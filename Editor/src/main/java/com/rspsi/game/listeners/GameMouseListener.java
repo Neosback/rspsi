@@ -144,7 +144,9 @@ public class GameMouseListener implements EventHandler<InputEvent> {
 			case PRIMARY -> PointerButton.PRIMARY;
 			case SECONDARY -> PointerButton.SECONDARY;
 			case MIDDLE -> PointerButton.MIDDLE;
-			default -> PointerButton.NONE;
+			default -> event.isPrimaryButtonDown() ? PointerButton.PRIMARY
+					: event.isSecondaryButtonDown() ? PointerButton.SECONDARY
+					: event.isMiddleButtonDown() ? PointerButton.MIDDLE : PointerButton.NONE;
 		};
 		return new PointerEvent((float) event.getX(), (float) event.getY(), button,
 				event.isShiftDown(), event.isControlDown(), event.isAltDown());

@@ -66,6 +66,12 @@ decode/transform/rendering problems.
 5. Do not extract a new Gradle core module until package rules and seams are
    proven; package-first enforcement is the current deliberate choice.
 
+The first migrated tool is `PaintUnderlayTool`: it receives neutral pointer
+events, resolves tiles through `Viewport`, and commits a grouped
+`CompositeEditCommand` through `EditorSession`. Its JavaFX input bridge is
+optional so the existing SceneGraph behavior remains the default until a
+document/viewport bridge is connected to the loaded map.
+
 ## Deferred systems
 
 No new renderer, public Plugin Hub, Lua/CS2 IDE, server runtime, live network

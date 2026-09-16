@@ -7,6 +7,7 @@ import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.render.OverlayDraw;
 import com.rspsi.editor.tool.EditorTool;
 import com.rspsi.editor.tool.EditorToolController;
+import com.rspsi.editor.tool.PaintUnderlayTool;
 import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.editor.viewport.Viewport;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,31 @@ class NeutralEditorContractsTest {
                 () -> new PointerEvent(Float.NaN, 1, PointerButton.NONE, false, false, false));
         assertThrows(IllegalArgumentException.class,
                 () -> new com.rspsi.editor.render.CameraState(0, 0, 0, Float.POSITIVE_INFINITY, 0));
+    }
+
+    @Test
+    void underlayStrokeIsOneCommandAndDoesNotRepeatDraggedTiles() {
+        WorldDocument document = new WorldDocument(3, 1);
+        EditorSession session = new EditorSession(document);
+        PaintUnderlayTool tool = new PaintUnderlayTool(42);
+        EditorToolController controller = new EditorToolController();
+        ToolContext context = new ToolContext(session, new EmptyAssets(),
+                (x, y) -> Optional.of(new com.rspsi.editor.model.TileCoordinate(0, (int) x, 0)));
+        PointerEvent first = new PointerEvent(0, 0, PointerButton.PRIMARY, false, false, false);
+        PointerEvent second = new PointerEvent(1, 0, PointerButton.PRIMARY, false, false, false);
+
+        controller.activate(tool, context);
+        controller.pointerDown(first);
+        controller.pointerDrag(first);
+        controller.pointerDrag(second);
+        controller.pointerUp(second);
+
+        assertEquals(1, session.history().size());
+        assertEquals(42, document.tile(0, 0, 0).snapshot().underlayId());
+        assertEquals(42, document.tile(0, 1, 0).snapshot().underlayId());
+        assertTrue(session.undo());
+        assertEquals(0, document.tile(0, 0, 0).snapshot().underlayId());
+        assertEquals(0, document.tile(0, 1, 0).snapshot().underlayId());
     }
 
     private static final class RecordingTool implements EditorTool {
