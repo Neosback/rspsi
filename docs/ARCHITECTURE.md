@@ -77,6 +77,9 @@ boundary.
   results.
 - Cache and definitions are accessed through RSPSi interfaces, never raw
   archive/index/file objects.
+- `LayeredCacheStore` keeps base-cache reads separate from staged output-layer
+  writes. Save coordinators flush an explicit output layer; painting cannot
+  mutate the source cache implicitly.
 - `MapService` exposes semantic landscape and location payload access; its
   OSRS implementation owns the file-0/file-1 archive convention.
 - `MapService` write methods target existing indexed regions only and honor
