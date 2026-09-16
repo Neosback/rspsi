@@ -142,6 +142,7 @@ they cannot become accidental application sources or dependencies:
 
 | Checkout | Local location | Captured revision | Scope |
 |---|---|---|---|
+| Upstream OpenRune-Server | `../RSPSi-resources/OpenRune-Server` | `72e8e1a1a05c54208f64c163cae4637301397d90` | Baseline for comparing the Neosback fork; inspect only engine/map, engine/routefinder, and or-cache |
 | Neosback OpenRune-Server | `../RSPSi-resources/OpenRune-Server-Neosback` | `bde85d0b0a5f7f87c1b8e9430fa81677bf443c9a` | Compare `engine`, `engine/map`, `engine/routefinder`, `or-cache`, and tools with upstream OpenRune |
 | Neosback OpenRune-Editor | `../RSPSi-resources/OpenRune-Editor-Neosback` | `1e5b41055da267ca94a615a0ec9853e21296b239` | Inspect the map-editor workbench, tools/plugins, history, region stamps, scene semantics, WebGL/picking, and cache integration; not a runtime dependency |
 | OpenRune FileStore | `../RSPSi-resources/OpenRune-FileStore` | `236e3920aa077a5990f2915e74f1c7d7729db47e` | Inspect the pinned production-candidate API and OSRS filesystem/definition modules; the application still consumes the published artifact |

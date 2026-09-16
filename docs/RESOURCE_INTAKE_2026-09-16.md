@@ -4,6 +4,34 @@ This is the first evidence capture for the OpenRune resource plan. It records
 what was inspected and what RSPSi is allowed to take from it. The checkouts
 remain outside the RSPSi source tree and are not build dependencies.
 
+## Upstream OpenRune-Server comparison
+
+- Upstream checkout: [OpenRune/OpenRune-Server](https://github.com/OpenRune/OpenRune-Server)
+- Captured commit: `72e8e1a1a05c54208f64c163cae4637301397d90`
+- Local checkout: `../RSPSi-resources/OpenRune-Server`
+- Intended role: baseline donor/oracle for comparing the Neosback fork's
+  cache-backed engine and world semantics.
+- License evidence: checked-out `LICENSE.md` grants BSD-2-Clause rights and
+  identifies the `RS Mod` 2025 copyright. Any inherited file still requires
+  file-level provenance review before adaptation.
+
+### Focused comparison evidence
+
+- `engine/map` contains 22 Kotlin source files in both checkouts; no focused
+  source additions were found in the fork.
+- `engine/routefinder` contains 20 Kotlin source files in both checkouts; the
+  fork changes `CollisionFlagMap.remove` so removing a mask materializes the
+  tile through the map accessor instead of returning when its zone is absent.
+- `or-cache` contains 187 upstream Kotlin/Java source files and 186 in the
+  fork. The map decoder, location decoder, terrain encoder, and map packer
+  paths inspected for RSPSi are byte-for-byte unchanged. The fork's other
+  differences are primarily generated server-cache tables/tooling and are not
+  eligible for direct editor adoption.
+
+RSPSi therefore keeps the upstream checkout as a comparison baseline and
+continues to use only small, Java-owned collision/map semantics. No server
+runtime, generated table, or fork-specific cache implementation is imported.
+
 ## OpenRune-Server Neosback fork
 
 - Upstream checkout: [Neosback/OpenRune-Server](https://github.com/Neosback/OpenRune-Server)
@@ -158,6 +186,7 @@ future intake can reproduce the inspected source set:
 | Resource | Commit | Role |
 |---|---|---|
 | [OpenRune FileStore](https://github.com/OpenRune/OpenRune-FileStore) | `236e3920aa077a5990f2915e74f1c7d7729db47e` | Production-candidate API and OSRS cache/definition reference |
+| [OpenRune/OpenRune-Server](https://github.com/OpenRune/OpenRune-Server) | `72e8e1a1a05c54208f64c163cae4637301397d90` | Upstream baseline for focused Neosback server-fork comparison |
 | [RSPSApp/TSPS](https://github.com/RSPSApp/TSPS) | `83415f76589a360eacbd0e635fe0557d06a510f0` | Terrain, scene, model, bridge, and instance donor/oracle |
 | [RuneLite](https://github.com/runelite/runelite) | `ced4c4aba7a3cb7cace42e1f0c25a5f79b7faef` | Independent current-OSRS semantics and DevTools oracle |
 | [RuneLite cache-code updater](https://github.com/runelite/runelite-cache-code-updater) | `a200d75bf779cdc76cae53e7e2cd6f23172e3535` | Revision-drift strategy reference |
@@ -170,10 +199,8 @@ materialized because those assets are not currently licensed for distribution.
 
 ## Next intake actions
 
-1. Diff the Neosback server fork against its upstream OpenRune-Server parent
-   before adapting collision or map algorithms.
-2. Build the TSPS/RuneLite 52-case terrain reference matrix.
-3. Add a licensed external OSRS cache fixture and run the neutral map service
+1. Build the TSPS/RuneLite 52-case terrain reference matrix.
+2. Add a licensed external OSRS cache fixture and run the neutral map service
    against it.
-4. Record exact provenance beside every future adapted file and add a test or
+3. Record exact provenance beside every future adapted file and add a test or
    fixture demonstrating the behavior.
