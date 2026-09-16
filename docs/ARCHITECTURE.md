@@ -163,6 +163,9 @@ corners from neighbouring tiles; both produce one history entry per pointer
 stroke. `ChangeHeightTool` now accumulates changes by shared terrain vertex,
 supports a bounded radius with none/linear/smooth falloff, and emits tile
 snapshots that preserve shared-edge heights.
+`RampTerrainTool` interpolates directly on shared vertex coordinates, and
+`TerrainHeightSampler` provides neutral bilinear samples for tools and
+inspectors.
 
 `PlaceObjectCommand`, `DeleteObjectCommand`, `MoveObjectCommand`, and
 `RotateObjectCommand` provide the corresponding canonical location mutations;

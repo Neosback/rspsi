@@ -9,6 +9,8 @@ import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.ChangeHeightTool;
 import com.rspsi.editor.tool.FlattenTerrainTool;
 import com.rspsi.editor.tool.SmoothTerrainTool;
+import com.rspsi.editor.tool.RampTerrainTool;
+import com.rspsi.editor.tool.TerrainHeightSampler;
 import com.rspsi.editor.tool.ToolContext;
 import org.junit.jupiter.api.Test;
 
@@ -71,6 +73,27 @@ class CoreTerrainSculptingTest {
         assertEquals(1, session.history().size());
         session.undo();
         assertEquals(0, world.tile(0, 3, 2).snapshot().southWestHeight());
+    }
+
+    @Test
+    void rampInterpolatesSharedVerticesAndCanBeSampled() {
+        WorldDocument world = new WorldDocument(4, 2);
+        EditorSession session = new EditorSession(world);
+        RampTerrainTool tool = new RampTerrainTool(0, 100);
+        tool.setAxis(RampTerrainTool.Axis.X);
+        EditorToolController controller = new EditorToolController();
+        controller.activate(tool, context(session));
+        controller.pointerDown(pointer(0, 0));
+        controller.pointerDrag(pointer(2, 1));
+        controller.pointerUp(pointer(2, 1));
+
+        assertEquals(33, world.tile(0, 1, 0).snapshot().southWestHeight());
+        assertEquals(67, world.tile(0, 1, 0).snapshot().southEastHeight());
+        assertEquals(67, world.tile(0, 2, 0).snapshot().southWestHeight());
+        assertEquals(50, TerrainHeightSampler.sample(world.tile(0, 1, 0).snapshot(), .5, .5));
+        assertEquals(1, session.history().size());
+        session.undo();
+        assertEquals(0, world.tile(0, 2, 0).snapshot().southWestHeight());
     }
 
     private static ToolContext context(EditorSession session) {
