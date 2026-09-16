@@ -40,6 +40,7 @@ The locked product direction and workspace design are maintained in
 | Command/session editing core | in-progress | Core model, command history, and session introduced; adapt existing tools next |
 | WorldFragment copy/paste | implemented-unverified | Canonical multi-plane fragment capture and atomic paste/undo command added; UI import/export wiring remains |
 | Dirty-region invalidation | implemented-unverified | `EditorSession` merges affected tiles into 8×8 `DirtyRegion` batches; renderer/cache consumers remain |
+| Unified selection service | implemented-unverified | Tile, tile-set, area, vertex, object, and fragment selection values are available; viewport/tool migration remains |
 | Canonical terrain mesh topology | implemented-unverified | RSPSi-owned `TerrainMeshBuilder` covers 13 shapes × 4 rotations, corners, and integer midpoint heights; TSPS/RuneLite parity remains |
 | Canonical collision map | implemented-unverified | RSPSi-owned flags/map provide cardinal, diagonal, and projectile inspection; decoded-location and bridge parity remain |
 | UI-neutral editor contracts | in-progress | Neutral pointer, tool, inspector, viewport, and renderer seams introduced; command-backed underlay brush is the first migrated tool path |

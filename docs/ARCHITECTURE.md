@@ -44,6 +44,8 @@ boundary.
   the legacy `ShapedTile` class.
 - `CollisionMap`, `CollisionFlag`, and `CollisionDirection` own editor
   collision semantics; server routefinder types are reference inputs only.
+- `SelectionModel` exposes one selection value for tiles, areas, vertices,
+  objects, and fragments while retaining its legacy tile-set methods.
 - `EditorTool`, `ToolContext`, `PointerEvent`, and `ToolInspector` are shared
   by all frontends.
 - `SceneRenderer` consumes neutral scenes and changes and returns neutral pick
