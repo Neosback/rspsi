@@ -144,10 +144,11 @@ boundary.
   numeric ID, and optional symbolic key, and search includes that key without
   importing a naming-library type into the editor.
 - `RenderSceneBuilder` derives renderer-independent terrain meshes and
-  canonical object placements from `WorldDocument`. It is intentionally a
-  complete-snapshot builder for now; 8×8 dirty-chunk updates can be connected
-  later through `RenderChanges` without adding scene construction to
-  `SceneGraph`.
+  canonical object placements from `WorldDocument`. It supports both complete
+  snapshots and `RenderChanges`-scoped terrain rebuilds, preserving untouched
+  mesh instances while refreshing canonical object placements. Neighbor tiles
+  can be included by the caller for blended floors and shared edges; scene
+  construction remains outside `SceneGraph`.
 
 ## Frontends
 

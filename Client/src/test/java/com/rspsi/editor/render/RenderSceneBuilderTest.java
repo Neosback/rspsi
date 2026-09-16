@@ -7,6 +7,7 @@ import com.rspsi.editor.model.WorldObject;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -38,5 +39,25 @@ class RenderSceneBuilderTest {
         assertSame(document, scene.document());
         assertEquals(0, scene.terrainMeshes().size());
         assertEquals(0, scene.objects().size());
+    }
+
+    @Test
+    void updateRebuildsOnlyDirtyTerrainAndRefreshesObjects() {
+        WorldDocument document = new WorldDocument(2, 1, 1);
+        RenderSceneBuilder builder = new RenderSceneBuilder();
+        RenderScene initial = builder.build(document);
+        var untouched = initial.terrainMeshes().get(new TileCoordinate(0, 1, 0));
+
+        WorldObject object = new WorldObject(200, 10, 0, 0, 0, 0);
+        document.tile(0, 0, 0).restore(new TileSnapshot(
+                20, 20, 20, 20, 0, 0, 0, 0, 0, List.of(object)));
+        RenderScene updated = builder.update(initial,
+                new RenderChanges(Set.of(new TileCoordinate(0, 0, 0))));
+
+        assertSame(untouched, updated.terrainMeshes().get(new TileCoordinate(0, 1, 0)));
+        org.junit.jupiter.api.Assertions.assertNotSame(
+                initial.terrainMeshes().get(new TileCoordinate(0, 0, 0)),
+                updated.terrainMeshes().get(new TileCoordinate(0, 0, 0)));
+        assertEquals(List.of(object), updated.objects());
     }
 }
