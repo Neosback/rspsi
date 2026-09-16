@@ -9,11 +9,17 @@ modules are `filesystem`, `filestore`, `osrs-fs`, `osrs`, and `definition`.
 ## Current adapter
 
 `OpenRuneCacheStore` adapts `dev.openrune.filesystem.Cache` to RSPSi's
-byte-oriented `CacheStore`. The only OpenRune operations currently used are:
+byte-oriented `CacheStore`. The cache adapter currently uses:
 
 - `Cache.Companion.load(Path)` to open a cache.
 - `Cache.data(index, archive, file, null)` for byte reads.
+- archive discovery and version-table access for neutral map indexes and cache
+  identity metadata.
 - `Cache.close()` for lifecycle cleanup.
+
+The definition adapter additionally uses OpenRune's object, floor, texture,
+and lazy model decoders, reducing their results to RSPSi-owned views before
+they reach editor code.
 
 The OpenRune type is confined to the cache adapter package. The public factory
 accepts a `Path` and returns `CacheStore`; editor-facing code does not receive
