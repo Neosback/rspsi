@@ -174,6 +174,8 @@ features. `MoveObjectsCommand` and `MoveSelectionTool` now provide one atomic
 multi-object translation path, including overlapping source/target tiles.
 `RotateObjectsCommand` and `RotateSelectionTool` provide the corresponding
 atomic orientation path and refresh the selection to the transformed values.
+`ReplaceObjectsCommand` and `ReplaceSelectionTool` provide atomic definition
+replacement while preserving placement attributes.
 
 The initial OSRS map codec now decodes all four planes, explicit/inherited
 heights, underlays, overlays, shapes, rotations, flags, and delta-packed

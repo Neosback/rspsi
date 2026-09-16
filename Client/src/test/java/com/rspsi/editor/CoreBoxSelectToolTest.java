@@ -13,6 +13,7 @@ import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.editor.tool.MoveSelectionTool;
 import com.rspsi.editor.tool.RotateSelectionTool;
+import com.rspsi.editor.tool.ReplaceSelectionTool;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -102,6 +103,28 @@ class CoreBoxSelectToolTest {
         assertEquals(List.of(rotatedSecond), world.tile(0, 2, 2).snapshot().objects());
         assertEquals(java.util.Set.of(rotatedFirst, rotatedSecond),
                 ((com.rspsi.editor.selection.ObjectSetSelection) session.selection().current()).objects());
+        session.undo();
+        assertEquals(List.of(first), world.tile(0, 1, 1).snapshot().objects());
+        assertEquals(List.of(second), world.tile(0, 2, 2).snapshot().objects());
+    }
+
+    @Test
+    void replaceSelectionChangesOnlyDefinitionIDsAndIsUndoable() {
+        WorldDocument world = new WorldDocument(8, 8);
+        WorldObject first = new WorldObject(7, 10, 0, 0, 1, 1);
+        WorldObject second = new WorldObject(8, 22, 3, 0, 2, 2);
+        put(world, first);
+        put(world, second);
+        EditorSession session = new EditorSession(world);
+        session.selection().selectObjects(java.util.Set.of(first, second));
+        EditorToolController controller = new EditorToolController();
+        controller.activate(new ReplaceSelectionTool(99), context(session));
+        controller.pointerDown(pointer(1, 1));
+
+        WorldObject replacedFirst = new WorldObject(99, 10, 0, 0, 1, 1);
+        WorldObject replacedSecond = new WorldObject(99, 22, 3, 0, 2, 2);
+        assertEquals(List.of(replacedFirst), world.tile(0, 1, 1).snapshot().objects());
+        assertEquals(List.of(replacedSecond), world.tile(0, 2, 2).snapshot().objects());
         session.undo();
         assertEquals(List.of(first), world.tile(0, 1, 1).snapshot().objects());
         assertEquals(List.of(second), world.tile(0, 2, 2).snapshot().objects());
