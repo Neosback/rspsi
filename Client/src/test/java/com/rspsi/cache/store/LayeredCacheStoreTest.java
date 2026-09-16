@@ -29,6 +29,7 @@ class LayeredCacheStoreTest {
         store.flush();
 
         assertArrayEquals(new byte[]{2}, output.values.get(key(5, 100, 0)));
+        assertArrayEquals(new byte[]{2}, store.read(5, 100, 0));
         assertEquals(0, store.pendingWriteCount());
     }
 

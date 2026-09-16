@@ -37,7 +37,8 @@ public final class LayeredCacheStore implements CacheStore {
     public byte[] read(int index, int archive, int file) {
         byte[] staged = pending.get(new CacheKey(index, archive, file));
         if (staged != null) return staged.clone();
-        byte[] value = base.read(index, archive, file);
+        byte[] value = output.read(index, archive, file);
+        if (value == null) value = base.read(index, archive, file);
         return value == null ? null : value.clone();
     }
 
