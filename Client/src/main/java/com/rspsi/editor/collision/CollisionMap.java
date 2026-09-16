@@ -82,6 +82,7 @@ public final class CollisionMap {
         Objects.requireNonNull(from, "from");
         Objects.requireNonNull(direction, "direction");
         if (size <= 0) throw new IllegalArgumentException("Actor size must be positive");
+        if (size > width || size > length) return false;
         if (!inside(from.plane(), from.x(), from.y())
                 || !inside(from.plane(), from.x() + size - 1, from.y() + size - 1)) {
             return false;

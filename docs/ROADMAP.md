@@ -26,6 +26,7 @@ The locked product direction and workspace design are maintained in
 |---|---|---|
 | Gradle multi-module build | verified | `./gradlew test` compiles all modules; tests now run on JUnit Platform |
 | JavaFX editor and software renderer | implemented-unverified | Existing `Editor` and `Client` modules; retain during stabilization |
+| Manual JavaFX smoke coverage | implemented-unverified | `./gradlew :Editor:run` reaches the JavaFX application task, but interactive acceptance is pending because the desktop was locked during the 2026-09-16 attempt; rerun [`MANUAL_SMOKE_TEST.md`](MANUAL_SMOKE_TEST.md) on an unlocked desktop |
 | Four-plane terrain and shaped tiles | implemented-unverified | `MapRegion` and `SceneGraph`; add fixture coverage |
 | Underlays, overlays, flags, bridges | implemented-unverified | Existing map arrays and encode/decode paths; add semantic tests |
 | Object placement/deletion | implemented-unverified | Existing `SceneGraph`/`MapRegion` paths; add object fixture coverage |
