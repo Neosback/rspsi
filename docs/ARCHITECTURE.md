@@ -45,6 +45,9 @@ boundary.
   carries UI types or owns the state it observes.
 - `EditorCommand` is the canonical mutation contract; `EditCommand` remains a
   temporary source-compatible alias.
+- `CommandHistory.moveTo(...)` and `EditorSession.jumpToHistory(...)` provide
+  exact history navigation with one consolidated session update; failed
+  forward replay rolls back commands already reapplied.
 - `WorldFragment` is the canonical portable terrain/location copy-paste
   payload; fragment pastes are grouped commands rather than direct scene
   mutations.

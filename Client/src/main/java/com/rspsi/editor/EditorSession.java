@@ -104,6 +104,19 @@ public final class EditorSession {
         return changed;
     }
 
+    /** Moves to an exact history position and emits one consolidated update. */
+    public boolean jumpToHistory(int position) {
+        if (!editable) {
+            throw new UnsupportedOperationException("Editor session is read-only");
+        }
+        int before = history.position();
+        if (before == position) return false;
+        java.util.Set<com.rspsi.editor.model.TileCoordinate> changed = history.moveTo(position, this);
+        notifyChanged(changed);
+        notifyStateChanged();
+        return true;
+    }
+
     public void markSaved() {
         savedHistoryPosition = history.position();
         notifyStateChanged();
@@ -165,13 +178,17 @@ public final class EditorSession {
     }
 
     private void notifyChanged(EditorCommand command) {
-        if (command.changedTiles().isEmpty()) {
+        notifyChanged(command.changedTiles());
+    }
+
+    private void notifyChanged(Set<com.rspsi.editor.model.TileCoordinate> changedTiles) {
+        if (changedTiles.isEmpty()) {
             return;
         }
-        markDirty(command.changedTiles());
-        var changedTiles = Set.copyOf(command.changedTiles());
+        markDirty(changedTiles);
+        Set<com.rspsi.editor.model.TileCoordinate> snapshot = Set.copyOf(changedTiles);
         for (SessionChangeListener listener : changeListeners) {
-            listener.changed(changedTiles);
+            listener.changed(snapshot);
         }
     }
 

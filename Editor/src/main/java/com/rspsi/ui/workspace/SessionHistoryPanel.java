@@ -31,6 +31,12 @@ public final class SessionHistoryPanel extends VBox implements AutoCloseable {
         entries.setPlaceholder(new Label("No edits yet."));
         entries.setAccessibleText("Editor command history");
         entries.setFocusTraversable(true);
+        entries.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 1 && session != null
+                    && entries.getSelectionModel().getSelectedIndex() >= 0) {
+                session.jumpToHistory(entries.getSelectionModel().getSelectedIndex() + 1);
+            }
+        });
         getChildren().addAll(title, status, entries);
         refresh();
     }

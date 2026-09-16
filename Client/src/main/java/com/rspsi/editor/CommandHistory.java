@@ -1,7 +1,10 @@
 package com.rspsi.editor;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 /** Non-UI undo/redo history. The cursor is also used for dirty-state tracking. */
 public final class CommandHistory {
@@ -33,6 +36,72 @@ public final class CommandHistory {
         commands.get(cursor).apply(session);
         cursor++;
         return true;
+    }
+
+    /**
+     * Moves the history cursor to an exact position and returns all tiles
+     * touched while replaying the transition. A failed replay is rolled back
+     * to the original cursor whenever the commands' inverse operations allow
+     * it, so callers never record a partial jump.
+     */
+    public Set<com.rspsi.editor.model.TileCoordinate> moveTo(int target, EditorSession session) {
+        Objects.requireNonNull(session, "session");
+        if (target < 0 || target > commands.size()) {
+            throw new IllegalArgumentException("History position outside [0, " + commands.size() + "]: " + target);
+        }
+        int origin = cursor;
+        if (target == origin) return Set.of();
+        Set<com.rspsi.editor.model.TileCoordinate> changed = new LinkedHashSet<>();
+        if (target < origin) {
+            try {
+                while (cursor > target) {
+                    EditorCommand command = commands.get(cursor - 1);
+                    command.undo(session);
+                    cursor--;
+                    changed.addAll(command.changedTiles());
+                }
+            } catch (RuntimeException failure) {
+                restoreUndone(origin, session, failure);
+                throw failure;
+            }
+        } else {
+            try {
+                while (cursor < target) {
+                    EditorCommand command = commands.get(cursor);
+                    command.apply(session);
+                    cursor++;
+                    changed.addAll(command.changedTiles());
+                }
+            } catch (RuntimeException failure) {
+                rollbackApplied(origin, session, failure);
+                throw failure;
+            }
+        }
+        return Set.copyOf(changed);
+    }
+
+    private void restoreUndone(int origin, EditorSession session, RuntimeException failure) {
+        while (cursor < origin) {
+            try {
+                commands.get(cursor).apply(session);
+                cursor++;
+            } catch (RuntimeException rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+                return;
+            }
+        }
+    }
+
+    private void rollbackApplied(int origin, EditorSession session, RuntimeException failure) {
+        while (cursor > origin) {
+            try {
+                commands.get(cursor - 1).undo(session);
+                cursor--;
+            } catch (RuntimeException rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+                return;
+            }
+        }
     }
 
     public int position() {

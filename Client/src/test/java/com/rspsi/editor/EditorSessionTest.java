@@ -104,6 +104,50 @@ class EditorSessionTest {
     }
 
     @Test
+    void historyCanJumpAcrossMultipleCommandsAndReturnsToSavedPosition() {
+        WorldModel world = new WorldModel(2, 2);
+        EditorSession session = new EditorSession(world);
+        TileCoordinate coordinate = new TileCoordinate(0, 0, 0);
+        TileSnapshot initial = world.tile(coordinate).snapshot();
+        TileSnapshot first = new TileSnapshot(1, 0, 0, 0, 1, 0, 0, 0, 0, List.of());
+        TileSnapshot second = new TileSnapshot(2, 0, 0, 0, 2, 0, 0, 0, 0, List.of());
+        session.execute(new SetTileCommand(coordinate, initial, first, "first"));
+        session.execute(new SetTileCommand(coordinate, first, second, "second"));
+        session.markSaved();
+
+        assertTrue(session.jumpToHistory(0));
+        assertEquals(initial, world.tile(coordinate).snapshot());
+        assertTrue(session.isDirty());
+        assertTrue(session.jumpToHistory(1));
+        assertEquals(first, world.tile(coordinate).snapshot());
+        assertTrue(session.jumpToHistory(2));
+        assertEquals(second, world.tile(coordinate).snapshot());
+        assertFalse(session.isDirty());
+    }
+
+    @Test
+    void failedHistoryReplayRollsBackTheCommandsAlreadyReapplied() {
+        WorldModel world = new WorldModel(2, 2);
+        EditorSession session = new EditorSession(world);
+        TileCoordinate firstCoordinate = new TileCoordinate(0, 0, 0);
+        TileCoordinate secondCoordinate = new TileCoordinate(0, 0, 1);
+        TileSnapshot firstBefore = world.tile(firstCoordinate).snapshot();
+        TileSnapshot secondBefore = world.tile(secondCoordinate).snapshot();
+        TileSnapshot firstAfter = new TileSnapshot(1, 0, 0, 0, 1, 0, 0, 0, 0, List.of());
+        TileSnapshot secondAfter = new TileSnapshot(2, 0, 0, 0, 2, 0, 0, 0, 0, List.of());
+
+        session.execute(new SetTileCommand(firstCoordinate, firstBefore, firstAfter, "first"));
+        session.execute(new FailingOnReplayCommand(secondCoordinate, secondBefore, secondAfter));
+        assertTrue(session.undo());
+        assertTrue(session.undo());
+
+        assertThrows(IllegalStateException.class, () -> session.jumpToHistory(2));
+        assertEquals(0, session.history().position());
+        assertEquals(firstBefore, world.tile(firstCoordinate).snapshot());
+        assertEquals(secondBefore, world.tile(secondCoordinate).snapshot());
+    }
+
+    @Test
     void stateListenersTrackEditsHistoryAndSaveMarker() {
         WorldModel world = new WorldModel(2, 2);
         EditorSession session = new EditorSession(world);
@@ -125,5 +169,33 @@ class EditorSessionTest {
         @Override public void apply(EditorSession session) { throw new IllegalStateException("expected test failure"); }
         @Override public void undo(EditorSession session) { }
         @Override public String description() { return "failure"; }
+    }
+
+    private static final class FailingOnReplayCommand implements EditorCommand {
+        private final TileCoordinate coordinate;
+        private final TileSnapshot before;
+        private final TileSnapshot after;
+        private int applyCount;
+
+        private FailingOnReplayCommand(TileCoordinate coordinate, TileSnapshot before, TileSnapshot after) {
+            this.coordinate = coordinate;
+            this.before = before;
+            this.after = after;
+        }
+
+        @Override public void apply(EditorSession session) {
+            if (applyCount++ > 0) throw new IllegalStateException("expected replay failure");
+            session.world().tile(coordinate).restore(after);
+        }
+
+        @Override public void undo(EditorSession session) {
+            session.world().tile(coordinate).restore(before);
+        }
+
+        @Override public String description() { return "replay failure"; }
+
+        @Override public java.util.Set<TileCoordinate> changedTiles() {
+            return java.util.Set.of(coordinate);
+        }
     }
 }
