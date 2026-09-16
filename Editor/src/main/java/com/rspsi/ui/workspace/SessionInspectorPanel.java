@@ -117,7 +117,7 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
         boolean bridge = session.world().bridgeLink(coordinate).isPresent();
         boolean roof = (tile.flags() & OsrsTileFlags.REMOVE_ROOFS) != 0;
         TileInspectorSnapshot snapshot = new TileInspectorSnapshot(address, tile, bridge, roof);
-        status.setText("Tile semantics");
+        status.setText((session.canEdit() ? "Editable" : "Read-only") + " · Tile semantics");
         values.getChildren().clear();
         row("World", snapshot.address().worldX() + ", " + snapshot.address().worldY());
         row("Region", snapshot.address().regionId() + " (" + snapshot.address().regionX()
@@ -151,7 +151,7 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
                 object.type(), object.rotation(), object.category(), object.shape(),
                 java.util.Optional.empty(), java.util.Optional.empty())
                 : ObjectInspectorSnapshot.capture(object, definitions);
-        clear("Object selection");
+        clear((session != null && session.canEdit() ? "Editable" : "Read-only") + " · Object selection");
         row("ID", Integer.toString(snapshot.id()));
         row("World", snapshot.x() + ", " + snapshot.y());
         row("Plane", Integer.toString(snapshot.plane()));

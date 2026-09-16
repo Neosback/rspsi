@@ -69,10 +69,11 @@ public final class ValidationPanel extends VBox implements AutoCloseable {
                 .filter(issue -> issue.severity() == ValidationIssue.Severity.ERROR)
                 .count();
         long warnings = diagnostics.size() - errors;
-        status.setText(diagnostics.isEmpty()
+        String result = diagnostics.isEmpty()
                 ? "World is valid"
                 : String.format("%d error%s · %d warning%s",
-                errors, errors == 1 ? "" : "s", warnings, warnings == 1 ? "" : "s"));
+                errors, errors == 1 ? "" : "s", warnings, warnings == 1 ? "" : "s");
+        status.setText((session.canEdit() ? "Editable" : "Read-only") + " · " + result);
     }
 
     private static String format(ValidationIssue issue) {

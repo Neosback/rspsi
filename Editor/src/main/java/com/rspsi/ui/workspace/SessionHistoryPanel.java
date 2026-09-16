@@ -32,7 +32,7 @@ public final class SessionHistoryPanel extends VBox implements AutoCloseable {
         entries.setAccessibleText("Editor command history");
         entries.setFocusTraversable(true);
         entries.setOnMouseClicked(event -> {
-            if (event.getClickCount() == 1 && session != null
+            if (event.getClickCount() == 1 && session != null && session.canEdit()
                     && entries.getSelectionModel().getSelectedIndex() >= 0) {
                 session.jumpToHistory(entries.getSelectionModel().getSelectedIndex() + 1);
             }
@@ -65,7 +65,9 @@ public final class SessionHistoryPanel extends VBox implements AutoCloseable {
             String state = index < cursor ? "Applied" : "Redo available";
             entries.getItems().add(String.format("%02d  %s  %s", index + 1, state, command.description()));
         }
-        status.setText(String.format("%d applied · %s", cursor, session.isDirty() ? "Unsaved changes" : "Saved"));
+        String mode = session.canEdit() ? "Editable" : "Read-only";
+        String saveState = session.isDirty() ? "Unsaved changes" : "Saved";
+        status.setText(String.format("%s · %d applied · %s", mode, cursor, saveState));
         if (!entries.getItems().isEmpty()) {
             entries.getSelectionModel().select(Math.max(0, cursor - 1));
         }
