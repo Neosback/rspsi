@@ -42,6 +42,24 @@ class SelectionQueryTest {
     }
 
     @Test
+    void objectAttributeToolCanSelectBySceneCategory() {
+        WorldDocument world = new WorldDocument(3, 3, 1);
+        WorldObject wall = new WorldObject(100, 0, 0, 0, 0, 0);
+        WorldObject gameObject = new WorldObject(101, 10, 0, 0, 1, 1);
+        put(world, wall);
+        put(world, gameObject);
+        EditorSession session = new EditorSession(world);
+        AttributeSelectionTool tool = new AttributeSelectionTool();
+        tool.setObjectCategory(ObjectCategory.WALL);
+        EditorToolController controller = new EditorToolController();
+        controller.activate(tool, context(session));
+        controller.pointerDown(pointer(0, 0));
+
+        ObjectSelection selection = assertInstanceOf(ObjectSelection.class, session.selection().current());
+        assertEquals(wall, selection.object());
+    }
+
+    @Test
     void tileAttributeToolSelectsRequiredFlagsAndFloorIds() {
         WorldDocument world = new WorldDocument(4, 4, 2);
         world.tile(1, 2, 3).restore(new TileSnapshot(0, 0, 0, 0, 7, 9, 0, 0, 0x06, List.of()));

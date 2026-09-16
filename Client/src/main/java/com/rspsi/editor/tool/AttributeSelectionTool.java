@@ -2,6 +2,7 @@ package com.rspsi.editor.tool;
 
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
+import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.render.OverlayDraw;
 import com.rspsi.editor.selection.SelectionQuery;
 
@@ -17,6 +18,7 @@ public final class AttributeSelectionTool implements EditorTool {
     private Integer objectType;
     private Integer objectPlane;
     private Integer objectRotation;
+    private ObjectCategory objectCategory;
     private Integer tilePlane;
     private Integer underlayId;
     private Integer overlayId;
@@ -28,6 +30,7 @@ public final class AttributeSelectionTool implements EditorTool {
     public void setObjectType(Integer value) { objectType = value; }
     public void setObjectPlane(Integer value) { objectPlane = value; }
     public void setObjectRotation(Integer value) { objectRotation = value; }
+    public void setObjectCategory(ObjectCategory value) { objectCategory = value; }
     public void setTilePlane(Integer value) { tilePlane = value; }
     public void setUnderlayId(Integer value) { underlayId = value; }
     public void setOverlayId(Integer value) { overlayId = value; }
@@ -41,7 +44,7 @@ public final class AttributeSelectionTool implements EditorTool {
         if (context == null || event.button() != PointerButton.PRIMARY) return;
         if (target == Target.OBJECTS) {
             context.session().selection().selectObjects(SelectionQuery.objects(context.session().world(),
-                    new SelectionQuery.ObjectFilter(objectId, objectType, objectPlane, objectRotation)));
+                    new SelectionQuery.ObjectFilter(objectId, objectType, objectPlane, objectRotation, objectCategory)));
         } else {
             context.session().selection().selectTiles(SelectionQuery.tiles(context.session().world(),
                     new SelectionQuery.TileFilter(tilePlane, underlayId, overlayId, requiredFlagsMask)));
