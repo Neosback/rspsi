@@ -26,3 +26,10 @@
     -fx-text-fill: #fca5a5;
     -fx-padding: 8px;
 }
+
+.workspace-placeholder {
+    -fx-background-color: #192134;
+    -fx-text-fill: #cbd5e1;
+    -fx-font-size: 13px;
+    -fx-padding: 12px;
+}

@@ -62,6 +62,7 @@ public final class ControlledWorkspaceBridge {
     private static Label placeholder(String title, String message) {
         Label label = new Label(title + "\n" + message);
         label.setWrapText(true);
+        label.getStyleClass().add("workspace-placeholder");
         label.setAccessibleText(title + ". " + message);
         return label;
     }
