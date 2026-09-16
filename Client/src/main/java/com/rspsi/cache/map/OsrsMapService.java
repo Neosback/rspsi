@@ -50,6 +50,11 @@ public final class OsrsMapService implements MapService {
         write(regionX, regionY, MapArchiveType.OBJECT, data);
     }
 
+    @Override
+    public void flush() {
+        store.flush();
+    }
+
     private byte[] read(int regionX, int regionY, MapArchiveType type) {
         int archiveId = index.archiveId(regionX, regionY, type);
         if (archiveId < 0) {

@@ -71,6 +71,11 @@ boundary.
 - `MapService` write methods target existing indexed regions only and honor
   backend writability. A read-only OpenRune spike therefore fails safely
   instead of appearing to save an edited map.
+- `OsrsRegionSaveCoordinator` is the editor-facing save boundary for a 64×64×4
+  region. It encodes terrain and locations before writing either payload,
+  flushes through `MapService`, and advances the session's saved marker only
+  after the write batch succeeds. Writable OpenRune packing remains a later
+  parity-gated adapter milestone.
 - `OsrsRegionDecoder` is the neutral format adapter for the current OSRS
   landscape/location payloads. It produces `WorldDocument` and
   `WorldObject` data without exposing OpenRune, Displee, archive IDs, or

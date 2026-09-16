@@ -15,6 +15,11 @@ public interface MapService {
     /** Writes a location payload to an existing indexed region. */
     void writeLocations(int regionX, int regionY, byte[] data);
 
+    /** Flushes the configured output backend after a successful write batch. */
+    default void flush() {
+        // Read-only and in-memory services have nothing to flush.
+    }
+
     /** Temporary source-compatible name retained for existing loaders. */
     @Deprecated
     default byte[] readObjects(int regionX, int regionY) {
