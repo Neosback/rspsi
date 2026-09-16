@@ -19,6 +19,11 @@ public final class CacheStoreFactory {
         return OpenRuneCacheStore.open(path);
     }
 
+    /** Creates a staged store whose writes commit only to the supplied output backend. */
+    public static CacheStore layered(CacheStore base, CacheStore output) {
+        return new LayeredCacheStore(base, output);
+    }
+
     static CacheStore openRune(Cache cache) {
         return new OpenRuneCacheStore(cache);
     }
