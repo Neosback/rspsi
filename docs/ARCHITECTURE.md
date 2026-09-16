@@ -186,6 +186,11 @@ boundary.
   terrain, canonical objects, and a bridge link. It is a local semantic
   characterization fixture; TSPS/RuneLite parity fixtures remain independent
   acceptance evidence.
+- `MinimapBuilder` produces a deterministic ARGB raster from canonical tiles
+  and neutral floor definitions. It includes an explicit blocked-tile color,
+  optional cardinal underlay blending, and deterministic missing-definition
+  fallbacks. It is a construction baseline only; mapscene icons and live
+  RuneLite/TSPS image parity remain separate.
 - `WorldDocument.bridgeLinks()` turns the OSRS bridge flag into explicit
   authored-plane/effective-plane links. The raw flag remains part of the
   canonical tile snapshot for lossless encoding, while scene and collision

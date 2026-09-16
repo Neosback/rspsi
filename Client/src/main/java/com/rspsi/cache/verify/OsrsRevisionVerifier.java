@@ -14,6 +14,8 @@ import com.rspsi.editor.assets.DefinitionAssetRepository;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldRegionWindow;
+import com.rspsi.editor.minimap.MinimapBuilder;
+import com.rspsi.editor.minimap.MinimapImage;
 import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.RenderSceneBuilder;
 import com.rspsi.editor.validation.ValidationIssue;
@@ -131,6 +133,16 @@ public final class OsrsRevisionVerifier {
                     == document.width() * document.length() * document.planes();
             messages.add("neutral scene meshes: " + scene.terrainMeshes().size()
                     + "; objects: " + scene.objects().size());
+            boolean minimapComplete = true;
+            int minimapPixels = 0;
+            for (int plane = 0; plane < document.planes(); plane++) {
+                MinimapImage minimap = new MinimapBuilder().build(document, plane, definitions);
+                minimapComplete &= minimap.width() == document.width()
+                        && minimap.height() == document.length();
+                minimapPixels += minimap.width() * minimap.height();
+            }
+            messages.add("neutral minimap rasters: " + document.planes()
+                    + " planes; " + minimapPixels + " pixels");
             byte[] encodedTerrain = OsrsRegionEncoder.encodeTerrain(document, profile.newTerrainFormat());
             byte[] encodedLocations = OsrsRegionEncoder.encodeLocations(document);
             WorldDocument roundTrip = OsrsRegionDecoder.decode(encodedTerrain, encodedLocations,
@@ -140,6 +152,7 @@ public final class OsrsRevisionVerifier {
             if (!equal) errors.add("semantic round-trip mismatch");
             if (issueErrors > 0) errors.add("world validation reported errors");
             if (!sceneComplete) errors.add("neutral scene did not cover every document tile");
+            if (!minimapComplete) errors.add("neutral minimap dimensions did not match the document");
             return new VerificationReport(path, regionX, regionY, revision, maps.index().size(),
                     true, true, equal, messages, errors,
                     List.of(
@@ -188,6 +201,11 @@ public final class OsrsRevisionVerifier {
                                             ? VerificationCheck.Status.PASS
                                             : VerificationCheck.Status.FAIL,
                                     scene.terrainMeshes().size() + " neutral terrain meshes built"),
+                            check("minimap.construction", minimapComplete
+                                            ? VerificationCheck.Status.PASS
+                                            : VerificationCheck.Status.FAIL,
+                                    document.planes() + " neutral minimap planes built; "
+                                            + minimapPixels + " pixels"),
                             check("location.parity", equal ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
                                     "locations included in canonical semantic comparison: " + equal),
                             check("semantic.roundtrip", equal ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
