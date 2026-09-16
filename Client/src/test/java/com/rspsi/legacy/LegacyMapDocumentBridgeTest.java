@@ -1,6 +1,11 @@
 package com.rspsi.legacy;
 
 import com.jagex.map.MapRegion;
+import com.jagex.map.SceneGraph;
+import com.jagex.map.object.GameObject;
+import com.jagex.map.object.Wall;
+import com.jagex.map.tile.SceneTile;
+import com.jagex.util.ObjectKey;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SetTileCommand;
 import com.rspsi.editor.model.TileCoordinate;
@@ -31,6 +36,38 @@ class LegacyMapDocumentBridgeTest {
         TileSnapshot tile = document.tile(2, 1, 1).snapshot();
 
         assertEquals(new TileSnapshot(-30, -20, -10, -25, 7, 9, 4, 3, 6, java.util.List.of()), tile);
+    }
+
+    @Test
+    void importsOneAnchorForEachSceneObjectLayerWithoutDuplicatingFootprints() {
+        MapRegion region = new MapRegion(null, 3, 3);
+        SceneGraph scene = new SceneGraph(3, 3, 4);
+
+        ObjectKey wallKey = new ObjectKey(1, 1, 100, 0, 2, true, false);
+        Wall wall = new Wall(wallKey, 1, 1, 0);
+        wall.setPlane(0);
+        scene.tiles[0][1][1] = new SceneTile(1, 1, 0);
+        scene.tiles[0][1][1].wall = wall;
+
+        ObjectKey gameKey = new ObjectKey(0, 2, 200, 10, 1, true, true);
+        GameObject game = new GameObject(gameKey, 0, 2, 0);
+        game.setPlane(0);
+        game.maxX = 1;
+        game.maxY = 2;
+        scene.tiles[0][0][2] = new SceneTile(0, 2, 0);
+        scene.tiles[0][1][2] = new SceneTile(1, 2, 0);
+        scene.tiles[0][0][2].gameObjects[0] = game;
+        scene.tiles[0][0][2].objectCount = 1;
+        scene.tiles[0][1][2].gameObjects[0] = game;
+        scene.tiles[0][1][2].objectCount = 1;
+
+        WorldDocument document = LegacyMapDocumentBridge.importDocument(region, scene);
+
+        assertEquals(java.util.List.of(new com.rspsi.editor.model.WorldObject(100, 0, 2, 0, 1, 1)),
+                document.tile(0, 1, 1).snapshot().objects());
+        assertEquals(java.util.List.of(new com.rspsi.editor.model.WorldObject(200, 10, 1, 0, 0, 2)),
+                document.tile(0, 0, 2).snapshot().objects());
+        assertTrue(document.tile(0, 1, 2).snapshot().objects().isEmpty());
     }
 
     @Test

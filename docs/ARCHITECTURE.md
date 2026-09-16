@@ -159,11 +159,13 @@ JavaFX panel.
 the controlled workflow and its manual coverage continue to be migrated.
 
 When a legacy map reaches its existing ready state, the client emits a small
-map-ready lifecycle callback. In controlled mode `MainWindow` imports the
-terrain into a fresh `EditorSession`, attaches `LegacyMapDocumentBridge`, and
-binds the inspector/history/validation panels. This keeps the default legacy path
-untouched while making the new panels reflect the loaded map rather than a
-synthetic document; legacy object synchronization remains intentionally open.
+map-ready lifecycle callback. In controlled mode `MainWindow` imports terrain
+and object anchors into a fresh `EditorSession`, attaches
+`LegacyMapDocumentBridge`, and binds the inspector/history/validation panels.
+This keeps the default legacy path untouched while making the controlled
+panels reflect the loaded map rather than a synthetic document. The bridge
+uses scene object keys and footprint-aware removal only at the compatibility
+boundary; new editor behavior remains command/session-owned.
 
 ## Correctness workflow
 

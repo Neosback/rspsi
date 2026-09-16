@@ -782,24 +782,25 @@ public class MainWindow extends Application {
 	}
 
 	/**
-	 * Imports the loaded legacy terrain into the neutral session only when the
+	 * Imports the loaded legacy scene into the neutral session only when the
 	 * controlled workspace is enabled. The existing renderer remains the
-	 * compatibility viewport; object synchronization is intentionally deferred.
+	 * compatibility viewport while the bridge synchronizes scene objects.
 	 */
 	private void bindControlledWorkspaceSession() {
 		if (controlledWorkspaceShell == null || clientInstance == null
-				|| clientInstance.mapRegion == null) {
+				|| clientInstance.mapRegion == null || clientInstance.sceneGraph == null) {
 			return;
 		}
 		Platform.runLater(() -> {
 			if (controlledWorkspaceShell == null || clientInstance == null
-					|| clientInstance.mapRegion == null) {
+				|| clientInstance.mapRegion == null || clientInstance.sceneGraph == null) {
 				return;
 			}
 			if (controlledDocumentBridge != null) {
 				controlledDocumentBridge.close();
 			}
-			var document = LegacyMapDocumentBridge.importTerrain(clientInstance.mapRegion);
+			var document = LegacyMapDocumentBridge.importDocument(clientInstance.mapRegion,
+					clientInstance.sceneGraph);
 			controlledSession = new EditorSession(document);
 			controlledDocumentBridge = new LegacyMapDocumentBridge(
 					clientInstance.mapRegion, clientInstance.sceneGraph);

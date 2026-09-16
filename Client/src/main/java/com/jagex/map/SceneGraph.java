@@ -3315,6 +3315,31 @@ public class SceneGraph {
 		}
 	}
 
+	/**
+	 * Removes one legacy scene object, including every footprint tile for a
+	 * game object. This supports the legacy document bridge; neutral editor
+	 * code must use its own command/session model instead.
+	 */
+	public void removeObject(DefaultWorldObject object) {
+		if (object == null || object.getKey() == null) return;
+		ObjectKey key = object.getKey();
+		int x = key.getX();
+		int y = key.getY();
+		int z = object.getPlane();
+		if (z < 0 || z >= tiles.length || x < 0 || x >= width || y < 0 || y >= length) return;
+		if (object instanceof GameObject gameObject) {
+			removeInteractable(gameObject);
+		} else if (object instanceof Wall) {
+			removeWall(x, y, z);
+		} else if (object instanceof WallDecoration) {
+			removeWallDecoration(x, y, z);
+		} else if (object instanceof GroundDecoration) {
+			removeFloorDecoration(x, y, z);
+		} else {
+			tiles[z][x][y].removeByUID(key);
+		}
+	}
+
 	public void removeTemporaryObject(int tileX, int tileY, int plane) {
 		SceneTile tile = getTile(plane, tileX, tileY);
 		tile.tileHighlighted = false;

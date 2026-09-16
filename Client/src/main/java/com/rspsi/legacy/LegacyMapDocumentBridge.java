@@ -2,20 +2,24 @@ package com.rspsi.legacy;
 
 import com.jagex.map.MapRegion;
 import com.jagex.map.SceneGraph;
+import com.jagex.map.object.DefaultWorldObject;
 import com.jagex.map.tile.SceneTile;
+import com.jagex.util.ObjectKey;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SessionChangeListener;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldDocument;
 
 import java.util.Objects;
 import java.util.Set;
 
 /**
- * Synchronizes the neutral terrain document with the current legacy map.
- * Objects are deliberately not imported or written until their semantics have
- * a complete neutral representation.
+ * Synchronizes the neutral document with the current legacy map while the
+ * legacy renderer remains the compatibility viewport. Cache semantics stay
+ * outside this adapter; it only translates the stable scene object key and
+ * layer values into RSPSi-owned objects.
  */
 public final class LegacyMapDocumentBridge implements SessionChangeListener, AutoCloseable {
     private final MapRegion mapRegion;
@@ -53,6 +57,30 @@ public final class LegacyMapDocumentBridge implements SessionChangeListener, Aut
         return document;
     }
 
+    /** Imports terrain and the scene's canonical object anchors when available. */
+    public static WorldDocument importDocument(MapRegion mapRegion, SceneGraph sceneGraph) {
+        Objects.requireNonNull(mapRegion, "mapRegion");
+        Objects.requireNonNull(sceneGraph, "sceneGraph");
+        WorldDocument document = importTerrain(mapRegion);
+        int planes = Math.min(document.planes(), sceneGraph.tiles.length);
+        int width = Math.min(document.width(), sceneGraph.width);
+        int length = Math.min(document.length(), sceneGraph.length);
+        for (int plane = 0; plane < planes; plane++) {
+            for (int x = 0; x < width; x++) {
+                for (int y = 0; y < length; y++) {
+                    SceneTile sceneTile = sceneGraph.tiles[plane][x][y];
+                    if (sceneTile == null) continue;
+                    for (DefaultWorldObject legacyObject : sceneTile.getExistingObjects()) {
+                        ObjectKey key = legacyObject.getKey();
+                        if (key == null || key.getX() != x || key.getY() != y) continue;
+                        appendObject(document, plane, x, y, toNeutralObject(legacyObject, plane));
+                    }
+                }
+            }
+        }
+        return document;
+    }
+
     public void attach(EditorSession session) {
         Objects.requireNonNull(session, "session");
         if (this.session != null) {
@@ -80,6 +108,10 @@ public final class LegacyMapDocumentBridge implements SessionChangeListener, Aut
                 mapRegion.underlays[plane][x][y] = (short) underlay;
                 changed = true;
                 markSceneTileDirty(plane, x, y);
+            }
+            if (sceneGraph != null && synchronizeObjects(plane, x, y,
+                    session.world().tile(coordinate).snapshot().objects())) {
+                changed = true;
             }
         }
         if (changed) {
@@ -113,6 +145,46 @@ public final class LegacyMapDocumentBridge implements SessionChangeListener, Aut
         if (tile != null) {
             tile.hasUpdated = true;
         }
+    }
+
+    private boolean synchronizeObjects(int plane, int x, int y, java.util.List<WorldObject> desired) {
+        if (plane >= sceneGraph.tiles.length || x >= sceneGraph.width || y >= sceneGraph.length) {
+            return false;
+        }
+        SceneTile tile = sceneGraph.tiles[plane][x][y];
+        if (tile == null) return false;
+        java.util.List<DefaultWorldObject> existing = tile.getExistingObjects().stream()
+                .filter(object -> object.getKey() != null
+                        && object.getKey().getX() == x && object.getKey().getY() == y)
+                .toList();
+        java.util.List<WorldObject> current = existing.stream()
+                .map(object -> toNeutralObject(object, plane))
+                .toList();
+        if (current.equals(desired)) return false;
+        existing.forEach(sceneGraph::removeObject);
+        for (WorldObject object : desired) {
+            sceneGraph.addObject(object.x(), object.y(), object.plane(), object.id(),
+                    object.type(), object.rotation(), false);
+        }
+        return true;
+    }
+
+    private static void appendObject(WorldDocument document, int plane, int x, int y,
+                                     WorldObject object) {
+        TileSnapshot before = document.tile(plane, x, y).snapshot();
+        java.util.ArrayList<WorldObject> objects = new java.util.ArrayList<>(before.objects());
+        objects.add(object);
+        document.tile(plane, x, y).restore(new TileSnapshot(
+                before.southWestHeight(), before.southEastHeight(),
+                before.northEastHeight(), before.northWestHeight(),
+                before.underlayId(), before.overlayId(), before.overlayShape(),
+                before.overlayRotation(), before.flags(), objects));
+    }
+
+    private static WorldObject toNeutralObject(DefaultWorldObject object, int plane) {
+        ObjectKey key = Objects.requireNonNull(object.getKey(), "legacy object key");
+        return new WorldObject(key.getId(), key.getType(), key.getOrientation(), plane,
+                key.getX(), key.getY());
     }
 
     private static TileSnapshot snapshotAt(MapRegion mapRegion, int plane, int x, int y) {
