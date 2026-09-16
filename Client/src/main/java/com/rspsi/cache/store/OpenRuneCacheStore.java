@@ -36,11 +36,13 @@ public final class OpenRuneCacheStore implements CacheStore {
     }
 
     /** Returns a stable identity derived from the cache's reference-table versions. */
-    public OsrsCacheMetadata metadata(int revision) {
+    @Override
+    public java.util.Optional<OsrsCacheMetadata> metadata(int revision) {
         if (revision <= 0) {
             throw new IllegalArgumentException("OSRS cache revision must be positive");
         }
-        return new OsrsCacheMetadata(revision, null, fingerprint(cache.getVersionTable()));
+        return java.util.Optional.of(new OsrsCacheMetadata(revision, null,
+                fingerprint(cache.getVersionTable())));
     }
 
     @Override

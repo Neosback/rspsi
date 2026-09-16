@@ -58,7 +58,7 @@ public final class OsrsRevisionVerifier {
         List<String> messages = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         try (OpenRuneCacheStore store = OpenRuneCacheStore.open(path)) {
-            messages.add("cache metadata: " + store.metadata(revision));
+            messages.add("cache metadata: " + store.metadata(revision).orElseThrow());
             OsrsRevisionProfile profile = OsrsRevisionProfile.forRevision(revision);
             messages.add("revision profile: " + profile.mapGroupLayout());
             OsrsMapService maps = new OsrsMapService(store, revision);

@@ -97,6 +97,10 @@ boundary.
   results.
 - Cache and definitions are accessed through RSPSi interfaces, never raw
   archive/index/file objects.
+- `CacheStore.metadata(revision)` is an optional neutral identity capability;
+  project compatibility can compare revision, subrevision, and fingerprint
+  without depending on an OpenRune store class. Legacy stores may leave it
+  unavailable.
 - `LayeredCacheStore` keeps base-cache reads separate from staged output-layer
   writes. Save coordinators flush an explicit output layer; painting cannot
   mutate the source cache implicitly. `CacheStoreFactory.layered(...)` is the

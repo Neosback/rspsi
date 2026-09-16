@@ -2,6 +2,7 @@ package com.rspsi.cache.store;
 
 import dev.openrune.filesystem.Cache;
 import dev.openrune.filesystem.Compression;
+import com.rspsi.cache.OsrsCacheMetadata;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -37,6 +38,15 @@ class OpenRuneCacheStoreTest {
             assertFalse(store.capabilities().writable());
             assertTrue(store.capabilities().namedArchives());
             assertFalse(store.capabilities().mapPacking());
+        }
+    }
+
+    @Test
+    void exposesCacheIdentityThroughTheNeutralStoreBoundary() {
+        try (CacheStore store = new OpenRuneCacheStore(new FakeCache())) {
+            OsrsCacheMetadata metadata = store.metadata(240).orElseThrow();
+            assertEquals(240, metadata.revision());
+            assertEquals(64, metadata.fingerprint().length());
         }
     }
 

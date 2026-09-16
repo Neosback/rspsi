@@ -1,6 +1,9 @@
 package com.rspsi.cache.store;
 
 import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.OsrsCacheMetadata;
+
+import java.util.Optional;
 
 /**
  * Neutral byte-oriented cache boundary used by editor code.
@@ -32,6 +35,11 @@ public interface CacheStore extends AutoCloseable {
     /** Describes backend behavior without exposing its implementation library. */
     default CacheStoreCapabilities capabilities() {
         return new CacheStoreCapabilities(false, false, false);
+    }
+
+    /** Returns OSRS cache identity when this backend can provide it. */
+    default Optional<OsrsCacheMetadata> metadata(int revision) {
+        return Optional.empty();
     }
 
     @Override
