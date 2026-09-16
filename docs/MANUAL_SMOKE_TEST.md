@@ -30,3 +30,10 @@ Remove the setting (or set it to `false`) to return to the default legacy
 layout.
 
 Record the cache revision, map/region used, operating system, and any failure in the roadmap ledger.
+
+For the OSRS project foundation, also verify that a project directory contains
+`project.json`, `autosave/`, and `edits/`; opening it against its recorded cache
+is editable, while opening it against a different revision or fingerprint is
+clearly read-only. The current project/session API is covered by automated
+tests; the JavaFX Open Project action remains gated until the canonical OSRS
+scene viewport is connected.

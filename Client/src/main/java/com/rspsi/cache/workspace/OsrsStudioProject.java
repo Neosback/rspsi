@@ -11,7 +11,9 @@ import com.rspsi.cache.store.OpenRuneCacheStore;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.assets.DefinitionAssetRepository;
 import com.rspsi.project.ProjectMetadata;
+import com.rspsi.project.ProjectLayout;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
@@ -33,6 +35,24 @@ public final class OsrsStudioProject implements AutoCloseable {
     private final DefinitionProvider definitions;
     private final AssetRepository assets;
     private boolean closed;
+
+    /**
+     * Captures the selected cache identity into a new project layout. This
+     * does not copy or modify cache data.
+     */
+    public static ProjectMetadata initializeProject(ProjectLayout layout, Path cachePath,
+                                                    int revision) throws IOException {
+        Objects.requireNonNull(layout, "layout");
+        Objects.requireNonNull(cachePath, "cachePath");
+        if (revision <= 0) throw new IllegalArgumentException("OSRS revision must be positive");
+        try (OpenRuneCacheStore cache = OpenRuneCacheStore.open(cachePath)) {
+            OsrsCacheMetadata identity = cache.metadata(revision)
+                    .orElseThrow(() -> new IOException("Selected cache did not expose an identity"));
+            ProjectMetadata metadata = ProjectMetadata.forCache(identity);
+            layout.initialize(metadata);
+            return metadata;
+        }
+    }
 
     /**
      * Creates a project over already-created neutral services. This overload
@@ -100,6 +120,13 @@ public final class OsrsStudioProject implements AutoCloseable {
         }
     }
 
+    /** Opens a read-only OSRS project from its persisted metadata file. */
+    public static OsrsStudioProject openReadOnly(ProjectLayout layout, Path cachePath)
+            throws IOException {
+        Objects.requireNonNull(layout, "layout");
+        return openReadOnly(cachePath, layout.readMetadata());
+    }
+
     /**
      * Opens an OpenRune source cache and a distinct Displee output cache.
      * OpenRune remains the source/definition reader until a writable OpenRune
@@ -125,6 +152,14 @@ public final class OsrsStudioProject implements AutoCloseable {
             definitionsBase.close();
             throw exception;
         }
+    }
+
+    /** Opens a persisted OSRS project with the explicit staged output cache. */
+    public static OsrsStudioProject openWithDispleeOutput(ProjectLayout layout,
+                                                           Path basePath, Path outputPath)
+            throws IOException {
+        Objects.requireNonNull(layout, "layout");
+        return openWithDispleeOutput(basePath, outputPath, layout.readMetadata());
     }
 
     public ProjectMetadata project() {

@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.Path;
 import java.util.Objects;
 
@@ -22,7 +24,19 @@ public final class ProjectMetadataStore {
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        Files.writeString(path, GSON.toJson(metadata));
+        String json = GSON.toJson(metadata);
+        Path temporary = Files.createTempFile(parent, path.getFileName().toString(), ".tmp");
+        try {
+            Files.writeString(temporary, json, StandardOpenOption.TRUNCATE_EXISTING);
+            try {
+                Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
     }
 
     public static ProjectMetadata read(Path path) throws IOException {

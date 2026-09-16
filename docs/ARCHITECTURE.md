@@ -235,6 +235,14 @@ keeping both backend types behind the cache boundary. Frontends receive
 `OpenedProject`, `DefinitionProvider`, and `AssetRepository`, never archive,
 filesystem, or cache-library objects.
 
+`ProjectLayout` owns the small project directory contract: `project.json`,
+`autosave/`, and `edits/`. `ProjectMetadataStore.write(...)` replaces metadata
+through a temporary file and atomic move when the filesystem supports it, so a
+crash cannot leave a partially written project identity. `initializeProject(...)`
+captures the selected OpenRune cache fingerprint without copying or modifying
+the cache; opening a different cache later still goes through the existing
+read-only compatibility decision.
+
 When a legacy map reaches its existing ready state, the client emits a small
 map-ready lifecycle callback. In controlled mode `MainWindow` imports terrain
 and object anchors into a fresh `EditorSession`, attaches

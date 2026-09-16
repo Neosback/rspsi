@@ -73,6 +73,11 @@ without exposing OpenRune, Displee, or archive types. The current safe output
 arrangement reads the OpenRune source and stages writes into a distinct output
 cache; a writable OpenRune packer remains a parity-gated milestone.
 
+Each project directory contains `project.json`, `autosave/`, and `edits/`.
+`OsrsStudioProject.initializeProject(...)` records the selected cache identity
+there without copying the cache; later opens compare that identity and fail
+closed to read-only when it differs.
+
 ## Editor layout
 
 Use controlled workspaces rather than unrestricted docking:
