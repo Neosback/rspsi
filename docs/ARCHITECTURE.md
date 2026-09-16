@@ -37,6 +37,8 @@ boundary.
 - `WorldFragment` is the canonical portable terrain/location copy-paste
   payload; fragment pastes are grouped commands rather than direct scene
   mutations.
+- `DirtyRegion` groups command invalidation by 8×8 chunk so future scene,
+  collision, minimap, and cache writers can rebuild only affected derived data.
 - `EditorTool`, `ToolContext`, `PointerEvent`, and `ToolInspector` are shared
   by all frontends.
 - `SceneRenderer` consumes neutral scenes and changes and returns neutral pick
