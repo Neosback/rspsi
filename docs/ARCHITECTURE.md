@@ -257,6 +257,11 @@ the initial `RenderScene`, consumes session-owned dirty chunks as bounded
 renderer updates, and removes its listener on close. JavaFX and future ImGui
 frontends can host this binding without placing UI types in the editor core.
 
+`SessionAutosaveStore` writes a versioned snapshot of the canonical document,
+project identity, and history position to the project `autosave/` area using
+the same atomic-replacement rule as project metadata. Recovery restores a
+standalone `WorldDocument`; it never opens or rewrites the source cache.
+
 When a legacy map reaches its existing ready state, the client emits a small
 map-ready lifecycle callback. In controlled mode `MainWindow` imports terrain
 and object anchors into a fresh `EditorSession`, attaches
