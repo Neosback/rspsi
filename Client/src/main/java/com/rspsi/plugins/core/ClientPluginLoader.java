@@ -30,8 +30,15 @@ public class ClientPluginLoader {
 	
 	public static void loadPlugins() {
 		File pluginPath = new File("plugins" + File.separator + "active");
-		log.info("Plugin folder contains {} files.", pluginPath.listFiles().length);
+		File[] files = pluginPath.listFiles();
+		log.info("Plugin folder contains {} files.", files == null ? 0 : files.length);
+		if (files == null) {
+			files = new File[0];
+		}
 		File[] plugins = pluginPath.listFiles((File dir, String name) -> name.endsWith(".jar"));
+		if (plugins == null) {
+			plugins = new File[0];
+		}
 		
 		List<URL> urls = Lists.newArrayList();
 		

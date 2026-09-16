@@ -474,7 +474,7 @@ public final class Client implements Runnable {
 
 
 
-			if(cache.getIndexedFileSystem().is317()) {
+			if(cache.is317()) {
 
 				Archive graphics = cache.createArchive(4, "2d graphics");
 

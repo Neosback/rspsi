@@ -38,6 +38,10 @@ subprojects {
         api group: 'com.google.code.gson', name: 'gson', version: '2.13.1'
 
         api group: 'jakarta.servlet', name: 'jakarta.servlet-api', version: '6.1.0'
+
+        testImplementation platform('org.junit:junit-bom:5.12.2')
+        testImplementation 'org.junit.jupiter:junit-jupiter'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     }
 
     lombok {
@@ -47,6 +51,10 @@ subprojects {
     compileJava {
         options.fork = true
         options.incremental = true
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
     }
 
     apply plugin: 'org.openjfx.javafxplugin'

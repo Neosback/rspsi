@@ -15,6 +15,10 @@ import java.util.function.BiFunction;
 import com.jagex.cache.graphics.Sprite;
 import com.jagex.net.ResourceProvider;
 import com.rspsi.cache.CacheFileType;
+import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.cache.definition.LegacyDefinitionProvider;
+import com.rspsi.cache.store.CacheStore;
+import com.rspsi.cache.store.LegacyDispleeCacheStore;
 import com.rspsi.core.misc.FixedIntegerKeyMap;
 
 import lombok.Getter;
@@ -45,6 +49,17 @@ public class Cache {
     @Getter
     private CacheLibrary indexedFileSystem;
 
+    /**
+     * Byte-oriented cache boundary for code that must not depend on Displee.
+     * The legacy adapter remains the active backend until an OSRS backend has
+     * passed the same compatibility tests.
+     */
+    @Getter
+    private CacheStore store;
+
+    @Getter
+    private final DefinitionProvider definitions = new LegacyDefinitionProvider();
+
     private Index modelArchive, mapArchive, configArchive, skeletonArchive, skinArchive, spriteIndex, textureIndex, spotAnimIndex, varbitIndex, locIndex;
 
     private boolean isCacheNewOSRS(CacheLibrary library) {
@@ -56,6 +71,7 @@ public class Cache {
     public Cache(Path path) {
         log.info("Loading cache at {}", path);
         indexedFileSystem = new CacheLibrary(path.toFile().toString(), false, null);
+        store = new LegacyDispleeCacheStore(indexedFileSystem);
         if (indexedFileSystem.is317()) {
             modelArchive = indexedFileSystem.index(1);
             mapArchive = indexedFileSystem.index(4);
@@ -93,6 +109,30 @@ public class Cache {
     }
 
     public ResourceProvider resourceProvider;
+
+    public boolean is317() {
+        return indexedFileSystem.is317();
+    }
+
+    public boolean isOsrs() {
+        return isCacheNewOSRS(indexedFileSystem);
+    }
+
+    public boolean isRs3() {
+        return indexedFileSystem.isRS3();
+    }
+
+    public byte[] read(int index, int archive, int file) {
+        return store.read(index, archive, file);
+    }
+
+    public void write(int index, int archive, int file, byte[] data) {
+        store.write(index, archive, file, data);
+    }
+
+    public void flush() {
+        store.flush();
+    }
 
 
     private FixedIntegerKeyMap<Sprite> spriteCache = new FixedIntegerKeyMap<Sprite>(100);
@@ -148,8 +188,8 @@ public class Cache {
                 return data.get();
         }
         if (indexedFileSystem.is317())
-            return mapArchive.archive(groupId).file(0).getData();
-        return mapArchive.archive(groupId).file(fileId).getData();
+            return store.read(4, groupId, 0);
+        return store.read(5, groupId, fileId);
     }
 
     public final byte[] getFile(CacheFileType type, int file) {
@@ -225,7 +265,7 @@ public class Cache {
     }
 
     public void close() throws IOException {
-        indexedFileSystem.close();
+        store.close();
     }
 
     public ResourceProvider getProvider() {
