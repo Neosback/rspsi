@@ -13,6 +13,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileInspectorSnapshot;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldTileAddress;
+import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.WorldWindow;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.selection.ObjectSelection;
@@ -113,10 +114,8 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
         TileSnapshot tile = session.world().tile(coordinate).snapshot();
         WorldTileAddress address = WorldTileAddress.of(window.worldX(coordinate),
                 window.worldY(coordinate), coordinate.plane());
-        boolean bridge = session.world().planes() > 1
-                && (session.world().tile(1, coordinate.x(), coordinate.y()).snapshot().flags()
-                & OsrsCollisionBuilder.LINK_BELOW) != 0;
-        boolean roof = (tile.flags() & OsrsCollisionBuilder.REMOVE_ROOFS) != 0;
+        boolean bridge = session.world().bridgeLink(coordinate).isPresent();
+        boolean roof = (tile.flags() & OsrsTileFlags.REMOVE_ROOFS) != 0;
         TileInspectorSnapshot snapshot = new TileInspectorSnapshot(address, tile, bridge, roof);
         status.setText("Tile semantics");
         values.getChildren().clear();
