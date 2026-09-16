@@ -17,7 +17,7 @@ class WorldValidatorTest {
     void reportsBrokenEdgesAndUnsupportedMapValues() {
         WorldDocument document = new WorldDocument(2, 2, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 8, 8, 8,
-                0, 1, 12, 0, 33, List.of()));
+                0, 1, 13, 0, 33, List.of()));
 
         List<ValidationIssue> issues = WorldValidator.validate(document);
 
@@ -37,6 +37,16 @@ class WorldValidatorTest {
         List<ValidationIssue> issues = WorldValidator.validate(document, new EmptyDefinitions());
 
         assertTrue(issues.stream().anyMatch(issue -> issue.code().equals("MISSING_OBJECT_DEFINITION")));
+    }
+
+    @Test
+    void acceptsTheHighestEncodedOverlayShape() {
+        WorldDocument document = new WorldDocument(2, 2, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 1, 11, 0, 0, List.of()));
+
+        assertTrue(WorldValidator.validate(document).stream()
+                .noneMatch(issue -> issue.code().equals("UNSUPPORTED_OVERLAY_SHAPE")));
     }
 
     private static final class EmptyDefinitions implements com.rspsi.cache.definition.DefinitionProvider {

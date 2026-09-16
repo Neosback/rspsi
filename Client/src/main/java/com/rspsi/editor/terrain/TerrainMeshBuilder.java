@@ -39,10 +39,13 @@ public final class TerrainMeshBuilder {
 
     public TerrainMesh build(TileSnapshot tile) {
         Objects.requireNonNull(tile, "tile");
-        int shape = tile.overlayShape();
+        // The map codec stores overlay shapes as 0..11. The scene topology
+        // table has one additional entry: shape 0 is the flat underlay model,
+        // while overlay shapes occupy topology entries 1..12.
+        int shape = tile.overlayId() == 0 ? 0 : tile.overlayShape() + 1;
         int rotation = tile.overlayRotation();
         if (shape < 0 || shape >= SHAPE_POINTS.length) {
-            throw new IllegalArgumentException("Terrain shape must be between 0 and 12");
+            throw new IllegalArgumentException("Encoded overlay shape must be between 0 and 11");
         }
         if (rotation < 0 || rotation > 3) {
             throw new IllegalArgumentException("Terrain rotation must be between 0 and 3");

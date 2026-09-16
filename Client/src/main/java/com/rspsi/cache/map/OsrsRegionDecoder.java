@@ -159,7 +159,7 @@ public final class OsrsRegionDecoder {
             BaseHeightProvider baseHeightProvider
     ) {
         WorldDocument document = decodeTerrain(landscape, regionX, regionY, baseHeightProvider);
-        for (WorldObject object : decodeLocations(locations)) {
+        for (WorldObject object : decodeLocations(locations == null ? new byte[0] : locations)) {
             TileSnapshot before = document.tile(object.plane(), object.x(), object.y()).snapshot();
             List<WorldObject> objects = new ArrayList<>(before.objects());
             objects.add(object);

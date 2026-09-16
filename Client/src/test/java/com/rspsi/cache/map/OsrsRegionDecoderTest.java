@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OsrsRegionDecoderTest {
     @Test
@@ -44,6 +45,14 @@ class OsrsRegionDecoderTest {
 
         assertEquals(List.of(new WorldObject(100, 10, 2, 1, 3, 4)),
                 document.tile(1, 3, 4).snapshot().objects());
+    }
+
+    @Test
+    void treatsAbsentLocationsAsAnEmptyPayload() {
+        WorldDocument document = OsrsRegionDecoder.decode(terrainFixture(), null, 0, 0,
+                (x, y) -> 10);
+
+        assertTrue(document.tile(0, 0, 0).snapshot().objects().isEmpty());
     }
 
     @Test

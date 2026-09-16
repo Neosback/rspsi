@@ -12,11 +12,11 @@ class TerrainMeshBuilderTest {
 
     @Test
     void everyShapeAndRotationBuildsValidGeometry() {
-        TileSnapshot tile = tile(10, 20, 30, 40, 2, 3);
+        TileSnapshot tile = tile(10, 20, 30, 40, 0, 3);
 
         for (int shape = 0; shape < TerrainMeshBuilder.shapeCount(); shape++) {
             for (int rotation = 0; rotation < 4; rotation++) {
-                TerrainMesh mesh = builder.build(withShape(tile, shape, rotation));
+                TerrainMesh mesh = builder.build(topologyTile(tile, shape, rotation));
                 assertFalse(mesh.vertices().isEmpty(), shape + "/" + rotation);
                 assertFalse(mesh.faces().isEmpty(), shape + "/" + rotation);
                 assertTrue(mesh.vertices().stream().allMatch(vertex ->
@@ -30,7 +30,7 @@ class TerrainMeshBuilderTest {
         TileSnapshot tile = tile(100, 200, 300, 400, 0, 0);
         for (int shape = 0; shape < TerrainMeshBuilder.shapeCount(); shape++) {
             for (int rotation = 0; rotation < 4; rotation++) {
-                TerrainMesh mesh = builder.build(withShape(tile, shape, rotation));
+                TerrainMesh mesh = builder.build(topologyTile(tile, shape, rotation));
                 assertTrue(mesh.vertices().contains(new TerrainVertex(0, 0, 100)), shape + "/" + rotation);
                 assertTrue(mesh.vertices().contains(new TerrainVertex(128, 0, 200)), shape + "/" + rotation);
                 assertTrue(mesh.vertices().contains(new TerrainVertex(128, 128, 300)), shape + "/" + rotation);
@@ -53,12 +53,23 @@ class TerrainMeshBuilderTest {
     }
 
     private static TileSnapshot tile(int sw, int se, int ne, int nw, int shape, int rotation) {
-        return new TileSnapshot(sw, se, ne, nw, 0, 0, shape, rotation, 0, List.of());
+        return new TileSnapshot(sw, se, ne, nw, 0, shape == 0 ? 0 : 1,
+                shape, rotation, 0, List.of());
     }
 
     private static TileSnapshot withShape(TileSnapshot source, int shape, int rotation) {
         return new TileSnapshot(source.southWestHeight(), source.southEastHeight(),
                 source.northEastHeight(), source.northWestHeight(), source.underlayId(),
-                source.overlayId(), shape, rotation, source.flags(), source.objects());
+                shape == 0 ? 0 : source.overlayId() == 0 ? 1 : source.overlayId(),
+                shape == 0 ? 0 : shape, rotation, source.flags(), source.objects());
+    }
+
+    private static TileSnapshot topologyTile(TileSnapshot source, int topologyShape, int rotation) {
+        // Topology 0 is the flat/no-overlay model; topology 1..12 map to
+        // encoded overlay shapes 0..11.
+        return new TileSnapshot(source.southWestHeight(), source.southEastHeight(),
+                source.northEastHeight(), source.northWestHeight(), source.underlayId(),
+                topologyShape == 0 ? 0 : 1,
+                Math.max(0, topologyShape - 1), rotation, source.flags(), source.objects());
     }
 }

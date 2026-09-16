@@ -45,7 +45,9 @@ boundary.
   collision, minimap, and cache writers can rebuild only affected derived data.
 - `TerrainMeshBuilder` owns the 13 shaped-tile topologies and four rotations;
   it produces neutral mesh data for renderers and is covered independently of
-  the legacy `ShapedTile` class.
+  the legacy `ShapedTile` class. The map-facing tile shape remains the encoded
+  0..11 value; mesh topology 0 is the flat model and overlay values map to
+  topology 1..12 at this boundary.
 - `CollisionMap`, `CollisionFlag`, and `CollisionDirection` own editor
   collision semantics; server routefinder types are reference inputs only.
 - The collision model preserves OpenRune's optional route-blocker layer. The

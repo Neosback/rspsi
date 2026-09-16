@@ -32,7 +32,7 @@ public final class PaintOverlayTool implements EditorTool {
         this.overlayId = overlayId;
     }
     public void setShape(int shape) {
-        if (shape < 0 || shape > 12) throw new IllegalArgumentException("Overlay shape must be between 0 and 12");
+        if (shape < 0 || shape > 11) throw new IllegalArgumentException("Overlay shape must be between 0 and 11");
         this.shape = shape;
     }
     public void setRotation(int rotation) {
@@ -56,7 +56,7 @@ public final class PaintOverlayTool implements EditorTool {
     @Override public ToolInspector inspector() {
         return () -> List.of(
                 new PropertyDescriptor("overlayId", "Overlay", PropertyDescriptor.ValueType.INTEGER, 0, Integer.MAX_VALUE),
-                new PropertyDescriptor("shape", "Shape", PropertyDescriptor.ValueType.INTEGER, 0, 12),
+                new PropertyDescriptor("shape", "Shape", PropertyDescriptor.ValueType.INTEGER, 0, 11),
                 new PropertyDescriptor("rotation", "Rotation", PropertyDescriptor.ValueType.INTEGER, 0, 3));
     }
     @Override public void renderOverlay(OverlayDraw draw) { visited.forEach(draw::tileOutline); }

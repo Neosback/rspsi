@@ -73,7 +73,8 @@ class TerrainMeshGoldenTest {
         TerrainMeshBuilder builder = new TerrainMeshBuilder();
         for (int shape = 0; shape < 13; shape++) {
             for (int rotation = 0; rotation < 4; rotation++) {
-                TileSnapshot tile = new TileSnapshot(10, 20, 30, 40, 2, 3, shape, rotation, 0, List.of());
+                TileSnapshot tile = new TileSnapshot(10, 20, 30, 40, 2,
+                        shape == 0 ? 0 : 3, Math.max(0, shape - 1), rotation, 0, List.of());
                 assertEquals(GOLDENS[shape * 4 + rotation], digest(builder.build(tile)), shape + "/" + rotation);
             }
         }
