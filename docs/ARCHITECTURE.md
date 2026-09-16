@@ -60,6 +60,10 @@ boundary.
   landscape/location payloads. It produces `WorldDocument` and
   `WorldObject` data without exposing OpenRune, Displee, archive IDs, or
   opcodes to editor packages.
+- `OsrsRegionEncoder` writes dirty-region terrain and location payloads from
+  the canonical model. It uses explicit heights during the first migration
+  so decode/encode/decode tests verify semantic equality without preserving
+  source-specific generated-height choices.
 
 ## Frontends
 
