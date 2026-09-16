@@ -9,6 +9,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectCollisionView;
+import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SetTileCommand;
 import org.junit.jupiter.api.Test;
@@ -141,6 +142,10 @@ class RenderSceneBuilderTest {
         assertArrayEquals(new int[]{501, 502}, renderObject.modelIds());
         assertTrue(renderObject.blocksMovement());
         assertTrue(renderObject.blocksProjectile());
+        assertEquals(700, renderObject.appearance().animationId());
+        assertTrue(renderObject.appearance().contouredGround());
+        assertEquals(150, renderObject.appearance().scaleX());
+        assertEquals(java.util.Map.of(10, 20), renderObject.appearance().recolors());
     }
 
     private static DefinitionProvider definitions() {
@@ -162,6 +167,13 @@ class RenderSceneBuilderTest {
             @Override public Optional<ObjectCollisionView> objectCollision(int id) {
                 return id == 100 ? Optional.of(new ObjectCollisionView(
                         id, 1, 2, 1, true, false)) : Optional.empty();
+            }
+
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return id == 100 ? Optional.of(new ObjectAppearanceView(700, true,
+                        150, 128, 128, 2, 3, 4,
+                        java.util.Map.of(10, 20), java.util.Map.of(30, 40)))
+                        : Optional.empty();
             }
         };
     }

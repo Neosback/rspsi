@@ -3,6 +3,7 @@ package com.rspsi.editor.inspector;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.model.OsrsLocShape;
 import com.rspsi.editor.model.WorldObject;
@@ -29,13 +30,15 @@ public record ObjectInspectorSnapshot(
         ObjectCategory category,
         Optional<OsrsLocShape> shape,
         Optional<ObjectDefinitionSummary> definition,
-        Optional<ObjectCollisionSummary> collision
+        Optional<ObjectCollisionSummary> collision,
+        Optional<ObjectAppearanceView> appearance
 ) {
     public ObjectInspectorSnapshot {
         Objects.requireNonNull(category, "category");
         shape = Objects.requireNonNull(shape, "shape");
         definition = Objects.requireNonNull(definition, "definition");
         collision = Objects.requireNonNull(collision, "collision");
+        appearance = Objects.requireNonNull(appearance, "appearance");
     }
 
     public String categoryName() {
@@ -57,7 +60,8 @@ public record ObjectInspectorSnapshot(
                 object.category(), object.shape(),
                 definition.map(ObjectInspectorSnapshot::summary),
                 collision.map(value -> new ObjectCollisionSummary(
-                        value.blockWalk(), value.blockProjectile(), value.breakRouteFinding())));
+                        value.blockWalk(), value.blockProjectile(), value.breakRouteFinding())),
+                definitions.objectAppearance(object.id()));
     }
 
     private static ObjectDefinitionSummary summary(ObjectDefinitionView definition) {

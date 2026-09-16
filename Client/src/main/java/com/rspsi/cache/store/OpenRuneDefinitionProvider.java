@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectCollisionView;
+import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ModelDefinitionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
 import dev.openrune.cache.filestore.definition.ModelDecoder;
@@ -98,6 +99,25 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                 Math.max(1, definition.getSizeX()), Math.max(1, definition.getSizeY()),
                 Math.max(0, definition.getSolid()), definition.getImpenetrable(),
                 definition.isHollow()));
+    }
+
+    @Override
+    public Optional<ObjectAppearanceView> objectAppearance(int id) {
+        ObjectType definition = objects.get(id);
+        if (definition == null) return Optional.empty();
+        return Optional.of(new ObjectAppearanceView(
+                definition.getAnimationId(), false,
+                Math.max(1, definition.getModelSizeX()), Math.max(1, definition.getModelSizeY()),
+                Math.max(1, definition.getModelSizeZ()), definition.getOffsetX(),
+                definition.getOffsetY(), definition.getOffsetZ(),
+                ObjectAppearanceView.pairs(toArray(definition.getOriginalColours()),
+                        toArray(definition.getModifiedColours())),
+                ObjectAppearanceView.pairs(toArray(definition.getOriginalTextureColours()),
+                        toArray(definition.getModifiedTextureColours()))));
+    }
+
+    private static int[] toArray(List<Integer> values) {
+        return values == null ? null : values.stream().mapToInt(Integer::intValue).toArray();
     }
 
     @Override

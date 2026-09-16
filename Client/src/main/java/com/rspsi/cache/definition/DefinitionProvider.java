@@ -34,4 +34,9 @@ public interface DefinitionProvider {
     default Optional<ObjectCollisionView> objectCollision(int id) {
         return Optional.empty();
     }
+
+    /** Optional model/animation/transform data for object scene previews. */
+    default Optional<ObjectAppearanceView> objectAppearance(int id) {
+        return Optional.empty();
+    }
 }

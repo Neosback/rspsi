@@ -173,9 +173,14 @@ boundary.
   already-applied delegates if a later one fails, keeping failed commands out
   of session history.
 - `ObjectInspectorSnapshot` resolves optional neutral definition and collision
-  providers into immutable frontend data. It keeps missing definitions
-  explicit and exposes canonical category/shape names without coupling an
-  inspector to Displee, OpenRune, JavaFX, or ImGui.
+  providers plus optional appearance data into immutable frontend data. It
+  keeps missing definitions explicit and exposes canonical category/shape
+  names, animation, transforms, contouring, and replacement metadata without
+  coupling an inspector to Displee, OpenRune, JavaFX, or ImGui.
+- `ObjectAppearanceView` is optional neutral object model metadata: animation,
+  ground contouring, scale/translation, recolor, and retexture pairs. Legacy
+  and OpenRune adapters may provide it independently of collision data; an
+  absent value never invents renderer behavior.
 - `RenderObject` is the renderer-facing projection of a canonical
   `WorldObject`. It resolves optional neutral definitions and collision views
   into category, shape, orientation-aware footprint, model IDs, and movement/

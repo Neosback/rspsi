@@ -1,6 +1,7 @@
 package com.rspsi.editor.render;
 
 import com.rspsi.cache.definition.ObjectCollisionView;
+import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.model.OsrsLocShape;
@@ -23,12 +24,22 @@ public record RenderObject(
         int footprintLength,
         int[] modelIds,
         boolean blocksMovement,
-        boolean blocksProjectile
+        boolean blocksProjectile,
+        ObjectAppearanceView appearance
 ) {
+    /** Compatibility constructor for callers that only provide geometry. */
+    public RenderObject(WorldObject object, ObjectCategory category, Optional<OsrsLocShape> shape,
+                        int footprintWidth, int footprintLength, int[] modelIds,
+                        boolean blocksMovement, boolean blocksProjectile) {
+        this(object, category, shape, footprintWidth, footprintLength, modelIds,
+                blocksMovement, blocksProjectile, ObjectAppearanceView.empty());
+    }
+
     public RenderObject {
         object = Objects.requireNonNull(object, "object");
         category = Objects.requireNonNull(category, "category");
         shape = Objects.requireNonNull(shape, "shape");
+        appearance = Objects.requireNonNull(appearance, "appearance");
         if (footprintWidth <= 0 || footprintLength <= 0) {
             throw new IllegalArgumentException("Object footprint must be positive");
         }
@@ -51,6 +62,7 @@ public record RenderObject(
                 && footprintLength == value.footprintLength
                 && blocksMovement == value.blocksMovement
                 && blocksProjectile == value.blocksProjectile
+                && Objects.equals(appearance, value.appearance)
                 && Objects.equals(object, value.object)
                 && category == value.category
                 && Objects.equals(shape, value.shape)
@@ -60,7 +72,7 @@ public record RenderObject(
     @Override
     public int hashCode() {
         int result = Objects.hash(object, category, shape, footprintWidth, footprintLength,
-                blocksMovement, blocksProjectile);
+                blocksMovement, blocksProjectile, appearance);
         return 31 * result + Arrays.hashCode(modelIds);
     }
 
@@ -73,13 +85,22 @@ public record RenderObject(
                 + ", footprintLength=" + footprintLength
                 + ", modelIds=" + Arrays.toString(modelIds)
                 + ", blocksMovement=" + blocksMovement
-                + ", blocksProjectile=" + blocksProjectile + ']';
+                + ", blocksProjectile=" + blocksProjectile
+                + ", appearance=" + appearance + ']';
     }
 
     /** Resolves a canonical object into renderer inputs at the neutral boundary. */
     public static RenderObject resolve(WorldObject object,
                                        ObjectDefinitionView definition,
                                        ObjectCollisionView collision) {
+        return resolve(object, definition, collision, null);
+    }
+
+    /** Resolves canonical object data plus optional appearance metadata. */
+    public static RenderObject resolve(WorldObject object,
+                                       ObjectDefinitionView definition,
+                                       ObjectCollisionView collision,
+                                       ObjectAppearanceView appearance) {
         Objects.requireNonNull(object, "object");
         int width = definition == null ? collision == null ? 1 : collision.width()
                 : Math.max(1, definition.width());
@@ -93,6 +114,7 @@ public record RenderObject(
         return new RenderObject(object, object.category(), object.shape(), width, length,
                 definition == null ? new int[0] : definition.modelIds(),
                 collision != null && collision.blockWalk() > 0,
-                collision != null && collision.blockProjectile());
+                collision != null && collision.blockProjectile(),
+                appearance == null ? ObjectAppearanceView.empty() : appearance);
     }
 }

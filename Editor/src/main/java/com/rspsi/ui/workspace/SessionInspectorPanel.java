@@ -149,7 +149,7 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
         ObjectInspectorSnapshot snapshot = definitions == null
                 ? new ObjectInspectorSnapshot(object.id(), object.x(), object.y(), object.plane(),
                 object.type(), object.rotation(), object.category(), object.shape(),
-                java.util.Optional.empty(), java.util.Optional.empty())
+                java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty())
                 : ObjectInspectorSnapshot.capture(object, definitions);
         clear((session != null && session.canEdit() ? "Editable" : "Read-only") + " · Object selection");
         row("ID", Integer.toString(snapshot.id()));
@@ -175,6 +175,20 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
             row("Movement collision", Integer.toString(collision.blockWalk()));
             row("Projectile collision", collision.blockProjectile() ? "Yes" : "No");
             row("Break route finding", collision.breakRouteFinding() ? "Yes" : "No");
+        });
+        snapshot.appearance().ifPresent(appearance -> {
+            if (appearance.animationId() >= 0) {
+                row("Animation", Integer.toString(appearance.animationId()));
+            }
+            row("Contour ground", appearance.contouredGround() ? "Yes" : "No");
+            if (appearance.scaleX() != 128 || appearance.scaleY() != 128 || appearance.scaleZ() != 128) {
+                row("Scale", appearance.scaleX() + " / " + appearance.scaleY() + " / " + appearance.scaleZ());
+            }
+            if (appearance.offsetX() != 0 || appearance.offsetY() != 0 || appearance.offsetZ() != 0) {
+                row("Offset", appearance.offsetX() + " / " + appearance.offsetY() + " / " + appearance.offsetZ());
+            }
+            if (!appearance.recolors().isEmpty()) row("Recolors", appearance.recolors().toString());
+            if (!appearance.retextures().isEmpty()) row("Retextures", appearance.retextures().toString());
         });
     }
 

@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.model.WorldObject;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,8 @@ class ObjectInspectorSnapshotTest {
         assertEquals(List.of(500, 501), snapshot.definition().orElseThrow().modelIds());
         assertEquals(List.of("Open", "Search"), snapshot.definition().orElseThrow().actions());
         assertTrue(snapshot.collision().orElseThrow().blockProjectile());
+        assertEquals(700, snapshot.appearance().orElseThrow().animationId());
+        assertTrue(snapshot.appearance().orElseThrow().contouredGround());
     }
 
     @Test
@@ -71,6 +74,13 @@ class ObjectInspectorSnapshotTest {
             return id == 42
                     ? Optional.of(new ObjectCollisionView(42, 2, 3, 2, true, false))
                     : Optional.empty();
+        }
+
+        @Override
+        public Optional<ObjectAppearanceView> objectAppearance(int id) {
+            return id == 42 ? Optional.of(new ObjectAppearanceView(700, true,
+                    128, 128, 128, 0, 0, 0,
+                    java.util.Map.of(10, 20), java.util.Map.of())) : Optional.empty();
         }
 
         @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }

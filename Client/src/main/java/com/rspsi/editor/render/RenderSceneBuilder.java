@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.DirtyRegion;
 import com.rspsi.editor.model.WorldDocument;
@@ -136,6 +137,8 @@ public final class RenderSceneBuilder {
                 ? null : definitions.object(object.id()).orElse(null);
         ObjectCollisionView collision = definitions == null
                 ? null : definitions.objectCollision(object.id()).orElse(null);
-        return RenderObject.resolve(object, definition, collision);
+        ObjectAppearanceView appearance = definitions == null
+                ? null : definitions.objectAppearance(object.id()).orElse(null);
+        return RenderObject.resolve(object, definition, collision, appearance);
     }
 }

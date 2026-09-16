@@ -50,6 +50,23 @@ public final class LegacyDefinitionProvider implements DefinitionProvider {
     }
 
     @Override
+    public Optional<ObjectAppearanceView> objectAppearance(int id) {
+        try {
+            ObjectDefinition definition = ObjectDefinitionLoader.lookup(id);
+            if (definition == null) return Optional.empty();
+            return Optional.of(new ObjectAppearanceView(
+                    definition.getAnimation(), definition.isContouredGround(),
+                    Math.max(1, definition.getScaleX()), Math.max(1, definition.getScaleY()),
+                    Math.max(1, definition.getScaleZ()), definition.getTranslateX(),
+                    definition.getTranslateY(), definition.getTranslateZ(),
+                    ObjectAppearanceView.pairs(definition.getOriginalColours(), definition.getReplacementColours()),
+                    ObjectAppearanceView.pairs(definition.getRetextureToFind(), definition.getTextureToReplace())));
+        } catch (RuntimeException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    @Override
     public Optional<FloorDefinitionView> underlay(int id) {
         return floor(id, true);
     }
