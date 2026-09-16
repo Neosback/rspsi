@@ -74,9 +74,11 @@ and uses the neutral `LayeredCacheStore` for staged output.
 The legacy Displee adapter now explicitly calls `CacheLibrary.update()` during
 `flush()`; closing a Displee library alone does not repack dirty archives. An
 opt-in integration test copies an explicitly supplied cache, edits a modern
-region, flushes and reopens it, and verifies the semantic terrain change. This
-validated the current output path against live build 240 without mutating the
-source cache. It does not make OpenRune's file-backed cache writable.
+region, flushes and reopens it through both Displee and the OpenRune reader,
+and verifies the semantic terrain change. This validated the current output
+path against live build 240 without mutating the source cache. It does not
+make OpenRune's file-backed cache writable, but it does establish that staged
+output is readable by the production OpenRune adapter.
 
 ## Explicit limitations
 
@@ -101,7 +103,7 @@ scene construction, and semantic decode -> encode -> decode. The selected
 modern region contained a 2,040-byte location payload and 988 objects. The
 OpenRune backend remains read-only. The application continues to construct the
 legacy Displee backend by default, and the validated Displee writer is an
-explicit output choice rather than an OpenRune production-backend claim.
+explicit staged output choice rather than an OpenRune-native writer claim.
 
 ## Next spike gate
 
@@ -110,10 +112,10 @@ load it through `CacheStoreFactory.openRune(Path)`, and compare terrain,
 objects, floors, flags, shapes, rotations, and region coordinates with the
 existing representation. Revision-6 named maps and live build-240 numeric
 maps now pass this read-only comparison. Writable output-cache reopening is
-validated through the explicit Displee adapter; the remaining cache gate is a
-safe OpenRune-compatible writer or a formally retained OpenRune-read/
-Displee-output arrangement. Definition adapters are available, but are not yet
-the default product backend.
+validated through the explicit Displee adapter and the OpenRune reader; the
+remaining cache gate is a safe OpenRune-compatible writer or a formally
+retained OpenRune-read/Displee-output arrangement. Definition adapters are
+available, but are not yet the default product backend.
 
 ## Explicit verification
 

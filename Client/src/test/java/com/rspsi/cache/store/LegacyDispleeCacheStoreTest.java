@@ -65,6 +65,15 @@ class LegacyDispleeCacheStoreTest {
                 WorldRegion reopened = maps.loadRegion(regionX, regionY).orElseThrow();
                 assertEquals(expected, reopened.document().tile(0, 1, 1).snapshot().underlayId());
             }
+
+            // The output is written by the staged Displee adapter, but it must
+            // remain consumable by the production OpenRune reader before it is
+            // accepted as an OSRS output cache.
+            try (CacheStore openRune = CacheStoreFactory.openRune(output)) {
+                OsrsMapService maps = new OsrsMapService(openRune, revision);
+                WorldRegion reopened = maps.loadRegion(regionX, regionY).orElseThrow();
+                assertEquals(expected, reopened.document().tile(0, 1, 1).snapshot().underlayId());
+            }
         } finally {
             deleteDirectory(output);
         }
