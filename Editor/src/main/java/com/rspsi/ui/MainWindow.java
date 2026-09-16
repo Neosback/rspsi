@@ -408,15 +408,30 @@ public class MainWindow extends Application {
 			});
 
 			SceneGraph.undoList.addListener((ListChangeListener<TileChange>) listener -> {
-				controller.getUndoMenuItem().disableProperty().set(SceneGraph.undoList.isEmpty());
+				updateHistoryMenuState();
 			});
 
 			SceneGraph.redoList.addListener((ListChangeListener<TileChange>) listener -> {
-				controller.getRedoMenuItem().disableProperty().set(SceneGraph.redoList.isEmpty());
+				updateHistoryMenuState();
 			});
 
-			controller.getUndoMenuItem().setOnAction(evt -> SceneGraph.undo());
-			controller.getRedoMenuItem().setOnAction(evt -> SceneGraph.redo());
+			controller.getUndoMenuItem().setOnAction(evt -> {
+				if (controlledSession != null && controlledSession.history().canUndo()) {
+					controlledSession.undo();
+				} else {
+					SceneGraph.undo();
+				}
+				updateHistoryMenuState();
+			});
+			controller.getRedoMenuItem().setOnAction(evt -> {
+				if (controlledSession != null && controlledSession.history().canRedo()) {
+					controlledSession.redo();
+				} else {
+					SceneGraph.redo();
+				}
+				updateHistoryMenuState();
+			});
+			updateHistoryMenuState();
 
 			controller.getDeleteSelectedTilesBtn().setOnAction(evt -> TileDeleteDialog.instance.show());
 
@@ -802,6 +817,7 @@ public class MainWindow extends Application {
 			var document = LegacyMapDocumentBridge.importDocument(clientInstance.mapRegion,
 					clientInstance.sceneGraph);
 			controlledSession = new EditorSession(document);
+			controlledSession.addStateListener(session -> updateHistoryMenuState());
 			controlledDocumentBridge = new LegacyMapDocumentBridge(
 					clientInstance.mapRegion, clientInstance.sceneGraph);
 			controlledDocumentBridge.attach(controlledSession);
@@ -819,6 +835,28 @@ public class MainWindow extends Application {
 			log.info("Controlled workspace session bound to legacy map {}x{} at {},{}",
 					document.width(), document.length(), clientInstance.getBaseX(), clientInstance.getBaseY());
 		});
+	}
+
+	/**
+	 * Keeps the existing menu usable while history migrates from SceneGraph to
+	 * the neutral session. Once a canonical command exists, the session owns
+	 * the menu state and dispatch; otherwise the legacy stacks remain the
+	 * compatibility fallback.
+	 */
+	private void updateHistoryMenuState() {
+		if (controller == null) {
+			return;
+		}
+		boolean canUndo = controlledSession != null && controlledSession.history().canUndo();
+		boolean canRedo = controlledSession != null && controlledSession.history().canRedo();
+		if (!canUndo) {
+			canUndo = !SceneGraph.undoList.isEmpty();
+		}
+		if (!canRedo) {
+			canRedo = !SceneGraph.redoList.isEmpty();
+		}
+		controller.getUndoMenuItem().setDisable(!canUndo);
+		controller.getRedoMenuItem().setDisable(!canRedo);
 	}
 
 	@Subscribe(threadMode = ThreadMode.ASYNC)
