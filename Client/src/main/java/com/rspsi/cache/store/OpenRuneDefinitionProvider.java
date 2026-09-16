@@ -69,6 +69,26 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     }
 
     @Override
+    public List<Integer> objectIds() {
+        return objects.keySet().stream().sorted().toList();
+    }
+
+    @Override
+    public List<Integer> underlayIds() {
+        return underlays.keySet().stream().sorted().toList();
+    }
+
+    @Override
+    public List<Integer> overlayIds() {
+        return overlays.keySet().stream().sorted().toList();
+    }
+
+    @Override
+    public List<Integer> textureIds() {
+        return textures.keySet().stream().sorted().toList();
+    }
+
+    @Override
     public Optional<ObjectCollisionView> objectCollision(int id) {
         ObjectType definition = objects.get(id);
         if (definition == null) {

@@ -103,6 +103,10 @@ boundary.
   providers into immutable frontend data. It keeps missing definitions
   explicit and exposes canonical category/shape names without coupling an
   inspector to Displee, OpenRune, JavaFX, or ImGui.
+- `DefinitionAssetRepository` turns neutral definition IDs into searchable
+  `AssetDescriptor` values for the first asset-browser categories (objects,
+  underlays, overlays, and textures). Providers may later supply RSCM/GameVal
+  names without changing the editor-facing asset contract.
 
 ## Frontends
 
