@@ -21,6 +21,11 @@ loading, confirm the History panel reports the bound session and the
 Inspector panel updates when a neutral selection is made. Open the Validation
 tab and confirm it reports either “World is valid” or actionable diagnostics
 with a plane/tile location; make an edit and confirm the diagnostics refresh.
+When an OSRS-backed asset repository is supplied, use the Assets pane to
+search by display name, numeric ID, and symbolic key, switch categories, move
+through results with the keyboard, and confirm the selected definition details
+are visible. Confirm that an unavailable repository leaves the legacy asset
+pane intact.
 Remove the setting (or set it to `false`) to return to the default legacy
 layout.
 
