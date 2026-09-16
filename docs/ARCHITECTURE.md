@@ -44,6 +44,10 @@ boundary.
   the legacy `ShapedTile` class.
 - `CollisionMap`, `CollisionFlag`, and `CollisionDirection` own editor
   collision semantics; server routefinder types are reference inputs only.
+- `RouteFinder` provides the first neutral collision-preview behavior: bounded
+  eight-way routes with diagonal corner protection and straight projectile
+  line-of-sight checks. It is intentionally small and replaceable while
+  OpenRune-Server route/reach semantics are verified against fixtures.
 - `OsrsCollisionBuilder` converts canonical terrain flags into collision and
   resolves the plane-1 `LINK_BELOW` bridge relationship. Object collision is
   supplied by the optional neutral `ObjectCollisionView`; missing definitions

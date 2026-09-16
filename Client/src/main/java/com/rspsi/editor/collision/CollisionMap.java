@@ -67,6 +67,18 @@ public final class CollisionMap {
         return (flags(coordinate) & projectileMask) != 0;
     }
 
+    /** Checks one projectile step using the same destination-mask convention. */
+    public boolean canProject(TileCoordinate from, CollisionDirection direction) {
+        Objects.requireNonNull(from, "from");
+        Objects.requireNonNull(direction, "direction");
+        int targetX = from.x() + direction.deltaX();
+        int targetY = from.y() + direction.deltaY();
+        if (!inside(from.plane(), targetX, targetY)) {
+            return false;
+        }
+        return (flags[from.plane()][targetX][targetY] & direction.projectileMask()) == 0;
+    }
+
     private boolean inside(int plane, int x, int y) {
         return plane >= 0 && plane < planes && x >= 0 && x < width && y >= 0 && y < length;
     }
