@@ -94,6 +94,10 @@ imports terrain into `WorldDocument`, listens to affected-tile notifications,
 and writes only underlay changes back to `MapRegion`. Object synchronization
 and the replacement of the legacy tool remain separate milestones.
 
+`PaintOverlayTool`, `ChangeHeightTool`, and `PaintFlagsTool` now use the same
+neutral pointer/session/composite-command path. They are first-party core tools
+and do not add editing behavior to `SceneGraph`.
+
 ## Deferred systems
 
 No new renderer, public Plugin Hub, Lua/CS2 IDE, server runtime, live network
