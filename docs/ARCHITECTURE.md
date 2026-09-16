@@ -59,6 +59,9 @@ boundary.
   eight-way routes with diagonal corner protection and straight projectile
   line-of-sight checks. It is intentionally small and replaceable while
   OpenRune-Server route/reach semantics are verified against fixtures.
+- `Reachability` uses the same default-off/explicit-on route-blocker choice as
+  `RouteFinder`, so object reach previews cannot silently use a different
+  collision layer.
 - `CollisionTileSnapshot` exposes ordinary movement blockers, the optional
   route-blocker layer, projectile blockers, and decoded floor/object/roof
   state so collision overlays can show routefinding semantics without

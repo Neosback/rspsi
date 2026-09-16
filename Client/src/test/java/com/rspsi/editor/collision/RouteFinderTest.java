@@ -54,4 +54,23 @@ class RouteFinderTest {
         assertFalse(RouteFinder.find(map, start, target, 20).isEmpty());
         assertTrue(RouteFinder.find(map, start, target, 20, true).isEmpty());
     }
+
+    @Test
+    void reachabilityCanOptIntoRouteBlockers() {
+        CollisionMap map = new CollisionMap(5, 1, 1);
+        TileCoordinate start = new TileCoordinate(0, 0, 0);
+        TileCoordinate object = new TileCoordinate(0, 4, 0);
+        map.add(new TileCoordinate(0, 2, 0), CollisionFlag.LOC_ROUTE_BLOCKER);
+
+        assertTrue(Reachability.canReach(map, start, object, 1, 1, 100));
+        assertFalse(Reachability.canReach(map, start, object, 1, 1, 100, true));
+    }
+
+    @Test
+    void reachabilityHandlesObjectsAtMapEdges() {
+        CollisionMap map = new CollisionMap(3, 3, 1);
+
+        assertTrue(Reachability.canReach(map,
+                new TileCoordinate(0, 1, 0), new TileCoordinate(0, 0, 0), 1, 1, 20));
+    }
 }

@@ -13,7 +13,14 @@ public final class Reachability {
 
     public static boolean canReach(CollisionMap map, TileCoordinate start, TileCoordinate object,
                                    int width, int length, int maxVisited) {
-        return !routeTo(map, start, object, width, length, maxVisited).isEmpty();
+        return canReach(map, start, object, width, length, maxVisited, false);
+    }
+
+    /** Tests reachability with optional OpenRune route-blocker semantics. */
+    public static boolean canReach(CollisionMap map, TileCoordinate start, TileCoordinate object,
+                                   int width, int length, int maxVisited,
+                                   boolean useRouteBlockers) {
+        return !routeTo(map, start, object, width, length, maxVisited, useRouteBlockers).isEmpty();
     }
 
     /**
@@ -23,6 +30,13 @@ public final class Reachability {
     public static List<TileCoordinate> routeTo(CollisionMap map, TileCoordinate start,
                                                TileCoordinate object, int width, int length,
                                                int maxVisited) {
+        return routeTo(map, start, object, width, length, maxVisited, false);
+    }
+
+    /** Finds a route to an object using an explicitly selected blocker layer. */
+    public static List<TileCoordinate> routeTo(CollisionMap map, TileCoordinate start,
+                                               TileCoordinate object, int width, int length,
+                                               int maxVisited, boolean useRouteBlockers) {
         Objects.requireNonNull(map, "map");
         Objects.requireNonNull(start, "start");
         Objects.requireNonNull(object, "object");
@@ -33,7 +47,8 @@ public final class Reachability {
         for (TileCoordinate candidate : border(object, width, length)) {
             if (candidate.x() < 0 || candidate.x() >= map.width()
                     || candidate.y() < 0 || candidate.y() >= map.length()) continue;
-            List<TileCoordinate> route = RouteFinder.find(map, start, candidate, maxVisited);
+            List<TileCoordinate> route = RouteFinder.find(map, start, candidate, maxVisited,
+                    useRouteBlockers);
             if (!route.isEmpty()) return route;
         }
         return List.of();
@@ -47,13 +62,19 @@ public final class Reachability {
     private static Set<TileCoordinate> border(TileCoordinate object, int width, int length) {
         Set<TileCoordinate> result = new LinkedHashSet<>();
         for (int x = object.x(); x < object.x() + width; x++) {
-            result.add(new TileCoordinate(object.plane(), x, object.y() - 1));
-            result.add(new TileCoordinate(object.plane(), x, object.y() + length));
+            addIfNonNegative(result, object.plane(), x, object.y() - 1);
+            addIfNonNegative(result, object.plane(), x, object.y() + length);
         }
         for (int y = object.y(); y < object.y() + length; y++) {
-            result.add(new TileCoordinate(object.plane(), object.x() - 1, y));
-            result.add(new TileCoordinate(object.plane(), object.x() + width, y));
+            addIfNonNegative(result, object.plane(), object.x() - 1, y);
+            addIfNonNegative(result, object.plane(), object.x() + width, y);
         }
         return result;
+    }
+
+    private static void addIfNonNegative(Set<TileCoordinate> result, int plane, int x, int y) {
+        if (x >= 0 && y >= 0) {
+            result.add(new TileCoordinate(plane, x, y));
+        }
     }
 }
