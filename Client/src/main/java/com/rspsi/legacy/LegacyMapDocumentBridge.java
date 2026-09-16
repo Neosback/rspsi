@@ -103,14 +103,12 @@ public final class LegacyMapDocumentBridge implements SessionChangeListener, Aut
             int plane = coordinate.plane();
             int x = coordinate.x();
             int y = coordinate.y();
-            int underlay = session.world().tile(coordinate).snapshot().underlayId();
-            if (mapRegion.underlays[plane][x][y] != underlay) {
-                mapRegion.underlays[plane][x][y] = (short) underlay;
+            TileSnapshot snapshot = session.world().tile(coordinate).snapshot();
+            if (synchronizeTile(plane, x, y, snapshot)) {
                 changed = true;
                 markSceneTileDirty(plane, x, y);
             }
-            if (sceneGraph != null && synchronizeObjects(plane, x, y,
-                    session.world().tile(coordinate).snapshot().objects())) {
+            if (sceneGraph != null && synchronizeObjects(plane, x, y, snapshot.objects())) {
                 changed = true;
             }
         }
@@ -145,6 +143,29 @@ public final class LegacyMapDocumentBridge implements SessionChangeListener, Aut
         if (tile != null) {
             tile.hasUpdated = true;
         }
+    }
+
+    private boolean synchronizeTile(int plane, int x, int y, TileSnapshot snapshot) {
+        boolean changed = mapRegion.tileHeights[plane][x][y] != snapshot.southWestHeight()
+                || mapRegion.tileHeights[plane][x + 1][y] != snapshot.southEastHeight()
+                || mapRegion.tileHeights[plane][x + 1][y + 1] != snapshot.northEastHeight()
+                || mapRegion.tileHeights[plane][x][y + 1] != snapshot.northWestHeight()
+                || mapRegion.underlays[plane][x][y] != snapshot.underlayId()
+                || mapRegion.overlays[plane][x][y] != snapshot.overlayId()
+                || mapRegion.overlayShapes[plane][x][y] != snapshot.overlayShape()
+                || mapRegion.overlayOrientations[plane][x][y] != snapshot.overlayRotation()
+                || (mapRegion.tileFlags[plane][x][y] & 0xff) != (snapshot.flags() & 0xff);
+        mapRegion.tileHeights[plane][x][y] = snapshot.southWestHeight();
+        mapRegion.tileHeights[plane][x + 1][y] = snapshot.southEastHeight();
+        mapRegion.tileHeights[plane][x + 1][y + 1] = snapshot.northEastHeight();
+        mapRegion.tileHeights[plane][x][y + 1] = snapshot.northWestHeight();
+        mapRegion.underlays[plane][x][y] = (short) snapshot.underlayId();
+        mapRegion.overlays[plane][x][y] = (short) snapshot.overlayId();
+        mapRegion.overlayShapes[plane][x][y] = (byte) snapshot.overlayShape();
+        mapRegion.overlayOrientations[plane][x][y] = (byte) snapshot.overlayRotation();
+        mapRegion.tileFlags[plane][x][y] = (byte) snapshot.flags();
+        if (changed) mapRegion.manualTileHeight[plane][x][y] = 1;
+        return changed;
     }
 
     private boolean synchronizeObjects(int plane, int x, int y, java.util.List<WorldObject> desired) {

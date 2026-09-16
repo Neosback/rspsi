@@ -100,6 +100,34 @@ class LegacyMapDocumentBridgeTest {
     }
 
     @Test
+    void synchronizesHeightsFloorsAndFlagsThroughTheSameSessionListener() {
+        MapRegion region = new MapRegion(null, 2, 2);
+        WorldDocument document = LegacyMapDocumentBridge.importTerrain(region);
+        EditorSession session = new EditorSession(document);
+        AtomicInteger refreshes = new AtomicInteger();
+        LegacyMapDocumentBridge bridge = new LegacyMapDocumentBridge(region, null, refreshes::incrementAndGet);
+        bridge.attach(session);
+
+        TileCoordinate coordinate = new TileCoordinate(1, 1, 1);
+        TileSnapshot before = document.tile(coordinate).snapshot();
+        TileSnapshot after = new TileSnapshot(-40, -30, -20, -10, 4, 5, 6, 3, 0x06, before.objects());
+
+        session.execute(new SetTileCommand(coordinate, before, after, "edit tile"));
+
+        assertEquals(-40, region.tileHeights[1][1][1]);
+        assertEquals(-30, region.tileHeights[1][2][1]);
+        assertEquals(-20, region.tileHeights[1][2][2]);
+        assertEquals(-10, region.tileHeights[1][1][2]);
+        assertEquals(4, region.underlays[1][1][1]);
+        assertEquals(5, region.overlays[1][1][1]);
+        assertEquals(6, region.overlayShapes[1][1][1]);
+        assertEquals(3, region.overlayOrientations[1][1][1]);
+        assertEquals(0x06, region.tileFlags[1][1][1]);
+        assertEquals(1, region.manualTileHeight[1][1][1]);
+        assertEquals(1, refreshes.get());
+    }
+
+    @Test
     void invalidChangedTilesAreIgnoredWithoutRefresh() {
         MapRegion region = new MapRegion(null, 2, 2);
         WorldDocument document = LegacyMapDocumentBridge.importTerrain(region);

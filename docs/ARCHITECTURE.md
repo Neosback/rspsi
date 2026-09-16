@@ -164,8 +164,9 @@ and object anchors into a fresh `EditorSession`, attaches
 `LegacyMapDocumentBridge`, and binds the inspector/history/validation panels.
 This keeps the default legacy path untouched while making the controlled
 panels reflect the loaded map rather than a synthetic document. The bridge
-uses scene object keys and footprint-aware removal only at the compatibility
-boundary; new editor behavior remains command/session-owned.
+uses scene object keys, shared-corner height writes, and footprint-aware
+removal only at the compatibility boundary; new editor behavior remains
+command/session-owned.
 
 ## Correctness workflow
 
