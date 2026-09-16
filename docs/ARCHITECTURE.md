@@ -102,7 +102,8 @@ boundary.
 - `OsrsRegionEncoder` writes dirty-region terrain and location payloads from
   the canonical model. It uses explicit heights during the first migration
   so decode/encode/decode tests verify semantic equality without preserving
-  source-specific generated-height choices.
+  source-specific generated-height choices, and rejects inconsistent shared
+  corner heights before bytes are emitted.
 - `WorldValidator` is the deterministic pre-save/parity diagnostic layer;
   renderers and UI panels consume its issues rather than reimplementing
   world invariants.

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class OsrsRegionEncoderTest {
     @Test
@@ -51,5 +52,14 @@ class OsrsRegionEncoderTest {
                 }
             }
         }
+    }
+
+    @Test
+    void rejectsCrackedSharedTerrainEdgesBeforeEncoding() {
+        WorldDocument source = new WorldDocument(64, 64, 4);
+        source.tile(0, 0, 0).restore(new TileSnapshot(
+                0, 8, 0, 0, 0, 0, 0, 0, 0, List.of()));
+
+        assertThrows(IllegalArgumentException.class, () -> OsrsRegionEncoder.encodeTerrain(source));
     }
 }

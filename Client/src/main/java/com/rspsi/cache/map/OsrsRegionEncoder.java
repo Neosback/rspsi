@@ -22,6 +22,7 @@ public final class OsrsRegionEncoder {
      */
     public static byte[] encodeTerrain(WorldDocument document) {
         requireRegion(document);
+        requireSharedHeights(document);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         for (int plane = 0; plane < OsrsRegionDecoder.PLANES; plane++) {
             for (int x = 0; x < OsrsRegionDecoder.REGION_SIZE; x++) {
@@ -146,6 +147,33 @@ public final class OsrsRegionEncoder {
                 || document.length() != OsrsRegionDecoder.REGION_SIZE
                 || document.planes() != OsrsRegionDecoder.PLANES) {
             throw new IllegalArgumentException("OSRS region must be exactly 64x64x4");
+        }
+    }
+
+    /** Prevents encoding a terrain document whose vertex graph already has cracks. */
+    private static void requireSharedHeights(WorldDocument document) {
+        for (int plane = 0; plane < document.planes(); plane++) {
+            for (int x = 0; x < document.width(); x++) {
+                for (int y = 0; y < document.length(); y++) {
+                    TileSnapshot tile = document.tile(plane, x, y).snapshot();
+                    if (x + 1 < document.width()) {
+                        TileSnapshot east = document.tile(plane, x + 1, y).snapshot();
+                        if (tile.southEastHeight() != east.southWestHeight()
+                                || tile.northEastHeight() != east.northWestHeight()) {
+                            throw new IllegalArgumentException("Terrain east edge heights do not match at "
+                                    + plane + "," + x + "," + y);
+                        }
+                    }
+                    if (y + 1 < document.length()) {
+                        TileSnapshot north = document.tile(plane, x, y + 1).snapshot();
+                        if (tile.northWestHeight() != north.southWestHeight()
+                                || tile.northEastHeight() != north.southEastHeight()) {
+                            throw new IllegalArgumentException("Terrain north edge heights do not match at "
+                                    + plane + "," + x + "," + y);
+                        }
+                    }
+                }
+            }
         }
     }
 
