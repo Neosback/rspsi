@@ -33,7 +33,7 @@ public final class ReplaceObjectsCommand implements EditorCommand {
 
     @Override public void apply(EditorSession session) {
         if (delegates == null) delegates = create(session);
-        delegates.forEach(command -> command.apply(session));
+        CommandTransaction.apply(delegates, session);
     }
 
     @Override public void undo(EditorSession session) {

@@ -40,9 +40,7 @@ public final class PasteFragmentCommand implements EditorCommand {
         if (tileCommands == null) {
             tileCommands = buildCommands(session);
         }
-        for (SetTileCommand command : tileCommands) {
-            command.apply(session);
-        }
+        CommandTransaction.apply(tileCommands, session);
     }
 
     @Override

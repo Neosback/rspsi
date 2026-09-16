@@ -16,18 +16,7 @@ public final class CompositeEditCommand implements EditCommand {
 
     @Override
     public void apply(EditorSession session) {
-        int applied = 0;
-        try {
-            for (EditorCommand command : commands) {
-                command.apply(session);
-                applied++;
-            }
-        } catch (RuntimeException failure) {
-            for (int index = applied - 1; index >= 0; index--) {
-                commands.get(index).undo(session);
-            }
-            throw failure;
-        }
+        CommandTransaction.apply(commands, session);
     }
 
     @Override

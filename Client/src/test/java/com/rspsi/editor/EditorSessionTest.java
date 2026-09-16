@@ -72,6 +72,22 @@ class EditorSessionTest {
     }
 
     @Test
+    void commandTransactionRollsBackDelegatesWhenAGroupedApplyFails() {
+        WorldModel world = new WorldModel(4, 4);
+        EditorSession session = new EditorSession(world);
+        TileCoordinate coordinate = new TileCoordinate(0, 2, 2);
+        TileSnapshot before = world.tile(coordinate).snapshot();
+        TileSnapshot changed = new TileSnapshot(0, 0, 0, 0, 11, 0, 0, 0, 0, List.of());
+        List<EditorCommand> commands = List.of(
+                new SetTileCommand(coordinate, before, changed, "first"),
+                new FailingCommand());
+
+        assertThrows(IllegalStateException.class, () -> CommandTransaction.apply(commands, session));
+
+        assertEquals(before, world.tile(coordinate).snapshot());
+    }
+
+    @Test
     void executingAfterUndoDropsRedoBranch() {
         WorldModel world = new WorldModel(2, 2);
         EditorSession session = new EditorSession(world);

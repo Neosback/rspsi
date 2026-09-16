@@ -137,6 +137,10 @@ boundary.
   chunk edge also invalidates the adjacent cardinal chunk so shared terrain
   edges, floor blending, and picking can be rebuilt without rebuilding a
   complete region.
+- `CommandTransaction` is the single rollback helper for grouped edits. It
+  applies composite, paste, and multi-object delegates in order and undoes
+  already-applied delegates if a later one fails, keeping failed commands out
+  of session history.
 - `ObjectInspectorSnapshot` resolves optional neutral definition and collision
   providers into immutable frontend data. It keeps missing definitions
   explicit and exposes canonical category/shape names without coupling an
