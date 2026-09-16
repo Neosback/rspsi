@@ -40,7 +40,7 @@ The locked product direction and workspace design are maintained in
 | Neutral definitions | implemented-unverified | Object/floor views plus texture/model and collision contracts and an OpenRune object/floor/texture/collision adapter exist; real-cache fixture parity remains |
 | Command/session editing core | in-progress | Core model, command history, session, atomic grouped rollback, and migrated tools are covered; legacy input and full UI migration remain |
 | Session state notifications | implemented-unverified | Neutral edit/save-state and selection listeners now support synchronized frontend panels; thread/FX scheduling and full legacy binding remain |
-| WorldFragment copy/paste | implemented-unverified | Canonical multi-plane fragment capture and atomic paste/undo command added; UI import/export wiring remains |
+| WorldFragment copy/paste | implemented-unverified | Canonical multi-plane fragment capture, versioned neutral JSON import/export, and atomic paste/undo command are covered; UI wiring remains |
 | Dirty-region invalidation | implemented-unverified | `EditorSession` merges affected tiles into 8×8 `DirtyRegion` batches; renderer/cache consumers remain |
 | Unified selection service | implemented-unverified | Tile, arbitrary tile-set/lasso, area, vertex, single-object, multi-object, fragment, and attribute-query selections are available; viewport/tool migration remains |
 | OSRS coordinate and tile inspector contract | implemented-unverified | `WorldWindow`, `WorldTileAddress`, and `TileInspectorSnapshot` provide world/region/chunk breakdowns and raw flag semantics for frontend overlays; live hover wiring remains |
