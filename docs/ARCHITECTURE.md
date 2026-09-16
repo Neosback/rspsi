@@ -216,6 +216,9 @@ boundary.
   tile/global differences across terrain, materials, lighting, objects, and
   bridges. It is the fixture seam for TSPS/RuneLite comparisons; it does not
   import or execute either oracle.
+- `MinimapParity` compares neutral ARGB rasters with exact mismatch counts and
+  bounded pixel samples. It is the corresponding fixture seam for visual
+  minimap comparisons and does not assume a particular frontend image type.
 - `MinimapBuilder` produces a deterministic ARGB raster from canonical tiles
   and neutral floor definitions. It includes an explicit blocked-tile color,
   optional cardinal underlay blending, and deterministic missing-definition
