@@ -98,6 +98,10 @@ and the replacement of the legacy tool remain separate milestones.
 neutral pointer/session/composite-command path. They are first-party core tools
 and do not add editing behavior to `SceneGraph`.
 
+`PlaceObjectCommand`, `DeleteObjectCommand`, `MoveObjectCommand`, and
+`RotateObjectCommand` provide the corresponding canonical location mutations;
+object tools can now be migrated without inventing a second history system.
+
 ## Deferred systems
 
 No new renderer, public Plugin Hub, Lua/CS2 IDE, server runtime, live network
