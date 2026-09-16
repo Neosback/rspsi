@@ -38,6 +38,12 @@ textures, and lazy model metadata with OpenRune codecs, then exposes only
 RSPSi-owned definition views. Full model geometry remains outside the provider
 until a neutral mesh representation is validated.
 
+`OpenRuneSymbolicNameProvider` adapts already-loaded RSCM/GameVal reverse
+mappings into the neutral `SymbolicNameProvider`. It is optional, does not
+load mapping files implicitly, and returns the exact backend key so the asset
+browser can show symbolic provenance without making RSCM/GameVal part of the
+editor model.
+
 ## Explicit limitations
 
 The first OpenRune filesystem implementation is read-only. `write` throws

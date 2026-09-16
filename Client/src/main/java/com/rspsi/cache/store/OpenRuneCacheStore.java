@@ -4,6 +4,7 @@ import dev.openrune.filesystem.Cache;
 import com.rspsi.cache.CacheStoreCapabilities;
 import com.rspsi.cache.OsrsCacheMetadata;
 import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.editor.assets.SymbolicNameProvider;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -33,6 +34,15 @@ public final class OpenRuneCacheStore implements CacheStore {
     /** Loads OpenRune definitions and immediately reduces them to RSPSi views. */
     public DefinitionProvider definitionProvider(int revision) {
         return OpenRuneDefinitionProvider.load(cache, revision);
+    }
+
+    /**
+     * Returns an editor-neutral view over mappings loaded into OpenRune's
+     * RSCM/GameVal provider. Mapping files are optional and are not loaded as
+     * a side effect of opening a cache.
+     */
+    public SymbolicNameProvider symbolicNameProvider() {
+        return new OpenRuneSymbolicNameProvider();
     }
 
     /** Returns a stable identity derived from the cache's reference-table versions. */
