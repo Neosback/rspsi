@@ -13,4 +13,10 @@ Run after changes affecting loading, editing, rendering, saving, or plugins.
 9. Export map/object files, close, reopen, and verify the edits remain.
 10. Confirm autosave recovery after a controlled restart when an autosave exists.
 
+For the opt-in controlled workspace migration, set `controlledWorkspace` to
+`true` in `~/.rspsi/settings.json` and repeat steps 2–10. Confirm that the
+legacy renderer remains interactive in the centered viewport and that the
+menu bar, tool rail, and asset pane remain reachable. Remove the setting (or
+set it to `false`) to return to the default legacy layout.
+
 Record the cache revision, map/region used, operating system, and any failure in the roadmap ledger.

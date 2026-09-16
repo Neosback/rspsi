@@ -369,6 +369,16 @@ public class MainController {
 	
 	@FXML
 	private VBox root;
+
+	/** Existing FXML regions exposed for the opt-in controlled workspace bridge. */
+	@FXML
+	private HBox legacyToolRail;
+
+	@FXML
+	private VBox legacyViewport;
+
+	@FXML
+	private VBox legacyInspector;
 	
 
     @FXML

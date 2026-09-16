@@ -104,6 +104,13 @@ continues, but it must not become the owner of workspace, document, or
 renderer state. The existing `MainWindow` remains the compatibility entry
 point until the shell has equivalent launch/load/edit/save coverage.
 
+`ControlledWorkspaceBridge` is an opt-in adapter selected by the
+`controlledWorkspace` setting. It reparents the existing `main_test4.fxml`
+tool rail, renderer viewport, asset pane, and menu bar into the shell while
+leaving the default legacy layout unchanged. The bridge deliberately uses
+placeholder inspector/history/validation panels until those views are backed
+by session state and their manual workflows are covered.
+
 ## Correctness workflow
 
 RuneLite DevTools is the live OSRS truth viewer. TSPS and RuneLite cache/client

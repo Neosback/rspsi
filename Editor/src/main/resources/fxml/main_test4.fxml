@@ -39,7 +39,7 @@
         <children>
             <HBox VBox.vgrow="ALWAYS">
                <children>
-                  <HBox alignment="CENTER" maxWidth="55.0" minWidth="55.0" HBox.hgrow="NEVER">
+                  <HBox fx:id="legacyToolRail" alignment="CENTER" maxWidth="55.0" minWidth="55.0" HBox.hgrow="NEVER">
                      <children>
                         <VBox HBox.hgrow="ALWAYS">
                            <children>
@@ -146,7 +146,7 @@
                         </VBox>
                      </children>
                   </HBox>
-                  <VBox HBox.hgrow="ALWAYS">
+                  <VBox fx:id="legacyViewport" HBox.hgrow="ALWAYS">
                      <children>
                         <HBox alignment="TOP_CENTER" minHeight="-Infinity" prefHeight="41.0" style="-fx-background-radius: 6;">
                            <padding>
@@ -305,7 +305,7 @@
                         </HBox>
                      </children>
                   </VBox>
-                  <VBox minWidth="300.0" HBox.hgrow="NEVER">
+                  <VBox fx:id="legacyInspector" minWidth="300.0" HBox.hgrow="NEVER">
                      <children>
                         <HBox alignment="TOP_RIGHT" minHeight="-Infinity" prefHeight="41.0" style="-fx-background-radius: 6;">
                            <padding>

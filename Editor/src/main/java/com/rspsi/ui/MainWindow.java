@@ -66,6 +66,7 @@ import com.rspsi.resources.ResourceLoader;
 import com.rspsi.swatches.BaseSwatch;
 import com.rspsi.swatches.OverlaySwatch;
 import com.rspsi.swatches.UnderlaySwatch;
+import com.rspsi.ui.workspace.ControlledWorkspaceBridge;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -225,6 +226,10 @@ public class MainWindow extends Application {
 			controller = new MainController();
 			loader.setController(controller);
 			Parent content = loader.load();
+			if (Settings.getSetting("controlledWorkspace", false)) {
+				content = ControlledWorkspaceBridge.adapt(content, controller);
+				log.info("Controlled workspace enabled; legacy renderer remains embedded as the viewport");
+			}
 			double windowWidth = (Double) Settings.properties.getOrDefault("window_width",1240.0);
 			double windowHeight = (Double) Settings.properties.getOrDefault("window_height",800.0);
 			scene = new Scene(content,windowWidth,windowHeight);
