@@ -32,6 +32,8 @@ public final class RenderSceneFingerprint {
                     if (material != null) value.append("material=").append(material).append(';');
                     TerrainLight lighting = scene.terrainLighting().get(coordinate);
                     if (lighting != null) value.append("lighting=").append(lighting).append(';');
+                    var collision = scene.collision().get(coordinate);
+                    if (collision != null) value.append("collision=").append(collision.rawFlags()).append(';');
                 }
             }
         }

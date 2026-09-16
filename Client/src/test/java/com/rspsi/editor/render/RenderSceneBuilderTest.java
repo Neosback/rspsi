@@ -41,6 +41,7 @@ class RenderSceneBuilderTest {
         assertEquals(6, scene.terrainMeshes()
                 .get(new TileCoordinate(1, 1, 2)).vertices().size());
         assertEquals(12, scene.terrainLighting().size());
+        assertEquals(12, scene.collision().size());
     }
 
     @Test
@@ -55,6 +56,7 @@ class RenderSceneBuilderTest {
         assertEquals(0, scene.bridges().size());
         assertEquals(0, scene.terrainMaterials().size());
         assertEquals(0, scene.terrainLighting().size());
+        assertEquals(0, scene.collision().size());
     }
 
     @Test
@@ -133,6 +135,9 @@ class RenderSceneBuilderTest {
 
         assertEquals(new TerrainMaterial(2, 3, 17, 0x102030, 0xA0B0C0),
                 scene.terrainMaterials().get(new TileCoordinate(0, 0, 0)));
+        assertEquals(com.rspsi.editor.collision.CollisionFlag.LOC
+                        | com.rspsi.editor.collision.CollisionFlag.LOC_PROJECTILE,
+                scene.collision().get(new TileCoordinate(0, 0, 0)).rawFlags());
         RenderObject renderObject = scene.renderObjects().get(0);
         assertEquals(object, renderObject.object());
         assertEquals(com.rspsi.editor.model.ObjectCategory.GROUND, renderObject.category());

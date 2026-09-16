@@ -201,6 +201,9 @@ boundary.
   construction remains outside `SceneGraph`. Definition-aware scenes also
   carry neutral terrain materials, and every complete scene carries per-corner
   `TerrainLight` values from the OSRS directional normal calculation.
+  Complete scenes also carry local `CollisionTileSnapshot` values derived from
+  the same neutral terrain/object collision builder used by window scenes, so
+  route and overlay consumers do not reconstruct collision independently.
 - `RenderWindowSceneBuilder` projects a `WorldRegionWindow` into world-addressed
   neutral tiles and objects. It prepares a deep copy, stitches loaded
   neighboring edges there, and preserves absent regions as holes, so

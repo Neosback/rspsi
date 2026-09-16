@@ -5,6 +5,9 @@ import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
+import com.rspsi.editor.collision.CollisionMap;
+import com.rspsi.editor.collision.CollisionTileSnapshot;
+import com.rspsi.editor.collision.OsrsCollisionBuilder;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.DirtyRegion;
 import com.rspsi.editor.model.WorldDocument;
@@ -50,6 +53,7 @@ public final class RenderSceneBuilder {
         Objects.requireNonNull(document, "document");
         Map<TileCoordinate, TerrainMesh> meshes = new LinkedHashMap<>();
         Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>();
+        Map<TileCoordinate, CollisionTileSnapshot> collision = collision(document);
         List<WorldObject> objects = new ArrayList<>();
         List<RenderObject> renderObjects = new ArrayList<>();
         for (int plane = 0; plane < document.planes(); plane++) {
@@ -68,7 +72,7 @@ public final class RenderSceneBuilder {
                 }
             }
         }
-        return new RenderScene(document, meshes, materials, TerrainLighting.build(document),
+        return new RenderScene(document, meshes, materials, TerrainLighting.build(document), collision,
                 objects, renderObjects, document.bridgeLinks());
     }
 
@@ -84,6 +88,7 @@ public final class RenderSceneBuilder {
         Map<TileCoordinate, TerrainMesh> meshes = new LinkedHashMap<>(previous.terrainMeshes());
         Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>(previous.terrainMaterials());
         Map<TileCoordinate, TerrainLight> lighting = new LinkedHashMap<>(TerrainLighting.build(document));
+        Map<TileCoordinate, CollisionTileSnapshot> collision = collision(document);
         List<RenderObject> renderObjects = new ArrayList<>();
         Set<TileCoordinate> dirtyTiles = changes.dirtyTiles();
         for (TileCoordinate coordinate : dirtyTiles) {
@@ -99,7 +104,7 @@ public final class RenderSceneBuilder {
         }
         List<WorldObject> objects = collectObjects(document);
         for (WorldObject object : objects) renderObjects.add(resolve(object));
-        return new RenderScene(document, meshes, materials, lighting, objects, renderObjects,
+        return new RenderScene(document, meshes, materials, lighting, collision, objects, renderObjects,
                 document.bridgeLinks());
     }
 
@@ -130,6 +135,22 @@ public final class RenderSceneBuilder {
                 overlay == null ? -1 : overlay.texture(),
                 underlay == null ? 0 : underlay.rgb() & 0xFFFFFF,
                 overlay == null ? 0 : overlay.rgb() & 0xFFFFFF);
+    }
+
+    private Map<TileCoordinate, CollisionTileSnapshot> collision(WorldDocument document) {
+        CollisionMap map = definitions == null
+                ? OsrsCollisionBuilder.fromTerrain(document)
+                : OsrsCollisionBuilder.fromTerrainAndObjects(document, definitions);
+        Map<TileCoordinate, CollisionTileSnapshot> snapshots = new LinkedHashMap<>();
+        for (int plane = 0; plane < document.planes(); plane++) {
+            for (int x = 0; x < document.width(); x++) {
+                for (int y = 0; y < document.length(); y++) {
+                    TileCoordinate coordinate = new TileCoordinate(plane, x, y);
+                    snapshots.put(coordinate, CollisionTileSnapshot.from(map, coordinate));
+                }
+            }
+        }
+        return snapshots;
     }
 
     private RenderObject resolve(WorldObject object) {
