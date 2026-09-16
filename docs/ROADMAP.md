@@ -17,6 +17,9 @@ The resource intake and provenance ledger is maintained in
 [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md). A catalog entry is not
 permission to copy code, bundle assets, or add a runtime dependency.
 
+The locked product direction and workspace design are maintained in
+[`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md).
+
 ## Current baseline
 
 | Area | Status | Evidence / next action |
@@ -38,6 +41,9 @@ permission to copy code, bundle assets, or add a runtime dependency.
 | Live legacy document bridge | in-progress | MapRegion terrain import and underlay synchronization are implemented; UI activation remains opt-in |
 | OpenRune backend | in-progress | 2.4.19 compatibility spike is isolated behind `CacheStore`; legacy remains default |
 | Resource catalog and provenance | in-progress | [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md) separates dependencies, donors, oracles, visual references, and license-review items; intake evidence remains |
+| OSRS-only product scope | in-progress | Scope and migration policy are locked in [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md); legacy paths remain quarantined during parity work |
+| Project/cache identity metadata | in-progress | Neutral `OsrsCacheMetadata`, `ProjectMetadata`, and JSON persistence added; cache discovery and mismatch UI remain |
+| Controlled workspace contracts | in-progress | UI-neutral dock, panel, placement, and workspace types added; JavaFX rendering remains |
 | RuneLite/TSPS parity harness | not-started | Add golden fixtures after cache seam is stable |
 | Lua, plugin permissions, Plugin Hub | deferred | Begin only after native command/plugin API is stable |
 | Renderer/UI rewrite | deferred | Current JavaFX renderer remains the compatibility surface |
@@ -71,6 +77,12 @@ permission to copy code, bundle assets, or add a runtime dependency.
   compile.
 - Complete OSRS map-index support.
 - Require legacy regression and OSRS parity fixtures before switching defaults.
+
+### Product-scope gate
+
+- Treat OSRS/OpenRune as the only production target.
+- Quarantine legacy 317/custom paths; do not add new features to them.
+- Retire legacy product UI only after OSRS parity and migration coverage pass.
 
 ### Resource intake gate
 

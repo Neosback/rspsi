@@ -31,6 +31,15 @@ class OpenRuneCacheStoreTest {
         assertTrue(error.getMessage().contains("read-only"));
     }
 
+    @Test
+    void reportsReadOnlyCapabilitiesWithoutExposingOpenRuneTypes() {
+        try (CacheStore store = new OpenRuneCacheStore(new FakeCache())) {
+            assertFalse(store.capabilities().writable());
+            assertTrue(store.capabilities().namedArchives());
+            assertFalse(store.capabilities().mapPacking());
+        }
+    }
+
     private static final class FakeCache implements Cache {
         private final Map<String, byte[]> values = new HashMap<>();
         private boolean closed;

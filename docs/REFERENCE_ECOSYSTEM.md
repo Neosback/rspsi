@@ -53,9 +53,11 @@ hosting repository rather than Maven Central. The repository is declared in
 the root Gradle build, and the version is pinned for repeatable compatibility
 testing.
 
-The current renderer and JavaFX UI remain the compatibility surface. Renderer
-replacement, Kotlin-wide migration, plugin marketplaces, Lua, CS2 tooling,
-network integration, and collaborative/cloud features are intentionally later.
+The current renderer and JavaFX UI remain the compatibility surface. The
+product targets OSRS/OpenRune; non-OSRS support is quarantine-only during the
+migration and is retired after parity gates pass. Renderer replacement,
+Kotlin-wide migration, plugin marketplaces, Lua, CS2 tooling, network
+integration, and collaborative/cloud features are intentionally later.
 
 ## Planned sequence
 

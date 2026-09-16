@@ -4,6 +4,9 @@ This is the implementation contract for the stabilization work. It narrows
 the research in [`REFERENCE_ECOSYSTEM.md`](REFERENCE_ECOSYSTEM.md) into rules
 that can be checked in code.
 
+The product scope and controlled layout are locked in
+[`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md).
+
 ## Ownership and dependency direction
 
 ```text
@@ -82,3 +85,16 @@ and the replacement of the legacy tool remain separate milestones.
 No new renderer, public Plugin Hub, Lua/CS2 IDE, server runtime, live network
 connection, collaboration, cloud cache, or procedural-generation system is a
 prerequisite for this architecture.
+
+## Product scope and migration
+
+RSPSi production support targets OSRS caches supported by OpenRune. Non-OSRS
+formats are quarantine-only during migration: existing behavior is protected
+by characterization tests, no new features are added, and the legacy product
+paths are removed after the OpenRune OSRS gates pass. The last compatible
+legacy state is preserved in repository history or an archive rather than
+maintained as a second product family.
+
+Project metadata records the OSRS cache revision, optional subrevision, and a
+cache fingerprint. A mismatch is reported and opens read-only until a future
+migration workflow is explicitly implemented.

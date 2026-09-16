@@ -1,5 +1,7 @@
 package com.rspsi.cache.store;
 
+import com.rspsi.cache.CacheStoreCapabilities;
+
 /**
  * Neutral byte-oriented cache boundary used by editor code.
  *
@@ -13,6 +15,11 @@ public interface CacheStore extends AutoCloseable {
     void write(int index, int archive, int file, byte[] data);
 
     void flush();
+
+    /** Describes backend behavior without exposing its implementation library. */
+    default CacheStoreCapabilities capabilities() {
+        return new CacheStoreCapabilities(false, false, false);
+    }
 
     @Override
     default void close() {

@@ -2,6 +2,7 @@ package com.rspsi.cache.store;
 
 import com.displee.cache.CacheLibrary;
 import com.displee.cache.index.Index;
+import com.rspsi.cache.CacheStoreCapabilities;
 
 import java.util.Objects;
 
@@ -37,6 +38,11 @@ public final class LegacyDispleeCacheStore implements CacheStore {
     @Override
     public void flush() {
         // Displee writes update the in-memory cache and are persisted on close.
+    }
+
+    @Override
+    public CacheStoreCapabilities capabilities() {
+        return new CacheStoreCapabilities(true, false, false);
     }
 
     @Override

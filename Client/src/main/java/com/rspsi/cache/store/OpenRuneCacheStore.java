@@ -1,6 +1,7 @@
 package com.rspsi.cache.store;
 
 import dev.openrune.filesystem.Cache;
+import com.rspsi.cache.CacheStoreCapabilities;
 
 import java.nio.file.Path;
 import java.util.Objects;
@@ -39,6 +40,11 @@ public final class OpenRuneCacheStore implements CacheStore {
     @Override
     public void flush() {
         // No writes are accepted by this read-only spike.
+    }
+
+    @Override
+    public CacheStoreCapabilities capabilities() {
+        return new CacheStoreCapabilities(false, true, false);
     }
 
     @Override
