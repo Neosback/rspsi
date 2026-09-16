@@ -43,6 +43,16 @@ public final class CommandHistory {
         return commands.size();
     }
 
+    /** Returns the complete immutable history, including commands after the cursor. */
+    public List<EditorCommand> commands() {
+        return List.copyOf(commands);
+    }
+
+    /** Number of commands currently applied; commands after this are redoable. */
+    public int cursor() {
+        return cursor;
+    }
+
     public boolean canUndo() {
         return cursor > 0;
     }

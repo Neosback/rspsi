@@ -17,6 +17,7 @@ public final class EditorSession {
     private final SelectionModel selection = new SelectionModel();
     private final CommandHistory history = new CommandHistory();
     private final List<SessionChangeListener> changeListeners = new CopyOnWriteArrayList<>();
+    private final List<SessionStateListener> stateListeners = new CopyOnWriteArrayList<>();
     private final Map<Long, DirtyRegion> dirtyRegions = new LinkedHashMap<>();
     private int savedHistoryPosition;
 
@@ -49,6 +50,7 @@ public final class EditorSession {
         EditorCommand checked = Objects.requireNonNull(command, "command");
         history.execute(checked, this);
         notifyChanged(checked);
+        notifyStateChanged();
     }
 
     public boolean undo() {
@@ -59,6 +61,9 @@ public final class EditorSession {
         boolean changed = history.undo(this);
         if (changed) {
             notifyChanged(command);
+        }
+        if (changed) {
+            notifyStateChanged();
         }
         return changed;
     }
@@ -72,15 +77,24 @@ public final class EditorSession {
         if (changed) {
             notifyChanged(command);
         }
+        if (changed) {
+            notifyStateChanged();
+        }
         return changed;
     }
 
     public void markSaved() {
         savedHistoryPosition = history.position();
+        notifyStateChanged();
     }
 
     public boolean isDirty() {
         return history.position() != savedHistoryPosition;
+    }
+
+    /** Provides the saved-history marker to neutral status/diagnostic views. */
+    public int savedHistoryPosition() {
+        return savedHistoryPosition;
     }
 
     /** Returns a stable snapshot of chunks whose derived data needs rebuilding. */
@@ -103,6 +117,14 @@ public final class EditorSession {
         changeListeners.remove(listener);
     }
 
+    public void addStateListener(SessionStateListener listener) {
+        stateListeners.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    public void removeStateListener(SessionStateListener listener) {
+        stateListeners.remove(listener);
+    }
+
     private void notifyChanged(EditorCommand command) {
         if (command.changedTiles().isEmpty()) {
             return;
@@ -111,6 +133,12 @@ public final class EditorSession {
         var changedTiles = Set.copyOf(command.changedTiles());
         for (SessionChangeListener listener : changeListeners) {
             listener.changed(changedTiles);
+        }
+    }
+
+    private void notifyStateChanged() {
+        for (SessionStateListener listener : stateListeners) {
+            listener.changed(this);
         }
     }
 

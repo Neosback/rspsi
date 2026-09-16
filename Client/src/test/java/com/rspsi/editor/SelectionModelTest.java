@@ -38,4 +38,24 @@ class SelectionModelTest {
         assertInstanceOf(ObjectSelection.class, selection.current());
         assertTrue(selection.tiles().isEmpty());
     }
+
+    @Test
+    void selectionListenersObserveTheUnifiedCurrentValue() {
+        SelectionModel selection = new SelectionModel();
+        java.util.List<com.rspsi.editor.selection.Selection> changes = new java.util.ArrayList<>();
+        SelectionChangeListener listener = changes::add;
+        selection.addChangeListener(listener);
+
+        selection.select(new TileCoordinate(0, 2, 2));
+        selection.selectObject(new WorldObject(7, 10, 0, 0, 2, 2));
+        selection.clear();
+
+        assertEquals(3, changes.size());
+        assertInstanceOf(TileSelection.class, changes.get(0));
+        assertInstanceOf(ObjectSelection.class, changes.get(1));
+        assertNull(changes.get(2));
+        selection.removeChangeListener(listener);
+        selection.select(new TileCoordinate(0, 1, 1));
+        assertEquals(3, changes.size());
+    }
 }

@@ -50,6 +50,11 @@ public final class ControlledWorkspaceShell extends BorderPane {
         return catalog.workspace(id);
     }
 
+    /** Returns a mounted panel so a frontend bridge can bind its data source. */
+    public Node panelNode(String id) {
+        return panels.get(id);
+    }
+
     public void show(String workspaceId) {
         show(catalog.workspace(workspaceId));
     }

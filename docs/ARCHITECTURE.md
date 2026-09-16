@@ -32,6 +32,10 @@ boundary.
   compatibility name.
 - `EditorSession` owns document state, selection, history, dirty state, and
   future save coordination.
+- `SessionStateListener` exposes edit/undo/redo/save-marker changes to
+  frontend adapters, while `SelectionChangeListener` exposes the final
+  unified selection value after each selection operation. Neither listener
+  carries UI types or owns the state it observes.
 - `EditorCommand` is the canonical mutation contract; `EditCommand` remains a
   temporary source-compatible alias.
 - `WorldFragment` is the canonical portable terrain/location copy-paste
@@ -108,8 +112,9 @@ point until the shell has equivalent launch/load/edit/save coverage.
 `controlledWorkspace` setting. It reparents the existing `main_test4.fxml`
 tool rail, renderer viewport, asset pane, and menu bar into the shell while
 leaving the default legacy layout unchanged. The bridge deliberately uses
-placeholder inspector/history/validation panels until those views are backed
-by session state and their manual workflows are covered.
+session-backed inspector/history panels, plus placeholder validation/console
+panels, until those views are connected to a loaded document and their manual
+workflows are covered.
 
 ## Correctness workflow
 

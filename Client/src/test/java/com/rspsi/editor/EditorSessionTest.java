@@ -69,4 +69,22 @@ class EditorSessionTest {
         assertFalse(session.redo());
         assertEquals(replacement, world.tile(0, 0, 0).snapshot());
     }
+
+    @Test
+    void stateListenersTrackEditsHistoryAndSaveMarker() {
+        WorldModel world = new WorldModel(2, 2);
+        EditorSession session = new EditorSession(world);
+        java.util.List<String> states = new java.util.ArrayList<>();
+        session.addStateListener(value -> states.add(value.isDirty() + ":" + value.history().position()));
+        TileCoordinate coordinate = new TileCoordinate(0, 0, 0);
+        TileSnapshot initial = world.tile(coordinate).snapshot();
+        TileSnapshot changed = new TileSnapshot(8, 0, 0, 0, 1, 0, 0, 0, 0, List.of());
+
+        session.execute(new SetTileCommand(coordinate, initial, changed, "height"));
+        session.undo();
+        session.redo();
+        session.markSaved();
+
+        assertEquals(List.of("true:1", "false:0", "true:1", "false:1"), states);
+    }
 }
