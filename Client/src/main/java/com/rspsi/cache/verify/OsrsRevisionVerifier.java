@@ -19,6 +19,8 @@ import com.rspsi.editor.minimap.MinimapImage;
 import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.RenderSceneBuilder;
 import com.rspsi.editor.render.RenderSceneFingerprint;
+import com.rspsi.editor.render.RenderWindowScene;
+import com.rspsi.editor.render.RenderWindowSceneBuilder;
 import com.rspsi.editor.validation.ValidationIssue;
 import com.rspsi.editor.validation.WorldValidator;
 
@@ -113,6 +115,11 @@ public final class OsrsRevisionVerifier {
             int rawBoundaryMismatches = context.boundaryMismatches().size();
             int stitchedVertices = context.stitchSharedEdges();
             int boundaryMismatches = context.boundaryMismatches().size();
+            RenderWindowScene windowScene = new RenderWindowSceneBuilder(definitions).build(context);
+            int expectedWindowTiles = context.loadedRegionCount()
+                    * OsrsRegionDecoder.REGION_SIZE * OsrsRegionDecoder.REGION_SIZE
+                    * OsrsRegionDecoder.PLANES;
+            boolean windowSceneComplete = windowScene.terrainMeshes().size() == expectedWindowTiles;
             int bridgeLinks = document.bridgeLinks().size();
             messages.add("context window: " + context.loadedRegionCount() + "/"
                     + context.expectedRegionCount() + " regions; missing "
@@ -121,6 +128,9 @@ public final class OsrsRevisionVerifier {
                     + " provisional mismatches, " + stitchedVertices
                     + " vertices stitched, " + boundaryMismatches
                     + " remaining; bridge links: " + bridgeLinks);
+            messages.add("window scene tiles: " + windowScene.terrainMeshes().size()
+                    + "; loaded-region expectation: " + expectedWindowTiles
+                    + "; world objects: " + windowScene.objects().size());
             if (boundaryMismatches > 0) {
                 errors.add("loaded region boundaries have " + boundaryMismatches + " height mismatches");
             }
@@ -170,6 +180,7 @@ public final class OsrsRevisionVerifier {
             }
             if (!sceneComplete) errors.add("neutral scene did not cover every document tile");
             if (!objectProjectionComplete) errors.add("neutral scene object projections did not match canonical objects");
+            if (!windowSceneComplete) errors.add("window scene did not cover every loaded region tile");
             if (!minimapComplete) errors.add("neutral minimap dimensions did not match the document");
             return new VerificationReport(path, regionX, regionY, revision, maps.index().size(),
                     true, true, equal, messages, errors,
@@ -204,6 +215,11 @@ public final class OsrsRevisionVerifier {
                                     context.loadedRegionCount() + "/" + context.expectedRegionCount()
                                             + " neighboring regions loaded; "
                                             + context.missingRegionIds().size() + " holes preserved"),
+                            check("region.windowScene", windowSceneComplete
+                                            ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
+                                    windowScene.terrainMeshes().size() + "/" + expectedWindowTiles
+                                            + " world-addressed terrain tiles built; "
+                                            + windowScene.objects().size() + " world objects"),
                             check("region.boundary", boundaryMismatches == 0
                                             ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
                                     rawBoundaryMismatches + " provisional mismatches; "
