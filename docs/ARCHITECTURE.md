@@ -119,7 +119,8 @@ boundary.
   supported construction seam for that topology. For OSRS work,
   `CacheStoreFactory.openRuneWithDispleeOutput(...)` makes the arrangement
   explicit: OpenRune reads the base cache and a distinct Displee cache receives
-  staged output. Equal base/output paths are rejected.
+  staged output. Equal base/output paths are rejected, and the layer preserves
+  the base cache identity for project compatibility decisions.
 - `MapService` exposes semantic landscape and location payload access; its
   OSRS implementation owns the file-0/file-1 archive convention.
 - `MapService` write methods target existing indexed regions only and honor

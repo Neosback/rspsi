@@ -1,6 +1,7 @@
 package com.rspsi.cache.store;
 
 import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.OsrsCacheMetadata;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -54,6 +55,15 @@ class LayeredCacheStoreTest {
         assertNull(output.values.get(key(5, 1, 0)));
     }
 
+    @Test
+    void preservesBaseCacheIdentityForProjectCompatibility() {
+        OsrsCacheMetadata metadata = new OsrsCacheMetadata(240, 2, "cache-a");
+        MetadataStore base = new MetadataStore(metadata);
+        LayeredCacheStore store = new LayeredCacheStore(base, new MetadataStore(null));
+
+        assertEquals(metadata, store.metadata(240).orElseThrow());
+    }
+
     private static String key(int index, int archive, int file) {
         return index + ":" + archive + ":" + file;
     }
@@ -72,6 +82,24 @@ class LayeredCacheStoreTest {
         @Override public void flush() { }
         @Override public CacheStoreCapabilities capabilities() {
             return new CacheStoreCapabilities(writable, true, writable);
+        }
+    }
+
+    private static final class MetadataStore implements CacheStore {
+        private final OsrsCacheMetadata metadata;
+
+        private MetadataStore(OsrsCacheMetadata metadata) {
+            this.metadata = metadata;
+        }
+
+        @Override public byte[] read(int index, int archive, int file) { return null; }
+        @Override public void write(int index, int archive, int file, byte[] data) { }
+        @Override public void flush() { }
+        @Override public CacheStoreCapabilities capabilities() {
+            return new CacheStoreCapabilities(false, false, false);
+        }
+        @Override public java.util.Optional<OsrsCacheMetadata> metadata(int revision) {
+            return java.util.Optional.ofNullable(metadata);
         }
     }
 }

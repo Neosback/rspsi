@@ -1,11 +1,13 @@
 package com.rspsi.cache.store;
 
 import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.OsrsCacheMetadata;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Neutral base-cache plus output-layer store.
@@ -81,6 +83,12 @@ public final class LayeredCacheStore implements CacheStore {
         return new CacheStoreCapabilities(outputCapabilities.writable(),
                 baseCapabilities.namedArchives() || outputCapabilities.namedArchives(),
                 baseCapabilities.mapPacking() || outputCapabilities.mapPacking());
+    }
+
+    @Override
+    public Optional<OsrsCacheMetadata> metadata(int revision) {
+        Optional<OsrsCacheMetadata> baseMetadata = base.metadata(revision);
+        return baseMetadata.isPresent() ? baseMetadata : output.metadata(revision);
     }
 
     @Override
