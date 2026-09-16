@@ -33,7 +33,12 @@ OpenRune's map packer uses numeric group IDs, the revision-aware overload uses
 the neutral `CacheStore.archiveIds` seam and treats file 0 as terrain and file
 1 as locations. The autodetecting overload remains available for compatibility
 tools that do not know a revision. `OsrsMapService` then reads terrain and
-location bytes by numeric archive ID without exposing OpenRune types. The
+location bytes by numeric archive ID without exposing OpenRune types. It also
+distinguishes the two payload layouts at this boundary: named pre-packed
+indexes use separate landscape/location groups with file 0 in each, while
+modern packed groups share one numeric group with terrain in file 0 and
+locations in file 1. `MapIndexTableTest` covers both layouts so a legacy
+compatibility assumption cannot silently break modern loading. The
 legacy `MapIndexLoaderOSRS` compatibility facade is now backed by the same
 neutral table and can export/import the existing six-byte-entry map-index
 interchange format for tooling. That interchange export is not a claim that
