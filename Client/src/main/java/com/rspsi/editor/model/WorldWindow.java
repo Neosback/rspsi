@@ -18,7 +18,8 @@ public record WorldWindow(int originX, int originY, int width, int length) {
 
     public boolean contains(TileCoordinate coordinate) {
         Objects.requireNonNull(coordinate, "coordinate");
-        return coordinate.x() < width && coordinate.y() < length;
+        return coordinate.x() >= 0 && coordinate.x() < width
+                && coordinate.y() >= 0 && coordinate.y() < length;
     }
 
     public int worldX(TileCoordinate coordinate) {
