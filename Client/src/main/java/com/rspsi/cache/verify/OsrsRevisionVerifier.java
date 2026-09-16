@@ -65,8 +65,8 @@ public final class OsrsRevisionVerifier {
             messages.add("map index entries: " + maps.index().size());
             byte[] landscape = maps.readLandscape(regionX, regionY);
             byte[] locations = maps.readLocations(regionX, regionY);
-            if (landscape == null || locations == null) {
-                errors.add("region payload missing for " + regionX + "," + regionY);
+            if (landscape == null) {
+                errors.add("terrain payload missing for " + regionX + "," + regionY);
                 return new VerificationReport(path, regionX, regionY, revision, maps.index().size(),
                         true, false, false, messages, errors,
                         List.of(
@@ -77,8 +77,10 @@ public final class OsrsRevisionVerifier {
                                 check("map.payload", VerificationCheck.Status.FAIL, "region payload missing"),
                                 check("region.verify", VerificationCheck.Status.FAIL, "region could not be decoded")));
             }
+            boolean emptyLocations = locations == null;
+            if (emptyLocations) locations = new byte[0];
             messages.add("terrain bytes: " + landscape.length);
-            messages.add("location bytes: " + locations.length);
+            messages.add("location bytes: " + locations.length + (emptyLocations ? " (archive absent)" : ""));
             DefinitionProvider definitions = store.definitionProvider(revision);
             messages.add("definition provider: ready");
             WorldDocument document = OsrsRegionDecoder.decode(landscape, locations, regionX, regionY);
@@ -105,6 +107,8 @@ public final class OsrsRevisionVerifier {
                             check("definitions", VerificationCheck.Status.PASS, "neutral definition provider ready"),
                             check("map.payload", VerificationCheck.Status.PASS,
                                     "terrain " + landscape.length + " bytes; locations " + locations.length + " bytes"),
+                            check("location.archive", emptyLocations ? VerificationCheck.Status.WARN : VerificationCheck.Status.PASS,
+                                    emptyLocations ? "location archive absent; treated as empty" : "location archive present"),
                             check("terrain.decode", VerificationCheck.Status.PASS, "64x64x4 terrain decoded"),
                             check("world.validation", issueErrors > 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     issueErrors + " validation errors; " + (issues.size() - issueErrors) + " warnings"),

@@ -2,6 +2,8 @@ package com.rspsi.cache.map;
 
 import com.rspsi.cache.store.CacheStore;
 import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldRegion;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -97,6 +99,22 @@ class MapIndexTableTest {
 
         assertArrayEquals(new byte[]{3}, store.values.get("5:1234:0"));
         assertArrayEquals(new byte[]{4}, store.values.get("5:5678:1"));
+    }
+
+    @Test
+    void loadsCanonicalRegionWhenLocationArchiveIsAbsent() {
+        FakeStore store = new FakeStore();
+        store.values.put("5:1234:0", OsrsRegionEncoder.encodeTerrain(new WorldDocument(64, 64, 4)));
+        MapIndexEntry entry = new MapIndexEntry(50, 75, 1234, -1, "m50_75", "l50_75");
+        OsrsMapService service = new OsrsMapService(store, 5, MapIndexTable.of(java.util.List.of(entry)));
+
+        WorldRegion region = service.loadRegion(50, 75).orElseThrow();
+
+        assertEquals(50, region.regionX());
+        assertEquals(75, region.regionY());
+        assertEquals((50 << 8) | 75, region.regionId());
+        assertEquals(3200, region.window().originX());
+        assertTrue(region.document().tile(0, 0, 0).snapshot().objects().isEmpty());
     }
 
     private static MapIndexEntry entry(int x, int y) {

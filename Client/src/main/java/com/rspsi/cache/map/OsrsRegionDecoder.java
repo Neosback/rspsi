@@ -3,6 +3,7 @@ package com.rspsi.cache.map;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.WorldRegion;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -134,6 +135,19 @@ public final class OsrsRegionDecoder {
     /** Decodes terrain and attaches locations to their owning canonical tiles. */
     public static WorldDocument decode(byte[] landscape, byte[] locations, int regionX, int regionY) {
         return decode(landscape, locations, regionX, regionY, OsrsRegionDecoder::defaultBaseHeight);
+    }
+
+    /** Decodes a region while retaining its canonical world identity. */
+    public static WorldRegion decodeRegion(byte[] landscape, byte[] locations, int regionX, int regionY) {
+        return decodeRegion(landscape, locations, regionX, regionY, OsrsRegionDecoder::defaultBaseHeight);
+    }
+
+    /** Decodes a region with an injectable base-height provider for parity tests. */
+    public static WorldRegion decodeRegion(byte[] landscape, byte[] locations, int regionX, int regionY,
+                                           BaseHeightProvider baseHeightProvider) {
+        return new WorldRegion(regionX, regionY,
+                decode(landscape, locations == null ? new byte[0] : locations,
+                        regionX, regionY, baseHeightProvider));
     }
 
     /** Combines both archive payloads with an injectable base-height provider. */

@@ -1,8 +1,10 @@
 package com.rspsi.cache.map;
 
 import com.rspsi.cache.store.CacheStore;
+import com.rspsi.editor.model.WorldRegion;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * OSRS map service backed by the neutral cache store. The map index remains
@@ -23,6 +25,14 @@ public final class OsrsMapService implements MapService {
     public OsrsMapService(CacheStore store, int revision) {
         this(store, OSRS_MAP_INDEX,
                 MapIndexTable.discover(store, OSRS_MAP_INDEX, OsrsRevisionProfile.forRevision(revision)));
+    }
+
+    /** Loads one canonical region; a missing location archive is treated as empty. */
+    public Optional<WorldRegion> loadRegion(int regionX, int regionY) {
+        byte[] landscape = readLandscape(regionX, regionY);
+        if (landscape == null) return Optional.empty();
+        byte[] locations = readLocations(regionX, regionY);
+        return Optional.of(OsrsRegionDecoder.decodeRegion(landscape, locations, regionX, regionY));
     }
 
     public OsrsMapService(CacheStore store, int mapIndex, MapIndexTable index) {
