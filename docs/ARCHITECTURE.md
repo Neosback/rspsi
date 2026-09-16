@@ -42,6 +42,8 @@ boundary.
 - `TerrainMeshBuilder` owns the 13 shaped-tile topologies and four rotations;
   it produces neutral mesh data for renderers and is covered independently of
   the legacy `ShapedTile` class.
+- `CollisionMap`, `CollisionFlag`, and `CollisionDirection` own editor
+  collision semantics; server routefinder types are reference inputs only.
 - `EditorTool`, `ToolContext`, `PointerEvent`, and `ToolInspector` are shared
   by all frontends.
 - `SceneRenderer` consumes neutral scenes and changes and returns neutral pick
