@@ -148,3 +148,8 @@ they cannot become accidental application sources or dependencies:
 The sibling resource directory is intentionally not part of the RSPSi Git
 repository. Refreshes should be deliberate and should update this revision
 record after review.
+
+The first detailed evidence capture is in
+[`RESOURCE_INTAKE_2026-09-16.md`](RESOURCE_INTAKE_2026-09-16.md). It records
+the inspected server/editor paths, license notices, RSPSi-owned replacement
+APIs, and current test evidence.

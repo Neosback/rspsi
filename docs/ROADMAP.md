@@ -41,7 +41,7 @@ The locked product direction and workspace design are maintained in
 | UI-neutral editor contracts | in-progress | Neutral pointer, tool, inspector, viewport, and renderer seams introduced; command-backed underlay brush is the first migrated tool path |
 | Live legacy document bridge | in-progress | MapRegion terrain import and underlay synchronization are implemented; UI activation remains opt-in |
 | OpenRune backend | in-progress | 2.4.19 compatibility spike is isolated behind `CacheStore`; legacy remains default |
-| Resource catalog and provenance | in-progress | [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md) separates dependencies, donors, oracles, visual references, and license-review items; intake evidence remains |
+| Resource catalog and provenance | implemented-unverified | [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md) and [`RESOURCE_INTAKE_2026-09-16.md`](RESOURCE_INTAKE_2026-09-16.md) record roles, commits, license evidence, inspected paths, and current adoption tests |
 | OSRS-only product scope | in-progress | Scope and migration policy are locked in [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md); legacy paths remain quarantined during parity work |
 | Project/cache identity metadata | implemented-unverified | Neutral `OsrsCacheMetadata`, `ProjectMetadata`, JSON persistence, and explicit read-only mismatch assessment added; cache discovery and UI remain |
 | Controlled workspace contracts | in-progress | UI-neutral dock, panel, placement, and workspace types added; JavaFX rendering remains |
