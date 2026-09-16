@@ -1,0 +1,84 @@
+package com.rspsi.cache.verify;
+
+import com.rspsi.cache.OsrsCacheMetadata;
+import com.rspsi.cache.map.MapIndexEntry;
+import com.rspsi.cache.map.MapIndexTable;
+import com.rspsi.cache.map.OsrsRevisionProfile;
+import com.rspsi.cache.store.CacheStore;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+/** Audits revision assumptions before map bytes are decoded. */
+public final class RevisionAudit {
+    private RevisionAudit() {
+    }
+
+    public static List<VerificationCheck> audit(CacheStore store, int requestedRevision,
+                                                MapIndexTable index) {
+        Objects.requireNonNull(store, "store");
+        Objects.requireNonNull(index, "index");
+        if (requestedRevision <= 0) throw new IllegalArgumentException("Revision must be positive");
+        OsrsRevisionProfile profile = OsrsRevisionProfile.forRevision(requestedRevision);
+        List<VerificationCheck> checks = new ArrayList<>();
+        checks.add(metadataCheck(store.metadata(requestedRevision).orElse(null), requestedRevision));
+        checks.add(layoutCheck(index, profile));
+        checks.add(new VerificationCheck("revision.codec",
+                VerificationCheck.Status.PASS,
+                "terrain=" + (profile.newTerrainFormat() ? "short" : "byte")
+                        + ", mapGroups=" + profile.mapGroupLayout()));
+        if (profile.mapGroupLayout() == OsrsRevisionProfile.MapGroupLayout.NAMED
+                && !store.capabilities().namedArchives()) {
+            checks.add(new VerificationCheck("revision.namedArchives", VerificationCheck.Status.WARN,
+                    "profile is named but backend does not expose named archive lookup"));
+        } else {
+            checks.add(new VerificationCheck("revision.namedArchives", VerificationCheck.Status.PASS,
+                    "backend capability is compatible with the selected profile"));
+        }
+        return List.copyOf(checks);
+    }
+
+    private static VerificationCheck metadataCheck(OsrsCacheMetadata metadata, int requestedRevision) {
+        if (metadata == null) {
+            return new VerificationCheck("revision.metadata", VerificationCheck.Status.WARN,
+                    "backend did not provide cache identity metadata");
+        }
+        if (metadata.revision() != requestedRevision) {
+            return new VerificationCheck("revision.metadata", VerificationCheck.Status.FAIL,
+                    "requested revision " + requestedRevision + " but backend reports " + metadata.revision());
+        }
+        return new VerificationCheck("revision.metadata", VerificationCheck.Status.PASS,
+                "revision " + metadata.revision() + ", fingerprint " + metadata.fingerprint());
+    }
+
+    private static VerificationCheck layoutCheck(MapIndexTable index, OsrsRevisionProfile profile) {
+        long split = index.entries().stream().filter(RevisionAudit::isSplitEntry).count();
+        long packed = index.entries().stream().filter(RevisionAudit::isPackedEntry).count();
+        long incomplete = index.entries().stream().filter(entry -> !isSplitEntry(entry)
+                && !isPackedEntry(entry)).count();
+        if (index.size() == 0) {
+            return new VerificationCheck("revision.mapLayout", VerificationCheck.Status.FAIL,
+                    "no map groups available to audit");
+        }
+        boolean expectedPacked = profile.mapGroupLayout() == OsrsRevisionProfile.MapGroupLayout.NUMERIC;
+        boolean matches = incomplete == 0
+                && (expectedPacked ? packed > 0 && split == 0 : split > 0 && packed == 0);
+        VerificationCheck.Status status = matches
+                ? VerificationCheck.Status.PASS
+                : VerificationCheck.Status.FAIL;
+        return new VerificationCheck("revision.mapLayout", status,
+                "expected=" + profile.mapGroupLayout() + ", split=" + split + ", packed=" + packed
+                        + ", incomplete=" + incomplete);
+    }
+
+    private static boolean isSplitEntry(MapIndexEntry entry) {
+        return entry.landscapeArchiveId() >= 0 && entry.objectArchiveId() >= 0
+                && entry.landscapeArchiveId() != entry.objectArchiveId();
+    }
+
+    private static boolean isPackedEntry(MapIndexEntry entry) {
+        return entry.landscapeArchiveId() >= 0 && entry.objectArchiveId() >= 0
+                && entry.landscapeArchiveId() == entry.objectArchiveId();
+    }
+}

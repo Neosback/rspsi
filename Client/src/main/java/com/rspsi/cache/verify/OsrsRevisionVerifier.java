@@ -97,6 +97,7 @@ public final class OsrsRevisionVerifier {
             messages.add("terrain bytes: " + landscape.length);
             messages.add("location bytes: " + locations.length + (emptyLocations ? " (archive absent)" : ""));
             DefinitionProvider definitions = store.definitionProvider(revision);
+            List<VerificationCheck> revisionAudit = RevisionAudit.audit(store, revision, maps.index());
             messages.add("definition provider: ready");
             AssetRepository assets = new DefinitionAssetRepository(definitions, store.symbolicNameProvider());
             List<AssetDescriptor> availableAssets = assets.search("");
@@ -164,12 +165,15 @@ public final class OsrsRevisionVerifier {
             messages.add("decode-encode-decode semantic equality: " + equal);
             if (!equal) errors.add("semantic round-trip mismatch");
             if (issueErrors > 0) errors.add("world validation reported errors");
+            if (revisionAudit.stream().anyMatch(check -> check.status() == VerificationCheck.Status.FAIL)) {
+                errors.add("revision audit reported incompatible cache assumptions");
+            }
             if (!sceneComplete) errors.add("neutral scene did not cover every document tile");
             if (!objectProjectionComplete) errors.add("neutral scene object projections did not match canonical objects");
             if (!minimapComplete) errors.add("neutral minimap dimensions did not match the document");
             return new VerificationReport(path, regionX, regionY, revision, maps.index().size(),
                     true, true, equal, messages, errors,
-                    List.of(
+                    concatChecks(revisionAudit, List.of(
                             check("cache.open", VerificationCheck.Status.PASS, "OpenRune cache opened"),
                             check("cache.capabilities", VerificationCheck.Status.PASS,
                                     capabilities(store)),
@@ -231,7 +235,7 @@ public final class OsrsRevisionVerifier {
                             check("render.parity", VerificationCheck.Status.NOT_RUN,
                                     "RuneLite/TSPS render fixtures are not bundled"),
                             check("minimap.parity", VerificationCheck.Status.NOT_RUN,
-                                    "minimap comparison fixture is not bundled")));
+                                    "minimap comparison fixture is not bundled"))));
         } catch (RuntimeException exception) {
             errors.add(exception.getClass().getSimpleName() + ": " + exception.getMessage());
             return new VerificationReport(path, regionX, regionY, revision, 0,
@@ -244,6 +248,14 @@ public final class OsrsRevisionVerifier {
 
     private static VerificationCheck check(String id, VerificationCheck.Status status, String detail) {
         return new VerificationCheck(id, status, detail);
+    }
+
+    private static List<VerificationCheck> concatChecks(List<VerificationCheck> prefix,
+                                                        List<VerificationCheck> suffix) {
+        List<VerificationCheck> checks = new ArrayList<>(prefix.size() + suffix.size());
+        checks.addAll(prefix);
+        checks.addAll(suffix);
+        return List.copyOf(checks);
     }
 
     private static String capabilities(OpenRuneCacheStore store) {
