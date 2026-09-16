@@ -39,6 +39,9 @@ boundary.
   mutations.
 - `DirtyRegion` groups command invalidation by 8×8 chunk so future scene,
   collision, minimap, and cache writers can rebuild only affected derived data.
+- `TerrainMeshBuilder` owns the 13 shaped-tile topologies and four rotations;
+  it produces neutral mesh data for renderers and is covered independently of
+  the legacy `ShapedTile` class.
 - `EditorTool`, `ToolContext`, `PointerEvent`, and `ToolInspector` are shared
   by all frontends.
 - `SceneRenderer` consumes neutral scenes and changes and returns neutral pick
