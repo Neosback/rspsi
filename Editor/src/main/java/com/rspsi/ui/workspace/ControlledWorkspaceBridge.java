@@ -126,6 +126,15 @@ public final class ControlledWorkspaceBridge {
         }
         if (shell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
             viewport.showCanonical(session, window);
+            if (shell.panelNode("inspector") instanceof SessionInspectorPanel inspector) {
+                viewport.canonicalViewport().setHoverListener(hover -> {
+                    if (hover.isEmpty() || session.selection().current() != null) {
+                        if (hover.isEmpty()) inspector.refresh();
+                        return;
+                    }
+                    inspector.showTile(hover.get());
+                });
+            }
         }
     }
 

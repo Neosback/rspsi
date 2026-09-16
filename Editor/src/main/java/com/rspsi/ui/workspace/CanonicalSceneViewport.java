@@ -29,6 +29,7 @@ import javafx.scene.text.Font;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Small JavaFX adapter for the canonical scene model.
@@ -48,6 +49,7 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     private SessionSceneController sceneController;
     private int plane;
     private DebugOverlaySettings debugOverlaySettings = DebugOverlaySettings.none();
+    private Consumer<Optional<TileCoordinate>> hoverListener = ignored -> { };
     private boolean closed;
 
     public CanonicalSceneViewport() {
@@ -55,6 +57,8 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
         setAccessibleText("Canonical OSRS scene preview");
         setFocusTraversable(true);
         canvas.setOnMouseClicked(event -> pickAndSelect(event.getX(), event.getY()));
+        canvas.setOnMouseMoved(event -> notifyHover(event.getX(), event.getY()));
+        canvas.setOnMouseExited(event -> hoverListener.accept(Optional.empty()));
         getChildren().add(canvas);
     }
 
@@ -92,6 +96,11 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     public void setDebugOverlaySettings(DebugOverlaySettings settings) {
         this.debugOverlaySettings = Objects.requireNonNull(settings, "settings");
         redrawOnFxThread();
+    }
+
+    /** Installs a frontend callback for hover inspection without changing selection. */
+    public void setHoverListener(Consumer<Optional<TileCoordinate>> listener) {
+        this.hoverListener = Objects.requireNonNull(listener, "listener");
     }
 
     public void setPlane(int plane) {
@@ -142,6 +151,11 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
             session.selection().select(result.tile());
             requestFocus();
         });
+    }
+
+    private void notifyHover(double x, double y) {
+        if (closed) return;
+        hoverListener.accept(pick((float) x, (float) y).map(PickResult::tile));
     }
 
     private void redrawOnFxThread() {
@@ -362,6 +376,7 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
         session = null;
         worldWindow = null;
         scene = null;
+        hoverListener = ignored -> { };
     }
 
     @Override
