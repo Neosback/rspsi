@@ -5,6 +5,8 @@ import com.rspsi.editor.SessionChangeListener;
 import com.rspsi.editor.SelectionChangeListener;
 import com.rspsi.editor.SessionStateListener;
 import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.editor.collision.CollisionMap;
+import com.rspsi.editor.collision.CollisionTileSnapshot;
 import com.rspsi.editor.collision.OsrsCollisionBuilder;
 import com.rspsi.editor.inspector.ObjectInspectorSnapshot;
 import com.rspsi.editor.model.TileCoordinate;
@@ -133,6 +135,14 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
         row("Flags", String.format("0x%02X", snapshot.rawFlags()));
         row("Bridge", snapshot.bridge() ? "Yes" : "No");
         row("Roof flag", snapshot.roofRelated() ? "Present" : "Absent");
+        CollisionMap collision = definitions == null
+                ? OsrsCollisionBuilder.fromTerrain(session.world())
+                : OsrsCollisionBuilder.fromTerrainAndObjects(session.world(), definitions);
+        CollisionTileSnapshot collisionTile = CollisionTileSnapshot.from(collision, coordinate);
+        row("Movement blocked", directions(collisionTile.movementBlocked()));
+        row("Projectile blocked", directions(collisionTile.projectileBlocked()));
+        row("Floor/object", collisionTile.floorBlocked() || collisionTile.objectBlocked()
+                ? (collisionTile.floorBlocked() ? "Floor" : "Object") : "No");
     }
 
     private void showObject(WorldObject object) {
@@ -189,6 +199,12 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
         text.getStyleClass().add("workspace-property-value");
         text.setWrapText(true);
         values.addRow(row, key, text);
+    }
+
+    private static String directions(java.util.Set<com.rspsi.editor.collision.CollisionDirection> directions) {
+        return directions.isEmpty()
+                ? "None"
+                : directions.stream().map(direction -> direction.name().replace('_', ' ')).toList().toString();
     }
 
     @Override
