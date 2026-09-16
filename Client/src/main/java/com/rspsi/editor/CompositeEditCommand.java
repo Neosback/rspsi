@@ -1,6 +1,8 @@
 package com.rspsi.editor;
 
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /** Groups several edits into one user-visible history entry. */
 public final class CompositeEditCommand implements EditCommand {
@@ -29,5 +31,14 @@ public final class CompositeEditCommand implements EditCommand {
     @Override
     public String description() {
         return description;
+    }
+
+    @Override
+    public Set<com.rspsi.editor.model.TileCoordinate> changedTiles() {
+        Set<com.rspsi.editor.model.TileCoordinate> changed = new LinkedHashSet<>();
+        for (EditorCommand command : commands) {
+            changed.addAll(command.changedTiles());
+        }
+        return Set.copyOf(changed);
     }
 }

@@ -4,6 +4,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 
 import java.util.Objects;
+import java.util.Set;
 
 /** Replaces one tile's canonical state; useful as the first adapter for old TileChange edits. */
 public final class SetTileCommand implements EditCommand {
@@ -32,5 +33,10 @@ public final class SetTileCommand implements EditCommand {
     @Override
     public String description() {
         return description;
+    }
+
+    @Override
+    public Set<TileCoordinate> changedTiles() {
+        return Set.of(coordinate);
     }
 }

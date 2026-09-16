@@ -72,6 +72,11 @@ events, resolves tiles through `Viewport`, and commits a grouped
 optional so the existing SceneGraph behavior remains the default until a
 document/viewport bridge is connected to the loaded map.
 
+`LegacyMapDocumentBridge` is the compatibility adapter for that connection. It
+imports terrain into `WorldDocument`, listens to affected-tile notifications,
+and writes only underlay changes back to `MapRegion`. Object synchronization
+and the replacement of the legacy tool remain separate milestones.
+
 ## Deferred systems
 
 No new renderer, public Plugin Hub, Lua/CS2 IDE, server runtime, live network

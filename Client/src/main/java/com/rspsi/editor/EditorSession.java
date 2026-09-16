@@ -3,13 +3,17 @@ package com.rspsi.editor;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldModel;
 
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /** Owns editor state without requiring JavaFX or a renderer. */
 public final class EditorSession {
     private final WorldDocument world;
     private final SelectionModel selection = new SelectionModel();
     private final CommandHistory history = new CommandHistory();
+    private final List<SessionChangeListener> changeListeners = new CopyOnWriteArrayList<>();
     private int savedHistoryPosition;
 
     public EditorSession(WorldDocument world) {
@@ -38,15 +42,33 @@ public final class EditorSession {
     }
 
     public void execute(EditorCommand command) {
-        history.execute(Objects.requireNonNull(command, "command"), this);
+        EditorCommand checked = Objects.requireNonNull(command, "command");
+        history.execute(checked, this);
+        notifyChanged(checked);
     }
 
     public boolean undo() {
-        return history.undo(this);
+        if (!history.canUndo()) {
+            return false;
+        }
+        EditorCommand command = history.previousCommand();
+        boolean changed = history.undo(this);
+        if (changed) {
+            notifyChanged(command);
+        }
+        return changed;
     }
 
     public boolean redo() {
-        return history.redo(this);
+        if (!history.canRedo()) {
+            return false;
+        }
+        EditorCommand command = history.nextCommand();
+        boolean changed = history.redo(this);
+        if (changed) {
+            notifyChanged(command);
+        }
+        return changed;
     }
 
     public void markSaved() {
@@ -55,5 +77,23 @@ public final class EditorSession {
 
     public boolean isDirty() {
         return history.position() != savedHistoryPosition;
+    }
+
+    public void addChangeListener(SessionChangeListener listener) {
+        changeListeners.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    public void removeChangeListener(SessionChangeListener listener) {
+        changeListeners.remove(listener);
+    }
+
+    private void notifyChanged(EditorCommand command) {
+        if (command.changedTiles().isEmpty()) {
+            return;
+        }
+        var changedTiles = Set.copyOf(command.changedTiles());
+        for (SessionChangeListener listener : changeListeners) {
+            listener.changed(changedTiles);
+        }
     }
 }

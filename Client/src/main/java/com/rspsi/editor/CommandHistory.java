@@ -50,4 +50,12 @@ public final class CommandHistory {
     public boolean canRedo() {
         return cursor < commands.size();
     }
+
+    EditorCommand previousCommand() {
+        return commands.get(cursor - 1);
+    }
+
+    EditorCommand nextCommand() {
+        return commands.get(cursor);
+    }
 }
