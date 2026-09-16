@@ -13,6 +13,7 @@ import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.assets.DefinitionAssetRepository;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.RenderSceneBuilder;
 import com.rspsi.editor.validation.ValidationIssue;
@@ -99,6 +100,26 @@ public final class OsrsRevisionVerifier {
             messages.add("asset descriptors: " + availableAssets.size());
             WorldDocument document = OsrsRegionDecoder.decode(landscape, locations, regionX, regionY,
                     profile.newTerrainFormat());
+            int contextMinX = Math.max(0, regionX - 1);
+            int contextMinY = Math.max(0, regionY - 1);
+            int contextWidth = Math.min(256, regionX + 2) - contextMinX;
+            int contextHeight = Math.min(256, regionY + 2) - contextMinY;
+            WorldRegionWindow context = maps.loadWindow(contextMinX, contextMinY,
+                    contextWidth, contextHeight);
+            int rawBoundaryMismatches = context.boundaryMismatches().size();
+            int stitchedVertices = context.stitchSharedEdges();
+            int boundaryMismatches = context.boundaryMismatches().size();
+            int bridgeLinks = document.bridgeLinks().size();
+            messages.add("context window: " + context.loadedRegionCount() + "/"
+                    + context.expectedRegionCount() + " regions; missing "
+                    + context.missingRegionIds().size());
+            messages.add("region boundaries: " + rawBoundaryMismatches
+                    + " provisional mismatches, " + stitchedVertices
+                    + " vertices stitched, " + boundaryMismatches
+                    + " remaining; bridge links: " + bridgeLinks);
+            if (boundaryMismatches > 0) {
+                errors.add("loaded region boundaries have " + boundaryMismatches + " height mismatches");
+            }
             List<ValidationIssue> issues = WorldValidator.validate(document, definitions,
                     WorldValidator.BoundaryMode.REGION_CONTEXT);
             long issueErrors = issues.stream().filter(issue -> issue.severity() == ValidationIssue.Severity.ERROR).count();
@@ -147,6 +168,19 @@ public final class OsrsRevisionVerifier {
                                             ? VerificationCheck.Status.WARN
                                             : VerificationCheck.Status.PASS,
                                     emptyLocations ? "no location payload to decode" : "location payload decoded"),
+                            check("region.window", context.loadedRegionCount() == context.expectedRegionCount()
+                                            ? VerificationCheck.Status.PASS : VerificationCheck.Status.WARN,
+                                    context.loadedRegionCount() + "/" + context.expectedRegionCount()
+                                            + " neighboring regions loaded; "
+                                            + context.missingRegionIds().size() + " holes preserved"),
+                            check("region.boundary", boundaryMismatches == 0
+                                            ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
+                                    rawBoundaryMismatches + " provisional mismatches; "
+                                            + stitchedVertices + " shared vertices materialized; "
+                                            + boundaryMismatches + " remaining"),
+                            check("plane.semantics", document.planes() == 4
+                                            ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
+                                    document.planes() + " authored planes; " + bridgeLinks + " bridge links"),
                             check("world.validation", issueErrors > 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     issueErrors + " validation errors; " + (issues.size() - issueErrors) + " warnings"),
                             check("collision.decode", VerificationCheck.Status.PASS, "collision map constructed"),

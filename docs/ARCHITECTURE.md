@@ -93,7 +93,10 @@ boundary.
 - `WorldRegionWindow` composes bounded canonical 64×64 regions for scene and
   neighbor-context work. Missing regions remain explicit holes, so boundary
   blending and loading-line behavior cannot silently treat absent data as
-  authored empty terrain.
+  authored empty terrain. `stitchSharedEdges()` resolves the provisional
+  final row/column of standalone decoded regions from loaded neighbor tile
+  origins before scene construction; `boundaryMismatches()` remains available
+  before and after stitching for diagnostics.
 - `InstanceChunkTemplate`, `InstanceChunkTransform`, and `InstanceChunkGrid`
   keep current OSRS
   instance-template packing and 8×8 rotation semantics neutral. They map

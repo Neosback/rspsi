@@ -31,4 +31,23 @@ class WorldRegionBoundaryTest {
         assertTrue(mismatches.stream().anyMatch(m -> m.direction() == RegionBoundaryDirection.NORTH
                 && m.alongEdge() == 7 && m.upperCorner()));
     }
+
+    @Test
+    void stitchesProvisionalStandaloneBordersFromNeighborOrigins() {
+        WorldDocument west = new WorldDocument(64, 64, 1);
+        WorldDocument east = new WorldDocument(64, 64, 1);
+        east.tile(0, 0, 6).restore(new TileSnapshot(0, 0, 0, 9,
+                0, 0, 0, 0, 0, List.of()));
+        east.tile(0, 0, 7).restore(new TileSnapshot(9, 9, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+        WorldRegionWindow window = new WorldRegionWindow(50, 50, 2, 1, Map.of(
+                (50 << 8) | 50, new WorldRegion(50, 50, west),
+                (51 << 8) | 50, new WorldRegion(51, 50, east)));
+
+        int updates = window.stitchSharedEdges();
+
+        assertTrue(updates > 0);
+        assertTrue(window.boundaryMismatches().isEmpty());
+        assertEquals(9, west.tile(0, 63, 7).snapshot().southEastHeight());
+    }
 }

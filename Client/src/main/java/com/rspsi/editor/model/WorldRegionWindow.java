@@ -112,6 +112,82 @@ public final class WorldRegionWindow {
         return List.copyOf(mismatches);
     }
 
+    /**
+     * Materializes shared border vertices from neighboring region origins.
+     *
+     * <p>A terrain archive stores the origin height for each tile; the final
+     * row and column of a standalone 64x64 document are therefore provisional
+     * until neighboring regions are present. Scene construction must call this
+     * once a context window has loaded so shared geometry uses one vertex. The
+     * return value is the number of tile snapshots updated.</p>
+     */
+    public int stitchSharedEdges() {
+        int updates = 0;
+        for (WorldRegion region : regions.values()) {
+            WorldRegion east = regions.get(((region.regionX() + 1) << 8) | region.regionY());
+            if (east != null) {
+                WorldRegion northEast = regions.get(((region.regionX() + 1) << 8)
+                        | (region.regionY() + 1));
+                updates += stitchEast(region, east, northEast);
+            }
+            WorldRegion north = regions.get((region.regionX() << 8) | (region.regionY() + 1));
+            if (north != null) {
+                WorldRegion northEast = regions.get(((region.regionX() + 1) << 8)
+                        | (region.regionY() + 1));
+                updates += stitchNorth(region, north, northEast);
+            }
+        }
+        return updates;
+    }
+
+    private static int stitchEast(WorldRegion west, WorldRegion east, WorldRegion northEast) {
+        int updates = 0;
+        for (int plane = 0; plane < Math.min(west.document().planes(), east.document().planes()); plane++) {
+            for (int y = 0; y < WorldRegion.REGION_SIZE; y++) {
+                TileSnapshot right = east.document().tile(plane, 0, y).snapshot();
+                int northWestHeight = y < WorldRegion.REGION_SIZE - 1
+                        ? east.document().tile(plane, 0, y + 1).snapshot().southWestHeight()
+                        : northEast == null
+                        ? right.northWestHeight()
+                        : northEast.document().tile(plane, 0, 0).snapshot().southWestHeight();
+                TileSnapshot left = west.document().tile(plane, 63, y).snapshot();
+                TileSnapshot updated = new TileSnapshot(left.southWestHeight(),
+                        right.southWestHeight(), northWestHeight, left.northWestHeight(),
+                        left.underlayId(), left.overlayId(), left.overlayShape(),
+                        left.overlayRotation(), left.flags(), left.objects());
+                if (!updated.equals(left)) {
+                    west.document().tile(plane, 63, y).restore(updated);
+                    updates++;
+                }
+            }
+        }
+        return updates;
+    }
+
+    private static int stitchNorth(WorldRegion south, WorldRegion north, WorldRegion northEast) {
+        int updates = 0;
+        for (int plane = 0; plane < Math.min(south.document().planes(), north.document().planes()); plane++) {
+            for (int x = 0; x < WorldRegion.REGION_SIZE; x++) {
+                TileSnapshot upper = north.document().tile(plane, x, 0).snapshot();
+                int northEastHeight = x < WorldRegion.REGION_SIZE - 1
+                        ? north.document().tile(plane, x + 1, 0).snapshot().southWestHeight()
+                        : northEast == null
+                        ? upper.southEastHeight()
+                        : northEast.document().tile(plane, 0, 0).snapshot().southWestHeight();
+                TileSnapshot lower = south.document().tile(plane, x, 63).snapshot();
+                TileSnapshot updated = new TileSnapshot(lower.southWestHeight(),
+                        lower.southEastHeight(), northEastHeight, upper.southWestHeight(),
+                        lower.underlayId(), lower.overlayId(), lower.overlayShape(),
+                        lower.overlayRotation(), lower.flags(), lower.objects());
+                if (!updated.equals(lower)) {
+                    south.document().tile(plane, x, 63).restore(updated);
+                    updates++;
+                }
+            }
+        }
+        return updates;
+    }
+
     private static void compareEast(WorldRegion west, WorldRegion east,
                                     List<RegionBoundaryMismatch> mismatches) {
         for (int plane = 0; plane < Math.min(west.document().planes(), east.document().planes()); plane++) {
