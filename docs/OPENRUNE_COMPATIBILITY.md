@@ -29,6 +29,11 @@ neutral table and can export/import the existing six-byte-entry map-index
 interchange format for tooling. That interchange export is not a claim that
 OSRS caches use a legacy binary map-index file internally.
 
+`OpenRuneDefinitionProvider` similarly decodes objects, underlays, overlays,
+and textures with OpenRune codecs, then exposes only RSPSi-owned definition
+views. Model metadata remains an optional provider capability until a neutral
+model decoder is validated.
+
 ## Explicit limitations
 
 The first OpenRune filesystem implementation is read-only. `write` throws

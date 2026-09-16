@@ -2,6 +2,7 @@ package com.rspsi.cache.store;
 
 import dev.openrune.filesystem.Cache;
 import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.definition.DefinitionProvider;
 
 import java.nio.file.Path;
 import java.util.Objects;
@@ -24,6 +25,11 @@ public final class OpenRuneCacheStore implements CacheStore {
     public static OpenRuneCacheStore open(Path path) {
         Objects.requireNonNull(path, "path");
         return new OpenRuneCacheStore(Cache.Companion.load(path));
+    }
+
+    /** Loads OpenRune definitions and immediately reduces them to RSPSi views. */
+    public DefinitionProvider definitionProvider(int revision) {
+        return OpenRuneDefinitionProvider.load(cache, revision);
     }
 
     @Override
