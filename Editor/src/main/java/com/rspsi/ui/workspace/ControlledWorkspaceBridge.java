@@ -2,6 +2,7 @@ package com.rspsi.ui.workspace;
 
 import com.rspsi.controllers.MainController;
 import com.rspsi.cache.definition.LegacyDefinitionProvider;
+import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.ui.StandardWorkspaceCatalog;
 import com.rspsi.editor.ui.WorkspaceCatalog;
 import javafx.scene.Node;
@@ -24,6 +25,12 @@ public final class ControlledWorkspaceBridge {
     }
 
     public static Parent adapt(Parent loadedContent, MainController controller) {
+        return adapt(loadedContent, controller, null);
+    }
+
+    /** Uses the neutral asset browser when an OSRS repository is available. */
+    public static Parent adapt(Parent loadedContent, MainController controller,
+                               AssetRepository assets) {
         Objects.requireNonNull(loadedContent, "loadedContent");
         Objects.requireNonNull(controller, "controller");
         if (controller.getLegacyToolRail() == null
@@ -46,7 +53,9 @@ public final class ControlledWorkspaceBridge {
         Map<String, Node> panels = new LinkedHashMap<>();
         panels.put("tools", controller.getLegacyToolRail());
         panels.put("viewport", controller.getLegacyViewport());
-        panels.put("assets", controller.getLegacyInspector());
+        panels.put("assets", assets == null
+                ? controller.getLegacyInspector()
+                : new AssetBrowserPanel(assets));
         panels.put("inspector", new SessionInspectorPanel(new LegacyDefinitionProvider()));
         panels.put("history", new SessionHistoryPanel());
         panels.put("validation", new ValidationPanel());

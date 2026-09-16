@@ -43,6 +43,21 @@
     -fx-background-color: #192134;
 }
 
+.workspace-asset-browser {
+    -fx-background-color: #192134;
+}
+
+.workspace-asset-filters .label {
+    -fx-text-fill: #cbd5e1;
+    -fx-padding: 7px 0 0 0;
+}
+
+.workspace-asset-details {
+    -fx-background-color: #111827;
+    -fx-text-fill: #e2e8f0;
+    -fx-padding: 8px;
+}
+
 .workspace-panel-title {
     -fx-text-fill: #f8fafc;
     -fx-font-size: 15px;

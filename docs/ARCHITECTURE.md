@@ -171,6 +171,9 @@ Tile inspection also derives a neutral `CollisionTileSnapshot` from the
 canonical document, making movement/projectile blockers, floor/object
 blocking, and roof semantics visible without placing collision logic in the
 JavaFX panel.
+When an OSRS-backed `AssetRepository` is supplied, the asset pane uses
+`AssetBrowserPanel` to search display names, numeric IDs, and optional
+RSCM/GameVal keys; a null repository preserves the legacy inspector fallback.
 the controlled workflow and its manual coverage continue to be migrated.
 
 When a legacy map reaches its existing ready state, the client emits a small
@@ -211,8 +214,8 @@ document/viewport bridge is connected to the loaded map.
 
 `LegacyMapDocumentBridge` is the compatibility adapter for that connection. It
 imports terrain into `WorldDocument`, listens to affected-tile notifications,
-and writes only underlay changes back to `MapRegion`. Object synchronization
-and the replacement of the legacy tool remain separate milestones.
+and writes canonical terrain fields and scene-object changes back to
+`MapRegion`/`SceneGraph`. Cache persistence remains a separate save boundary.
 
 `PaintOverlayTool`, `ChangeHeightTool`, and `PaintFlagsTool` now use the same
 neutral pointer/session/composite-command path. They are first-party core tools

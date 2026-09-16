@@ -1,0 +1,128 @@
+package com.rspsi.ui.workspace;
+
+import com.rspsi.editor.assets.AssetDescriptor;
+import com.rspsi.editor.assets.AssetRepository;
+import javafx.collections.FXCollections;
+import javafx.geometry.Insets;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
+import javafx.scene.control.Separator;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Consumer;
+
+/** JavaFX adapter for the neutral asset repository. */
+public final class AssetBrowserPanel extends VBox {
+    private static final String ALL = "All";
+
+    private final TextField searchField = new TextField();
+    private final ComboBox<String> category = new ComboBox<>();
+    private final ListView<AssetDescriptor> results = new ListView<>();
+    private final Label status = new Label();
+    private final Label details = new Label();
+    private AssetRepository repository;
+    private Consumer<AssetDescriptor> selectionListener = ignored -> { };
+
+    public AssetBrowserPanel(AssetRepository repository) {
+        this.repository = Objects.requireNonNull(repository, "repository");
+        setSpacing(8);
+        setPadding(new Insets(12));
+        getStyleClass().add("workspace-asset-browser");
+        setAccessibleText("Asset browser");
+
+        Label title = new Label("Assets");
+        title.getStyleClass().add("workspace-panel-title");
+
+        Label searchLabel = new Label("Search");
+        searchLabel.setLabelFor(searchField);
+        searchField.setPromptText("Name, symbolic key, or ID");
+        searchField.setAccessibleText("Search assets by name, symbolic key, or numeric ID");
+        HBox.setHgrow(searchField, Priority.ALWAYS);
+
+        category.getItems().setAll(ALL, "Objects", "Underlays", "Overlays", "Textures");
+        category.setValue(ALL);
+        category.setAccessibleText("Asset category filter");
+        category.setPrefWidth(110);
+
+        HBox filters = new HBox(8, searchLabel, searchField, category);
+        filters.getStyleClass().add("workspace-asset-filters");
+
+        status.getStyleClass().add("workspace-panel-status");
+        results.setPlaceholder(new Label("No matching assets."));
+        results.setAccessibleText("Asset search results");
+        results.setCellFactory(view -> new AssetCell());
+        VBox.setVgrow(results, Priority.ALWAYS);
+
+        details.setWrapText(true);
+        details.setMinHeight(48);
+        details.getStyleClass().add("workspace-asset-details");
+
+        searchField.textProperty().addListener((observable, oldValue, newValue) -> refresh());
+        category.valueProperty().addListener((observable, oldValue, newValue) -> refresh());
+        results.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            showDetails(newValue);
+            selectionListener.accept(newValue);
+        });
+
+        getChildren().addAll(title, filters, status, results, new Separator(), details);
+        refresh();
+    }
+
+    public void setRepository(AssetRepository repository) {
+        this.repository = Objects.requireNonNull(repository, "repository");
+        refresh();
+    }
+
+    public Optional<AssetDescriptor> selectedAsset() {
+        return Optional.ofNullable(results.getSelectionModel().getSelectedItem());
+    }
+
+    public void onAssetSelected(Consumer<AssetDescriptor> listener) {
+        this.selectionListener = Objects.requireNonNull(listener, "listener");
+    }
+
+    public void refresh() {
+        List<AssetDescriptor> assets = repository.search(searchField.getText());
+        String selectedCategory = category.getValue();
+        if (selectedCategory != null && !ALL.equals(selectedCategory)) {
+            String type = selectedCategory.substring(0, selectedCategory.length() - 1).toLowerCase(Locale.ROOT);
+            assets = assets.stream().filter(asset -> asset.type().equals(type)).toList();
+        }
+        AssetDescriptor selected = selectedAsset().orElse(null);
+        results.setItems(FXCollections.observableArrayList(assets));
+        if (selected != null) results.getSelectionModel().select(selected);
+        status.setText(assets.size() + (assets.size() == 1 ? " asset" : " assets"));
+        showDetails(results.getSelectionModel().getSelectedItem());
+    }
+
+    private void showDetails(AssetDescriptor asset) {
+        if (asset == null) {
+            details.setText("Select an asset to inspect its definition.");
+            return;
+        }
+        String symbolic = asset.symbolicName().map(value -> "\nSymbolic: " + value).orElse("");
+        details.setText(asset.name() + "\nType: " + asset.type() + " · ID: " + asset.id() + symbolic);
+    }
+
+    private static final class AssetCell extends ListCell<AssetDescriptor> {
+        @Override
+        protected void updateItem(AssetDescriptor asset, boolean empty) {
+            super.updateItem(asset, empty);
+            if (empty || asset == null) {
+                setText(null);
+                return;
+            }
+            String symbolic = asset.symbolicName().map(value -> " · " + value).orElse("");
+            setText(asset.name() + "\n" + asset.type() + " · ID " + asset.id() + symbolic);
+        }
+    }
+}
