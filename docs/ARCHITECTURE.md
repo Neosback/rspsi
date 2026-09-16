@@ -176,6 +176,11 @@ boundary.
   providers into immutable frontend data. It keeps missing definitions
   explicit and exposes canonical category/shape names without coupling an
   inspector to Displee, OpenRune, JavaFX, or ImGui.
+- `RenderObject` is the renderer-facing projection of a canonical
+  `WorldObject`. It resolves optional neutral definitions and collision views
+  into category, shape, orientation-aware footprint, model IDs, and movement/
+  projectile blocking inputs. The raw object remains present for editing and
+  identity; renderer code does not need to rediscover cache semantics.
 - `DefinitionAssetRepository` turns neutral definition IDs into searchable
   `AssetDescriptor` values for the first asset-browser categories (objects,
   underlays, overlays, and textures). `SymbolicNameProvider` is the narrow
@@ -183,7 +188,8 @@ boundary.
   numeric ID, and optional symbolic key, and search includes that key without
   importing a naming-library type into the editor.
 - `RenderSceneBuilder` derives renderer-independent terrain meshes and
-  canonical object placements from `WorldDocument`. It supports both complete
+  canonical object placements plus `RenderObject` projections from
+  `WorldDocument`. It supports both complete
   snapshots and `RenderChanges`-scoped terrain rebuilds, preserving untouched
   mesh instances while refreshing canonical object placements. Neighbor tiles
   can be included by the caller for blended floors and shared edges; scene

@@ -8,6 +8,7 @@ import com.rspsi.editor.model.WorldObject;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SetTileCommand;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import java.util.Optional;
 
 class RenderSceneBuilderTest {
@@ -33,6 +35,7 @@ class RenderSceneBuilderTest {
         assertSame(document, scene.document());
         assertEquals(12, scene.terrainMeshes().size());
         assertEquals(1, scene.objects().size());
+        assertEquals(1, scene.renderObjects().size());
         assertEquals(object, scene.objects().get(0));
         assertEquals(6, scene.terrainMeshes()
                 .get(new TileCoordinate(1, 1, 2)).vertices().size());
@@ -121,18 +124,27 @@ class RenderSceneBuilderTest {
     @Test
     void definitionAwareBuilderCarriesNeutralTerrainMaterialInputs() {
         WorldDocument document = new WorldDocument(1, 1, 1);
+        WorldObject object = new WorldObject(100, 10, 1, 0, 0, 0);
         document.tile(0, 0, 0).restore(new TileSnapshot(
-                0, 0, 0, 0, 2, 3, 0, 0, 0, List.of()));
+                0, 0, 0, 0, 2, 3, 0, 0, 0, List.of(object)));
 
         RenderScene scene = new RenderSceneBuilder(definitions()).build(document);
 
         assertEquals(new TerrainMaterial(2, 3, 17, 0x102030, 0xA0B0C0),
                 scene.terrainMaterials().get(new TileCoordinate(0, 0, 0)));
+        RenderObject renderObject = scene.renderObjects().get(0);
+        assertEquals(object, renderObject.object());
+        assertEquals(com.rspsi.editor.model.ObjectCategory.GROUND, renderObject.category());
+        assertEquals(Optional.of(com.rspsi.editor.model.OsrsLocShape.CENTREPIECE_STRAIGHT), renderObject.shape());
+        assertEquals(2, renderObject.footprintWidth());
+        assertEquals(1, renderObject.footprintLength());
+        assertArrayEquals(new int[]{501, 502}, renderObject.modelIds());
+        assertTrue(renderObject.blocksMovement());
+        assertTrue(renderObject.blocksProjectile());
     }
 
     private static DefinitionProvider definitions() {
         return new DefinitionProvider() {
-            @Override public Optional<ObjectDefinitionView> object(int id) { return Optional.empty(); }
             @Override public Optional<FloorDefinitionView> underlay(int id) {
                 return id == 2 ? Optional.of(new FloorDefinitionView(id, -1, 0x102030,
                         0, 0, 0, 0, 0)) : Optional.empty();
@@ -140,6 +152,16 @@ class RenderSceneBuilderTest {
             @Override public Optional<FloorDefinitionView> overlay(int id) {
                 return id == 3 ? Optional.of(new FloorDefinitionView(id, 17, 0xA0B0C0,
                         0, 0, 0, 0, 0)) : Optional.empty();
+            }
+
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return id == 100 ? Optional.of(new ObjectDefinitionView(id, "Test object", 1, 2,
+                        List.of("Use"), new int[]{501, 502})) : Optional.empty();
+            }
+
+            @Override public Optional<ObjectCollisionView> objectCollision(int id) {
+                return id == 100 ? Optional.of(new ObjectCollisionView(
+                        id, 1, 2, 1, true, false)) : Optional.empty();
             }
         };
     }

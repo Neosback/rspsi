@@ -36,6 +36,7 @@ public final class RenderSceneFingerprint {
             }
         }
         value.append("objects=").append(scene.objects()).append(';');
+        value.append("renderObjects=").append(scene.renderObjects()).append(';');
         value.append("bridges=").append(scene.bridges());
         return sha256(value.toString());
     }

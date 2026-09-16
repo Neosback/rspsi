@@ -22,24 +22,25 @@ public record RenderScene(
         Map<TileCoordinate, TerrainMaterial> terrainMaterials,
         Map<TileCoordinate, TerrainLight> terrainLighting,
         List<WorldObject> objects,
+        List<RenderObject> renderObjects,
         List<BridgeLink> bridges
 ) {
     /** Compatibility constructor for callers that only need the document. */
     public RenderScene(WorldDocument document) {
-        this(document, Map.of(), Map.of(), Map.of(), List.of(), List.of());
+        this(document, Map.of(), Map.of(), Map.of(), List.of(), List.of(), List.of());
     }
 
     /** Compatibility constructor for callers without definition data. */
     public RenderScene(WorldDocument document, Map<TileCoordinate, TerrainMesh> terrainMeshes,
                        List<WorldObject> objects, List<BridgeLink> bridges) {
-        this(document, terrainMeshes, Map.of(), Map.of(), objects, bridges);
+        this(document, terrainMeshes, Map.of(), Map.of(), objects, List.of(), bridges);
     }
 
     /** Compatibility constructor for scenes with materials but no lighting. */
     public RenderScene(WorldDocument document, Map<TileCoordinate, TerrainMesh> terrainMeshes,
                        Map<TileCoordinate, TerrainMaterial> terrainMaterials,
                        List<WorldObject> objects, List<BridgeLink> bridges) {
-        this(document, terrainMeshes, terrainMaterials, Map.of(), objects, bridges);
+        this(document, terrainMeshes, terrainMaterials, Map.of(), objects, List.of(), bridges);
     }
 
     public RenderScene {
@@ -48,11 +49,13 @@ public record RenderScene(
         Objects.requireNonNull(terrainMaterials, "terrainMaterials");
         Objects.requireNonNull(terrainLighting, "terrainLighting");
         Objects.requireNonNull(objects, "objects");
+        Objects.requireNonNull(renderObjects, "renderObjects");
         Objects.requireNonNull(bridges, "bridges");
         terrainMeshes = Map.copyOf(new LinkedHashMap<>(terrainMeshes));
         terrainMaterials = Map.copyOf(new LinkedHashMap<>(terrainMaterials));
         terrainLighting = Map.copyOf(new LinkedHashMap<>(terrainLighting));
         objects = List.copyOf(objects);
+        renderObjects = List.copyOf(renderObjects);
         bridges = List.copyOf(bridges);
     }
 }

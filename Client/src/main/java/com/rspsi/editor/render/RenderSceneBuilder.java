@@ -2,6 +2,8 @@ package com.rspsi.editor.render;
 
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
+import com.rspsi.cache.definition.ObjectCollisionView;
+import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.DirtyRegion;
 import com.rspsi.editor.model.WorldDocument;
@@ -48,6 +50,7 @@ public final class RenderSceneBuilder {
         Map<TileCoordinate, TerrainMesh> meshes = new LinkedHashMap<>();
         Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>();
         List<WorldObject> objects = new ArrayList<>();
+        List<RenderObject> renderObjects = new ArrayList<>();
         for (int plane = 0; plane < document.planes(); plane++) {
             for (int x = 0; x < document.width(); x++) {
                 for (int y = 0; y < document.length(); y++) {
@@ -57,12 +60,15 @@ public final class RenderSceneBuilder {
                     if (definitions != null) {
                         materials.put(coordinate, material(tile.snapshot()));
                     }
-                    objects.addAll(tile.objects());
+                    for (WorldObject object : tile.objects()) {
+                        objects.add(object);
+                        renderObjects.add(resolve(object));
+                    }
                 }
             }
         }
         return new RenderScene(document, meshes, materials, TerrainLighting.build(document),
-                objects, document.bridgeLinks());
+                objects, renderObjects, document.bridgeLinks());
     }
 
     /**
@@ -77,6 +83,7 @@ public final class RenderSceneBuilder {
         Map<TileCoordinate, TerrainMesh> meshes = new LinkedHashMap<>(previous.terrainMeshes());
         Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>(previous.terrainMaterials());
         Map<TileCoordinate, TerrainLight> lighting = new LinkedHashMap<>(TerrainLighting.build(document));
+        List<RenderObject> renderObjects = new ArrayList<>();
         Set<TileCoordinate> dirtyTiles = changes.dirtyTiles();
         for (TileCoordinate coordinate : dirtyTiles) {
             if (coordinate.plane() >= document.planes()
@@ -90,7 +97,9 @@ public final class RenderSceneBuilder {
             }
         }
         List<WorldObject> objects = collectObjects(document);
-        return new RenderScene(document, meshes, materials, lighting, objects, document.bridgeLinks());
+        for (WorldObject object : objects) renderObjects.add(resolve(object));
+        return new RenderScene(document, meshes, materials, lighting, objects, renderObjects,
+                document.bridgeLinks());
     }
 
     /** Rebuilds the chunks drained from an editor session's invalidation queue. */
@@ -120,5 +129,13 @@ public final class RenderSceneBuilder {
                 overlay == null ? -1 : overlay.texture(),
                 underlay == null ? 0 : underlay.rgb() & 0xFFFFFF,
                 overlay == null ? 0 : overlay.rgb() & 0xFFFFFF);
+    }
+
+    private RenderObject resolve(WorldObject object) {
+        ObjectDefinitionView definition = definitions == null
+                ? null : definitions.object(object.id()).orElse(null);
+        ObjectCollisionView collision = definitions == null
+                ? null : definitions.objectCollision(object.id()).orElse(null);
+        return RenderObject.resolve(object, definition, collision);
     }
 }
