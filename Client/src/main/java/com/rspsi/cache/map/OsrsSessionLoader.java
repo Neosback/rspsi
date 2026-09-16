@@ -24,11 +24,21 @@ public final class OsrsSessionLoader {
 
     /** Loads an indexed region and returns a clean, save-capable session. */
     public LoadedRegion load(int regionX, int regionY) {
+        return load(regionX, regionY, true);
+    }
+
+    /** Loads an indexed region without attaching persistence. */
+    public LoadedRegion loadReadOnly(int regionX, int regionY) {
+        return load(regionX, regionY, false);
+    }
+
+    private LoadedRegion load(int regionX, int regionY, boolean saveable) {
         WorldRegion region = maps.loadRegion(regionX, regionY)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Region is not present in the OSRS map index: " + regionX + "," + regionY));
-        EditorSession session = new EditorSession(region.document(),
-                current -> saves.save(current, regionX, regionY));
+        EditorSession session = saveable
+                ? new EditorSession(region.document(), current -> saves.save(current, regionX, regionY))
+                : new EditorSession(region.document());
         session.markSaved();
         return new LoadedRegion(regionX, regionY, session);
     }

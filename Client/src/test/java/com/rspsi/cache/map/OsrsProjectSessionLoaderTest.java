@@ -1,0 +1,96 @@
+package com.rspsi.cache.map;
+
+import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.OsrsCacheMetadata;
+import com.rspsi.cache.store.CacheStore;
+import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.project.ProjectMetadata;
+import org.junit.jupiter.api.Test;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class OsrsProjectSessionLoaderTest {
+    @Test
+    void matchingIdentityProducesSaveCapableSession() {
+        OsrsCacheMetadata identity = new OsrsCacheMetadata(240, 2, "cache-a");
+        RecordingStore store = new RecordingStore(identity);
+        OsrsMapService maps = maps(store);
+        ProjectMetadata project = ProjectMetadata.forCache(identity);
+
+        OsrsProjectSessionLoader.OpenedProject opened =
+                new OsrsProjectSessionLoader(store, maps, project).load(50, 50);
+
+        assertFalse(opened.readOnly());
+        assertTrue(opened.region().session().canSave());
+    }
+
+    @Test
+    void mismatchedIdentityProducesInspectableReadOnlySession() {
+        OsrsCacheMetadata projectIdentity = new OsrsCacheMetadata(240, 2, "cache-a");
+        RecordingStore store = new RecordingStore(new OsrsCacheMetadata(240, 2, "cache-b"));
+        OsrsMapService maps = maps(store);
+
+        OsrsProjectSessionLoader.OpenedProject opened =
+                new OsrsProjectSessionLoader(store, maps, ProjectMetadata.forCache(projectIdentity))
+                        .load(50, 50);
+
+        assertTrue(opened.readOnly());
+        assertFalse(opened.region().session().canSave());
+        assertTrue(opened.compatibility().issues().contains("cache fingerprint differs"));
+    }
+
+    @Test
+    void unavailableIdentityFailsClosedToReadOnly() {
+        RecordingStore store = new RecordingStore(null);
+        OsrsMapService maps = maps(store);
+
+        OsrsProjectSessionLoader.OpenedProject opened =
+                new OsrsProjectSessionLoader(store, maps,
+                        ProjectMetadata.forCache(new OsrsCacheMetadata(240, 2, "cache-a")))
+                        .load(50, 50);
+
+        assertTrue(opened.readOnly());
+        assertFalse(opened.region().session().canSave());
+    }
+
+    private static OsrsMapService maps(RecordingStore store) {
+        return new OsrsMapService(store, 5, MapIndexTable.of(List.of(
+                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))));
+    }
+
+    private static final class RecordingStore implements CacheStore {
+        private final Map<String, byte[]> values = new HashMap<>();
+        private final OsrsCacheMetadata identity;
+
+        private RecordingStore(OsrsCacheMetadata identity) {
+            this.identity = identity;
+            WorldDocument source = new WorldDocument(64, 64, 4);
+            values.put("5:100:0", OsrsRegionEncoder.encodeTerrain(source, true));
+            values.put("5:100:1", OsrsRegionEncoder.encodeLocations(source));
+        }
+
+        @Override public byte[] read(int index, int archive, int file) {
+            return values.get(index + ":" + archive + ":" + file);
+        }
+
+        @Override public void write(int index, int archive, int file, byte[] data) {
+            values.put(index + ":" + archive + ":" + file, data.clone());
+        }
+
+        @Override public void flush() { }
+
+        @Override public CacheStoreCapabilities capabilities() {
+            return new CacheStoreCapabilities(true, true, true);
+        }
+
+        @Override public Optional<OsrsCacheMetadata> metadata(int revision) {
+            return Optional.ofNullable(identity);
+        }
+    }
+}
