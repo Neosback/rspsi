@@ -53,7 +53,7 @@ The locked product direction and workspace design are maintained in
 | Resource catalog and provenance | implemented-unverified | [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md) and [`RESOURCE_INTAKE_2026-09-16.md`](RESOURCE_INTAKE_2026-09-16.md) record roles, commits, license evidence, inspected paths, and current adoption tests |
 | OSRS-only product scope | in-progress | Scope and migration policy are locked in [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md); legacy paths remain quarantined during parity work |
 | Project/cache identity metadata | implemented-unverified | Neutral `OsrsCacheMetadata`, `ProjectMetadata`, JSON persistence, and explicit read-only mismatch assessment added; cache discovery and UI remain |
-| Controlled workspace contracts | implemented-unverified | UI-neutral dock/panel/placement types and validated Map/Terrain/Objects/Collision/Validation-Debug presets added; JavaFX rendering remains |
+| Controlled workspace contracts | implemented-unverified | UI-neutral dock/panel/placement types and validated Map/Terrain/Objects/Collision/Validation-Debug presets plus the incremental JavaFX `ControlledWorkspaceShell` adapter; live `MainWindow` migration remains |
 | RuneLite/TSPS parity harness | in-progress | `OsrsRevisionVerifier` can inspect an explicitly supplied OpenRune cache and run region decode/validation/collision/semantic round-trip checks; licensed golden comparisons remain |
 | Lua, plugin permissions, Plugin Hub | deferred | Begin only after native command/plugin API is stable |
 | Renderer/UI rewrite | deferred | Current JavaFX renderer remains the compatibility surface |
@@ -107,3 +107,9 @@ The locked product direction and workspace design are maintained in
 ### Phase 4 — Editing improvements
 
 Prioritize terrain sculpting, object transforms, richer selection, collision tools, then region/asset workflows. Every operation must use the command/history path.
+
+The first controlled JavaFX workspace shell is now available as a frontend
+adapter. It materializes the neutral workspace presets into fixed tool and
+inspector rails, a centered viewport, and controlled bottom tabs. It does not
+own document state, renderer state, or arbitrary docking; wiring it into the
+legacy `MainWindow` remains a separate compatibility milestone.

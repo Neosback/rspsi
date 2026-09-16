@@ -1,0 +1,28 @@
+.controlled-workspace-shell {
+    -fx-background-color: #0f172a;
+}
+
+.workspace-tools,
+.workspace-inspector,
+.workspace-bottom-tabs {
+    -fx-background-color: #192134;
+    -fx-border-color: rgba(255, 255, 255, 0.08);
+    -fx-border-width: 0 1px 0 0;
+}
+
+.workspace-inspector {
+    -fx-border-width: 0 0 0 1px;
+}
+
+.workspace-viewport {
+    -fx-background-color: #111827;
+}
+
+.workspace-panel {
+    -fx-background-color: #192134;
+}
+
+.workspace-missing-panel {
+    -fx-text-fill: #fca5a5;
+    -fx-padding: 8px;
+}

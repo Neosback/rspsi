@@ -83,6 +83,14 @@ not enter tool or document classes. Dear ImGui remains a future frontend
 option, with GLFW/LWJGL integration deferred until the neutral contracts and
 legacy behavior are stable.
 
+`Editor/src/main/java/com/rspsi/ui/workspace/ControlledWorkspaceShell.java`
+is the first concrete JavaFX adapter for the neutral workspace contracts. It
+renders fixed side rails, a permanent center viewport, and controlled bottom
+tabs from `WorkspaceCatalog` data. It may host legacy panels while migration
+continues, but it must not become the owner of workspace, document, or
+renderer state. The existing `MainWindow` remains the compatibility entry
+point until the shell has equivalent launch/load/edit/save coverage.
+
 ## Correctness workflow
 
 RuneLite DevTools is the live OSRS truth viewer. TSPS and RuneLite cache/client
