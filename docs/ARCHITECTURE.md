@@ -165,7 +165,8 @@ supports a bounded radius with none/linear/smooth falloff, and emits tile
 snapshots that preserve shared-edge heights.
 `RampTerrainTool` interpolates directly on shared vertex coordinates, and
 `TerrainHeightSampler` provides neutral bilinear samples for tools and
-inspectors.
+inspectors. `TerrainMeshGoldenTest` locks all 52 shape/rotation combinations
+to deterministic RSPSi-owned topology signatures pending external parity.
 
 `PlaceObjectCommand`, `DeleteObjectCommand`, `MoveObjectCommand`, and
 `RotateObjectCommand` provide the corresponding canonical location mutations;
