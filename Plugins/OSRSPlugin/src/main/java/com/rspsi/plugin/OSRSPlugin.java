@@ -89,6 +89,10 @@ public class OSRSPlugin implements ClientPlugin {
         Index spriteIndex = client.getCache().getFile(CacheFileType.SPRITE);
         textureLoader.init(textureIndex.archive(0), spriteIndex);
 
+        if (client.getCache().isOsrs()) {
+            mapIndexLoader.load(client.getCache().getStore(), 5);
+        }
+
 
     }
 

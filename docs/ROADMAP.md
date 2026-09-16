@@ -33,8 +33,9 @@ The locked product direction and workspace design are maintained in
 | Undo/redo | implemented-unverified | Existing `TileChange` hierarchy and static `SceneGraph` stacks |
 | Autosave | implemented-unverified | Existing `AutoSaveJob`; add recovery smoke test |
 | Legacy/317 cache loading | implemented-unverified | Existing Displee-backed `Cache`; protect before migration |
-| OSRS cache support | in-progress | `OSRSPlugin` exists; OSRS map-index methods still contain unsupported stubs |
+| OSRS cache support | implemented-unverified | `OSRSPlugin` discovers named `mX_Y`/`lX_Y` archives through `CacheStore`; real-cache parity and writable packing remain |
 | Neutral cache boundary | in-progress | `CacheStore` facade introduced; migrate consumers incrementally |
+| Neutral map service | implemented-unverified | `MapIndexTable` and `OsrsMapService` provide named OSRS map discovery and terrain/location byte reads; real-cache fixture remains |
 | Neutral definitions | in-progress | Definition views/provider introduced; expand only as consumers migrate |
 | Command/session editing core | in-progress | Core model, command history, and session introduced; adapt existing tools next |
 | UI-neutral editor contracts | in-progress | Neutral pointer, tool, inspector, viewport, and renderer seams introduced; command-backed underlay brush is the first migrated tool path |
@@ -76,6 +77,8 @@ The locked product direction and workspace design are maintained in
   read-only compatibility spike; writable support is not implied by a green
   compile.
 - Complete OSRS map-index support.
+- Discover named `mX_Y`/`lX_Y` archive IDs through the neutral
+  cache boundary; prove the path against a licensed representative cache.
 - Require legacy regression and OSRS parity fixtures before switching defaults.
 
 ### Product-scope gate

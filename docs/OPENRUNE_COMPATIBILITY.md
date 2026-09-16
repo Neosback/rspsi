@@ -19,6 +19,16 @@ The OpenRune type is confined to the cache adapter package. The public factory
 accepts a `Path` and returns `CacheStore`; editor-facing code does not receive
 OpenRune objects.
 
+## Neutral OSRS map path
+
+`MapIndexTable` discovers named `mX_Y` landscape and `lX_Y` location archives
+through `CacheStore.archiveId`. `OsrsMapService` then reads terrain and
+location bytes by numeric archive ID without exposing OpenRune types. The
+legacy `MapIndexLoaderOSRS` compatibility facade is now backed by the same
+neutral table and can export/import the existing six-byte-entry map-index
+interchange format for tooling. That interchange export is not a claim that
+OSRS caches use a legacy binary map-index file internally.
+
 ## Explicit limitations
 
 The first OpenRune filesystem implementation is read-only. `write` throws
@@ -27,11 +37,11 @@ semantics are validated. `flush` does not claim to persist edits. There is no
 automatic fallback to Displee, because falling back could decode a cache with
 the wrong format and silently produce incorrect data.
 
-No real OSRS cache is checked into the repository yet. The adapter has a fake
-byte-store test for boundary behavior, but real fixture loading, neutral
-object/floor/texture conversion, map-index completion, and semantic parity are
-still open acceptance work. The application continues to construct the legacy
-Displee backend by default.
+No real OSRS cache is checked into the repository yet. The adapter has fake
+byte-store and named-map-index tests for boundary behavior, but real fixture
+loading, neutral object/floor/texture conversion, writable packing, and
+semantic parity are still open acceptance work. The application continues to
+construct the legacy Displee backend by default.
 
 ## Next spike gate
 

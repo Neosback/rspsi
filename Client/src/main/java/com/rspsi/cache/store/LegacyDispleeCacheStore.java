@@ -30,6 +30,17 @@ public final class LegacyDispleeCacheStore implements CacheStore {
     }
 
     @Override
+    public int archiveId(int index, String archiveName) {
+        Objects.requireNonNull(archiveName, "archiveName");
+        try {
+            Index cacheIndex = library.index(index);
+            return cacheIndex == null ? -1 : cacheIndex.archiveId(archiveName);
+        } catch (RuntimeException ignored) {
+            return -1;
+        }
+    }
+
+    @Override
     public void write(int index, int archive, int file, byte[] data) {
         Objects.requireNonNull(data, "data");
         library.index(index).archive(archive).add(file, data);

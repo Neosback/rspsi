@@ -32,6 +32,12 @@ public final class OpenRuneCacheStore implements CacheStore {
     }
 
     @Override
+    public int archiveId(int index, String archiveName) {
+        Objects.requireNonNull(archiveName, "archiveName");
+        return cache.archiveId(index, archiveName);
+    }
+
+    @Override
     public void write(int index, int archive, int file, byte[] data) {
         throw new UnsupportedOperationException(
                 "OpenRune compatibility store is read-only until writable packing is validated");

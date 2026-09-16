@@ -12,6 +12,14 @@ public interface CacheStore extends AutoCloseable {
 
     byte[] read(int index, int archive, int file);
 
+    /**
+     * Resolves a named archive without exposing the cache implementation's
+     * archive object. Backends that do not support named archives return -1.
+     */
+    default int archiveId(int index, String archiveName) {
+        return -1;
+    }
+
     void write(int index, int archive, int file, byte[] data);
 
     void flush();
