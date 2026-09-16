@@ -55,6 +55,23 @@ class EditorSessionTest {
     }
 
     @Test
+    void compositeCommandRollsBackEarlierEditsWhenAChildFails() {
+        WorldModel world = new WorldModel(4, 4);
+        EditorSession session = new EditorSession(world);
+        TileCoordinate coordinate = new TileCoordinate(0, 1, 1);
+        TileSnapshot before = world.tile(coordinate).snapshot();
+        TileSnapshot changed = new TileSnapshot(0, 0, 0, 0, 9, 0, 0, 0, 0, List.of());
+
+        assertThrows(IllegalStateException.class, () -> session.execute(new CompositeEditCommand("atomic", List.of(
+                new SetTileCommand(coordinate, before, changed, "first"),
+                new FailingCommand()))));
+
+        assertEquals(before, world.tile(coordinate).snapshot());
+        assertEquals(0, session.history().size());
+        assertFalse(session.isDirty());
+    }
+
+    @Test
     void executingAfterUndoDropsRedoBranch() {
         WorldModel world = new WorldModel(2, 2);
         EditorSession session = new EditorSession(world);
@@ -86,5 +103,11 @@ class EditorSessionTest {
         session.markSaved();
 
         assertEquals(List.of("true:1", "false:0", "true:1", "false:1"), states);
+    }
+
+    private static final class FailingCommand implements EditorCommand {
+        @Override public void apply(EditorSession session) { throw new IllegalStateException("expected test failure"); }
+        @Override public void undo(EditorSession session) { }
+        @Override public String description() { return "failure"; }
     }
 }
