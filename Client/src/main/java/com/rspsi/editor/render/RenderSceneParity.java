@@ -43,6 +43,8 @@ public final class RenderSceneParity {
                             expected.terrainMaterials().get(coordinate), actual.terrainMaterials().get(coordinate));
                     differenceCount += compareValue(differences, "lighting", coordinate,
                             expected.terrainLighting().get(coordinate), actual.terrainLighting().get(coordinate));
+                    differenceCount += compareValue(differences, "collision", coordinate,
+                            expected.collision().get(coordinate), actual.collision().get(coordinate));
                 }
             }
         }

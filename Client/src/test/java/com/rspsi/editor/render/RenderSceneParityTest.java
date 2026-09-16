@@ -2,6 +2,7 @@ package com.rspsi.editor.render;
 
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.OsrsTileFlags;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,6 +38,25 @@ class RenderSceneParityTest {
         assertTrue(report.differenceCount() >= 1);
         assertTrue(report.differences().stream().anyMatch(value ->
                 value.scope().equals("terrain")
+                        && value.location().contains("plane=0")
+                        && value.location().contains("x=1")
+                        && value.location().contains("y=1")));
+    }
+
+    @Test
+    void reportsChangedCollisionSemanticsAtTheTile() {
+        WorldDocument expectedDocument = new WorldDocument(2, 2, 1);
+        WorldDocument actualDocument = new WorldDocument(2, 2, 1);
+        actualDocument.tile(0, 1, 1).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, OsrsTileFlags.BLOCK_MAP_SQUARE,
+                java.util.List.of()));
+
+        RenderSceneParity.Report report = RenderSceneParity.compare(
+                new RenderSceneBuilder().build(expectedDocument),
+                new RenderSceneBuilder().build(actualDocument));
+
+        assertTrue(report.differences().stream().anyMatch(value ->
+                value.scope().equals("collision")
                         && value.location().contains("plane=0")
                         && value.location().contains("x=1")
                         && value.location().contains("y=1")));
