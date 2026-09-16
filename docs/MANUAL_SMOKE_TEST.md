@@ -18,7 +18,10 @@ For the opt-in controlled workspace migration, set `controlledWorkspace` to
 legacy renderer remains interactive in the centered viewport and that the
 menu bar, tool rail, and asset pane remain reachable. After a map finishes
 loading, confirm the History panel reports the bound session and the
-Inspector panel updates when a neutral selection is made. Remove the setting
-(or set it to `false`) to return to the default legacy layout.
+Inspector panel updates when a neutral selection is made. Open the Validation
+tab and confirm it reports either “World is valid” or actionable diagnostics
+with a plane/tile location; make an edit and confirm the diagnostics refresh.
+Remove the setting (or set it to `false`) to return to the default legacy
+layout.
 
 Record the cache revision, map/region used, operating system, and any failure in the roadmap ledger.

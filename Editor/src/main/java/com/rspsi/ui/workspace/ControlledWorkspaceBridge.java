@@ -48,7 +48,7 @@ public final class ControlledWorkspaceBridge {
         panels.put("assets", controller.getLegacyInspector());
         panels.put("inspector", new SessionInspectorPanel());
         panels.put("history", new SessionHistoryPanel());
-        panels.put("validation", placeholder("Validation", "Validation diagnostics will appear here."));
+        panels.put("validation", new ValidationPanel());
         panels.put("console", placeholder("Console", "Editor messages will appear here."));
         panels.put("command-palette", placeholder("Command palette", "Search commands with Cmd/Ctrl-P."));
 

@@ -73,6 +73,7 @@ import com.rspsi.ui.workspace.ControlledWorkspaceBridge;
 import com.rspsi.ui.workspace.ControlledWorkspaceShell;
 import com.rspsi.ui.workspace.SessionHistoryPanel;
 import com.rspsi.ui.workspace.SessionInspectorPanel;
+import com.rspsi.ui.workspace.ValidationPanel;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -602,6 +603,17 @@ public class MainWindow extends Application {
 					controlledDocumentBridge.close();
 					controlledDocumentBridge = null;
 				}
+				if (controlledWorkspaceShell != null) {
+					if (controlledWorkspaceShell.panelNode("history") instanceof SessionHistoryPanel history) {
+						history.close();
+					}
+					if (controlledWorkspaceShell.panelNode("inspector") instanceof SessionInspectorPanel inspector) {
+						inspector.close();
+					}
+					if (controlledWorkspaceShell.panelNode("validation") instanceof ValidationPanel validation) {
+						validation.close();
+					}
+				}
 				if(singleton != null) {
 					Platform.exit();
 					System.exit(0);
@@ -798,6 +810,9 @@ public class MainWindow extends Application {
 			if (controlledWorkspaceShell.panelNode("inspector") instanceof SessionInspectorPanel inspector) {
 				inspector.bind(controlledSession, new WorldWindow(clientInstance.getBaseX(),
 						clientInstance.getBaseY(), document.width(), document.length()));
+			}
+			if (controlledWorkspaceShell.panelNode("validation") instanceof ValidationPanel validation) {
+				validation.bind(controlledSession);
 			}
 			log.info("Controlled workspace session bound to legacy map {}x{} at {},{}",
 					document.width(), document.length(), clientInstance.getBaseX(), clientInstance.getBaseY());
