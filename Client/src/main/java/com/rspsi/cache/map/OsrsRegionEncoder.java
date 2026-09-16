@@ -3,6 +3,7 @@ package com.rspsi.cache.map;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.OsrsLocShape;
 
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
@@ -64,7 +65,10 @@ public final class OsrsRegionEncoder {
                         if (object.plane() != plane || object.x() != x || object.y() != y) {
                             throw new IllegalArgumentException("Object is not owned by its document tile: " + object);
                         }
-                        requireRange(object.type(), 0, 63, "object type");
+                        if (OsrsLocShape.fromId(object.type()).isEmpty()) {
+                            throw new IllegalArgumentException("OSRS location shape must be between 0 and 22: "
+                                    + object.type());
+                        }
                         objects.add(object);
                     }
                 }

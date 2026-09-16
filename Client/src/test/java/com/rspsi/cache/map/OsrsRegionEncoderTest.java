@@ -62,4 +62,13 @@ class OsrsRegionEncoderTest {
 
         assertThrows(IllegalArgumentException.class, () -> OsrsRegionEncoder.encodeTerrain(source));
     }
+
+    @Test
+    void rejectsLocationTypesOutsideTheCanonicalOsrsShapeTable() {
+        WorldDocument source = new WorldDocument(64, 64, 4);
+        source.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0, 0, 0, 0, 0, 0,
+                List.of(new WorldObject(1, 23, 0, 0, 0, 0))));
+
+        assertThrows(IllegalArgumentException.class, () -> OsrsRegionEncoder.encodeLocations(source));
+    }
 }
