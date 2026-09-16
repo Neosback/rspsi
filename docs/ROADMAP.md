@@ -35,7 +35,7 @@ The locked product direction and workspace design are maintained in
 | Legacy/317 cache loading | implemented-unverified | Existing Displee-backed `Cache`; protect before migration |
 | OSRS cache support | implemented-unverified | `OSRSPlugin` discovers named `mX_Y`/`lX_Y` archives through `CacheStore`; real-cache parity and writable packing remain |
 | Neutral cache boundary | in-progress | `CacheStore` facade introduced; migrate consumers incrementally |
-| Neutral map service | implemented-unverified | `MapIndexTable` and `OsrsMapService` provide named OSRS map discovery and terrain/location byte reads; real-cache fixture remains |
+| Neutral map service | implemented-unverified | `MapIndexTable` and `OsrsMapService` provide named OSRS map discovery plus file-0 terrain/file-1 location reads; `OsrsRegionDecoder` converts both payloads into canonical terrain and objects; real-cache fixture remains |
 | Neutral definitions | implemented-unverified | Object/floor views plus texture/model contracts and an OpenRune object/floor/texture adapter exist; real-cache fixture parity remains |
 | Command/session editing core | in-progress | Core model, command history, and session introduced; adapt existing tools next |
 | WorldFragment copy/paste | implemented-unverified | Canonical multi-plane fragment capture and atomic paste/undo command added; UI import/export wiring remains |
@@ -48,7 +48,7 @@ The locked product direction and workspace design are maintained in
 | Canonical collision map | implemented-unverified | RSPSi-owned flags/map provide cardinal, diagonal, and projectile inspection; decoded-location and bridge parity remain |
 | UI-neutral editor contracts | in-progress | Neutral pointer, tool, inspector, viewport, and renderer seams introduced; command-backed underlay brush is the first migrated tool path |
 | Live legacy document bridge | in-progress | MapRegion terrain import and underlay synchronization are implemented; UI activation remains opt-in |
-| OpenRune backend | in-progress | 2.4.19 compatibility spike is isolated behind `CacheStore`; legacy remains default |
+| OpenRune backend | in-progress | 2.4.19 compatibility spike and neutral OSRS region decoder are isolated behind `CacheStore`; legacy remains default and real-cache parity remains pending |
 | Resource catalog and provenance | implemented-unverified | [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md) and [`RESOURCE_INTAKE_2026-09-16.md`](RESOURCE_INTAKE_2026-09-16.md) record roles, commits, license evidence, inspected paths, and current adoption tests |
 | OSRS-only product scope | in-progress | Scope and migration policy are locked in [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md); legacy paths remain quarantined during parity work |
 | Project/cache identity metadata | implemented-unverified | Neutral `OsrsCacheMetadata`, `ProjectMetadata`, JSON persistence, and explicit read-only mismatch assessment added; cache discovery and UI remain |

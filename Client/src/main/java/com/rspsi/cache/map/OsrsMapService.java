@@ -36,12 +36,19 @@ public final class OsrsMapService implements MapService {
     }
 
     @Override
-    public byte[] readObjects(int regionX, int regionY) {
+    public byte[] readLocations(int regionX, int regionY) {
         return read(regionX, regionY, MapArchiveType.OBJECT);
     }
 
     private byte[] read(int regionX, int regionY, MapArchiveType type) {
         int archiveId = index.archiveId(regionX, regionY, type);
-        return archiveId < 0 ? null : store.read(mapIndex, archiveId, 0);
+        if (archiveId < 0) {
+            return null;
+        }
+        // OSRS map archives use file 0 for terrain and file 1 for locations.
+        // Keeping this distinction here prevents callers from having to know
+        // the cache-file layout.
+        int file = type == MapArchiveType.LANDSCAPE ? 0 : 1;
+        return store.read(mapIndex, archiveId, file);
     }
 }

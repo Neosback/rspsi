@@ -54,6 +54,12 @@ boundary.
   results.
 - Cache and definitions are accessed through RSPSi interfaces, never raw
   archive/index/file objects.
+- `MapService` exposes semantic landscape and location payload access; its
+  OSRS implementation owns the file-0/file-1 archive convention.
+- `OsrsRegionDecoder` is the neutral format adapter for the current OSRS
+  landscape/location payloads. It produces `WorldDocument` and
+  `WorldObject` data without exposing OpenRune, Displee, archive IDs, or
+  opcodes to editor packages.
 
 ## Frontends
 
@@ -103,6 +109,11 @@ and do not add editing behavior to `SceneGraph`.
 object tools can now be migrated without inventing a second history system.
 The initial place/delete/rotate tools invoke these commands directly; picking
 and drag-move remain UI migration work.
+
+The initial OSRS map codec now decodes all four planes, explicit/inherited
+heights, underlays, overlays, shapes, rotations, flags, and delta-packed
+locations. Its fixture suite is a format characterization layer, not yet a
+claim of parity against a licensed external cache.
 
 ## Deferred systems
 

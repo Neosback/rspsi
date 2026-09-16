@@ -41,12 +41,13 @@ class MapIndexTableTest {
     void osrsMapServiceReadsBothMapFamilies() {
         FakeStore store = new FakeStore();
         store.values.put("5:1234:0", new byte[]{1});
-        store.values.put("5:5678:0", new byte[]{2});
+        store.values.put("5:5678:1", new byte[]{2});
         MapIndexEntry entry = new MapIndexEntry(50, 75, 1234, 5678, "m50_75", "l50_75");
 
         OsrsMapService service = new OsrsMapService(store, 5, MapIndexTable.of(java.util.List.of(entry)));
 
         assertArrayEquals(new byte[]{1}, service.readLandscape(50, 75));
+        assertArrayEquals(new byte[]{2}, service.readLocations(50, 75));
         assertArrayEquals(new byte[]{2}, service.readObjects(50, 75));
         assertNull(service.readLandscape(51, 75));
     }
