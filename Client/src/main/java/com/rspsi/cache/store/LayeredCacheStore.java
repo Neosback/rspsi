@@ -1,6 +1,7 @@
 package com.rspsi.cache.store;
 
 import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.CacheWriteMode;
 import com.rspsi.cache.OsrsCacheMetadata;
 
 import java.util.Arrays;
@@ -82,7 +83,8 @@ public final class LayeredCacheStore implements CacheStore {
         CacheStoreCapabilities outputCapabilities = output.capabilities();
         return new CacheStoreCapabilities(outputCapabilities.writable(),
                 baseCapabilities.namedArchives() || outputCapabilities.namedArchives(),
-                baseCapabilities.mapPacking() || outputCapabilities.mapPacking());
+                baseCapabilities.mapPacking() || outputCapabilities.mapPacking(),
+                outputCapabilities.writable() ? CacheWriteMode.STAGED : CacheWriteMode.READ_ONLY);
     }
 
     @Override

@@ -3,6 +3,7 @@ package com.rspsi.cache.store;
 import com.displee.cache.CacheLibrary;
 import com.displee.cache.index.Index;
 import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.CacheWriteMode;
 
 import java.util.Objects;
 
@@ -70,7 +71,7 @@ public final class LegacyDispleeCacheStore implements CacheStore {
         // The adapter writes archive/file payloads and explicitly repacks
         // dirty indexes during flush, which is the map-packing capability
         // required by the neutral OSRS map service.
-        return new CacheStoreCapabilities(true, false, true);
+        return new CacheStoreCapabilities(true, false, true, CacheWriteMode.DIRECT);
     }
 
     @Override

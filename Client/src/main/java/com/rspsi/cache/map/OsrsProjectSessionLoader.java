@@ -1,6 +1,8 @@
 package com.rspsi.cache.map;
 
 import com.rspsi.cache.OsrsCacheMetadata;
+import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.CacheWriteMode;
 import com.rspsi.cache.store.CacheStore;
 import com.rspsi.editor.model.WorldRegion;
 import com.rspsi.project.ProjectCompatibility;
@@ -44,19 +46,21 @@ public final class OsrsProjectSessionLoader {
         OsrsSessionLoader.LoadedRegion region = compatibility.readOnly()
                 ? sessions.loadReadOnly(regionX, regionY)
                 : sessions.load(regionX, regionY);
-        return new OpenedProject(project, cache, compatibility, region);
+        return new OpenedProject(project, cache, compatibility, store.capabilities(), region);
     }
 
     public record OpenedProject(
             ProjectMetadata project,
             Optional<OsrsCacheMetadata> cache,
             ProjectCompatibility compatibility,
+            CacheStoreCapabilities capabilities,
             OsrsSessionLoader.LoadedRegion region
     ) {
         public OpenedProject {
             project = Objects.requireNonNull(project, "project");
             cache = Objects.requireNonNull(cache, "cache");
             compatibility = Objects.requireNonNull(compatibility, "compatibility");
+            capabilities = Objects.requireNonNull(capabilities, "capabilities");
             region = Objects.requireNonNull(region, "region");
         }
 
@@ -66,6 +70,11 @@ public final class OsrsProjectSessionLoader {
 
         public boolean readOnly() {
             return compatibility.readOnly();
+        }
+
+        /** Explains whether an editable session writes directly or via staging. */
+        public CacheWriteMode writeMode() {
+            return readOnly() ? CacheWriteMode.READ_ONLY : capabilities.writeMode();
         }
     }
 }

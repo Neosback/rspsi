@@ -236,7 +236,8 @@ public final class OsrsRevisionVerifier {
         var capabilities = store.capabilities();
         return "writable=" + capabilities.writable()
                 + ", namedArchives=" + capabilities.namedArchives()
-                + ", mapPacking=" + capabilities.mapPacking();
+                + ", mapPacking=" + capabilities.mapPacking()
+                + ", writeMode=" + capabilities.writeMode();
     }
 
     private static boolean semanticallyEqual(WorldDocument first, WorldDocument second) {

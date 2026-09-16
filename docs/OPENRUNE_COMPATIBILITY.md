@@ -95,8 +95,10 @@ staged, and the separately prepared output cache is the only writable target.
 The factory rejects identical paths.
 
 The staged output advertises `mapPacking=true` because its Displee adapter
-repacks dirty archive indexes during `flush()`. That capability is exposed
-only through the neutral boundary; the editor does not receive Displee index
+repacks dirty archive indexes during `flush()`. Its neutral capability is
+`writeMode=STAGED`; a direct Displee adapter reports `writeMode=DIRECT`, while
+OpenRune reports `writeMode=READ_ONLY`. These distinctions are exposed only
+through the neutral boundary; the editor does not receive Displee index
 objects.
 
 No real OSRS cache is checked into the repository. External OpenRS2 fixtures
@@ -117,10 +119,11 @@ load it through `CacheStoreFactory.openRune(Path)`, and compare terrain,
 objects, floors, flags, shapes, rotations, and region coordinates with the
 existing representation. Revision-6 named maps and live build-240 numeric
 maps now pass this read-only comparison. Writable output-cache reopening is
-validated through the explicit Displee adapter and the OpenRune reader; the
-remaining cache gate is a safe OpenRune-compatible writer or a formally
-retained OpenRune-read/Displee-output arrangement. Definition adapters are
-available, but are not yet the default product backend.
+validated through the explicit Displee adapter and the OpenRune reader. The
+current supported arrangement is therefore formally retained as
+OpenRune-read/Displee-output staging; a native OpenRune writer remains future
+work and is not required to enable the safe staged path. Definition adapters
+are available, but are not yet the default product backend.
 
 ## Explicit verification
 

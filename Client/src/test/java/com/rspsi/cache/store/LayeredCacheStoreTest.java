@@ -1,6 +1,7 @@
 package com.rspsi.cache.store;
 
 import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.CacheWriteMode;
 import com.rspsi.cache.OsrsCacheMetadata;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +27,7 @@ class LayeredCacheStoreTest {
         assertArrayEquals(new byte[]{1}, base.values.get(key(5, 100, 0)));
         assertNull(output.values.get(key(5, 100, 0)));
         assertEquals(1, store.pendingWriteCount());
+        assertEquals(CacheWriteMode.STAGED, store.capabilities().writeMode());
 
         store.flush();
 
@@ -38,6 +40,7 @@ class LayeredCacheStoreTest {
     void refusesStagingWhenTheOutputBackendIsReadOnly() {
         LayeredCacheStore store = new LayeredCacheStore(new FakeStore(false), new FakeStore(false));
 
+        assertEquals(CacheWriteMode.READ_ONLY, store.capabilities().writeMode());
         assertThrows(UnsupportedOperationException.class,
                 () -> store.write(5, 1, 0, new byte[]{7}));
         assertEquals(0, store.pendingWriteCount());

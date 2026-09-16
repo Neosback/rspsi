@@ -1,6 +1,7 @@
 package com.rspsi.cache.map;
 
 import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.CacheWriteMode;
 import com.rspsi.cache.OsrsCacheMetadata;
 import com.rspsi.cache.store.CacheStore;
 import com.rspsi.editor.model.WorldDocument;
@@ -13,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,6 +31,7 @@ class OsrsProjectSessionLoaderTest {
 
         assertFalse(opened.readOnly());
         assertTrue(opened.region().session().canSave());
+        assertEquals(CacheWriteMode.DIRECT, opened.writeMode());
     }
 
     @Test
@@ -44,6 +47,7 @@ class OsrsProjectSessionLoaderTest {
         assertTrue(opened.readOnly());
         assertFalse(opened.region().session().canSave());
         assertFalse(opened.region().session().canEdit());
+        assertEquals(CacheWriteMode.READ_ONLY, opened.writeMode());
         assertTrue(opened.compatibility().issues().contains("cache fingerprint differs"));
     }
 

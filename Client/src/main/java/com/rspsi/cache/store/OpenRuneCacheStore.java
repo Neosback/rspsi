@@ -2,6 +2,7 @@ package com.rspsi.cache.store;
 
 import dev.openrune.filesystem.Cache;
 import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.CacheWriteMode;
 import com.rspsi.cache.OsrsCacheMetadata;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.editor.assets.AssetRepository;
@@ -91,7 +92,7 @@ public final class OpenRuneCacheStore implements CacheStore {
 
     @Override
     public CacheStoreCapabilities capabilities() {
-        return new CacheStoreCapabilities(false, true, false);
+        return new CacheStoreCapabilities(false, true, false, CacheWriteMode.READ_ONLY);
     }
 
     @Override
