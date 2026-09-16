@@ -13,6 +13,8 @@ import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.assets.DefinitionAssetRepository;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.render.RenderScene;
+import com.rspsi.editor.render.RenderSceneBuilder;
 import com.rspsi.editor.validation.ValidationIssue;
 import com.rspsi.editor.validation.WorldValidator;
 
@@ -100,6 +102,11 @@ public final class OsrsRevisionVerifier {
             messages.add("validation errors: " + issueErrors);
             messages.add("validation warnings: " + (issues.size() - issueErrors));
             OsrsCollisionBuilder.fromTerrainAndObjects(document, definitions);
+            RenderScene scene = new RenderSceneBuilder().build(document);
+            boolean sceneComplete = scene.terrainMeshes().size()
+                    == document.width() * document.length() * document.planes();
+            messages.add("neutral scene meshes: " + scene.terrainMeshes().size()
+                    + "; objects: " + scene.objects().size());
             byte[] encodedTerrain = OsrsRegionEncoder.encodeTerrain(document);
             byte[] encodedLocations = OsrsRegionEncoder.encodeLocations(document);
             WorldDocument roundTrip = OsrsRegionDecoder.decode(encodedTerrain, encodedLocations, regionX, regionY);
@@ -107,6 +114,7 @@ public final class OsrsRevisionVerifier {
             messages.add("decode-encode-decode semantic equality: " + equal);
             if (!equal) errors.add("semantic round-trip mismatch");
             if (issueErrors > 0) errors.add("world validation reported errors");
+            if (!sceneComplete) errors.add("neutral scene did not cover every document tile");
             return new VerificationReport(path, regionX, regionY, revision, maps.index().size(),
                     true, true, equal, messages, errors,
                     List.of(
@@ -137,8 +145,10 @@ public final class OsrsRevisionVerifier {
                             check("world.validation", issueErrors > 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     issueErrors + " validation errors; " + (issues.size() - issueErrors) + " warnings"),
                             check("collision.decode", VerificationCheck.Status.PASS, "collision map constructed"),
-                            check("scene.construction", VerificationCheck.Status.NOT_RUN,
-                                    "standalone scene-builder parity fixture is not bundled"),
+                            check("scene.construction", sceneComplete
+                                            ? VerificationCheck.Status.PASS
+                                            : VerificationCheck.Status.FAIL,
+                                    scene.terrainMeshes().size() + " neutral terrain meshes built"),
                             check("location.parity", equal ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
                                     "locations included in canonical semantic comparison: " + equal),
                             check("semantic.roundtrip", equal ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
