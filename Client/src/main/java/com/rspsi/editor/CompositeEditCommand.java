@@ -5,16 +5,16 @@ import java.util.List;
 /** Groups several edits into one user-visible history entry. */
 public final class CompositeEditCommand implements EditCommand {
     private final String description;
-    private final List<EditCommand> commands;
+    private final List<EditorCommand> commands;
 
-    public CompositeEditCommand(String description, List<EditCommand> commands) {
+    public CompositeEditCommand(String description, List<? extends EditorCommand> commands) {
         this.description = description;
         this.commands = List.copyOf(commands);
     }
 
     @Override
     public void apply(EditorSession session) {
-        for (EditCommand command : commands) {
+        for (EditorCommand command : commands) {
             command.apply(session);
         }
     }

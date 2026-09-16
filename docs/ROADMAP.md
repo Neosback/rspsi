@@ -30,6 +30,7 @@ this file is the executable progress ledger.
 | Neutral cache boundary | in-progress | `CacheStore` facade introduced; migrate consumers incrementally |
 | Neutral definitions | in-progress | Definition views/provider introduced; expand only as consumers migrate |
 | Command/session editing core | in-progress | Core model, command history, and session introduced; adapt existing tools next |
+| UI-neutral editor contracts | in-progress | Neutral pointer, tool, inspector, viewport, and renderer seams introduced; migrate one live path next |
 | OpenRune backend | in-progress | 2.4.19 compatibility spike is isolated behind `CacheStore`; legacy remains default |
 | RuneLite/TSPS parity harness | not-started | Add golden fixtures after cache seam is stable |
 | Lua, plugin permissions, Plugin Hub | deferred | Begin only after native command/plugin API is stable |
@@ -54,6 +55,8 @@ this file is the executable progress ledger.
 - Route new edits through `EditCommand` and `CommandHistory`.
 - Use `EditorSession` for world, selection, dirty state, and history.
 - Keep `SceneGraph` as a compatibility facade while behavior migrates.
+- Keep the core free of JavaFX, ImGui, renderer backend, and cache-library
+  imports; see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ### Phase 3 — Modern OSRS backend
 

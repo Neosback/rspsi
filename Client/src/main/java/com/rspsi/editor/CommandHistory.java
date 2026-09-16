@@ -5,10 +5,10 @@ import java.util.List;
 
 /** Non-UI undo/redo history. The cursor is also used for dirty-state tracking. */
 public final class CommandHistory {
-    private final List<EditCommand> commands = new ArrayList<>();
+    private final List<EditorCommand> commands = new ArrayList<>();
     private int cursor;
 
-    public void execute(EditCommand command, EditorSession session) {
+    public void execute(EditorCommand command, EditorSession session) {
         command.apply(session);
         while (commands.size() > cursor) {
             commands.remove(commands.size() - 1);

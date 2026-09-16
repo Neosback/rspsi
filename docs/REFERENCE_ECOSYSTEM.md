@@ -4,6 +4,10 @@ This document records research and architectural decisions. It is context for
 future implementation, not a set of instructions to import or combine whole
 repositories.
 
+The enforceable design contract is in
+[`ARCHITECTURE.md`](ARCHITECTURE.md); this document explains the roles of
+external sources.
+
 ## Source tiers
 
 - **A — use directly:** a small, production dependency behind an RSPSi API.
@@ -21,9 +25,14 @@ repositories.
 | Collision and routefinding semantics | Focused donor | OpenRune-Server |
 | Modern terrain, locs, bridges, instances, models | Focused donor | TSPS |
 | Current OSRS correctness | Independent oracle | RuneLite |
+| Live scene inspection and debug UX | First-class oracle | RuneLite DevTools |
 | Editing tools, transactions, fragments | Focused donor | OpenRune-Editor |
 | CS2 compiler/runtime | Later specialist | Neptune and TSPS |
 | Cache archaeology and old revisions | Research only | OpenRS2, VoidPS, 2011Scape, LostCity |
+| Revision-240 compatibility forensics | Research only | Domw71/OSRS-Map-Editor-Loading-240-rev |
+| Revision drift strategy | Research only | runelite-cache-code-updater |
+| World-map visual QA | Reference only; do not bundle unclear-license assets | Explv/osrs_map_tiles |
+| Geometry debugging | Independent validation workflow | Model Exporter |
 | Asset-browser UX | Reference only | Quill |
 | Advanced rendering | Later reference | 117 HD and GPU clients |
 | World model, commands, selection, renderer, UI | RSPSi-owned | Ours |
@@ -63,3 +72,8 @@ canonical `WorldDocument`, `TerrainTile`, `WorldObject`, `WorldFragment`,
 `EditorCommand`, `EditorTool`, selection service, and renderer interfaces belong
 to RSPSi. VoidPS and 2011Scape are 667-era references and must not define modern
 OSRS encoding or scene behavior.
+
+RuneLite DevTools is promoted to the live truth viewer for tile coordinates,
+scene/region/chunk relationships, flags, collision, object categories, and
+loading-line context. Studio will eventually implement equivalent offline
+debug overlays and inspectors rather than depending on RuneLite at runtime.

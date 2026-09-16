@@ -1,0 +1,73 @@
+# RSPSi Architecture Contract
+
+This is the implementation contract for the stabilization work. It narrows
+the research in [`REFERENCE_ECOSYSTEM.md`](REFERENCE_ECOSYSTEM.md) into rules
+that can be checked in code.
+
+## Ownership and dependency direction
+
+```text
+JavaFX / future ImGui frontend
+            ↓
+neutral tools, input, inspectors, renderer API
+            ↓
+EditorSession + WorldDocument + commands + selection
+            ↓
+neutral cache/definition services
+            ↓
+Displee legacy adapter | OpenRune OSRS adapter
+```
+
+The neutral editor packages own world data, editing, selection, tool contracts,
+and renderer contracts. They may not import JavaFX, ImGui, OpenGL/LWJGL,
+Displee, or OpenRune types. Frontends and cache adapters translate at the
+boundary.
+
+## Canonical APIs
+
+- `WorldDocument` is the mutable document model; `WorldModel` is a temporary
+  compatibility name.
+- `EditorSession` owns document state, selection, history, dirty state, and
+  future save coordination.
+- `EditorCommand` is the canonical mutation contract; `EditCommand` remains a
+  temporary source-compatible alias.
+- `EditorTool`, `ToolContext`, `PointerEvent`, and `ToolInspector` are shared
+  by all frontends.
+- `SceneRenderer` consumes neutral scenes and changes and returns neutral pick
+  results.
+- Cache and definitions are accessed through RSPSi interfaces, never raw
+  archive/index/file objects.
+
+## Frontends
+
+JavaFX is the current frontend and keeps the existing workflow working. Its
+event adapters translate to `PointerEvent`; JavaFX properties and controls do
+not enter tool or document classes. Dear ImGui remains a future frontend
+option, with GLFW/LWJGL integration deferred until the neutral contracts and
+legacy behavior are stable.
+
+## Correctness workflow
+
+RuneLite DevTools is the live OSRS truth viewer. TSPS and RuneLite cache/client
+behavior provide independent scene and map references. OpenRune provides the
+planned production OSRS cache backend. Explv map tiles are visual QA only;
+Domw71's rev-240 editor is forensic revision evidence; the runelite cache
+updater informs future revision-audit reports; model exporters isolate geometry
+decode/transform/rendering problems.
+
+## Migration rules
+
+1. Preserve current JavaFX and software-renderer behavior behind adapters.
+2. Add new editing behavior through `EditorSession` and `EditorCommand`.
+3. Do not add new editing logic to `SceneGraph`, global `Options`, or static
+   history.
+4. Migrate one input/tool path at a time and retain compatibility constructors
+   until characterization tests cover the replacement.
+5. Do not extract a new Gradle core module until package rules and seams are
+   proven; package-first enforcement is the current deliberate choice.
+
+## Deferred systems
+
+No new renderer, public Plugin Hub, Lua/CS2 IDE, server runtime, live network
+connection, collaboration, cloud cache, or procedural-generation system is a
+prerequisite for this architecture.

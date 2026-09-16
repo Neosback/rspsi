@@ -1,10 +1,9 @@
 package com.rspsi.editor;
 
-/** Atomic, undoable editor operation. */
-public interface EditCommand {
-    void apply(EditorSession session);
-
-    void undo(EditorSession session);
-
-    String description();
+/**
+ * @deprecated use {@link EditorCommand}. This alias prevents a second history
+ * implementation while old tools are migrated.
+ */
+@Deprecated
+public interface EditCommand extends EditorCommand {
 }

@@ -2,6 +2,9 @@ package com.rspsi.game.listeners;
 
 import com.jagex.Client;
 import com.jagex.map.SceneGraph;
+import com.rspsi.editor.input.PointerButton;
+import com.rspsi.editor.input.PointerEvent;
+import com.rspsi.editor.input.PointerEventSink;
 
 import javafx.event.EventHandler;
 import javafx.scene.input.InputEvent;
@@ -12,9 +15,16 @@ import javafx.scene.input.ScrollEvent;
 public class GameMouseListener implements EventHandler<InputEvent> {
 
 	private final Client client;
+	private final PointerEventSink pointerEvents;
 
 	public GameMouseListener(Client applet) {
+		this(applet, null);
+	}
+
+	/** Optional neutral input path; null preserves the existing SceneGraph path. */
+	public GameMouseListener(Client applet, PointerEventSink pointerEvents) {
 		this.client = applet;
+		this.pointerEvents = pointerEvents;
 	}
 
 	@Override
@@ -40,7 +50,7 @@ public class GameMouseListener implements EventHandler<InputEvent> {
 			} else if (event.getEventType() == MouseEvent.MOUSE_DRAGGED) {
 				this.mouseDragged(mouseEvent);
 			} else if (event.getEventType() == MouseEvent.MOUSE_RELEASED) {
-				this.mouseReleased();
+				this.mouseReleased(mouseEvent);
 			} else if (event.getEventType() == MouseEvent.MOUSE_EXITED) {
 				this.mouseExited();
 			}
@@ -65,6 +75,9 @@ public class GameMouseListener implements EventHandler<InputEvent> {
 		client.metaModifierHeld = 3;
 
 		SceneGraph.setMousePos(y, x);
+		if (pointerEvents != null) {
+			pointerEvents.pointerDrag(toPointerEvent(event));
+		}
 	}
 
 	public final void mouseExited() {
@@ -103,12 +116,37 @@ public class GameMouseListener implements EventHandler<InputEvent> {
 				SceneGraph.setMouseIsDown(true);
 			}
 		}
+		if (pointerEvents != null) {
+			pointerEvents.pointerDown(toPointerEvent(event));
+		}
 	}
 
-	public final void mouseReleased() {
+	public final void mouseReleased(MouseEvent event) {
 		client.metaModifierHeld = 0;
 		client.mouseWheelDown = false;
 
 		SceneGraph.setMouseIsDown(false);
+		if (pointerEvents != null) {
+			pointerEvents.pointerUp(event == null
+					? new PointerEvent(client.mouseEventX, client.mouseEventY, PointerButton.NONE,
+					false, false, false)
+					: toPointerEvent(event));
+		}
+	}
+
+	/** Compatibility overload for callers that do not retain the JavaFX event. */
+	public final void mouseReleased() {
+		mouseReleased(null);
+	}
+
+	private PointerEvent toPointerEvent(MouseEvent event) {
+		PointerButton button = switch (event.getButton()) {
+			case PRIMARY -> PointerButton.PRIMARY;
+			case SECONDARY -> PointerButton.SECONDARY;
+			case MIDDLE -> PointerButton.MIDDLE;
+			default -> PointerButton.NONE;
+		};
+		return new PointerEvent((float) event.getX(), (float) event.getY(), button,
+				event.isShiftDown(), event.isControlDown(), event.isAltDown());
 	}
 }
