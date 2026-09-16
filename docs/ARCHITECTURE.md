@@ -68,6 +68,9 @@ boundary.
   neighbor-context work. Missing regions remain explicit holes, so boundary
   blending and loading-line behavior cannot silently treat absent data as
   authored empty terrain.
+- `WorldRegionWindow.boundaryMismatches()` checks shared corner heights across
+  loaded east and north region edges; incomplete windows report only the
+  boundaries that can actually be proven.
 - `EditorTool`, `ToolContext`, `PointerEvent`, and `ToolInspector` are shared
   by all frontends.
 - `SceneRenderer` consumes neutral scenes and changes and returns neutral pick

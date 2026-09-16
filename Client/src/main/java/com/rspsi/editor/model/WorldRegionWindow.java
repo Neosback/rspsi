@@ -6,6 +6,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A bounded OSRS world window made up of canonical 64x64 regions.
@@ -89,5 +91,61 @@ public final class WorldRegionWindow {
             }
         }
         return Set.copyOf(missing);
+    }
+
+    /**
+     * Compares shared corner heights between adjacent loaded regions. Missing
+     * regions are skipped because their boundary cannot be verified yet.
+     */
+    public List<RegionBoundaryMismatch> boundaryMismatches() {
+        List<RegionBoundaryMismatch> mismatches = new ArrayList<>();
+        for (WorldRegion region : regions.values()) {
+            WorldRegion east = regions.get(((region.regionX() + 1) << 8) | region.regionY());
+            if (east != null) {
+                compareEast(region, east, mismatches);
+            }
+            WorldRegion north = regions.get((region.regionX() << 8) | (region.regionY() + 1));
+            if (north != null) {
+                compareNorth(region, north, mismatches);
+            }
+        }
+        return List.copyOf(mismatches);
+    }
+
+    private static void compareEast(WorldRegion west, WorldRegion east,
+                                    List<RegionBoundaryMismatch> mismatches) {
+        for (int plane = 0; plane < Math.min(west.document().planes(), east.document().planes()); plane++) {
+            for (int along = 0; along < WorldRegion.REGION_SIZE; along++) {
+                TileSnapshot left = west.document().tile(plane, 63, along).snapshot();
+                TileSnapshot right = east.document().tile(plane, 0, along).snapshot();
+                compare(west, RegionBoundaryDirection.EAST, plane, along, false,
+                        left.southEastHeight(), right.southWestHeight(), mismatches);
+                compare(west, RegionBoundaryDirection.EAST, plane, along, true,
+                        left.northEastHeight(), right.northWestHeight(), mismatches);
+            }
+        }
+    }
+
+    private static void compareNorth(WorldRegion south, WorldRegion north,
+                                     List<RegionBoundaryMismatch> mismatches) {
+        for (int plane = 0; plane < Math.min(south.document().planes(), north.document().planes()); plane++) {
+            for (int along = 0; along < WorldRegion.REGION_SIZE; along++) {
+                TileSnapshot lower = south.document().tile(plane, along, 63).snapshot();
+                TileSnapshot upper = north.document().tile(plane, along, 0).snapshot();
+                compare(south, RegionBoundaryDirection.NORTH, plane, along, false,
+                        lower.northWestHeight(), upper.southWestHeight(), mismatches);
+                compare(south, RegionBoundaryDirection.NORTH, plane, along, true,
+                        lower.northEastHeight(), upper.southEastHeight(), mismatches);
+            }
+        }
+    }
+
+    private static void compare(WorldRegion origin, RegionBoundaryDirection direction, int plane,
+                                int along, boolean upperCorner, int expected, int actual,
+                                List<RegionBoundaryMismatch> mismatches) {
+        if (expected != actual) {
+            mismatches.add(new RegionBoundaryMismatch(direction, plane, origin.regionX(),
+                    origin.regionY(), along, upperCorner, expected, actual));
+        }
     }
 }
