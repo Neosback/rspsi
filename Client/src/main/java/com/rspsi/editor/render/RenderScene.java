@@ -3,6 +3,7 @@ package com.rspsi.editor.render;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.BridgeLink;
 import com.rspsi.editor.terrain.TerrainMesh;
 
 import java.util.LinkedHashMap;
@@ -18,18 +19,21 @@ import java.util.Objects;
 public record RenderScene(
         WorldDocument document,
         Map<TileCoordinate, TerrainMesh> terrainMeshes,
-        List<WorldObject> objects
+        List<WorldObject> objects,
+        List<BridgeLink> bridges
 ) {
     /** Compatibility constructor for callers that only need the document. */
     public RenderScene(WorldDocument document) {
-        this(document, Map.of(), List.of());
+        this(document, Map.of(), List.of(), List.of());
     }
 
     public RenderScene {
         Objects.requireNonNull(document, "document");
         Objects.requireNonNull(terrainMeshes, "terrainMeshes");
         Objects.requireNonNull(objects, "objects");
+        Objects.requireNonNull(bridges, "bridges");
         terrainMeshes = Map.copyOf(new LinkedHashMap<>(terrainMeshes));
         objects = List.copyOf(objects);
+        bridges = List.copyOf(bridges);
     }
 }

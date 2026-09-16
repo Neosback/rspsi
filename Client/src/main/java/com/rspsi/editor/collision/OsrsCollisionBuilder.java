@@ -8,14 +8,18 @@ import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.model.OsrsLocShape;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.OsrsTileFlags;
 
 import java.util.Objects;
 
 /** Builds the terrain/bridge portion of canonical OSRS collision. */
 public final class OsrsCollisionBuilder {
-    public static final int BLOCK_MAP_SQUARE = 0x1;
-    public static final int LINK_BELOW = 0x2;
-    public static final int REMOVE_ROOFS = 0x4;
+    /** @deprecated use {@link OsrsTileFlags#BLOCK_MAP_SQUARE}. */
+    @Deprecated public static final int BLOCK_MAP_SQUARE = OsrsTileFlags.BLOCK_MAP_SQUARE;
+    /** @deprecated use {@link OsrsTileFlags#BRIDGE}. */
+    @Deprecated public static final int LINK_BELOW = OsrsTileFlags.BRIDGE;
+    /** @deprecated use {@link OsrsTileFlags#REMOVE_ROOFS}. */
+    @Deprecated public static final int REMOVE_ROOFS = OsrsTileFlags.REMOVE_ROOFS;
 
     private static final int BRIDGE_FLAG_PLANE = 1;
 

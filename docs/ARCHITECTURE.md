@@ -153,6 +153,11 @@ boundary.
   mesh instances while refreshing canonical object placements. Neighbor tiles
   can be included by the caller for blended floors and shared edges; scene
   construction remains outside `SceneGraph`.
+- `WorldDocument.bridgeLinks()` turns the OSRS bridge flag into explicit
+  authored-plane/effective-plane links. The raw flag remains part of the
+  canonical tile snapshot for lossless encoding, while scene and collision
+  consumers can use the same derived relationship instead of duplicating bit
+  interpretation.
 
 ## Frontends
 

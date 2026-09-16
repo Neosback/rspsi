@@ -43,7 +43,7 @@ public final class RenderSceneBuilder {
                 }
             }
         }
-        return new RenderScene(document, meshes, objects);
+        return new RenderScene(document, meshes, objects, document.bridgeLinks());
     }
 
     /**
@@ -66,7 +66,7 @@ public final class RenderSceneBuilder {
             meshes.put(coordinate, terrainMeshes.build(document.tile(coordinate).snapshot()));
         }
         List<WorldObject> objects = collectObjects(document);
-        return new RenderScene(document, meshes, objects);
+        return new RenderScene(document, meshes, objects, document.bridgeLinks());
     }
 
     private static List<WorldObject> collectObjects(WorldDocument document) {

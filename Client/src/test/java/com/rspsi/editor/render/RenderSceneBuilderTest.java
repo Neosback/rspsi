@@ -39,6 +39,7 @@ class RenderSceneBuilderTest {
         assertSame(document, scene.document());
         assertEquals(0, scene.terrainMeshes().size());
         assertEquals(0, scene.objects().size());
+        assertEquals(0, scene.bridges().size());
     }
 
     @Test
@@ -59,5 +60,19 @@ class RenderSceneBuilderTest {
                 initial.terrainMeshes().get(new TileCoordinate(0, 0, 0)),
                 updated.terrainMeshes().get(new TileCoordinate(0, 0, 0)));
         assertEquals(List.of(object), updated.objects());
+    }
+
+    @Test
+    void exposesBridgeLinksDerivedFromTheCanonicalFlag() {
+        WorldDocument document = new WorldDocument(1, 1, 4);
+        document.tile(1, 0, 0).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, com.rspsi.editor.model.OsrsTileFlags.BRIDGE, List.of()));
+
+        RenderScene scene = new RenderSceneBuilder().build(document);
+
+        assertEquals(3, scene.bridges().size());
+        assertEquals(new com.rspsi.editor.model.BridgeLink(
+                new TileCoordinate(1, 0, 0), new TileCoordinate(0, 0, 0)), scene.bridges().get(0));
+        assertEquals(scene.bridges(), document.bridgeLinks());
     }
 }
