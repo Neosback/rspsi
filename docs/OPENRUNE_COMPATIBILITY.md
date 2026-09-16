@@ -94,6 +94,11 @@ topology for callers: OpenRune remains the read/definition source, writes are
 staged, and the separately prepared output cache is the only writable target.
 The factory rejects identical paths.
 
+The staged output advertises `mapPacking=true` because its Displee adapter
+repacks dirty archive indexes during `flush()`. That capability is exposed
+only through the neutral boundary; the editor does not receive Displee index
+objects.
+
 No real OSRS cache is checked into the repository. External OpenRS2 fixtures
 have now passed the read-only verification path: cache id 391 (revision 6)
 passed named-map terrain and location decoding, while cache id 2710 (live

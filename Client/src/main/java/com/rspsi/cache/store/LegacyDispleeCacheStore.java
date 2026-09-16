@@ -67,7 +67,10 @@ public final class LegacyDispleeCacheStore implements CacheStore {
 
     @Override
     public CacheStoreCapabilities capabilities() {
-        return new CacheStoreCapabilities(true, false, false);
+        // The adapter writes archive/file payloads and explicitly repacks
+        // dirty indexes during flush, which is the map-packing capability
+        // required by the neutral OSRS map service.
+        return new CacheStoreCapabilities(true, false, true);
     }
 
     @Override

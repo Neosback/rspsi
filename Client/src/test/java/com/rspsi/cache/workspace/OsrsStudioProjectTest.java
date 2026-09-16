@@ -38,6 +38,7 @@ class OsrsStudioProjectTest {
             assertTrue(studio.openWindowAround(50, 50, 0).complete());
             assertTrue(studio.assets().search("").isEmpty());
             assertTrue(studio.capabilities().writable());
+            assertTrue(studio.capabilities().mapPacking());
         }
 
         assertTrue(store.closed);
