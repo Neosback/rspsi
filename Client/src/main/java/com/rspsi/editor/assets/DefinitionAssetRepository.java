@@ -1,9 +1,6 @@
 package com.rspsi.editor.assets;
 
 import com.rspsi.cache.definition.DefinitionProvider;
-import com.rspsi.cache.definition.FloorDefinitionView;
-import com.rspsi.cache.definition.ObjectDefinitionView;
-import com.rspsi.cache.definition.TextureDefinitionView;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -11,7 +8,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Function;
 
 /**
  * Neutral asset-browser adapter over definition providers.

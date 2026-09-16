@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenRuneSymbolicNameProviderTest {
     @Test
-    void translatesLoadedReverseMappingsWithoutExposingBackendKeysToCallers() {
+    void translatesLoadedReverseMappingsIntoNeutralOptionalNames() {
         ConstantProvider constants = ConstantProvider.INSTANCE;
         Map<String, Map<String, Integer>> previous = new HashMap<>(constants.getMappings());
         try {

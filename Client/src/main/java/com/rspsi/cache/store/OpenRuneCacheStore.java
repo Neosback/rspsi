@@ -4,6 +4,8 @@ import dev.openrune.filesystem.Cache;
 import com.rspsi.cache.CacheStoreCapabilities;
 import com.rspsi.cache.OsrsCacheMetadata;
 import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.editor.assets.AssetRepository;
+import com.rspsi.editor.assets.DefinitionAssetRepository;
 import com.rspsi.editor.assets.SymbolicNameProvider;
 
 import java.security.MessageDigest;
@@ -43,6 +45,11 @@ public final class OpenRuneCacheStore implements CacheStore {
      */
     public SymbolicNameProvider symbolicNameProvider() {
         return new OpenRuneSymbolicNameProvider();
+    }
+
+    /** Builds the neutral asset-browser repository for this OpenRune cache. */
+    public AssetRepository assetRepository(int revision) {
+        return new DefinitionAssetRepository(definitionProvider(revision), symbolicNameProvider());
     }
 
     /** Returns a stable identity derived from the cache's reference-table versions. */

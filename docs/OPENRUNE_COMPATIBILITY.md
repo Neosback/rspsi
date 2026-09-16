@@ -42,7 +42,8 @@ until a neutral mesh representation is validated.
 mappings into the neutral `SymbolicNameProvider`. It is optional, does not
 load mapping files implicitly, and returns the exact backend key so the asset
 browser can show symbolic provenance without making RSCM/GameVal part of the
-editor model.
+editor model. `OpenRuneCacheStore.assetRepository(revision)` composes this
+provider with the neutral definition adapter for asset-browser callers.
 
 ## Explicit limitations
 
