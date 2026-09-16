@@ -30,9 +30,11 @@ bridge/render-level handling, region neighbors, collision, minimap output,
 and final renderer comparison against TSPS and RuneLite.
 
 The neutral minimap builder also exposes an opt-in 4×4-per-tile raster using
-the captured TSPS shaped-tile masks and rotation permutations. This locks the
-raster geometry contract without claiming color or mapscene parity; those
-remain explicit `NOT_RUN` verifier checks until licensed reference fixtures
-are available.
+the captured TSPS shaped-tile masks and rotation permutations. When floor
+definitions provide HSL blend metadata, that path uses the OSRS radius-5
+weighted hue/saturation/luminance blend and palette conversion. This locks
+the neutral geometry/material baseline without claiming mapscene or live
+RuneLite image parity; those remain explicit `NOT_RUN` verifier checks until
+licensed reference fixtures are available.
 
 No TSPS source or generated asset is copied into the product.
