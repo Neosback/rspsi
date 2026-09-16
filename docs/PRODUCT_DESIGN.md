@@ -63,8 +63,9 @@ Revision-specific behavior belongs in cache adapters and codecs. The world
 model does not contain archive IDs, opcodes, XTEA keys, or revision branches.
 
 Projects record format version, `game = oldschool`, cache revision,
-subrevision, and cache fingerprint. A fingerprint mismatch opens read-only in
-the first implementation; automatic ID migration is deferred.
+subrevision, and cache fingerprint. A mismatch opens read-only in the first
+implementation; `ProjectCompatibility` makes that decision explicit for
+callers. Automatic ID migration is deferred.
 
 ## Editor layout
 
