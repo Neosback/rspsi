@@ -30,6 +30,8 @@ public final class RenderSceneFingerprint {
                             .append('|').append(mesh == null ? "<missing>" : mesh.faces()).append(';');
                     TerrainMaterial material = scene.terrainMaterials().get(coordinate);
                     if (material != null) value.append("material=").append(material).append(';');
+                    TerrainLight lighting = scene.terrainLighting().get(coordinate);
+                    if (lighting != null) value.append("lighting=").append(lighting).append(';');
                 }
             }
         }

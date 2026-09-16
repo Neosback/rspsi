@@ -187,7 +187,9 @@ boundary.
   snapshots and `RenderChanges`-scoped terrain rebuilds, preserving untouched
   mesh instances while refreshing canonical object placements. Neighbor tiles
   can be included by the caller for blended floors and shared edges; scene
-  construction remains outside `SceneGraph`.
+  construction remains outside `SceneGraph`. Definition-aware scenes also
+  carry neutral terrain materials, and every complete scene carries per-corner
+  `TerrainLight` values from the OSRS directional normal calculation.
 - `SceneRenderer.update(RenderScene, RenderChanges)` is the preferred
   incremental publication path. Its default delegates to the original
   `update(RenderChanges)` method so existing renderers remain source

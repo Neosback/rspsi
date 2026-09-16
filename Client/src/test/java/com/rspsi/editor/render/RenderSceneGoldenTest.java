@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /** Locks one mixed-plane scene snapshot until external parity fixtures replace it. */
 class RenderSceneGoldenTest {
     private static final String GOLDEN =
-            "898841d8457936158c95eb8a6b929eab21de92d69cfb91ccb60a451585ffb335";
+            "cd47e6c17d2ff19ddbc1706c3c0d5ce70932d05f7d2d90376b3908876bceb250";
 
     @Test
     void mixedTerrainObjectsAndBridgeHaveStableNeutralSceneSemantics() {

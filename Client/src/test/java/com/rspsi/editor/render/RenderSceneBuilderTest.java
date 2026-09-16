@@ -36,6 +36,7 @@ class RenderSceneBuilderTest {
         assertEquals(object, scene.objects().get(0));
         assertEquals(6, scene.terrainMeshes()
                 .get(new TileCoordinate(1, 1, 2)).vertices().size());
+        assertEquals(12, scene.terrainLighting().size());
     }
 
     @Test
@@ -49,6 +50,7 @@ class RenderSceneBuilderTest {
         assertEquals(0, scene.objects().size());
         assertEquals(0, scene.bridges().size());
         assertEquals(0, scene.terrainMaterials().size());
+        assertEquals(0, scene.terrainLighting().size());
     }
 
     @Test
@@ -112,6 +114,8 @@ class RenderSceneBuilderTest {
 
         assertEquals(20, updated.terrainMeshes()
                 .get(new TileCoordinate(0, 4, 4)).vertices().get(0).height());
+        org.junit.jupiter.api.Assertions.assertNotNull(updated.terrainLighting()
+                .get(new TileCoordinate(0, 4, 4)));
     }
 
     @Test

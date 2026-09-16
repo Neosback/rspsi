@@ -35,6 +35,11 @@ when a neutral definition provider is available. This is the material input
 boundary for future scene parity; it does not yet claim lighting, texture
 animation, hidden-face, or rendered-image equivalence.
 
+The neutral scene now also carries per-corner `TerrainLight` values using
+TSPS's directional constants (`-50, -10, -50`, ambient `96`) and height-normal
+calculation. Object light occlusion and rendered-light image comparison are
+not yet included in that baseline.
+
 The neutral minimap builder also exposes an opt-in 4×4-per-tile raster using
 the captured TSPS shaped-tile masks and rotation permutations. When floor
 definitions provide HSL blend metadata, that path uses the OSRS radius-5

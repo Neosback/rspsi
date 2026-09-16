@@ -61,7 +61,8 @@ public final class RenderSceneBuilder {
                 }
             }
         }
-        return new RenderScene(document, meshes, materials, objects, document.bridgeLinks());
+        return new RenderScene(document, meshes, materials, TerrainLighting.build(document),
+                objects, document.bridgeLinks());
     }
 
     /**
@@ -75,6 +76,7 @@ public final class RenderSceneBuilder {
         WorldDocument document = previous.document();
         Map<TileCoordinate, TerrainMesh> meshes = new LinkedHashMap<>(previous.terrainMeshes());
         Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>(previous.terrainMaterials());
+        Map<TileCoordinate, TerrainLight> lighting = new LinkedHashMap<>(TerrainLighting.build(document));
         Set<TileCoordinate> dirtyTiles = changes.dirtyTiles();
         for (TileCoordinate coordinate : dirtyTiles) {
             if (coordinate.plane() >= document.planes()
@@ -88,7 +90,7 @@ public final class RenderSceneBuilder {
             }
         }
         List<WorldObject> objects = collectObjects(document);
-        return new RenderScene(document, meshes, materials, objects, document.bridgeLinks());
+        return new RenderScene(document, meshes, materials, lighting, objects, document.bridgeLinks());
     }
 
     /** Rebuilds the chunks drained from an editor session's invalidation queue. */
