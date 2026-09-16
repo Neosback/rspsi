@@ -28,6 +28,12 @@ public final class CollisionMap {
     public int length() { return length; }
     public int planes() { return planes; }
 
+    /** Returns whether a canonical tile is covered by this collision map. */
+    public boolean contains(TileCoordinate coordinate) {
+        Objects.requireNonNull(coordinate, "coordinate");
+        return inside(coordinate.plane(), coordinate.x(), coordinate.y());
+    }
+
     public int flags(TileCoordinate coordinate) {
         return flags[coordinate.plane()][coordinate.x()][coordinate.y()];
     }

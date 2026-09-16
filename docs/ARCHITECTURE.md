@@ -180,6 +180,17 @@ boundary.
   consumers can use the same derived relationship instead of duplicating bit
   interpretation.
 
+## Debug overlay data
+
+`com.rspsi.editor.debug` contains the frontend-neutral debug view contract.
+`DebugOverlayBuilder` turns a `WorldDocument`, its world origin, and an
+optional `CollisionMap` into a `DebugOverlaySnapshot`. The snapshot exposes
+tile inspector payloads, bridge/effective-plane information, collision
+directions, and semantic tile/chunk/region/world-window grid lines. A JavaFX
+viewport may render these values today, while a future OpenGL or Dear ImGui
+frontend can consume the same data. Overlay colors, labels, and drawing
+technology remain frontend concerns.
+
 ## Frontends
 
 JavaFX is the current frontend and keeps the existing workflow working. Its
