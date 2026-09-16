@@ -28,6 +28,19 @@ public final class CollisionMap {
     public int length() { return length; }
     public int planes() { return planes; }
 
+    /** Returns the number of tiles carrying at least one collision semantic. */
+    public int nonEmptyTileCount() {
+        int count = 0;
+        for (int plane = 0; plane < planes; plane++) {
+            for (int x = 0; x < width; x++) {
+                for (int y = 0; y < length; y++) {
+                    if (flags[plane][x][y] != 0) count++;
+                }
+            }
+        }
+        return count;
+    }
+
     /** Returns whether a canonical tile is covered by this collision map. */
     public boolean contains(TileCoordinate coordinate) {
         Objects.requireNonNull(coordinate, "coordinate");

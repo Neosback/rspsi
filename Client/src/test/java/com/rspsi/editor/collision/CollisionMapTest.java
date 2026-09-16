@@ -32,6 +32,17 @@ class CollisionMapTest {
     }
 
     @Test
+    void countsOnlyTilesWithCollisionSemantics() {
+        CollisionMap map = new CollisionMap(3, 2, 2);
+        map.add(new TileCoordinate(0, 1, 1), CollisionFlag.LOC);
+        map.add(new TileCoordinate(1, 2, 0), CollisionFlag.ROOF);
+
+        assertEquals(2, map.nonEmptyTileCount());
+        map.add(new TileCoordinate(0, 1, 1), CollisionFlag.BLOCK_WALK);
+        assertEquals(2, map.nonEmptyTileCount());
+    }
+
+    @Test
     void mapRejectsOutOfBoundsMutation() {
         CollisionMap map = new CollisionMap(2, 2, 1);
         assertThrows(IndexOutOfBoundsException.class,

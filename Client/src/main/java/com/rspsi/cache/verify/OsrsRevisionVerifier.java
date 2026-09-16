@@ -128,14 +128,17 @@ public final class OsrsRevisionVerifier {
             long issueErrors = issues.stream().filter(issue -> issue.severity() == ValidationIssue.Severity.ERROR).count();
             messages.add("validation errors: " + issueErrors);
             messages.add("validation warnings: " + (issues.size() - issueErrors));
-            OsrsCollisionBuilder.fromTerrainAndObjects(document, definitions);
+            var collision = OsrsCollisionBuilder.fromTerrainAndObjects(document, definitions);
             RenderScene scene = new RenderSceneBuilder(definitions).build(document);
             boolean sceneComplete = scene.terrainMeshes().size()
                     == document.width() * document.length() * document.planes();
+            boolean objectProjectionComplete = scene.renderObjects().size() == scene.objects().size();
             String sceneFingerprint = RenderSceneFingerprint.sha256(scene);
             messages.add("neutral scene meshes: " + scene.terrainMeshes().size()
                     + "; terrain materials: " + scene.terrainMaterials().size()
-                    + "; objects: " + scene.objects().size());
+                    + "; objects: " + scene.objects().size()
+                    + "; render objects: " + scene.renderObjects().size());
+            messages.add("collision non-empty tiles: " + collision.nonEmptyTileCount());
             messages.add("neutral scene fingerprint: " + sceneFingerprint);
             boolean minimapComplete = true;
             int minimapPixels = 0;
@@ -162,6 +165,7 @@ public final class OsrsRevisionVerifier {
             if (!equal) errors.add("semantic round-trip mismatch");
             if (issueErrors > 0) errors.add("world validation reported errors");
             if (!sceneComplete) errors.add("neutral scene did not cover every document tile");
+            if (!objectProjectionComplete) errors.add("neutral scene object projections did not match canonical objects");
             if (!minimapComplete) errors.add("neutral minimap dimensions did not match the document");
             return new VerificationReport(path, regionX, regionY, revision, maps.index().size(),
                     true, true, equal, messages, errors,
@@ -206,12 +210,14 @@ public final class OsrsRevisionVerifier {
                                     document.planes() + " authored planes; " + bridgeLinks + " bridge links"),
                             check("world.validation", issueErrors > 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     issueErrors + " validation errors; " + (issues.size() - issueErrors) + " warnings"),
-                            check("collision.decode", VerificationCheck.Status.PASS, "collision map constructed"),
-                            check("scene.construction", sceneComplete
+                            check("collision.decode", VerificationCheck.Status.PASS,
+                                    "collision map constructed; " + collision.nonEmptyTileCount() + " non-empty tiles"),
+                            check("scene.construction", sceneComplete && objectProjectionComplete
                                             ? VerificationCheck.Status.PASS
                                             : VerificationCheck.Status.FAIL,
-                                    scene.terrainMeshes().size() + " neutral terrain meshes built; fingerprint "
-                                            + sceneFingerprint),
+                                    scene.terrainMeshes().size() + " neutral terrain meshes and "
+                                            + scene.renderObjects().size() + "/" + scene.objects().size()
+                                            + " object projections built; fingerprint " + sceneFingerprint),
                             check("minimap.construction", minimapComplete
                                             ? VerificationCheck.Status.PASS
                                             : VerificationCheck.Status.FAIL,
