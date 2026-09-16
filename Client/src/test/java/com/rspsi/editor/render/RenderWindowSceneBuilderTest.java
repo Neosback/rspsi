@@ -1,5 +1,8 @@
 package com.rspsi.editor.render;
 
+import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.cache.definition.ObjectCollisionView;
+import com.rspsi.editor.collision.CollisionFlag;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldRegion;
@@ -7,11 +10,11 @@ import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.OsrsTileFlags;
-import com.rspsi.editor.collision.CollisionFlag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -62,6 +65,41 @@ class RenderWindowSceneBuilderTest {
                 10 * 64 + snapshot.coordinate().x(),
                 20 * 64 + snapshot.coordinate().y(),
                 snapshot.coordinate().plane()));
+    }
+
+    @Test
+    void includesDefinitionBackedObjectCollisionAtWorldAddresses() {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        document.tile(0, 12, 13).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0,
+                List.of(new WorldObject(42, 10, 0, 0, 12, 13))));
+        WorldRegion loaded = new WorldRegion(10, 20, document);
+        WorldRegionWindow window = new WorldRegionWindow(10, 20, 1, 1,
+                Map.of(loaded.regionId(), loaded));
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) {
+                return Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> underlay(int id) {
+                return Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> overlay(int id) {
+                return Optional.empty();
+            }
+
+            @Override public Optional<ObjectCollisionView> objectCollision(int id) {
+                return Optional.of(new ObjectCollisionView(id, 2, 1, 2, true, false));
+            }
+        };
+
+        RenderWindowScene scene = new RenderWindowSceneBuilder(definitions).build(window);
+
+        assertEquals(CollisionFlag.LOC | CollisionFlag.LOC_PROJECTILE,
+                scene.collision().get(WorldTileAddress.of(10 * 64 + 12, 20 * 64 + 13, 0)).rawFlags());
+        assertEquals(CollisionFlag.LOC | CollisionFlag.LOC_PROJECTILE,
+                scene.collision().get(WorldTileAddress.of(10 * 64 + 13, 20 * 64 + 13, 0)).rawFlags());
     }
 
     @Test
