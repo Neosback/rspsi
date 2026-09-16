@@ -18,6 +18,7 @@ import com.rspsi.editor.minimap.MinimapBuilder;
 import com.rspsi.editor.minimap.MinimapImage;
 import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.RenderSceneBuilder;
+import com.rspsi.editor.render.RenderSceneFingerprint;
 import com.rspsi.editor.validation.ValidationIssue;
 import com.rspsi.editor.validation.WorldValidator;
 
@@ -131,8 +132,10 @@ public final class OsrsRevisionVerifier {
             RenderScene scene = new RenderSceneBuilder().build(document);
             boolean sceneComplete = scene.terrainMeshes().size()
                     == document.width() * document.length() * document.planes();
+            String sceneFingerprint = RenderSceneFingerprint.sha256(scene);
             messages.add("neutral scene meshes: " + scene.terrainMeshes().size()
                     + "; objects: " + scene.objects().size());
+            messages.add("neutral scene fingerprint: " + sceneFingerprint);
             boolean minimapComplete = true;
             int minimapPixels = 0;
             for (int plane = 0; plane < document.planes(); plane++) {
@@ -200,7 +203,8 @@ public final class OsrsRevisionVerifier {
                             check("scene.construction", sceneComplete
                                             ? VerificationCheck.Status.PASS
                                             : VerificationCheck.Status.FAIL,
-                                    scene.terrainMeshes().size() + " neutral terrain meshes built"),
+                                    scene.terrainMeshes().size() + " neutral terrain meshes built; fingerprint "
+                                            + sceneFingerprint),
                             check("minimap.construction", minimapComplete
                                             ? VerificationCheck.Status.PASS
                                             : VerificationCheck.Status.FAIL,

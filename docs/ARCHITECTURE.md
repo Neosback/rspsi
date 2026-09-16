@@ -186,6 +186,9 @@ boundary.
   terrain, canonical objects, and a bridge link. It is a local semantic
   characterization fixture; TSPS/RuneLite parity fixtures remain independent
   acceptance evidence.
+- `RenderSceneFingerprint` also produces a deterministic SHA-256 identity for
+  the neutral scene snapshot. The cache verifier reports it as construction
+  evidence; it is intentionally not a rendered-image parity hash.
 - `MinimapBuilder` produces a deterministic ARGB raster from canonical tiles
   and neutral floor definitions. It includes an explicit blocked-tile color,
   optional cardinal underlay blending, and deterministic missing-definition
