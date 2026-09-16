@@ -22,35 +22,18 @@ public final class MapIndexTable {
 
     public static MapIndexTable discover(CacheStore store, int mapIndex) {
         Objects.requireNonNull(store, "store");
-        MapIndexTable table = new MapIndexTable();
-        for (int regionX = 0; regionX < DEFAULT_REGION_LIMIT; regionX++) {
-            for (int regionY = 0; regionY < DEFAULT_REGION_LIMIT; regionY++) {
-                String landscapeName = "m" + regionX + "_" + regionY;
-                String objectName = "l" + regionX + "_" + regionY;
-                int landscapeId = store.archiveId(mapIndex, landscapeName);
-                int objectId = store.archiveId(mapIndex, objectName);
-                if (landscapeId >= 0 || objectId >= 0) {
-                    table.put(new MapIndexEntry(regionX, regionY, landscapeId, objectId,
-                            landscapeName, objectName));
-                }
-            }
+        MapIndexTable table = discoverNamed(store, mapIndex);
+        if (table.size() > 0 && hasCompleteNamedEntries(table)) {
+            return table;
         }
-        if (table.size() == 0) {
-            discoverNumericGroups(store, mapIndex, table);
-        }
-        return table;
+        MapIndexTable numeric = new MapIndexTable();
+        discoverNumericGroups(store, mapIndex, numeric);
+        return numeric.size() > table.size() ? numeric : table;
     }
 
-    /**
-     * Discovers using a known revision profile. The explicit profile makes
-     * revision drift visible to callers while retaining the autodetecting
-     * overload for existing adapters and tooling.
-     */
-    public static MapIndexTable discover(CacheStore store, int mapIndex, OsrsRevisionProfile profile) {
-        Objects.requireNonNull(profile, "profile");
-        return profile.mapGroupLayout() == OsrsRevisionProfile.MapGroupLayout.NUMERIC
-                ? discoverNumeric(store, mapIndex)
-                : discoverNamed(store, mapIndex);
+    private static boolean hasCompleteNamedEntries(MapIndexTable table) {
+        return table.entries.values().stream().anyMatch(entry ->
+                entry.landscapeArchiveId() >= 0 && entry.objectArchiveId() >= 0);
     }
 
     private static MapIndexTable discoverNamed(CacheStore store, int mapIndex) {
@@ -70,6 +53,18 @@ public final class MapIndexTable {
         return table;
     }
 
+    /**
+     * Discovers using a known revision profile. The explicit profile makes
+     * revision drift visible to callers while retaining the autodetecting
+     * overload for existing adapters and tooling.
+     */
+    public static MapIndexTable discover(CacheStore store, int mapIndex, OsrsRevisionProfile profile) {
+        Objects.requireNonNull(profile, "profile");
+        return profile.mapGroupLayout() == OsrsRevisionProfile.MapGroupLayout.NUMERIC
+                ? discoverNumeric(store, mapIndex)
+                : discoverNamed(store, mapIndex);
+    }
+
     private static MapIndexTable discoverNumeric(CacheStore store, int mapIndex) {
         MapIndexTable table = new MapIndexTable();
         discoverNumericGroups(store, mapIndex, table);
@@ -79,8 +74,9 @@ public final class MapIndexTable {
     /**
      * Revision 237+ OpenRune packing stores maps as numeric groups whose ID is
      * the packed 8-bit region coordinate, with terrain in file 0 and
-     * locations in file 1. The fallback is used only when named discovery
-     * found nothing, so legacy named layouts remain unambiguous.
+     * locations in file 1. Numeric discovery is also used when name-hash
+     * probing yields only partial matches; this avoids mistaking a hash
+     * collision in a modern index for a complete named map index.
      */
     private static void discoverNumericGroups(CacheStore store, int mapIndex, MapIndexTable table) {
         for (int archiveId : store.archiveIds(mapIndex)) {

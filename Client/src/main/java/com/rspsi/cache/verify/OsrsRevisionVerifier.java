@@ -99,7 +99,8 @@ public final class OsrsRevisionVerifier {
             messages.add("asset descriptors: " + availableAssets.size());
             WorldDocument document = OsrsRegionDecoder.decode(landscape, locations, regionX, regionY,
                     profile.newTerrainFormat());
-            List<ValidationIssue> issues = WorldValidator.validate(document, definitions);
+            List<ValidationIssue> issues = WorldValidator.validate(document, definitions,
+                    WorldValidator.BoundaryMode.REGION_CONTEXT);
             long issueErrors = issues.stream().filter(issue -> issue.severity() == ValidationIssue.Severity.ERROR).count();
             messages.add("validation errors: " + issueErrors);
             messages.add("validation warnings: " + (issues.size() - issueErrors));

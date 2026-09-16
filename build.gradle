@@ -67,9 +67,9 @@ subprojects {
 
 }
 
-// The report is intentionally honest while the real-cache fixture is being
-// assembled: this gate runs the neutral decoder and adapter tests, but does
-// not claim acceptance of an external OSRS cache until parity fixtures exist.
+// The report is intentionally explicit while external parity fixtures remain
+// outside the repository: this gate never mutates or silently discovers a
+// user cache, and reports real-cache results only when a path is supplied.
 tasks.register('verifyOsrsRevision') {
     description = 'Runs the current neutral OSRS cache/map compatibility suite.'
     group = 'verification'

@@ -69,35 +69,46 @@ The pinned FileStore source declares write methods on the neutral-looking
 `ReadOnlyCache`, whose write and index-creation methods throw
 `UnsupportedOperationException`. The tools module writes through a separate
 Displee-backed build path. RSPSi therefore keeps `OpenRuneCacheStore` read-only
-and uses the neutral `LayeredCacheStore` for staged output until a dedicated
-copy-to-output/packing path is tested against a representative OSRS cache.
+and uses the neutral `LayeredCacheStore` for staged output.
+
+The legacy Displee adapter now explicitly calls `CacheLibrary.update()` during
+`flush()`; closing a Displee library alone does not repack dirty archives. An
+opt-in integration test copies an explicitly supplied cache, edits a modern
+region, flushes and reopens it, and verifies the semantic terrain change. This
+validated the current output path against live build 240 without mutating the
+source cache. It does not make OpenRune's file-backed cache writable.
 
 ## Explicit limitations
 
 The first OpenRune filesystem implementation is read-only. `write` throws
-`UnsupportedOperationException` until writable packing and output-cache
-semantics are validated. `flush` does not claim to persist edits. There is no
-automatic fallback to Displee, because falling back could decode a cache with
-the wrong format and silently produce incorrect data.
+`UnsupportedOperationException` until writable packing is implemented in that
+backend. The neutral `LayeredCacheStore` can now commit through an explicitly
+selected writable Displee output adapter, but there is no automatic fallback
+to Displee because falling back could decode a cache with the wrong format and
+silently produce incorrect data.
 
-No real OSRS cache is checked into the repository. An external OpenRS2 cache
-fixture (cache id 391, revision 6) has now passed the read-only verification
-path: OpenRune opened it, 926 map groups were discovered, 26,469 neutral asset
-descriptors loaded, terrain decoded, collision and neutral scene construction
-succeeded, and decode -> encode -> decode was semantically equal. The fixture
-has no location payload for the selected region and the backend remains
-read-only, so representative location parity and writable packing remain open.
-The application continues to construct the legacy Displee backend by default.
+No real OSRS cache is checked into the repository. External OpenRS2 fixtures
+have now passed the read-only verification path: cache id 391 (revision 6)
+passed named-map terrain and location decoding, while cache id 2710 (live
+build 240, captured 2026-09-16) passed modern numeric-group discovery, modern
+terrain decoding, 63,630 neutral asset descriptors, collision and neutral
+scene construction, and semantic decode -> encode -> decode. The selected
+modern region contained a 2,040-byte location payload and 988 objects. The
+OpenRune backend remains read-only. The application continues to construct the
+legacy Displee backend by default, and the validated Displee writer is an
+explicit output choice rather than an OpenRune production-backend claim.
 
 ## Next spike gate
 
 Provide a licensed representative OSRS cache fixture outside the repository,
 load it through `CacheStoreFactory.openRune(Path)`, and compare terrain,
 objects, floors, flags, shapes, rotations, and region coordinates with the
-existing representation. The first external revision-6 terrain/definition
-check now passes; the next gate is a cache/region containing location payloads,
-followed by validated writable packing. Definition adapters are already
-available, but are not yet the default product backend.
+existing representation. Revision-6 named maps and live build-240 numeric
+maps now pass this read-only comparison. Writable output-cache reopening is
+validated through the explicit Displee adapter; the remaining cache gate is a
+safe OpenRune-compatible writer or a formally retained OpenRune-read/
+Displee-output arrangement. Definition adapters are available, but are not yet
+the default product backend.
 
 ## Explicit verification
 

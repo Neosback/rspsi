@@ -24,7 +24,19 @@ public final class WorldValidator {
 
     /** Adds definition-backed object checks when a cache provider is available. */
     public static List<ValidationIssue> validate(WorldDocument document, DefinitionProvider definitions) {
+        return validate(document, definitions, BoundaryMode.STRICT);
+    }
+
+    /**
+     * Validates a document with an explicit loaded-window boundary policy.
+     * Region documents are intentionally allowed to contain anchored objects
+     * whose footprint continues into a neighboring region; that condition is
+     * a warning until the adjacent context is loaded, not corrupt map data.
+     */
+    public static List<ValidationIssue> validate(WorldDocument document, DefinitionProvider definitions,
+                                                 BoundaryMode boundaryMode) {
         Objects.requireNonNull(document, "document");
+        Objects.requireNonNull(boundaryMode, "boundaryMode");
         List<ValidationIssue> issues = new ArrayList<>();
         for (int plane = 0; plane < document.planes(); plane++) {
             for (int x = 0; x < document.width(); x++) {
@@ -64,7 +76,10 @@ public final class WorldValidator {
                                 }
                                 if (object.x() + width > document.width()
                                         || object.y() + length > document.length()) {
-                                    issues.add(error("OBJECT_OUT_OF_BOUNDS",
+                                    issues.add(boundaryMode == BoundaryMode.REGION_CONTEXT
+                                            ? warning("OBJECT_CROSSES_LOADED_BOUNDARY",
+                                            "Object footprint continues into neighboring loaded context", coordinate)
+                                            : error("OBJECT_OUT_OF_BOUNDS",
                                             "Object footprint crosses the loaded document boundary", coordinate));
                                 }
                             }
@@ -75,6 +90,11 @@ public final class WorldValidator {
         }
         checkSharedEdges(document, issues);
         return List.copyOf(issues);
+    }
+
+    public enum BoundaryMode {
+        STRICT,
+        REGION_CONTEXT
     }
 
     private static void checkSharedEdges(WorldDocument document, List<ValidationIssue> issues) {

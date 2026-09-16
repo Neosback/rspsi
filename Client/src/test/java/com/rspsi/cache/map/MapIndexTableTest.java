@@ -41,6 +41,21 @@ class MapIndexTableTest {
     }
 
     @Test
+    void ignoresPartialNamedHashMatchesWhenNumericMapGroupsAreMoreComplete() {
+        FakeStore store = new FakeStore();
+        // A hashed lookup can produce a false partial m/l match when a modern
+        // numeric index happens to contain the requested name hash.
+        store.archiveIds.put("5:l50_75", 5678);
+        store.numericArchiveIds = new int[]{(50 << 8) | 75, (50 << 8) | 76};
+
+        MapIndexTable table = MapIndexTable.discover(store, 5);
+
+        assertEquals(2, table.size());
+        assertEquals((50 << 8) | 75, table.archiveId(50, 75, MapArchiveType.LANDSCAPE));
+        assertEquals((50 << 8) | 75, table.archiveId(50, 75, MapArchiveType.OBJECT));
+    }
+
+    @Test
     void knownModernRevisionUsesNumericGroups() {
         FakeStore store = new FakeStore();
         store.numericArchiveIds = new int[]{(50 << 8) | 75};

@@ -10,6 +10,7 @@ import java.util.Objects;
 public final class LegacyDispleeCacheStore implements CacheStore {
 
     private final CacheLibrary library;
+    private boolean closed;
 
     public LegacyDispleeCacheStore(CacheLibrary library) {
         this.library = Objects.requireNonNull(library, "library");
@@ -41,6 +42,16 @@ public final class LegacyDispleeCacheStore implements CacheStore {
     }
 
     @Override
+    public int[] archiveIds(int index) {
+        try {
+            Index cacheIndex = library.index(index);
+            return cacheIndex == null ? new int[0] : cacheIndex.archiveIds();
+        } catch (RuntimeException ignored) {
+            return new int[0];
+        }
+    }
+
+    @Override
     public void write(int index, int archive, int file, byte[] data) {
         Objects.requireNonNull(data, "data");
         library.index(index).archive(archive).add(file, data);
@@ -48,7 +59,10 @@ public final class LegacyDispleeCacheStore implements CacheStore {
 
     @Override
     public void flush() {
-        // Displee writes update the in-memory cache and are persisted on close.
+        // Archive.add(...) only marks the archive dirty. CacheLibrary.close()
+        // closes its files without repacking dirty archives, so an explicit
+        // update is required to make CacheStore writes durable.
+        library.update();
     }
 
     @Override
@@ -58,6 +72,11 @@ public final class LegacyDispleeCacheStore implements CacheStore {
 
     @Override
     public void close() {
+        if (closed) {
+            return;
+        }
+        flush();
         library.close();
+        closed = true;
     }
 }

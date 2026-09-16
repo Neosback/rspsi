@@ -174,8 +174,10 @@ RuneLite chunk packing and four rotation cases are covered by
 
 The OpenRune FileStore compatibility spike is pinned to `2.4.19` in
 `Client/build.gradle`, using `filesystem`, `filestore`, `osrs-fs`, `osrs`, and
-`definition`. Its RSPSi adapter remains read-only. Writable packing and real
-cache parity are intentionally not marked verified.
+`definition`. Its RSPSi adapter remains read-only. Read-only parity passed for
+OpenRS2 cache 391/revision 6 and live build 240/cache 2710; modern output
+reopening passed through a copied cache and the explicit Displee adapter. A
+safe OpenRune-native writer is still not marked verified.
 
 ## Additional research checkouts captured
 
@@ -207,15 +209,18 @@ materialized because those assets are not currently licensed for distribution.
 
 ## Real-cache verification evidence
 
-On 2026-09-16, OpenRS2 cache id `391` was downloaded outside the repository
-and extracted to a temporary path. Its metadata reports OSRS revision `6`.
-Running `verifyOsrsRevision` against a selected region passed OpenRune cache
-opening, revision-aware byte terrain decoding, map-index discovery (926 map
-groups), neutral object/floor/texture definition loading, 26,469 asset
-descriptors, collision construction, complete neutral terrain scene
-construction, and semantic decode -> encode -> decode equality. The selected
-region has no location archive, so location parity is not yet representative.
-The cache was not copied into RSPSi and no generated assets were bundled.
+On 2026-09-16, OpenRS2 cache ids `391` and `2710` were downloaded outside the
+repository and extracted to temporary paths. Their metadata reports OSRS
+revision `6` and live build `240`, respectively. Running
+`verifyOsrsRevision` against revision-6 region `30,74` passed named-map
+opening, byte terrain decoding, a non-empty location payload, 26,469 neutral
+asset descriptors, collision, scene construction, and semantic round trip.
+Running it against live build-240 region `16,33` passed modern numeric-group
+discovery, short terrain decoding, a 2,040-byte location payload containing
+988 objects, 63,630 neutral asset descriptors, collision, scene construction,
+and semantic round trip. A region-edge object is reported as a warning when
+the verifier is operating on a single-region context. Neither cache was
+copied into RSPSi and no generated assets were bundled.
 
 The run also captured the revision boundary used by TSPS and
 OpenRune-Editor: OSRS terrain opcodes and overlay values are byte-width before
