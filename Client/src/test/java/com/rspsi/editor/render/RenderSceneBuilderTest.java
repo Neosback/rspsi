@@ -2,6 +2,7 @@ package com.rspsi.editor.render;
 
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.model.DirtyRegion;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import org.junit.jupiter.api.Test;
@@ -74,5 +75,19 @@ class RenderSceneBuilderTest {
         assertEquals(new com.rspsi.editor.model.BridgeLink(
                 new TileCoordinate(1, 0, 0), new TileCoordinate(0, 0, 0)), scene.bridges().get(0));
         assertEquals(scene.bridges(), document.bridgeLinks());
+    }
+
+    @Test
+    void expandsDirtyChunksToClampedCoordinatesAcrossAllPlanes() {
+        WorldDocument document = new WorldDocument(10, 9, 2);
+
+        RenderChanges changes = RenderChanges.fromDirtyRegions(Set.of(
+                new DirtyRegion(1, 1, false, false, false, false, true)), document);
+
+        assertEquals(4, changes.dirtyTiles().size());
+        assertEquals(Set.of(
+                new TileCoordinate(0, 8, 8), new TileCoordinate(0, 9, 8),
+                new TileCoordinate(1, 8, 8), new TileCoordinate(1, 9, 8)),
+                changes.dirtyTiles());
     }
 }
