@@ -37,7 +37,7 @@ The locked product direction and workspace design are maintained in
 | Neutral cache boundary | in-progress | `CacheStore` facade introduced; migrate consumers incrementally |
 | Neutral map service | implemented-unverified | `MapIndexTable` and `OsrsMapService` provide named and modern numeric-group OSRS map discovery, file-0/file-1 reads, and safe writes to existing regions; `OsrsRegionDecoder`/`OsrsRegionEncoder` convert canonical terrain and objects with semantic round-trip coverage; real-cache fixture remains |
 | OSRS region save coordination | implemented-unverified | `OsrsRegionSaveCoordinator` encodes both region payloads before writing, flushes through the neutral map service, and marks `EditorSession` saved only after success; writable OpenRune packing remains gated |
-| Neutral definitions | implemented-unverified | Object/floor views plus texture/model and collision contracts and an OpenRune object/floor/texture/collision adapter exist; real-cache fixture parity remains |
+| Neutral definitions | implemented-unverified | Object/floor/texture/collision views plus lazy OpenRune model metadata now cross the adapter; full geometry and real-cache fixture parity remain |
 | Command/session editing core | in-progress | Core model, command history, session, atomic grouped rollback, and migrated tools are covered; legacy input and full UI migration remain |
 | Session state notifications | implemented-unverified | Neutral edit/save-state and selection listeners now support synchronized frontend panels; thread/FX scheduling and full legacy binding remain |
 | WorldFragment copy/paste | implemented-unverified | Canonical multi-plane fragment capture, versioned neutral JSON import/export, and atomic paste/undo command are covered; UI wiring remains |

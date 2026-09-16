@@ -34,9 +34,9 @@ interchange format for tooling. That interchange export is not a claim that
 OSRS caches use a legacy binary map-index file internally.
 
 `OpenRuneDefinitionProvider` similarly decodes objects, underlays, overlays,
-and textures with OpenRune codecs, then exposes only RSPSi-owned definition
-views. Model metadata remains an optional provider capability until a neutral
-model decoder is validated.
+textures, and lazy model metadata with OpenRune codecs, then exposes only
+RSPSi-owned definition views. Full model geometry remains outside the provider
+until a neutral mesh representation is validated.
 
 ## Explicit limitations
 

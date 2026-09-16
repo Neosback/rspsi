@@ -4,7 +4,10 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectCollisionView;
+import com.rspsi.cache.definition.ModelDefinitionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
+import dev.openrune.cache.filestore.definition.ModelDecoder;
+import dev.openrune.definition.type.model.ModelType;
 import dev.openrune.OsrsCacheProvider;
 import dev.openrune.definition.type.ObjectType;
 import dev.openrune.definition.type.OverlayType;
@@ -27,6 +30,8 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     private final Map<Integer, UnderlayType> underlays = new HashMap<>();
     private final Map<Integer, OverlayType> overlays = new HashMap<>();
     private final Map<Integer, TextureType> textures = new HashMap<>();
+    private final ModelDecoder modelDecoder;
+    private final Map<Integer, Optional<ModelDefinitionView>> modelViews = new HashMap<>();
 
     private OpenRuneDefinitionProvider(Cache cache, int revision) {
         Objects.requireNonNull(cache, "cache");
@@ -37,6 +42,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         new OsrsCacheProvider.UnderlayDecoder().load(cache, underlays);
         new OsrsCacheProvider.OverlayDecoder().load(cache, overlays);
         new OsrsCacheProvider.TextureDecoder(revision).load(cache, textures);
+        modelDecoder = new ModelDecoder(cache, java.util.Collections.emptyList());
     }
 
     public static OpenRuneDefinitionProvider load(Cache cache, int revision) {
@@ -104,5 +110,19 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         return Optional.of(new TextureDefinitionView(id, definition.isTransparent(), definition.getFileId(),
                 definition.getAverageRgb(), definition.getAnimationDirection(),
                 definition.getAnimationSpeed(), definition.isLowDetail()));
+    }
+
+    /** Decodes model metadata lazily so opening a cache does not load every mesh. */
+    @Override
+    public synchronized Optional<ModelDefinitionView> model(int id) {
+        if (id < 0) return Optional.empty();
+        return modelViews.computeIfAbsent(id, this::decodeModelView);
+    }
+
+    private Optional<ModelDefinitionView> decodeModelView(int id) {
+        ModelType model = modelDecoder.getModel(id);
+        if (model == null) return Optional.empty();
+        return Optional.of(new ModelDefinitionView(model.getId(), model.getVertexCount(),
+                model.getTriangleCount(), model.getTextureTriangleCount(), model.getRenderPriority()));
     }
 }
