@@ -8,6 +8,9 @@ The enforceable design contract is in
 [`ARCHITECTURE.md`](ARCHITECTURE.md); this document explains the roles of
 external sources.
 
+The actionable intake ledger—including URLs, license confidence, provenance,
+and next actions—is [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md).
+
 ## Source tiers
 
 - **A — use directly:** a small, production dependency behind an RSPSi API.
@@ -62,6 +65,10 @@ network integration, and collaborative/cloud features are intentionally later.
 4. Move all edits through the session and command history.
 5. Add terrain/object/collision improvements on that stable core.
 6. Only then build a new renderer or first-party plugin ecosystem.
+
+Resource gathering follows the same order. We collect evidence and fixtures
+first, then selectively promote a resource to a pinned dependency or focused
+port. We do not combine entire donor projects.
 
 ## Source-specific guidance
 

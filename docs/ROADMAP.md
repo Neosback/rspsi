@@ -13,6 +13,10 @@ The source-priority and ownership record is maintained in
 [`REFERENCE_ECOSYSTEM.md`](REFERENCE_ECOSYSTEM.md). It is research context;
 this file is the executable progress ledger.
 
+The resource intake and provenance ledger is maintained in
+[`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md). A catalog entry is not
+permission to copy code, bundle assets, or add a runtime dependency.
+
 ## Current baseline
 
 | Area | Status | Evidence / next action |
@@ -33,6 +37,7 @@ this file is the executable progress ledger.
 | UI-neutral editor contracts | in-progress | Neutral pointer, tool, inspector, viewport, and renderer seams introduced; command-backed underlay brush is the first migrated tool path |
 | Live legacy document bridge | in-progress | MapRegion terrain import and underlay synchronization are implemented; UI activation remains opt-in |
 | OpenRune backend | in-progress | 2.4.19 compatibility spike is isolated behind `CacheStore`; legacy remains default |
+| Resource catalog and provenance | in-progress | [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md) separates dependencies, donors, oracles, visual references, and license-review items; intake evidence remains |
 | RuneLite/TSPS parity harness | not-started | Add golden fixtures after cache seam is stable |
 | Lua, plugin permissions, Plugin Hub | deferred | Begin only after native command/plugin API is stable |
 | Renderer/UI rewrite | deferred | Current JavaFX renderer remains the compatibility surface |
@@ -66,6 +71,14 @@ this file is the executable progress ledger.
   compile.
 - Complete OSRS map-index support.
 - Require legacy regression and OSRS parity fixtures before switching defaults.
+
+### Resource intake gate
+
+- Record upstream URL, revision, license evidence, and intended role before
+  importing code, assets, or dependencies.
+- Gather the first RuneLite DevTools, TSPS, OpenRune-Server, revision-240,
+  and visual-map evidence set described in [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md).
+- Do not bundle or depend on resources marked `license-review`.
 
 ### Phase 4 — Editing improvements
 
