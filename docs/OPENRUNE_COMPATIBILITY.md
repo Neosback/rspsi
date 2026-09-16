@@ -51,6 +51,16 @@ browser can show symbolic provenance without making RSCM/GameVal part of the
 editor model. `OpenRuneCacheStore.assetRepository(revision)` composes this
 provider with the neutral definition adapter for asset-browser callers.
 
+## Write-path evidence
+
+The pinned FileStore source declares write methods on the neutral-looking
+`Cache` interface, but its published file-backed `FileCache` inherits
+`ReadOnlyCache`, whose write and index-creation methods throw
+`UnsupportedOperationException`. The tools module writes through a separate
+Displee-backed build path. RSPSi therefore keeps `OpenRuneCacheStore` read-only
+and uses the neutral `LayeredCacheStore` for staged output until a dedicated
+copy-to-output/packing path is tested against a representative OSRS cache.
+
 ## Explicit limitations
 
 The first OpenRune filesystem implementation is read-only. `write` throws
