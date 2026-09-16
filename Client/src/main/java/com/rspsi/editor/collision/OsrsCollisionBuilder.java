@@ -4,6 +4,8 @@ import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.ObjectCategory;
+import com.rspsi.editor.model.OsrsLocShape;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 
@@ -98,23 +100,26 @@ public final class OsrsCollisionBuilder {
             width = length;
             length = swap;
         }
-        int shape = object.type();
-        if (shape == 22) {
+        OsrsLocShape shape = OsrsLocShape.fromId(object.type()).orElse(null);
+        if (shape == null) {
+            return;
+        }
+        if (shape.category() == ObjectCategory.GROUND_DECOR) {
             if (definition.blockWalk() == 1) {
                 addAt(collision, plane, object.x(), object.y(), CollisionFlag.GROUND_DECOR);
             }
             return;
         }
         int projectileMask = definition.blockProjectile() ? CollisionFlag.LOC_PROJECTILE : 0;
-        if (shape == 10 || shape == 11 || shape >= 12 || shape == 9) {
+        if (shape.category() == ObjectCategory.GROUND) {
             for (int x = 0; x < width; x++) {
                 for (int y = 0; y < length; y++) {
                     addAt(collision, plane, object.x() + x, object.y() + y,
                             CollisionFlag.LOC | projectileMask);
                 }
             }
-        } else if (shape >= 0 && shape <= 3) {
-            addWall(collision, plane, object.x(), object.y(), object.rotation(), shape,
+        } else if (shape.category() == ObjectCategory.WALL) {
+            addWall(collision, plane, object.x(), object.y(), object.rotation(), shape.id(),
                     projectileMask);
         }
     }

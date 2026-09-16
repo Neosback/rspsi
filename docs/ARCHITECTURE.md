@@ -48,6 +48,10 @@ boundary.
   the legacy `ShapedTile` class.
 - `CollisionMap`, `CollisionFlag`, and `CollisionDirection` own editor
   collision semantics; server routefinder types are reference inputs only.
+- `OsrsCollisionBuilder` consumes `ObjectCategory`/`OsrsLocShape` rather than
+  duplicating raw shape ranges. This preserves OpenRune's distinction between
+  blocking walls, non-blocking wall decor, ground-layer locations, and ground
+  decor in one auditable mapping.
 - `RouteFinder` provides the first neutral collision-preview behavior: bounded
   eight-way routes with diagonal corner protection and straight projectile
   line-of-sight checks. It is intentionally small and replaceable while

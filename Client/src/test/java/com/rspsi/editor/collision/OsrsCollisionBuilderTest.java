@@ -54,4 +54,29 @@ class OsrsCollisionBuilderTest {
         assertEquals(CollisionFlag.LOC | CollisionFlag.LOC_PROJECTILE, collision.flags(0, 1, 2));
         assertEquals(0, collision.flags(0, 2, 1));
     }
+
+    @Test
+    void followsOpenRuneLayerSemanticsForDiagonalGroundObjectsAndWallDecor() {
+        WorldDocument document = new WorldDocument(5, 5, 1);
+        WorldObject diagonalObject = new WorldObject(42, 9, 0, 0, 1, 1);
+        WorldObject wallDecor = new WorldObject(43, 4, 0, 0, 3, 3);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0, 0, 0, 0, 0, 0,
+                java.util.List.of(diagonalObject)));
+        document.tile(0, 3, 3).restore(new TileSnapshot(0, 0, 0, 0, 0, 0, 0, 0, 0,
+                java.util.List.of(wallDecor)));
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) { return Optional.empty(); }
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectCollisionView> objectCollision(int id) {
+                return Optional.of(new ObjectCollisionView(id, 1, 1, 2, true, false));
+            }
+        };
+
+        CollisionMap collision = OsrsCollisionBuilder.fromTerrainAndObjects(document, definitions);
+
+        assertEquals(CollisionFlag.LOC | CollisionFlag.LOC_PROJECTILE,
+                collision.flags(0, 1, 1));
+        assertEquals(0, collision.flags(0, 3, 3));
+    }
 }
