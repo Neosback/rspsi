@@ -64,6 +64,10 @@ boundary.
   neutral coordinate/inspection payload used by future status bars and debug
   overlays. Local document coordinates remain separate from world-space
   region/chunk derivation.
+- `WorldRegionWindow` composes bounded canonical 64×64 regions for scene and
+  neighbor-context work. Missing regions remain explicit holes, so boundary
+  blending and loading-line behavior cannot silently treat absent data as
+  authored empty terrain.
 - `EditorTool`, `ToolContext`, `PointerEvent`, and `ToolInspector` are shared
   by all frontends.
 - `SceneRenderer` consumes neutral scenes and changes and returns neutral pick

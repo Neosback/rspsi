@@ -2,6 +2,7 @@ package com.rspsi.cache.map;
 
 import com.rspsi.cache.store.CacheStore;
 import com.rspsi.editor.model.WorldRegion;
+import com.rspsi.editor.model.WorldRegionWindow;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -33,6 +34,18 @@ public final class OsrsMapService implements MapService {
         if (landscape == null) return Optional.empty();
         byte[] locations = readLocations(regionX, regionY);
         return Optional.of(OsrsRegionDecoder.decodeRegion(landscape, locations, regionX, regionY));
+    }
+
+    /** Loads a bounded region window while preserving missing-region holes. */
+    public WorldRegionWindow loadWindow(int minRegionX, int minRegionY,
+                                        int regionWidth, int regionHeight) {
+        java.util.Map<Integer, WorldRegion> regions = new java.util.LinkedHashMap<>();
+        for (int regionX = minRegionX; regionX < minRegionX + regionWidth; regionX++) {
+            for (int regionY = minRegionY; regionY < minRegionY + regionHeight; regionY++) {
+                loadRegion(regionX, regionY).ifPresent(region -> regions.put(region.regionId(), region));
+            }
+        }
+        return new WorldRegionWindow(minRegionX, minRegionY, regionWidth, regionHeight, regions);
     }
 
     public OsrsMapService(CacheStore store, int mapIndex, MapIndexTable index) {
