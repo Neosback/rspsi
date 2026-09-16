@@ -70,7 +70,9 @@ fixture-only gate with:
 ```
 
 For an explicitly selected OpenRune-compatible cache, set
-`RSPSI_OSRS_CACHE=/path/to/cache`. This inspects the named map index. To verify
+`RSPSI_OSRS_CACHE=/path/to/cache`. This inspects the OSRS map index using the
+known revision layout when a region revision is supplied, or safe autodetection
+otherwise. To verify
 one region, also set `RSPSI_OSRS_REGION_X`, `RSPSI_OSRS_REGION_Y`, and
 `RSPSI_OSRS_REVISION`. The verifier reports cache metadata, the selected
 revision profile, map/location payloads, neutral definition loading,

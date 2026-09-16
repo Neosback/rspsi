@@ -90,8 +90,9 @@ The locked product direction and workspace design are maintained in
   read-only compatibility spike; writable support is not implied by a green
   compile.
 - Complete OSRS map-index support.
-- Discover named `mX_Y`/`lX_Y` archive IDs through the neutral
-  cache boundary; prove the path against a licensed representative cache.
+- Discover named `mX_Y`/`lX_Y` archive IDs and revision-237+ numeric groups
+  through the neutral cache boundary; prove both paths against a licensed
+  representative cache.
 - Require legacy regression and OSRS parity fixtures before switching defaults.
 
 ### Product-scope gate
@@ -117,3 +118,12 @@ adapter. It materializes the neutral workspace presets into fixed tool and
 inspector rails, a centered viewport, and controlled bottom tabs. It does not
 own document state, renderer state, or arbitrary docking; wiring it into the
 legacy `MainWindow` remains a separate compatibility milestone.
+
+## Next implementation gate
+
+The next required evidence is a licensed representative OSRS cache outside
+the repository. Run `./gradlew verifyOsrsRevision` with
+`RSPSI_OSRS_CACHE=/path/to/cache`; for a selected region also provide
+`RSPSI_OSRS_REGION_X`, `RSPSI_OSRS_REGION_Y`, and `RSPSI_OSRS_REVISION`.
+Until that run passes against real data, OpenRune remains read-only and the
+legacy backend remains available only as a quarantined compatibility path.
