@@ -16,6 +16,7 @@ public record ProjectLayout(Path root) {
     public static final String METADATA_FILE = "project.json";
     public static final String AUTOSAVE_DIRECTORY = "autosave";
     public static final String EDITS_DIRECTORY = "edits";
+    public static final String SESSION_AUTOSAVE_FILE = "session.json";
 
     public ProjectLayout {
         root = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
@@ -27,6 +28,11 @@ public record ProjectLayout(Path root) {
 
     public Path autosaveDirectory() {
         return root.resolve(AUTOSAVE_DIRECTORY);
+    }
+
+    /** Canonical recovery snapshot path inside the project autosave area. */
+    public Path sessionAutosaveFile() {
+        return autosaveDirectory().resolve(SESSION_AUTOSAVE_FILE);
     }
 
     public Path editsDirectory() {

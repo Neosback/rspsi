@@ -31,7 +31,7 @@ The locked product direction and workspace design are maintained in
 | Object placement/deletion | implemented-unverified | Existing `SceneGraph`/`MapRegion` paths; add object fixture coverage |
 | Selection and copy/import/export | implemented-unverified | Existing `SceneGraph` operations; add grouped-edit tests |
 | Undo/redo | implemented-unverified | Existing `TileChange` hierarchy and static `SceneGraph` stacks |
-| Autosave | implemented-unverified | Legacy `AutoSaveJob` remains as a compatibility path; neutral `SessionAutosaveStore` now writes atomic versioned project snapshots and restores terrain, flags, and objects, while JavaFX scheduling/recovery UI remains |
+| Autosave | implemented-unverified | Legacy `AutoSaveJob` remains as a compatibility path; neutral `SessionAutosaveStore` now writes atomic versioned project snapshots to the canonical `ProjectLayout.sessionAutosaveFile()` path and restores terrain, flags, and objects, while JavaFX scheduling/recovery UI remains |
 | Legacy/317 cache loading | implemented-unverified | Existing Displee-backed `Cache`; protect before migration |
 | OSRS cache support | implemented-unverified | `OSRSPlugin` discovers named and revision-237+ numeric map groups through `CacheStore`; external revision-6 named and live build-240 numeric terrain/location verification passes, and the explicit Displee output adapter now persists modern edits across reopen |
 | Neutral cache boundary | in-progress | `CacheStore` facade introduced; migrate consumers incrementally |

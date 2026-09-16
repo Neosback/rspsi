@@ -25,6 +25,8 @@ class ProjectLayoutTest {
         assertTrue(Files.isDirectory(layout.root()));
         assertTrue(Files.isDirectory(layout.autosaveDirectory()));
         assertTrue(Files.isDirectory(layout.editsDirectory()));
+        assertEquals(layout.autosaveDirectory().resolve("session.json"),
+                layout.sessionAutosaveFile());
         assertEquals(metadata, layout.readMetadata());
     }
 
