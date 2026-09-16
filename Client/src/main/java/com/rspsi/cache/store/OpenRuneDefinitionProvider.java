@@ -3,6 +3,7 @@ package com.rspsi.cache.store;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
 import dev.openrune.OsrsCacheProvider;
 import dev.openrune.definition.type.ObjectType;
@@ -59,6 +60,18 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         return Optional.of(new ObjectDefinitionView(definition.getId(), definition.getName(),
                 Math.max(1, definition.getSizeX()), Math.max(1, definition.getSizeY()),
                 interactions, modelIds));
+    }
+
+    @Override
+    public Optional<ObjectCollisionView> objectCollision(int id) {
+        ObjectType definition = objects.get(id);
+        if (definition == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new ObjectCollisionView(definition.getId(),
+                Math.max(1, definition.getSizeX()), Math.max(1, definition.getSizeY()),
+                Math.max(0, definition.getSolid()), definition.getImpenetrable(),
+                definition.isHollow()));
     }
 
     @Override

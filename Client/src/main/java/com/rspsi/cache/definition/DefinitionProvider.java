@@ -19,4 +19,9 @@ public interface DefinitionProvider {
     default Optional<TextureDefinitionView> texture(int id) {
         return Optional.empty();
     }
+
+    /** Optional until a backend has supplied collision-relevant object fields. */
+    default Optional<ObjectCollisionView> objectCollision(int id) {
+        return Optional.empty();
+    }
 }

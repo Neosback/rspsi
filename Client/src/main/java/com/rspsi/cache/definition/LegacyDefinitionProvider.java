@@ -35,6 +35,21 @@ public final class LegacyDefinitionProvider implements DefinitionProvider {
     }
 
     @Override
+    public Optional<ObjectCollisionView> objectCollision(int id) {
+        try {
+            ObjectDefinition definition = ObjectDefinitionLoader.lookup(id);
+            if (definition == null) {
+                return Optional.empty();
+            }
+            return Optional.of(new ObjectCollisionView(id, Math.max(1, definition.getWidth()),
+                    Math.max(1, definition.getLength()), definition.isSolid() ? 2 : 0,
+                    definition.isImpenetrable(), definition.isHollow()));
+        } catch (RuntimeException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    @Override
     public Optional<FloorDefinitionView> underlay(int id) {
         return floor(id, true);
     }

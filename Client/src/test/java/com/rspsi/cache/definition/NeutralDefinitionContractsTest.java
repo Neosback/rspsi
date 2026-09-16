@@ -18,6 +18,7 @@ class NeutralDefinitionContractsTest {
 
         assertTrue(provider.model(1).isEmpty());
         assertTrue(provider.texture(1).isEmpty());
+        assertTrue(provider.objectCollision(1).isEmpty());
     }
 
     @Test
