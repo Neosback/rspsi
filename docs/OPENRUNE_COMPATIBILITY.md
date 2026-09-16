@@ -55,3 +55,19 @@ load it through `CacheStoreFactory.openRune(Path)`, and compare its terrain,
 objects, floors, flags, shapes, rotations, and region coordinates with the
 existing representation. Only after that comparison passes should definition
 adapters and writable packing be considered.
+
+## Explicit verification
+
+The verifier never searches for or mutates an implicit user cache. Run the
+fixture-only gate with:
+
+```text
+./gradlew verifyOsrsRevision
+```
+
+For an explicitly selected OpenRune-compatible cache, set
+`RSPSI_OSRS_CACHE=/path/to/cache`. This inspects the named map index. To verify
+one region, also set `RSPSI_OSRS_REGION_X`, `RSPSI_OSRS_REGION_Y`, and
+`RSPSI_OSRS_REVISION`. The verifier reports cache metadata, map/location
+payloads, neutral definition loading, validation, collision construction, and
+semantic decode/encode/decode equality. It does not write the supplied cache.

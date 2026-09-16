@@ -75,6 +75,24 @@ tasks.register('verifyOsrsRevision') {
     group = 'verification'
     dependsOn(':Client:test', ':Plugins:OSRSPlugin:test')
     doLast {
-        logger.lifecycle('OSRS revision verification: neutral map/location and adapter fixtures passed; real-cache parity remains pending.')
+        def cachePath = providers.environmentVariable('RSPSI_OSRS_CACHE').orNull
+        if (cachePath == null || cachePath.isBlank()) {
+            logger.lifecycle('OSRS revision verification: neutral map/location and adapter fixtures passed; real-cache parity remains pending.')
+        } else {
+            def regionX = providers.environmentVariable('RSPSI_OSRS_REGION_X').orNull
+            def regionY = providers.environmentVariable('RSPSI_OSRS_REGION_Y').orNull
+            def revision = providers.environmentVariable('RSPSI_OSRS_REVISION').orNull
+            def regionArguments = [regionX, regionY, revision]
+            if (regionArguments.any { it != null } && regionArguments.any { it == null }) {
+                throw new GradleException('Set RSPSI_OSRS_REGION_X, RSPSI_OSRS_REGION_Y, and RSPSI_OSRS_REVISION together.')
+            }
+            def verifierArguments = [cachePath]
+            if (regionArguments.every { it != null }) verifierArguments.addAll(regionArguments)
+            project(':Client').javaexec {
+                classpath = project(':Client').sourceSets.main.runtimeClasspath
+                mainClass = 'com.rspsi.cache.verify.OsrsRevisionVerifier'
+                args verifierArguments
+            }
+        }
     }
 }

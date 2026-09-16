@@ -54,7 +54,7 @@ The locked product direction and workspace design are maintained in
 | OSRS-only product scope | in-progress | Scope and migration policy are locked in [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md); legacy paths remain quarantined during parity work |
 | Project/cache identity metadata | implemented-unverified | Neutral `OsrsCacheMetadata`, `ProjectMetadata`, JSON persistence, and explicit read-only mismatch assessment added; cache discovery and UI remain |
 | Controlled workspace contracts | implemented-unverified | UI-neutral dock/panel/placement types and validated Map/Terrain/Objects/Collision/Validation-Debug presets added; JavaFX rendering remains |
-| RuneLite/TSPS parity harness | not-started | Add golden fixtures after cache seam is stable |
+| RuneLite/TSPS parity harness | in-progress | `OsrsRevisionVerifier` can inspect an explicitly supplied OpenRune cache and run region decode/validation/collision/semantic round-trip checks; licensed golden comparisons remain |
 | Lua, plugin permissions, Plugin Hub | deferred | Begin only after native command/plugin API is stable |
 | Renderer/UI rewrite | deferred | Current JavaFX renderer remains the compatibility surface |
 

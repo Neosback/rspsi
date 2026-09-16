@@ -2,8 +2,11 @@ package com.rspsi.cache.store;
 
 import dev.openrune.filesystem.Cache;
 import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.OsrsCacheMetadata;
 import com.rspsi.cache.definition.DefinitionProvider;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.nio.file.Path;
 import java.util.Objects;
 
@@ -30,6 +33,14 @@ public final class OpenRuneCacheStore implements CacheStore {
     /** Loads OpenRune definitions and immediately reduces them to RSPSi views. */
     public DefinitionProvider definitionProvider(int revision) {
         return OpenRuneDefinitionProvider.load(cache, revision);
+    }
+
+    /** Returns a stable identity derived from the cache's reference-table versions. */
+    public OsrsCacheMetadata metadata(int revision) {
+        if (revision <= 0) {
+            throw new IllegalArgumentException("OSRS cache revision must be positive");
+        }
+        return new OsrsCacheMetadata(revision, null, fingerprint(cache.getVersionTable()));
     }
 
     @Override
@@ -62,5 +73,16 @@ public final class OpenRuneCacheStore implements CacheStore {
     @Override
     public void close() {
         cache.close();
+    }
+
+    private static String fingerprint(byte[] bytes) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes.clone());
+            StringBuilder result = new StringBuilder(digest.length * 2);
+            for (byte value : digest) result.append(String.format("%02x", value & 0xFF));
+            return result.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("JVM does not provide SHA-256", exception);
+        }
     }
 }
