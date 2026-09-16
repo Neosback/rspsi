@@ -95,6 +95,10 @@ boundary.
 - `WorldValidator` is the deterministic pre-save/parity diagnostic layer;
   renderers and UI panels consume its issues rather than reimplementing
   world invariants.
+- `ObjectInspectorSnapshot` resolves optional neutral definition and collision
+  providers into immutable frontend data. It keeps missing definitions
+  explicit and exposes canonical category/shape names without coupling an
+  inspector to Displee, OpenRune, JavaFX, or ImGui.
 
 ## Frontends
 
