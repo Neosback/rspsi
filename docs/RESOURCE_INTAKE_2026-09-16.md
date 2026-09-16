@@ -112,6 +112,36 @@ Adapt behavior into the existing Java-owned `EditorSession`,
 docking architecture into RSPSi. No editor source, generated map tile, model,
 or font asset was copied or bundled in this intake.
 
+## Terrain and coordinate evidence
+
+The captured TSPS checkout (`83415f76589a360eacbd0e635fe0557d06a510f0`)
+was inspected at:
+
+- `client/rs/scene/SceneTileModel.ts`
+- `client/rs/scene/SceneBuilder.ts`
+- `client/rs/scene/CollisionMap.ts`
+- `client/common/instance/InstanceTypes.ts`
+
+Its scene-tile model contains the 13 shaped-tile vertex-index rows and face
+topology used by the RSPSi-owned `TerrainMeshBuilder`. The arrays match the
+existing 52-case topology matrix; TSPS remains the donor/oracle and its code
+is not copied into the product.
+
+The captured RuneLite checkout
+(`ced4c4aba7a3cb7cace42e1f0c25a5f79b7faef`) was inspected at:
+
+- `runelite-api/src/main/java/net/runelite/api/SceneTileModel.java`
+- `runelite-api/src/main/java/net/runelite/api/coords/WorldPoint.java`
+- `runelite-api/src/main/java/net/runelite/api/Scene.java`
+- `runelite-api/src/main/java/net/runelite/api/Tile.java`
+- `runelite-client/src/main/java/net/runelite/client/plugins/devtools/DevToolsOverlay.java`
+
+The evidence confirms that tile shape/rotation, scene planes, bridge-aware
+tile inspection, and instance template transforms are separate semantics. The
+RuneLite chunk packing and four rotation cases are covered by
+`InstanceChunkTemplateTest`, `InstanceChunkTransformTest`, and
+`InstanceChunkGridTest` in RSPSi.
+
 ## Current production dependency evidence
 
 The OpenRune FileStore compatibility spike is pinned to `2.4.19` in
