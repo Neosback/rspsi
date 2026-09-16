@@ -15,6 +15,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public final class EditorSession {
     private final WorldDocument world;
     private final SessionSaveHandler saveHandler;
+    private final boolean editable;
     private final SelectionModel selection = new SelectionModel();
     private final CommandHistory history = new CommandHistory();
     private final List<SessionChangeListener> changeListeners = new CopyOnWriteArrayList<>();
@@ -23,13 +24,23 @@ public final class EditorSession {
     private int savedHistoryPosition;
 
     public EditorSession(WorldDocument world) {
-        this(world, null);
+        this(world, null, true);
     }
 
     /** Creates a session with an optional neutral persistence callback. */
     public EditorSession(WorldDocument world, SessionSaveHandler saveHandler) {
+        this(world, saveHandler, true);
+    }
+
+    private EditorSession(WorldDocument world, SessionSaveHandler saveHandler, boolean editable) {
         this.world = Objects.requireNonNull(world, "world");
         this.saveHandler = saveHandler;
+        this.editable = editable;
+    }
+
+    /** Creates an inspect-only session that rejects all document mutations. */
+    public static EditorSession readOnly(WorldDocument world) {
+        return new EditorSession(world, null, false);
     }
 
     public WorldDocument world() {
@@ -54,6 +65,9 @@ public final class EditorSession {
     }
 
     public void execute(EditorCommand command) {
+        if (!editable) {
+            throw new UnsupportedOperationException("Editor session is read-only");
+        }
         EditorCommand checked = Objects.requireNonNull(command, "command");
         history.execute(checked, this);
         notifyChanged(checked);
@@ -98,6 +112,11 @@ public final class EditorSession {
     /** Returns whether this session has a persistence callback configured. */
     public boolean canSave() {
         return saveHandler != null;
+    }
+
+    /** Returns whether this session accepts editing commands. */
+    public boolean canEdit() {
+        return editable;
     }
 
     /** Persists this session through its configured neutral save boundary. */

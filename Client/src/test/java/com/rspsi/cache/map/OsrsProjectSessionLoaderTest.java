@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OsrsProjectSessionLoaderTest {
@@ -42,6 +43,7 @@ class OsrsProjectSessionLoaderTest {
 
         assertTrue(opened.readOnly());
         assertFalse(opened.region().session().canSave());
+        assertFalse(opened.region().session().canEdit());
         assertTrue(opened.compatibility().issues().contains("cache fingerprint differs"));
     }
 
@@ -57,6 +59,14 @@ class OsrsProjectSessionLoaderTest {
 
         assertTrue(opened.readOnly());
         assertFalse(opened.region().session().canSave());
+        assertFalse(opened.region().session().canEdit());
+        assertThrows(UnsupportedOperationException.class,
+                () -> opened.region().session().execute(
+                        new com.rspsi.editor.SetTileCommand(
+                                new com.rspsi.editor.model.TileCoordinate(0, 0, 0),
+                                opened.region().session().world().tile(0, 0, 0).snapshot(),
+                                opened.region().session().world().tile(0, 0, 0).snapshot(),
+                                "read-only edit")));
     }
 
     private static OsrsMapService maps(RecordingStore store) {

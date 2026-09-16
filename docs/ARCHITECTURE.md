@@ -38,7 +38,7 @@ boundary.
 - `OsrsProjectSessionLoader` compares project/cache revision, subrevision, and
   fingerprint before attaching the save handler. Matching projects are
   save-capable; mismatched or unidentified caches remain inspectable but
-  read-only until ID migration exists.
+  mutation-rejecting and read-only until ID migration exists.
 - `SessionStateListener` exposes edit/undo/redo/save-marker changes to
   frontend adapters, while `SelectionChangeListener` exposes the final
   unified selection value after each selection operation. Neither listener
