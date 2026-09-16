@@ -80,8 +80,10 @@ public final class MinimapBuilder {
      * Builds a TSPS-compatible shaped-tile raster at four pixels per tile.
      * This is intentionally additive: {@link #build(WorldDocument, int,
      * DefinitionProvider)} remains the stable one-pixel semantic baseline.
-     * Colors use the current neutral definition baseline; palette and
-     * RuneLite minimap parity remain separate verification work.
+     * Colors use the OSRS HSL palette and radius-5 underlay blend when the
+     * neutral definitions provide the required metadata, with deterministic
+     * RGB fallback for incomplete definitions. Palette/mapscene parity remains
+     * separate verification work.
      */
     public MinimapImage buildShaped(WorldDocument document, int plane,
                                     DefinitionProvider definitions) {
@@ -97,8 +99,8 @@ public final class MinimapBuilder {
         for (int x = 0; x < document.width(); x++) {
             for (int y = 0; y < document.length(); y++) {
                 TileSnapshot tile = document.tile(plane, x, y).snapshot();
-                int underlay = blendedUnderlay(document, plane, x, y, definitions);
-                int overlay = color(definitions.overlay(tile.overlayId()), tile.overlayId(), false);
+                int underlay = blendedOsrsUnderlay(document, plane, x, y, definitions);
+                int overlay = osrsColor(definitions.overlay(tile.overlayId()), tile.overlayId(), false);
                 int shape = tile.overlayId() == 0 ? 0 : tile.overlayShape() + 1;
                 if (shape < 0 || shape >= TILE_SHAPE.length) {
                     throw new IllegalArgumentException("Encoded overlay shape must be between 0 and 11");
@@ -157,6 +159,107 @@ public final class MinimapBuilder {
         }
         if (samples == 0) return MISSING_COLOR;
         return 0xFF000000 | ((red / samples) << 16) | ((green / samples) << 8) | (blue / samples);
+    }
+
+    /** Uses the OSRS radius-5 HSL blend when neutral definitions provide it. */
+    private static int blendedOsrsUnderlay(WorldDocument document, int plane, int x, int y,
+                                           DefinitionProvider definitions) {
+        int weightedHue = 0;
+        int hueMultiplier = 0;
+        int saturation = 0;
+        int luminance = 0;
+        int samples = 0;
+        for (int sampleX = Math.max(0, x - 5); sampleX <= Math.min(document.width() - 1, x + 5); sampleX++) {
+            for (int sampleY = Math.max(0, y - 5); sampleY <= Math.min(document.length() - 1, y + 5); sampleY++) {
+                TileSnapshot sample = document.tile(plane, sampleX, sampleY).snapshot();
+                if (sample.underlayId() <= 0) continue;
+                java.util.Optional<FloorDefinitionView> definition = definitions.underlay(sample.underlayId());
+                if (definition.isEmpty() || definition.get().chroma() <= 0) continue;
+                FloorDefinitionView floor = definition.get();
+                weightedHue += floor.weightedHue();
+                hueMultiplier += floor.chroma();
+                saturation += floor.saturation();
+                luminance += floor.luminance();
+                samples++;
+            }
+        }
+        if (samples > 0 && hueMultiplier > 0) {
+            int hue = weightedHue * 256 / hueMultiplier;
+            int hsl = packHsl(hue, saturation / samples, luminance / samples);
+            return 0xFF000000 | hslToRgb(adjustUnderlayLight(hsl, 96));
+        }
+        return blendedUnderlay(document, plane, x, y, definitions);
+    }
+
+    private static int osrsColor(java.util.Optional<FloorDefinitionView> definition,
+                                  int id, boolean underlay) {
+        if (definition.isPresent()) {
+            FloorDefinitionView floor = definition.get();
+            boolean hasHsl = floor.hue() != 0 || floor.saturation() != 0
+                    || floor.luminance() != 0 || floor.chroma() > 0;
+            if (hasHsl) {
+                int hsl = packHsl(floor.hue(), floor.saturation(), floor.luminance());
+                return 0xFF000000 | hslToRgb(adjustOverlayLight(hsl, 96));
+            }
+            return 0xFF000000 | (floor.rgb() & 0xFFFFFF);
+        }
+        return color(definition, id, underlay);
+    }
+
+    private static int packHsl(int hue, int saturation, int luminance) {
+        if (luminance > 179) saturation /= 2;
+        if (luminance > 192) saturation /= 2;
+        if (luminance > 217) saturation /= 2;
+        if (luminance > 243) saturation /= 2;
+        return (hue / 4 << 10) + (saturation / 32 << 7) + luminance / 2;
+    }
+
+    private static int adjustUnderlayLight(int hsl, int light) {
+        light = (hsl & 127) * light >> 7;
+        return (hsl & 0xFF80) + clampLight(light);
+    }
+
+    private static int adjustOverlayLight(int hsl, int light) {
+        light = (hsl & 127) * light >> 7;
+        return (hsl & 0xFF80) + clampLight(light);
+    }
+
+    private static int clampLight(int light) {
+        return Math.max(2, Math.min(126, light));
+    }
+
+    /** Port of the RuneScape HSL palette used by TSPS for scene colors. */
+    private static int hslToRgb(int hsl) {
+        double hue = 0.0078125 + ((hsl >> 10) & 63) / 64.0;
+        double saturation = 0.0625 + ((hsl >> 7) & 7) / 8.0;
+        double luminance = (hsl & 127) / 128.0;
+        double red = luminance;
+        double green = luminance;
+        double blue = luminance;
+        if (saturation != 0.0) {
+            double max = luminance < 0.5
+                    ? luminance * (1.0 + saturation)
+                    : luminance + saturation - luminance * saturation;
+            double min = 2.0 * luminance - max;
+            red = hueChannel(min, max, hue + 1.0 / 3.0);
+            green = hueChannel(min, max, hue);
+            blue = hueChannel(min, max, hue - 1.0 / 3.0);
+        }
+        return (brighten(red) << 16) | (brighten(green) << 8) | brighten(blue);
+    }
+
+    private static double hueChannel(double min, double max, double value) {
+        if (value < 0.0) value++;
+        if (value > 1.0) value--;
+        if (6.0 * value < 1.0) return min + (max - min) * 6.0 * value;
+        if (2.0 * value < 1.0) return max;
+        if (3.0 * value < 2.0) return min + (max - min) * (2.0 / 3.0 - value) * 6.0;
+        return min;
+    }
+
+    private static int brighten(double channel) {
+        int raw = (int) (channel * 256.0);
+        return (int) (Math.pow(raw / 256.0, 0.8) * 256.0);
     }
 
     private static int color(java.util.Optional<FloorDefinitionView> definition,

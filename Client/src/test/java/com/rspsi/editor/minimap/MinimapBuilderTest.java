@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 
 class MinimapBuilderTest {
@@ -62,6 +63,26 @@ class MinimapBuilderTest {
         MinimapImage rotationTwo = builder.buildShaped(document, 0, definitions());
         assertEquals(0xFFA0B0C0, rotationTwo.pixel(1, 0));
         assertEquals(0xFFA0B0C0, rotationTwo.pixel(3, 0));
+    }
+
+    @Test
+    void shapedRasterUsesOsrsHslWhenDefinitionProvidesBlendMetadata() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                1, 0, 0, 0, 0, List.of()));
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> underlay(int id) {
+                return Optional.of(new FloorDefinitionView(id, -1, 0x102030,
+                        32, 192, 96, 32, 256));
+            }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+        };
+
+        int pixel = new MinimapBuilder().buildShaped(document, 0, definitions).pixel(0, 0);
+
+        assertEquals(pixel, new MinimapBuilder().buildShaped(document, 0, definitions).pixel(3, 3));
+        assertNotEquals(0xFF102030, pixel);
     }
 
     private static DefinitionProvider definitions() {
