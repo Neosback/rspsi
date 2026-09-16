@@ -79,4 +79,25 @@ class OsrsCollisionBuilderTest {
                 collision.flags(0, 1, 1));
         assertEquals(0, collision.flags(0, 3, 3));
     }
+
+    @Test
+    void preservesOpenRuneRouteBlockerForGroundLocations() {
+        WorldDocument document = new WorldDocument(3, 1, 1);
+        WorldObject object = new WorldObject(42, 10, 0, 0, 1, 0);
+        document.tile(0, 1, 0).restore(new TileSnapshot(0, 0, 0, 0, 0, 0, 0, 0, 0,
+                java.util.List.of(object)));
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) { return Optional.empty(); }
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectCollisionView> objectCollision(int id) {
+                return Optional.of(new ObjectCollisionView(id, 1, 1, 2, false, true));
+            }
+        };
+
+        CollisionMap collision = OsrsCollisionBuilder.fromTerrainAndObjects(document, definitions);
+
+        assertEquals(CollisionFlag.LOC | CollisionFlag.LOC_ROUTE_BLOCKER,
+                collision.flags(0, 1, 0));
+    }
 }

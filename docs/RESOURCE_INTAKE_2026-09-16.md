@@ -31,6 +31,8 @@ remain outside the RSPSi source tree and are not build dependencies.
 - `engine/routefinder/src/main/kotlin/org/rsmod/routefinder/loc/LocShapeConstants.kt`
 - `engine/routefinder/src/main/kotlin/org/rsmod/routefinder/loc/LocLayerConstants.kt`
 - `engine/routefinder/src/main/kotlin/org/rsmod/routefinder/util/Rotations.kt`
+- `engine/routefinder/src/main/kotlin/org/rsmod/routefinder/flag/CollisionFlag.kt`
+- `or-cache/src/main/kotlin/org/rsmod/game/map/collision/CollisionFlagMapExtensions.kt`
 - `or-cache/src/main/kotlin/dev/openrune/map/GameMapDecoder.kt`
 - `or-cache/src/main/kotlin/dev/openrune/map/tile/MapTileDecoder.kt`
 - `or-cache/src/main/kotlin/dev/openrune/map/tile/MapTileByteEncoder.kt`
@@ -59,6 +61,8 @@ Evidence currently proving adoption:
   category filtering without importing donor enums.
 - `WorldRegionWindowTest` verifies bounded multi-region loading semantics and
   preserves absent regions as explicit loading-line holes.
+- `OsrsCollisionBuilderTest` and `RouteFinderTest` verify the neutral
+  route-blocker masks and OpenRune's default-off versus explicit-on strategy.
 
 No OpenRune-Server source, cache dump, model, or generated asset was copied or
 bundled in this intake.

@@ -29,6 +29,17 @@ public final class RouteFinder {
 
     public static List<TileCoordinate> find(CollisionMap map, TileCoordinate start,
                                             TileCoordinate target, int maxVisited) {
+        return find(map, start, target, maxVisited, false);
+    }
+
+    /**
+     * Finds a route with optional OpenRune route-blocker semantics. The
+     * default overload intentionally follows the donor's normal strategy,
+     * which does not opt into route-blocker flags.
+     */
+    public static List<TileCoordinate> find(CollisionMap map, TileCoordinate start,
+                                            TileCoordinate target, int maxVisited,
+                                            boolean useRouteBlockers) {
         Objects.requireNonNull(map, "map");
         Objects.requireNonNull(start, "start");
         Objects.requireNonNull(target, "target");
@@ -52,7 +63,7 @@ public final class RouteFinder {
         while (!queue.isEmpty() && visited++ < maxVisited) {
             TileCoordinate current = queue.removeFirst();
             for (CollisionDirection direction : ALL_DIRECTIONS) {
-                if (!canMove(map, current, direction)) {
+                if (!canMove(map, current, direction, useRouteBlockers)) {
                     continue;
                 }
                 TileCoordinate next = new TileCoordinate(current.plane(),
@@ -113,8 +124,8 @@ public final class RouteFinder {
     }
 
     private static boolean canMove(CollisionMap map, TileCoordinate from,
-                                   CollisionDirection direction) {
-        if (!map.canTravel(from, direction)) {
+                                   CollisionDirection direction, boolean useRouteBlockers) {
+        if (!map.canTravel(from, direction, useRouteBlockers)) {
             return false;
         }
         if (!direction.diagonal()) {
@@ -124,7 +135,8 @@ public final class RouteFinder {
                 ? CollisionDirection.EAST : CollisionDirection.WEST;
         CollisionDirection vertical = direction.deltaY() > 0
                 ? CollisionDirection.NORTH : CollisionDirection.SOUTH;
-        return map.canTravel(from, horizontal) && map.canTravel(from, vertical);
+        return map.canTravel(from, horizontal, useRouteBlockers)
+                && map.canTravel(from, vertical, useRouteBlockers);
     }
 
     private static boolean canProject(CollisionMap map, TileCoordinate from,

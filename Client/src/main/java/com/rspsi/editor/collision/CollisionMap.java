@@ -53,6 +53,11 @@ public final class CollisionMap {
 
     /** Checks the destination tile using the OSRS routefinder mask convention. */
     public boolean canTravel(TileCoordinate from, CollisionDirection direction) {
+        return canTravel(from, direction, false);
+    }
+
+    /** Checks a destination using OpenRune's optional route-blocker layer. */
+    public boolean canTravel(TileCoordinate from, CollisionDirection direction, boolean useRouteBlockers) {
         Objects.requireNonNull(from, "from");
         Objects.requireNonNull(direction, "direction");
         int targetX = from.x() + direction.deltaX();
@@ -60,7 +65,8 @@ public final class CollisionMap {
         if (!inside(from.plane(), targetX, targetY)) {
             return false;
         }
-        return (flags[from.plane()][targetX][targetY] & direction.movementMask()) == 0;
+        int mask = useRouteBlockers ? direction.routeMask() : direction.movementMask();
+        return (flags[from.plane()][targetX][targetY] & mask) == 0;
     }
 
     public boolean projectileBlocked(TileCoordinate coordinate, int projectileMask) {

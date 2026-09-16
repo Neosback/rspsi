@@ -48,6 +48,9 @@ boundary.
   the legacy `ShapedTile` class.
 - `CollisionMap`, `CollisionFlag`, and `CollisionDirection` own editor
   collision semantics; server routefinder types are reference inputs only.
+- The collision model preserves OpenRune's optional route-blocker layer. The
+  neutral routefinder follows the donor's normal strategy by default and can
+  explicitly enable route-blocker masks for diagnostics and parity tests.
 - `OsrsCollisionBuilder` consumes `ObjectCategory`/`OsrsLocShape` rather than
   duplicating raw shape ranges. This preserves OpenRune's distinction between
   blocking walls, non-blocking wall decor, ground-layer locations, and ground

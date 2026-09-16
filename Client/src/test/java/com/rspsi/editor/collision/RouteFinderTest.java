@@ -43,4 +43,15 @@ class RouteFinderTest {
         assertTrue(RouteFinder.hasLineOfSight(new CollisionMap(3, 1, 1),
                 new TileCoordinate(0, 0, 0), new TileCoordinate(0, 2, 0)));
     }
+
+    @Test
+    void routeBlockersAreOptInLikeOpenRuneNormalStrategy() {
+        CollisionMap map = new CollisionMap(3, 1, 1);
+        map.add(new TileCoordinate(0, 1, 0), CollisionFlag.LOC_ROUTE_BLOCKER);
+        TileCoordinate start = new TileCoordinate(0, 0, 0);
+        TileCoordinate target = new TileCoordinate(0, 2, 0);
+
+        assertFalse(RouteFinder.find(map, start, target, 20).isEmpty());
+        assertTrue(RouteFinder.find(map, start, target, 20, true).isEmpty());
+    }
 }

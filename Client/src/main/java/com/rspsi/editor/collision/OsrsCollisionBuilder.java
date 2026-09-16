@@ -111,11 +111,12 @@ public final class OsrsCollisionBuilder {
             return;
         }
         int projectileMask = definition.blockProjectile() ? CollisionFlag.LOC_PROJECTILE : 0;
+        int routeMask = definition.breakRouteFinding() ? CollisionFlag.LOC_ROUTE_BLOCKER : 0;
         if (shape.category() == ObjectCategory.GROUND) {
             for (int x = 0; x < width; x++) {
                 for (int y = 0; y < length; y++) {
                     addAt(collision, plane, object.x() + x, object.y() + y,
-                            CollisionFlag.LOC | projectileMask);
+                            CollisionFlag.LOC | projectileMask | routeMask);
                 }
             }
         } else if (shape.category() == ObjectCategory.WALL) {

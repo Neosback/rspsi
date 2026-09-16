@@ -25,6 +25,15 @@ public final class CollisionFlag {
     public static final int LOC_PROJECTILE = 0x20000;
     public static final int GROUND_DECOR = 0x40000;
     public static final int BLOCK_WALK = 0x200000;
+    public static final int WALL_NORTH_WEST_ROUTE_BLOCKER = 0x400000;
+    public static final int WALL_NORTH_ROUTE_BLOCKER = 0x800000;
+    public static final int WALL_NORTH_EAST_ROUTE_BLOCKER = 0x1000000;
+    public static final int WALL_EAST_ROUTE_BLOCKER = 0x2000000;
+    public static final int WALL_SOUTH_EAST_ROUTE_BLOCKER = 0x4000000;
+    public static final int WALL_SOUTH_ROUTE_BLOCKER = 0x8000000;
+    public static final int WALL_SOUTH_WEST_ROUTE_BLOCKER = 0x10000000;
+    public static final int WALL_WEST_ROUTE_BLOCKER = 0x20000000;
+    public static final int LOC_ROUTE_BLOCKER = 0x40000000;
     /** OpenRune routefinder's roof/region-binding flag. */
     public static final int ROOF = 0x80000000;
 
@@ -38,4 +47,17 @@ public final class CollisionFlag {
     public static final int BLOCK_SOUTH_EAST = WALL_NORTH_WEST | WALL_NORTH | WALL_WEST | LOC | FLOOR_BLOCKED;
     public static final int BLOCK_NORTH_WEST = WALL_EAST | WALL_SOUTH_EAST | WALL_SOUTH | LOC | FLOOR_BLOCKED;
     public static final int BLOCK_NORTH_EAST = WALL_SOUTH | WALL_SOUTH_WEST | WALL_WEST | LOC | FLOOR_BLOCKED;
+
+    public static final int BLOCK_WEST_ROUTE_BLOCKER = WALL_EAST_ROUTE_BLOCKER | LOC_ROUTE_BLOCKER | FLOOR_BLOCKED;
+    public static final int BLOCK_EAST_ROUTE_BLOCKER = WALL_WEST_ROUTE_BLOCKER | LOC_ROUTE_BLOCKER | FLOOR_BLOCKED;
+    public static final int BLOCK_SOUTH_ROUTE_BLOCKER = WALL_NORTH_ROUTE_BLOCKER | LOC_ROUTE_BLOCKER | FLOOR_BLOCKED;
+    public static final int BLOCK_NORTH_ROUTE_BLOCKER = WALL_SOUTH_ROUTE_BLOCKER | LOC_ROUTE_BLOCKER | FLOOR_BLOCKED;
+    public static final int BLOCK_SOUTH_WEST_ROUTE_BLOCKER = WALL_NORTH_ROUTE_BLOCKER
+            | WALL_NORTH_EAST_ROUTE_BLOCKER | WALL_EAST_ROUTE_BLOCKER | LOC_ROUTE_BLOCKER | FLOOR_BLOCKED;
+    public static final int BLOCK_SOUTH_EAST_ROUTE_BLOCKER = WALL_NORTH_WEST_ROUTE_BLOCKER
+            | WALL_NORTH_ROUTE_BLOCKER | WALL_WEST_ROUTE_BLOCKER | LOC_ROUTE_BLOCKER | FLOOR_BLOCKED;
+    public static final int BLOCK_NORTH_WEST_ROUTE_BLOCKER = WALL_EAST_ROUTE_BLOCKER
+            | WALL_SOUTH_EAST_ROUTE_BLOCKER | WALL_SOUTH_ROUTE_BLOCKER | LOC_ROUTE_BLOCKER | FLOOR_BLOCKED;
+    public static final int BLOCK_NORTH_EAST_ROUTE_BLOCKER = WALL_SOUTH_ROUTE_BLOCKER
+            | WALL_SOUTH_WEST_ROUTE_BLOCKER | WALL_WEST_ROUTE_BLOCKER | LOC_ROUTE_BLOCKER | FLOOR_BLOCKED;
 }
