@@ -90,4 +90,19 @@ class RenderSceneBuilderTest {
                 new TileCoordinate(1, 8, 8), new TileCoordinate(1, 9, 8)),
                 changes.dirtyTiles());
     }
+
+    @Test
+    void acceptsSessionChunkInvalidationBatchesDirectly() {
+        WorldDocument document = new WorldDocument(8, 8, 1);
+        RenderSceneBuilder builder = new RenderSceneBuilder();
+        RenderScene initial = builder.build(document);
+        document.tile(0, 4, 4).restore(new TileSnapshot(
+                20, 20, 20, 20, 0, 4, 0, 0, 0, List.of()));
+
+        RenderScene updated = builder.update(initial, Set.of(
+                new DirtyRegion(0, 0, false, false, false, false, true)));
+
+        assertEquals(20, updated.terrainMeshes()
+                .get(new TileCoordinate(0, 4, 4)).vertices().get(0).height());
+    }
 }

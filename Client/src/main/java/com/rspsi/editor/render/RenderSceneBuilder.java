@@ -1,6 +1,7 @@
 package com.rspsi.editor.render;
 
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.DirtyRegion;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.terrain.TerrainMesh;
@@ -67,6 +68,12 @@ public final class RenderSceneBuilder {
         }
         List<WorldObject> objects = collectObjects(document);
         return new RenderScene(document, meshes, objects, document.bridgeLinks());
+    }
+
+    /** Rebuilds the chunks drained from an editor session's invalidation queue. */
+    public RenderScene update(RenderScene previous, Set<DirtyRegion> dirtyRegions) {
+        Objects.requireNonNull(previous, "previous");
+        return update(previous, RenderChanges.fromDirtyRegions(dirtyRegions, previous.document()));
     }
 
     private static List<WorldObject> collectObjects(WorldDocument document) {
