@@ -37,12 +37,14 @@ public final class MoveObjectCommand implements EditorCommand {
     }
     @Override public String description() { return description; }
     @Override public Set<TileCoordinate> changedTiles() {
+        if (object.x() == targetX && object.y() == targetY) return Set.of();
         return Set.of(new TileCoordinate(object.plane(), object.x(), object.y()),
                 new TileCoordinate(object.plane(), targetX, targetY));
     }
     private List<SetTileCommand> create(EditorSession session) {
         TileCoordinate sourceCoordinate = new TileCoordinate(object.plane(), object.x(), object.y());
         TileCoordinate targetCoordinate = new TileCoordinate(object.plane(), targetX, targetY);
+        if (sourceCoordinate.equals(targetCoordinate)) return List.of();
         TileSnapshot sourceBefore = session.world().tile(sourceCoordinate).snapshot();
         TileSnapshot targetBefore = session.world().tile(targetCoordinate).snapshot();
         List<WorldObject> sourceObjects = new ArrayList<>(sourceBefore.objects());
@@ -50,10 +52,6 @@ public final class MoveObjectCommand implements EditorCommand {
         WorldObject moved = new WorldObject(object.id(), object.type(), object.rotation(), object.plane(), targetX, targetY);
         List<WorldObject> targetObjects = new ArrayList<>(targetBefore.objects());
         if (!targetObjects.contains(moved)) targetObjects.add(moved);
-        if (sourceCoordinate.equals(targetCoordinate)) {
-            return List.of(new SetTileCommand(sourceCoordinate, sourceBefore,
-                    PlaceObjectCommand.copyWithObjects(sourceBefore, targetObjects), description));
-        }
         return List.of(
                 new SetTileCommand(sourceCoordinate, sourceBefore,
                         PlaceObjectCommand.copyWithObjects(sourceBefore, sourceObjects), description),

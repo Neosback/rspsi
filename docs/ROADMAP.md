@@ -43,7 +43,7 @@ The locked product direction and workspace design are maintained in
 | Unified selection service | implemented-unverified | Tile, tile-set, area, vertex, object, and fragment selection values are available; viewport/tool migration remains |
 | First-party terrain tools | implemented-unverified | Command-backed overlay, raise/lower, tile-flag, flatten, and neighbour-aware smoothing brushes are tested; falloff/ramp/sampling and legacy UI wiring remain |
 | First-party object commands | implemented-unverified | Place/delete/move/rotate are atomic and tested through `EditorSession`; object picking/tool and multi-select UI remain |
-| First-party object tools | implemented-unverified | Place/delete/rotate tools invoke the canonical commands; picking, drag-move, duplicate, replace, and snapping remain |
+| First-party object tools | implemented-unverified | Place/delete/rotate plus pick-on-drag move and duplicate tools invoke canonical commands; multi-select, replace, and snapping remain |
 | Canonical terrain mesh topology | implemented-unverified | RSPSi-owned `TerrainMeshBuilder` covers 13 shapes × 4 rotations, corners, and integer midpoint heights; TSPS/RuneLite parity remains |
 | Canonical collision map | implemented-unverified | RSPSi-owned flags/map plus `OsrsCollisionBuilder` provide bridge-aware terrain masks, roof semantics, rotated footprint collision, and wall/ground categories; route/LOS parity and complete definition fixtures remain |
 | Neutral world validation | implemented-unverified | `WorldValidator` reports broken shared edges, unsupported OSRS map values, duplicate/invalid objects, missing definitions, and definition-backed footprint bounds; UI diagnostics and full parity rules remain |

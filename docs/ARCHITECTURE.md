@@ -126,8 +126,9 @@ stroke.
 `PlaceObjectCommand`, `DeleteObjectCommand`, `MoveObjectCommand`, and
 `RotateObjectCommand` provide the corresponding canonical location mutations;
 object tools can now be migrated without inventing a second history system.
-The initial place/delete/rotate tools invoke these commands directly; picking
-and drag-move remain UI migration work.
+The initial place/delete/rotate tools invoke these commands directly, while
+`MoveObjectTool` and `DuplicateObjectTool` add neutral pick-and-release
+workflows. Multi-select, replace, and snapping remain later tool features.
 
 The initial OSRS map codec now decodes all four planes, explicit/inherited
 heights, underlays, overlays, shapes, rotations, flags, and delta-packed
