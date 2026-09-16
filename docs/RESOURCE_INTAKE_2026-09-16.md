@@ -51,6 +51,14 @@ Evidence currently proving adoption:
   `CacheStore`, without an OpenRune type in the test-facing API.
 - `MapIndexLoaderOSRSTest` verifies the compatibility facade and stable map
   index export/import behavior.
+- `OsrsLocShapeTest` verifies all 23 location-shape IDs and the exact
+  wall/wall-decor/ground/ground-decor mapping from the inspected
+  `LocShapeConstants.kt` and `LocLayerConstants.kt`.
+- `ObjectInspectorSnapshotTest` verifies that definitions and collision are
+  flattened into RSPSi-owned inspector data; `SelectionQueryTest` verifies
+  category filtering without importing donor enums.
+- `WorldRegionWindowTest` verifies bounded multi-region loading semantics and
+  preserves absent regions as explicit loading-line holes.
 
 No OpenRune-Server source, cache dump, model, or generated asset was copied or
 bundled in this intake.
