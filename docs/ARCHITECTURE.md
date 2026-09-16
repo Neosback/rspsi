@@ -170,7 +170,8 @@ The initial place/delete/rotate tools invoke these commands directly, while
 workflows. Both transform tools share a bounded nearest-grid snap setting.
 `BoxSelectTool` can select a tile area or all objects in that area through the
 unified selection model; multi-object transforms and replace remain later tool
-features.
+features. `MoveObjectsCommand` and `MoveSelectionTool` now provide one atomic
+multi-object translation path, including overlapping source/target tiles.
 
 The initial OSRS map codec now decodes all four planes, explicit/inherited
 heights, underlays, overlays, shapes, rotations, flags, and delta-packed

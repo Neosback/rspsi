@@ -11,6 +11,7 @@ import com.rspsi.editor.selection.TileAreaSelection;
 import com.rspsi.editor.tool.BoxSelectTool;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.ToolContext;
+import com.rspsi.editor.tool.MoveSelectionTool;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -52,6 +53,33 @@ class CoreBoxSelectToolTest {
 
         ObjectSetSelection selection = assertInstanceOf(ObjectSetSelection.class, session.selection().current());
         assertEquals(java.util.Set.of(first, second), selection.objects());
+    }
+
+    @Test
+    void moveSelectionMovesAllObjectsAsOneUndoableCommand() {
+        WorldDocument world = new WorldDocument(8, 8);
+        WorldObject first = new WorldObject(7, 10, 0, 0, 1, 1);
+        WorldObject second = new WorldObject(8, 10, 1, 0, 2, 2);
+        put(world, first);
+        put(world, second);
+        EditorSession session = new EditorSession(world);
+        session.selection().selectObjects(java.util.Set.of(first, second));
+        EditorToolController controller = new EditorToolController();
+        controller.activate(new MoveSelectionTool(), context(session));
+        controller.pointerDown(pointer(1, 1));
+        controller.pointerDrag(pointer(3, 4));
+        controller.pointerUp(pointer(3, 4));
+
+        assertEquals(List.of(), world.tile(0, 1, 1).snapshot().objects());
+        assertEquals(List.of(), world.tile(0, 2, 2).snapshot().objects());
+        assertEquals(List.of(new WorldObject(7, 10, 0, 0, 3, 4)),
+                world.tile(0, 3, 4).snapshot().objects());
+        assertEquals(List.of(new WorldObject(8, 10, 1, 0, 4, 5)),
+                world.tile(0, 4, 5).snapshot().objects());
+        assertEquals(1, session.history().size());
+        session.undo();
+        assertEquals(List.of(first), world.tile(0, 1, 1).snapshot().objects());
+        assertEquals(List.of(second), world.tile(0, 2, 2).snapshot().objects());
     }
 
     private static void put(WorldDocument world, WorldObject object) {
