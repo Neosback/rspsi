@@ -1,5 +1,6 @@
 package com.rspsi.editor.render;
 
+import com.rspsi.editor.collision.CollisionTileSnapshot;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.model.WorldTileAddress;
@@ -16,14 +17,26 @@ public record RenderWindowScene(
         Map<WorldTileAddress, TerrainMesh> terrainMeshes,
         Map<WorldTileAddress, TerrainMaterial> terrainMaterials,
         Map<WorldTileAddress, TerrainLight> terrainLighting,
+        Map<WorldTileAddress, CollisionTileSnapshot> collision,
         List<WorldRenderObject> objects,
         List<WorldBridgeLink> bridges
 ) {
+    /** Source-compatible constructor for callers that do not publish collision yet. */
+    public RenderWindowScene(WorldRegionWindow window,
+                             Map<WorldTileAddress, TerrainMesh> terrainMeshes,
+                             Map<WorldTileAddress, TerrainMaterial> terrainMaterials,
+                             Map<WorldTileAddress, TerrainLight> terrainLighting,
+                             List<WorldRenderObject> objects,
+                             List<WorldBridgeLink> bridges) {
+        this(window, terrainMeshes, terrainMaterials, terrainLighting, Map.of(), objects, bridges);
+    }
+
     public RenderWindowScene {
         window = Objects.requireNonNull(window, "window");
         terrainMeshes = Map.copyOf(new LinkedHashMap<>(Objects.requireNonNull(terrainMeshes, "terrainMeshes")));
         terrainMaterials = Map.copyOf(new LinkedHashMap<>(Objects.requireNonNull(terrainMaterials, "terrainMaterials")));
         terrainLighting = Map.copyOf(new LinkedHashMap<>(Objects.requireNonNull(terrainLighting, "terrainLighting")));
+        collision = Map.copyOf(new LinkedHashMap<>(Objects.requireNonNull(collision, "collision")));
         objects = List.copyOf(Objects.requireNonNull(objects, "objects"));
         bridges = List.copyOf(Objects.requireNonNull(bridges, "bridges"));
     }

@@ -205,7 +205,11 @@ boundary.
   neutral tiles and objects. It prepares a deep copy, stitches loaded
   neighboring edges there, and preserves absent regions as holes, so
   loading-line context and region boundaries remain observable without
-  mutating authored documents or bypassing session dirty tracking.
+  mutating authored documents or bypassing session dirty tracking. It also
+  publishes world-addressed `CollisionTileSnapshot` values built from terrain
+  flags and, when available, neutral object definitions; collision overlays,
+  route previews, and inspectors therefore consume the same semantics as the
+  neutral collision services.
 - `SceneRenderer.update(RenderScene, RenderChanges)` is the preferred
   incremental publication path. Its default delegates to the original
   `update(RenderChanges)` method so existing renderers remain source

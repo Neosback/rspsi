@@ -1,6 +1,9 @@
 package com.rspsi.editor.render;
 
 import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.editor.collision.CollisionMap;
+import com.rspsi.editor.collision.CollisionTileSnapshot;
+import com.rspsi.editor.collision.OsrsCollisionBuilder;
 import com.rspsi.editor.model.BridgeLink;
 import com.rspsi.editor.model.WorldRegion;
 import com.rspsi.editor.model.WorldRegionWindow;
@@ -14,13 +17,16 @@ import java.util.Objects;
 /** Builds world-addressed neutral geometry while preserving window holes. */
 public final class RenderWindowSceneBuilder {
     private final RenderSceneBuilder regions;
+    private final DefinitionProvider definitions;
 
     public RenderWindowSceneBuilder() {
         this.regions = new RenderSceneBuilder();
+        this.definitions = null;
     }
 
     public RenderWindowSceneBuilder(DefinitionProvider definitions) {
-        this.regions = new RenderSceneBuilder(Objects.requireNonNull(definitions, "definitions"));
+        this.definitions = Objects.requireNonNull(definitions, "definitions");
+        this.regions = new RenderSceneBuilder(this.definitions);
     }
 
     /**
@@ -34,6 +40,7 @@ public final class RenderWindowSceneBuilder {
         var meshes = new LinkedHashMap<WorldTileAddress, com.rspsi.editor.terrain.TerrainMesh>();
         var materials = new LinkedHashMap<WorldTileAddress, TerrainMaterial>();
         var lighting = new LinkedHashMap<WorldTileAddress, TerrainLight>();
+        var collision = new LinkedHashMap<WorldTileAddress, CollisionTileSnapshot>();
         List<WorldRenderObject> objects = new ArrayList<>();
         List<WorldBridgeLink> bridges = new ArrayList<>();
 
@@ -49,6 +56,18 @@ public final class RenderWindowSceneBuilder {
                     materials.put(WorldTileAddress.of(originX + local.x(), originY + local.y(), local.plane()), material));
             scene.terrainLighting().forEach((local, light) ->
                     lighting.put(WorldTileAddress.of(originX + local.x(), originY + local.y(), local.plane()), light));
+            CollisionMap regionCollision = definitions == null
+                    ? OsrsCollisionBuilder.fromTerrain(region.document())
+                    : OsrsCollisionBuilder.fromTerrainAndObjects(region.document(), definitions);
+            for (int plane = 0; plane < region.document().planes(); plane++) {
+                for (int x = 0; x < region.document().width(); x++) {
+                    for (int y = 0; y < region.document().length(); y++) {
+                        var local = new com.rspsi.editor.model.TileCoordinate(plane, x, y);
+                        collision.put(WorldTileAddress.of(originX + x, originY + y, plane),
+                                CollisionTileSnapshot.from(regionCollision, local));
+                    }
+                }
+            }
             for (RenderObject object : scene.renderObjects()) {
                 objects.add(new WorldRenderObject(WorldTileAddress.of(
                         originX + object.object().x(), originY + object.object().y(), object.object().plane()), object));
@@ -57,7 +76,7 @@ public final class RenderWindowSceneBuilder {
                 bridges.add(new WorldBridgeLink(address(region, bridge.upper()), address(region, bridge.lower())));
             }
         }
-        return new RenderWindowScene(prepared, meshes, materials, lighting, objects, bridges);
+        return new RenderWindowScene(prepared, meshes, materials, lighting, collision, objects, bridges);
     }
 
     private static WorldTileAddress address(WorldRegion region, com.rspsi.editor.model.TileCoordinate coordinate) {

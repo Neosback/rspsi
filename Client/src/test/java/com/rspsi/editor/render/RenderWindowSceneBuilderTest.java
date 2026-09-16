@@ -6,6 +6,8 @@ import com.rspsi.editor.model.WorldRegion;
 import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.OsrsTileFlags;
+import com.rspsi.editor.collision.CollisionFlag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -34,7 +36,32 @@ class RenderWindowSceneBuilderTest {
         assertTrue(scene.hasTile(objectAddress));
         assertEquals(1, scene.objects().size());
         assertEquals(objectAddress, scene.objects().get(0).address());
+        assertEquals(64 * 64 * 4, scene.collision().size());
         assertFalse(scene.hasTile(WorldTileAddress.of(11 * 64, 20 * 64, 0)));
+    }
+
+    @Test
+    void publishesWorldAddressedTerrainCollisionForOverlayConsumers() {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        document.tile(1, 12, 13).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0,
+                OsrsTileFlags.BLOCK_MAP_SQUARE | OsrsTileFlags.REMOVE_ROOFS,
+                List.of()));
+        WorldRegion loaded = new WorldRegion(10, 20, document);
+        WorldRegionWindow window = new WorldRegionWindow(10, 20, 1, 1,
+                Map.of(loaded.regionId(), loaded));
+
+        RenderWindowScene scene = new RenderWindowSceneBuilder().build(window);
+
+        var address = WorldTileAddress.of(10 * 64 + 12, 20 * 64 + 13, 1);
+        var snapshot = scene.collision().get(address);
+        assertEquals(CollisionFlag.BLOCK_WALK | CollisionFlag.ROOF, snapshot.rawFlags());
+        assertTrue(snapshot.floorBlocked());
+        assertTrue(snapshot.roof());
+        assertEquals(address, WorldTileAddress.of(
+                10 * 64 + snapshot.coordinate().x(),
+                20 * 64 + snapshot.coordinate().y(),
+                snapshot.coordinate().plane()));
     }
 
     @Test

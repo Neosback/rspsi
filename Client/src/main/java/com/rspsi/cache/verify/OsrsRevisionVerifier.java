@@ -130,6 +130,7 @@ public final class OsrsRevisionVerifier {
                     + " remaining; bridge links: " + bridgeLinks);
             messages.add("window scene tiles: " + windowScene.terrainMeshes().size()
                     + "; loaded-region expectation: " + expectedWindowTiles
+                    + "; collision tiles: " + windowScene.collision().size()
                     + "; world objects: " + windowScene.objects().size());
             if (boundaryMismatches > 0) {
                 errors.add("loaded region boundaries have " + boundaryMismatches + " height mismatches");
@@ -181,6 +182,9 @@ public final class OsrsRevisionVerifier {
             if (!sceneComplete) errors.add("neutral scene did not cover every document tile");
             if (!objectProjectionComplete) errors.add("neutral scene object projections did not match canonical objects");
             if (!windowSceneComplete) errors.add("window scene did not cover every loaded region tile");
+            if (windowScene.collision().size() != expectedWindowTiles) {
+                errors.add("window scene collision did not cover every loaded region tile");
+            }
             if (!minimapComplete) errors.add("neutral minimap dimensions did not match the document");
             return new VerificationReport(path, regionX, regionY, revision, maps.index().size(),
                     true, true, equal, messages, errors,
