@@ -167,8 +167,10 @@ stroke.
 object tools can now be migrated without inventing a second history system.
 The initial place/delete/rotate tools invoke these commands directly, while
 `MoveObjectTool` and `DuplicateObjectTool` add neutral pick-and-release
-workflows. Both transform tools share a bounded nearest-grid snap setting;
-multi-select and replace remain later tool features.
+workflows. Both transform tools share a bounded nearest-grid snap setting.
+`BoxSelectTool` can select a tile area or all objects in that area through the
+unified selection model; multi-object transforms and replace remain later tool
+features.
 
 The initial OSRS map codec now decodes all four planes, explicit/inherited
 heights, underlays, overlays, shapes, rotations, flags, and delta-packed

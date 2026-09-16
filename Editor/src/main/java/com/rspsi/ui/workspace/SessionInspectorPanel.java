@@ -12,6 +12,7 @@ import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.model.WorldWindow;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.selection.ObjectSelection;
+import com.rspsi.editor.selection.ObjectSetSelection;
 import com.rspsi.editor.selection.Selection;
 import com.rspsi.editor.selection.TileAreaSelection;
 import com.rspsi.editor.selection.TileSelection;
@@ -76,6 +77,8 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
             showTile(tile.coordinate());
         } else if (selection instanceof ObjectSelection object) {
             showObject(object.object());
+        } else if (selection instanceof ObjectSetSelection objects) {
+            clear("Objects selected: " + objects.objects().size());
         } else if (selection instanceof TileSetSelection tiles) {
             clear("Multiple tiles selected: " + tiles.coordinates().size());
         } else if (selection instanceof TileAreaSelection area) {

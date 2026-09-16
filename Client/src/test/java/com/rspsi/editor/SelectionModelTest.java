@@ -4,6 +4,7 @@ import com.rspsi.editor.model.TileBounds;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.selection.ObjectSelection;
+import com.rspsi.editor.selection.ObjectSetSelection;
 import com.rspsi.editor.selection.TileAreaSelection;
 import com.rspsi.editor.selection.TileSelection;
 import com.rspsi.editor.selection.TileSetSelection;
@@ -57,5 +58,17 @@ class SelectionModelTest {
         selection.removeChangeListener(listener);
         selection.select(new TileCoordinate(0, 1, 1));
         assertEquals(3, changes.size());
+    }
+
+    @Test
+    void objectSetSelectionKeepsMultipleObjectsAsOneSelectionValue() {
+        SelectionModel selection = new SelectionModel();
+        WorldObject first = new WorldObject(7, 10, 0, 0, 1, 1);
+        WorldObject second = new WorldObject(8, 10, 0, 0, 2, 2);
+
+        selection.selectObjects(java.util.Set.of(first, second));
+
+        assertInstanceOf(ObjectSetSelection.class, selection.current());
+        assertEquals(java.util.Set.of(first, second), ((ObjectSetSelection) selection.current()).objects());
     }
 }

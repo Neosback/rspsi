@@ -6,6 +6,7 @@ import com.rspsi.editor.model.WorldFragment;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.selection.FragmentSelection;
 import com.rspsi.editor.selection.ObjectSelection;
+import com.rspsi.editor.selection.ObjectSetSelection;
 import com.rspsi.editor.selection.Selection;
 import com.rspsi.editor.selection.TileAreaSelection;
 import com.rspsi.editor.selection.TileSelection;
@@ -85,6 +86,18 @@ public final class SelectionModel {
     public void selectObject(WorldObject object) {
         clearInternal();
         current = new ObjectSelection(object);
+        notifyChanged();
+    }
+
+    public void selectObjects(Set<WorldObject> objects) {
+        clearInternal();
+        if (objects == null || objects.isEmpty()) {
+            notifyChanged();
+            return;
+        }
+        current = objects.size() == 1
+                ? new ObjectSelection(objects.iterator().next())
+                : new ObjectSetSelection(objects);
         notifyChanged();
     }
 
