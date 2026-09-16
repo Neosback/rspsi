@@ -28,6 +28,8 @@ public final class RenderSceneFingerprint {
                     TerrainMesh mesh = scene.terrainMeshes().get(coordinate);
                     value.append(coordinate).append('=').append(mesh == null ? "<missing>" : mesh.vertices())
                             .append('|').append(mesh == null ? "<missing>" : mesh.faces()).append(';');
+                    TerrainMaterial material = scene.terrainMaterials().get(coordinate);
+                    if (material != null) value.append("material=").append(material).append(';');
                 }
             }
         }

@@ -129,11 +129,12 @@ public final class OsrsRevisionVerifier {
             messages.add("validation errors: " + issueErrors);
             messages.add("validation warnings: " + (issues.size() - issueErrors));
             OsrsCollisionBuilder.fromTerrainAndObjects(document, definitions);
-            RenderScene scene = new RenderSceneBuilder().build(document);
+            RenderScene scene = new RenderSceneBuilder(definitions).build(document);
             boolean sceneComplete = scene.terrainMeshes().size()
                     == document.width() * document.length() * document.planes();
             String sceneFingerprint = RenderSceneFingerprint.sha256(scene);
             messages.add("neutral scene meshes: " + scene.terrainMeshes().size()
+                    + "; terrain materials: " + scene.terrainMaterials().size()
                     + "; objects: " + scene.objects().size());
             messages.add("neutral scene fingerprint: " + sceneFingerprint);
             boolean minimapComplete = true;

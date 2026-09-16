@@ -5,6 +5,9 @@ import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.DirtyRegion;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.cache.definition.FloorDefinitionView;
+import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SetTileCommand;
 import org.junit.jupiter.api.Test;
@@ -15,6 +18,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.util.Optional;
 
 class RenderSceneBuilderTest {
     @Test
@@ -44,6 +48,7 @@ class RenderSceneBuilderTest {
         assertEquals(0, scene.terrainMeshes().size());
         assertEquals(0, scene.objects().size());
         assertEquals(0, scene.bridges().size());
+        assertEquals(0, scene.terrainMaterials().size());
     }
 
     @Test
@@ -107,6 +112,32 @@ class RenderSceneBuilderTest {
 
         assertEquals(20, updated.terrainMeshes()
                 .get(new TileCoordinate(0, 4, 4)).vertices().get(0).height());
+    }
+
+    @Test
+    void definitionAwareBuilderCarriesNeutralTerrainMaterialInputs() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(
+                0, 0, 0, 0, 2, 3, 0, 0, 0, List.of()));
+
+        RenderScene scene = new RenderSceneBuilder(definitions()).build(document);
+
+        assertEquals(new TerrainMaterial(2, 3, 17, 0x102030, 0xA0B0C0),
+                scene.terrainMaterials().get(new TileCoordinate(0, 0, 0)));
+    }
+
+    private static DefinitionProvider definitions() {
+        return new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> underlay(int id) {
+                return id == 2 ? Optional.of(new FloorDefinitionView(id, -1, 0x102030,
+                        0, 0, 0, 0, 0)) : Optional.empty();
+            }
+            @Override public Optional<FloorDefinitionView> overlay(int id) {
+                return id == 3 ? Optional.of(new FloorDefinitionView(id, 17, 0xA0B0C0,
+                        0, 0, 0, 0, 0)) : Optional.empty();
+            }
+        };
     }
 
     @Test

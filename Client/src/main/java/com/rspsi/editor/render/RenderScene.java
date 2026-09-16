@@ -19,20 +19,29 @@ import java.util.Objects;
 public record RenderScene(
         WorldDocument document,
         Map<TileCoordinate, TerrainMesh> terrainMeshes,
+        Map<TileCoordinate, TerrainMaterial> terrainMaterials,
         List<WorldObject> objects,
         List<BridgeLink> bridges
 ) {
     /** Compatibility constructor for callers that only need the document. */
     public RenderScene(WorldDocument document) {
-        this(document, Map.of(), List.of(), List.of());
+        this(document, Map.of(), Map.of(), List.of(), List.of());
+    }
+
+    /** Compatibility constructor for callers without definition data. */
+    public RenderScene(WorldDocument document, Map<TileCoordinate, TerrainMesh> terrainMeshes,
+                       List<WorldObject> objects, List<BridgeLink> bridges) {
+        this(document, terrainMeshes, Map.of(), objects, bridges);
     }
 
     public RenderScene {
         Objects.requireNonNull(document, "document");
         Objects.requireNonNull(terrainMeshes, "terrainMeshes");
+        Objects.requireNonNull(terrainMaterials, "terrainMaterials");
         Objects.requireNonNull(objects, "objects");
         Objects.requireNonNull(bridges, "bridges");
         terrainMeshes = Map.copyOf(new LinkedHashMap<>(terrainMeshes));
+        terrainMaterials = Map.copyOf(new LinkedHashMap<>(terrainMaterials));
         objects = List.copyOf(objects);
         bridges = List.copyOf(bridges);
     }

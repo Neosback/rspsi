@@ -1,5 +1,7 @@
 package com.rspsi.editor.render;
 
+import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.DirtyRegion;
 import com.rspsi.editor.model.WorldDocument;
@@ -17,13 +19,24 @@ import java.util.Set;
 /** Builds a renderer-neutral scene from the RSPSi-owned world model. */
 public final class RenderSceneBuilder {
     private final TerrainMeshBuilder terrainMeshes;
+    private final DefinitionProvider definitions;
 
     public RenderSceneBuilder() {
-        this(new TerrainMeshBuilder());
+        this(new TerrainMeshBuilder(), null);
     }
 
     public RenderSceneBuilder(TerrainMeshBuilder terrainMeshes) {
+        this(terrainMeshes, null);
+    }
+
+    /** Builds scene materials from the neutral definition provider when supplied. */
+    public RenderSceneBuilder(DefinitionProvider definitions) {
+        this(new TerrainMeshBuilder(), Objects.requireNonNull(definitions, "definitions"));
+    }
+
+    public RenderSceneBuilder(TerrainMeshBuilder terrainMeshes, DefinitionProvider definitions) {
         this.terrainMeshes = Objects.requireNonNull(terrainMeshes, "terrainMeshes");
+        this.definitions = definitions;
     }
 
     /**
@@ -33,6 +46,7 @@ public final class RenderSceneBuilder {
     public RenderScene build(WorldDocument document) {
         Objects.requireNonNull(document, "document");
         Map<TileCoordinate, TerrainMesh> meshes = new LinkedHashMap<>();
+        Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>();
         List<WorldObject> objects = new ArrayList<>();
         for (int plane = 0; plane < document.planes(); plane++) {
             for (int x = 0; x < document.width(); x++) {
@@ -40,11 +54,14 @@ public final class RenderSceneBuilder {
                     TileCoordinate coordinate = new TileCoordinate(plane, x, y);
                     var tile = document.tile(coordinate);
                     meshes.put(coordinate, terrainMeshes.build(tile.snapshot()));
+                    if (definitions != null) {
+                        materials.put(coordinate, material(tile.snapshot()));
+                    }
                     objects.addAll(tile.objects());
                 }
             }
         }
-        return new RenderScene(document, meshes, objects, document.bridgeLinks());
+        return new RenderScene(document, meshes, materials, objects, document.bridgeLinks());
     }
 
     /**
@@ -57,6 +74,7 @@ public final class RenderSceneBuilder {
         Objects.requireNonNull(changes, "changes");
         WorldDocument document = previous.document();
         Map<TileCoordinate, TerrainMesh> meshes = new LinkedHashMap<>(previous.terrainMeshes());
+        Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>(previous.terrainMaterials());
         Set<TileCoordinate> dirtyTiles = changes.dirtyTiles();
         for (TileCoordinate coordinate : dirtyTiles) {
             if (coordinate.plane() >= document.planes()
@@ -65,9 +83,12 @@ public final class RenderSceneBuilder {
                 throw new IllegalArgumentException("Dirty tile is outside the scene document: " + coordinate);
             }
             meshes.put(coordinate, terrainMeshes.build(document.tile(coordinate).snapshot()));
+            if (definitions != null) {
+                materials.put(coordinate, material(document.tile(coordinate).snapshot()));
+            }
         }
         List<WorldObject> objects = collectObjects(document);
-        return new RenderScene(document, meshes, objects, document.bridgeLinks());
+        return new RenderScene(document, meshes, materials, objects, document.bridgeLinks());
     }
 
     /** Rebuilds the chunks drained from an editor session's invalidation queue. */
@@ -86,5 +107,16 @@ public final class RenderSceneBuilder {
             }
         }
         return objects;
+    }
+
+    private TerrainMaterial material(com.rspsi.editor.model.TileSnapshot tile) {
+        FloorDefinitionView underlay = definitions.underlay(tile.underlayId()).orElse(null);
+        FloorDefinitionView overlay = definitions.overlay(tile.overlayId()).orElse(null);
+        return new TerrainMaterial(
+                tile.underlayId(),
+                tile.overlayId(),
+                overlay == null ? -1 : overlay.texture(),
+                underlay == null ? 0 : underlay.rgb() & 0xFFFFFF,
+                overlay == null ? 0 : overlay.rgb() & 0xFFFFFF);
     }
 }

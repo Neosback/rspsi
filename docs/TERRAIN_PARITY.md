@@ -29,6 +29,12 @@ underlay blending, overlay/texture material selection, hidden-face behavior,
 bridge/render-level handling, region neighbors, collision, minimap output,
 and final renderer comparison against TSPS and RuneLite.
 
+The renderer-neutral scene path now carries a definition-aware
+`TerrainMaterial` per tile (underlay/overlay IDs, texture ID, and RGB inputs)
+when a neutral definition provider is available. This is the material input
+boundary for future scene parity; it does not yet claim lighting, texture
+animation, hidden-face, or rendered-image equivalence.
+
 The neutral minimap builder also exposes an opt-in 4×4-per-tile raster using
 the captured TSPS shaped-tile masks and rotation permutations. When floor
 definitions provide HSL blend metadata, that path uses the OSRS radius-5
