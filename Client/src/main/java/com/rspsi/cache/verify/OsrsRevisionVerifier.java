@@ -138,14 +138,20 @@ public final class OsrsRevisionVerifier {
             messages.add("neutral scene fingerprint: " + sceneFingerprint);
             boolean minimapComplete = true;
             int minimapPixels = 0;
+            int shapedMinimapPixels = 0;
             for (int plane = 0; plane < document.planes(); plane++) {
                 MinimapImage minimap = new MinimapBuilder().build(document, plane, definitions);
                 minimapComplete &= minimap.width() == document.width()
                         && minimap.height() == document.length();
                 minimapPixels += minimap.width() * minimap.height();
+                MinimapImage shapedMinimap = new MinimapBuilder().buildShaped(document, plane, definitions);
+                minimapComplete &= shapedMinimap.width() == document.width() * 4
+                        && shapedMinimap.height() == document.length() * 4;
+                shapedMinimapPixels += shapedMinimap.width() * shapedMinimap.height();
             }
             messages.add("neutral minimap rasters: " + document.planes()
-                    + " planes; " + minimapPixels + " pixels");
+                    + " planes; " + minimapPixels + " semantic pixels; "
+                    + shapedMinimapPixels + " shaped pixels");
             byte[] encodedTerrain = OsrsRegionEncoder.encodeTerrain(document, profile.newTerrainFormat());
             byte[] encodedLocations = OsrsRegionEncoder.encodeLocations(document);
             WorldDocument roundTrip = OsrsRegionDecoder.decode(encodedTerrain, encodedLocations,
@@ -209,7 +215,8 @@ public final class OsrsRevisionVerifier {
                                             ? VerificationCheck.Status.PASS
                                             : VerificationCheck.Status.FAIL,
                                     document.planes() + " neutral minimap planes built; "
-                                            + minimapPixels + " pixels"),
+                                            + minimapPixels + " semantic pixels; "
+                                            + shapedMinimapPixels + " shaped pixels"),
                             check("location.parity", equal ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
                                     "locations included in canonical semantic comparison: " + equal),
                             check("semantic.roundtrip", equal ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,

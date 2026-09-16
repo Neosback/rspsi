@@ -43,6 +43,27 @@ class MinimapBuilderTest {
         assertEquals(0xFF102030, new MinimapBuilder().build(document, 0, definitions(), false).pixel(0, 0));
     }
 
+    @Test
+    void shapedRasterUsesFourByFourTileMasksAndRotation() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                1, 4, 1, 0, 0, List.of()));
+
+        MinimapBuilder builder = new MinimapBuilder();
+        MinimapImage rotationZero = builder.buildShaped(document, 0, definitions());
+        assertEquals(4, rotationZero.width());
+        assertEquals(4, rotationZero.height());
+        assertEquals(0xFFA0B0C0, rotationZero.pixel(0, 0));
+        assertEquals(0xFF102030, rotationZero.pixel(3, 0));
+        assertEquals(0xFF102030, rotationZero.pixel(2, 1));
+
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                1, 4, 1, 2, 0, List.of()));
+        MinimapImage rotationTwo = builder.buildShaped(document, 0, definitions());
+        assertEquals(0xFFA0B0C0, rotationTwo.pixel(1, 0));
+        assertEquals(0xFFA0B0C0, rotationTwo.pixel(3, 0));
+    }
+
     private static DefinitionProvider definitions() {
         return new DefinitionProvider() {
             @Override public Optional<ObjectDefinitionView> object(int id) { return Optional.empty(); }
@@ -51,7 +72,8 @@ class MinimapBuilderTest {
                         : id == 2 ? Optional.of(floor(id, 0x203040)) : Optional.empty();
             }
             @Override public Optional<FloorDefinitionView> overlay(int id) {
-                return id == 3 ? Optional.of(floor(id, 0x102030)) : Optional.empty();
+                return id == 3 ? Optional.of(floor(id, 0x102030))
+                        : id == 4 ? Optional.of(floor(id, 0xA0B0C0)) : Optional.empty();
             }
         };
     }
