@@ -27,4 +27,16 @@ class StandardWorkspaceCatalogTest {
             }
         }
     }
+
+    @Test
+    void presetsKeepOneCenteredViewportAndDoNotDuplicatePanels() {
+        WorkspaceCatalog catalog = StandardWorkspaceCatalog.create();
+
+        for (WorkspaceDefinition workspace : catalog.workspaces()) {
+            assertEquals(1, workspace.placements().stream()
+                    .filter(p -> p.region() == DockRegion.CENTER && p.panelId().equals("viewport")).count());
+            assertEquals(workspace.placements().size(), workspace.placements().stream()
+                    .map(PanelPlacement::panelId).distinct().count());
+        }
+    }
 }

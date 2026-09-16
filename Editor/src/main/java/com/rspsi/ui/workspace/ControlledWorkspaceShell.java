@@ -11,6 +11,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -61,6 +62,7 @@ public final class ControlledWorkspaceShell extends BorderPane {
 
     public void show(WorkspaceDefinition workspace) {
         Objects.requireNonNull(workspace, "workspace");
+        detachMountedPanels();
         VBox left = rail("workspace-tools");
         VBox right = rail("workspace-inspector");
         TabPane bottom = new TabPane();
@@ -97,7 +99,9 @@ public final class ControlledWorkspaceShell extends BorderPane {
 
     private Node panel(String id, PanelDescriptor descriptor) {
         Node panel = panels.getOrDefault(id, missingPanel(id));
-        panel.getStyleClass().add("workspace-panel");
+        if (!panel.getStyleClass().contains("workspace-panel")) {
+            panel.getStyleClass().add("workspace-panel");
+        }
         panel.setAccessibleText(title(id));
         if (panel instanceof Region region) {
             region.setMinWidth(descriptor.minimumWidth());
@@ -110,6 +114,15 @@ public final class ControlledWorkspaceShell extends BorderPane {
         Label label = new Label("Panel unavailable: " + id);
         label.getStyleClass().add("workspace-missing-panel");
         return label;
+    }
+
+    /** Removes nodes from the previous preset before reusing the fixed panels. */
+    private void detachMountedPanels() {
+        for (Node panel : panels.values()) {
+            if (panel.getParent() instanceof Pane parent) {
+                parent.getChildren().remove(panel);
+            }
+        }
     }
 
     private static String title(String id) {
