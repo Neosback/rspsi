@@ -64,6 +64,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
@@ -87,6 +89,9 @@ public final class Client implements Runnable {
 	private Cache cache;
 	
 	public static BooleanProperty gameLoaded = new SimpleBooleanProperty(false);
+
+	/** Compatibility lifecycle hook for optional neutral editor integrations. */
+	private final List<Runnable> mapReadyListeners = new CopyOnWriteArrayList<>();
 	
 	public static ObjectProperty<Exception> lastThrownException = new SimpleObjectProperty<Exception>();
 
@@ -1338,7 +1343,22 @@ public final class Client implements Runnable {
 
 		loadState = LoadState.ACTIVE;
 		loadChunks();
+		for (Runnable listener : List.copyOf(mapReadyListeners)) {
+			try {
+				listener.run();
+			} catch (RuntimeException exception) {
+				log.warn("Map-ready listener failed", exception);
+			}
+		}
 		return true;
+	}
+
+	public void addMapReadyListener(Runnable listener) {
+		mapReadyListeners.add(Objects.requireNonNull(listener, "listener"));
+	}
+
+	public void removeMapReadyListener(Runnable listener) {
+		mapReadyListeners.remove(listener);
 	}
 
 	public void mouseWheelDragged(int i, int j) {

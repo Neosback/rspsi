@@ -66,7 +66,13 @@ import com.rspsi.resources.ResourceLoader;
 import com.rspsi.swatches.BaseSwatch;
 import com.rspsi.swatches.OverlaySwatch;
 import com.rspsi.swatches.UnderlaySwatch;
+import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.model.WorldWindow;
+import com.rspsi.legacy.LegacyMapDocumentBridge;
 import com.rspsi.ui.workspace.ControlledWorkspaceBridge;
+import com.rspsi.ui.workspace.ControlledWorkspaceShell;
+import com.rspsi.ui.workspace.SessionHistoryPanel;
+import com.rspsi.ui.workspace.SessionInspectorPanel;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -120,6 +126,11 @@ public class MainWindow extends Application {
 
 
 	private Client clientInstance;
+
+	private ControlledWorkspaceShell controlledWorkspaceShell;
+	private EditorSession controlledSession;
+	private LegacyMapDocumentBridge controlledDocumentBridge;
+	private final Runnable controlledMapReadyListener = this::bindControlledWorkspaceSession;
 
 	private Scene scene;
 
@@ -227,7 +238,9 @@ public class MainWindow extends Application {
 			loader.setController(controller);
 			Parent content = loader.load();
 			if (Settings.getSetting("controlledWorkspace", false)) {
-				content = ControlledWorkspaceBridge.adapt(content, controller);
+				controlledWorkspaceShell = (ControlledWorkspaceShell)
+						ControlledWorkspaceBridge.adapt(content, controller);
+				content = controlledWorkspaceShell;
 				log.info("Controlled workspace enabled; legacy renderer remains embedded as the viewport");
 			}
 			double windowWidth = (Double) Settings.properties.getOrDefault("window_width",1240.0);
@@ -470,6 +483,9 @@ public class MainWindow extends Application {
 
 			clientInstance = Client.initialize(controller.getGamePane().widthProperty().intValue(),
 					controller.getGamePane().heightProperty().intValue());
+			if (controlledWorkspaceShell != null) {
+				clientInstance.addMapReadyListener(controlledMapReadyListener);
+			}
 
 			clientInstance.loadCache(Paths.get(Config.cacheLocation.get()));
 
@@ -574,12 +590,17 @@ public class MainWindow extends Application {
 
 				Settings.putSetting("shutdown", true);
 				if (clientInstance != null) {
+					clientInstance.removeMapReadyListener(controlledMapReadyListener);
 					try {
 						clientInstance.exit();
 					} catch(Exception ex) {
 						ex.printStackTrace();
 
 					}
+				}
+				if (controlledDocumentBridge != null) {
+					controlledDocumentBridge.close();
+					controlledDocumentBridge = null;
 				}
 				if(singleton != null) {
 					Platform.exit();
@@ -745,6 +766,42 @@ public class MainWindow extends Application {
 		Settings.putSetting("autosaveSeconds", autosaveSeconds);
 
 		service.scheduleAtFixedRate(() -> AutoSaveJob.execute(clientInstance), 5, 5, TimeUnit.MINUTES);
+	}
+
+	/**
+	 * Imports the loaded legacy terrain into the neutral session only when the
+	 * controlled workspace is enabled. The existing renderer remains the
+	 * compatibility viewport; object synchronization is intentionally deferred.
+	 */
+	private void bindControlledWorkspaceSession() {
+		if (controlledWorkspaceShell == null || clientInstance == null
+				|| clientInstance.mapRegion == null) {
+			return;
+		}
+		Platform.runLater(() -> {
+			if (controlledWorkspaceShell == null || clientInstance == null
+					|| clientInstance.mapRegion == null) {
+				return;
+			}
+			if (controlledDocumentBridge != null) {
+				controlledDocumentBridge.close();
+			}
+			var document = LegacyMapDocumentBridge.importTerrain(clientInstance.mapRegion);
+			controlledSession = new EditorSession(document);
+			controlledDocumentBridge = new LegacyMapDocumentBridge(
+					clientInstance.mapRegion, clientInstance.sceneGraph);
+			controlledDocumentBridge.attach(controlledSession);
+
+			if (controlledWorkspaceShell.panelNode("history") instanceof SessionHistoryPanel history) {
+				history.bind(controlledSession);
+			}
+			if (controlledWorkspaceShell.panelNode("inspector") instanceof SessionInspectorPanel inspector) {
+				inspector.bind(controlledSession, new WorldWindow(clientInstance.getBaseX(),
+						clientInstance.getBaseY(), document.width(), document.length()));
+			}
+			log.info("Controlled workspace session bound to legacy map {}x{} at {},{}",
+					document.width(), document.length(), clientInstance.getBaseX(), clientInstance.getBaseY());
+		});
 	}
 
 	@Subscribe(threadMode = ThreadMode.ASYNC)

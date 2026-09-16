@@ -111,10 +111,16 @@ point until the shell has equivalent launch/load/edit/save coverage.
 `ControlledWorkspaceBridge` is an opt-in adapter selected by the
 `controlledWorkspace` setting. It reparents the existing `main_test4.fxml`
 tool rail, renderer viewport, asset pane, and menu bar into the shell while
-leaving the default legacy layout unchanged. The bridge deliberately uses
-session-backed inspector/history panels, plus placeholder validation/console
-panels, until those views are connected to a loaded document and their manual
-workflows are covered.
+leaving the default legacy layout unchanged. The bridge uses session-backed
+inspector/history panels, plus placeholder validation/console panels, while
+the controlled workflow and its manual coverage continue to be migrated.
+
+When a legacy map reaches its existing ready state, the client emits a small
+map-ready lifecycle callback. In controlled mode `MainWindow` imports the
+terrain into a fresh `EditorSession`, attaches `LegacyMapDocumentBridge`, and
+binds the inspector/history panels. This keeps the default legacy path
+untouched while making the new panels reflect the loaded map rather than a
+synthetic document; legacy object synchronization remains intentionally open.
 
 ## Correctness workflow
 
