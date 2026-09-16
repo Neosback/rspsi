@@ -34,6 +34,9 @@ boundary.
   future save coordination.
 - `EditorCommand` is the canonical mutation contract; `EditCommand` remains a
   temporary source-compatible alias.
+- `WorldFragment` is the canonical portable terrain/location copy-paste
+  payload; fragment pastes are grouped commands rather than direct scene
+  mutations.
 - `EditorTool`, `ToolContext`, `PointerEvent`, and `ToolInspector` are shared
   by all frontends.
 - `SceneRenderer` consumes neutral scenes and changes and returns neutral pick

@@ -38,6 +38,7 @@ The locked product direction and workspace design are maintained in
 | Neutral map service | implemented-unverified | `MapIndexTable` and `OsrsMapService` provide named OSRS map discovery and terrain/location byte reads; real-cache fixture remains |
 | Neutral definitions | in-progress | Definition views/provider introduced; expand only as consumers migrate |
 | Command/session editing core | in-progress | Core model, command history, and session introduced; adapt existing tools next |
+| WorldFragment copy/paste | implemented-unverified | Canonical multi-plane fragment capture and atomic paste/undo command added; UI import/export wiring remains |
 | UI-neutral editor contracts | in-progress | Neutral pointer, tool, inspector, viewport, and renderer seams introduced; command-backed underlay brush is the first migrated tool path |
 | Live legacy document bridge | in-progress | MapRegion terrain import and underlay synchronization are implemented; UI activation remains opt-in |
 | OpenRune backend | in-progress | 2.4.19 compatibility spike is isolated behind `CacheStore`; legacy remains default |
