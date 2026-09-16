@@ -209,6 +209,29 @@ When an OSRS-backed `AssetRepository` is supplied, the asset pane uses
 RSCM/GameVal keys; a null repository preserves the legacy inspector fallback.
 the controlled workflow and its manual coverage continue to be migrated.
 
+`WorkspaceStatusBar` is a persistent JavaFX state row below the controlled
+bottom tabs. It reports the active OSRS region/project context, cache revision,
+editable versus read-only state, compatibility issues, and saved/dirty state.
+It observes only `EditorSession` state and is intentionally not a cache or
+renderer status channel. Preset changes detach and remount the row safely, so
+the fixed workspace can change without losing session state.
+
+`ControlledWorkspaceBridge.bindSession(...)` is the shared frontend binding
+path for legacy compatibility sessions and future canonical OSRS sessions.
+`bindProject(...)` additionally supplies an `OsrsProjectSessionLoader`
+`OpenedProject` to the same history, inspector, validation, status, and asset
+panels. The legacy renderer remains a compatibility viewport until a neutral
+OSRS scene renderer is ready; the UI does not claim that the legacy viewport
+has rendered the canonical OSRS session.
+
+`OsrsStudioProject` is the Client-side OSRS composition root. It owns the
+neutral map service, project/session loader, definition provider, asset
+repository, and cache lifecycle. It supports an OpenRune read-only source and
+the currently validated OpenRune-read/Displee-output arrangement while
+keeping both backend types behind the cache boundary. Frontends receive
+`OpenedProject`, `DefinitionProvider`, and `AssetRepository`, never archive,
+filesystem, or cache-library objects.
+
 When a legacy map reaches its existing ready state, the client emits a small
 map-ready lifecycle callback. In controlled mode `MainWindow` imports terrain
 and object anchors into a fresh `EditorSession`, attaches

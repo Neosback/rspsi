@@ -34,6 +34,8 @@ public final class ControlledWorkspaceShell extends BorderPane {
 
     private final WorkspaceCatalog catalog;
     private final Map<String, Node> panels;
+    private Node bottomTabs;
+    private Node statusBar;
 
     public ControlledWorkspaceShell(WorkspaceCatalog catalog,
                                     WorkspaceDefinition workspace,
@@ -56,6 +58,11 @@ public final class ControlledWorkspaceShell extends BorderPane {
         return panels.get(id);
     }
 
+    /** Returns the mounted persistent status row, if one was configured. */
+    public Node statusBar() {
+        return statusBar;
+    }
+
     public void show(String workspaceId) {
         show(catalog.workspace(workspaceId));
     }
@@ -63,6 +70,8 @@ public final class ControlledWorkspaceShell extends BorderPane {
     public void show(WorkspaceDefinition workspace) {
         Objects.requireNonNull(workspace, "workspace");
         detachMountedPanels();
+        detach(statusBar);
+        detach(bottomTabs);
         VBox left = rail("workspace-tools");
         VBox right = rail("workspace-inspector");
         TabPane bottom = new TabPane();
@@ -86,8 +95,17 @@ public final class ControlledWorkspaceShell extends BorderPane {
         }
         setLeft(left.getChildren().isEmpty() ? null : left);
         setRight(right.getChildren().isEmpty() ? null : right);
-        setBottom(bottom.getTabs().isEmpty() ? null : bottom);
+        bottomTabs = bottom.getTabs().isEmpty() ? null : bottom;
+        rebuildBottom();
         setCenter(center);
+    }
+
+    /** Mounts the persistent state row below the controlled bottom panels. */
+    public void setStatusBar(Node statusBar) {
+        detach(this.statusBar);
+        detach(statusBar);
+        this.statusBar = statusBar;
+        rebuildBottom();
     }
 
     private VBox rail(String styleClass) {
@@ -123,6 +141,32 @@ public final class ControlledWorkspaceShell extends BorderPane {
                 parent.getChildren().remove(panel);
             }
         }
+    }
+
+    private static void detach(Node node) {
+        if (node != null && node.getParent() instanceof Pane parent) {
+            parent.getChildren().remove(node);
+        }
+    }
+
+    private void rebuildBottom() {
+        if (bottomTabs == null && statusBar == null) {
+            setBottom(null);
+            return;
+        }
+        if (bottomTabs == null) {
+            setBottom(statusBar);
+            return;
+        }
+        if (statusBar == null) {
+            setBottom(bottomTabs);
+            return;
+        }
+        VBox container = new VBox();
+        container.getStyleClass().add("workspace-bottom-area");
+        VBox.setVgrow(bottomTabs, javafx.scene.layout.Priority.ALWAYS);
+        container.getChildren().addAll(bottomTabs, statusBar);
+        setBottom(container);
     }
 
     private static String title(String id) {

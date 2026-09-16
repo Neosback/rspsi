@@ -60,7 +60,8 @@ The locked product direction and workspace design are maintained in
 | Resource catalog and provenance | implemented-unverified | [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md) and [`RESOURCE_INTAKE_2026-09-16.md`](RESOURCE_INTAKE_2026-09-16.md) record roles, commits, license evidence, inspected paths, and current adoption tests |
 | OSRS-only product scope | in-progress | Scope and migration policy are locked in [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md); legacy paths remain quarantined during parity work |
 | Project/cache identity metadata | implemented-unverified | Neutral `OsrsCacheMetadata`, `ProjectMetadata`, JSON persistence, explicit read-only mismatch assessment, optional backend-neutral `CacheStore.metadata(...)` capability, and `OsrsProjectSessionLoader` fail-closed session binding added; mismatched sessions reject edits at the core, while cache discovery and UI remain |
-| Controlled workspace contracts | implemented-unverified | UI-neutral dock/panel/placement types, validated presets, reusable preset switching, visible focus styling, and an opt-in `MainWindow` bridge that reuses the legacy renderer; session-backed inspector/history/validation panels bind after map-ready, show editable versus read-only state, and the history panel supports seeking; optional `AssetBrowserPanel` consumes neutral display/ID/symbolic metadata, while full UI smoke coverage remains |
+| Controlled workspace contracts | implemented-unverified | UI-neutral dock/panel/placement types, validated presets, reusable preset switching, visible focus styling, persistent status bar, and an opt-in `MainWindow` bridge that reuses the legacy renderer; the shared binder now accepts canonical sessions or `OsrsProjectSessionLoader.OpenedProject`, binds session-backed inspector/history/validation/assets, shows editable versus read-only state and compatibility issues, and the history panel supports seeking; full UI smoke coverage remains |
+| OSRS project composition | implemented-unverified | `OsrsStudioProject` composes the neutral OSRS map/session/definition/asset services, owns cache lifecycle, supports read-only OpenRune and the staged OpenRune-read/Displee-output arrangement, and is covered with neutral lifecycle/session tests; JavaFX launch/load wiring and native OpenRune writing remain gated |
 | RuneLite/TSPS parity harness | in-progress | `OsrsRevisionVerifier` reports auditable cache, capabilities, metadata/fingerprint, revision-profile, definitions, terrain/location decode, neutral scene construction, collision, round-trip, and render/minimap parity checks for an explicitly supplied OpenRune cache; neutral instance-template packing, repeated-chunk grids, 8×8 transforms, and inverse rotation tests now cover the RuneLite coordinate oracle, while licensed golden comparisons remain |
 | Lua, plugin permissions, Plugin Hub | deferred | Begin only after native command/plugin API is stable |
 | Renderer/UI rewrite | deferred | Current JavaFX renderer remains the compatibility surface |
@@ -118,9 +119,11 @@ Prioritize terrain sculpting, object transforms, richer selection, collision too
 
 The first controlled JavaFX workspace shell is now available as a frontend
 adapter. It materializes the neutral workspace presets into fixed tool and
-inspector rails, a centered viewport, and controlled bottom tabs. It does not
-own document state, renderer state, or arbitrary docking; wiring it into the
-legacy `MainWindow` remains a separate compatibility milestone.
+inspector rails, a centered viewport, controlled bottom tabs, and a persistent
+status row. `ControlledWorkspaceBridge` binds the same panels to the legacy
+compatibility session and exposes an OSRS `OpenedProject` binding path. It does
+not own document state, renderer state, or arbitrary docking; the legacy
+renderer remains the viewport until a neutral OSRS scene path is ready.
 
 ## Next implementation gate
 
@@ -134,4 +137,7 @@ writer or a formally documented OpenRune-read/Displee-output arrangement. Run
 `RSPSI_OSRS_REGION_X`, `RSPSI_OSRS_REGION_Y`, and `RSPSI_OSRS_REVISION`.
 Until the OpenRune writer decision and the remaining scene/parity gates pass,
 OpenRune remains read-only and the legacy backend remains available only as a
-quarantined compatibility/output path.
+quarantined compatibility/output path. The next implementation step is to
+exercise `OsrsStudioProject` from an explicit OSRS project-open workflow and
+then add scene/window parity evidence; do not silently replace the existing
+launch path before that workflow has equivalent smoke coverage.

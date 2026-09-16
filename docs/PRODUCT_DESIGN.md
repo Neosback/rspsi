@@ -67,6 +67,12 @@ subrevision, and cache fingerprint. A mismatch opens read-only in the first
 implementation; `ProjectCompatibility` makes that decision explicit for
 callers. Automatic ID migration is deferred.
 
+The frontend composition root is `OsrsStudioProject`. It exposes an opened
+canonical session, neutral definitions, and asset search to the JavaFX bridge
+without exposing OpenRune, Displee, or archive types. The current safe output
+arrangement reads the OpenRune source and stages writes into a distinct output
+cache; a writable OpenRune packer remains a parity-gated milestone.
+
 ## Editor layout
 
 Use controlled workspaces rather than unrestricted docking:
@@ -95,6 +101,9 @@ history, validation, and console. Command palette and search are overlays.
 
 Panels declare a preferred region, allowed regions, and minimum dimensions.
 JavaFX renders these neutral contracts now; Dear ImGui may render them later.
+The controlled JavaFX shell also keeps a persistent status row visible for
+project/region context, revision, compatibility, editability, and saved/dirty
+state. This is state feedback, not a second document model.
 
 ## Advancement gates
 

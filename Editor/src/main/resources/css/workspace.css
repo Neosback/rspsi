@@ -18,6 +18,38 @@
     -fx-background-color: #111827;
 }
 
+.workspace-bottom-area {
+    -fx-background-color: #111827;
+}
+
+.workspace-status-bar {
+    -fx-background-color: #0f172a;
+    -fx-border-color: #475569;
+    -fx-border-width: 1px 0 0 0;
+    -fx-alignment: center-left;
+}
+
+.workspace-status-bar .label {
+    -fx-font-family: "JetBrains Mono";
+    -fx-font-size: 11px;
+}
+
+.workspace-status-context,
+.workspace-status-cache {
+    -fx-text-fill: #cbd5e1;
+}
+
+.workspace-status-editable,
+.workspace-status-saved {
+    -fx-text-fill: #86efac;
+}
+
+.workspace-status-readonly,
+.workspace-status-dirty {
+    -fx-text-fill: #fca5a5;
+    -fx-font-weight: bold;
+}
+
 .workspace-panel {
     -fx-background-color: #192134;
 }
