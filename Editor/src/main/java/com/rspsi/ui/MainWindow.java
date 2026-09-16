@@ -67,6 +67,7 @@ import com.rspsi.swatches.BaseSwatch;
 import com.rspsi.swatches.OverlaySwatch;
 import com.rspsi.swatches.UnderlaySwatch;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.cache.definition.LegacyDefinitionProvider;
 import com.rspsi.editor.model.WorldWindow;
 import com.rspsi.legacy.LegacyMapDocumentBridge;
 import com.rspsi.ui.workspace.ControlledWorkspaceBridge;
@@ -812,7 +813,7 @@ public class MainWindow extends Application {
 						clientInstance.getBaseY(), document.width(), document.length()));
 			}
 			if (controlledWorkspaceShell.panelNode("validation") instanceof ValidationPanel validation) {
-				validation.bind(controlledSession);
+				validation.bind(controlledSession, new LegacyDefinitionProvider());
 			}
 			log.info("Controlled workspace session bound to legacy map {}x{} at {},{}",
 					document.width(), document.length(), clientInstance.getBaseX(), clientInstance.getBaseY());
