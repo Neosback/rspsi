@@ -35,6 +35,7 @@ class OsrsStudioProjectTest {
             var opened = studio.openRegion(50, 50);
             assertFalse(opened.readOnly());
             assertTrue(opened.region().session().canSave());
+            assertTrue(studio.openWindowAround(50, 50, 0).complete());
             assertTrue(studio.assets().search("").isEmpty());
             assertTrue(studio.capabilities().writable());
         }
@@ -53,6 +54,7 @@ class OsrsStudioProjectTest {
 
         studio.close();
         assertThrows(IllegalStateException.class, () -> studio.openRegion(50, 50));
+        assertThrows(IllegalStateException.class, () -> studio.openWindow(50, 50, 1, 1));
     }
 
     private static DefinitionProvider emptyDefinitions() {

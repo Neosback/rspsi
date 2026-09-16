@@ -243,6 +243,12 @@ captures the selected OpenRune cache fingerprint without copying or modifying
 the cache; opening a different cache later still goes through the existing
 read-only compatibility decision.
 
+The composition root also exposes `openWindow(...)` and
+`openWindowAround(...)` for scene consumers. These load a bounded OSRS context,
+preserve missing-region holes, and stitch shared terrain borders before the
+window is consumed. A window is scene context, not a second editor model;
+editable state remains owned by the `EditorSession` returned by `openRegion`.
+
 When a legacy map reaches its existing ready state, the client emits a small
 map-ready lifecycle callback. In controlled mode `MainWindow` imports terrain
 and object anchors into a fresh `EditorSession`, attaches

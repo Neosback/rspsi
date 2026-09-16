@@ -10,6 +10,7 @@ import com.rspsi.cache.store.CacheStoreFactory;
 import com.rspsi.cache.store.OpenRuneCacheStore;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.assets.DefinitionAssetRepository;
+import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.project.ProjectMetadata;
 import com.rspsi.project.ProjectLayout;
 
@@ -190,6 +191,37 @@ public final class OsrsStudioProject implements AutoCloseable {
     public OsrsProjectSessionLoader.OpenedProject openRegion(int regionX, int regionY) {
         ensureOpen();
         return sessions.load(regionX, regionY);
+    }
+
+    /**
+     * Loads a bounded scene context around one or more regions. Missing
+     * regions remain explicit holes, and shared terrain borders are stitched
+     * before the window is handed to scene/render consumers.
+     */
+    public WorldRegionWindow openWindow(int minRegionX, int minRegionY,
+                                        int regionWidth, int regionHeight) {
+        ensureOpen();
+        WorldRegionWindow window = maps.loadWindow(minRegionX, minRegionY,
+                regionWidth, regionHeight);
+        window.stitchSharedEdges();
+        return window;
+    }
+
+    /** Loads a square context centered on a region, clamped to OSRS bounds. */
+    public WorldRegionWindow openWindowAround(int centerRegionX, int centerRegionY,
+                                              int radius) {
+        if (centerRegionX < 0 || centerRegionX > 255
+                || centerRegionY < 0 || centerRegionY > 255) {
+            throw new IllegalArgumentException("OSRS region coordinates must be in [0, 255]");
+        }
+        if (radius < 0 || radius > 255) {
+            throw new IllegalArgumentException("Window radius must be in [0, 255]");
+        }
+        int minX = Math.max(0, centerRegionX - radius);
+        int minY = Math.max(0, centerRegionY - radius);
+        int maxX = Math.min(255, centerRegionX + radius);
+        int maxY = Math.min(255, centerRegionY + radius);
+        return openWindow(minX, minY, maxX - minX + 1, maxY - minY + 1);
     }
 
     @Override
