@@ -201,6 +201,10 @@ boundary.
   construction remains outside `SceneGraph`. Definition-aware scenes also
   carry neutral terrain materials, and every complete scene carries per-corner
   `TerrainLight` values from the OSRS directional normal calculation.
+- `RenderWindowSceneBuilder` projects a `WorldRegionWindow` into world-addressed
+  neutral tiles and objects. It stitches loaded neighboring edges first and
+  preserves absent regions as holes, so loading-line context and region
+  boundaries remain observable instead of becoming fabricated empty terrain.
 - `SceneRenderer.update(RenderScene, RenderChanges)` is the preferred
   incremental publication path. Its default delegates to the original
   `update(RenderChanges)` method so existing renderers remain source
