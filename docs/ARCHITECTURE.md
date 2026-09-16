@@ -112,6 +112,11 @@ boundary.
   source world tiles to all repeated scene occurrences, preserve missing
   chunks as holes, invert the mapping for inspection, and adjust object
   orientation without exposing RuneLite or client classes.
+- `InstanceWorldBuilder` materializes those transformed chunks into a normal
+  `WorldDocument`, rotating terrain corner heights and overlay orientation and
+  translating object anchors into destination-document coordinates. Source
+  holes remain default/unloaded destination tiles rather than fabricated cache
+  data.
 - `WorldRegionWindow.boundaryMismatches()` checks shared corner heights across
   loaded east and north region edges; incomplete windows report only the
   boundaries that can actually be proven.
