@@ -160,7 +160,9 @@ and do not add editing behavior to `SceneGraph`.
 `FlattenTerrainTool` and `SmoothTerrainTool` extend that same path. Flatten
 writes a uniform four-corner height, while smooth samples corresponding shared
 corners from neighbouring tiles; both produce one history entry per pointer
-stroke.
+stroke. `ChangeHeightTool` now accumulates changes by shared terrain vertex,
+supports a bounded radius with none/linear/smooth falloff, and emits tile
+snapshots that preserve shared-edge heights.
 
 `PlaceObjectCommand`, `DeleteObjectCommand`, `MoveObjectCommand`, and
 `RotateObjectCommand` provide the corresponding canonical location mutations;

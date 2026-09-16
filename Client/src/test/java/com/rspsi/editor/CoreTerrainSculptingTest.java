@@ -6,6 +6,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.tool.EditorToolController;
+import com.rspsi.editor.tool.ChangeHeightTool;
 import com.rspsi.editor.tool.FlattenTerrainTool;
 import com.rspsi.editor.tool.SmoothTerrainTool;
 import com.rspsi.editor.tool.ToolContext;
@@ -48,6 +49,28 @@ class CoreTerrainSculptingTest {
         assertEquals(25, world.tile(0, 1, 1).snapshot().southWestHeight());
         assertEquals(25, world.tile(0, 1, 1).snapshot().northEastHeight());
         assertEquals(1, session.history().size());
+    }
+
+    @Test
+    void falloffBrushUpdatesSharedVerticesWithoutTerrainCracks() {
+        WorldDocument world = new WorldDocument(5, 5);
+        EditorSession session = new EditorSession(world);
+        ChangeHeightTool tool = new ChangeHeightTool(9);
+        tool.setRadius(1);
+        tool.setFalloff(ChangeHeightTool.Falloff.LINEAR);
+        EditorToolController controller = new EditorToolController();
+        controller.activate(tool, context(session));
+        controller.pointerDown(pointer(2, 2));
+        controller.pointerUp(pointer(2, 2));
+
+        assertEquals(9, world.tile(0, 2, 2).snapshot().southWestHeight());
+        assertEquals(9, world.tile(0, 3, 2).snapshot().southWestHeight());
+        assertEquals(5, world.tile(0, 3, 2).snapshot().southEastHeight());
+        assertEquals(world.tile(0, 2, 2).snapshot().southEastHeight(),
+                world.tile(0, 3, 2).snapshot().southWestHeight());
+        assertEquals(1, session.history().size());
+        session.undo();
+        assertEquals(0, world.tile(0, 3, 2).snapshot().southWestHeight());
     }
 
     private static ToolContext context(EditorSession session) {
