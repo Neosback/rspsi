@@ -52,6 +52,10 @@ boundary.
   objects, and fragments while retaining its legacy tile-set methods.
 - `WorkspaceCatalog` and `StandardWorkspaceCatalog` define the fixed frontend
   presets; JavaFX renders them, but no frontend owns the layout model.
+- `WorldWindow`, `WorldTileAddress`, and `TileInspectorSnapshot` provide the
+  neutral coordinate/inspection payload used by future status bars and debug
+  overlays. Local document coordinates remain separate from world-space
+  region/chunk derivation.
 - `EditorTool`, `ToolContext`, `PointerEvent`, and `ToolInspector` are shared
   by all frontends.
 - `SceneRenderer` consumes neutral scenes and changes and returns neutral pick
