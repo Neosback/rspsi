@@ -420,6 +420,11 @@
                                     <MenuItem fx:id="openHashButton" mnemonicParsing="false" text="Hash" />
                                     <MenuItem fx:id="openFileButton" mnemonicParsing="false" text=".dat/.gz" />
                                     <MenuItem fx:id="openAsPackBtn" mnemonicParsing="false" text=".pack" />
+                                    <MenuItem fx:id="openOsrsProjectButton" mnemonicParsing="true" text="OSRS project…">
+                                       <accelerator>
+                                          <KeyCodeCombination alt="UP" code="P" control="DOWN" meta="UP" shift="DOWN" shortcut="UP" />
+                                       </accelerator>
+                                    </MenuItem>
                                  </items>
                               </Menu>
                         <SeparatorMenuItem mnemonicParsing="false" />

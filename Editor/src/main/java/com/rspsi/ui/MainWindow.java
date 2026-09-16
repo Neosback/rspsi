@@ -67,9 +67,12 @@ import com.rspsi.swatches.BaseSwatch;
 import com.rspsi.swatches.OverlaySwatch;
 import com.rspsi.swatches.UnderlaySwatch;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.cache.workspace.OsrsStudioProject;
 import com.rspsi.cache.definition.LegacyDefinitionProvider;
 import com.rspsi.editor.model.WorldWindow;
 import com.rspsi.legacy.LegacyMapDocumentBridge;
+import com.rspsi.project.ProjectLayout;
+import com.rspsi.project.ProjectMetadata;
 import com.rspsi.ui.workspace.ControlledWorkspaceBridge;
 import com.rspsi.ui.workspace.ControlledWorkspaceShell;
 import com.rspsi.ui.workspace.SessionHistoryPanel;
@@ -93,6 +96,7 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.StageStyle;
 import javafx.util.Duration;
 import lombok.Getter;
@@ -132,6 +136,8 @@ public class MainWindow extends Application {
 	private ControlledWorkspaceShell controlledWorkspaceShell;
 	private EditorSession controlledSession;
 	private LegacyMapDocumentBridge controlledDocumentBridge;
+	private OsrsStudioProject osrsStudioProject;
+	private boolean osrsProjectActive;
 	private final Runnable controlledMapReadyListener = this::bindControlledWorkspaceSession;
 
 	private Scene scene;
@@ -619,6 +625,10 @@ public class MainWindow extends Application {
 					controlledDocumentBridge.close();
 					controlledDocumentBridge = null;
 				}
+				if (osrsStudioProject != null) {
+					osrsStudioProject.close();
+					osrsStudioProject = null;
+				}
 				if (controlledWorkspaceShell != null) {
 					if (controlledWorkspaceShell.panelNode("history") instanceof SessionHistoryPanel history) {
 						history.close();
@@ -805,6 +815,9 @@ public class MainWindow extends Application {
 	 * compatibility viewport while the bridge synchronizes scene objects.
 	 */
 	private void bindControlledWorkspaceSession() {
+		if (osrsProjectActive) {
+			return;
+		}
 		if (controlledWorkspaceShell == null || clientInstance == null
 				|| clientInstance.mapRegion == null || clientInstance.sceneGraph == null) {
 			return;
@@ -831,6 +844,87 @@ public class MainWindow extends Application {
 			log.info("Controlled workspace session bound to legacy map {}x{} at {},{}",
 					document.width(), document.length(), clientInstance.getBaseX(), clientInstance.getBaseY());
 		});
+	}
+
+	/**
+	 * Opens the explicit OSRS project workflow without replacing the legacy
+	 * launch path. The first frontend milestone is intentionally read-only:
+	 * it proves project identity, cache loading, region selection, and neutral
+	 * inspector binding before a canonical OSRS viewport is introduced.
+	 */
+	private void openOsrsProject() {
+		if (controlledWorkspaceShell == null) {
+			FXDialogs.showInformation(stage, "Controlled workspace required",
+					"Enable the controlled workspace setting before opening an OSRS project.");
+			return;
+		}
+		DirectoryChooser chooser = new DirectoryChooser();
+		chooser.setTitle("Choose RSPSi OSRS project folder");
+		File projectDirectory = chooser.showDialog(stage);
+		if (projectDirectory == null) return;
+
+		ProjectLayout layout = new ProjectLayout(projectDirectory.toPath());
+		ProjectMetadata metadata;
+		try {
+			metadata = layout.readMetadata();
+		} catch (IOException exception) {
+			FXDialogs.showException(stage, "Cannot open OSRS project",
+					"The selected folder does not contain a readable project.json.", exception);
+			return;
+		}
+
+		DirectoryChooser cacheChooser = new DirectoryChooser();
+		cacheChooser.setTitle("Choose OSRS cache for this project");
+		File cacheDirectory = cacheChooser.showDialog(stage);
+		if (cacheDirectory == null) return;
+
+		String regionInput = FXDialogs.showTextInput(stage, "Choose starting region",
+				"Enter region coordinates as regionX,regionY:", "50,50");
+		int[] region = parseRegion(regionInput);
+		if (region == null) {
+			FXDialogs.showWarning(stage, "Invalid region",
+					"Enter two region coordinates between 0 and 255, for example 50,50.");
+			return;
+		}
+
+		OsrsStudioProject opened = null;
+		try {
+			opened = OsrsStudioProject.openReadOnly(cacheDirectory.toPath(), metadata);
+			var projectRegion = opened.openRegion(region[0], region[1]);
+			if (osrsStudioProject != null) osrsStudioProject.close();
+			osrsStudioProject = opened;
+			opened = null;
+			osrsProjectActive = true;
+			if (clientInstance != null) {
+				clientInstance.removeMapReadyListener(controlledMapReadyListener);
+			}
+			if (controlledDocumentBridge != null) {
+				controlledDocumentBridge.close();
+				controlledDocumentBridge = null;
+			}
+			ControlledWorkspaceBridge.bindProject(controlledWorkspaceShell, projectRegion,
+					osrsStudioProject.definitions(), osrsStudioProject.assets());
+			updateHistoryMenuState();
+			log.info("Opened read-only OSRS project {} at region {},{}",
+					layout.root(), region[0], region[1]);
+		} catch (RuntimeException exception) {
+			if (opened != null) opened.close();
+			FXDialogs.showException(stage, "Cannot open OSRS project",
+					"The cache or selected region could not be opened.", exception);
+		}
+	}
+
+	private static int[] parseRegion(String value) {
+		if (value == null) return null;
+		String[] parts = value.trim().split(",");
+		if (parts.length != 2) return null;
+		try {
+			int x = Integer.parseInt(parts[0].trim());
+			int y = Integer.parseInt(parts[1].trim());
+			return x >= 0 && x <= 255 && y >= 0 && y <= 255 ? new int[] {x, y} : null;
+		} catch (NumberFormatException exception) {
+			return null;
+		}
 	}
 
 	/**
@@ -1041,6 +1135,8 @@ public class MainWindow extends Application {
 			});
 
 		});
+
+		controller.getOpenOsrsProjectButton().setOnAction(evt -> openOsrsProject());
 
 		controller.getOpenHashButton().setOnAction(evt -> {
 

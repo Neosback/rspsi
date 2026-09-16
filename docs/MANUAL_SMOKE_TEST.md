@@ -33,7 +33,19 @@ Record the cache revision, map/region used, operating system, and any failure in
 
 For the OSRS project foundation, also verify that a project directory contains
 `project.json`, `autosave/`, and `edits/`; opening it against its recorded cache
-is editable, while opening it against a different revision or fingerprint is
-clearly read-only. The current project/session API is covered by automated
-tests; the JavaFX Open Project action remains gated until the canonical OSRS
-scene viewport is connected.
+is compatible, while opening it against a different revision or fingerprint
+is clearly read-only. The staged output/session API is covered separately by
+automated tests; the JavaFX OpenRune workflow is intentionally read-only until
+the native writer gate passes.
+
+For the opt-in OSRS project workflow:
+
+- [ ] Enable `controlledWorkspace` and launch RSPSi.
+- [ ] Choose `File > Open from > OSRS project…`.
+- [ ] Select a project folder containing `project.json`.
+- [ ] Select the OSRS cache recorded by that project.
+- [ ] Enter a valid starting region such as `50,50`.
+- [ ] Confirm the selected region appears in the controlled workspace and the
+      inspector, history, assets, validation, and status panels are populated.
+- [ ] Confirm the status row clearly marks the OpenRune project read-only.
+- [ ] Close/relaunch and confirm the legacy map workflow still opens normally.

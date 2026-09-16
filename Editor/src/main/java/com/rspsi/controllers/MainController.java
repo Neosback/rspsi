@@ -96,6 +96,9 @@ public class MainController {
 	private MenuItem openFileButton;
 
 	@FXML
+	private MenuItem openOsrsProjectButton;
+
+	@FXML
 	private MenuItem saveMenuItem;
 
 	@FXML
