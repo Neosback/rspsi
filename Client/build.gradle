@@ -6,6 +6,13 @@ dependencies {
     api 'com.displee:rs-cache-library:7.3.0'
     api 'com.displee:disio:2.3'
 
+    // Isolated compatibility spike; OpenRune types must not leak into editor APIs.
+    implementation 'dev.or2:filesystem:2.4.19'
+    implementation 'dev.or2:filestore:2.4.19'
+    implementation 'dev.or2:osrs-fs:2.4.19'
+    implementation 'dev.or2:osrs:2.4.19'
+    implementation 'dev.or2:definition:2.4.19'
+
     api group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     api group: 'org.tukaani', name: 'xz', version: '1.10'
     api group: 'org.brotli', name: 'dec', version: '0.1.2'

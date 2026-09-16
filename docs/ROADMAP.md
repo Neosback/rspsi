@@ -9,6 +9,10 @@ This is the canonical technical progress ledger. Statuses are evidence-based:
 - `blocked` — progress requires an external decision or dependency
 - `deferred` — intentionally postponed
 
+The source-priority and ownership record is maintained in
+[`REFERENCE_ECOSYSTEM.md`](REFERENCE_ECOSYSTEM.md). It is research context;
+this file is the executable progress ledger.
+
 ## Current baseline
 
 | Area | Status | Evidence / next action |
@@ -26,7 +30,7 @@ This is the canonical technical progress ledger. Statuses are evidence-based:
 | Neutral cache boundary | in-progress | `CacheStore` facade introduced; migrate consumers incrementally |
 | Neutral definitions | in-progress | Definition views/provider introduced; expand only as consumers migrate |
 | Command/session editing core | in-progress | Core model, command history, and session introduced; adapt existing tools next |
-| OpenRune backend | not-started | Requires compatibility spike behind `CacheStore` |
+| OpenRune backend | in-progress | 2.4.19 compatibility spike is isolated behind `CacheStore`; legacy remains default |
 | RuneLite/TSPS parity harness | not-started | Add golden fixtures after cache seam is stable |
 | Lua, plugin permissions, Plugin Hub | deferred | Begin only after native command/plugin API is stable |
 | Renderer/UI rewrite | deferred | Current JavaFX renderer remains the compatibility surface |
@@ -53,11 +57,12 @@ This is the canonical technical progress ledger. Statuses are evidence-based:
 
 ### Phase 3 — Modern OSRS backend
 
-- Add OpenRune only behind neutral interfaces.
+- Add OpenRune only behind neutral interfaces. The first milestone is a
+  read-only compatibility spike; writable support is not implied by a green
+  compile.
 - Complete OSRS map-index support.
 - Require legacy regression and OSRS parity fixtures before switching defaults.
 
 ### Phase 4 — Editing improvements
 
 Prioritize terrain sculpting, object transforms, richer selection, collision tools, then region/asset workflows. Every operation must use the command/history path.
-
