@@ -72,6 +72,10 @@ boundary.
   neighbor-context work. Missing regions remain explicit holes, so boundary
   blending and loading-line behavior cannot silently treat absent data as
   authored empty terrain.
+- `InstanceChunkTemplate` and `InstanceChunkTransform` keep current OSRS
+  instance-template packing and 8×8 rotation semantics neutral. They map
+  source world tiles to scene tiles, invert the mapping for inspection, and
+  adjust object orientation without exposing RuneLite or client classes.
 - `WorldRegionWindow.boundaryMismatches()` checks shared corner heights across
   loaded east and north region edges; incomplete windows report only the
   boundaries that can actually be proven.
