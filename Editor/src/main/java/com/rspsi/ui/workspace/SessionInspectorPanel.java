@@ -140,6 +140,7 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
                 : OsrsCollisionBuilder.fromTerrainAndObjects(session.world(), definitions);
         CollisionTileSnapshot collisionTile = CollisionTileSnapshot.from(collision, coordinate);
         row("Movement blocked", directions(collisionTile.movementBlocked()));
+        row("Route blocked", directions(collisionTile.routeBlocked()));
         row("Projectile blocked", directions(collisionTile.projectileBlocked()));
         row("Floor/object", collisionTile.floorBlocked() || collisionTile.objectBlocked()
                 ? (collisionTile.floorBlocked() ? "Floor" : "Object") : "No");

@@ -11,6 +11,7 @@ public record CollisionTileSnapshot(
         TileCoordinate coordinate,
         int rawFlags,
         Set<CollisionDirection> movementBlocked,
+        Set<CollisionDirection> routeBlocked,
         Set<CollisionDirection> projectileBlocked,
         boolean floorBlocked,
         boolean objectBlocked,
@@ -19,6 +20,7 @@ public record CollisionTileSnapshot(
     public CollisionTileSnapshot {
         coordinate = Objects.requireNonNull(coordinate, "coordinate");
         movementBlocked = immutableDirections(movementBlocked);
+        routeBlocked = immutableDirections(routeBlocked);
         projectileBlocked = immutableDirections(projectileBlocked);
     }
 
@@ -27,12 +29,14 @@ public record CollisionTileSnapshot(
         Objects.requireNonNull(coordinate, "coordinate");
         int flags = map.flags(coordinate);
         EnumSet<CollisionDirection> movement = EnumSet.noneOf(CollisionDirection.class);
+        EnumSet<CollisionDirection> route = EnumSet.noneOf(CollisionDirection.class);
         EnumSet<CollisionDirection> projectile = EnumSet.noneOf(CollisionDirection.class);
         for (CollisionDirection direction : CollisionDirection.values()) {
             if ((flags & direction.movementMask()) != 0) movement.add(direction);
+            if ((flags & direction.routeMask()) != 0) route.add(direction);
             if ((flags & direction.projectileMask()) != 0) projectile.add(direction);
         }
-        return new CollisionTileSnapshot(coordinate, flags, movement, projectile,
+        return new CollisionTileSnapshot(coordinate, flags, movement, route, projectile,
                 (flags & (CollisionFlag.BLOCK_WALK | CollisionFlag.GROUND_DECOR)) != 0,
                 (flags & CollisionFlag.LOC) != 0,
                 (flags & CollisionFlag.ROOF) != 0);

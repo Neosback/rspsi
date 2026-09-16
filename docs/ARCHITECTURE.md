@@ -59,6 +59,10 @@ boundary.
   eight-way routes with diagonal corner protection and straight projectile
   line-of-sight checks. It is intentionally small and replaceable while
   OpenRune-Server route/reach semantics are verified against fixtures.
+- `CollisionTileSnapshot` exposes ordinary movement blockers, the optional
+  route-blocker layer, projectile blockers, and decoded floor/object/roof
+  state so collision overlays can show routefinding semantics without
+  importing server flags.
 - `OsrsCollisionBuilder` converts canonical terrain flags into collision and
   resolves the plane-1 `LINK_BELOW` bridge relationship. Object collision is
   supplied by the optional neutral `ObjectCollisionView`; missing definitions
