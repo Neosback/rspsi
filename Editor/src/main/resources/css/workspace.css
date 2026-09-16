@@ -18,6 +18,11 @@
     -fx-background-color: #111827;
 }
 
+.canonical-scene-viewport,
+.controlled-viewport-panel {
+    -fx-background-color: #111827;
+}
+
 .workspace-bottom-area {
     -fx-background-color: #111827;
 }

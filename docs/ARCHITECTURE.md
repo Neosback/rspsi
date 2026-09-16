@@ -174,6 +174,10 @@ boundary.
   mesh instances while refreshing canonical object placements. Neighbor tiles
   can be included by the caller for blended floors and shared edges; scene
   construction remains outside `SceneGraph`.
+- `SceneRenderer.update(RenderScene, RenderChanges)` is the preferred
+  incremental publication path. Its default delegates to the original
+  `update(RenderChanges)` method so existing renderers remain source
+  compatible, while new renderers receive the derived scene they must draw.
 - `WorldDocument.bridgeLinks()` turns the OSRS bridge flag into explicit
   authored-plane/effective-plane links. The raw flag remains part of the
   canonical tile snapshot for lossless encoding, while scene and collision
@@ -234,9 +238,15 @@ the fixed workspace can change without losing session state.
 path for legacy compatibility sessions and future canonical OSRS sessions.
 `bindProject(...)` additionally supplies an `OsrsProjectSessionLoader`
 `OpenedProject` to the same history, inspector, validation, status, and asset
-panels. The legacy renderer remains a compatibility viewport until a neutral
-OSRS scene renderer is ready; the UI does not claim that the legacy viewport
-has rendered the canonical OSRS session.
+panels. Legacy sessions continue to use the legacy renderer; OSRS project
+sessions use the canonical semantic preview described below until faithful
+3D scene parity is ready.
+
+`ControlledViewportPanel` keeps the existing legacy viewport available and
+can switch the controlled workspace to `CanonicalSceneViewport` for a loaded
+OSRS project. The canonical viewport is a deliberately small top-down
+semantic preview backed by `SessionSceneController`; it supports neutral tile
+picking and selection and is not a claim of final 3D/render-parity support.
 
 `OsrsStudioProject` is the Client-side OSRS composition root. It owns the
 neutral map service, project/session loader, definition provider, asset

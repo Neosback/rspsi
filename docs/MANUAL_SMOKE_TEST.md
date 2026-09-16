@@ -46,6 +46,9 @@ For the opt-in OSRS project workflow:
 - [ ] Select the OSRS cache recorded by that project.
 - [ ] Enter a valid starting region such as `50,50`.
 - [ ] Confirm the selected region appears in the controlled workspace and the
-      inspector, history, assets, validation, and status panels are populated.
+      canonical top-down scene preview, inspector, history, assets, validation,
+      and status panels are populated.
+- [ ] Click a terrain tile in the canonical preview and confirm the neutral
+      selection and inspector update to the selected plane/tile.
 - [ ] Confirm the status row clearly marks the OpenRune project read-only.
 - [ ] Close/relaunch and confirm the legacy map workflow still opens normally.

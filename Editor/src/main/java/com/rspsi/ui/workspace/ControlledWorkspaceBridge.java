@@ -56,7 +56,7 @@ public final class ControlledWorkspaceBridge {
 
         Map<String, Node> panels = new LinkedHashMap<>();
         panels.put("tools", controller.getLegacyToolRail());
-        panels.put("viewport", controller.getLegacyViewport());
+        panels.put("viewport", new ControlledViewportPanel(controller.getLegacyViewport()));
         panels.put("assets", assets == null
                 ? controller.getLegacyInspector()
                 : new AssetBrowserPanel(assets));
@@ -123,6 +123,9 @@ public final class ControlledWorkspaceBridge {
         bindSession(shell, session, window, definitions, region, cache, compatibility);
         if (assets != null && shell.panelNode("assets") instanceof AssetBrowserPanel browser) {
             browser.setRepository(assets);
+        }
+        if (shell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
+            viewport.showCanonical(session, window);
         }
     }
 

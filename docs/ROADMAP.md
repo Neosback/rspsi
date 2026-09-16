@@ -49,7 +49,7 @@ The locked product direction and workspace design are maintained in
 | First-party object commands | implemented-unverified | Place/delete/move/rotate plus atomic multi-object moves, rotations, and definition replacement are tested through `EditorSession`; richer transform coverage remains |
 | First-party object tools | implemented-unverified | Place/delete/rotate plus pick-on-drag move, single- and multi-object duplicate, box object selection, move-selection, rotate-selection, and replace-selection tools invoke canonical commands; UI wiring and broader transform coverage remain |
 | Canonical terrain mesh topology | implemented-unverified | RSPSi-owned `TerrainMeshBuilder` covers the flat topology plus encoded overlay shapes 0–11 mapped to 13 scene topologies × 4 rotations, corners, and integer midpoint heights; a 52-case deterministic golden matrix and encoder shared-edge rejection now lock topology safety, while TSPS/RuneLite parity remains |
-| Neutral scene construction | implemented-unverified | `RenderSceneBuilder` derives a complete renderer-independent terrain/object snapshot from `WorldDocument`; `SessionSceneController` now loads the initial scene and publishes session-owned dirty-chunk updates, while renderer integration with the legacy viewport and TSPS/RuneLite scene parity remain |
+| Neutral scene construction | implemented-unverified | `RenderSceneBuilder` derives a complete renderer-independent terrain/object snapshot from `WorldDocument`; `SessionSceneController` now loads the initial scene and publishes session-owned dirty-chunk updates through the new scene-plus-changes publication path; the controlled workspace now has a small canonical top-down JavaFX preview with neutral tile picking/selection, while faithful renderer integration and TSPS/RuneLite scene parity remain |
 | Canonical object semantics | implemented-unverified | RSPSi-owned `OsrsLocShape` and `ObjectCategory` preserve OpenRune's shape IDs 0–22 and wall/wall-decor/ground/ground-decor layer mapping; neutral `ObjectInspectorSnapshot` now flattens optional definitions/collision, while placement-inspector wiring remains |
 | Canonical bridge relationships | implemented-unverified | `OsrsTileFlags` names the raw bridge bit and `WorldDocument.bridgeLinks()`/`RenderScene` expose authored-plane to effective-plane links; external RuneLite/TSPS bridge parity and live overlay wiring remain |
 | Canonical collision map | implemented-unverified | RSPSi-owned flags/map plus `OsrsCollisionBuilder` consume canonical object categories for bridge-aware terrain masks, roof semantics, rotated footprint collision, wall-decor behavior, OpenRune route-blocker flags, and decoded collision-inspector snapshots including route-blocked directions; route/LOS parity and complete definition fixtures remain |
@@ -62,7 +62,7 @@ The locked product direction and workspace design are maintained in
 | OSRS-only product scope | in-progress | Scope and migration policy are locked in [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md); legacy paths remain quarantined during parity work |
 | Project/cache identity metadata | implemented-unverified | Neutral `OsrsCacheMetadata`, `ProjectMetadata`, JSON persistence, explicit read-only mismatch assessment, optional backend-neutral `CacheStore.metadata(...)` capability, and `OsrsProjectSessionLoader` fail-closed session binding added; mismatched sessions and matching projects over read-only backends reject edits at the core, while cache discovery and UI remain |
 | Controlled workspace contracts | implemented-unverified | UI-neutral dock/panel/placement types, validated presets, reusable preset switching, visible focus styling, persistent status bar, and an opt-in `MainWindow` bridge that reuses the legacy renderer; the shared binder now accepts canonical sessions or `OsrsProjectSessionLoader.OpenedProject`, binds session-backed inspector/history/validation/assets, shows editable versus read-only state and compatibility issues, and the history panel supports seeking; an additive `File > Open from > OSRS project…` workflow now selects project/cache/region and binds a read-only canonical session, while full UI smoke coverage remains |
-| OSRS project composition | implemented-unverified | `OsrsStudioProject` composes the neutral OSRS map/session/definition/asset services, owns cache lifecycle, supports read-only OpenRune and the staged OpenRune-read/Displee-output arrangement, exposes stitched bounded scene windows, and is covered with neutral lifecycle/session tests; `ProjectLayout` establishes `project.json`, `autosave/`, and `edits/`, and metadata writes are atomic; the controlled JavaFX shell can now open persisted project metadata and a selected region read-only, while canonical viewport integration and native OpenRune writing remain gated |
+| OSRS project composition | implemented-unverified | `OsrsStudioProject` composes the neutral OSRS map/session/definition/asset services, owns cache lifecycle, supports read-only OpenRune and the staged OpenRune-read/Displee-output arrangement, exposes stitched bounded scene windows, and is covered with neutral lifecycle/session tests; `ProjectLayout` establishes `project.json`, `autosave/`, and `edits/`, and metadata writes are atomic; the controlled JavaFX shell opens persisted project metadata and a selected region read-only and now shows a canonical top-down scene preview, while faithful viewport parity and native OpenRune writing remain gated |
 | RuneLite/TSPS parity harness | in-progress | `OsrsRevisionVerifier` reports auditable cache, capabilities, metadata/fingerprint, revision-profile, definitions, terrain/location decode, neighboring region windows with explicit holes, provisional-border stitching and shared-edge results, bridge/plane semantics, neutral scene construction, collision, round-trip, and render/minimap parity checks for an explicitly supplied OpenRune cache; neutral instance-template packing, repeated-chunk grids, 8×8 transforms, and inverse rotation tests now cover the RuneLite coordinate oracle, while licensed golden comparisons remain |
 | Lua, plugin permissions, Plugin Hub | deferred | Begin only after native command/plugin API is stable |
 | Renderer/UI rewrite | deferred | Current JavaFX renderer remains the compatibility surface |
@@ -123,8 +123,9 @@ adapter. It materializes the neutral workspace presets into fixed tool and
 inspector rails, a centered viewport, controlled bottom tabs, and a persistent
 status row. `ControlledWorkspaceBridge` binds the same panels to the legacy
 compatibility session and exposes an OSRS `OpenedProject` binding path. It does
-not own document state, renderer state, or arbitrary docking; the legacy
-renderer remains the viewport until a neutral OSRS scene path is ready.
+not own document state, renderer state, or arbitrary docking; legacy sessions
+retain the legacy renderer while OSRS sessions use the small canonical
+semantic preview until faithful 3D scene parity is ready.
 
 ## Next implementation gate
 
@@ -138,7 +139,8 @@ writer or a formally documented OpenRune-read/Displee-output arrangement. Run
 `RSPSI_OSRS_REGION_X`, `RSPSI_OSRS_REGION_Y`, and `RSPSI_OSRS_REVISION`.
 Until the OpenRune writer decision and the remaining scene/parity gates pass,
 OpenRune remains read-only and the legacy backend remains available only as a
-quarantined compatibility/output path. The next implementation step is to
-exercise `OsrsStudioProject` from an explicit OSRS project-open workflow and
-then add scene/window parity evidence; do not silently replace the existing
-launch path before that workflow has equivalent smoke coverage.
+quarantined compatibility/output path. The explicit OSRS project-open
+workflow and a small canonical top-down scene preview are now in place. The
+next implementation step is manual smoke coverage followed by scene/window
+parity evidence; do not replace the legacy renderer or enable native OpenRune
+writes before those gates pass.

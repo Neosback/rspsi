@@ -75,6 +75,7 @@ import com.rspsi.project.ProjectLayout;
 import com.rspsi.project.ProjectMetadata;
 import com.rspsi.ui.workspace.ControlledWorkspaceBridge;
 import com.rspsi.ui.workspace.ControlledWorkspaceShell;
+import com.rspsi.ui.workspace.ControlledViewportPanel;
 import com.rspsi.ui.workspace.SessionHistoryPanel;
 import com.rspsi.ui.workspace.SessionInspectorPanel;
 import com.rspsi.ui.workspace.ValidationPanel;
@@ -630,6 +631,9 @@ public class MainWindow extends Application {
 					osrsStudioProject = null;
 				}
 				if (controlledWorkspaceShell != null) {
+					if (controlledWorkspaceShell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
+						viewport.close();
+					}
 					if (controlledWorkspaceShell.panelNode("history") instanceof SessionHistoryPanel history) {
 						history.close();
 					}

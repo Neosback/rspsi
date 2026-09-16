@@ -51,7 +51,7 @@ public final class SessionSceneController implements AutoCloseable {
         if (dirty.isEmpty()) return;
         RenderChanges changes = RenderChanges.fromDirtyRegions(dirty, session.world());
         RenderScene next = scenes.update(scene, changes);
-        renderer.update(changes);
+        renderer.update(next, changes);
         scene = next;
         session.drainDirtyRegions();
     }

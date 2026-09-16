@@ -123,6 +123,8 @@ class RenderSceneBuilderTest {
                     "height edit"));
 
             assertEquals(1, renderer.updateCount);
+            assertEquals(20, renderer.lastScene.terrainMeshes()
+                    .get(new TileCoordinate(0, 4, 4)).vertices().get(0).height());
             assertEquals(20, controller.scene().terrainMeshes()
                     .get(new TileCoordinate(0, 4, 4)).vertices().get(0).height());
             assertTrue(session.dirtyRegions().isEmpty());
@@ -138,9 +140,14 @@ class RenderSceneBuilderTest {
     private static final class RecordingRenderer implements SceneRenderer {
         private int loadCount;
         private int updateCount;
+        private RenderScene lastScene;
 
-        @Override public void load(RenderScene scene) { loadCount++; }
+        @Override public void load(RenderScene scene) { loadCount++; lastScene = scene; }
         @Override public void update(RenderChanges changes) { updateCount++; }
+        @Override public void update(RenderScene scene, RenderChanges changes) {
+            updateCount++;
+            lastScene = scene;
+        }
         @Override public void render(CameraState camera) { }
         @Override public java.util.Optional<PickResult> pick(float x, float y) {
             return java.util.Optional.empty();
