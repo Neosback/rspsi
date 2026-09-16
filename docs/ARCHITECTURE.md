@@ -121,6 +121,8 @@ point until the shell has equivalent launch/load/edit/save coverage.
 tool rail, renderer viewport, asset pane, and menu bar into the shell while
 leaving the default legacy layout unchanged. The bridge uses session-backed
 inspector/history/validation panels, plus a placeholder console panel, while
+the inspector resolves object details through the neutral `DefinitionProvider`
+contract (the compatibility bridge currently supplies the legacy adapter).
 the controlled workflow and its manual coverage continue to be migrated.
 
 When a legacy map reaches its existing ready state, the client emits a small

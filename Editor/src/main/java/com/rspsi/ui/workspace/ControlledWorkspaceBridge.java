@@ -1,6 +1,7 @@
 package com.rspsi.ui.workspace;
 
 import com.rspsi.controllers.MainController;
+import com.rspsi.cache.definition.LegacyDefinitionProvider;
 import com.rspsi.editor.ui.StandardWorkspaceCatalog;
 import com.rspsi.editor.ui.WorkspaceCatalog;
 import javafx.scene.Node;
@@ -46,7 +47,7 @@ public final class ControlledWorkspaceBridge {
         panels.put("tools", controller.getLegacyToolRail());
         panels.put("viewport", controller.getLegacyViewport());
         panels.put("assets", controller.getLegacyInspector());
-        panels.put("inspector", new SessionInspectorPanel());
+        panels.put("inspector", new SessionInspectorPanel(new LegacyDefinitionProvider()));
         panels.put("history", new SessionHistoryPanel());
         panels.put("validation", new ValidationPanel());
         panels.put("console", placeholder("Console", "Editor messages will appear here."));

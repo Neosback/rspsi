@@ -4,7 +4,9 @@ import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SessionChangeListener;
 import com.rspsi.editor.SelectionChangeListener;
 import com.rspsi.editor.SessionStateListener;
+import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.editor.collision.OsrsCollisionBuilder;
+import com.rspsi.editor.inspector.ObjectInspectorSnapshot;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileInspectorSnapshot;
 import com.rspsi.editor.model.TileSnapshot;
@@ -38,8 +40,14 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
     private final SelectionChangeListener selectionListener = ignored -> refreshOnFxThread();
     private EditorSession session;
     private WorldWindow window;
+    private DefinitionProvider definitions;
 
     public SessionInspectorPanel() {
+        this(null);
+    }
+
+    public SessionInspectorPanel(DefinitionProvider definitions) {
+        this.definitions = definitions;
         setSpacing(8);
         setPadding(new Insets(12));
         getStyleClass().add("workspace-session-panel");
@@ -51,6 +59,12 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
         values.setVgap(6);
         getChildren().addAll(title, status, values);
         clear("Select a tile or object to inspect it.");
+    }
+
+    /** Replaces the neutral definition source used for object details. */
+    public void setDefinitionProvider(DefinitionProvider definitions) {
+        this.definitions = definitions;
+        refresh();
     }
 
     public void bind(EditorSession session, WorldWindow window) {
@@ -122,12 +136,36 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
     }
 
     private void showObject(WorldObject object) {
+        ObjectInspectorSnapshot snapshot = definitions == null
+                ? new ObjectInspectorSnapshot(object.id(), object.x(), object.y(), object.plane(),
+                object.type(), object.rotation(), object.category(), object.shape(),
+                java.util.Optional.empty(), java.util.Optional.empty())
+                : ObjectInspectorSnapshot.capture(object, definitions);
         clear("Object selection");
-        row("ID", Integer.toString(object.id()));
-        row("World", object.x() + ", " + object.y());
-        row("Plane", Integer.toString(object.plane()));
-        row("Type", Integer.toString(object.type()));
-        row("Rotation", Integer.toString(object.rotation()));
+        row("ID", Integer.toString(snapshot.id()));
+        row("World", snapshot.x() + ", " + snapshot.y());
+        row("Plane", Integer.toString(snapshot.plane()));
+        row("Category", snapshot.categoryName());
+        row("Type", snapshot.type() + " (" + snapshot.shapeName() + ")");
+        row("Rotation", Integer.toString(snapshot.rotation()));
+        snapshot.definition().ifPresent(definition -> {
+            int width = definition.width();
+            int length = definition.length();
+            if (snapshot.rotation() == 1 || snapshot.rotation() == 3) {
+                int swap = width;
+                width = length;
+                length = swap;
+            }
+            row("Name", definition.name());
+            row("Size", width + " × " + length);
+            row("Models", definition.modelIds().toString());
+            row("Actions", definition.actions().toString());
+        });
+        snapshot.collision().ifPresent(collision -> {
+            row("Movement collision", Integer.toString(collision.blockWalk()));
+            row("Projectile collision", collision.blockProjectile() ? "Yes" : "No");
+            row("Break route finding", collision.breakRouteFinding() ? "Yes" : "No");
+        });
     }
 
     private void clear(String message) {
