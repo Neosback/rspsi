@@ -44,6 +44,9 @@ boundary.
   the legacy `ShapedTile` class.
 - `CollisionMap`, `CollisionFlag`, and `CollisionDirection` own editor
   collision semantics; server routefinder types are reference inputs only.
+- `OsrsCollisionBuilder` converts canonical terrain flags into collision and
+  resolves the plane-1 `LINK_BELOW` bridge relationship. Object collision is
+  a later definition-backed adapter, not inferred from an object ID alone.
 - `SelectionModel` exposes one selection value for tiles, areas, vertices,
   objects, and fragments while retaining its legacy tile-set methods.
 - `WorkspaceCatalog` and `StandardWorkspaceCatalog` define the fixed frontend

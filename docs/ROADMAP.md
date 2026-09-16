@@ -45,7 +45,7 @@ The locked product direction and workspace design are maintained in
 | First-party object commands | implemented-unverified | Place/delete/move/rotate are atomic and tested through `EditorSession`; object picking/tool and multi-select UI remain |
 | First-party object tools | implemented-unverified | Place/delete/rotate tools invoke the canonical commands; picking, drag-move, duplicate, replace, and snapping remain |
 | Canonical terrain mesh topology | implemented-unverified | RSPSi-owned `TerrainMeshBuilder` covers 13 shapes × 4 rotations, corners, and integer midpoint heights; TSPS/RuneLite parity remains |
-| Canonical collision map | implemented-unverified | RSPSi-owned flags/map provide cardinal, diagonal, and projectile inspection; decoded-location and bridge parity remain |
+| Canonical collision map | implemented-unverified | RSPSi-owned flags/map plus `OsrsCollisionBuilder` provide bridge-aware terrain masks and roof semantics; definition-backed location collision and route/LOS parity remain |
 | UI-neutral editor contracts | in-progress | Neutral pointer, tool, inspector, viewport, and renderer seams introduced; command-backed underlay brush is the first migrated tool path |
 | Live legacy document bridge | in-progress | MapRegion terrain import and underlay synchronization are implemented; UI activation remains opt-in |
 | OpenRune backend | in-progress | 2.4.19 compatibility spike and neutral OSRS region decoder are isolated behind `CacheStore`; legacy remains default and real-cache parity remains pending |

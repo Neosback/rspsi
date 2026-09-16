@@ -25,6 +25,8 @@ public final class CollisionFlag {
     public static final int LOC_PROJECTILE = 0x20000;
     public static final int GROUND_DECOR = 0x40000;
     public static final int BLOCK_WALK = 0x200000;
+    /** OpenRune routefinder's roof/region-binding flag. */
+    public static final int ROOF = 0x80000000;
 
     private static final int FLOOR_BLOCKED = BLOCK_WALK | GROUND_DECOR;
 
