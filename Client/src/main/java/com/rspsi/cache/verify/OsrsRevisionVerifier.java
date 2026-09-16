@@ -63,7 +63,8 @@ public final class OsrsRevisionVerifier {
         List<String> messages = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         try (OpenRuneCacheStore store = OpenRuneCacheStore.open(path)) {
-            messages.add("cache metadata: " + store.metadata(revision).orElseThrow());
+            var metadata = store.metadata(revision).orElseThrow();
+            messages.add("cache metadata: " + metadata);
             OsrsRevisionProfile profile = OsrsRevisionProfile.forRevision(revision);
             messages.add("revision profile: " + profile.mapGroupLayout());
             OsrsMapService maps = new OsrsMapService(store, revision);
@@ -76,7 +77,9 @@ public final class OsrsRevisionVerifier {
                         true, false, false, messages, errors,
                         List.of(
                                 check("cache.open", VerificationCheck.Status.PASS, "OpenRune cache opened"),
-                                check("cache.metadata", VerificationCheck.Status.PASS, "revision profile " + profile.mapGroupLayout()),
+                                check("cache.capabilities", VerificationCheck.Status.PASS, capabilities(store)),
+                                check("cache.metadata", VerificationCheck.Status.PASS,
+                                        "revision " + metadata.revision() + ", fingerprint " + metadata.fingerprint()),
                                 check("map.index", maps.index().size() == 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                         maps.index().size() + " map groups discovered"),
                                 check("map.payload", VerificationCheck.Status.FAIL, "region payload missing"),
@@ -111,7 +114,8 @@ public final class OsrsRevisionVerifier {
                             check("cache.capabilities", VerificationCheck.Status.PASS,
                                     capabilities(store)),
                             check("cache.metadata", VerificationCheck.Status.PASS,
-                                    "revision " + revision + ", profile " + profile.mapGroupLayout()),
+                                    "revision " + metadata.revision() + ", profile " + profile.mapGroupLayout()
+                                            + ", fingerprint " + metadata.fingerprint()),
                             check("map.index", maps.index().size() == 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     maps.index().size() + " map groups discovered"),
                             check("definitions", VerificationCheck.Status.PASS, "neutral definition provider ready"),
@@ -126,13 +130,23 @@ public final class OsrsRevisionVerifier {
                             check("location.archive", emptyLocations ? VerificationCheck.Status.WARN : VerificationCheck.Status.PASS,
                                     emptyLocations ? "location archive absent; treated as empty" : "location archive present"),
                             check("terrain.decode", VerificationCheck.Status.PASS, "64x64x4 terrain decoded"),
+                            check("location.decode", emptyLocations
+                                            ? VerificationCheck.Status.WARN
+                                            : VerificationCheck.Status.PASS,
+                                    emptyLocations ? "no location payload to decode" : "location payload decoded"),
                             check("world.validation", issueErrors > 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     issueErrors + " validation errors; " + (issues.size() - issueErrors) + " warnings"),
                             check("collision.decode", VerificationCheck.Status.PASS, "collision map constructed"),
+                            check("scene.construction", VerificationCheck.Status.NOT_RUN,
+                                    "standalone scene-builder parity fixture is not bundled"),
+                            check("location.parity", equal ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
+                                    "locations included in canonical semantic comparison: " + equal),
                             check("semantic.roundtrip", equal ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
                                     "decode -> encode -> decode semantic equality: " + equal),
                             check("render.parity", VerificationCheck.Status.NOT_RUN,
-                                    "RuneLite/TSPS render fixtures are not bundled")));
+                                    "RuneLite/TSPS render fixtures are not bundled"),
+                            check("minimap.parity", VerificationCheck.Status.NOT_RUN,
+                                    "minimap comparison fixture is not bundled")));
         } catch (RuntimeException exception) {
             errors.add(exception.getClass().getSimpleName() + ": " + exception.getMessage());
             return new VerificationReport(path, regionX, regionY, revision, 0,
