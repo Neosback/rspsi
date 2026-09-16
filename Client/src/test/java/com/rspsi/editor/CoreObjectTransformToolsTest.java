@@ -10,6 +10,7 @@ import com.rspsi.editor.tool.DuplicateObjectTool;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.MoveObjectTool;
 import com.rspsi.editor.tool.ToolContext;
+import com.rspsi.editor.tool.TileSnapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -54,6 +55,26 @@ class CoreObjectTransformToolsTest {
                 world.tile(0, 1, 1).snapshot().objects());
         session.undo();
         assertEquals(List.of(), world.tile(0, 1, 1).snapshot().objects());
+    }
+
+    @Test
+    void objectToolsSnapToNearestGridWithoutLeavingTheDocument() {
+        WorldDocument world = new WorldDocument(10, 10);
+        WorldObject object = new WorldObject(12, 10, 0, 0, 0, 0);
+        put(world, object);
+        EditorSession session = new EditorSession(world);
+        MoveObjectTool tool = new MoveObjectTool();
+        tool.setSnapGridSize(4);
+        EditorToolController controller = new EditorToolController();
+        controller.activate(tool, context(session));
+        controller.pointerDown(pointer(0, 0));
+        controller.pointerDrag(pointer(5, 6));
+        controller.pointerUp(pointer(5, 6));
+
+        assertEquals(List.of(new WorldObject(12, 10, 0, 0, 4, 8)),
+                world.tile(0, 4, 8).snapshot().objects());
+        assertEquals(8, TileSnapper.snap(8, 4, 10));
+        assertEquals(9, TileSnapper.snap(99, 4, 10));
     }
 
     private static void put(WorldDocument world, WorldObject object) {

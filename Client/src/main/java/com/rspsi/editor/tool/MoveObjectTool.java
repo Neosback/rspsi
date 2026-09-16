@@ -14,6 +14,13 @@ public final class MoveObjectTool implements EditorTool {
     private ToolContext context;
     private WorldObject object;
     private TileCoordinate target;
+    private int snapGridSize = 1;
+
+    public int snapGridSize() { return snapGridSize; }
+    public void setSnapGridSize(int snapGridSize) {
+        if (snapGridSize < 1) throw new IllegalArgumentException("Snap grid size must be at least one tile");
+        this.snapGridSize = snapGridSize;
+    }
 
     @Override public String id() { return "move-object"; }
     @Override public void activate(ToolContext context) { this.context = context; clear(); }
@@ -32,7 +39,7 @@ public final class MoveObjectTool implements EditorTool {
     }
     @Override public void pointerDrag(PointerEvent event) {
         if (context != null && object != null && event.button() == PointerButton.PRIMARY) {
-            context.viewport().tileAt(event.x(), event.y()).ifPresent(coordinate -> target = coordinate);
+            context.viewport().tileAt(event.x(), event.y()).ifPresent(coordinate -> target = snap(coordinate));
         }
     }
     @Override public void pointerUp(PointerEvent event) {
@@ -42,9 +49,15 @@ public final class MoveObjectTool implements EditorTool {
         }
         clear();
     }
-    @Override public ToolInspector inspector() { return () -> List.of(); }
+    @Override public ToolInspector inspector() { return () -> List.of(
+            new PropertyDescriptor("snapGridSize", "Snap grid", PropertyDescriptor.ValueType.INTEGER, 1, 64)); }
     @Override public void renderOverlay(OverlayDraw draw) {
         if (target != null) draw.tileOutline(target);
     }
     private void clear() { object = null; target = null; }
+    private TileCoordinate snap(TileCoordinate coordinate) {
+        return new TileCoordinate(coordinate.plane(),
+                TileSnapper.snap(coordinate.x(), snapGridSize, context.session().world().width()),
+                TileSnapper.snap(coordinate.y(), snapGridSize, context.session().world().length()));
+    }
 }
