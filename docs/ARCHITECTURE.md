@@ -143,6 +143,11 @@ boundary.
   adapter seam for RSCM/GameVal names: descriptors retain the display name,
   numeric ID, and optional symbolic key, and search includes that key without
   importing a naming-library type into the editor.
+- `RenderSceneBuilder` derives renderer-independent terrain meshes and
+  canonical object placements from `WorldDocument`. It is intentionally a
+  complete-snapshot builder for now; 8×8 dirty-chunk updates can be connected
+  later through `RenderChanges` without adding scene construction to
+  `SceneGraph`.
 
 ## Frontends
 
