@@ -8,6 +8,7 @@ import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.project.ProjectMetadata;
+import com.rspsi.project.ProjectLayout;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -33,15 +34,16 @@ class SessionAutosaveStoreTest {
                 document.tile(1, 2, 1).snapshot(), edited, "autosave edit"));
         ProjectMetadata project = ProjectMetadata.forCache(
                 new OsrsCacheMetadata(240, 2, "cache-fingerprint"));
-        Path file = temporaryDirectory.resolve("autosave/session.json");
+        ProjectLayout layout = new ProjectLayout(temporaryDirectory.resolve("project"));
+        layout.initialize(project);
 
-        SessionAutosaveStore.write(file, session, project);
-        SessionAutosaveStore.AutosaveSnapshot recovered = SessionAutosaveStore.read(file);
+        SessionAutosaveStore.write(layout, session);
+        SessionAutosaveStore.AutosaveSnapshot recovered = SessionAutosaveStore.read(layout);
 
         assertEquals(project, recovered.project());
         assertEquals(1, recovered.historyPosition());
         assertEquals(edited, recovered.world().tile(1, 2, 1).snapshot());
-        assertTrue(Files.exists(file));
+        assertTrue(Files.exists(layout.sessionAutosaveFile()));
     }
 
     @Test

@@ -13,6 +13,7 @@ import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldFragment;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.project.ProjectMetadata;
+import com.rspsi.project.ProjectLayout;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,6 +37,12 @@ public final class SessionAutosaveStore {
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
     private SessionAutosaveStore() {
+    }
+
+    /** Writes the canonical snapshot for an initialized project layout. */
+    public static void write(ProjectLayout layout, EditorSession session) throws IOException {
+        Objects.requireNonNull(layout, "layout");
+        write(layout.sessionAutosaveFile(), session, layout.readMetadata());
     }
 
     public static void write(Path path, EditorSession session, ProjectMetadata project)
@@ -75,6 +82,12 @@ public final class SessionAutosaveStore {
         } catch (JsonParseException | IllegalStateException | UnsupportedOperationException exception) {
             throw new IOException("Invalid autosave JSON: " + path, exception);
         }
+    }
+
+    /** Reads the canonical snapshot for an initialized project layout. */
+    public static AutosaveSnapshot read(ProjectLayout layout) throws IOException {
+        Objects.requireNonNull(layout, "layout");
+        return read(layout.sessionAutosaveFile());
     }
 
     private static WorldDocument restore(WorldFragment fragment) throws IOException {

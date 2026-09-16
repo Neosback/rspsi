@@ -260,8 +260,9 @@ frontends can host this binding without placing UI types in the editor core.
 `SessionAutosaveStore` writes a versioned snapshot of the canonical document,
 project identity, and history position to `ProjectLayout.sessionAutosaveFile()`
 (`autosave/session.json`) using the same atomic-replacement rule as project
-metadata. Recovery restores a standalone `WorldDocument`; it never opens or
-rewrites the source cache.
+metadata. Its layout-aware overloads read the project metadata and canonical
+path together. Recovery restores a standalone `WorldDocument`; it never opens
+or rewrites the source cache.
 
 When a legacy map reaches its existing ready state, the client emits a small
 map-ready lifecycle callback. In controlled mode `MainWindow` imports terrain
