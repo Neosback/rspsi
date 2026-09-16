@@ -51,6 +51,8 @@ public final class OsrsRevisionVerifier {
                     false, false, List.of("cache opened", "map index entries: " + index.size()), errors,
                     List.of(
                             check("cache.open", VerificationCheck.Status.PASS, "OpenRune cache opened"),
+                            check("cache.capabilities", VerificationCheck.Status.PASS,
+                                    capabilities(store)),
                             check("map.index", index.size() == 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     index.size() == 0 ? "no OSRS map groups found" : index.size() + " map groups discovered"),
                             check("region.verify", VerificationCheck.Status.NOT_RUN, "no region was selected")));
@@ -106,13 +108,19 @@ public final class OsrsRevisionVerifier {
                     true, true, equal, messages, errors,
                     List.of(
                             check("cache.open", VerificationCheck.Status.PASS, "OpenRune cache opened"),
+                            check("cache.capabilities", VerificationCheck.Status.PASS,
+                                    capabilities(store)),
                             check("cache.metadata", VerificationCheck.Status.PASS,
                                     "revision " + revision + ", profile " + profile.mapGroupLayout()),
                             check("map.index", maps.index().size() == 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     maps.index().size() + " map groups discovered"),
                             check("definitions", VerificationCheck.Status.PASS, "neutral definition provider ready"),
-                            check("assets", VerificationCheck.Status.PASS,
-                                    availableAssets.size() + " neutral asset descriptors available"),
+                            check("assets", availableAssets.isEmpty()
+                                            ? VerificationCheck.Status.WARN
+                                            : VerificationCheck.Status.PASS,
+                                    availableAssets.isEmpty()
+                                            ? "no neutral asset descriptors were discovered"
+                                            : availableAssets.size() + " neutral asset descriptors available"),
                             check("map.payload", VerificationCheck.Status.PASS,
                                     "terrain " + landscape.length + " bytes; locations " + locations.length + " bytes"),
                             check("location.archive", emptyLocations ? VerificationCheck.Status.WARN : VerificationCheck.Status.PASS,
@@ -137,6 +145,13 @@ public final class OsrsRevisionVerifier {
 
     private static VerificationCheck check(String id, VerificationCheck.Status status, String detail) {
         return new VerificationCheck(id, status, detail);
+    }
+
+    private static String capabilities(OpenRuneCacheStore store) {
+        var capabilities = store.capabilities();
+        return "writable=" + capabilities.writable()
+                + ", namedArchives=" + capabilities.namedArchives()
+                + ", mapPacking=" + capabilities.mapPacking();
     }
 
     private static boolean semanticallyEqual(WorldDocument first, WorldDocument second) {
