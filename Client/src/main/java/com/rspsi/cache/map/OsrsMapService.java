@@ -40,6 +40,16 @@ public final class OsrsMapService implements MapService {
         return read(regionX, regionY, MapArchiveType.OBJECT);
     }
 
+    @Override
+    public void writeLandscape(int regionX, int regionY, byte[] data) {
+        write(regionX, regionY, MapArchiveType.LANDSCAPE, data);
+    }
+
+    @Override
+    public void writeLocations(int regionX, int regionY, byte[] data) {
+        write(regionX, regionY, MapArchiveType.OBJECT, data);
+    }
+
     private byte[] read(int regionX, int regionY, MapArchiveType type) {
         int archiveId = index.archiveId(regionX, regionY, type);
         if (archiveId < 0) {
@@ -50,5 +60,18 @@ public final class OsrsMapService implements MapService {
         // the cache-file layout.
         int file = type == MapArchiveType.LANDSCAPE ? 0 : 1;
         return store.read(mapIndex, archiveId, file);
+    }
+
+    private void write(int regionX, int regionY, MapArchiveType type, byte[] data) {
+        Objects.requireNonNull(data, "data");
+        if (!store.capabilities().writable()) {
+            throw new UnsupportedOperationException("Cache backend is read-only");
+        }
+        int archiveId = index.archiveId(regionX, regionY, type);
+        if (archiveId < 0) {
+            throw new IllegalArgumentException("Region is not present in the map index: " + regionX + "," + regionY);
+        }
+        int file = type == MapArchiveType.LANDSCAPE ? 0 : 1;
+        store.write(mapIndex, archiveId, file, data);
     }
 }

@@ -35,7 +35,7 @@ The locked product direction and workspace design are maintained in
 | Legacy/317 cache loading | implemented-unverified | Existing Displee-backed `Cache`; protect before migration |
 | OSRS cache support | implemented-unverified | `OSRSPlugin` discovers named `mX_Y`/`lX_Y` archives through `CacheStore`; real-cache parity and writable packing remain |
 | Neutral cache boundary | in-progress | `CacheStore` facade introduced; migrate consumers incrementally |
-| Neutral map service | implemented-unverified | `MapIndexTable` and `OsrsMapService` provide named OSRS map discovery plus file-0 terrain/file-1 location reads; `OsrsRegionDecoder`/`OsrsRegionEncoder` convert canonical terrain and objects with semantic round-trip coverage; real-cache fixture remains |
+| Neutral map service | implemented-unverified | `MapIndexTable` and `OsrsMapService` provide named OSRS map discovery, file-0/file-1 reads, and safe writes to existing regions; `OsrsRegionDecoder`/`OsrsRegionEncoder` convert canonical terrain and objects with semantic round-trip coverage; real-cache fixture remains |
 | Neutral definitions | implemented-unverified | Object/floor views plus texture/model contracts and an OpenRune object/floor/texture adapter exist; real-cache fixture parity remains |
 | Command/session editing core | in-progress | Core model, command history, and session introduced; adapt existing tools next |
 | WorldFragment copy/paste | implemented-unverified | Canonical multi-plane fragment capture and atomic paste/undo command added; UI import/export wiring remains |

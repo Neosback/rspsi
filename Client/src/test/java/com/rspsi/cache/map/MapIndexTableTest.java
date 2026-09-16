@@ -52,6 +52,19 @@ class MapIndexTableTest {
         assertNull(service.readLandscape(51, 75));
     }
 
+    @Test
+    void writesExistingRegionsThroughWritableNeutralStore() {
+        FakeStore store = new FakeStore(true);
+        MapIndexEntry entry = new MapIndexEntry(50, 75, 1234, 5678, "m50_75", "l50_75");
+        OsrsMapService service = new OsrsMapService(store, 5, MapIndexTable.of(java.util.List.of(entry)));
+
+        service.writeLandscape(50, 75, new byte[]{3});
+        service.writeLocations(50, 75, new byte[]{4});
+
+        assertArrayEquals(new byte[]{3}, store.values.get("5:1234:0"));
+        assertArrayEquals(new byte[]{4}, store.values.get("5:5678:1"));
+    }
+
     private static MapIndexEntry entry(int x, int y) {
         return new MapIndexEntry(x, y, x * 100 + y, x * 100 + y + 1,
                 "m" + x + "_" + y, "l" + x + "_" + y);
@@ -60,6 +73,15 @@ class MapIndexTableTest {
     private static final class FakeStore implements CacheStore {
         private final Map<String, Integer> archiveIds = new HashMap<>();
         private final Map<String, byte[]> values = new HashMap<>();
+        private final boolean writable;
+
+        private FakeStore() {
+            this(false);
+        }
+
+        private FakeStore(boolean writable) {
+            this.writable = writable;
+        }
 
         @Override public byte[] read(int index, int archive, int file) {
             return values.get(index + ":" + archive + ":" + file);
@@ -69,10 +91,12 @@ class MapIndexTableTest {
             return archiveIds.getOrDefault(index + ":" + archiveName, -1);
         }
 
-        @Override public void write(int index, int archive, int file, byte[] data) { }
+        @Override public void write(int index, int archive, int file, byte[] data) {
+            values.put(index + ":" + archive + ":" + file, data.clone());
+        }
         @Override public void flush() { }
         @Override public CacheStoreCapabilities capabilities() {
-            return new CacheStoreCapabilities(false, true, false);
+            return new CacheStoreCapabilities(writable, true, false);
         }
     }
 }
