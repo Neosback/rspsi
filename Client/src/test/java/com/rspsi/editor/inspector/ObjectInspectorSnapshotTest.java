@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ObjectInspectorSnapshotTest {
@@ -40,6 +41,20 @@ class ObjectInspectorSnapshotTest {
         assertEquals("Unknown shape", snapshot.shapeName());
         assertTrue(snapshot.definition().isEmpty());
         assertTrue(snapshot.collision().isEmpty());
+    }
+
+    @Test
+    void definitionModelArraysUseValueEqualityAcrossAdapterBoundaries() {
+        ObjectDefinitionView first = new ObjectDefinitionView(1, "Tree", 1, 1,
+                List.of(), new int[]{10, 11});
+        ObjectDefinitionView equal = new ObjectDefinitionView(1, "Tree", 1, 1,
+                List.of(), new int[]{10, 11});
+        ObjectDefinitionView different = new ObjectDefinitionView(1, "Tree", 1, 1,
+                List.of(), new int[]{10, 12});
+
+        assertEquals(equal, first);
+        assertEquals(equal.hashCode(), first.hashCode());
+        assertNotEquals(different, first);
     }
 
     private static final class Definitions implements DefinitionProvider {
