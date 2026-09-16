@@ -133,7 +133,18 @@ public final class OsrsRegionDecoder {
 
     /** Decodes terrain and attaches locations to their owning canonical tiles. */
     public static WorldDocument decode(byte[] landscape, byte[] locations, int regionX, int regionY) {
-        WorldDocument document = decodeTerrain(landscape, regionX, regionY);
+        return decode(landscape, locations, regionX, regionY, OsrsRegionDecoder::defaultBaseHeight);
+    }
+
+    /** Combines both archive payloads with an injectable base-height provider. */
+    public static WorldDocument decode(
+            byte[] landscape,
+            byte[] locations,
+            int regionX,
+            int regionY,
+            BaseHeightProvider baseHeightProvider
+    ) {
+        WorldDocument document = decodeTerrain(landscape, regionX, regionY, baseHeightProvider);
         for (WorldObject object : decodeLocations(locations)) {
             TileSnapshot before = document.tile(object.plane(), object.x(), object.y()).snapshot();
             List<WorldObject> objects = new ArrayList<>(before.objects());
