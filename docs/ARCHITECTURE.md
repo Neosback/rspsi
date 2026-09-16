@@ -182,6 +182,10 @@ boundary.
   incremental publication path. Its default delegates to the original
   `update(RenderChanges)` method so existing renderers remain source
   compatible, while new renderers receive the derived scene they must draw.
+- `RenderSceneGoldenTest` locks a mixed two-plane scene containing shaped
+  terrain, canonical objects, and a bridge link. It is a local semantic
+  characterization fixture; TSPS/RuneLite parity fixtures remain independent
+  acceptance evidence.
 - `WorldDocument.bridgeLinks()` turns the OSRS bridge flag into explicit
   authored-plane/effective-plane links. The raw flag remains part of the
   canonical tile snapshot for lossless encoding, while scene and collision
