@@ -55,6 +55,16 @@ public final class WorldRegionWindow {
     public boolean complete() { return loadedRegionCount() == expectedRegionCount(); }
     public Map<Integer, WorldRegion> regions() { return regions; }
 
+    /** Returns a deep neutral copy suitable for derived scene preparation. */
+    public WorldRegionWindow copy() {
+        Map<Integer, WorldRegion> copy = new LinkedHashMap<>();
+        for (WorldRegion region : regions.values()) {
+            copy.put(region.regionId(), new WorldRegion(region.regionX(), region.regionY(),
+                    region.document().copy()));
+        }
+        return new WorldRegionWindow(minRegionX, minRegionY, regionWidth, regionHeight, copy);
+    }
+
     public WorldWindow worldWindow() {
         return new WorldWindow(minRegionX * WorldRegion.REGION_SIZE,
                 minRegionY * WorldRegion.REGION_SIZE,

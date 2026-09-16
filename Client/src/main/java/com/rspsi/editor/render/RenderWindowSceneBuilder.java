@@ -29,14 +29,15 @@ public final class RenderWindowSceneBuilder {
      */
     public RenderWindowScene build(WorldRegionWindow window) {
         Objects.requireNonNull(window, "window");
-        window.stitchSharedEdges();
+        WorldRegionWindow prepared = window.copy();
+        prepared.stitchSharedEdges();
         var meshes = new LinkedHashMap<WorldTileAddress, com.rspsi.editor.terrain.TerrainMesh>();
         var materials = new LinkedHashMap<WorldTileAddress, TerrainMaterial>();
         var lighting = new LinkedHashMap<WorldTileAddress, TerrainLight>();
         List<WorldRenderObject> objects = new ArrayList<>();
         List<WorldBridgeLink> bridges = new ArrayList<>();
 
-        for (WorldRegion region : window.regions().values().stream()
+        for (WorldRegion region : prepared.regions().values().stream()
                 .sorted(java.util.Comparator.comparingInt(WorldRegion::regionX)
                         .thenComparingInt(WorldRegion::regionY)).toList()) {
             RenderScene scene = regions.build(region.document());
@@ -56,7 +57,7 @@ public final class RenderWindowSceneBuilder {
                 bridges.add(new WorldBridgeLink(address(region, bridge.upper()), address(region, bridge.lower())));
             }
         }
-        return new RenderWindowScene(window, meshes, materials, lighting, objects, bridges);
+        return new RenderWindowScene(prepared, meshes, materials, lighting, objects, bridges);
     }
 
     private static WorldTileAddress address(WorldRegion region, com.rspsi.editor.model.TileCoordinate coordinate) {

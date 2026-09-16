@@ -51,6 +51,19 @@ public class WorldDocument {
         return planes;
     }
 
+    /** Returns an independent document copy without changing authored state. */
+    public WorldDocument copy() {
+        WorldDocument copy = new WorldDocument(width, length, planes);
+        for (int plane = 0; plane < planes; plane++) {
+            for (int x = 0; x < width; x++) {
+                for (int y = 0; y < length; y++) {
+                    copy.tile(plane, x, y).restore(tile(plane, x, y).snapshot());
+                }
+            }
+        }
+        return copy;
+    }
+
     public Tile tile(int plane, int x, int y) {
         if (plane < 0 || plane >= planes || x < 0 || x >= width || y < 0 || y >= length) {
             throw new IndexOutOfBoundsException("Tile outside world: " + plane + "," + x + "," + y);

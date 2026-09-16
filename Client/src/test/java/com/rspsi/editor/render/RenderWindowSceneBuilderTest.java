@@ -52,11 +52,15 @@ class RenderWindowSceneBuilderTest {
         WorldRegionWindow window = new WorldRegionWindow(10, 20, 2, 1,
                 Map.of(west.regionId(), west, east.regionId(), east));
 
-        new RenderWindowSceneBuilder().build(window);
+        RenderWindowScene scene = new RenderWindowSceneBuilder().build(window);
 
-        assertEquals(westDocument.tile(0, 63, 4).snapshot().southEastHeight(),
+        assertEquals(20, westDocument.tile(0, 63, 4).snapshot().southEastHeight());
+        assertEquals(30, westDocument.tile(0, 63, 4).snapshot().northEastHeight());
+        assertEquals(scene.window().region(10, 20).orElseThrow().document()
+                        .tile(0, 63, 4).snapshot().southEastHeight(),
                 eastDocument.tile(0, 0, 4).snapshot().southWestHeight());
-        assertEquals(westDocument.tile(0, 63, 4).snapshot().northEastHeight(),
+        assertEquals(scene.window().region(10, 20).orElseThrow().document()
+                        .tile(0, 63, 4).snapshot().northEastHeight(),
                 eastDocument.tile(0, 0, 5).snapshot().southWestHeight());
     }
 }
