@@ -37,5 +37,39 @@ class CollisionMapTest {
         assertThrows(IndexOutOfBoundsException.class,
                 () -> map.flags(new TileCoordinate(0, 2, 0)));
         assertFalse(map.canTravel(new TileCoordinate(0, 0, 0), CollisionDirection.WEST));
+        assertFalse(map.canTravel(new TileCoordinate(0, 1, 0), CollisionDirection.EAST, 2));
+    }
+
+    @Test
+    void checksTheFullSweptEdgeForSizeTwoActors() {
+        CollisionMap map = new CollisionMap(6, 6, 1);
+        TileCoordinate origin = new TileCoordinate(0, 1, 1);
+
+        assertTrue(map.canTravel(origin, CollisionDirection.NORTH, 2, false));
+        map.add(new TileCoordinate(0, 2, 3), CollisionFlag.LOC);
+
+        assertTrue(map.canTravel(origin, CollisionDirection.NORTH, false));
+        assertFalse(map.canTravel(origin, CollisionDirection.NORTH, 2, false));
+    }
+
+    @Test
+    void checksMiddleSamplesForLargerEastwardActors() {
+        CollisionMap map = new CollisionMap(8, 8, 1);
+        TileCoordinate origin = new TileCoordinate(0, 1, 1);
+
+        assertTrue(map.canTravel(origin, CollisionDirection.EAST, 3, false));
+        map.add(new TileCoordinate(0, 4, 2), CollisionFlag.WALL_WEST);
+
+        assertFalse(map.canTravel(origin, CollisionDirection.EAST, 3, false));
+    }
+
+    @Test
+    void appliesRouteBlockersToSweptEdgesWhenOptedIn() {
+        CollisionMap map = new CollisionMap(6, 6, 1);
+        TileCoordinate origin = new TileCoordinate(0, 1, 1);
+        map.add(new TileCoordinate(0, 2, 3), CollisionFlag.LOC_ROUTE_BLOCKER);
+
+        assertTrue(map.canTravel(origin, CollisionDirection.NORTH, 2, false));
+        assertFalse(map.canTravel(origin, CollisionDirection.NORTH, 2, true));
     }
 }

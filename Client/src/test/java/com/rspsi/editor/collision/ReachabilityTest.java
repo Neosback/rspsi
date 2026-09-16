@@ -39,4 +39,17 @@ class ReachabilityTest {
         assertTrue(Reachability.canReach(map, new TileCoordinate(0, 2, 2),
                 new TileCoordinate(0, 1, 1), 2, 2, 1));
     }
+
+    @Test
+    void routesForTheRequestedActorSize() {
+        CollisionMap map = new CollisionMap(7, 3, 1);
+
+        List<TileCoordinate> route = Reachability.routeTo(map,
+                new TileCoordinate(0, 0, 1), new TileCoordinate(0, 5, 1),
+                1, 1, 100, 2, false);
+
+        assertFalse(route.isEmpty());
+        TileCoordinate last = route.get(route.size() - 1);
+        assertTrue(last.x() == 4 || last.y() == 0 || last.y() == 2);
+    }
 }

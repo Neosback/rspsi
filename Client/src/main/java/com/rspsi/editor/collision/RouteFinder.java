@@ -40,11 +40,27 @@ public final class RouteFinder {
     public static List<TileCoordinate> find(CollisionMap map, TileCoordinate start,
                                             TileCoordinate target, int maxVisited,
                                             boolean useRouteBlockers) {
+        return find(map, start, target, maxVisited, 1, useRouteBlockers);
+    }
+
+    /** Finds a route for an actor of the supplied size using normal movement masks. */
+    public static List<TileCoordinate> find(CollisionMap map, TileCoordinate start,
+                                            TileCoordinate target, int maxVisited, int size) {
+        return find(map, start, target, maxVisited, size, false);
+    }
+
+    /** Finds a route for a square actor using OpenRune-compatible footprint checks. */
+    public static List<TileCoordinate> find(CollisionMap map, TileCoordinate start,
+                                            TileCoordinate target, int maxVisited, int size,
+                                            boolean useRouteBlockers) {
         Objects.requireNonNull(map, "map");
         Objects.requireNonNull(start, "start");
         Objects.requireNonNull(target, "target");
         if (maxVisited <= 0) {
             throw new IllegalArgumentException("Route search budget must be positive");
+        }
+        if (size <= 0) {
+            throw new IllegalArgumentException("Actor size must be positive");
         }
         if (start.plane() != target.plane()) {
             return List.of();
@@ -63,7 +79,7 @@ public final class RouteFinder {
         while (!queue.isEmpty() && visited++ < maxVisited) {
             TileCoordinate current = queue.removeFirst();
             for (CollisionDirection direction : ALL_DIRECTIONS) {
-                if (!canMove(map, current, direction, useRouteBlockers)) {
+                if (!canMove(map, current, direction, size, useRouteBlockers)) {
                     continue;
                 }
                 TileCoordinate next = new TileCoordinate(current.plane(),
@@ -124,19 +140,9 @@ public final class RouteFinder {
     }
 
     private static boolean canMove(CollisionMap map, TileCoordinate from,
-                                   CollisionDirection direction, boolean useRouteBlockers) {
-        if (!map.canTravel(from, direction, useRouteBlockers)) {
-            return false;
-        }
-        if (!direction.diagonal()) {
-            return true;
-        }
-        CollisionDirection horizontal = direction.deltaX() > 0
-                ? CollisionDirection.EAST : CollisionDirection.WEST;
-        CollisionDirection vertical = direction.deltaY() > 0
-                ? CollisionDirection.NORTH : CollisionDirection.SOUTH;
-        return map.canTravel(from, horizontal, useRouteBlockers)
-                && map.canTravel(from, vertical, useRouteBlockers);
+                                   CollisionDirection direction, int size,
+                                   boolean useRouteBlockers) {
+        return map.canTravel(from, direction, size, useRouteBlockers);
     }
 
     private static boolean canProject(CollisionMap map, TileCoordinate from,

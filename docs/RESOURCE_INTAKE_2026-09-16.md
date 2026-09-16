@@ -89,8 +89,11 @@ Evidence currently proving adoption:
   category filtering without importing donor enums.
 - `WorldRegionWindowTest` verifies bounded multi-region loading semantics and
   preserves absent regions as explicit loading-line holes.
-- `OsrsCollisionBuilderTest` and `RouteFinderTest` verify the neutral
-  route-blocker masks and OpenRune's default-off versus explicit-on strategy.
+- `OsrsCollisionBuilderTest`, `CollisionMapTest`, `ReachabilityTest`, and
+  `RouteFinderTest` verify the neutral route-blocker masks, OpenRune's
+  default-off versus explicit-on strategy, and swept movement for larger
+  actors. `OpenRuneCollisionSemanticsTest` locks the composite masks against
+  the inspected `StepValidator.kt`/`CollisionFlag.kt` source.
 
 No OpenRune-Server source, cache dump, model, or generated asset was copied or
 bundled in this intake.

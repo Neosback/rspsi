@@ -72,9 +72,14 @@ boundary.
   blocking walls, non-blocking wall decor, ground-layer locations, and ground
   decor in one auditable mapping.
 - `RouteFinder` provides the first neutral collision-preview behavior: bounded
-  eight-way routes with diagonal corner protection and straight projectile
-  line-of-sight checks. It is intentionally small and replaceable while
-  OpenRune-Server route/reach semantics are verified against fixtures.
+  eight-way routes with OpenRune-compatible swept footprint checks for square
+  actors, diagonal corner protection, and straight projectile line-of-sight
+  checks. It remains intentionally small and replaceable while broader
+  OpenRune-Server route/reach parity is verified against fixtures.
+- `CollisionMap.canTravel(..., size, ...)` is the focused port of the donor's
+  `StepValidator` edge-sampling contract. The size-one overload remains
+  source-compatible, while larger actor previews no longer silently test only
+  their origin tile.
 - `Reachability` uses the same default-off/explicit-on route-blocker choice as
   `RouteFinder`, so object reach previews cannot silently use a different
   collision layer.
