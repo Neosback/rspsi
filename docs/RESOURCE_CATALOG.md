@@ -39,9 +39,11 @@ but must not redistribute code or assets until the terms are confirmed.
 
 | Resource | Link | Status | Intended use | License / distribution | Next action |
 |---|---|---|---|---|---|
-| OpenRune-Server | [OpenRune/OpenRune-Server](https://github.com/OpenRune/OpenRune-Server) | `donor` | Coordinate conventions, collision flags, loc constants, rotation helpers, route/reach semantics | ISC declared upstream; adapt only separable world logic | Extract a small collision/route reference package after cache seam |
+| OpenRune-Server upstream | [OpenRune/OpenRune-Server](https://github.com/OpenRune/OpenRune-Server) | `donor` | Coordinate conventions, collision flags, loc constants, rotation helpers, route/reach semantics | Review the upstream license and preserve attribution | Extract a small collision/route reference package after cache seam |
+| OpenRune-Server Neosback fork | [Neosback/OpenRune-Server](https://github.com/Neosback/OpenRune-Server) | `donor` | `engine`, `engine/map`, `engine/routefinder`, `or-cache`, and focused tools; cache-backed engine logic and world semantics | BSD 2-Clause declared in the checked-out `LICENSE.md`; preserve RS Mod notices and review inherited files before adapting | Diff against upstream; inspect only world/cache/route modules, never import server/content runtime |
 | TSPS | [RSPSApp/TSPS](https://github.com/RSPSApp/TSPS) | `donor` + `oracle` | Modern terrain/loc decoding, scene construction, bridges, instances, model transforms, shaped-tile behavior | Review repository terms before copying code/assets | Build 13-shape × 4-rotation and modern map parity cases |
-| OpenRune-Editor | [OpenRune organization](https://github.com/OpenRune) | `donor` | Tool lifecycle, brush policies, transaction grouping, history, region-stamp concepts | Verify the exact editor repository and terms | Adapt concepts into `EditorTool`, `EditorCommand`, and `WorldFragment` |
+| OpenRune-Editor concepts | [OpenRune organization](https://github.com/OpenRune) | `donor` | Tool lifecycle, brush policies, transaction grouping, history, region-stamp concepts | Verify the exact editor repository and terms | Adapt concepts into `EditorTool`, `EditorCommand`, and `WorldFragment` |
+| OpenRune-Editor Neosback fork | [Neosback/OpenRune-Editor](https://github.com/Neosback/OpenRune-Editor) | `visual-reference` + `donor` | Map-viewer layout, scene/map browsing, cache-backed exploration, RuneLite/OpenRS2 integration clues | BSD 2-Clause declared in the checked-out `LICENSE`; preserve notices and review credited assets | Treat as a map-viewer/UX reference; do not assume it is the command/tool architecture |
 | Neptune | [neptune-ps/neptune](https://github.com/neptune-ps/neptune) | `later` | CS2/RuneScript parser/compiler and diagnostics, much later | MIT declared upstream | Keep outside map-editor foundation |
 | Neptune OSRS CS2 | [neptune-ps/osrs-cs2](https://gitlab.com/neptune-ps/osrs-cs2) | `later` | Future CS2 symbols/compiler inputs | Verify repository terms and revision | Revisit only after world editing is strong |
 | OpenRune cache packing utilities | [OpenRune FileStore tools](https://github.com/OpenRune/OpenRune-FileStore) | `donor` | Dirty-region output and incremental packing | Covered by selected OpenRune artifact review | Test output-cache workflow before enabling writes |
@@ -132,3 +134,17 @@ This is the next focused work package; it does not add new runtime systems:
 The next implementation milestone after this catalog is the resource-intake
 evidence and fixture harness—not a renderer rewrite or a broad dependency
 import.
+
+## Local research checkouts
+
+The two requested repositories are checked out outside the RSPSi Git tree so
+they cannot become accidental application sources or dependencies:
+
+| Checkout | Local location | Captured revision | Scope |
+|---|---|---|---|
+| Neosback OpenRune-Server | `../RSPSi-resources/OpenRune-Server-Neosback` | `bde85d0b0a5f7f87c1b8e9430fa81677bf443c9a` | Compare `engine`, `engine/map`, `engine/routefinder`, `or-cache`, and tools with upstream OpenRune |
+| Neosback OpenRune-Editor | `../RSPSi-resources/OpenRune-Editor-Neosback` | `1e5b41055da267ca94a615a0ec9853e21296b239` | Inspect map-viewer scene, cache, coordinate, and UX ideas; not a runtime dependency |
+
+The sibling resource directory is intentionally not part of the RSPSi Git
+repository. Refreshes should be deliberate and should update this revision
+record after review.
