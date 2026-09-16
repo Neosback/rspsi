@@ -101,6 +101,8 @@ and do not add editing behavior to `SceneGraph`.
 `PlaceObjectCommand`, `DeleteObjectCommand`, `MoveObjectCommand`, and
 `RotateObjectCommand` provide the corresponding canonical location mutations;
 object tools can now be migrated without inventing a second history system.
+The initial place/delete/rotate tools invoke these commands directly; picking
+and drag-move remain UI migration work.
 
 ## Deferred systems
 
