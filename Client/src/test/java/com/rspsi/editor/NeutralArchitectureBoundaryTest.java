@@ -14,10 +14,18 @@ class NeutralArchitectureBoundaryTest {
             "javafx.", "imgui.", "org.lwjgl.", "com.displee.", "dev.openrune.");
 
     @Test
-    void neutralEditorSourcesDoNotImportFrontendOrBackendTypes() throws Exception {
-        Path root = Path.of("src/main/java/com/rspsi/editor");
-        try (Stream<Path> files = Files.walk(root)) {
-            files.filter(path -> path.toString().endsWith(".java")).forEach(path -> {
+    void neutralCoreSourcesDoNotImportFrontendOrBackendTypes() throws Exception {
+        List<Path> roots = List.of(
+                Path.of("src/main/java/com/rspsi/editor"),
+                Path.of("src/main/java/com/rspsi/cache"),
+                Path.of("src/main/java/com/rspsi/project"));
+        roots.forEach(root -> {
+            try (Stream<Path> files = Files.walk(root)) {
+                files.filter(path -> path.toString().endsWith(".java"))
+                        .filter(path -> !path.toString().contains("/cache/store/"))
+                        .filter(path -> !path.toString().contains("/cache/workspace/"))
+                        .filter(path -> !path.toString().contains("/cache/verify/"))
+                        .forEach(path -> {
                 try {
                     List<String> lines = Files.readAllLines(path);
                     for (int index = 0; index < lines.size(); index++) {
@@ -33,6 +41,9 @@ class NeutralArchitectureBoundaryTest {
                     fail("Unable to inspect " + path, error);
                 }
             });
-        }
+            } catch (java.io.IOException error) {
+                fail("Unable to inspect " + root, error);
+            }
+        });
     }
 }

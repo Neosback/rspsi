@@ -27,17 +27,22 @@ dependencies {
     api group: 'org.apache.commons', name: 'commons-compress', version: '1.27.1'
 }
 
-def neutralEditorSources = fileTree('src/main/java/com/rspsi/editor') {
-    include '**/*.java'
-}
+def neutralCoreSources = files(
+        fileTree('src/main/java/com/rspsi/editor') { include '**/*.java' },
+        fileTree('src/main/java/com/rspsi/cache') {
+            include '**/*.java'
+            exclude 'store/**', 'workspace/**', 'verify/**'
+        },
+        fileTree('src/main/java/com/rspsi/project') { include '**/*.java' }
+)
 
 tasks.register('verifyUiNeutralCore') {
     description = 'Rejects frontend, cache, and renderer-backend imports from neutral editor APIs.'
     group = 'verification'
-    inputs.files(neutralEditorSources)
+    inputs.files(neutralCoreSources)
     doLast {
         def forbidden = ['javafx.', 'imgui.', 'org.lwjgl.', 'com.displee.', 'dev.openrune.']
-        neutralEditorSources.files.each { source ->
+        neutralCoreSources.files.each { source ->
             source.eachLine { line, number ->
                 if (forbidden.any { token -> line.contains(token) }) {
                     throw new GradleException("UI-neutral editor source imports forbidden dependency at ${source}:${number}: ${line.trim()}")
