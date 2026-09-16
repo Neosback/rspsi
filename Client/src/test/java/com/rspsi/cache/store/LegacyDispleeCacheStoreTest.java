@@ -34,16 +34,15 @@ class LegacyDispleeCacheStoreTest {
 
         Path source = Path.of(configuredPath);
         Assumptions.assumeTrue(Files.isDirectory(source), "configured cache path is not a directory");
-        Path copy = Files.createTempDirectory("rspsi-displee-output-");
+        Path output = Files.createTempDirectory("rspsi-displee-output-");
         try {
-            copyDirectory(source, copy);
+            copyDirectory(source, output);
             int regionX = envInt("RSPSI_OSRS_REGION_X", 16);
             int regionY = envInt("RSPSI_OSRS_REGION_Y", 33);
             int revision = envInt("RSPSI_OSRS_REVISION", 240);
             int expected;
 
-            CacheLibrary library = new CacheLibrary(copy.toString(), false, null);
-            try (LegacyDispleeCacheStore store = new LegacyDispleeCacheStore(library)) {
+            try (CacheStore store = CacheStoreFactory.openRuneWithDispleeOutput(source, output)) {
                 OsrsMapService maps = new OsrsMapService(store, revision);
                 WorldRegion region = maps.loadRegion(regionX, regionY).orElse(null);
                 Assumptions.assumeTrue(region != null, "configured cache does not contain the selected region");
@@ -60,14 +59,14 @@ class LegacyDispleeCacheStoreTest {
                 maps.flush();
             }
 
-            CacheLibrary reopenedLibrary = new CacheLibrary(copy.toString(), false, null);
+            CacheLibrary reopenedLibrary = new CacheLibrary(output.toString(), false, null);
             try (LegacyDispleeCacheStore store = new LegacyDispleeCacheStore(reopenedLibrary)) {
                 OsrsMapService maps = new OsrsMapService(store, revision);
                 WorldRegion reopened = maps.loadRegion(regionX, regionY).orElseThrow();
                 assertEquals(expected, reopened.document().tile(0, 1, 1).snapshot().underlayId());
             }
         } finally {
-            deleteDirectory(copy);
+            deleteDirectory(output);
         }
     }
 

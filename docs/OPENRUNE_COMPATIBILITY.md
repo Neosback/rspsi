@@ -87,6 +87,11 @@ selected writable Displee output adapter, but there is no automatic fallback
 to Displee because falling back could decode a cache with the wrong format and
 silently produce incorrect data.
 
+`CacheStoreFactory.openRuneWithDispleeOutput(base, output)` packages this
+topology for callers: OpenRune remains the read/definition source, writes are
+staged, and the separately prepared output cache is the only writable target.
+The factory rejects identical paths.
+
 No real OSRS cache is checked into the repository. External OpenRS2 fixtures
 have now passed the read-only verification path: cache id 391 (revision 6)
 passed named-map terrain and location decoding, while cache id 2710 (live

@@ -31,7 +31,10 @@ boundary.
 - `WorldDocument` is the mutable document model; `WorldModel` is a temporary
   compatibility name.
 - `EditorSession` owns document state, selection, history, dirty state, and
-  future save coordination.
+  an optional neutral `SessionSaveHandler`. `OsrsSessionLoader` composes that
+  handler with `OsrsRegionSaveCoordinator`, so callers save a loaded region
+  through `session.save()` without passing cache or format types into editor
+  code.
 - `SessionStateListener` exposes edit/undo/redo/save-marker changes to
   frontend adapters, while `SelectionChangeListener` exposes the final
   unified selection value after each selection operation. Neither listener
@@ -106,7 +109,10 @@ boundary.
 - `LayeredCacheStore` keeps base-cache reads separate from staged output-layer
   writes. Save coordinators flush an explicit output layer; painting cannot
   mutate the source cache implicitly. `CacheStoreFactory.layered(...)` is the
-  supported construction seam for that topology.
+  supported construction seam for that topology. For OSRS work,
+  `CacheStoreFactory.openRuneWithDispleeOutput(...)` makes the arrangement
+  explicit: OpenRune reads the base cache and a distinct Displee cache receives
+  staged output. Equal base/output paths are rejected.
 - `MapService` exposes semantic landscape and location payload access; its
   OSRS implementation owns the file-0/file-1 archive convention.
 - `MapService` write methods target existing indexed regions only and honor

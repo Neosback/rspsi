@@ -14,6 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /** Owns editor state without requiring JavaFX or a renderer. */
 public final class EditorSession {
     private final WorldDocument world;
+    private final SessionSaveHandler saveHandler;
     private final SelectionModel selection = new SelectionModel();
     private final CommandHistory history = new CommandHistory();
     private final List<SessionChangeListener> changeListeners = new CopyOnWriteArrayList<>();
@@ -22,7 +23,13 @@ public final class EditorSession {
     private int savedHistoryPosition;
 
     public EditorSession(WorldDocument world) {
+        this(world, null);
+    }
+
+    /** Creates a session with an optional neutral persistence callback. */
+    public EditorSession(WorldDocument world, SessionSaveHandler saveHandler) {
         this.world = Objects.requireNonNull(world, "world");
+        this.saveHandler = saveHandler;
     }
 
     public WorldDocument world() {
@@ -86,6 +93,19 @@ public final class EditorSession {
     public void markSaved() {
         savedHistoryPosition = history.position();
         notifyStateChanged();
+    }
+
+    /** Returns whether this session has a persistence callback configured. */
+    public boolean canSave() {
+        return saveHandler != null;
+    }
+
+    /** Persists this session through its configured neutral save boundary. */
+    public void save() {
+        if (saveHandler == null) {
+            throw new IllegalStateException("Session has no save handler");
+        }
+        saveHandler.save(this);
     }
 
     public boolean isDirty() {
