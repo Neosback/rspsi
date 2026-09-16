@@ -47,6 +47,21 @@ public final class OsrsRegionDecoder {
             int regionY,
             BaseHeightProvider baseHeightProvider
     ) {
+        return decodeTerrain(data, regionX, regionY, baseHeightProvider, true);
+    }
+
+    /**
+     * Decodes terrain using the revision-specific opcode width. Revisions
+     * before 209 use unsigned-byte opcodes and overlay values; revision 209
+     * and later use unsigned-short opcodes and overlay values.
+     */
+    public static WorldDocument decodeTerrain(
+            byte[] data,
+            int regionX,
+            int regionY,
+            BaseHeightProvider baseHeightProvider,
+            boolean newTerrainFormat
+    ) {
         Objects.requireNonNull(data, "data");
         Objects.requireNonNull(baseHeightProvider, "baseHeightProvider");
 
@@ -64,7 +79,7 @@ public final class OsrsRegionDecoder {
                 for (int y = 0; y < REGION_SIZE; y++) {
                     decodeTile(cursor, plane, x, y, regionX, regionY,
                             baseHeightProvider, heights, underlays, overlays,
-                            shapes, rotations, flags);
+                            shapes, rotations, flags, newTerrainFormat);
                 }
             }
         }
@@ -137,17 +152,38 @@ public final class OsrsRegionDecoder {
         return decode(landscape, locations, regionX, regionY, OsrsRegionDecoder::defaultBaseHeight);
     }
 
+    /** Decodes a region using the selected revision's terrain representation. */
+    public static WorldDocument decode(byte[] landscape, byte[] locations, int regionX, int regionY,
+                                       boolean newTerrainFormat) {
+        return decode(landscape, locations, regionX, regionY,
+                OsrsRegionDecoder::defaultBaseHeight, newTerrainFormat);
+    }
+
     /** Decodes a region while retaining its canonical world identity. */
     public static WorldRegion decodeRegion(byte[] landscape, byte[] locations, int regionX, int regionY) {
         return decodeRegion(landscape, locations, regionX, regionY, OsrsRegionDecoder::defaultBaseHeight);
     }
 
+    /** Decodes a region using the selected revision's terrain representation. */
+    public static WorldRegion decodeRegion(byte[] landscape, byte[] locations, int regionX, int regionY,
+                                           boolean newTerrainFormat) {
+        return decodeRegion(landscape, locations, regionX, regionY,
+                OsrsRegionDecoder::defaultBaseHeight, newTerrainFormat);
+    }
+
     /** Decodes a region with an injectable base-height provider for parity tests. */
     public static WorldRegion decodeRegion(byte[] landscape, byte[] locations, int regionX, int regionY,
                                            BaseHeightProvider baseHeightProvider) {
+        return decodeRegion(landscape, locations, regionX, regionY, baseHeightProvider, true);
+    }
+
+    /** Decodes a region using the selected revision's terrain representation. */
+    public static WorldRegion decodeRegion(byte[] landscape, byte[] locations, int regionX, int regionY,
+                                           BaseHeightProvider baseHeightProvider,
+                                           boolean newTerrainFormat) {
         return new WorldRegion(regionX, regionY,
                 decode(landscape, locations == null ? new byte[0] : locations,
-                        regionX, regionY, baseHeightProvider));
+                        regionX, regionY, baseHeightProvider, newTerrainFormat));
     }
 
     /** Combines both archive payloads with an injectable base-height provider. */
@@ -158,7 +194,20 @@ public final class OsrsRegionDecoder {
             int regionY,
             BaseHeightProvider baseHeightProvider
     ) {
-        WorldDocument document = decodeTerrain(landscape, regionX, regionY, baseHeightProvider);
+        return decode(landscape, locations, regionX, regionY, baseHeightProvider, true);
+    }
+
+    /** Combines both archive payloads using the selected revision profile. */
+    public static WorldDocument decode(
+            byte[] landscape,
+            byte[] locations,
+            int regionX,
+            int regionY,
+            BaseHeightProvider baseHeightProvider,
+            boolean newTerrainFormat
+    ) {
+        WorldDocument document = decodeTerrain(landscape, regionX, regionY,
+                baseHeightProvider, newTerrainFormat);
         for (WorldObject object : decodeLocations(locations == null ? new byte[0] : locations)) {
             TileSnapshot before = document.tile(object.plane(), object.x(), object.y()).snapshot();
             List<WorldObject> objects = new ArrayList<>(before.objects());
@@ -184,10 +233,11 @@ public final class OsrsRegionDecoder {
             int[][][] overlays,
             int[][][] shapes,
             int[][][] rotations,
-            int[][][] flags
+            int[][][] flags,
+            boolean newTerrainFormat
     ) {
         while (true) {
-            int opcode = cursor.readUnsignedShort();
+            int opcode = readTerrainValue(cursor, newTerrainFormat, false);
             if (opcode == 0 || opcode == 1) {
                 int value = opcode == 1 ? cursor.readUnsignedByte() : 0;
                 if (plane == 0) {
@@ -203,7 +253,7 @@ public final class OsrsRegionDecoder {
                 return;
             }
             if (opcode <= 49) {
-                int rawOverlay = cursor.readShort();
+                int rawOverlay = readTerrainValue(cursor, newTerrainFormat, false);
                 overlays[plane][x][y] = (rawOverlay - 1) & 0xFFFF;
                 shapes[plane][x][y] = (opcode - 2) >>> 2;
                 rotations[plane][x][y] = (opcode - 2) & 0x3;
@@ -213,6 +263,13 @@ public final class OsrsRegionDecoder {
                 underlays[plane][x][y] = (opcode - 81) & 0xFF;
             }
         }
+    }
+
+    private static int readTerrainValue(Cursor cursor, boolean newTerrainFormat, boolean signed) {
+        if (newTerrainFormat) {
+            return signed ? cursor.readShort() : cursor.readUnsignedShort();
+        }
+        return signed ? cursor.readByte() : cursor.readUnsignedByte();
     }
 
     private static int normaliseExplicitHeight(int value) {
@@ -296,6 +353,11 @@ public final class OsrsRegionDecoder {
         private int readUnsignedByte() {
             require(1);
             return data[position++] & 0xFF;
+        }
+
+        private int readByte() {
+            int value = readUnsignedByte();
+            return value > 0x7F ? value - 0x100 : value;
         }
 
         private int readUnsignedShort() {

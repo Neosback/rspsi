@@ -68,7 +68,8 @@ public final class OsrsRevisionVerifier {
             var metadata = store.metadata(revision).orElseThrow();
             messages.add("cache metadata: " + metadata);
             OsrsRevisionProfile profile = OsrsRevisionProfile.forRevision(revision);
-            messages.add("revision profile: " + profile.mapGroupLayout());
+            messages.add("revision profile: " + profile.mapGroupLayout()
+                    + ", terrain=" + (profile.newTerrainFormat() ? "short" : "byte"));
             OsrsMapService maps = new OsrsMapService(store, revision);
             messages.add("map index entries: " + maps.index().size());
             byte[] landscape = maps.readLandscape(regionX, regionY);
@@ -96,7 +97,8 @@ public final class OsrsRevisionVerifier {
             AssetRepository assets = new DefinitionAssetRepository(definitions, store.symbolicNameProvider());
             List<AssetDescriptor> availableAssets = assets.search("");
             messages.add("asset descriptors: " + availableAssets.size());
-            WorldDocument document = OsrsRegionDecoder.decode(landscape, locations, regionX, regionY);
+            WorldDocument document = OsrsRegionDecoder.decode(landscape, locations, regionX, regionY,
+                    profile.newTerrainFormat());
             List<ValidationIssue> issues = WorldValidator.validate(document, definitions);
             long issueErrors = issues.stream().filter(issue -> issue.severity() == ValidationIssue.Severity.ERROR).count();
             messages.add("validation errors: " + issueErrors);
@@ -107,9 +109,10 @@ public final class OsrsRevisionVerifier {
                     == document.width() * document.length() * document.planes();
             messages.add("neutral scene meshes: " + scene.terrainMeshes().size()
                     + "; objects: " + scene.objects().size());
-            byte[] encodedTerrain = OsrsRegionEncoder.encodeTerrain(document);
+            byte[] encodedTerrain = OsrsRegionEncoder.encodeTerrain(document, profile.newTerrainFormat());
             byte[] encodedLocations = OsrsRegionEncoder.encodeLocations(document);
-            WorldDocument roundTrip = OsrsRegionDecoder.decode(encodedTerrain, encodedLocations, regionX, regionY);
+            WorldDocument roundTrip = OsrsRegionDecoder.decode(encodedTerrain, encodedLocations,
+                    regionX, regionY, profile.newTerrainFormat());
             boolean equal = semanticallyEqual(document, roundTrip);
             messages.add("decode-encode-decode semantic equality: " + equal);
             if (!equal) errors.add("semantic round-trip mismatch");
@@ -123,6 +126,7 @@ public final class OsrsRevisionVerifier {
                                     capabilities(store)),
                             check("cache.metadata", VerificationCheck.Status.PASS,
                                     "revision " + metadata.revision() + ", profile " + profile.mapGroupLayout()
+                                            + ", terrain=" + (profile.newTerrainFormat() ? "short" : "byte")
                                             + ", fingerprint " + metadata.fingerprint()),
                             check("map.index", maps.index().size() == 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     maps.index().size() + " map groups discovered"),

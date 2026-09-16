@@ -33,10 +33,10 @@ The locked product direction and workspace design are maintained in
 | Undo/redo | implemented-unverified | Existing `TileChange` hierarchy and static `SceneGraph` stacks |
 | Autosave | implemented-unverified | Existing `AutoSaveJob`; add recovery smoke test |
 | Legacy/317 cache loading | implemented-unverified | Existing Displee-backed `Cache`; protect before migration |
-| OSRS cache support | implemented-unverified | `OSRSPlugin` discovers named and revision-237+ numeric map groups through `CacheStore`; real-cache parity and writable packing remain |
+| OSRS cache support | implemented-unverified | `OSRSPlugin` discovers named and revision-237+ numeric map groups through `CacheStore`; external revision-6 terrain/definition verification passes, while representative location parity and writable packing remain |
 | Neutral cache boundary | in-progress | `CacheStore` facade introduced; migrate consumers incrementally |
-| Neutral map service | implemented-unverified | `MapIndexTable` and `OsrsMapService` provide named and modern numeric-group OSRS map discovery, correct split-group file-0 and packed-group file-0/file-1 reads/writes, canonical region and bounded multi-region window loading with explicit holes, and safe writes to existing regions; `OsrsRegionDecoder`/`OsrsRegionEncoder` convert canonical terrain and objects with semantic round-trip coverage; real-cache fixture remains |
-| OSRS region save coordination | implemented-unverified | `OsrsRegionSaveCoordinator` encodes both region payloads before writing, supports a staged `LayeredCacheStore` output boundary, flushes through the neutral map service, and marks `EditorSession` saved only after success; writable OpenRune packing remains gated |
+| Neutral map service | implemented-unverified | `MapIndexTable` and `OsrsMapService` provide named and modern numeric-group OSRS map discovery, correct split-group file-0 and packed-group file-0/file-1 reads/writes, revision-aware pre-209 byte and 209+ short terrain codecs, canonical region and bounded multi-region window loading with explicit holes, and safe writes to existing regions; external revision-6 terrain/definition verification and semantic round-trip pass, while representative location parity remains |
+| OSRS region save coordination | implemented-unverified | `OsrsRegionSaveCoordinator` encodes both region payloads before writing using the map service's revision-specific terrain format, supports a staged `LayeredCacheStore` output boundary, flushes through the neutral map service, and marks `EditorSession` saved only after success; writable OpenRune packing remains gated |
 | Neutral definitions | implemented-unverified | Object/floor/texture/collision views plus lazy OpenRune model metadata now cross the adapter; `DefinitionAssetRepository` and `OpenRuneSymbolicNameProvider` expose optional neutral RSCM/GameVal keys, while mapping-file lifecycle and real-cache fixture parity remain |
 | Command/session editing core | in-progress | Core model, command history, session, centralized atomic grouped rollback, and migrated tools are covered; legacy input and full UI migration remain |
 | Session state notifications | implemented-unverified | Neutral edit/save-state and selection listeners now support synchronized frontend panels; thread/FX scheduling and full legacy binding remain |
@@ -56,7 +56,7 @@ The locked product direction and workspace design are maintained in
 | Neutral world validation | implemented-unverified | `WorldValidator` reports broken intra-document shared edges, unsupported OSRS map values, duplicate/invalid objects using canonical shape semantics, missing definitions, and definition-backed footprint bounds; `WorldRegionWindow` also reports verifiable cross-region corner mismatches, and the controlled workspace exposes live diagnostics with a neutral definition adapter, while full parity rules remain |
 | UI-neutral editor contracts | in-progress | Neutral pointer, tool, inspector, viewport, and renderer seams introduced; command-backed underlay brush is the first migrated tool path |
 | Live legacy document bridge | in-progress | MapRegion terrain import, scene-object anchor import, shared-corner height/floor/flag synchronization, and footprint-aware object replacement are implemented; UI smoke coverage remains |
-| OpenRune backend | in-progress | 2.4.19 compatibility spike and neutral OSRS region decoder are isolated behind `CacheStore`; legacy remains default and real-cache parity remains pending |
+| OpenRune backend | in-progress | 2.4.19 compatibility spike and neutral OSRS region decoder are isolated behind `CacheStore`; external revision-6 terrain/definition verification passes, legacy remains default, and location parity/writable packing remain pending |
 | Resource catalog and provenance | implemented-unverified | [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md) and [`RESOURCE_INTAKE_2026-09-16.md`](RESOURCE_INTAKE_2026-09-16.md) record roles, commits, license evidence, inspected paths, and current adoption tests |
 | OSRS-only product scope | in-progress | Scope and migration policy are locked in [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md); legacy paths remain quarantined during parity work |
 | Project/cache identity metadata | implemented-unverified | Neutral `OsrsCacheMetadata`, `ProjectMetadata`, JSON persistence, explicit read-only mismatch assessment, and optional backend-neutral `CacheStore.metadata(...)` capability added; cache discovery and UI remain |
@@ -124,9 +124,12 @@ legacy `MainWindow` remains a separate compatibility milestone.
 
 ## Next implementation gate
 
-The next required evidence is a licensed representative OSRS cache outside
-the repository. Run `./gradlew verifyOsrsRevision` with
+The initial external evidence run now passes for revision-6 terrain and
+definitions. The next required evidence is a licensed representative OSRS
+cache/region containing location payloads, followed by writable packing. Run
+`./gradlew verifyOsrsRevision` with
 `RSPSI_OSRS_CACHE=/path/to/cache`; for a selected region also provide
 `RSPSI_OSRS_REGION_X`, `RSPSI_OSRS_REGION_Y`, and `RSPSI_OSRS_REVISION`.
-Until that run passes against real data, OpenRune remains read-only and the
-legacy backend remains available only as a quarantined compatibility path.
+Until the location and write gates pass against real data, OpenRune remains
+read-only and the legacy backend remains available only as a quarantined
+compatibility path.

@@ -55,6 +55,44 @@ class OsrsRegionEncoderTest {
     }
 
     @Test
+    void decodeEncodeDecodePreservesLegacyByteTerrainSemantics() {
+        WorldDocument source = new WorldDocument(64, 64, 4);
+        for (int plane = 0; plane < 4; plane++) {
+            for (int x = 0; x < 64; x++) {
+                for (int y = 0; y < 64; y++) {
+                    int southWest = -16 * (x + y + plane * 4);
+                    int eastX = x == 63 ? x : x + 1;
+                    int northY = y == 63 ? y : y + 1;
+                    source.tile(plane, x, y).restore(new TileSnapshot(
+                            southWest,
+                            -16 * (eastX + y + plane * 4),
+                            -16 * (eastX + northY + plane * 4),
+                            -16 * (x + northY + plane * 4),
+                            plane == 1 && x == 2 && y == 3 ? 7 : 0,
+                            plane == 0 && x == 4 && y == 5 ? 200 : 0,
+                            plane == 0 && x == 4 && y == 5 ? 11 : 0,
+                            plane == 0 && x == 4 && y == 5 ? 1 : 0,
+                            plane == 2 && x == 7 && y == 8 ? 6 : 0,
+                            List.of()));
+                }
+            }
+        }
+
+        byte[] terrain = OsrsRegionEncoder.encodeTerrain(source, false);
+        WorldDocument decoded = OsrsRegionDecoder.decodeTerrain(terrain, 0, 0, (x, y) -> 10, false);
+
+        for (int plane = 0; plane < 4; plane++) {
+            for (int x = 0; x < 64; x++) {
+                for (int y = 0; y < 64; y++) {
+                    assertEquals(source.tile(plane, x, y).snapshot(),
+                            decoded.tile(plane, x, y).snapshot(),
+                            "legacy semantic mismatch at " + plane + "," + x + "," + y);
+                }
+            }
+        }
+    }
+
+    @Test
     void rejectsCrackedSharedTerrainEdgesBeforeEncoding() {
         WorldDocument source = new WorldDocument(64, 64, 4);
         source.tile(0, 0, 0).restore(new TileSnapshot(

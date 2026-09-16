@@ -39,6 +39,12 @@ indexes use separate landscape/location groups with file 0 in each, while
 modern packed groups share one numeric group with terrain in file 0 and
 locations in file 1. `MapIndexTableTest` covers both layouts so a legacy
 compatibility assumption cannot silently break modern loading. The
+terrain codec is revision-aware at the same boundary: OSRS revisions before
+209 use one-byte terrain opcodes and overlay values, while revision 209 onward
+uses two-byte values, matching the captured TSPS/OpenRune-Editor scene decoder
+behavior.
+`OsrsRevisionProfile`, `OsrsMapService`, and `OsrsRegionSaveCoordinator` carry
+that decision without exposing revision branches to the world model. The
 legacy `MapIndexLoaderOSRS` compatibility facade is now backed by the same
 neutral table and can export/import the existing six-byte-entry map-index
 interchange format for tooling. That interchange export is not a claim that
@@ -74,19 +80,24 @@ semantics are validated. `flush` does not claim to persist edits. There is no
 automatic fallback to Displee, because falling back could decode a cache with
 the wrong format and silently produce incorrect data.
 
-No real OSRS cache is checked into the repository yet. The adapter has fake
-byte-store and named-map-index tests for boundary behavior, but real fixture
-loading, neutral object/floor/texture conversion, symbolic asset discovery,
-writable packing, and semantic parity are still open acceptance work. The application continues to
-construct the legacy Displee backend by default.
+No real OSRS cache is checked into the repository. An external OpenRS2 cache
+fixture (cache id 391, revision 6) has now passed the read-only verification
+path: OpenRune opened it, 926 map groups were discovered, 26,469 neutral asset
+descriptors loaded, terrain decoded, collision and neutral scene construction
+succeeded, and decode -> encode -> decode was semantically equal. The fixture
+has no location payload for the selected region and the backend remains
+read-only, so representative location parity and writable packing remain open.
+The application continues to construct the legacy Displee backend by default.
 
 ## Next spike gate
 
 Provide a licensed representative OSRS cache fixture outside the repository,
-load it through `CacheStoreFactory.openRune(Path)`, and compare its terrain,
+load it through `CacheStoreFactory.openRune(Path)`, and compare terrain,
 objects, floors, flags, shapes, rotations, and region coordinates with the
-existing representation. Only after that comparison passes should definition
-adapters and writable packing be considered.
+existing representation. The first external revision-6 terrain/definition
+check now passes; the next gate is a cache/region containing location payloads,
+followed by validated writable packing. Definition adapters are already
+available, but are not yet the default product backend.
 
 ## Explicit verification
 

@@ -200,7 +200,25 @@ materialized because those assets are not currently licensed for distribution.
 ## Next intake actions
 
 1. Build the TSPS/RuneLite 52-case terrain reference matrix.
-2. Add a licensed external OSRS cache fixture and run the neutral map service
-   against it.
+2. Select a licensed external OSRS cache region with a non-empty location
+   payload and run the neutral map service against it.
 3. Record exact provenance beside every future adapted file and add a test or
    fixture demonstrating the behavior.
+
+## Real-cache verification evidence
+
+On 2026-09-16, OpenRS2 cache id `391` was downloaded outside the repository
+and extracted to a temporary path. Its metadata reports OSRS revision `6`.
+Running `verifyOsrsRevision` against a selected region passed OpenRune cache
+opening, revision-aware byte terrain decoding, map-index discovery (926 map
+groups), neutral object/floor/texture definition loading, 26,469 asset
+descriptors, collision construction, complete neutral terrain scene
+construction, and semantic decode -> encode -> decode equality. The selected
+region has no location archive, so location parity is not yet representative.
+The cache was not copied into RSPSi and no generated assets were bundled.
+
+The run also captured the revision boundary used by TSPS and
+OpenRune-Editor: OSRS terrain opcodes and overlay values are byte-width before
+revision 209 and short-width from revision 209 onward. RSPSi now records that
+choice in `OsrsRevisionProfile` and carries it through map loading and save
+encoding.

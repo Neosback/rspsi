@@ -20,6 +20,15 @@ public interface MapService {
         // Read-only and in-memory services have nothing to flush.
     }
 
+    /**
+     * Reports the terrain payload representation owned by this map service.
+     * The default preserves the modern format used by existing neutral test
+     * services; revision-aware OSRS services override it at the cache edge.
+     */
+    default boolean newTerrainFormat() {
+        return true;
+    }
+
     /** Temporary source-compatible name retained for existing loaders. */
     @Deprecated
     default byte[] readObjects(int regionX, int regionY) {

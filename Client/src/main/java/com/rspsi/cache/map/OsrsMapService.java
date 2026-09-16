@@ -17,15 +17,20 @@ public final class OsrsMapService implements MapService {
     private final CacheStore store;
     private final int mapIndex;
     private final MapIndexTable index;
+    private final boolean newTerrainFormat;
 
     public OsrsMapService(CacheStore store) {
-        this(store, OSRS_MAP_INDEX, MapIndexTable.discover(store, OSRS_MAP_INDEX));
+        this(store, OSRS_MAP_INDEX, MapIndexTable.discover(store, OSRS_MAP_INDEX), true);
     }
 
     /** Creates a map service using the layout selected by an OSRS revision. */
     public OsrsMapService(CacheStore store, int revision) {
-        this(store, OSRS_MAP_INDEX,
-                MapIndexTable.discover(store, OSRS_MAP_INDEX, OsrsRevisionProfile.forRevision(revision)));
+        this(store, OsrsRevisionProfile.forRevision(revision));
+    }
+
+    private OsrsMapService(CacheStore store, OsrsRevisionProfile profile) {
+        this(store, OSRS_MAP_INDEX, MapIndexTable.discover(store, OSRS_MAP_INDEX, profile),
+                profile.newTerrainFormat());
     }
 
     /** Loads one canonical region; a missing location archive is treated as empty. */
@@ -33,7 +38,8 @@ public final class OsrsMapService implements MapService {
         byte[] landscape = readLandscape(regionX, regionY);
         if (landscape == null) return Optional.empty();
         byte[] locations = readLocations(regionX, regionY);
-        return Optional.of(OsrsRegionDecoder.decodeRegion(landscape, locations, regionX, regionY));
+        return Optional.of(OsrsRegionDecoder.decodeRegion(landscape, locations, regionX, regionY,
+                newTerrainFormat));
     }
 
     /** Loads a bounded region window while preserving missing-region holes. */
@@ -49,14 +55,25 @@ public final class OsrsMapService implements MapService {
     }
 
     public OsrsMapService(CacheStore store, int mapIndex, MapIndexTable index) {
+        this(store, mapIndex, index, true);
+    }
+
+    /** Creates a map service with an explicit terrain representation policy. */
+    public OsrsMapService(CacheStore store, int mapIndex, MapIndexTable index, boolean newTerrainFormat) {
         this.store = Objects.requireNonNull(store, "store");
         this.mapIndex = mapIndex;
         this.index = Objects.requireNonNull(index, "index");
+        this.newTerrainFormat = newTerrainFormat;
     }
 
     @Override
     public MapIndexTable index() {
         return index;
+    }
+
+    @Override
+    public boolean newTerrainFormat() {
+        return newTerrainFormat;
     }
 
     @Override

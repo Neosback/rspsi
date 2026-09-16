@@ -24,7 +24,7 @@ public final class OsrsRegionSaveCoordinator {
     public SaveResult save(EditorSession session, int regionX, int regionY) {
         Objects.requireNonNull(session, "session");
         WorldDocument document = session.world();
-        byte[] landscape = OsrsRegionEncoder.encodeTerrain(document);
+        byte[] landscape = OsrsRegionEncoder.encodeTerrain(document, maps.newTerrainFormat());
         byte[] locations = OsrsRegionEncoder.encodeLocations(document);
 
         maps.writeLandscape(regionX, regionY, landscape);

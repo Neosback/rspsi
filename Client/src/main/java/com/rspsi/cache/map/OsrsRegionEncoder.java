@@ -22,6 +22,11 @@ public final class OsrsRegionEncoder {
      * whether a source tile used generated height opcode 0.
      */
     public static byte[] encodeTerrain(WorldDocument document) {
+        return encodeTerrain(document, true);
+    }
+
+    /** Encodes terrain using the selected revision's opcode width. */
+    public static byte[] encodeTerrain(WorldDocument document, boolean newTerrainFormat) {
         requireRegion(document);
         requireSharedHeights(document);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -30,28 +35,37 @@ public final class OsrsRegionEncoder {
                 for (int y = 0; y < OsrsRegionDecoder.REGION_SIZE; y++) {
                     TileSnapshot tile = document.tile(plane, x, y).snapshot();
                     if (tile.overlayId() != 0) {
-                        requireRange(tile.overlayId(), 1, 65534, "overlay ID");
+                        requireRange(tile.overlayId(), 1, newTerrainFormat ? 65534 : 254, "overlay ID");
                         requireRange(tile.overlayShape(), 0, 11, "overlay shape");
-                        writeShort(out, 2 + tile.overlayShape() * 4 + tile.overlayRotation());
-                        writeShort(out, tile.overlayId() + 1);
+                        writeTerrainValue(out, 2 + tile.overlayShape() * 4 + tile.overlayRotation(), newTerrainFormat);
+                        writeTerrainValue(out, tile.overlayId() + 1, newTerrainFormat);
                     } else if (tile.overlayShape() != 0 || tile.overlayRotation() != 0) {
                         throw new IllegalArgumentException("Overlay shape/rotation requires an overlay ID");
                     }
                     if (tile.flags() != 0) {
                         requireRange(tile.flags(), 1, 32, "tile flags");
-                        writeShort(out, 49 + tile.flags());
+                        writeTerrainValue(out, 49 + tile.flags(), newTerrainFormat);
                     }
                     if (tile.underlayId() != 0) {
-                        requireRange(tile.underlayId(), 1, 255, "underlay ID");
-                        writeShort(out, 81 + tile.underlayId());
+                        requireRange(tile.underlayId(), 1, newTerrainFormat ? 255 : 174, "underlay ID");
+                        writeTerrainValue(out, 81 + tile.underlayId(), newTerrainFormat);
                     }
                     int value = heightValue(document, plane, x, y, tile.southWestHeight());
-                    writeShort(out, 1);
+                    writeTerrainValue(out, 1, newTerrainFormat);
                     out.write(value);
                 }
             }
         }
         return out.toByteArray();
+    }
+
+    private static void writeTerrainValue(ByteArrayOutputStream out, int value, boolean newTerrainFormat) {
+        if (newTerrainFormat) {
+            writeShort(out, value);
+        } else {
+            requireRange(value, 0, 255, "legacy terrain value");
+            out.write(value);
+        }
     }
 
     /** Encodes the delta-packed file-1 location payload. */

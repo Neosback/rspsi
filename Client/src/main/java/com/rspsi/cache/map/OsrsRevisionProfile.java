@@ -7,7 +7,17 @@ package com.rspsi.cache.map;
  * layout decisions stay at the cache/map boundary where they can be audited
  * and replaced without leaking archive conventions into editor code.</p>
  */
-public record OsrsRevisionProfile(int revision, MapGroupLayout mapGroupLayout) {
+public record OsrsRevisionProfile(int revision, MapGroupLayout mapGroupLayout,
+                                  boolean newTerrainFormat) {
+
+    /**
+     * Compatibility constructor for callers that have not selected a
+     * revision profile yet. Synthetic fixtures historically used the modern
+     * two-byte terrain representation, so keep that behavior explicit here.
+     */
+    public OsrsRevisionProfile(int revision, MapGroupLayout mapGroupLayout) {
+        this(revision, mapGroupLayout, true);
+    }
 
     public OsrsRevisionProfile {
         if (revision <= 0) {
@@ -21,7 +31,8 @@ public record OsrsRevisionProfile(int revision, MapGroupLayout mapGroupLayout) {
     /** OpenRune's map packer uses numeric groups from revision 237 onward. */
     public static OsrsRevisionProfile forRevision(int revision) {
         return new OsrsRevisionProfile(revision,
-                revision >= 237 ? MapGroupLayout.NUMERIC : MapGroupLayout.NAMED);
+                revision >= 237 ? MapGroupLayout.NUMERIC : MapGroupLayout.NAMED,
+                revision >= 209);
     }
 
     public enum MapGroupLayout {
