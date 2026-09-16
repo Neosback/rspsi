@@ -23,10 +23,11 @@ OpenRune objects.
 
 `MapIndexTable` discovers named `mX_Y` landscape and `lX_Y` location archives
 through `CacheStore.archiveId`. For modern revision 237+ layouts, where
-OpenRune's map packer uses numeric group IDs, it falls back to the neutral
-`CacheStore.archiveIds` seam and treats file 0 as terrain and file 1 as
-locations. `OsrsMapService` then reads terrain and location bytes by numeric
-archive ID without exposing OpenRune types. The
+OpenRune's map packer uses numeric group IDs, the revision-aware overload uses
+the neutral `CacheStore.archiveIds` seam and treats file 0 as terrain and file
+1 as locations. The autodetecting overload remains available for compatibility
+tools that do not know a revision. `OsrsMapService` then reads terrain and
+location bytes by numeric archive ID without exposing OpenRune types. The
 legacy `MapIndexLoaderOSRS` compatibility facade is now backed by the same
 neutral table and can export/import the existing six-byte-entry map-index
 interchange format for tooling. That interchange export is not a claim that
@@ -71,6 +72,7 @@ fixture-only gate with:
 For an explicitly selected OpenRune-compatible cache, set
 `RSPSI_OSRS_CACHE=/path/to/cache`. This inspects the named map index. To verify
 one region, also set `RSPSI_OSRS_REGION_X`, `RSPSI_OSRS_REGION_Y`, and
-`RSPSI_OSRS_REVISION`. The verifier reports cache metadata, map/location
-payloads, neutral definition loading, validation, collision construction, and
-semantic decode/encode/decode equality. It does not write the supplied cache.
+`RSPSI_OSRS_REVISION`. The verifier reports cache metadata, the selected
+revision profile, map/location payloads, neutral definition loading,
+validation, collision construction, and semantic decode/encode/decode equality
+as explicit PASS/FAIL/NOT_RUN checks. It does not write the supplied cache.

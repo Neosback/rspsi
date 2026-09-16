@@ -77,6 +77,15 @@ public final class SelectionModel {
         notifyChanged();
     }
 
+    /** Replaces the current selection with an arbitrary set of tiles. */
+    public void selectTiles(Set<TileCoordinate> coordinates) {
+        clearInternal();
+        if (coordinates != null) tiles.addAll(coordinates);
+        if (tiles.size() == 1) current = new TileSelection(tiles.iterator().next());
+        else if (!tiles.isEmpty()) current = new TileSetSelection(tiles);
+        notifyChanged();
+    }
+
     public void selectVertex(VertexSelection vertex) {
         clearInternal();
         current = Objects.requireNonNull(vertex, "vertex");

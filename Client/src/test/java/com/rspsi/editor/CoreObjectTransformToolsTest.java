@@ -7,6 +7,7 @@ import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.tool.DuplicateObjectTool;
+import com.rspsi.editor.tool.DuplicateSelectionTool;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.MoveObjectTool;
 import com.rspsi.editor.tool.ToolContext;
@@ -75,6 +76,34 @@ class CoreObjectTransformToolsTest {
                 world.tile(0, 4, 8).snapshot().objects());
         assertEquals(8, TileSnapper.snap(8, 4, 10));
         assertEquals(9, TileSnapper.snap(99, 4, 10));
+    }
+
+    @Test
+    void duplicateSelectionIsOneAtomicCommandAndSelectsCopies() {
+        WorldDocument world = new WorldDocument(8, 8);
+        WorldObject first = new WorldObject(12, 10, 0, 0, 1, 1);
+        WorldObject second = new WorldObject(13, 22, 1, 0, 2, 1);
+        put(world, first);
+        put(world, second);
+        EditorSession session = new EditorSession(world);
+        session.selection().selectObjects(java.util.Set.of(first, second));
+        DuplicateSelectionTool tool = new DuplicateSelectionTool();
+        EditorToolController controller = new EditorToolController();
+        controller.activate(tool, context(session));
+        controller.pointerDown(pointer(1, 1));
+        controller.pointerDrag(pointer(3, 2));
+        controller.pointerUp(pointer(3, 2));
+
+        assertEquals(List.of(new WorldObject(12, 10, 0, 0, 3, 2)),
+                world.tile(0, 3, 2).snapshot().objects());
+        assertEquals(List.of(new WorldObject(13, 22, 1, 0, 4, 2)),
+                world.tile(0, 4, 2).snapshot().objects());
+        assertEquals(1, session.history().size());
+        session.undo();
+        assertEquals(List.of(), world.tile(0, 3, 2).snapshot().objects());
+        assertEquals(List.of(), world.tile(0, 4, 2).snapshot().objects());
+        assertEquals(2, session.selection().current() instanceof com.rspsi.editor.selection.ObjectSetSelection set
+                ? set.objects().size() : -1);
     }
 
     private static void put(WorldDocument world, WorldObject object) {

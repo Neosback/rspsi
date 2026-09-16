@@ -42,6 +42,41 @@ public final class MapIndexTable {
     }
 
     /**
+     * Discovers using a known revision profile. The explicit profile makes
+     * revision drift visible to callers while retaining the autodetecting
+     * overload for existing adapters and tooling.
+     */
+    public static MapIndexTable discover(CacheStore store, int mapIndex, OsrsRevisionProfile profile) {
+        Objects.requireNonNull(profile, "profile");
+        return profile.mapGroupLayout() == OsrsRevisionProfile.MapGroupLayout.NUMERIC
+                ? discoverNumeric(store, mapIndex)
+                : discoverNamed(store, mapIndex);
+    }
+
+    private static MapIndexTable discoverNamed(CacheStore store, int mapIndex) {
+        MapIndexTable table = new MapIndexTable();
+        for (int regionX = 0; regionX < DEFAULT_REGION_LIMIT; regionX++) {
+            for (int regionY = 0; regionY < DEFAULT_REGION_LIMIT; regionY++) {
+                String landscapeName = "m" + regionX + "_" + regionY;
+                String objectName = "l" + regionX + "_" + regionY;
+                int landscapeId = store.archiveId(mapIndex, landscapeName);
+                int objectId = store.archiveId(mapIndex, objectName);
+                if (landscapeId >= 0 || objectId >= 0) {
+                    table.put(new MapIndexEntry(regionX, regionY, landscapeId, objectId,
+                            landscapeName, objectName));
+                }
+            }
+        }
+        return table;
+    }
+
+    private static MapIndexTable discoverNumeric(CacheStore store, int mapIndex) {
+        MapIndexTable table = new MapIndexTable();
+        discoverNumericGroups(store, mapIndex, table);
+        return table;
+    }
+
+    /**
      * Revision 237+ OpenRune packing stores maps as numeric groups whose ID is
      * the packed 8-bit region coordinate, with terrain in file 0 and
      * locations in file 1. The fallback is used only when named discovery

@@ -5,6 +5,7 @@ import com.rspsi.cache.map.MapIndexTable;
 import com.rspsi.cache.map.OsrsMapService;
 import com.rspsi.cache.map.OsrsRegionDecoder;
 import com.rspsi.cache.map.OsrsRegionEncoder;
+import com.rspsi.cache.map.OsrsRevisionProfile;
 import com.rspsi.cache.store.OpenRuneCacheStore;
 import com.rspsi.editor.collision.OsrsCollisionBuilder;
 import com.rspsi.editor.model.TileSnapshot;
@@ -41,10 +42,15 @@ public final class OsrsRevisionVerifier {
         try (OpenRuneCacheStore store = OpenRuneCacheStore.open(path)) {
             MapIndexTable index = MapIndexTable.discover(store, OsrsMapService.OSRS_MAP_INDEX);
             List<String> errors = index.size() == 0
-                    ? List.of("no named OSRS map archives found; supplied cache is not accepted as OSRS evidence")
+                    ? List.of("no OSRS map archives found; supplied cache is not accepted as OSRS evidence")
                     : List.of();
             return new VerificationReport(path, null, null, null, index.size(), true,
-                    false, false, List.of("cache opened", "map index entries: " + index.size()), errors);
+                    false, false, List.of("cache opened", "map index entries: " + index.size()), errors,
+                    List.of(
+                            check("cache.open", VerificationCheck.Status.PASS, "OpenRune cache opened"),
+                            check("map.index", index.size() == 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
+                                    index.size() == 0 ? "no OSRS map groups found" : index.size() + " map groups discovered"),
+                            check("region.verify", VerificationCheck.Status.NOT_RUN, "no region was selected")));
         }
     }
 
@@ -52,19 +58,29 @@ public final class OsrsRevisionVerifier {
         List<String> messages = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         try (OpenRuneCacheStore store = OpenRuneCacheStore.open(path)) {
-            OsrsMapService maps = new OsrsMapService(store);
             messages.add("cache metadata: " + store.metadata(revision));
+            OsrsRevisionProfile profile = OsrsRevisionProfile.forRevision(revision);
+            messages.add("revision profile: " + profile.mapGroupLayout());
+            OsrsMapService maps = new OsrsMapService(store, revision);
             messages.add("map index entries: " + maps.index().size());
             byte[] landscape = maps.readLandscape(regionX, regionY);
             byte[] locations = maps.readLocations(regionX, regionY);
             if (landscape == null || locations == null) {
                 errors.add("region payload missing for " + regionX + "," + regionY);
                 return new VerificationReport(path, regionX, regionY, revision, maps.index().size(),
-                        false, false, false, messages, errors);
+                        true, false, false, messages, errors,
+                        List.of(
+                                check("cache.open", VerificationCheck.Status.PASS, "OpenRune cache opened"),
+                                check("cache.metadata", VerificationCheck.Status.PASS, "revision profile " + profile.mapGroupLayout()),
+                                check("map.index", maps.index().size() == 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
+                                        maps.index().size() + " map groups discovered"),
+                                check("map.payload", VerificationCheck.Status.FAIL, "region payload missing"),
+                                check("region.verify", VerificationCheck.Status.FAIL, "region could not be decoded")));
             }
             messages.add("terrain bytes: " + landscape.length);
             messages.add("location bytes: " + locations.length);
             DefinitionProvider definitions = store.definitionProvider(revision);
+            messages.add("definition provider: ready");
             WorldDocument document = OsrsRegionDecoder.decode(landscape, locations, regionX, regionY);
             List<ValidationIssue> issues = WorldValidator.validate(document, definitions);
             long issueErrors = issues.stream().filter(issue -> issue.severity() == ValidationIssue.Severity.ERROR).count();
@@ -79,12 +95,36 @@ public final class OsrsRevisionVerifier {
             if (!equal) errors.add("semantic round-trip mismatch");
             if (issueErrors > 0) errors.add("world validation reported errors");
             return new VerificationReport(path, regionX, regionY, revision, maps.index().size(),
-                    true, true, equal, messages, errors);
+                    true, true, equal, messages, errors,
+                    List.of(
+                            check("cache.open", VerificationCheck.Status.PASS, "OpenRune cache opened"),
+                            check("cache.metadata", VerificationCheck.Status.PASS,
+                                    "revision " + revision + ", profile " + profile.mapGroupLayout()),
+                            check("map.index", maps.index().size() == 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
+                                    maps.index().size() + " map groups discovered"),
+                            check("definitions", VerificationCheck.Status.PASS, "neutral definition provider ready"),
+                            check("map.payload", VerificationCheck.Status.PASS,
+                                    "terrain " + landscape.length + " bytes; locations " + locations.length + " bytes"),
+                            check("terrain.decode", VerificationCheck.Status.PASS, "64x64x4 terrain decoded"),
+                            check("world.validation", issueErrors > 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
+                                    issueErrors + " validation errors; " + (issues.size() - issueErrors) + " warnings"),
+                            check("collision.decode", VerificationCheck.Status.PASS, "collision map constructed"),
+                            check("semantic.roundtrip", equal ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
+                                    "decode -> encode -> decode semantic equality: " + equal),
+                            check("render.parity", VerificationCheck.Status.NOT_RUN,
+                                    "RuneLite/TSPS render fixtures are not bundled")));
         } catch (RuntimeException exception) {
             errors.add(exception.getClass().getSimpleName() + ": " + exception.getMessage());
             return new VerificationReport(path, regionX, regionY, revision, 0,
-                    false, false, false, messages, errors);
+                    false, false, false, messages, errors,
+                    List.of(
+                            check("cache.open", VerificationCheck.Status.FAIL, exception.getClass().getSimpleName()),
+                            check("region.verify", VerificationCheck.Status.FAIL, exception.getMessage() == null ? "verification failed" : exception.getMessage())));
         }
+    }
+
+    private static VerificationCheck check(String id, VerificationCheck.Status status, String detail) {
+        return new VerificationCheck(id, status, detail);
     }
 
     private static boolean semanticallyEqual(WorldDocument first, WorldDocument second) {
@@ -112,16 +152,35 @@ public final class OsrsRevisionVerifier {
             boolean regionDecoded,
             boolean roundTripEqual,
             List<String> messages,
-            List<String> errors
+            List<String> errors,
+            List<VerificationCheck> checks
     ) {
+        public VerificationReport(
+                Path cachePath,
+                Integer regionX,
+                Integer regionY,
+                Integer revision,
+                int mapIndexEntries,
+                boolean cacheOpened,
+                boolean regionDecoded,
+                boolean roundTripEqual,
+                List<String> messages,
+                List<String> errors
+        ) {
+            this(cachePath, regionX, regionY, revision, mapIndexEntries, cacheOpened, regionDecoded,
+                    roundTripEqual, messages, errors, List.of());
+        }
+
         public VerificationReport {
             messages = List.copyOf(messages);
             errors = List.copyOf(errors);
+            checks = List.copyOf(checks);
         }
 
         public List<String> lines() {
-            List<String> result = new ArrayList<>(messages.size() + errors.size() + 1);
+            List<String> result = new ArrayList<>(checks.size() + messages.size() + errors.size() + 1);
             result.add("OSRS revision verification: " + cachePath);
+            checks.forEach(check -> result.add(check.status() + " " + check.id() + ": " + check.detail()));
             result.addAll(messages);
             errors.forEach(error -> result.add("ERROR: " + error));
             return result;

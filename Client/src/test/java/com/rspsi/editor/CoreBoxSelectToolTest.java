@@ -10,6 +10,7 @@ import com.rspsi.editor.selection.ObjectSetSelection;
 import com.rspsi.editor.selection.TileAreaSelection;
 import com.rspsi.editor.tool.BoxSelectTool;
 import com.rspsi.editor.tool.EditorToolController;
+import com.rspsi.editor.tool.LassoSelectTool;
 import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.editor.tool.MoveSelectionTool;
 import com.rspsi.editor.tool.RotateSelectionTool;
@@ -55,6 +56,31 @@ class CoreBoxSelectToolTest {
 
         ObjectSetSelection selection = assertInstanceOf(ObjectSetSelection.class, session.selection().current());
         assertEquals(java.util.Set.of(first, second), selection.objects());
+    }
+
+    @Test
+    void lassoSelectsTileCentersAndUsesUnifiedTileSetSelection() {
+        EditorSession session = new EditorSession(new WorldDocument(8, 8));
+        EditorToolController controller = new EditorToolController();
+        controller.activate(new LassoSelectTool(), context(session));
+        controller.pointerDown(pointer(1, 1));
+        controller.pointerDrag(pointer(5, 1));
+        controller.pointerDrag(pointer(5, 5));
+        controller.pointerDrag(pointer(1, 5));
+        controller.pointerUp(pointer(1, 5));
+
+        com.rspsi.editor.selection.TileSetSelection selection =
+                assertInstanceOf(com.rspsi.editor.selection.TileSetSelection.class, session.selection().current());
+        assertEquals(java.util.Set.of(
+                new TileCoordinate(0, 1, 1), new TileCoordinate(0, 1, 2), new TileCoordinate(0, 1, 3),
+                new TileCoordinate(0, 1, 4),
+                new TileCoordinate(0, 2, 1), new TileCoordinate(0, 2, 2), new TileCoordinate(0, 2, 3),
+                new TileCoordinate(0, 2, 4),
+                new TileCoordinate(0, 3, 1), new TileCoordinate(0, 3, 2), new TileCoordinate(0, 3, 3),
+                new TileCoordinate(0, 3, 4),
+                new TileCoordinate(0, 4, 1), new TileCoordinate(0, 4, 2), new TileCoordinate(0, 4, 3),
+                new TileCoordinate(0, 4, 4)),
+                selection.coordinates());
     }
 
     @Test

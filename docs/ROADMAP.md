@@ -33,7 +33,7 @@ The locked product direction and workspace design are maintained in
 | Undo/redo | implemented-unverified | Existing `TileChange` hierarchy and static `SceneGraph` stacks |
 | Autosave | implemented-unverified | Existing `AutoSaveJob`; add recovery smoke test |
 | Legacy/317 cache loading | implemented-unverified | Existing Displee-backed `Cache`; protect before migration |
-| OSRS cache support | implemented-unverified | `OSRSPlugin` discovers named `mX_Y`/`lX_Y` archives through `CacheStore`; real-cache parity and writable packing remain |
+| OSRS cache support | implemented-unverified | `OSRSPlugin` discovers named and revision-237+ numeric map groups through `CacheStore`; real-cache parity and writable packing remain |
 | Neutral cache boundary | in-progress | `CacheStore` facade introduced; migrate consumers incrementally |
 | Neutral map service | implemented-unverified | `MapIndexTable` and `OsrsMapService` provide named and modern numeric-group OSRS map discovery, file-0/file-1 reads, and safe writes to existing regions; `OsrsRegionDecoder`/`OsrsRegionEncoder` convert canonical terrain and objects with semantic round-trip coverage; real-cache fixture remains |
 | OSRS region save coordination | implemented-unverified | `OsrsRegionSaveCoordinator` encodes both region payloads before writing, flushes through the neutral map service, and marks `EditorSession` saved only after success; writable OpenRune packing remains gated |
@@ -42,11 +42,11 @@ The locked product direction and workspace design are maintained in
 | Session state notifications | implemented-unverified | Neutral edit/save-state and selection listeners now support synchronized frontend panels; thread/FX scheduling and full legacy binding remain |
 | WorldFragment copy/paste | implemented-unverified | Canonical multi-plane fragment capture and atomic paste/undo command added; UI import/export wiring remains |
 | Dirty-region invalidation | implemented-unverified | `EditorSession` merges affected tiles into 8×8 `DirtyRegion` batches; renderer/cache consumers remain |
-| Unified selection service | implemented-unverified | Tile, tile-set, area, vertex, single-object, multi-object, and fragment selection values are available; viewport/tool migration remains |
+| Unified selection service | implemented-unverified | Tile, arbitrary tile-set/lasso, area, vertex, single-object, multi-object, and fragment selection values are available; viewport/tool migration remains |
 | OSRS coordinate and tile inspector contract | implemented-unverified | `WorldWindow`, `WorldTileAddress`, and `TileInspectorSnapshot` provide world/region/chunk breakdowns and raw flag semantics for frontend overlays; live hover wiring remains |
 | First-party terrain tools | implemented-unverified | Command-backed overlay, vertex-aware raise/lower with radius/falloff, ramp, bilinear height sampling, tile-flag, flatten, and neighbour-aware smoothing brushes are tested; legacy UI wiring remains |
 | First-party object commands | implemented-unverified | Place/delete/move/rotate plus atomic multi-object moves, rotations, and definition replacement are tested through `EditorSession`; richer transform coverage remains |
-| First-party object tools | implemented-unverified | Place/delete/rotate plus pick-on-drag move, duplicate, box object selection, move-selection, rotate-selection, and replace-selection tools invoke canonical commands; multi-object duplicate remains |
+| First-party object tools | implemented-unverified | Place/delete/rotate plus pick-on-drag move, single- and multi-object duplicate, box object selection, move-selection, rotate-selection, and replace-selection tools invoke canonical commands; UI wiring and broader transform coverage remain |
 | Canonical terrain mesh topology | implemented-unverified | RSPSi-owned `TerrainMeshBuilder` covers 13 shapes × 4 rotations, corners, and integer midpoint heights; a 52-case deterministic golden matrix now locks topology, while TSPS/RuneLite parity remains |
 | Canonical collision map | implemented-unverified | RSPSi-owned flags/map plus `OsrsCollisionBuilder` provide bridge-aware terrain masks, roof semantics, rotated footprint collision, and wall/ground categories; route/LOS parity and complete definition fixtures remain |
 | Route and line-of-sight preview | implemented-unverified | Neutral bounded `RouteFinder` provides collision-aware routes, corner-cutting protection, and projectile LOS checks; OpenRune-Server parity and reach strategies remain |
@@ -58,7 +58,7 @@ The locked product direction and workspace design are maintained in
 | OSRS-only product scope | in-progress | Scope and migration policy are locked in [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md); legacy paths remain quarantined during parity work |
 | Project/cache identity metadata | implemented-unverified | Neutral `OsrsCacheMetadata`, `ProjectMetadata`, JSON persistence, and explicit read-only mismatch assessment added; cache discovery and UI remain |
 | Controlled workspace contracts | implemented-unverified | UI-neutral dock/panel/placement types, validated presets, `ControlledWorkspaceShell`, and an opt-in `MainWindow` bridge that reuses the legacy renderer; session-backed inspector/history/validation panels bind after map-ready, while full UI smoke coverage remains |
-| RuneLite/TSPS parity harness | in-progress | `OsrsRevisionVerifier` can inspect an explicitly supplied OpenRune cache and run region decode/validation/collision/semantic round-trip checks; licensed golden comparisons remain |
+| RuneLite/TSPS parity harness | in-progress | `OsrsRevisionVerifier` now reports auditable cache, revision-profile, definitions, decode, collision, round-trip, and render-parity checks for an explicitly supplied OpenRune cache; licensed golden comparisons remain |
 | Lua, plugin permissions, Plugin Hub | deferred | Begin only after native command/plugin API is stable |
 | Renderer/UI rewrite | deferred | Current JavaFX renderer remains the compatibility surface |
 

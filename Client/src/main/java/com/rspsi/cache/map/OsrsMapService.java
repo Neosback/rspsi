@@ -19,6 +19,12 @@ public final class OsrsMapService implements MapService {
         this(store, OSRS_MAP_INDEX, MapIndexTable.discover(store, OSRS_MAP_INDEX));
     }
 
+    /** Creates a map service using the layout selected by an OSRS revision. */
+    public OsrsMapService(CacheStore store, int revision) {
+        this(store, OSRS_MAP_INDEX,
+                MapIndexTable.discover(store, OSRS_MAP_INDEX, OsrsRevisionProfile.forRevision(revision)));
+    }
+
     public OsrsMapService(CacheStore store, int mapIndex, MapIndexTable index) {
         this.store = Objects.requireNonNull(store, "store");
         this.mapIndex = mapIndex;

@@ -1,0 +1,103 @@
+package com.rspsi.editor.tool;
+
+import com.rspsi.editor.input.PointerButton;
+import com.rspsi.editor.input.PointerEvent;
+import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.render.OverlayDraw;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+/** Selects tiles or objects whose tile centers fall inside a pointer lasso. */
+public final class LassoSelectTool implements EditorTool {
+    public enum Target { TILES, OBJECTS }
+
+    private Target target = Target.TILES;
+    private ToolContext context;
+    private final List<TileCoordinate> points = new ArrayList<>();
+    private int plane = -1;
+
+    public Target target() { return target; }
+    public void setTarget(Target target) { this.target = java.util.Objects.requireNonNull(target, "target"); }
+
+    @Override public String id() { return "lasso-select"; }
+    @Override public void activate(ToolContext context) { this.context = context; clear(); }
+    @Override public void deactivate() { clear(); context = null; }
+
+    @Override public void pointerDown(PointerEvent event) {
+        if (context == null || event.button() != PointerButton.PRIMARY) return;
+        clear();
+        addPoint(event);
+    }
+
+    @Override public void pointerDrag(PointerEvent event) {
+        if (context != null && !points.isEmpty() && event.button() == PointerButton.PRIMARY) addPoint(event);
+    }
+
+    @Override public void pointerUp(PointerEvent event) {
+        if (context == null || points.size() < 3 || event.button() != PointerButton.PRIMARY) {
+            clear();
+            return;
+        }
+        Set<TileCoordinate> selectedTiles = tilesInsideLasso();
+        if (target == Target.TILES) {
+            context.session().selection().selectTiles(selectedTiles);
+        } else {
+            Set<WorldObject> objects = new LinkedHashSet<>();
+            selectedTiles.forEach(tile -> context.session().world().tile(tile).snapshot().objects().forEach(objects::add));
+            context.session().selection().selectObjects(objects);
+        }
+        clear();
+    }
+
+    @Override public ToolInspector inspector() {
+        return () -> List.of(new PropertyDescriptor("target", "Select", PropertyDescriptor.ValueType.ENUM, 0, 1));
+    }
+
+    @Override public void renderOverlay(OverlayDraw draw) {
+        tilesInsideLasso().forEach(draw::tileOutline);
+    }
+
+    private void addPoint(PointerEvent event) {
+        context.viewport().tileAt(event.x(), event.y())
+                .filter(tile -> plane < 0 || tile.plane() == plane)
+                .ifPresent(tile -> {
+                    if (plane < 0) plane = tile.plane();
+                    if (points.isEmpty() || !points.get(points.size() - 1).equals(tile)) points.add(tile);
+                });
+    }
+
+    private Set<TileCoordinate> tilesInsideLasso() {
+        if (context == null || points.size() < 3 || plane < 0) return Set.of();
+        Set<TileCoordinate> selected = new LinkedHashSet<>();
+        for (int x = 0; x < context.session().world().width(); x++) {
+            for (int y = 0; y < context.session().world().length(); y++) {
+                if (contains(x + 0.5, y + 0.5)) selected.add(new TileCoordinate(plane, x, y));
+            }
+        }
+        return Set.copyOf(selected);
+    }
+
+    /** Ray-casting point-in-polygon test in world-tile coordinates. */
+    private boolean contains(double x, double y) {
+        boolean inside = false;
+        for (int index = 0, previous = points.size() - 1; index < points.size(); previous = index++) {
+            double currentX = points.get(index).x() + 0.5;
+            double currentY = points.get(index).y() + 0.5;
+            double previousX = points.get(previous).x() + 0.5;
+            double previousY = points.get(previous).y() + 0.5;
+            boolean crosses = (currentY > y) != (previousY > y)
+                    && x < (previousX - currentX) * (y - currentY) / (previousY - currentY) + currentX;
+            if (crosses) inside = !inside;
+        }
+        return inside;
+    }
+
+    private void clear() {
+        points.clear();
+        plane = -1;
+    }
+}

@@ -39,6 +39,28 @@ class MapIndexTableTest {
     }
 
     @Test
+    void knownModernRevisionUsesNumericGroups() {
+        FakeStore store = new FakeStore();
+        store.numericArchiveIds = new int[]{(50 << 8) | 75};
+
+        MapIndexTable table = MapIndexTable.discover(store, 5, OsrsRevisionProfile.forRevision(240));
+
+        assertEquals(1, table.size());
+        assertEquals((50 << 8) | 75, table.archiveId(50, 75, MapArchiveType.LANDSCAPE));
+    }
+
+    @Test
+    void knownLegacyRevisionUsesNamedGroups() {
+        FakeStore store = new FakeStore();
+        store.archiveIds.put("5:m50_75", 1234);
+
+        MapIndexTable table = MapIndexTable.discover(store, 5, OsrsRevisionProfile.forRevision(236));
+
+        assertEquals(1, table.size());
+        assertEquals(1234, table.archiveId(50, 75, MapArchiveType.LANDSCAPE));
+    }
+
+    @Test
     void entriesAreReturnedInStableWorldOrder() {
         MapIndexTable table = MapIndexTable.of(java.util.List.of(
                 entry(12, 2), entry(1, 200), entry(12, 1)));

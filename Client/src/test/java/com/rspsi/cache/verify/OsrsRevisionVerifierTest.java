@@ -19,4 +19,16 @@ class OsrsRevisionVerifierTest {
         assertTrue(report.lines().contains("cache opened"));
         assertTrue(report.lines().contains("ERROR: semantic round-trip mismatch"));
     }
+
+    @Test
+    void checksAreRenderedAsAnAuditableGate() {
+        OsrsRevisionVerifier.VerificationReport report = new OsrsRevisionVerifier.VerificationReport(
+                Path.of("/tmp/example-cache"), null, null, null, 12,
+                true, false, false, List.of(), List.of(), List.of(
+                        new VerificationCheck("cache.open", VerificationCheck.Status.PASS, "opened"),
+                        new VerificationCheck("render.parity", VerificationCheck.Status.NOT_RUN, "fixture pending")));
+
+        assertTrue(report.lines().contains("PASS cache.open: opened"));
+        assertTrue(report.lines().contains("NOT_RUN render.parity: fixture pending"));
+    }
 }
