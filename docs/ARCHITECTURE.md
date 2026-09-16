@@ -118,6 +118,11 @@ and the replacement of the legacy tool remain separate milestones.
 neutral pointer/session/composite-command path. They are first-party core tools
 and do not add editing behavior to `SceneGraph`.
 
+`FlattenTerrainTool` and `SmoothTerrainTool` extend that same path. Flatten
+writes a uniform four-corner height, while smooth samples corresponding shared
+corners from neighbouring tiles; both produce one history entry per pointer
+stroke.
+
 `PlaceObjectCommand`, `DeleteObjectCommand`, `MoveObjectCommand`, and
 `RotateObjectCommand` provide the corresponding canonical location mutations;
 object tools can now be migrated without inventing a second history system.

@@ -41,7 +41,7 @@ The locked product direction and workspace design are maintained in
 | WorldFragment copy/paste | implemented-unverified | Canonical multi-plane fragment capture and atomic paste/undo command added; UI import/export wiring remains |
 | Dirty-region invalidation | implemented-unverified | `EditorSession` merges affected tiles into 8×8 `DirtyRegion` batches; renderer/cache consumers remain |
 | Unified selection service | implemented-unverified | Tile, tile-set, area, vertex, object, and fragment selection values are available; viewport/tool migration remains |
-| First-party terrain tools | implemented-unverified | Command-backed overlay, raise/lower, and tile-flag brushes are tested; smoothing/falloff/flatten and legacy UI wiring remain |
+| First-party terrain tools | implemented-unverified | Command-backed overlay, raise/lower, tile-flag, flatten, and neighbour-aware smoothing brushes are tested; falloff/ramp/sampling and legacy UI wiring remain |
 | First-party object commands | implemented-unverified | Place/delete/move/rotate are atomic and tested through `EditorSession`; object picking/tool and multi-select UI remain |
 | First-party object tools | implemented-unverified | Place/delete/rotate tools invoke the canonical commands; picking, drag-move, duplicate, replace, and snapping remain |
 | Canonical terrain mesh topology | implemented-unverified | RSPSi-owned `TerrainMeshBuilder` covers 13 shapes × 4 rotations, corners, and integer midpoint heights; TSPS/RuneLite parity remains |
