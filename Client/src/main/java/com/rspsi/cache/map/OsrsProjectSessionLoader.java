@@ -9,6 +9,7 @@ import com.rspsi.project.ProjectMetadata;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.ArrayList;
 
 /**
  * Opens an OSRS project against a selected cache with an explicit identity
@@ -35,6 +36,11 @@ public final class OsrsProjectSessionLoader {
                 .map(value -> ProjectCompatibility.assess(project, value))
                 .orElseGet(() -> new ProjectCompatibility(true,
                         List.of("cache identity is unavailable")));
+        if (!store.capabilities().writable()) {
+            ArrayList<String> issues = new ArrayList<>(compatibility.issues());
+            issues.add("cache backend is read-only");
+            compatibility = new ProjectCompatibility(true, issues);
+        }
         OsrsSessionLoader.LoadedRegion region = compatibility.readOnly()
                 ? sessions.loadReadOnly(regionX, regionY)
                 : sessions.load(regionX, regionY);

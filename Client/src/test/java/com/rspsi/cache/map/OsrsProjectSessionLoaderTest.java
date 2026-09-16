@@ -66,7 +66,23 @@ class OsrsProjectSessionLoaderTest {
                                 new com.rspsi.editor.model.TileCoordinate(0, 0, 0),
                                 opened.region().session().world().tile(0, 0, 0).snapshot(),
                                 opened.region().session().world().tile(0, 0, 0).snapshot(),
-                                "read-only edit")));
+                "read-only edit")));
+    }
+
+    @Test
+    void matchingProjectOnReadOnlyBackendIsInspectableOnly() {
+        OsrsCacheMetadata identity = new OsrsCacheMetadata(240, 2, "cache-a");
+        RecordingStore store = new RecordingStore(identity, false);
+        OsrsMapService maps = maps(store);
+
+        OsrsProjectSessionLoader.OpenedProject opened =
+                new OsrsProjectSessionLoader(store, maps, ProjectMetadata.forCache(identity))
+                        .load(50, 50);
+
+        assertTrue(opened.readOnly());
+        assertFalse(opened.region().session().canSave());
+        assertFalse(opened.region().session().canEdit());
+        assertTrue(opened.compatibility().issues().contains("cache backend is read-only"));
     }
 
     private static OsrsMapService maps(RecordingStore store) {
@@ -77,9 +93,15 @@ class OsrsProjectSessionLoaderTest {
     private static final class RecordingStore implements CacheStore {
         private final Map<String, byte[]> values = new HashMap<>();
         private final OsrsCacheMetadata identity;
+        private final boolean writable;
 
         private RecordingStore(OsrsCacheMetadata identity) {
+            this(identity, true);
+        }
+
+        private RecordingStore(OsrsCacheMetadata identity, boolean writable) {
             this.identity = identity;
+            this.writable = writable;
             WorldDocument source = new WorldDocument(64, 64, 4);
             values.put("5:100:0", OsrsRegionEncoder.encodeTerrain(source, true));
             values.put("5:100:1", OsrsRegionEncoder.encodeLocations(source));
@@ -96,7 +118,7 @@ class OsrsProjectSessionLoaderTest {
         @Override public void flush() { }
 
         @Override public CacheStoreCapabilities capabilities() {
-            return new CacheStoreCapabilities(true, true, true);
+            return new CacheStoreCapabilities(writable, true, true);
         }
 
         @Override public Optional<OsrsCacheMetadata> metadata(int revision) {

@@ -241,7 +241,10 @@ through a temporary file and atomic move when the filesystem supports it, so a
 crash cannot leave a partially written project identity. `initializeProject(...)`
 captures the selected OpenRune cache fingerprint without copying or modifying
 the cache; opening a different cache later still goes through the existing
-read-only compatibility decision.
+read-only compatibility decision. `OsrsProjectSessionLoader` also applies the
+selected backend capabilities: a matching project opened over a read-only
+OpenRune store is inspectable only, while the explicit staged output store can
+produce an editable session.
 
 The composition root also exposes `openWindow(...)` and
 `openWindowAround(...)` for scene consumers. These load a bounded OSRS context,
