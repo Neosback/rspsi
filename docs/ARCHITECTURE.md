@@ -84,6 +84,10 @@ boundary.
   landscape/location payloads. It produces `WorldDocument` and
   `WorldObject` data without exposing OpenRune, Displee, archive IDs, or
   opcodes to editor packages.
+- `OsrsLocShape` and `ObjectCategory` are the canonical editor-side location
+  semantics. They preserve OpenRune's shape IDs 0–22 and layer mapping for
+  walls, wall decor, game objects, and ground decor without leaking donor
+  enums into inspectors, selection queries, collision, or validation.
 - `OsrsRegionEncoder` writes dirty-region terrain and location payloads from
   the canonical model. It uses explicit heights during the first migration
   so decode/encode/decode tests verify semantic equality without preserving

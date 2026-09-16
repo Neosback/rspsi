@@ -45,7 +45,7 @@ public final class WorldValidator {
                             issues.add(error("DUPLICATE_OBJECT",
                                     "The same object appears more than once on a tile", coordinate));
                         }
-                        if (object.type() > 22) {
+                        if (!object.category().isKnown()) {
                             issues.add(error("INVALID_OBJECT_TYPE",
                                     "OSRS location shape must be between 0 and 22", coordinate));
                         }

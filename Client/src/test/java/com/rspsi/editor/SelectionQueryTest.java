@@ -4,7 +4,9 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.selection.ObjectSelection;
+import com.rspsi.editor.selection.SelectionQuery;
 import com.rspsi.editor.selection.TileSetSelection;
 import com.rspsi.editor.tool.AttributeSelectionTool;
 import com.rspsi.editor.tool.EditorToolController;
@@ -58,6 +60,20 @@ class SelectionQueryTest {
 
         TileSetSelection selection = assertInstanceOf(TileSetSelection.class, session.selection().current());
         assertEquals(java.util.Set.of(new TileCoordinate(1, 2, 3), new TileCoordinate(1, 1, 1)), selection.coordinates());
+    }
+
+    @Test
+    void objectQueriesCanSelectByNeutralSceneCategory() {
+        WorldDocument world = new WorldDocument(2, 2, 1);
+        WorldObject wall = new WorldObject(100, 0, 0, 0, 0, 0);
+        WorldObject decor = new WorldObject(101, 22, 0, 0, 1, 1);
+        put(world, wall);
+        put(world, decor);
+
+        assertEquals(java.util.Set.of(wall), SelectionQuery.objects(world,
+                new SelectionQuery.ObjectFilter(null, null, null, null, ObjectCategory.WALL)));
+        assertEquals(java.util.Set.of(decor), SelectionQuery.objects(world,
+                new SelectionQuery.ObjectFilter(null, null, null, null, ObjectCategory.GROUND_DECOR)));
     }
 
     private static void put(WorldDocument world, WorldObject object) {

@@ -4,6 +4,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.ObjectCategory;
 
 import java.util.LinkedHashSet;
 import java.util.Objects;
@@ -44,7 +45,11 @@ public final class SelectionQuery {
         return Set.copyOf(result);
     }
 
-    public record ObjectFilter(Integer id, Integer type, Integer plane, Integer rotation) {
+    public record ObjectFilter(Integer id, Integer type, Integer plane, Integer rotation, ObjectCategory category) {
+        public ObjectFilter(Integer id, Integer type, Integer plane, Integer rotation) {
+            this(id, type, plane, rotation, null);
+        }
+
         public ObjectFilter {
             if (id != null && id < 0) throw new IllegalArgumentException("Object ID cannot be negative");
             if (type != null && (type < 0 || type > 63)) throw new IllegalArgumentException("Object type must be 0..63");
@@ -56,7 +61,8 @@ public final class SelectionQuery {
             return (id == null || id == object.id())
                     && (type == null || type == object.type())
                     && (plane == null || plane == object.plane())
-                    && (rotation == null || rotation == object.rotation());
+                    && (rotation == null || rotation == object.rotation())
+                    && (category == null || category == object.category());
         }
     }
 

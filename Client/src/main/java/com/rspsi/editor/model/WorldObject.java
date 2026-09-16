@@ -10,4 +10,14 @@ public record WorldObject(int id, int type, int rotation, int plane, int x, int 
             throw new IllegalArgumentException("Object rotation must be between 0 and 3");
         }
     }
+
+    /** Returns the neutral scene category implied by this object's OSRS shape. */
+    public ObjectCategory category() {
+        return ObjectCategory.fromType(type);
+    }
+
+    /** Returns the semantic shape when the OSRS type is supported. */
+    public java.util.Optional<OsrsLocShape> shape() {
+        return OsrsLocShape.fromId(type);
+    }
 }
