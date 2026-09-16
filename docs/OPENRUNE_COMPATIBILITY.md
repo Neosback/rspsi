@@ -22,8 +22,11 @@ OpenRune objects.
 ## Neutral OSRS map path
 
 `MapIndexTable` discovers named `mX_Y` landscape and `lX_Y` location archives
-through `CacheStore.archiveId`. `OsrsMapService` then reads terrain and
-location bytes by numeric archive ID without exposing OpenRune types. The
+through `CacheStore.archiveId`. For modern revision 237+ layouts, where
+OpenRune's map packer uses numeric group IDs, it falls back to the neutral
+`CacheStore.archiveIds` seam and treats file 0 as terrain and file 1 as
+locations. `OsrsMapService` then reads terrain and location bytes by numeric
+archive ID without exposing OpenRune types. The
 legacy `MapIndexLoaderOSRS` compatibility facade is now backed by the same
 neutral table and can export/import the existing six-byte-entry map-index
 interchange format for tooling. That interchange export is not a claim that

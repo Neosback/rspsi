@@ -20,6 +20,11 @@ public interface CacheStore extends AutoCloseable {
         return -1;
     }
 
+    /** Returns numeric archive IDs when a backend exposes them without names. */
+    default int[] archiveIds(int index) {
+        return new int[0];
+    }
+
     void write(int index, int archive, int file, byte[] data);
 
     void flush();

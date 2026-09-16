@@ -35,7 +35,28 @@ public final class MapIndexTable {
                 }
             }
         }
+        if (table.size() == 0) {
+            discoverNumericGroups(store, mapIndex, table);
+        }
         return table;
+    }
+
+    /**
+     * Revision 237+ OpenRune packing stores maps as numeric groups whose ID is
+     * the packed 8-bit region coordinate, with terrain in file 0 and
+     * locations in file 1. The fallback is used only when named discovery
+     * found nothing, so legacy named layouts remain unambiguous.
+     */
+    private static void discoverNumericGroups(CacheStore store, int mapIndex, MapIndexTable table) {
+        for (int archiveId : store.archiveIds(mapIndex)) {
+            if (archiveId < 0 || archiveId > 0xFFFF) continue;
+            int regionX = archiveId >>> 8;
+            int regionY = archiveId & 0xFF;
+            String landscapeName = "m" + regionX + "_" + regionY;
+            String objectName = "l" + regionX + "_" + regionY;
+            table.put(new MapIndexEntry(regionX, regionY, archiveId, archiveId,
+                    landscapeName, objectName));
+        }
     }
 
     public static MapIndexTable of(Collection<MapIndexEntry> entries) {

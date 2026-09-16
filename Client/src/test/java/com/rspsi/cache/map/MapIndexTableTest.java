@@ -27,6 +27,18 @@ class MapIndexTableTest {
     }
 
     @Test
+    void discoversNumericModernMapGroupsWhenNamesAreUnavailable() {
+        FakeStore store = new FakeStore();
+        store.numericArchiveIds = new int[]{(50 << 8) | 75};
+
+        MapIndexTable table = MapIndexTable.discover(store, 5);
+
+        assertEquals(1, table.size());
+        assertEquals((50 << 8) | 75, table.archiveId(50, 75, MapArchiveType.LANDSCAPE));
+        assertEquals((50 << 8) | 75, table.archiveId(50, 75, MapArchiveType.OBJECT));
+    }
+
+    @Test
     void entriesAreReturnedInStableWorldOrder() {
         MapIndexTable table = MapIndexTable.of(java.util.List.of(
                 entry(12, 2), entry(1, 200), entry(12, 1)));
@@ -74,6 +86,7 @@ class MapIndexTableTest {
         private final Map<String, Integer> archiveIds = new HashMap<>();
         private final Map<String, byte[]> values = new HashMap<>();
         private final boolean writable;
+        private int[] numericArchiveIds = new int[0];
 
         private FakeStore() {
             this(false);
@@ -90,6 +103,7 @@ class MapIndexTableTest {
         @Override public int archiveId(int index, String archiveName) {
             return archiveIds.getOrDefault(index + ":" + archiveName, -1);
         }
+        @Override public int[] archiveIds(int index) { return numericArchiveIds.clone(); }
 
         @Override public void write(int index, int archive, int file, byte[] data) {
             values.put(index + ":" + archive + ":" + file, data.clone());
