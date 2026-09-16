@@ -12,6 +12,7 @@ import com.rspsi.editor.tool.BoxSelectTool;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.editor.tool.MoveSelectionTool;
+import com.rspsi.editor.tool.RotateSelectionTool;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -77,6 +78,30 @@ class CoreBoxSelectToolTest {
         assertEquals(List.of(new WorldObject(8, 10, 1, 0, 4, 5)),
                 world.tile(0, 4, 5).snapshot().objects());
         assertEquals(1, session.history().size());
+        session.undo();
+        assertEquals(List.of(first), world.tile(0, 1, 1).snapshot().objects());
+        assertEquals(List.of(second), world.tile(0, 2, 2).snapshot().objects());
+    }
+
+    @Test
+    void rotateSelectionUpdatesAllObjectsAndKeepsSelectionCurrent() {
+        WorldDocument world = new WorldDocument(8, 8);
+        WorldObject first = new WorldObject(7, 10, 0, 0, 1, 1);
+        WorldObject second = new WorldObject(8, 10, 2, 0, 2, 2);
+        put(world, first);
+        put(world, second);
+        EditorSession session = new EditorSession(world);
+        session.selection().selectObjects(java.util.Set.of(first, second));
+        EditorToolController controller = new EditorToolController();
+        controller.activate(new RotateSelectionTool(), context(session));
+        controller.pointerDown(pointer(1, 1));
+
+        WorldObject rotatedFirst = new WorldObject(7, 10, 1, 0, 1, 1);
+        WorldObject rotatedSecond = new WorldObject(8, 10, 3, 0, 2, 2);
+        assertEquals(List.of(rotatedFirst), world.tile(0, 1, 1).snapshot().objects());
+        assertEquals(List.of(rotatedSecond), world.tile(0, 2, 2).snapshot().objects());
+        assertEquals(java.util.Set.of(rotatedFirst, rotatedSecond),
+                ((com.rspsi.editor.selection.ObjectSetSelection) session.selection().current()).objects());
         session.undo();
         assertEquals(List.of(first), world.tile(0, 1, 1).snapshot().objects());
         assertEquals(List.of(second), world.tile(0, 2, 2).snapshot().objects());

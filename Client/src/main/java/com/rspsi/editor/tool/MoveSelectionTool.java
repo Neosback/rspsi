@@ -60,6 +60,10 @@ public final class MoveSelectionTool implements EditorTool {
             int deltaY = target.y() - anchor.y();
             if (deltaX != 0 || deltaY != 0) {
                 context.session().execute(new MoveObjectsCommand(objects, deltaX, deltaY));
+                context.session().selection().selectObjects(objects.stream()
+                        .map(object -> new WorldObject(object.id(), object.type(), object.rotation(), object.plane(),
+                                object.x() + deltaX, object.y() + deltaY))
+                        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new)));
             }
         }
         clear();

@@ -172,6 +172,8 @@ workflows. Both transform tools share a bounded nearest-grid snap setting.
 unified selection model; multi-object transforms and replace remain later tool
 features. `MoveObjectsCommand` and `MoveSelectionTool` now provide one atomic
 multi-object translation path, including overlapping source/target tiles.
+`RotateObjectsCommand` and `RotateSelectionTool` provide the corresponding
+atomic orientation path and refresh the selection to the transformed values.
 
 The initial OSRS map codec now decodes all four planes, explicit/inherited
 heights, underlays, overlays, shapes, rotations, flags, and delta-packed
