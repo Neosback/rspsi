@@ -133,6 +133,10 @@ boundary.
 - `WorldValidator` is the deterministic pre-save/parity diagnostic layer;
   renderers and UI panels consume its issues rather than reimplementing
   world invariants.
+- `EditorSession` records dirty work at 8×8 chunk granularity. An edit on a
+  chunk edge also invalidates the adjacent cardinal chunk so shared terrain
+  edges, floor blending, and picking can be rebuilt without rebuilding a
+  complete region.
 - `ObjectInspectorSnapshot` resolves optional neutral definition and collision
   providers into immutable frontend data. It keeps missing definitions
   explicit and exposes canonical category/shape names without coupling an

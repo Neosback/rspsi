@@ -144,9 +144,31 @@ public final class EditorSession {
 
     private synchronized void markDirty(Set<com.rspsi.editor.model.TileCoordinate> changedTiles) {
         for (var coordinate : changedTiles) {
-            DirtyRegion dirty = DirtyRegion.forTile(coordinate);
-            long key = ((long) dirty.chunkX() << 32) | (dirty.chunkY() & 0xFFFFFFFFL);
-            dirtyRegions.merge(key, dirty, DirtyRegion::merge);
+            markDirtyChunk(coordinate);
+            // A tile on a chunk edge can affect blended floors, shared-edge
+            // geometry, and picking in the adjacent 8x8 chunk.
+            if (coordinate.x() % 8 == 0 && coordinate.x() > 0) {
+                markDirtyChunk(new com.rspsi.editor.model.TileCoordinate(
+                        coordinate.plane(), coordinate.x() - 1, coordinate.y()));
+            }
+            if (coordinate.x() % 8 == 7 && coordinate.x() + 1 < world.width()) {
+                markDirtyChunk(new com.rspsi.editor.model.TileCoordinate(
+                        coordinate.plane(), coordinate.x() + 1, coordinate.y()));
+            }
+            if (coordinate.y() % 8 == 0 && coordinate.y() > 0) {
+                markDirtyChunk(new com.rspsi.editor.model.TileCoordinate(
+                        coordinate.plane(), coordinate.x(), coordinate.y() - 1));
+            }
+            if (coordinate.y() % 8 == 7 && coordinate.y() + 1 < world.length()) {
+                markDirtyChunk(new com.rspsi.editor.model.TileCoordinate(
+                        coordinate.plane(), coordinate.x(), coordinate.y() + 1));
+            }
         }
+    }
+
+    private void markDirtyChunk(com.rspsi.editor.model.TileCoordinate coordinate) {
+        DirtyRegion dirty = DirtyRegion.forTile(coordinate);
+        long key = ((long) dirty.chunkX() << 32) | (dirty.chunkY() & 0xFFFFFFFFL);
+        dirtyRegions.merge(key, dirty, DirtyRegion::merge);
     }
 }

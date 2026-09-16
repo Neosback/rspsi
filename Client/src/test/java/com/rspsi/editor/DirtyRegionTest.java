@@ -27,13 +27,31 @@ class DirtyRegionTest {
                 document.tile(0, 1, 1).snapshot(),
                 new com.rspsi.editor.model.TileSnapshot(0, 0, 0, 0, 7, 0, 0, 0, 0, java.util.List.of()),
                 "test edit"));
-        session.execute(new SetTileCommand(new TileCoordinate(0, 7, 7),
-                document.tile(0, 7, 7).snapshot(),
+        session.execute(new SetTileCommand(new TileCoordinate(0, 6, 6),
+                document.tile(0, 6, 6).snapshot(),
                 new com.rspsi.editor.model.TileSnapshot(0, 0, 0, 0, 8, 0, 0, 0, 0, java.util.List.of()),
                 "same chunk"));
 
         assertEquals(1, session.dirtyRegions().size());
         assertEquals(1, session.drainDirtyRegions().size());
         assertTrue(session.dirtyRegions().isEmpty());
+    }
+
+    @Test
+    void edgeEditsInvalidateAdjacentChunksForSharedGeometry() {
+        WorldDocument document = new WorldDocument(16, 16);
+        EditorSession session = new EditorSession(document);
+        TileCoordinate edge = new TileCoordinate(0, 7, 7);
+        session.execute(new SetTileCommand(edge, document.tile(edge).snapshot(),
+                new com.rspsi.editor.model.TileSnapshot(0, 0, 0, 0, 7, 0, 0, 0, 0, java.util.List.of()),
+                "edge edit"));
+
+        assertEquals(3, session.dirtyRegions().size());
+        assertTrue(session.dirtyRegions().stream().anyMatch(region ->
+                region.chunkX() == 0 && region.chunkY() == 0));
+        assertTrue(session.dirtyRegions().stream().anyMatch(region ->
+                region.chunkX() == 1 && region.chunkY() == 0));
+        assertTrue(session.dirtyRegions().stream().anyMatch(region ->
+                region.chunkX() == 0 && region.chunkY() == 1));
     }
 }
