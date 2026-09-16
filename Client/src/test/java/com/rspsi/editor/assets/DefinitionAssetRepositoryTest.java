@@ -32,6 +32,28 @@ class DefinitionAssetRepositoryTest {
         assertTrue(assets.get(12, "npc").isEmpty());
     }
 
+    @Test
+    void symbolicNamesRemainOptionalAndAreSearchable() {
+        SymbolicNameProvider names = (type, id) ->
+                type.equals("object") && id == 12
+                        ? Optional.of("loc.castle_wall")
+                        : Optional.empty();
+        DefinitionAssetRepository assets = new DefinitionAssetRepository(new Definitions(), names);
+
+        AssetDescriptor descriptor = assets.get(12, "object").orElseThrow();
+        assertEquals("Castle wall", descriptor.name());
+        assertEquals(Optional.of("loc.castle_wall"), descriptor.symbolicName());
+        assertEquals(List.of(descriptor), assets.search("loc.castle_wall"));
+    }
+
+    @Test
+    void symbolicProviderValuesAreNormalized() {
+        DefinitionAssetRepository assets = new DefinitionAssetRepository(new Definitions(),
+                (type, id) -> type.equals("object") && id == 12 ? Optional.of("  loc.castle_wall  ") : null);
+
+        assertEquals(Optional.of("loc.castle_wall"), assets.get(12, "object").orElseThrow().symbolicName());
+    }
+
     private static final class Definitions implements DefinitionProvider {
         @Override public Optional<ObjectDefinitionView> object(int id) {
             if (id == 12) return Optional.of(new ObjectDefinitionView(12, "Castle wall", 1, 1, List.of(), new int[0]));

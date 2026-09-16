@@ -139,8 +139,10 @@ boundary.
   inspector to Displee, OpenRune, JavaFX, or ImGui.
 - `DefinitionAssetRepository` turns neutral definition IDs into searchable
   `AssetDescriptor` values for the first asset-browser categories (objects,
-  underlays, overlays, and textures). Providers may later supply RSCM/GameVal
-  names without changing the editor-facing asset contract.
+  underlays, overlays, and textures). `SymbolicNameProvider` is the narrow
+  adapter seam for RSCM/GameVal names: descriptors retain the display name,
+  numeric ID, and optional symbolic key, and search includes that key without
+  importing a naming-library type into the editor.
 
 ## Frontends
 
