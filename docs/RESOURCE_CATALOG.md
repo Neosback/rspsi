@@ -144,6 +144,12 @@ they cannot become accidental application sources or dependencies:
 |---|---|---|---|
 | Neosback OpenRune-Server | `../RSPSi-resources/OpenRune-Server-Neosback` | `bde85d0b0a5f7f87c1b8e9430fa81677bf443c9a` | Compare `engine`, `engine/map`, `engine/routefinder`, `or-cache`, and tools with upstream OpenRune |
 | Neosback OpenRune-Editor | `../RSPSi-resources/OpenRune-Editor-Neosback` | `1e5b41055da267ca94a615a0ec9853e21296b239` | Inspect the map-editor workbench, tools/plugins, history, region stamps, scene semantics, WebGL/picking, and cache integration; not a runtime dependency |
+| OpenRune FileStore | `../RSPSi-resources/OpenRune-FileStore` | `236e3920aa077a5990f2915e74f1c7d7729db47e` | Inspect the pinned production-candidate API and OSRS filesystem/definition modules; the application still consumes the published artifact |
+| RSPSApp TSPS | `../RSPSi-resources/TSPS` | `83415f76589a360eacbd0e635fe0557d06a510f0` | Inspect modern terrain, scene, model, bridge, instance, and collision behavior; donor/oracle only |
+| RuneLite | `../RSPSi-resources/RuneLite` | `ced4c4aba7a3cb7cace42e1f0c25a5f79b7faef` | Inspect current OSRS coordinate, scene, DevTools, cache, and renderer semantics; independent oracle only |
+| RuneLite cache-code updater | `../RSPSi-resources/runelite-cache-code-updater` | `a200d75bf779cdc76cae53e7e2cd6f23172e3535` | Study revision-drift and changed-assumption reporting; oracle/reference only |
+| Domw71 revision-240 editor | `../RSPSi-resources/OSRS-Map-Editor-Loading-240-rev` | `ddc360daaf3e60414e1822c5784531e3696096af` | Forensic revision-240 comparison; license/provenance review remains required |
+| Explv OSRS map tiles | `../RSPSi-resources/osrs_map_tiles` | `1e3d20bfccca800c7bdec6611655670323ae10f6` | External visual world-map reference; generated tile checkout is intentionally not bundled or used as canonical data |
 
 The sibling resource directory is intentionally not part of the RSPSi Git
 repository. Refreshes should be deliberate and should update this revision

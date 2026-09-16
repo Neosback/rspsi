@@ -119,6 +119,25 @@ The OpenRune FileStore compatibility spike is pinned to `2.4.19` in
 `definition`. Its RSPSi adapter remains read-only. Writable packing and real
 cache parity are intentionally not marked verified.
 
+## Additional research checkouts captured
+
+The remaining first-pass references are also checked out outside the RSPSi
+tree as shallow research repositories. Their revisions are pinned here so a
+future intake can reproduce the inspected source set:
+
+| Resource | Commit | Role |
+|---|---|---|
+| [OpenRune FileStore](https://github.com/OpenRune/OpenRune-FileStore) | `236e3920aa077a5990f2915e74f1c7d7729db47e` | Production-candidate API and OSRS cache/definition reference |
+| [RSPSApp/TSPS](https://github.com/RSPSApp/TSPS) | `83415f76589a360eacbd0e635fe0557d06a510f0` | Terrain, scene, model, bridge, and instance donor/oracle |
+| [RuneLite](https://github.com/runelite/runelite) | `ced4c4aba7a3cb7cace42e1f0c25a5f79b7faef` | Independent current-OSRS semantics and DevTools oracle |
+| [RuneLite cache-code updater](https://github.com/runelite/runelite-cache-code-updater) | `a200d75bf779cdc76cae53e7e2cd6f23172e3535` | Revision-drift strategy reference |
+| [Domw71 revision-240 editor](https://github.com/Domw71/OSRS-Map-Editor-Loading-240-rev) | `ddc360daaf3e60414e1822c5784531e3696096af` | Revision-240 forensic reference; no runtime dependency |
+| [Explv OSRS map tiles](https://github.com/Explv/osrs_map_tiles) | `1e3d20bfccca800c7bdec6611655670323ae10f6` | Visual world-map reference only; generated assets remain outside the product |
+
+The Explv checkout contains the repository commit and is not used as a
+canonical data source. Its generated tile working tree was not fully
+materialized because those assets are not currently licensed for distribution.
+
 ## Next intake actions
 
 1. Diff the Neosback server fork against its upstream OpenRune-Server parent
