@@ -106,8 +106,13 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         if (definition == null) {
             return Optional.empty();
         }
-        return Optional.of(new FloorDefinitionView(id, -1, definition.getRgb(), definition.getHue(),
-                definition.getSaturation(), definition.getLightness(), definition.getHueMultiplier(), 0));
+        // OpenRune stores both the raw HSL hue and the derived weighted hue
+        // used by the client’s radius-5 underlay blend. Keep those meanings
+        // intact at the neutral boundary: weightedHue is the numerator and
+        // chroma is the hue multiplier/denominator.
+        return Optional.of(new FloorDefinitionView(id, -1, definition.getRgb(), definition.getRawHue(),
+                definition.getSaturation(), definition.getLightness(), definition.getHue(),
+                definition.getHueMultiplier()));
     }
 
     @Override
