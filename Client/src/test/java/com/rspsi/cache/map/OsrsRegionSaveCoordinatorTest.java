@@ -36,7 +36,7 @@ class OsrsRegionSaveCoordinatorTest {
         assertTrue(result.landscapeBytes() > 0);
         assertTrue(result.locationBytes() > 0);
         assertNotNull(store.values.get("5:100:0"));
-        assertNotNull(store.values.get("5:101:1"));
+        assertNotNull(store.values.get("5:101:0"));
     }
 
     @Test

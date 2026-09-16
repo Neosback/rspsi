@@ -77,7 +77,7 @@ class MapIndexTableTest {
     void osrsMapServiceReadsBothMapFamilies() {
         FakeStore store = new FakeStore();
         store.values.put("5:1234:0", new byte[]{1});
-        store.values.put("5:5678:1", new byte[]{2});
+        store.values.put("5:5678:0", new byte[]{2});
         MapIndexEntry entry = new MapIndexEntry(50, 75, 1234, 5678, "m50_75", "l50_75");
 
         OsrsMapService service = new OsrsMapService(store, 5, MapIndexTable.of(java.util.List.of(entry)));
@@ -86,6 +86,19 @@ class MapIndexTableTest {
         assertArrayEquals(new byte[]{2}, service.readLocations(50, 75));
         assertArrayEquals(new byte[]{2}, service.readObjects(50, 75));
         assertNull(service.readLandscape(51, 75));
+    }
+
+    @Test
+    void osrsMapServiceUsesFileOneForLocationsInPackedGroups() {
+        FakeStore store = new FakeStore();
+        store.values.put("5:12875:0", new byte[]{1});
+        store.values.put("5:12875:1", new byte[]{2});
+        MapIndexEntry entry = new MapIndexEntry(50, 75, 12875, 12875, "m50_75", "l50_75");
+
+        OsrsMapService service = new OsrsMapService(store, 5, MapIndexTable.of(java.util.List.of(entry)));
+
+        assertArrayEquals(new byte[]{1}, service.readLandscape(50, 75));
+        assertArrayEquals(new byte[]{2}, service.readLocations(50, 75));
     }
 
     @Test
@@ -98,7 +111,7 @@ class MapIndexTableTest {
         service.writeLocations(50, 75, new byte[]{4});
 
         assertArrayEquals(new byte[]{3}, store.values.get("5:1234:0"));
-        assertArrayEquals(new byte[]{4}, store.values.get("5:5678:1"));
+        assertArrayEquals(new byte[]{4}, store.values.get("5:5678:0"));
     }
 
     @Test

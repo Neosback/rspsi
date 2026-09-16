@@ -85,14 +85,15 @@ public final class OsrsMapService implements MapService {
     }
 
     private byte[] read(int regionX, int regionY, MapArchiveType type) {
+        MapIndexEntry entry = index.region(regionX, regionY);
+        if (entry == null) {
+            return null;
+        }
         int archiveId = index.archiveId(regionX, regionY, type);
         if (archiveId < 0) {
             return null;
         }
-        // OSRS map archives use file 0 for terrain and file 1 for locations.
-        // Keeping this distinction here prevents callers from having to know
-        // the cache-file layout.
-        int file = type == MapArchiveType.LANDSCAPE ? 0 : 1;
+        int file = payloadFile(entry, type);
         return store.read(mapIndex, archiveId, file);
     }
 
@@ -101,11 +102,29 @@ public final class OsrsMapService implements MapService {
         if (!store.capabilities().writable()) {
             throw new UnsupportedOperationException("Cache backend is read-only");
         }
+        MapIndexEntry entry = index.region(regionX, regionY);
+        if (entry == null) {
+            throw new IllegalArgumentException("Region is not present in the map index: " + regionX + "," + regionY);
+        }
         int archiveId = index.archiveId(regionX, regionY, type);
         if (archiveId < 0) {
             throw new IllegalArgumentException("Region is not present in the map index: " + regionX + "," + regionY);
         }
-        int file = type == MapArchiveType.LANDSCAPE ? 0 : 1;
+        int file = payloadFile(entry, type);
         store.write(mapIndex, archiveId, file, data);
+    }
+
+    /**
+     * Named map indexes keep terrain and locations in separate groups, each
+     * with payload file 0. Modern packed indexes use one numeric group with
+     * terrain in file 0 and locations in file 1. The index shape is enough to
+     * distinguish these layouts without leaking a cache-library type into the
+     * world model.
+     */
+    private static int payloadFile(MapIndexEntry entry, MapArchiveType type) {
+        if (entry.landscapeArchiveId() != entry.objectArchiveId()) {
+            return 0;
+        }
+        return type == MapArchiveType.LANDSCAPE ? 0 : 1;
     }
 }
