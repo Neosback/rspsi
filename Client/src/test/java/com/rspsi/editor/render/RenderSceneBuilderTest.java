@@ -5,6 +5,8 @@ import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.DirtyRegion;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.SetTileCommand;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -12,6 +14,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RenderSceneBuilderTest {
     @Test
@@ -104,5 +107,43 @@ class RenderSceneBuilderTest {
 
         assertEquals(20, updated.terrainMeshes()
                 .get(new TileCoordinate(0, 4, 4)).vertices().get(0).height());
+    }
+
+    @Test
+    void sessionSceneControllerPublishesInitialAndChunkUpdates() {
+        WorldDocument document = new WorldDocument(8, 8, 1);
+        EditorSession session = new EditorSession(document);
+        RecordingRenderer renderer = new RecordingRenderer();
+
+        try (SessionSceneController controller = new SessionSceneController(session, renderer)) {
+            assertEquals(1, renderer.loadCount);
+            session.execute(new SetTileCommand(new TileCoordinate(0, 4, 4),
+                    document.tile(0, 4, 4).snapshot(),
+                    new TileSnapshot(20, 20, 20, 20, 0, 0, 0, 0, 0, List.of()),
+                    "height edit"));
+
+            assertEquals(1, renderer.updateCount);
+            assertEquals(20, controller.scene().terrainMeshes()
+                    .get(new TileCoordinate(0, 4, 4)).vertices().get(0).height());
+            assertTrue(session.dirtyRegions().isEmpty());
+        }
+
+        session.execute(new SetTileCommand(new TileCoordinate(0, 4, 4),
+                document.tile(0, 4, 4).snapshot(),
+                new TileSnapshot(24, 24, 24, 24, 0, 0, 0, 0, 0, List.of()),
+                "second height edit"));
+        assertEquals(1, renderer.updateCount);
+    }
+
+    private static final class RecordingRenderer implements SceneRenderer {
+        private int loadCount;
+        private int updateCount;
+
+        @Override public void load(RenderScene scene) { loadCount++; }
+        @Override public void update(RenderChanges changes) { updateCount++; }
+        @Override public void render(CameraState camera) { }
+        @Override public java.util.Optional<PickResult> pick(float x, float y) {
+            return java.util.Optional.empty();
+        }
     }
 }

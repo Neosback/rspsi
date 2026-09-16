@@ -252,6 +252,11 @@ preserve missing-region holes, and stitch shared terrain borders before the
 window is consumed. A window is scene context, not a second editor model;
 editable state remains owned by the `EditorSession` returned by `openRegion`.
 
+`SessionSceneController` is the neutral session-to-renderer binding. It loads
+the initial `RenderScene`, consumes session-owned dirty chunks as bounded
+renderer updates, and removes its listener on close. JavaFX and future ImGui
+frontends can host this binding without placing UI types in the editor core.
+
 When a legacy map reaches its existing ready state, the client emits a small
 map-ready lifecycle callback. In controlled mode `MainWindow` imports terrain
 and object anchors into a fresh `EditorSession`, attaches
