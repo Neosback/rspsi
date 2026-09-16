@@ -8,6 +8,9 @@ import com.rspsi.cache.map.OsrsRegionEncoder;
 import com.rspsi.cache.map.OsrsRevisionProfile;
 import com.rspsi.cache.store.OpenRuneCacheStore;
 import com.rspsi.editor.collision.OsrsCollisionBuilder;
+import com.rspsi.editor.assets.AssetDescriptor;
+import com.rspsi.editor.assets.AssetRepository;
+import com.rspsi.editor.assets.DefinitionAssetRepository;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.validation.ValidationIssue;
@@ -83,6 +86,9 @@ public final class OsrsRevisionVerifier {
             messages.add("location bytes: " + locations.length + (emptyLocations ? " (archive absent)" : ""));
             DefinitionProvider definitions = store.definitionProvider(revision);
             messages.add("definition provider: ready");
+            AssetRepository assets = new DefinitionAssetRepository(definitions, store.symbolicNameProvider());
+            List<AssetDescriptor> availableAssets = assets.search("");
+            messages.add("asset descriptors: " + availableAssets.size());
             WorldDocument document = OsrsRegionDecoder.decode(landscape, locations, regionX, regionY);
             List<ValidationIssue> issues = WorldValidator.validate(document, definitions);
             long issueErrors = issues.stream().filter(issue -> issue.severity() == ValidationIssue.Severity.ERROR).count();
@@ -105,6 +111,8 @@ public final class OsrsRevisionVerifier {
                             check("map.index", maps.index().size() == 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     maps.index().size() + " map groups discovered"),
                             check("definitions", VerificationCheck.Status.PASS, "neutral definition provider ready"),
+                            check("assets", VerificationCheck.Status.PASS,
+                                    availableAssets.size() + " neutral asset descriptors available"),
                             check("map.payload", VerificationCheck.Status.PASS,
                                     "terrain " + landscape.length + " bytes; locations " + locations.length + " bytes"),
                             check("location.archive", emptyLocations ? VerificationCheck.Status.WARN : VerificationCheck.Status.PASS,

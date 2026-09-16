@@ -71,8 +71,8 @@ the wrong format and silently produce incorrect data.
 
 No real OSRS cache is checked into the repository yet. The adapter has fake
 byte-store and named-map-index tests for boundary behavior, but real fixture
-loading, neutral object/floor/texture conversion, writable packing, and
-semantic parity are still open acceptance work. The application continues to
+loading, neutral object/floor/texture conversion, symbolic asset discovery,
+writable packing, and semantic parity are still open acceptance work. The application continues to
 construct the legacy Displee backend by default.
 
 ## Next spike gate
