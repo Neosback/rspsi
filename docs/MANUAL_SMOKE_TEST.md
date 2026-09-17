@@ -57,5 +57,8 @@ For the opt-in OSRS project workflow:
 - [ ] Select a tile or area, use World fragment > Copy, change the target
       coordinates, then use Paste. Confirm the document changes once and one
       Undo removes the complete paste.
+- [ ] Export the selected fragment to JSON, clear/reopen the workspace, then
+      import the file at a new target. Confirm the imported fragment is one
+      undoable history entry.
 - [ ] Confirm the status row clearly marks the OpenRune project read-only.
 - [ ] Close/relaunch and confirm the legacy map workflow still opens normally.

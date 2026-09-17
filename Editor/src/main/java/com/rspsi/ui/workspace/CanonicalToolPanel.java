@@ -26,6 +26,7 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.HBox;
+import javafx.stage.FileChooser;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -141,7 +142,13 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
                 fragmentStatus("Paste", exception.getMessage());
             }
         });
-        fragmentButtons.getChildren().addAll(copy, paste);
+        Button export = new Button("Export");
+        export.setAccessibleText("Export selected world fragment to a file");
+        export.setOnAction(event -> chooseExportFile());
+        Button importButton = new Button("Import");
+        importButton.setAccessibleText("Import a world fragment file at target coordinates");
+        importButton.setOnAction(event -> chooseImportFile());
+        fragmentButtons.getChildren().addAll(copy, paste, export, importButton);
         fragmentStatus.getStyleClass().add("workspace-panel-status");
         fragmentStatus.setWrapText(true);
         fragments.getChildren().addAll(fragmentButtons, fragmentStatus);
@@ -251,6 +258,41 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
 
     private void fragmentStatus(String action, String message) {
         fragmentStatus.setText(action + ": " + message);
+    }
+
+    private void chooseExportFile() {
+        if (viewport == null || getScene() == null) {
+            fragmentStatus("Export", "No viewport");
+            return;
+        }
+        FileChooser chooser = fragmentChooser("Export world fragment");
+        java.io.File file = chooser.showSaveDialog(getScene().getWindow());
+        if (file != null) fragmentStatus("Export", viewport.exportSelection(file.toPath()));
+    }
+
+    private void chooseImportFile() {
+        if (viewport == null || getScene() == null) {
+            fragmentStatus("Import", "No viewport");
+            return;
+        }
+        FileChooser chooser = fragmentChooser("Import world fragment");
+        java.io.File file = chooser.showOpenDialog(getScene().getWindow());
+        if (file != null) {
+            try {
+                fragmentStatus("Import", viewport.importFragment(file.toPath(),
+                        parse(targetX, "target X"), parse(targetY, "target Y")));
+            } catch (IllegalArgumentException exception) {
+                fragmentStatus("Import", exception.getMessage());
+            }
+        }
+    }
+
+    private static FileChooser fragmentChooser(String title) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(title);
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
+                "RSPSi world fragment (*.json)", "*.json"));
+        return chooser;
     }
 
     private static TextField field(String label, String value) {

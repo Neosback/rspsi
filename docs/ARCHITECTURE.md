@@ -358,7 +358,8 @@ frontends can host this binding without placing UI types in the editor core.
 The canonical JavaFX tool rail exposes the existing fragment contracts as a
 small clipboard workflow: selection is captured with `WorldFragment.capture`,
 encoded by `WorldFragmentCodec`, and pasted through `PasteFragmentCommand`.
-Clipboard and error presentation remain frontend concerns; the fragment data
+The same adapter offers explicit JSON file import/export. Clipboard, file
+dialogs, and error presentation remain frontend concerns; the fragment data
 and undo semantics remain neutral.
 
 `SessionAutosaveStore` writes a versioned snapshot of the canonical document,

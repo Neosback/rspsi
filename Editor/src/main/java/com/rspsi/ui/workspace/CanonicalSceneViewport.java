@@ -55,6 +55,9 @@ import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -231,6 +234,36 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
             return "Pasted fragment " + fragment.bounds().width() + " × " + fragment.bounds().height();
         } catch (RuntimeException exception) {
             return "Paste failed: " + exception.getMessage();
+        }
+    }
+
+    /** Writes the selected fragment using the neutral versioned interchange format. */
+    public String exportSelection(Path file) {
+        Objects.requireNonNull(file, "file");
+        if (session == null) return "No editor session";
+        WorldFragment fragment = selectedFragment();
+        if (fragment == null) return "Select tiles or objects first";
+        try {
+            Files.writeString(file, WorldFragmentCodec.encode(fragment));
+            return "Exported fragment " + fragment.bounds().width() + " × "
+                    + fragment.bounds().height();
+        } catch (IOException exception) {
+            return "Export failed: " + exception.getMessage();
+        }
+    }
+
+    /** Reads a neutral fragment and applies it through one undoable command. */
+    public String importFragment(Path file, int targetX, int targetY) {
+        Objects.requireNonNull(file, "file");
+        if (session == null) return "No editor session";
+        try {
+            WorldFragment fragment = WorldFragmentCodec.decode(Files.readString(file));
+            session.execute(new PasteFragmentCommand(fragment, targetX, targetY,
+                    "Import world fragment"));
+            return "Imported fragment " + fragment.bounds().width() + " × "
+                    + fragment.bounds().height();
+        } catch (IOException | RuntimeException exception) {
+            return "Import failed: " + exception.getMessage();
         }
     }
 
