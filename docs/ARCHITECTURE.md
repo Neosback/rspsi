@@ -39,6 +39,9 @@ boundary.
   fingerprint before attaching the save handler. Matching projects are
   save-capable; mismatched or unidentified caches remain inspectable but
   mutation-rejecting and read-only until ID migration exists.
+- `OsrsRegionSaveCoordinator.saveAll(...)` is the multi-region save boundary:
+  it pre-encodes every region, writes all terrain/location payloads, flushes
+  once, and marks sessions saved only after the complete batch succeeds.
 - `SessionStateListener` exposes edit/undo/redo/save-marker changes to
   frontend adapters, while `SelectionChangeListener` exposes the final
   unified selection value after each selection operation. Neither listener

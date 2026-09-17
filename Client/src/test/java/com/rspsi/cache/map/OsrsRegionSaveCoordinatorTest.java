@@ -40,6 +40,39 @@ class OsrsRegionSaveCoordinatorTest {
     }
 
     @Test
+    void encodesAndFlushesMultipleRegionsBeforeMarkingEitherSaved() {
+        RecordingStore store = new RecordingStore();
+        store.archiveIds.put("5:m50_51", 102);
+        store.archiveIds.put("5:l50_51", 103);
+        OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
+                new MapIndexEntry(50, 50, 100, 101, "m50_50", "l50_50"),
+                new MapIndexEntry(50, 51, 102, 103, "m50_51", "l50_51"))));
+        EditorSession first = dirtySession();
+        EditorSession second = dirtySession();
+
+        OsrsRegionSaveCoordinator.BatchSaveResult result =
+                new OsrsRegionSaveCoordinator(maps).saveAll(List.of(
+                        new OsrsRegionSaveCoordinator.RegionSaveRequest(first, 50, 50),
+                        new OsrsRegionSaveCoordinator.RegionSaveRequest(second, 50, 51)));
+
+        assertEquals(2, result.regions().size());
+        assertFalse(first.isDirty());
+        assertFalse(second.isDirty());
+        assertEquals(1, store.flushes);
+        assertNotNull(store.values.get("5:102:0"));
+        assertNotNull(store.values.get("5:103:0"));
+    }
+
+    private static EditorSession dirtySession() {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        EditorSession session = new EditorSession(document);
+        session.execute(new SetTileCommand(new TileCoordinate(0, 1, 1),
+                document.tile(0, 1, 1).snapshot(),
+                new TileSnapshot(0, 0, 0, 0, 7, 0, 0, 0, 0, List.of()), "paint"));
+        return session;
+    }
+
+    @Test
     void failedWriteDoesNotMarkSessionSaved() {
         FailingMapService maps = new FailingMapService();
         WorldDocument document = new WorldDocument(64, 64, 4);
