@@ -16,6 +16,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -69,11 +71,17 @@ import com.rspsi.swatches.BaseSwatch;
 import com.rspsi.swatches.OverlaySwatch;
 import com.rspsi.swatches.UnderlaySwatch;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.CompositeEditCommand;
+import com.rspsi.editor.DeleteObjectCommand;
 import com.rspsi.editor.PasteFragmentCommand;
 import com.rspsi.editor.io.SessionAutosaveCoordinator;
 import com.rspsi.editor.io.SessionAutosaveStore;
 import com.rspsi.editor.model.TileBounds;
 import com.rspsi.editor.model.WorldFragment;
+import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.selection.ObjectSelection;
+import com.rspsi.editor.selection.ObjectSetSelection;
+import com.rspsi.editor.selection.Selection;
 import com.rspsi.cache.workspace.OsrsStudioProject;
 import com.rspsi.cache.definition.LegacyDefinitionProvider;
 import com.rspsi.editor.model.WorldWindow;
@@ -1062,6 +1070,30 @@ public class MainWindow extends Application {
 	/** Dispatches keyboard redo through the same bridge as the Edit menu. */
 	public void redoActiveEditorSession() {
 		handleRedo();
+	}
+
+	/**
+	 * Deletes the canonical object selection when an OSRS project is active.
+	 * Returning false leaves the legacy key path responsible for compatibility.
+	 */
+	public boolean deleteActiveEditorSelection() {
+		if (!osrsProjectActive || controlledSession == null) {
+			return false;
+		}
+		Selection selection = controlledSession.selection().current();
+		Set<WorldObject> objects = new LinkedHashSet<>();
+		if (selection instanceof ObjectSelection object) {
+			objects.add(object.object());
+		} else if (selection instanceof ObjectSetSelection objectSet) {
+			objects.addAll(objectSet.objects());
+		}
+		if (!objects.isEmpty() && controlledSession.canEdit()) {
+			controlledSession.execute(new CompositeEditCommand("Delete selected objects",
+					objects.stream().map(DeleteObjectCommand::new).toList()));
+			controlledSession.selection().clear();
+			updateHistoryMenuState();
+		}
+		return true;
 	}
 
 	@Subscribe(threadMode = ThreadMode.ASYNC)

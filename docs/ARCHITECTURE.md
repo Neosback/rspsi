@@ -416,6 +416,10 @@ not select a history implementation itself; the active window dispatches to
 the canonical session when an OSRS project is open and retains the legacy
 fallback for the compatibility editor.
 
+Delete follows the same rule: an OSRS object selection becomes one grouped
+canonical command, while an active OSRS project with no object selection
+consumes the key instead of allowing the hidden legacy `SceneGraph` to mutate.
+
 The canonical JavaFX tool rail exposes the existing fragment contracts as a
 small clipboard workflow: selection is captured with `WorldFragment.capture`,
 encoded by `WorldFragmentCodec`, and pasted through `PasteFragmentCommand`.

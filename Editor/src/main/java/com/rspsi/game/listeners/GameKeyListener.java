@@ -143,7 +143,10 @@ public class GameKeyListener implements EventHandler<InputEvent> {
 			}
 
 			if (keyEvent.getCode() == KeyCode.DELETE) {
-				if(Options.currentTool.get() == ToolType.SELECT_OBJECT) {
+				MainWindow window = MainWindow.getSingleton();
+				if (window != null && window.deleteActiveEditorSelection()) {
+					event.consume();
+				} else if(Options.currentTool.get() == ToolType.SELECT_OBJECT) {
 					SceneGraph.onCycleEnd.add(() -> Client.getSingleton().sceneGraph.deleteObjects());
 				} else
 					TileDeleteDialog.instance.show();
