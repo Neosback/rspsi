@@ -7,6 +7,7 @@ import java.util.List;
 public interface DefinitionProvider {
     Optional<ObjectDefinitionView> object(int id);
 
+    /** Looks up the zero-based cache definition ID for a non-empty underlay. */
     Optional<FloorDefinitionView> underlay(int id);
 
     Optional<FloorDefinitionView> overlay(int id);

@@ -156,7 +156,7 @@ class RenderSceneBuilderTest {
     private static DefinitionProvider definitions() {
         return new DefinitionProvider() {
             @Override public Optional<FloorDefinitionView> underlay(int id) {
-                return id == 2 ? Optional.of(new FloorDefinitionView(id, -1, 0x102030,
+                return id == 1 ? Optional.of(new FloorDefinitionView(id, -1, 0x102030,
                         0, 0, 0, 0, 0)) : Optional.empty();
             }
             @Override public Optional<FloorDefinitionView> overlay(int id) {

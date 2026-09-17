@@ -44,8 +44,27 @@ The neutral minimap builder also exposes an opt-in 4×4-per-tile raster using
 the captured TSPS shaped-tile masks and rotation permutations. When floor
 definitions provide HSL blend metadata, that path uses the OSRS radius-5
 weighted hue/saturation/luminance blend and palette conversion. This locks
-the neutral geometry/material baseline without claiming mapscene or live
-RuneLite image parity; those remain explicit `NOT_RUN` verifier checks until
-licensed reference fixtures are available.
+the neutral geometry/material baseline. It also follows TSPS's scene boundary,
+vertical image orientation, render-flag visibility, bridge demotion, and
+wall-marker ordering. An independently generated TSPS build-240 fixture for
+region `(50,50)` now compares exactly on planes 2 and 3; planes 0 and 1 still
+have bounded differences because neutral map-scene sprite pixels and the full
+location decoration asset path are not implemented yet. This is useful,
+executable progress, not a claim of complete map/minimap or live RuneLite
+image parity.
+
+The current verifier evidence is:
+
+- 256×256 shaped minimap rasters compared for all four planes;
+- 0 differing pixels on planes 2 and 3;
+- 9,616 differences on plane 0 and 1,488 on plane 1, concentrated in the
+  remaining map-scene/location decoration path;
+- cache identity, revision, terrain/location decoding, bridge links, scene
+  construction, and decode→encode→decode semantic equality all pass for the
+  fixture's OpenRune-backed build-240 cache.
+
+The fixture is generated and retained outside the product repository under
+the resource-intake workflow. No TSPS source, cache dump, or generated asset
+is copied into the product.
 
 No TSPS source or generated asset is copied into the product.

@@ -396,7 +396,9 @@ public final class OsrsRevisionVerifier {
             compared++;
             differingPixels += report.differingPixels();
             messages.add("minimap parity plane " + entry.getKey() + ": " + report.differingPixels()
-                    + " differing pixels");
+                    + " differing pixels (expected " + report.expectedWidth() + "x"
+                    + report.expectedHeight() + ", actual " + report.actualWidth() + "x"
+                    + report.actualHeight() + ")" + sampleDifferences(report));
         }
         for (Map.Entry<Integer, MinimapImage> entry : fixture.shapedMinimaps().entrySet()) {
             MinimapImage actual = actualShapedMinimaps.get(entry.getKey());
@@ -409,12 +411,23 @@ public final class OsrsRevisionVerifier {
             compared++;
             differingPixels += report.differingPixels();
             messages.add("shaped minimap parity plane " + entry.getKey() + ": "
-                    + report.differingPixels() + " differing pixels");
+                    + report.differingPixels() + " differing pixels (expected "
+                    + report.expectedWidth() + "x" + report.expectedHeight() + ", actual "
+                    + report.actualWidth() + "x" + report.actualHeight() + ")"
+                    + sampleDifferences(report));
         }
         boolean matches = compared > 0 && differingPixels == 0 && missingImages == 0;
         return check("minimap.parity", matches ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
                 compared + " fixture images compared; " + differingPixels
                         + " differing pixels" + (missingImages == 0 ? "" : ", " + missingImages + " missing"));
+    }
+
+    private static String sampleDifferences(MinimapParity.Report report) {
+        if (report.differences().isEmpty()) return "";
+        MinimapParity.PixelDifference first = report.differences().get(0);
+        return "; first difference at (" + first.x() + "," + first.y() + ") expected=0x"
+                + Integer.toHexString(first.expected()) + " actual=0x"
+                + Integer.toHexString(first.actual());
     }
 
     private static Path parityFixturePath() {

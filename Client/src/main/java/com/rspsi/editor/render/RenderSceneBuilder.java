@@ -127,7 +127,8 @@ public final class RenderSceneBuilder {
     }
 
     private TerrainMaterial material(com.rspsi.editor.model.TileSnapshot tile) {
-        FloorDefinitionView underlay = definitions.underlay(tile.underlayId()).orElse(null);
+        FloorDefinitionView underlay = tile.underlayId() <= 0
+                ? null : definitions.underlay(tile.underlayId() - 1).orElse(null);
         FloorDefinitionView overlay = definitions.overlay(tile.overlayId()).orElse(null);
         return new TerrainMaterial(
                 tile.underlayId(),

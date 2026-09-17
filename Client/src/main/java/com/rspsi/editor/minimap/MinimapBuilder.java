@@ -6,6 +6,7 @@ import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -19,6 +20,8 @@ import java.util.Objects;
 public final class MinimapBuilder {
     private static final int MISSING_COLOR = 0xFF9CA3AF;
     private static final int BLOCKED_COLOR = 0xFF1F2937;
+    /** TSPS/RuneScape's initial pixel value for an empty scene tile. */
+    private static final int EMPTY_SCENE_PIXEL = 0xFF000001;
 
     // The 4x4 masks and rotation permutations are the client-side shaped-tile
     // raster contract used by TSPS. They are kept here as data, not coupled to
@@ -69,7 +72,8 @@ public final class MinimapBuilder {
                 } else if (blendUnderlays) {
                     pixels[index] = blendedUnderlay(document, plane, x, y, definitions);
                 } else {
-                    pixels[index] = color(definitions.underlay(tile.underlayId()), tile.underlayId(), true);
+                    pixels[index] = color(underlayDefinition(definitions, tile.underlayId()),
+                            tile.underlayId(), true);
                 }
             }
         }
@@ -96,41 +100,140 @@ public final class MinimapBuilder {
         int width = document.width() * 4;
         int height = document.length() * 4;
         int[] pixels = new int[width * height];
+        Arrays.fill(pixels, EMPTY_SCENE_PIXEL);
         for (int x = 0; x < document.width(); x++) {
             for (int y = 0; y < document.length(); y++) {
+                // SceneBuilder reserves the outer tile ring for neighbour
+                // height/blend context and does not create tile models there.
+                if (x == 0 || y == 0 || x == document.width() - 1
+                        || y == document.length() - 1) continue;
                 TileSnapshot tile = document.tile(plane, x, y).snapshot();
-                int underlay = blendedOsrsUnderlay(document, plane, x, y, definitions);
-                int overlay = osrsColor(definitions.overlay(tile.overlayId()), tile.overlayId(), false);
-                int shape = tile.overlayId() == 0 ? 0 : tile.overlayShape() + 1;
-                if (shape < 0 || shape >= TILE_SHAPE.length) {
-                    throw new IllegalArgumentException("Encoded overlay shape must be between 0 and 11");
+                if ((tile.flags() & OsrsTileFlags.MINIMAP_HIDDEN) == 0
+                        && !(plane > 0 && (tile.flags() & OsrsTileFlags.BRIDGE) != 0)) {
+                    drawShapedTile(document, plane, x, y, definitions, pixels, width);
                 }
-                int rotation = tile.overlayRotation();
-                if (rotation < 0 || rotation >= TILE_ROTATION.length) {
-                    throw new IllegalArgumentException("Tile rotation must be between 0 and 3");
-                }
-                if ((tile.flags() & OsrsTileFlags.BLOCK_MAP_SQUARE) != 0) {
-                    fillTile(pixels, width, x, y, BLOCKED_COLOR);
-                    continue;
-                }
-                int[] mask = TILE_SHAPE[shape];
-                int[] permutation = TILE_ROTATION[rotation];
-                for (int row = 0; row < 4; row++) {
-                    for (int column = 0; column < 4; column++) {
-                        int maskIndex = row * 4 + column;
-                        int rgb = mask[permutation[maskIndex]] == 0 ? underlay : overlay;
-                        pixels[(y * 4 + row) * width + x * 4 + column] = rgb;
-                    }
+                // A bridge exposes the tile authored on the next plane on
+                // the current minimap, matching the TSPS/RuneScape scene
+                // render-flag ordering.
+                if (plane < document.planes() - 1
+                        && (document.tile(plane + 1, x, y).snapshot().flags()
+                        & (OsrsTileFlags.MINIMAP_BRIDGE | OsrsTileFlags.BRIDGE)) != 0) {
+                    drawShapedTile(document, plane + 1, x, y, definitions, pixels, width);
                 }
             }
         }
+        drawWallMarkers(document, plane, definitions, pixels, width);
         return new MinimapImage(plane, width, height, pixels);
     }
 
-    private static void fillTile(int[] pixels, int width, int tileX, int tileY, int color) {
+    private static void drawShapedTile(WorldDocument document, int sourcePlane, int x, int y,
+                                       DefinitionProvider definitions, int[] pixels, int width) {
+        TileSnapshot tile = document.tile(sourcePlane, x, y).snapshot();
+        boolean hasUnderlay = tile.underlayId() > 0;
+        boolean hasOverlay = tile.overlayId() > 0;
+        if (!hasUnderlay && !hasOverlay) return;
+
+        int underlay = hasUnderlay
+                ? blendedOsrsUnderlay(document, sourcePlane, x, y, definitions)
+                : 0;
+        int overlay = osrsColor(definitions.overlay(tile.overlayId()), tile.overlayId(), false);
+        int shape = hasOverlay ? tile.overlayShape() + 1 : 0;
+        if (shape < 0 || shape >= TILE_SHAPE.length) {
+            throw new IllegalArgumentException("Encoded overlay shape must be between 0 and 11");
+        }
+        int rotation = tile.overlayRotation();
+        if (rotation < 0 || rotation >= TILE_ROTATION.length) {
+            throw new IllegalArgumentException("Tile rotation must be between 0 and 3");
+        }
+        int[] mask = TILE_SHAPE[shape];
+        int[] permutation = TILE_ROTATION[rotation];
+        int outputY = document.length() - 1 - y;
         for (int row = 0; row < 4; row++) {
             for (int column = 0; column < 4; column++) {
-                pixels[(tileY * 4 + row) * width + tileX * 4 + column] = color;
+                int maskIndex = row * 4 + column;
+                boolean overlayPixel = mask[permutation[maskIndex]] != 0;
+                // With no underlay TSPS leaves the non-overlay part at the
+                // scene's initial sentinel value.
+                if (!overlayPixel && !hasUnderlay) continue;
+                int rgb = overlayPixel ? overlay : underlay;
+                pixels[(outputY * 4 + row) * width + x * 4 + column] = rgb;
+            }
+        }
+    }
+
+    /**
+     * Draws the small, cache-independent wall marks used by the OSRS minimap.
+     * Map-scene sprites are deliberately deferred until the neutral asset
+     * provider exposes sprite pixels; walls still provide useful parity and
+     * editor diagnostics without coupling this raster to a cache library.
+     */
+    private static void drawWallMarkers(WorldDocument document, int plane,
+                                        DefinitionProvider definitions, int[] pixels, int width) {
+        final int wallColor = 0xFFEEEEEE;
+        for (int x = 0; x < document.width(); x++) {
+            for (int y = 0; y < document.length(); y++) {
+                if (x == 0 || y == 0 || x == document.width() - 1
+                        || y == document.length() - 1) continue;
+                int outputY = document.length() - 1 - y;
+                java.util.List<com.rspsi.editor.model.WorldObject> objects =
+                        new java.util.ArrayList<>();
+                TileSnapshot current = document.tile(plane, x, y).snapshot();
+                if ((current.flags() & OsrsTileFlags.MINIMAP_HIDDEN) == 0
+                        && !(plane > 0 && (current.flags() & OsrsTileFlags.BRIDGE) != 0)) {
+                    objects.addAll(current.objects());
+                }
+                if (plane < document.planes() - 1
+                        && (document.tile(plane + 1, x, y).snapshot().flags()
+                        & (OsrsTileFlags.MINIMAP_BRIDGE | OsrsTileFlags.BRIDGE)) != 0) {
+                    objects.addAll(document.tile(plane + 1, x, y).snapshot().objects());
+                }
+                for (var object : objects) {
+                    int markerColor = definitions.object(object.id())
+                            .filter(definition -> !definition.interactions().isEmpty())
+                            .map(definition -> 0xFFEE0000)
+                            .orElse(wallColor);
+                    int offset = x * 4 + outputY * width * 4;
+                    int type = object.type();
+                    int rotation = object.rotation();
+                    if (type == 0 || type == 2) {
+                        if (rotation == 0) {
+                            for (int row = 0; row < 4; row++) pixels[offset + row * width] = markerColor;
+                        } else if (rotation == 1) {
+                            for (int column = 0; column < 4; column++) pixels[offset + column] = markerColor;
+                        } else if (rotation == 2) {
+                            for (int row = 0; row < 4; row++) pixels[offset + row * width + 3] = markerColor;
+                        } else {
+                            for (int column = 0; column < 4; column++) pixels[offset + width * 3 + column] = markerColor;
+                        }
+                        if (type == 2) {
+                            if (rotation == 3) {
+                                for (int row = 0; row < 4; row++) pixels[offset + row * width] = markerColor;
+                            } else if (rotation == 0) {
+                                for (int column = 0; column < 4; column++) pixels[offset + column] = markerColor;
+                            } else if (rotation == 1) {
+                                for (int row = 0; row < 4; row++) pixels[offset + row * width + 3] = markerColor;
+                            } else {
+                                for (int column = 0; column < 4; column++) pixels[offset + width * 3 + column] = markerColor;
+                            }
+                        }
+                    } else if (type == 3) {
+                        int pixelX = rotation == 0 || rotation == 3 ? 0 : 3;
+                        int pixelY = rotation == 0 || rotation == 1 ? 0 : 3;
+                        pixels[offset + pixelY * width + pixelX] = markerColor;
+                    } else if (type == 9) {
+                        if (rotation == 0 || rotation == 2) {
+                            pixels[offset + width * 3] = markerColor;
+                            pixels[offset + width * 2 + 1] = markerColor;
+                            pixels[offset + width + 2] = markerColor;
+                            pixels[offset + 3] = markerColor;
+                        } else {
+                            pixels[offset] = markerColor;
+                            pixels[offset + width + 1] = markerColor;
+                            pixels[offset + width * 2 + 2] = markerColor;
+                            pixels[offset + width * 3 + 3] = markerColor;
+                        }
+                    }
+                }
             }
         }
     }
@@ -151,7 +254,9 @@ public final class MinimapBuilder {
             if (sampleX < 0 || sampleX >= document.width()
                     || sampleY < 0 || sampleY >= document.length()) continue;
             TileSnapshot sample = document.tile(plane, sampleX, sampleY).snapshot();
-            int rgb = color(definitions.underlay(sample.underlayId()), sample.underlayId(), true);
+            if (sample.underlayId() <= 0) continue;
+            int rgb = color(underlayDefinition(definitions, sample.underlayId()),
+                    sample.underlayId(), true);
             red += (rgb >> 16) & 0xFF;
             green += (rgb >> 8) & 0xFF;
             blue += rgb & 0xFF;
@@ -169,11 +274,15 @@ public final class MinimapBuilder {
         int saturation = 0;
         int luminance = 0;
         int samples = 0;
-        for (int sampleX = Math.max(0, x - 5); sampleX <= Math.min(document.width() - 1, x + 5); sampleX++) {
-            for (int sampleY = Math.max(0, y - 5); sampleY <= Math.min(document.length() - 1, y + 5); sampleY++) {
+        // This is the effective window of TSPS's sliding blend accumulator:
+        // radius five contributes the current coordinate through +5, while
+        // the removal step has already dropped coordinate -5.
+        for (int sampleX = Math.max(0, x - 4); sampleX <= Math.min(document.width() - 1, x + 5); sampleX++) {
+            for (int sampleY = Math.max(0, y - 4); sampleY <= Math.min(document.length() - 1, y + 5); sampleY++) {
                 TileSnapshot sample = document.tile(plane, sampleX, sampleY).snapshot();
                 if (sample.underlayId() <= 0) continue;
-                java.util.Optional<FloorDefinitionView> definition = definitions.underlay(sample.underlayId());
+                java.util.Optional<FloorDefinitionView> definition = underlayDefinition(
+                        definitions, sample.underlayId());
                 if (definition.isEmpty() || definition.get().chroma() <= 0) continue;
                 FloorDefinitionView floor = definition.get();
                 weightedHue += floor.weightedHue();
@@ -245,7 +354,8 @@ public final class MinimapBuilder {
             green = hueChannel(min, max, hue);
             blue = hueChannel(min, max, hue - 1.0 / 3.0);
         }
-        return (brighten(red) << 16) | (brighten(green) << 8) | brighten(blue);
+        int rgb = (brighten(red) << 16) | (brighten(green) << 8) | brighten(blue);
+        return rgb == 0 ? 1 : rgb;
     }
 
     private static double hueChannel(double min, double max, double value) {
@@ -271,5 +381,11 @@ public final class MinimapBuilder {
         int green = 64 + Math.floorMod(seed * 3, 128);
         int blue = 64 + Math.floorMod(seed * 7, 128);
         return 0xFF000000 | (red << 16) | (green << 8) | blue;
+    }
+
+    /** Terrain underlay opcodes are one-based; definition files are zero-based. */
+    private static java.util.Optional<FloorDefinitionView> underlayDefinition(
+            DefinitionProvider definitions, int encodedId) {
+        return encodedId <= 0 ? java.util.Optional.empty() : definitions.underlay(encodedId - 1);
     }
 }

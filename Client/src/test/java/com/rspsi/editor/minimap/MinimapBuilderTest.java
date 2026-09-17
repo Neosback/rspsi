@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldDocument;
 import org.junit.jupiter.api.Test;
 
@@ -46,29 +47,29 @@ class MinimapBuilderTest {
 
     @Test
     void shapedRasterUsesFourByFourTileMasksAndRotation() {
-        WorldDocument document = new WorldDocument(1, 1, 1);
-        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+        WorldDocument document = new WorldDocument(3, 3, 1);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
                 1, 4, 1, 0, 0, List.of()));
 
         MinimapBuilder builder = new MinimapBuilder();
         MinimapImage rotationZero = builder.buildShaped(document, 0, definitions());
-        assertEquals(4, rotationZero.width());
-        assertEquals(4, rotationZero.height());
-        assertEquals(0xFFA0B0C0, rotationZero.pixel(0, 0));
-        assertEquals(0xFF102030, rotationZero.pixel(3, 0));
-        assertEquals(0xFF102030, rotationZero.pixel(2, 1));
+        assertEquals(12, rotationZero.width());
+        assertEquals(12, rotationZero.height());
+        assertEquals(0xFFA0B0C0, rotationZero.pixel(4, 4));
+        assertEquals(0xFF102030, rotationZero.pixel(7, 4));
+        assertEquals(0xFF102030, rotationZero.pixel(6, 5));
 
-        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
                 1, 4, 1, 2, 0, List.of()));
         MinimapImage rotationTwo = builder.buildShaped(document, 0, definitions());
-        assertEquals(0xFFA0B0C0, rotationTwo.pixel(1, 0));
-        assertEquals(0xFFA0B0C0, rotationTwo.pixel(3, 0));
+        assertEquals(0xFFA0B0C0, rotationTwo.pixel(5, 4));
+        assertEquals(0xFFA0B0C0, rotationTwo.pixel(7, 4));
     }
 
     @Test
     void shapedRasterUsesOsrsHslWhenDefinitionProvidesBlendMetadata() {
-        WorldDocument document = new WorldDocument(1, 1, 1);
-        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+        WorldDocument document = new WorldDocument(3, 3, 1);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
                 1, 0, 0, 0, 0, List.of()));
         DefinitionProvider definitions = new DefinitionProvider() {
             @Override public Optional<ObjectDefinitionView> object(int id) { return Optional.empty(); }
@@ -79,18 +80,42 @@ class MinimapBuilderTest {
             @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
         };
 
-        int pixel = new MinimapBuilder().buildShaped(document, 0, definitions).pixel(0, 0);
+        int pixel = new MinimapBuilder().buildShaped(document, 0, definitions).pixel(4, 4);
 
-        assertEquals(pixel, new MinimapBuilder().buildShaped(document, 0, definitions).pixel(3, 3));
+        assertEquals(pixel, new MinimapBuilder().buildShaped(document, 0, definitions).pixel(7, 7));
         assertNotEquals(0xFF102030, pixel);
+    }
+
+    @Test
+    void shapedRasterDrawsInteractiveWallMarkersAfterTerrain() {
+        WorldDocument document = new WorldDocument(3, 3, 1);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                1, 0, 0, 0, 0,
+                List.of(new WorldObject(99, 0, 1, 0, 1, 1))));
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return id == 99 ? Optional.of(new ObjectDefinitionView(99, "Gate", 1, 1,
+                        List.of("Open"), new int[0])) : Optional.empty();
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) {
+                return Optional.of(floor(id, 0x102030));
+            }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+        };
+
+        MinimapImage image = new MinimapBuilder().buildShaped(document, 0, definitions);
+
+        assertEquals(0xFFEE0000, image.pixel(4, 4));
+        assertEquals(0xFFEE0000, image.pixel(5, 4));
+        assertNotEquals(0xFFEE0000, image.pixel(4, 5));
     }
 
     private static DefinitionProvider definitions() {
         return new DefinitionProvider() {
             @Override public Optional<ObjectDefinitionView> object(int id) { return Optional.empty(); }
             @Override public Optional<FloorDefinitionView> underlay(int id) {
-                return id == 1 ? Optional.of(floor(id, 0x102030))
-                        : id == 2 ? Optional.of(floor(id, 0x203040)) : Optional.empty();
+                return id == 0 ? Optional.of(floor(id, 0x102030))
+                        : id == 1 ? Optional.of(floor(id, 0x203040)) : Optional.empty();
             }
             @Override public Optional<FloorDefinitionView> overlay(int id) {
                 return id == 3 ? Optional.of(floor(id, 0x102030))
