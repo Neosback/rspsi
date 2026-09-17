@@ -21,6 +21,9 @@ public interface DefinitionProvider {
 
     default List<Integer> textureIds() { return List.of(); }
 
+    /** Available model IDs for neutral asset-browser adapters; empty when unknown. */
+    default List<Integer> modelIds() { return List.of(); }
+
     /** Optional until the selected backend exposes a decoded model index. */
     default Optional<ModelDefinitionView> model(int id) {
         return Optional.empty();

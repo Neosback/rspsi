@@ -129,7 +129,8 @@ public final class OsrsRevisionVerifier {
             DefinitionProvider definitions = store.definitionProvider(revision);
             List<VerificationCheck> revisionAudit = RevisionAudit.audit(store, revision, maps.index());
             List<VerificationCheck> definitionAudit = RevisionAudit.auditDefinitions(definitions);
-            messages.add("definition provider: ready; map-scene sprites: " + definitions.mapSceneIds().size());
+            messages.add("definition provider: ready; models: " + definitions.modelIds().size()
+                    + "; map-scene sprites: " + definitions.mapSceneIds().size());
             AssetRepository assets = new DefinitionAssetRepository(definitions, store.symbolicNameProvider());
             List<AssetDescriptor> availableAssets = assets.search("");
             messages.add("asset descriptors: " + availableAssets.size());
@@ -296,7 +297,9 @@ public final class OsrsRevisionVerifier {
                                             + ", fingerprint " + metadata.fingerprint()),
                             check("map.index", maps.index().size() == 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     maps.index().size() + " map groups discovered"),
-                            check("definitions", VerificationCheck.Status.PASS, "neutral definition provider ready"),
+                            check("definitions", VerificationCheck.Status.PASS,
+                                    "neutral definition provider ready; models=" + definitions.modelIds().size()
+                                            + ", map-scenes=" + definitions.mapSceneIds().size()),
                             check("assets", availableAssets.isEmpty()
                                             ? VerificationCheck.Status.WARN
                                             : VerificationCheck.Status.PASS,

@@ -53,7 +53,7 @@ public final class AssetBrowserPanel extends VBox {
         searchField.setAccessibleText("Search assets by name, symbolic key, or numeric ID");
         HBox.setHgrow(searchField, Priority.ALWAYS);
 
-        category.getItems().setAll(ALL, "Objects", "Underlays", "Overlays", "Textures");
+        category.getItems().setAll(ALL, "Objects", "Underlays", "Overlays", "Textures", "Models");
         category.setValue(ALL);
         category.setAccessibleText("Asset category filter");
         category.setPrefWidth(110);
@@ -142,10 +142,13 @@ public final class AssetBrowserPanel extends VBox {
             details.setText("Select an asset to inspect its definition.");
             return;
         }
-        String symbolic = asset.symbolicName().map(value -> "\nSymbolic: " + value).orElse("");
-        String properties = asset.details().isEmpty()
-                ? "" : "\n" + String.join("\n", asset.details());
-        details.setText(asset.name() + "\nType: " + asset.type() + " · ID: " + asset.id()
+        // Search results use lightweight model descriptors. Resolve only the
+        // selected item, so listing a large model index does not decode every mesh.
+        AssetDescriptor resolved = repository.get(asset.id(), asset.type()).orElse(asset);
+        String symbolic = resolved.symbolicName().map(value -> "\nSymbolic: " + value).orElse("");
+        String properties = resolved.details().isEmpty()
+                ? "" : "\n" + String.join("\n", resolved.details());
+        details.setText(resolved.name() + "\nType: " + resolved.type() + " · ID: " + resolved.id()
                 + symbolic + properties);
     }
 

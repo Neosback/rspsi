@@ -10,6 +10,7 @@ import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.cache.definition.MapSceneSpriteView;
 import dev.openrune.cache.filestore.definition.ModelDecoder;
 import dev.openrune.cache.filestore.definition.SpriteDecoder;
+import static dev.openrune.cache.ArchiveIndexKt.MODELS;
 import dev.openrune.definition.game.IndexedSprite;
 import dev.openrune.definition.type.model.ModelType;
 import dev.openrune.OsrsCacheProvider;
@@ -36,6 +37,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     private final Map<Integer, OverlayType> overlays = new HashMap<>();
     private final Map<Integer, TextureType> textures = new HashMap<>();
     private final ModelDecoder modelDecoder;
+    private final List<Integer> modelIds;
     private final Map<Integer, Optional<ModelDefinitionView>> modelViews = new HashMap<>();
     private final Map<Integer, MapSceneSpriteView> mapScenes;
 
@@ -49,6 +51,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         new OsrsCacheProvider.OverlayDecoder().load(cache, overlays);
         new OsrsCacheProvider.TextureDecoder(revision).load(cache, textures);
         modelDecoder = new ModelDecoder(cache, java.util.Collections.emptyList());
+        modelIds = archiveIds(cache, MODELS);
         mapScenes = loadMapScenes(cache);
     }
 
@@ -103,6 +106,11 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     @Override
     public List<Integer> textureIds() {
         return textures.keySet().stream().sorted().toList();
+    }
+
+    @Override
+    public List<Integer> modelIds() {
+        return modelIds;
     }
 
     @Override
@@ -288,5 +296,14 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         if (model == null) return Optional.empty();
         return Optional.of(new ModelDefinitionView(model.getId(), model.getVertexCount(),
                 model.getTriangleCount(), model.getTextureTriangleCount(), model.getRenderPriority()));
+    }
+
+    private static List<Integer> archiveIds(Cache cache, int index) {
+        try {
+            return java.util.Arrays.stream(cache.archives(index)).boxed().sorted().toList();
+        } catch (RuntimeException ignored) {
+            // Model archives are optional for definition-only or partial caches.
+            return List.of();
+        }
     }
 }

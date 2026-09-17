@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
+import com.rspsi.cache.definition.ModelDefinitionView;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -67,6 +68,22 @@ class DefinitionAssetRepositoryTest {
         assertEquals(1, definitions.overlayLookups);
     }
 
+    @Test
+    void modelsAreSearchableWithoutEagerMeshDecoding() {
+        CountingDefinitions definitions = new CountingDefinitions();
+        DefinitionAssetRepository assets = new DefinitionAssetRepository(definitions);
+
+        AssetDescriptor indexed = assets.search("model 900").get(0);
+        assertEquals("model", indexed.type());
+        assertTrue(indexed.details().isEmpty());
+        assertEquals(0, definitions.modelLookups);
+
+        AssetDescriptor selected = assets.get(900, "model").orElseThrow();
+        assertEquals(List.of("Vertices: 24", "Triangles: 12", "Texture triangles: 2",
+                "Render priority: 3"), selected.details());
+        assertEquals(1, definitions.modelLookups);
+    }
+
     private static class Definitions implements DefinitionProvider {
         @Override public Optional<ObjectDefinitionView> object(int id) {
             if (id == 12) return Optional.of(new ObjectDefinitionView(12, "Castle wall", 1, 1, List.of(), new int[0]));
@@ -78,13 +95,18 @@ class DefinitionAssetRepositoryTest {
             return id == 4 ? Optional.of(new FloorDefinitionView(4, -1, 0, 0, 0, 0, 0, 0)) : Optional.empty();
         }
         @Override public Optional<TextureDefinitionView> texture(int id) { return Optional.empty(); }
+        @Override public Optional<ModelDefinitionView> model(int id) {
+            return id == 900 ? Optional.of(new ModelDefinitionView(900, 24, 12, 2, 3)) : Optional.empty();
+        }
         @Override public List<Integer> objectIds() { return List.of(12, 13); }
         @Override public List<Integer> overlayIds() { return List.of(4); }
+        @Override public List<Integer> modelIds() { return List.of(900); }
     }
 
     private static final class CountingDefinitions extends Definitions {
         private int objectLookups;
         private int overlayLookups;
+        private int modelLookups;
 
         @Override public Optional<ObjectDefinitionView> object(int id) {
             objectLookups++;
@@ -94,6 +116,11 @@ class DefinitionAssetRepositoryTest {
         @Override public Optional<FloorDefinitionView> overlay(int id) {
             overlayLookups++;
             return super.overlay(id);
+        }
+
+        @Override public Optional<ModelDefinitionView> model(int id) {
+            modelLookups++;
+            return super.model(id);
         }
     }
 }

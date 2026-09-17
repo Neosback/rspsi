@@ -52,6 +52,7 @@ public final class RevisionAudit {
                 definitionCheck("revision.definitions.underlays", "underlays", definitions.underlayIds().size()),
                 definitionCheck("revision.definitions.overlays", "overlays", definitions.overlayIds().size()),
                 definitionCheck("revision.definitions.textures", "textures", definitions.textureIds().size()),
+                definitionCheck("revision.definitions.models", "models", definitions.modelIds().size()),
                 definitionCheck("revision.definitions.mapScenes", "map-scene sprites", definitions.mapSceneIds().size()));
     }
 

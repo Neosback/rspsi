@@ -6,6 +6,7 @@ import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
+import com.rspsi.cache.definition.ModelDefinitionView;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -64,6 +65,8 @@ public final class DefinitionAssetRepository implements AssetRepository {
                     descriptor("overlay", id, "Overlay " + id, floorDetails(value)));
             case "texture" -> definitions.texture(id).map(value ->
                     descriptor("texture", id, "Texture " + id, textureDetails(value)));
+            case "model" -> definitions.model(id).map(value ->
+                    descriptor("model", id, "Model " + id, modelDetails(value)));
             default -> Optional.empty();
         };
     }
@@ -80,6 +83,10 @@ public final class DefinitionAssetRepository implements AssetRepository {
                 definitions.underlayIds().forEach(id -> add(assets, descriptorFor(id, "underlay")));
                 definitions.overlayIds().forEach(id -> add(assets, descriptorFor(id, "overlay")));
                 definitions.textureIds().forEach(id -> add(assets, descriptorFor(id, "texture")));
+                // Model metadata is decoded lazily. A cache can contain a very
+                // large model index, and searching it must not decode every mesh.
+                definitions.modelIds().forEach(id -> add(assets, Optional.of(
+                        descriptor("model", id, "Model " + id))));
                 current = assets.stream()
                         .sorted(Comparator.comparing(AssetDescriptor::type)
                                 .thenComparingInt(AssetDescriptor::id))
@@ -133,6 +140,13 @@ public final class DefinitionAssetRepository implements AssetRepository {
                 "Average RGB: " + texture.averageRgb(),
                 "Average HSL: " + texture.averageHsl(),
                 "Animated: " + (texture.animationSpeed() > 0 ? "yes" : "no"));
+    }
+
+    private static List<String> modelDetails(ModelDefinitionView model) {
+        return List.of("Vertices: " + model.vertexCount(),
+                "Triangles: " + model.triangleCount(),
+                "Texture triangles: " + model.textureTriangleCount(),
+                "Render priority: " + model.renderPriority());
     }
 
     private static void add(List<AssetDescriptor> assets, Optional<AssetDescriptor> asset) {
