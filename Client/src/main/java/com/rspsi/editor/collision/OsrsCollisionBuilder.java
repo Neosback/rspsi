@@ -58,9 +58,6 @@ public final class OsrsCollisionBuilder {
         int width = window.regionWidth() * WorldRegion.REGION_SIZE;
         int length = window.regionHeight() * WorldRegion.REGION_SIZE;
         CollisionMap collision = new CollisionMap(width, length, planes);
-        int originX = window.minRegionX() * WorldRegion.REGION_SIZE;
-        int originY = window.minRegionY() * WorldRegion.REGION_SIZE;
-
         for (WorldRegion region : window.regions().values()) {
             int offsetX = (region.regionX() - window.minRegionX()) * WorldRegion.REGION_SIZE;
             int offsetY = (region.regionY() - window.minRegionY()) * WorldRegion.REGION_SIZE;
@@ -73,7 +70,7 @@ public final class OsrsCollisionBuilder {
                 addObjects(collision, region.document(), definitions, offsetX, offsetY);
             }
         }
-        applyBridgeBoundaryWalls(window, collision, originX, originY);
+        applyBridgeBoundaryWalls(window, collision);
         return collision;
     }
 
@@ -198,8 +195,7 @@ public final class OsrsCollisionBuilder {
         }
     }
 
-    private static void applyBridgeBoundaryWalls(WorldRegionWindow window, CollisionMap collision,
-                                                 int originX, int originY) {
+    private static void applyBridgeBoundaryWalls(WorldRegionWindow window, CollisionMap collision) {
         int wallWest = CollisionFlag.WALL_WEST
                 | CollisionFlag.WALL_WEST_PROJECTILE
                 | CollisionFlag.WALL_WEST_ROUTE_BLOCKER;
