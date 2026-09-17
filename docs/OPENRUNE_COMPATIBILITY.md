@@ -159,6 +159,12 @@ fixture data remains visible as `WARN`/`NOT_RUN`. This keeps RuneLite/TSPS
 captures and generated images outside the repository while making their
 provenance-controlled acceptance path executable.
 
+For visual debugging, set `RSPSI_OSRS_PARITY_OUTPUT=/explicit/output/path`
+with the selected-region arguments. The verifier then writes the derived
+`minimap-plane-N.png` and `minimap-shaped-plane-N.png` rasters to that path.
+This output is opt-in and derived from the supplied cache; it is not a checked-
+in fixture or a replacement for the independent oracle images.
+
 For release/CI acceptance, set `RSPSI_OSRS_REQUIRE_PARITY=true` as well. The
 verifier will then fail unless both `render.parity` and `minimap.parity` are
 `PASS`; the default remains non-strict so fixture-free local cache checks keep

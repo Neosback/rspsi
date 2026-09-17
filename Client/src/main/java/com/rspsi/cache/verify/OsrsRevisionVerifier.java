@@ -27,7 +27,10 @@ import com.rspsi.editor.validation.ValidationIssue;
 import com.rspsi.editor.validation.WorldValidator;
 
 import java.io.IOException;
+import java.awt.image.BufferedImage;
 import java.nio.file.Path;
+import java.nio.file.Files;
+import javax.imageio.ImageIO;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -198,6 +201,7 @@ public final class OsrsRevisionVerifier {
             messages.add("neutral minimap rasters: " + document.planes()
                     + " planes; " + minimapPixels + " semantic pixels; "
                     + shapedMinimapPixels + " shaped pixels");
+            exportParityImages(parityOutputPath(), minimaps, shapedMinimaps, messages, errors);
             byte[] encodedTerrain = OsrsRegionEncoder.encodeTerrain(document, profile.newTerrainFormat());
             byte[] encodedLocations = OsrsRegionEncoder.encodeLocations(document);
             WorldDocument roundTrip = OsrsRegionDecoder.decode(encodedTerrain, encodedLocations,
@@ -433,6 +437,42 @@ public final class OsrsRevisionVerifier {
     private static Path parityFixturePath() {
         String value = System.getenv("RSPSI_OSRS_PARITY_FIXTURE");
         return value == null || value.isBlank() ? null : Path.of(value);
+    }
+
+    private static Path parityOutputPath() {
+        String value = System.getenv("RSPSI_OSRS_PARITY_OUTPUT");
+        return value == null || value.isBlank() ? null : Path.of(value);
+    }
+
+    /** Writes only explicitly requested, derived rasters for visual parity review. */
+    private static void exportParityImages(Path output,
+                                           Map<Integer, MinimapImage> minimaps,
+                                           Map<Integer, MinimapImage> shapedMinimaps,
+                                           List<String> messages,
+                                           List<String> errors) {
+        if (output == null) return;
+        try {
+            Files.createDirectories(output);
+            writeImages(output, "minimap-plane-", minimaps);
+            writeImages(output, "minimap-shaped-plane-", shapedMinimaps);
+            messages.add("parity rasters exported: " + output);
+        } catch (IOException | RuntimeException exception) {
+            errors.add("could not export parity rasters: " + exception.getMessage());
+        }
+    }
+
+    private static void writeImages(Path output, String prefix,
+                                    Map<Integer, MinimapImage> images) throws IOException {
+        for (Map.Entry<Integer, MinimapImage> entry : images.entrySet()) {
+            MinimapImage image = entry.getValue();
+            BufferedImage buffered = new BufferedImage(image.width(), image.height(),
+                    BufferedImage.TYPE_INT_ARGB);
+            buffered.setRGB(0, 0, image.width(), image.height(), image.argb(), 0, image.width());
+            Path target = output.resolve(prefix + entry.getKey() + ".png");
+            if (!ImageIO.write(buffered, "png", target.toFile())) {
+                throw new IOException("PNG writer unavailable");
+            }
+        }
     }
 
     private static boolean requireExternalParity() {
