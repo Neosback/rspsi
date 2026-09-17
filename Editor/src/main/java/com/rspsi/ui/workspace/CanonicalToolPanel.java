@@ -69,6 +69,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private final TextField objectId = field("Object ID", "0");
     private final TextField objectType = field("Object type", "10");
     private final TextField objectRotation = field("Object rotation", "0");
+    private final TextField snapGridSize = field("Snap grid", "1");
     private final TextField selectionQuarterTurns = field("Selection quarter turns", "1");
     private final TextField replacementId = field("Replacement ID", "0");
     private final TextField startX = field("Start X", "0");
@@ -114,18 +115,18 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addTool(objects, "Place object", () -> new PlaceObjectTool(
                 parse(objectId, "object ID"), parse(objectType, "object type"),
                 parse(objectRotation, "object rotation")), false);
-        addTool(objects, "Move object", MoveObjectTool::new, false);
+        addTool(objects, "Move object", this::moveObjectTool, false);
         addTool(objects, "Rotate object", RotateObjectTool::new, false);
-        addTool(objects, "Duplicate object", DuplicateObjectTool::new, false);
+        addTool(objects, "Duplicate object", this::duplicateObjectTool, false);
         addTool(objects, "Delete object", DeleteObjectTool::new, false);
 
         VBox selection = section("Selection / transforms");
         addTool(selection, "Box select", BoxSelectTool::new, false);
         addTool(selection, "Lasso select", LassoSelectTool::new, false);
         addTool(selection, "Select by attribute", AttributeSelectionTool::new, false);
-        addTool(selection, "Move selection", MoveSelectionTool::new, false);
+        addTool(selection, "Move selection", this::moveSelectionTool, false);
         addTool(selection, "Rotate selection", this::rotateSelectionTool, false);
-        addTool(selection, "Duplicate selection", DuplicateSelectionTool::new, false);
+        addTool(selection, "Duplicate selection", this::duplicateSelectionTool, false);
         addTool(selection, "Replace selection", () -> new ReplaceSelectionTool(
                 parse(replacementId, "replacement ID")), false);
         TitledPane selectionPane = collapsed("Selection tools", selection);
@@ -213,8 +214,9 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addSetting(settings, 9, "Object ID", objectId);
         addSetting(settings, 10, "Object type", objectType);
         addSetting(settings, 11, "Object rotation", objectRotation);
-        addSetting(settings, 12, "Selection turns", selectionQuarterTurns);
-        addSetting(settings, 13, "Replacement ID", replacementId);
+        addSetting(settings, 12, "Snap grid", snapGridSize);
+        addSetting(settings, 13, "Selection turns", selectionQuarterTurns);
+        addSetting(settings, 14, "Replacement ID", replacementId);
         getChildren().addAll(title, status, terrain, advancedTerrainPane, objects,
                 selectionPane, debug, preview, fragments, settings);
         setViewport(null);
@@ -294,6 +296,30 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private RotateSelectionTool rotateSelectionTool() {
         RotateSelectionTool tool = new RotateSelectionTool();
         tool.setQuarterTurns(parse(selectionQuarterTurns, "selection quarter turns"));
+        return tool;
+    }
+
+    private MoveObjectTool moveObjectTool() {
+        MoveObjectTool tool = new MoveObjectTool();
+        tool.setSnapGridSize(parse(snapGridSize, "snap grid"));
+        return tool;
+    }
+
+    private DuplicateObjectTool duplicateObjectTool() {
+        DuplicateObjectTool tool = new DuplicateObjectTool();
+        tool.setSnapGridSize(parse(snapGridSize, "snap grid"));
+        return tool;
+    }
+
+    private MoveSelectionTool moveSelectionTool() {
+        MoveSelectionTool tool = new MoveSelectionTool();
+        tool.setSnapGridSize(parse(snapGridSize, "snap grid"));
+        return tool;
+    }
+
+    private DuplicateSelectionTool duplicateSelectionTool() {
+        DuplicateSelectionTool tool = new DuplicateSelectionTool();
+        tool.setSnapGridSize(parse(snapGridSize, "snap grid"));
         return tool;
     }
 
