@@ -1,8 +1,5 @@
 package com.rspsi.plugin.loader;
 
-import com.displee.cache.index.archive.Archive;
-import com.displee.cache.index.archive.file.File;
-
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.stream.IntStream;
@@ -11,6 +8,7 @@ import com.jagex.cache.def.RSArea;
 import com.jagex.cache.loader.config.RSAreaLoader;
 import com.jagex.io.Buffer;
 import com.jagex.util.ByteBufferUtils;
+import com.rspsi.cache.store.CacheArchiveView;
 import lombok.val;
 
 public class RSAreaLoaderOSRS extends RSAreaLoader {
@@ -29,7 +27,7 @@ public class RSAreaLoaderOSRS extends RSAreaLoader {
 	}
 
 	@Override
-	public void init(Archive archive) {
+	public void init(CacheArchiveView archive) {
 		if(archive == null){
 			areas = new RSArea[1000];
 			IntStream.range(0, areas.length).forEach(index -> {
@@ -39,12 +37,13 @@ public class RSAreaLoaderOSRS extends RSAreaLoader {
 			});
 			return;
 		}
-		val highestId = Arrays.stream(archive.fileIds()).max().getAsInt();
+		val highestId = Arrays.stream(archive.fileIds()).max().orElse(-1);
 		areas = new RSArea[highestId + 1];
-		for(File file : archive.files()) {
-			if(file != null && file.getData() != null) {
-				RSArea area = decode(file.getId(), ByteBuffer.wrap(file.getData()));
-				areas[file.getId()] = area;
+		for (int id : archive.fileIds()) {
+			byte[] data = archive.file(id);
+			if (data != null) {
+				RSArea area = decode(id, ByteBuffer.wrap(data));
+				areas[id] = area;
 			}
 		}
 	}

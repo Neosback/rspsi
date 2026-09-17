@@ -28,6 +28,11 @@ public interface CacheStore extends AutoCloseable {
         return new int[0];
     }
 
+    /** Returns file IDs exposed by one archive without leaking cache types. */
+    default int[] fileIds(int index, int archive) {
+        return new int[0];
+    }
+
     void write(int index, int archive, int file, byte[] data);
 
     void flush();

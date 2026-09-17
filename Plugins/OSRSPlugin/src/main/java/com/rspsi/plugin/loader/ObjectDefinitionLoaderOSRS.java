@@ -1,8 +1,6 @@
 package com.rspsi.plugin.loader;
 
 import com.jagex.cache.def.RSArea;
-import com.displee.cache.index.archive.Archive;
-import com.displee.cache.index.archive.file.File;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -14,6 +12,7 @@ import com.jagex.cache.def.ObjectDefinition;
 import com.jagex.cache.loader.config.VariableBitLoader;
 import com.jagex.cache.loader.object.ObjectDefinitionLoader;
 import com.jagex.io.Buffer;
+import com.rspsi.cache.store.CacheArchiveView;
 
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
@@ -26,15 +25,16 @@ public class ObjectDefinitionLoaderOSRS extends ObjectDefinitionLoader {
 
 
 	@Override
-	public void init(Archive archive) {
-		val highestId = Arrays.stream(archive.fileIds()).max().getAsInt();
+	public void init(CacheArchiveView archive) {
+		val highestId = Arrays.stream(archive.fileIds()).max().orElse(-1);
 		count = highestId + 1;
-		for(File file : archive.files()){
-			if (file != null && file.getData() != null) {
+		for (int id : archive.fileIds()) {
+			byte[] data = archive.file(id);
+			if (data != null) {
 				try {
-					Buffer buffer = new Buffer(file.getData());
-					ObjectDefinition def = decode(file.getId(), buffer);
-					cache.put(file.getId(), def);
+					Buffer buffer = new Buffer(data);
+					ObjectDefinition def = decode(id, buffer);
+					cache.put(id, def);
 				} catch (Exception ex) {
 					ex.printStackTrace();
 				}

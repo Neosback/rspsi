@@ -146,6 +146,13 @@ boundary.
   for the legacy client/resource path. New consumers receive bytes through those
   methods; the deprecated `Cache.getFile(CacheFileType)` index accessor remains
   only for compatibility loaders that still require Displee indexes.
+- Compatibility loader initialization now uses the neutral `CacheIndexView` /
+  `CacheArchiveView` plus `CacheStore.fileIds(...)` contract. The legacy store
+  and OpenRune store provide the same archive/file view, while old renderer
+  classes that still need Displee archive objects remain explicitly quarantined.
+- Neutral replacement maps are sorted before publication so record snapshots
+  and `RenderSceneFingerprint` values remain reproducible across separate cache
+  openings.
   This is an incremental boundary, not a claim that all legacy loaders have
   already migrated.
 - `CacheStore.metadata(revision)` is an optional neutral identity capability;

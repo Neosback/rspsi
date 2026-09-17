@@ -19,6 +19,7 @@ import com.rspsi.cache.CacheFileType;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.LegacyDefinitionProvider;
 import com.rspsi.cache.store.CacheStore;
+import com.rspsi.cache.store.CacheIndexView;
 import com.rspsi.cache.store.LegacyDispleeCacheStore;
 import com.rspsi.core.misc.FixedIntegerKeyMap;
 
@@ -180,6 +181,12 @@ public class Cache {
             case TEXTURE -> is317() ? -1 : 9;
             case SOUND, VARBIT, LOC, SPOT -> -1;
         };
+    }
+
+    /** Returns a neutral index view for compatibility loaders. */
+    public final Optional<CacheIndexView> indexView(CacheFileType type) {
+        int index = cacheIndex(type);
+        return index < 0 ? Optional.empty() : Optional.of(new CacheIndexView(store, index));
     }
 
 

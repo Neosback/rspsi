@@ -1,14 +1,13 @@
 package com.rspsi.plugin.loader;
 
-import com.displee.cache.index.Index;
-import com.displee.cache.index.archive.Archive;
-import com.displee.cache.index.archive.file.File;
 import com.jagex.cache.graphics.Sprite;
 import com.jagex.cache.loader.textures.TextureLoader;
 import com.jagex.draw.textures.SpriteTexture;
 import com.jagex.draw.textures.Texture;
 import com.jagex.io.Buffer;
 import com.rspsi.core.misc.FixedHashMap;
+import com.rspsi.cache.store.CacheArchiveView;
+import com.rspsi.cache.store.CacheIndexView;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 
@@ -69,21 +68,24 @@ public class TextureLoaderOSRS extends TextureLoader {
 	}
 
 	
-	public void init(Archive archive, Index spriteIndex) {
-		val highestId = Arrays.stream(archive.fileIds()).max().getAsInt();
+	public void init(CacheArchiveView archive, CacheIndexView spriteIndex) {
+		val highestId = Arrays.stream(archive.fileIds()).max().orElse(-1);
 		textures = new Texture[highestId + 1];
 		transparent = new boolean[highestId + 1];
-		for(File file : archive.files()) {
-			if(file != null && file.getData() != null) {
-				log.info("Loading texture {}", file.getId());
-				Buffer buffer = new Buffer(file.getData());
+		for (int id : archive.fileIds()) {
+			byte[] data = archive.file(id);
+			if (data != null) {
+				log.info("Loading texture {}", id);
+				Buffer buffer = new Buffer(data);
 				int spriteId = buffer.readUnsignedShort();
-				Sprite sprite = Sprite.decode(ByteBuffer.wrap(spriteIndex.archive(spriteId).file(0).getData()));
+				byte[] spriteData = spriteIndex.archive(spriteId).file(0);
+				if (spriteData == null) continue;
+				Sprite sprite = Sprite.decode(ByteBuffer.wrap(spriteData));
 				if(sprite.getWidth() != 128 || sprite.getHeight() != 128)
 					sprite.resize(128, 128);
 				Texture texture = new SpriteTexture(sprite);
-				textures[file.getId()] = texture;
-				transparent[file.getId()] = texture.supportsAlpha();
+				textures[id] = texture;
+				transparent[id] = texture.supportsAlpha();
 			}
 		}
 	}
@@ -109,7 +111,7 @@ public class TextureLoaderOSRS extends TextureLoader {
 	}
 
 	@Override
-	public void init(Archive archive) {
+	public void init(CacheArchiveView archive) {
 	}
 
 }

@@ -1,6 +1,6 @@
 package com.jagex.cache.loader;
 
-import com.displee.cache.index.archive.Archive;
+import com.rspsi.cache.store.CacheArchiveView;
 
 public interface DataLoaderBase<T> {
 
@@ -8,6 +8,6 @@ public interface DataLoaderBase<T> {
 
     int count();
 
-    void init(final Archive archive);
+    void init(final CacheArchiveView archive);
 
 }

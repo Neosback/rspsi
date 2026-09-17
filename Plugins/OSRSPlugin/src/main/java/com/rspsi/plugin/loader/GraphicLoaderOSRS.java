@@ -1,11 +1,10 @@
 package com.rspsi.plugin.loader;
 
-import com.displee.cache.index.archive.Archive;
-import com.displee.cache.index.archive.file.File;
 import com.jagex.cache.anim.Graphic;
 import com.jagex.cache.loader.anim.AnimationDefinitionLoader;
 import com.jagex.cache.loader.anim.GraphicLoader;
 import com.jagex.io.Buffer;
+import com.rspsi.cache.store.CacheArchiveView;
 import lombok.val;
 
 import java.util.Arrays;
@@ -29,16 +28,18 @@ public class GraphicLoaderOSRS extends GraphicLoader {
 	}
 
 	@Override
-	public void init(Archive archive) {
+	public void init(CacheArchiveView archive) {
 
-		val highestId = Arrays.stream(archive.fileIds()).max().getAsInt();
+		val highestId = Arrays.stream(archive.fileIds()).max().orElse(-1);
 		graphics = new Graphic[highestId + 1];
 		
 
-		for(File file : archive.files()){
+		for (int id : archive.fileIds()) {
 			try {
-				graphics[file.getId()] = decode(new Buffer(file.getData()));
-				graphics[file.getId()].setId(file.getId());
+				byte[] data = archive.file(id);
+				if (data == null) continue;
+				graphics[id] = decode(new Buffer(data));
+				graphics[id].setId(id);
 			} catch (Exception ex) {
 
 			}

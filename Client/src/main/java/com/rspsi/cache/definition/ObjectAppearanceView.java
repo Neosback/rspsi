@@ -1,7 +1,9 @@
 package com.rspsi.cache.definition;
 
 import java.util.LinkedHashMap;
+import java.util.Collections;
 import java.util.Map;
+import java.util.TreeMap;
 
 /** Optional neutral appearance data used by scene builders and inspectors. */
 public record ObjectAppearanceView(
@@ -41,7 +43,7 @@ public record ObjectAppearanceView(
                 result.put(from[index], to[index]);
             }
         }
-        return Map.copyOf(result);
+        return immutablePairs(result);
     }
 
     private static Map<Integer, Integer> immutablePairs(Map<Integer, Integer> pairs) {
@@ -52,6 +54,8 @@ public record ObjectAppearanceView(
                 throw new IllegalArgumentException("Appearance replacements must be non-negative");
             }
         }
-        return Map.copyOf(pairs);
+        Map<Integer, Integer> ordered = new TreeMap<>();
+        ordered.putAll(pairs);
+        return Collections.unmodifiableMap(new LinkedHashMap<>(ordered));
     }
 }

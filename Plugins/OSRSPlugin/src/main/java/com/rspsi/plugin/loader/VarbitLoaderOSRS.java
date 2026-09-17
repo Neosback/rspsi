@@ -1,11 +1,9 @@
 package com.rspsi.plugin.loader;
 
-import com.displee.cache.index.archive.Archive;
-import com.displee.cache.index.archive.file.File;
-
 import com.jagex.cache.config.VariableBits;
 import com.jagex.cache.loader.config.VariableBitLoader;
 import com.jagex.io.Buffer;
+import com.rspsi.cache.store.CacheArchiveView;
 import lombok.val;
 
 import java.util.Arrays;
@@ -29,15 +27,16 @@ public class VarbitLoaderOSRS extends VariableBitLoader{
 	}
 
 	@Override
-	public void init(Archive archive) {
-		val highestId = Arrays.stream(archive.fileIds()).max().getAsInt();
+	public void init(CacheArchiveView archive) {
+		val highestId = Arrays.stream(archive.fileIds()).max().orElse(-1);
 		count = highestId + 1;
 		bits = new VariableBits[count];
 		
 
-		for(File file : archive.files()){
-			if(file != null && file.getData() != null)
-				bits[file.getId()] = decode(new Buffer(file.getData()));
+		for (int id : archive.fileIds()) {
+			byte[] data = archive.file(id);
+			if (data != null)
+				bits[id] = decode(new Buffer(data));
 		}
 
 	}

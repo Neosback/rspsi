@@ -59,6 +59,17 @@ public final class LayeredCacheStore implements CacheStore {
     }
 
     @Override
+    public int[] fileIds(int index, int archive) {
+        java.util.stream.IntStream stored = java.util.stream.IntStream.concat(
+                Arrays.stream(base.fileIds(index, archive)),
+                Arrays.stream(output.fileIds(index, archive)));
+        return java.util.stream.IntStream.concat(stored, pending.keySet().stream()
+                        .filter(key -> key.index() == index && key.archive() == archive)
+                        .mapToInt(CacheKey::file))
+                .distinct().sorted().toArray();
+    }
+
+    @Override
     public void write(int index, int archive, int file, byte[] data) {
         Objects.requireNonNull(data, "data");
         if (!output.capabilities().writable()) {

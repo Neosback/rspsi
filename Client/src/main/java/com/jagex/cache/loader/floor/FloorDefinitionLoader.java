@@ -1,8 +1,8 @@
 package com.jagex.cache.loader.floor;
 
-import com.displee.cache.index.archive.Archive;
 import com.jagex.cache.def.Floor;
 import com.jagex.cache.loader.DataLoaderBase;
+import com.rspsi.cache.store.CacheArchiveView;
 
 public abstract class FloorDefinitionLoader implements DataLoaderBase<Floor> {
 
@@ -33,7 +33,7 @@ public abstract class FloorDefinitionLoader implements DataLoaderBase<Floor> {
     }
 
     @Override
-    public void init(final Archive archive) {
+    public void init(final CacheArchiveView archive) {
     }
 
     @Override

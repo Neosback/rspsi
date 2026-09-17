@@ -1,13 +1,13 @@
 package com.jagex.cache.loader.map;
 
 import com.jagex.io.Buffer;
-import com.displee.cache.index.archive.Archive;
+import com.rspsi.cache.store.CacheArchiveView;
 
 public abstract class MapIndexLoader {
 	
 	public static MapIndexLoader instance;
 	
-	public abstract void init(Archive archive);
+	public abstract void init(CacheArchiveView archive);
 	public abstract void init(Buffer buffer);
 	public abstract int getFileId(int hash, MapType type);
 	public abstract String getGroupName(int hash, MapType type);

@@ -1,10 +1,9 @@
 package com.rspsi.plugin.loader;
 
-import com.displee.cache.index.archive.Archive;
-import com.displee.cache.index.archive.file.File;
 import com.jagex.cache.def.Floor;
 import com.jagex.cache.loader.floor.FloorDefinitionLoader;
 import com.jagex.cache.loader.floor.FloorType;
+import com.rspsi.cache.store.CacheArchiveView;
 import lombok.val;
 
 import java.nio.ByteBuffer;
@@ -21,21 +20,17 @@ public final class FloorDefinitionLoaderOSRS extends FloorDefinitionLoader {
     private int highestUnderlayId = -1;
     private int highestOverlayId = -1;
 
-    public void initUnderlays(final Archive archive) {
-        val highestId = Arrays.stream(archive.fileIds()).max().getAsInt();
+    public void initUnderlays(final CacheArchiveView archive) {
+        val highestId = Arrays.stream(archive.fileIds()).max().orElse(-1);
         this.highestUnderlayId = highestId;
 
         this.underlays = new Floor[highestId + 1];
 
-        for (final File file : archive.files()) {
-            if (file == null) continue;
-
-            final byte[] data = file.getData();
+        for (final int id : archive.fileIds()) {
+            final byte[] data = archive.file(id);
             if (data == null) continue;
 
             final ByteBuffer buffer = ByteBuffer.wrap(data);
-
-            final int id = file.getId();
 
             final Floor floor = decodeUnderlay(id, buffer);
             floor.generateHsl();
@@ -44,21 +39,17 @@ public final class FloorDefinitionLoaderOSRS extends FloorDefinitionLoader {
         }
     }
 
-    public void initOverlays(final Archive archive) {
-        val highestId = Arrays.stream(archive.fileIds()).max().getAsInt();
+    public void initOverlays(final CacheArchiveView archive) {
+        val highestId = Arrays.stream(archive.fileIds()).max().orElse(-1);
         this.highestOverlayId = highestId;
 
         this.overlays = new Floor[highestId + 1];
 
-        for (final File file : archive.files()) {
-            if (file == null) continue;
-
-            final byte[] data = file.getData();
+        for (final int id : archive.fileIds()) {
+            final byte[] data = archive.file(id);
             if (data == null) continue;
 
             final ByteBuffer buffer = ByteBuffer.wrap(data);
-
-            final int id = file.getId();
 
             final Floor floor = decodeOverlay(id, buffer);
             floor.generateHsl();

@@ -1,6 +1,5 @@
 package com.rspsi.plugin;
 
-import com.displee.cache.index.Index;
 import com.jagex.Client;
 import com.jagex.cache.loader.anim.AnimationDefinitionLoader;
 import com.jagex.cache.loader.anim.FrameBaseLoader;
@@ -14,6 +13,7 @@ import com.jagex.cache.loader.object.ObjectDefinitionLoader;
 import com.jagex.cache.loader.textures.TextureLoader;
 import com.jagex.net.ResourceResponse;
 import com.rspsi.cache.CacheFileType;
+import com.rspsi.cache.store.CacheIndexView;
 import com.rspsi.plugin.loader.AnimationDefinitionLoaderOSRS;
 import com.rspsi.plugin.loader.FloorDefinitionLoaderOSRS;
 import com.rspsi.plugin.loader.FrameBaseLoaderOSRS;
@@ -69,7 +69,8 @@ public class OSRSPlugin implements ClientPlugin {
     public void onGameLoaded(final Client client) {
         frameLoader.init(2500);
 
-        Index configIndex = client.getCache().getFile(CacheFileType.CONFIG);
+        CacheIndexView configIndex = client.getCache().indexView(CacheFileType.CONFIG)
+                .orElseThrow(() -> new IllegalStateException("Configuration index is unavailable"));
 
         floorLoader.initUnderlays(configIndex.archive(1));
         floorLoader.initOverlays(configIndex.archive(4));
@@ -82,11 +83,14 @@ public class OSRSPlugin implements ClientPlugin {
 
         objLoader.renameMapFunctions(areaLoader);
 
-        Index skeletonIndex = client.getCache().getFile(CacheFileType.SKELETON);
+        CacheIndexView skeletonIndex = client.getCache().indexView(CacheFileType.SKELETON)
+                .orElseThrow(() -> new IllegalStateException("Skeleton index is unavailable"));
         skeletonLoader.init(skeletonIndex);
 
-        Index textureIndex = client.getCache().getFile(CacheFileType.TEXTURE);
-        Index spriteIndex = client.getCache().getFile(CacheFileType.SPRITE);
+        CacheIndexView textureIndex = client.getCache().indexView(CacheFileType.TEXTURE)
+                .orElseThrow(() -> new IllegalStateException("Texture index is unavailable"));
+        CacheIndexView spriteIndex = client.getCache().indexView(CacheFileType.SPRITE)
+                .orElseThrow(() -> new IllegalStateException("Sprite index is unavailable"));
         textureLoader.init(textureIndex.archive(0), spriteIndex);
 
         if (client.getCache().isOsrs()) {

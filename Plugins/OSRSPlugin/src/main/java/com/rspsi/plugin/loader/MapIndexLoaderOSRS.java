@@ -1,12 +1,12 @@
 package com.rspsi.plugin.loader;
 
-import com.displee.cache.index.archive.Archive;
 import com.jagex.cache.loader.map.MapIndexLoader;
 import com.jagex.cache.loader.map.MapType;
 import com.jagex.io.Buffer;
 import com.rspsi.cache.map.MapArchiveType;
 import com.rspsi.cache.map.MapIndexEntry;
 import com.rspsi.cache.map.MapIndexTable;
+import com.rspsi.cache.store.CacheArchiveView;
 import com.rspsi.cache.store.CacheStore;
 
 import java.util.Objects;
@@ -20,7 +20,7 @@ public class MapIndexLoaderOSRS extends MapIndexLoader {
 	}
 
 	@Override
-	public void init(Archive archive) {
+	public void init(CacheArchiveView archive) {
 		if (archive == null || archive.file(0) == null) {
 			index = MapIndexTable.of(java.util.List.of());
 			return;

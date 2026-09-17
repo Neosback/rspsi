@@ -1,10 +1,9 @@
 package com.rspsi.plugin.loader;
 
-import com.displee.cache.index.archive.Archive;
-import com.displee.cache.index.archive.file.File;
 import com.jagex.cache.anim.Animation;
 import com.jagex.cache.loader.anim.AnimationDefinitionLoader;
 import com.jagex.io.Buffer;
+import com.rspsi.cache.store.CacheArchiveView;
 import lombok.val;
 
 import java.util.Arrays;
@@ -16,14 +15,12 @@ public class AnimationDefinitionLoaderOSRS extends AnimationDefinitionLoader {
 	private Animation[] animations;
 
 	@Override
-	public void init(Archive archive) {
-		val highestId = Arrays.stream(archive.fileIds()).max().getAsInt();
+	public void init(CacheArchiveView archive) {
+		val highestId = Arrays.stream(archive.fileIds()).max().orElse(-1);
 		animations = new Animation[highestId + 1];
-		for (File file : archive.files()) {
-			if (file == null) continue;
-			byte[] data = file.getData();
+		for (int id : archive.fileIds()) {
+			byte[] data = archive.file(id);
 			if (data == null) continue;
-			int id = file.getId();
 			animations[id] = decode(id, new Buffer(data));
 		}
 	}
