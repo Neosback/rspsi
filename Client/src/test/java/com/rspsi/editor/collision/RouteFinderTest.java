@@ -45,6 +45,40 @@ class RouteFinderTest {
     }
 
     @Test
+    void lineOfSightIgnoresLocationProjectileFlagOnDestination() {
+        CollisionMap map = new CollisionMap(3, 1, 1);
+        map.add(new TileCoordinate(0, 2, 0), CollisionFlag.LOC_PROJECTILE);
+
+        assertTrue(RouteFinder.hasLineOfSight(map,
+                new TileCoordinate(0, 0, 0), new TileCoordinate(0, 2, 0)));
+        map.add(new TileCoordinate(0, 1, 0), CollisionFlag.LOC_PROJECTILE);
+        assertFalse(RouteFinder.hasLineOfSight(map,
+                new TileCoordinate(0, 0, 0), new TileCoordinate(0, 2, 0)));
+    }
+
+    @Test
+    void lineValidatorSupportsRectangularEndpointsAndLineOfWalk() {
+        CollisionMap map = new CollisionMap(5, 3, 1);
+        TileCoordinate source = new TileCoordinate(0, 0, 1);
+        TileCoordinate target = new TileCoordinate(0, 3, 0);
+
+        assertTrue(LineValidator.hasLineOfSight(map, source, 2, 1, target, 2, 1));
+        assertTrue(RouteFinder.hasLineOfWalk(map, source, target));
+
+        map.add(new TileCoordinate(0, 1, 1), CollisionFlag.WALL_WEST);
+        assertFalse(RouteFinder.hasLineOfWalk(map, source, target));
+    }
+
+    @Test
+    void lineValidationRejectsOutOfBoundsFootprints() {
+        CollisionMap map = new CollisionMap(3, 3, 1);
+
+        assertFalse(LineValidator.hasLineOfSight(map,
+                new TileCoordinate(0, 2, 2), 2, 1,
+                new TileCoordinate(0, 0, 0), 1, 1));
+    }
+
+    @Test
     void routeBlockersAreOptInLikeOpenRuneNormalStrategy() {
         CollisionMap map = new CollisionMap(3, 1, 1);
         map.add(new TileCoordinate(0, 1, 0), CollisionFlag.LOC_ROUTE_BLOCKER);

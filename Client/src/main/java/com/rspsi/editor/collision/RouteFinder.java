@@ -103,40 +103,13 @@ public final class RouteFinder {
      */
     public static boolean hasLineOfSight(CollisionMap map, TileCoordinate start,
                                          TileCoordinate target) {
-        Objects.requireNonNull(map, "map");
-        Objects.requireNonNull(start, "start");
-        Objects.requireNonNull(target, "target");
-        if (start.plane() != target.plane()) {
-            return false;
-        }
-        map.flags(start);
-        map.flags(target);
-        int x = start.x();
-        int y = start.y();
-        int dx = Math.abs(target.x() - x);
-        int dy = Math.abs(target.y() - y);
-        int sx = Integer.compare(target.x(), x);
-        int sy = Integer.compare(target.y(), y);
-        int error = dx - dy;
-        while (x != target.x() || y != target.y()) {
-            int oldX = x;
-            int oldY = y;
-            int twice = 2 * error;
-            if (twice > -dy) {
-                error -= dy;
-                x += sx;
-            }
-            if (twice < dx) {
-                error += dx;
-                y += sy;
-            }
-            CollisionDirection direction = direction(oldX, oldY, x, y);
-            TileCoordinate from = new TileCoordinate(start.plane(), oldX, oldY);
-            if (!canProject(map, from, direction)) {
-                return false;
-            }
-        }
-        return true;
+        return LineValidator.hasLineOfSight(map, start, target);
+    }
+
+    /** OpenRune-compatible walk-line check retained beside route previews. */
+    public static boolean hasLineOfWalk(CollisionMap map, TileCoordinate start,
+                                        TileCoordinate target) {
+        return LineValidator.hasLineOfWalk(map, start, target);
     }
 
     /** Returns the grid cells crossed by the same integer line used by LOS. */
@@ -172,30 +145,6 @@ public final class RouteFinder {
                                    CollisionDirection direction, int size,
                                    boolean useRouteBlockers) {
         return map.canTravel(from, direction, size, useRouteBlockers);
-    }
-
-    private static boolean canProject(CollisionMap map, TileCoordinate from,
-                                      CollisionDirection direction) {
-        if (!map.canProject(from, direction)) {
-            return false;
-        }
-        if (!direction.diagonal()) {
-            return true;
-        }
-        CollisionDirection horizontal = direction.deltaX() > 0
-                ? CollisionDirection.EAST : CollisionDirection.WEST;
-        CollisionDirection vertical = direction.deltaY() > 0
-                ? CollisionDirection.NORTH : CollisionDirection.SOUTH;
-        return map.canProject(from, horizontal) && map.canProject(from, vertical);
-    }
-
-    private static CollisionDirection direction(int fromX, int fromY, int toX, int toY) {
-        for (CollisionDirection direction : ALL_DIRECTIONS) {
-            if (direction.deltaX() == toX - fromX && direction.deltaY() == toY - fromY) {
-                return direction;
-            }
-        }
-        throw new IllegalStateException("Line traversal skipped more than one tile");
     }
 
     private static List<TileCoordinate> reconstruct(Map<TileCoordinate, TileCoordinate> previous,
