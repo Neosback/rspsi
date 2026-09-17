@@ -2,7 +2,7 @@ package com.rspsi.editor.tool;
 
 import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.EditorCommand;
-import com.rspsi.editor.SetTileCommand;
+import com.rspsi.editor.ChangeTileFlagsCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
@@ -51,7 +51,8 @@ public final class PaintFlagsTool implements EditorTool {
             TileSnapshot after = new TileSnapshot(before.southWestHeight(), before.southEastHeight(),
                     before.northEastHeight(), before.northWestHeight(), before.underlayId(), before.overlayId(),
                     before.overlayShape(), before.overlayRotation(), flags, before.objects());
-            stroke.add(new SetTileCommand(coordinate, before, after, "Paint flags at " + coordinate));
+            stroke.add(new ChangeTileFlagsCommand(coordinate, before, after,
+                    "Paint flags at " + coordinate));
         });
     }
     private void clear() { stroke.clear(); visited.clear(); }

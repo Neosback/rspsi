@@ -3,6 +3,7 @@ package com.rspsi.editor.tool;
 import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.PaintUnderlayCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
@@ -106,7 +107,7 @@ public final class PaintUnderlayTool implements EditorTool {
                     before.northEastHeight(), before.northWestHeight(), underlayId,
                     before.overlayId(), before.overlayShape(), before.overlayRotation(),
                     before.flags(), before.objects());
-            stroke.add(new com.rspsi.editor.SetTileCommand(coordinate, before, after,
+            stroke.add(new PaintUnderlayCommand(coordinate, before, after,
                     "Paint underlay at " + coordinate));
         });
     }

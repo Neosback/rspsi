@@ -33,6 +33,8 @@ class CoreTerrainToolsTest {
         assertEquals(9, world.tile(0, 0, 0).snapshot().overlayId());
         assertEquals(7, world.tile(0, 0, 0).snapshot().overlayShape());
         assertEquals(2, world.tile(0, 0, 0).snapshot().overlayRotation());
+        CompositeEditCommand overlayStroke = (CompositeEditCommand) session.history().commands().get(0);
+        assertTrue(overlayStroke.changedTiles().contains(new TileCoordinate(0, 0, 0)));
         assertTrue(session.undo());
         assertEquals(0, world.tile(0, 0, 0).snapshot().overlayId());
     }
@@ -53,6 +55,8 @@ class CoreTerrainToolsTest {
         controller.pointerUp(pointer(1, 0));
         assertEquals(0x06, world.tile(0, 1, 0).snapshot().flags());
         assertEquals(2, session.history().size());
+        assertTrue(session.history().commands().get(0) instanceof CompositeEditCommand);
+        assertTrue(session.history().commands().get(1) instanceof CompositeEditCommand);
     }
 
     private static ToolContext context(EditorSession session) {

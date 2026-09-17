@@ -2,7 +2,7 @@ package com.rspsi.editor.tool;
 
 import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.EditorCommand;
-import com.rspsi.editor.SetTileCommand;
+import com.rspsi.editor.PaintOverlayCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
@@ -68,7 +68,8 @@ public final class PaintOverlayTool implements EditorTool {
             TileSnapshot after = new TileSnapshot(before.southWestHeight(), before.southEastHeight(),
                     before.northEastHeight(), before.northWestHeight(), before.underlayId(), overlayId,
                     shape, rotation, before.flags(), before.objects());
-            stroke.add(new SetTileCommand(coordinate, before, after, "Paint overlay at " + coordinate));
+            stroke.add(new PaintOverlayCommand(coordinate, before, after,
+                    "Paint overlay at " + coordinate));
         });
     }
     private void clear() { stroke.clear(); visited.clear(); }

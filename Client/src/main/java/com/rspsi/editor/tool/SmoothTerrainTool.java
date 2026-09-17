@@ -1,8 +1,8 @@
 package com.rspsi.editor.tool;
 
 import com.rspsi.editor.CompositeEditCommand;
+import com.rspsi.editor.ChangeHeightCommand;
 import com.rspsi.editor.EditorCommand;
-import com.rspsi.editor.SetTileCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
@@ -61,7 +61,7 @@ public final class SmoothTerrainTool implements EditorTool {
             TileSnapshot after = new TileSnapshot(smoothed[0], smoothed[1], smoothed[2], smoothed[3],
                     before.underlayId(), before.overlayId(), before.overlayShape(), before.overlayRotation(),
                     before.flags(), before.objects());
-            if (!before.equals(after)) stroke.add(new SetTileCommand(coordinate, before, after,
+            if (!before.equals(after)) stroke.add(new ChangeHeightCommand(coordinate, before, after,
                     "Smooth terrain at " + coordinate));
         });
     }

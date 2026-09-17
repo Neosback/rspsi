@@ -1,8 +1,8 @@
 package com.rspsi.editor.tool;
 
 import com.rspsi.editor.CompositeEditCommand;
+import com.rspsi.editor.ChangeHeightCommand;
 import com.rspsi.editor.EditorCommand;
-import com.rspsi.editor.SetTileCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileBounds;
@@ -99,7 +99,7 @@ public final class RampTerrainTool implements EditorTool {
                 int nw = height(axis == Axis.X ? x : y + 1, startCoordinate, span);
                 TileSnapshot after = new TileSnapshot(sw, se, ne, nw, before.underlayId(), before.overlayId(),
                         before.overlayShape(), before.overlayRotation(), before.flags(), before.objects());
-                if (!before.equals(after)) stroke.add(new SetTileCommand(coordinate, before, after,
+                if (!before.equals(after)) stroke.add(new ChangeHeightCommand(coordinate, before, after,
                         "Ramp terrain at " + coordinate));
             }
         }
