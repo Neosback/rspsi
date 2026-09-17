@@ -36,6 +36,11 @@ public interface DefinitionProvider {
         return Optional.empty();
     }
 
+    /** Available zero-based map-scene sprite IDs, when the backend exposes them. */
+    default List<Integer> mapSceneIds() {
+        return List.of();
+    }
+
     /** Optional until a backend has supplied collision-relevant object fields. */
     default Optional<ObjectCollisionView> objectCollision(int id) {
         return Optional.empty();

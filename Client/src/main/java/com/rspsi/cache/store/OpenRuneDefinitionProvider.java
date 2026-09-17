@@ -7,11 +7,15 @@ import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ModelDefinitionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
+import com.rspsi.cache.definition.MapSceneSpriteView;
 import dev.openrune.cache.filestore.definition.ModelDecoder;
+import dev.openrune.cache.filestore.definition.SpriteDecoder;
+import dev.openrune.definition.game.IndexedSprite;
 import dev.openrune.definition.type.model.ModelType;
 import dev.openrune.OsrsCacheProvider;
 import dev.openrune.definition.type.ObjectType;
 import dev.openrune.definition.type.OverlayType;
+import dev.openrune.definition.type.SpriteType;
 import dev.openrune.definition.type.TextureType;
 import dev.openrune.definition.type.UnderlayType;
 import dev.openrune.filesystem.Cache;
@@ -33,6 +37,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     private final Map<Integer, TextureType> textures = new HashMap<>();
     private final ModelDecoder modelDecoder;
     private final Map<Integer, Optional<ModelDefinitionView>> modelViews = new HashMap<>();
+    private final Map<Integer, MapSceneSpriteView> mapScenes;
 
     private OpenRuneDefinitionProvider(Cache cache, int revision) {
         Objects.requireNonNull(cache, "cache");
@@ -44,6 +49,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         new OsrsCacheProvider.OverlayDecoder().load(cache, overlays);
         new OsrsCacheProvider.TextureDecoder(revision).load(cache, textures);
         modelDecoder = new ModelDecoder(cache, java.util.Collections.emptyList());
+        mapScenes = loadMapScenes(cache);
     }
 
     public static OpenRuneDefinitionProvider load(Cache cache, int revision) {
@@ -67,6 +73,16 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         return Optional.of(new ObjectDefinitionView(definition.getId(), definition.getName(),
                 Math.max(1, definition.getSizeX()), Math.max(1, definition.getSizeY()),
                 interactions, modelIds, definition.getMapSceneID()));
+    }
+
+    @Override
+    public Optional<MapSceneSpriteView> mapScene(int id) {
+        return Optional.ofNullable(mapScenes.get(id));
+    }
+
+    @Override
+    public List<Integer> mapSceneIds() {
+        return mapScenes.keySet().stream().sorted().toList();
     }
 
     @Override
@@ -118,6 +134,87 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
 
     private static int[] toArray(List<Integer> values) {
         return values == null ? null : values.stream().mapToInt(Integer::intValue).toArray();
+    }
+
+    /**
+     * Loads the graphics-defaults map-scene group when the cache exposes it.
+     * The current OpenRune sprite decoder enumerates the sprite index, so
+     * this remains an opt-in adapter surface until a targeted group decoder
+     * can be used without eagerly decoding unrelated sprite archives.
+     */
+    private static Map<Integer, MapSceneSpriteView> loadMapScenes(Cache cache) {
+        try {
+            byte[] defaults = cache.data(17, 3, 0, null);
+            int group = graphicsDefaultMapSceneGroup(defaults);
+            if (group < 0) return Map.of();
+            Map<Integer, SpriteType> spriteGroups = new HashMap<>();
+            new SpriteDecoder().load(cache, spriteGroups);
+            SpriteType spriteType = spriteGroups.get(group);
+            if (spriteType == null) return Map.of();
+            Map<Integer, MapSceneSpriteView> result = new HashMap<>();
+            IndexedSprite[] sprites = spriteType.getSprites();
+            for (int id = 0; id < sprites.length; id++) {
+                IndexedSprite sprite = sprites[id];
+                if (sprite == null || sprite.getWidth() <= 0 || sprite.getHeight() <= 0) continue;
+                java.awt.image.BufferedImage image = sprite.toBufferedImage();
+                result.put(id, new MapSceneSpriteView(id, image.getWidth(), image.getHeight(),
+                        sprite.getOffsetX(), sprite.getOffsetY(),
+                        image.getRGB(0, 0, image.getWidth(), image.getHeight(), null,
+                                0, image.getWidth())));
+            }
+            return Map.copyOf(result);
+        } catch (RuntimeException ignored) {
+            // Graphics defaults and sprite groups are optional across cache
+            // families. A missing/unsupported group must not make terrain or
+            // definitions unavailable.
+            return Map.of();
+        }
+    }
+
+    /** Reads opcode 2 from the OSRS graphics-defaults file. */
+    private static int graphicsDefaultMapSceneGroup(byte[] data) {
+        if (data == null) return -1;
+        int offset = 0;
+        while (offset < data.length) {
+            int opcode = data[offset++] & 0xFF;
+            if (opcode == 0) return -1;
+            if (opcode != 2) {
+                if (opcode == 1) {
+                    if (offset + 3 > data.length) return -1;
+                    offset += 3;
+                } else {
+                    return -1;
+                }
+                continue;
+            }
+            int mapScene = -1;
+            for (int field = 0; field < 11; field++) {
+                int value = readBigSmart(data, offset);
+                if (value == Integer.MIN_VALUE) return -1;
+                offset += bigSmartLength(data, offset);
+                if (field == 2) mapScene = value;
+            }
+            return mapScene;
+        }
+        return -1;
+    }
+
+    private static int readBigSmart(byte[] data, int offset) {
+        if (offset >= data.length) return Integer.MIN_VALUE;
+        if ((data[offset] & 0x80) != 0) {
+            if (offset + 4 > data.length) return Integer.MIN_VALUE;
+            return ((data[offset] & 0x7F) << 24)
+                    | ((data[offset + 1] & 0xFF) << 16)
+                    | ((data[offset + 2] & 0xFF) << 8)
+                    | (data[offset + 3] & 0xFF);
+        }
+        if (offset + 2 > data.length) return Integer.MIN_VALUE;
+        int value = ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
+        return value == 32767 ? -1 : value;
+    }
+
+    private static int bigSmartLength(byte[] data, int offset) {
+        return offset < data.length && (data[offset] & 0x80) != 0 ? 4 : 2;
     }
 
     @Override

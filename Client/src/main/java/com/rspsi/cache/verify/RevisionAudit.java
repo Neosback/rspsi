@@ -51,7 +51,8 @@ public final class RevisionAudit {
                 definitionCheck("revision.definitions.objects", "objects", definitions.objectIds().size()),
                 definitionCheck("revision.definitions.underlays", "underlays", definitions.underlayIds().size()),
                 definitionCheck("revision.definitions.overlays", "overlays", definitions.overlayIds().size()),
-                definitionCheck("revision.definitions.textures", "textures", definitions.textureIds().size()));
+                definitionCheck("revision.definitions.textures", "textures", definitions.textureIds().size()),
+                definitionCheck("revision.definitions.mapScenes", "map-scene sprites", definitions.mapSceneIds().size()));
     }
 
     private static VerificationCheck definitionCheck(String id, String name, int count) {
