@@ -51,4 +51,15 @@ class InstanceChunkTransformTest {
 
         assertEquals(new WorldObject(42, 10, 3, 2, 6, 5), mapped);
     }
+
+    @Test
+    void rotatesMultiTileObjectAnchorUsingDefinitionFootprint() {
+        InstanceChunkTransform transform = new InstanceChunkTransform(
+                new InstanceChunkTemplate(0, 0, 0, 0, 10, 20, 1), 0, 0);
+
+        WorldObject mapped = transform.sourceObjectToScene(
+                new WorldObject(42, 10, 0, 0, 82, 163), 3, 2);
+
+        assertEquals(new WorldObject(42, 10, 1, 0, 3, 3), mapped);
+    }
 }

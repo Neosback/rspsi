@@ -3,6 +3,8 @@ package com.rspsi.ui.workspace;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.editor.assets.AssetDescriptor;
 import com.rspsi.editor.assets.AssetRepository;
+import com.rspsi.editor.assets.EmptyAssetRepository;
+import com.rspsi.editor.plugin.EditorSceneSnapshot;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SelectionChangeListener;
 import com.rspsi.editor.collision.CollisionDirection;
@@ -15,6 +17,8 @@ import com.rspsi.editor.debug.DebugGridLevel;
 import com.rspsi.editor.debug.DebugOverlayMode;
 import com.rspsi.editor.debug.DebugOverlaySettings;
 import com.rspsi.editor.input.PointerButton;
+import com.rspsi.editor.input.EditorInputRouter;
+import com.rspsi.editor.input.EditorKeyEvent;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
@@ -44,6 +48,7 @@ import com.rspsi.editor.terrain.TerrainVertex;
 import com.rspsi.editor.tool.EditorTool;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.ToolContext;
+import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.editor.viewport.Viewport;
 import javafx.application.Platform;
 import javafx.scene.canvas.Canvas;
@@ -85,6 +90,7 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     private RoutePreview routePreview;
     private Consumer<Optional<TileCoordinate>> hoverListener = ignored -> { };
     private AssetRepository assets = EmptyAssetRepository.INSTANCE;
+    private EditorInputRouter inputRouter;
     private boolean closed;
 
     public CanonicalSceneViewport() {
@@ -146,12 +152,38 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
         redrawOnFxThread();
     }
 
+    /** Binds the shared shortcut/pointer router to the active plugin host. */
+    public void bindPluginHost(EditorPluginHost host) {
+        Objects.requireNonNull(host, "host");
+        inputRouter = new EditorInputRouter(host.context(), toolController);
+    }
+
+    /** Clears frontend input callbacks before the plugin host is unloaded. */
+    public void clearPluginHost() {
+        inputRouter = null;
+    }
+
+    /** Dispatches one frontend-translated key event through plugin shortcuts. */
+    public boolean dispatchKey(EditorKeyEvent event, boolean textInputFocused) {
+        return inputRouter != null && inputRouter.key(event, textInputFocused);
+    }
+
     public EditorSession session() {
         return session;
     }
 
     public WorldWindow worldWindow() {
         return worldWindow;
+    }
+
+    /** Returns the host-owned derived scene for neutral plugin consumers. */
+    public RenderScene sceneSnapshot() {
+        return scene;
+    }
+
+    /** Returns the immutable scene view used by neutral plugin consumers. */
+    public EditorSceneSnapshot sceneSnapshotView() {
+        return EditorSceneSnapshot.from(scene);
     }
 
     public int plane() {
@@ -495,6 +527,7 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     }
 
     private void toolPointerDown(MouseEvent event) {
+        requestFocus();
         if (toolController.activeTool() == null) return;
         toolController.pointerDown(pointerEvent(event));
         redrawOnFxThread();
@@ -713,6 +746,7 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
         worldWindow = null;
         scene = null;
         routePreview = null;
+        inputRouter = null;
         hoverListener = ignored -> { };
         assets = EmptyAssetRepository.INSTANCE;
     }
@@ -724,9 +758,4 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
         closeBinding();
     }
 
-    private static final class EmptyAssetRepository implements AssetRepository {
-        private static final EmptyAssetRepository INSTANCE = new EmptyAssetRepository();
-        @Override public java.util.List<AssetDescriptor> search(String query) { return java.util.List.of(); }
-        @Override public Optional<AssetDescriptor> get(int id, String type) { return Optional.empty(); }
-    }
 }

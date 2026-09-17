@@ -1,6 +1,7 @@
 package com.rspsi.cache.map;
 
 import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.model.TerrainHeightSource;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldRegion;
@@ -21,6 +22,9 @@ import java.util.Objects;
 public final class OsrsRegionDecoder {
     public static final int REGION_SIZE = 64;
     public static final int PLANES = 4;
+    private static final int GENERATED_HEIGHT_X_OFFSET = 932731;
+    private static final int GENERATED_HEIGHT_Y_OFFSET = 556238;
+    private static final int[] HEIGHT_COSINE = heightCosineTable();
 
     private OsrsRegionDecoder() {
     }
@@ -33,7 +37,8 @@ public final class OsrsRegionDecoder {
 
     /** Decodes terrain using the classic deterministic base-height function. */
     public static WorldDocument decodeTerrain(byte[] data, int regionX, int regionY) {
-        return decodeTerrain(data, regionX, regionY, OsrsRegionDecoder::defaultBaseHeight);
+        return decodeTerrain(data, regionX, regionY,
+                OsrsRegionDecoder::defaultBaseHeightAtWorldNoiseCoordinate);
     }
 
     /**
@@ -72,6 +77,8 @@ public final class OsrsRegionDecoder {
         int[][][] shapes = new int[PLANES][REGION_SIZE][REGION_SIZE];
         int[][][] rotations = new int[PLANES][REGION_SIZE][REGION_SIZE];
         int[][][] flags = new int[PLANES][REGION_SIZE][REGION_SIZE];
+        TerrainHeightSource[][][] heightSources =
+                new TerrainHeightSource[PLANES][REGION_SIZE][REGION_SIZE];
         Cursor cursor = new Cursor(data);
 
         for (int plane = 0; plane < PLANES; plane++) {
@@ -79,7 +86,7 @@ public final class OsrsRegionDecoder {
                 for (int y = 0; y < REGION_SIZE; y++) {
                     decodeTile(cursor, plane, x, y, regionX, regionY,
                             baseHeightProvider, heights, underlays, overlays,
-                            shapes, rotations, flags, newTerrainFormat);
+                            shapes, rotations, flags, heightSources, newTerrainFormat);
                 }
             }
         }
@@ -109,6 +116,7 @@ public final class OsrsRegionDecoder {
                             rotations[plane][x][y],
                             flags[plane][x][y],
                             List.of()));
+                    document.tile(plane, x, y).heightSource(heightSources[plane][x][y]);
                 }
             }
         }
@@ -149,26 +157,28 @@ public final class OsrsRegionDecoder {
 
     /** Decodes terrain and attaches locations to their owning canonical tiles. */
     public static WorldDocument decode(byte[] landscape, byte[] locations, int regionX, int regionY) {
-        return decode(landscape, locations, regionX, regionY, OsrsRegionDecoder::defaultBaseHeight);
+        return decode(landscape, locations, regionX, regionY,
+                OsrsRegionDecoder::defaultBaseHeightAtWorldNoiseCoordinate);
     }
 
     /** Decodes a region using the selected revision's terrain representation. */
     public static WorldDocument decode(byte[] landscape, byte[] locations, int regionX, int regionY,
                                        boolean newTerrainFormat) {
         return decode(landscape, locations, regionX, regionY,
-                OsrsRegionDecoder::defaultBaseHeight, newTerrainFormat);
+                OsrsRegionDecoder::defaultBaseHeightAtWorldNoiseCoordinate, newTerrainFormat);
     }
 
     /** Decodes a region while retaining its canonical world identity. */
     public static WorldRegion decodeRegion(byte[] landscape, byte[] locations, int regionX, int regionY) {
-        return decodeRegion(landscape, locations, regionX, regionY, OsrsRegionDecoder::defaultBaseHeight);
+        return decodeRegion(landscape, locations, regionX, regionY,
+                OsrsRegionDecoder::defaultBaseHeightAtWorldNoiseCoordinate);
     }
 
     /** Decodes a region using the selected revision's terrain representation. */
     public static WorldRegion decodeRegion(byte[] landscape, byte[] locations, int regionX, int regionY,
                                            boolean newTerrainFormat) {
         return decodeRegion(landscape, locations, regionX, regionY,
-                OsrsRegionDecoder::defaultBaseHeight, newTerrainFormat);
+                OsrsRegionDecoder::defaultBaseHeightAtWorldNoiseCoordinate, newTerrainFormat);
     }
 
     /** Decodes a region with an injectable base-height provider for parity tests. */
@@ -209,13 +219,16 @@ public final class OsrsRegionDecoder {
         WorldDocument document = decodeTerrain(landscape, regionX, regionY,
                 baseHeightProvider, newTerrainFormat);
         for (WorldObject object : decodeLocations(locations == null ? new byte[0] : locations)) {
-            TileSnapshot before = document.tile(object.plane(), object.x(), object.y()).snapshot();
+            var tile = document.tile(object.plane(), object.x(), object.y());
+            TileSnapshot before = tile.snapshot();
+            TerrainHeightSource heightSource = tile.heightSource();
             List<WorldObject> objects = new ArrayList<>(before.objects());
             objects.add(object);
-            document.tile(object.plane(), object.x(), object.y()).restore(new TileSnapshot(
+            tile.restore(new TileSnapshot(
                     before.southWestHeight(), before.southEastHeight(), before.northEastHeight(),
                     before.northWestHeight(), before.underlayId(), before.overlayId(),
                     before.overlayShape(), before.overlayRotation(), before.flags(), objects));
+            tile.heightSource(heightSource);
         }
         return document;
     }
@@ -234,12 +247,16 @@ public final class OsrsRegionDecoder {
             int[][][] shapes,
             int[][][] rotations,
             int[][][] flags,
+            TerrainHeightSource[][][] heightSources,
             boolean newTerrainFormat
     ) {
         while (true) {
             int opcode = readTerrainValue(cursor, newTerrainFormat, false);
             if (opcode == 0 || opcode == 1) {
                 int value = opcode == 1 ? cursor.readUnsignedByte() : 0;
+                heightSources[plane][x][y] = opcode == 0
+                        ? TerrainHeightSource.generatedSource()
+                        : TerrainHeightSource.explicitSource(value);
                 if (plane == 0) {
                     heights[plane][x][y] = opcode == 0
                             ? -baseHeightProvider.heightAt(regionX * REGION_SIZE + x, regionY * REGION_SIZE + y) * 8
@@ -304,6 +321,17 @@ public final class OsrsRegionDecoder {
         return Math.max(10, Math.min(60, height));
     }
 
+    /** Applies the fixed offsets used by the OSRS client for opcode-0 terrain. */
+    private static int defaultBaseHeightAtWorldNoiseCoordinate(int worldX, int worldY) {
+        return defaultBaseHeight(worldX + GENERATED_HEIGHT_X_OFFSET,
+                worldY + GENERATED_HEIGHT_Y_OFFSET);
+    }
+
+    /** Returns an opcode-0 height at the world noise coordinates used by OSRS. */
+    public static int generatedHeightAtWorldNoiseCoordinate(int worldX, int worldY) {
+        return -defaultBaseHeightAtWorldNoiseCoordinate(worldX, worldY) * 8;
+    }
+
     private static int interpolatedNoise(int x, int y, int scale) {
         int sampleX = x / scale;
         int offsetX = x & (scale - 1);
@@ -318,8 +346,17 @@ public final class OsrsRegionDecoder {
     }
 
     private static int interpolate(int a, int b, int offset, int scale) {
-        int cosine = 0x10000 - (int) (65536D * Math.cos(offset * Math.PI / (1024D * scale))) >> 1;
+        int cosine = 0x10000 - HEIGHT_COSINE[1024 * offset / scale] >> 1;
         return (a * (0x10000 - cosine) >> 16) + (b * cosine >> 16);
+    }
+
+    private static int[] heightCosineTable() {
+        int[] table = new int[2048];
+        double unit = Math.PI / 1024D;
+        for (int i = 0; i < table.length; i++) {
+            table[i] = (int) (65536D * Math.cos(i * unit));
+        }
+        return table;
     }
 
     private static int smoothNoise(int x, int y) {

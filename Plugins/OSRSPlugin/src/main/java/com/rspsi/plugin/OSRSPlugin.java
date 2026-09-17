@@ -77,7 +77,7 @@ public class OSRSPlugin implements ClientPlugin {
 
         objLoader.init(configIndex.archive(6));
         animDefLoader.init(configIndex.archive(12));
-        graphicLoader.init(configIndex.archive(13));
+        graphicLoader.init(configIndex.archive(13), client.getCache().revision());
         varbitLoader.init(configIndex.archive(14));
         areaLoader.init(configIndex.archive(35));
 

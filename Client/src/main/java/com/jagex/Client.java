@@ -489,7 +489,8 @@ public final class Client implements Runnable {
 					mapScenes = new Sprite[0];
 				}
 				try {
-					mapFunctions = cache.readLegacySprites("mapfunction", 1000, true);
+					mapFunctions = Sprite.unpackAndDecode(ByteBuffer.wrap(
+							cache.readNamedFile(CacheFileType.SPRITE, "mapfunction", 0)));
 				} catch(Exception ex){
 					mapFunctions = new Sprite[0];
 				}

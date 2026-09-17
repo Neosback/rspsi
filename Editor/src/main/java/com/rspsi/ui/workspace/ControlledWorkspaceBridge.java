@@ -6,6 +6,11 @@ import com.rspsi.cache.definition.LegacyDefinitionProvider;
 import com.rspsi.cache.map.OsrsProjectSessionLoader;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.assets.AssetRepository;
+import com.rspsi.editor.assets.EmptyAssetRepository;
+import com.rspsi.editor.plugin.EditorPluginHost;
+import com.rspsi.editor.plugin.EditorPlugin;
+import com.rspsi.editor.plugin.EditorPluginLoader;
+import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
 import com.rspsi.editor.model.WorldWindow;
 import com.rspsi.editor.ui.StandardWorkspaceCatalog;
 import com.rspsi.editor.ui.WorkspaceCatalog;
@@ -16,6 +21,8 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
 
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -67,7 +74,7 @@ public final class ControlledWorkspaceBridge {
         panels.put("history", new SessionHistoryPanel());
         panels.put("validation", new ValidationPanel());
         panels.put("console", placeholder("Console", "Editor messages will appear here."));
-        panels.put("command-palette", placeholder("Command palette", "Search commands with Cmd/Ctrl-P."));
+        panels.put("command-palette", new PluginCommandPalettePanel());
 
         WorkspaceCatalog catalog = StandardWorkspaceCatalog.create();
         ControlledWorkspaceShell shell = new ControlledWorkspaceShell(
@@ -134,6 +141,17 @@ public final class ControlledWorkspaceBridge {
             viewport.showCanonical(session, window, definitions, assets);
             if (shell.panelNode("tools") instanceof AdaptiveToolPanel tools) {
                 tools.showCanonical(viewport.canonicalViewport());
+                List<EditorPlugin> pluginsToLoad = new ArrayList<>();
+                pluginsToLoad.addAll(CoreToolsPlugin.builtIns());
+                pluginsToLoad.addAll(EditorPluginLoader.discover(
+                        java.nio.file.Path.of("plugins", "active"),
+                        Thread.currentThread().getContextClassLoader()));
+                EditorPluginHost plugins = EditorPluginHost.initialize(
+                        pluginsToLoad,
+                        session,
+                        assets == null ? EmptyAssetRepository.INSTANCE : assets,
+                        viewport.canonicalViewport()::sceneSnapshotView);
+                shell.bindPluginHost(plugins);
                 if (shell.panelNode("assets") instanceof AssetBrowserPanel browser) {
                     browser.selectedAsset().ifPresent(tools::setObjectAsset);
                 }

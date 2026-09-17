@@ -26,23 +26,31 @@ import java.util.Set;
 public final class RenderSceneBuilder {
     private final TerrainMeshBuilder terrainMeshes;
     private final DefinitionProvider definitions;
+    private final LightingProfile lightingProfile;
 
     public RenderSceneBuilder() {
-        this(new TerrainMeshBuilder(), null);
+        this(new TerrainMeshBuilder(), null, LightingProfile.osrs());
     }
 
     public RenderSceneBuilder(TerrainMeshBuilder terrainMeshes) {
-        this(terrainMeshes, null);
+        this(terrainMeshes, null, LightingProfile.osrs());
     }
 
     /** Builds scene materials from the neutral definition provider when supplied. */
     public RenderSceneBuilder(DefinitionProvider definitions) {
-        this(new TerrainMeshBuilder(), Objects.requireNonNull(definitions, "definitions"));
+        this(new TerrainMeshBuilder(), Objects.requireNonNull(definitions, "definitions"),
+                LightingProfile.osrs());
     }
 
     public RenderSceneBuilder(TerrainMeshBuilder terrainMeshes, DefinitionProvider definitions) {
+        this(terrainMeshes, definitions, LightingProfile.osrs());
+    }
+
+    public RenderSceneBuilder(TerrainMeshBuilder terrainMeshes, DefinitionProvider definitions,
+                              LightingProfile lightingProfile) {
         this.terrainMeshes = Objects.requireNonNull(terrainMeshes, "terrainMeshes");
         this.definitions = definitions;
+        this.lightingProfile = Objects.requireNonNull(lightingProfile, "lightingProfile");
     }
 
     /**
@@ -53,6 +61,9 @@ public final class RenderSceneBuilder {
         Objects.requireNonNull(document, "document");
         Map<TileCoordinate, TerrainMesh> meshes = new LinkedHashMap<>();
         Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>();
+        Map<TileCoordinate, TerrainAppearance> appearances = new LinkedHashMap<>();
+        Map<TileCoordinate, TerrainAppearance> derivedAppearances = definitions == null
+                ? Map.of() : new TerrainAppearanceBuilder().build(document, definitions);
         Map<TileCoordinate, CollisionTileSnapshot> collision = collision(document);
         List<WorldObject> objects = new ArrayList<>();
         List<RenderObject> renderObjects = new ArrayList<>();
@@ -64,6 +75,7 @@ public final class RenderSceneBuilder {
                     meshes.put(coordinate, terrainMeshes.build(tile.snapshot()));
                     if (definitions != null) {
                         materials.put(coordinate, material(tile.snapshot()));
+                        appearances.put(coordinate, derivedAppearances.get(coordinate));
                     }
                     for (WorldObject object : tile.objects()) {
                         objects.add(object);
@@ -72,7 +84,8 @@ public final class RenderSceneBuilder {
                 }
             }
         }
-        return new RenderScene(document, meshes, materials, TerrainLighting.build(document), collision,
+        return new RenderScene(document, meshes, materials, appearances,
+                TerrainLighting.build(document, lightingProfile), lightingProfile, collision,
                 objects, renderObjects, document.bridgeLinks());
     }
 
@@ -87,7 +100,11 @@ public final class RenderSceneBuilder {
         WorldDocument document = previous.document();
         Map<TileCoordinate, TerrainMesh> meshes = new LinkedHashMap<>(previous.terrainMeshes());
         Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>(previous.terrainMaterials());
-        Map<TileCoordinate, TerrainLight> lighting = new LinkedHashMap<>(TerrainLighting.build(document));
+        Map<TileCoordinate, TerrainAppearance> appearances = new LinkedHashMap<>(previous.terrainAppearances());
+        Map<TileCoordinate, TerrainAppearance> derivedAppearances = definitions == null
+                ? Map.of() : new TerrainAppearanceBuilder().build(document, definitions);
+        Map<TileCoordinate, TerrainLight> lighting = new LinkedHashMap<>(
+                TerrainLighting.build(document, lightingProfile));
         Map<TileCoordinate, CollisionTileSnapshot> collision = collision(document);
         List<RenderObject> renderObjects = new ArrayList<>();
         Set<TileCoordinate> dirtyTiles = changes.dirtyTiles();
@@ -100,11 +117,13 @@ public final class RenderSceneBuilder {
             meshes.put(coordinate, terrainMeshes.build(document.tile(coordinate).snapshot()));
             if (definitions != null) {
                 materials.put(coordinate, material(document.tile(coordinate).snapshot()));
+                appearances.put(coordinate, derivedAppearances.get(coordinate));
             }
         }
         List<WorldObject> objects = collectObjects(document);
         for (WorldObject object : objects) renderObjects.add(resolve(object));
-        return new RenderScene(document, meshes, materials, lighting, collision, objects, renderObjects,
+        return new RenderScene(document, meshes, materials, appearances, lighting, lightingProfile, collision,
+                objects, renderObjects,
                 document.bridgeLinks());
     }
 

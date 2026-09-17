@@ -17,10 +17,12 @@ public record CacheStoreCapabilities(
         if (writeMode == null) {
             throw new NullPointerException("writeMode");
         }
-        if (!writable && writeMode != CacheWriteMode.READ_ONLY) {
+        if (!writable && writeMode != CacheWriteMode.READ_ONLY
+                && writeMode != CacheWriteMode.BUILD_ONLY) {
             throw new IllegalArgumentException("Non-writable capabilities must be READ_ONLY");
         }
-        if (writable && writeMode == CacheWriteMode.READ_ONLY) {
+        if (writable && (writeMode == CacheWriteMode.READ_ONLY
+                || writeMode == CacheWriteMode.BUILD_ONLY)) {
             throw new IllegalArgumentException("Writable capabilities need a write mode");
         }
     }

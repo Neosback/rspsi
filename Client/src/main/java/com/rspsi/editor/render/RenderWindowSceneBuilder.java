@@ -39,6 +39,7 @@ public final class RenderWindowSceneBuilder {
         prepared.stitchSharedEdges();
         var meshes = new LinkedHashMap<WorldTileAddress, com.rspsi.editor.terrain.TerrainMesh>();
         var materials = new LinkedHashMap<WorldTileAddress, TerrainMaterial>();
+        var appearances = new LinkedHashMap<WorldTileAddress, TerrainAppearance>();
         var lighting = new LinkedHashMap<WorldTileAddress, TerrainLight>();
         var collision = new LinkedHashMap<WorldTileAddress, CollisionTileSnapshot>();
         List<WorldRenderObject> objects = new ArrayList<>();
@@ -57,6 +58,8 @@ public final class RenderWindowSceneBuilder {
                     meshes.put(WorldTileAddress.of(originX + local.x(), originY + local.y(), local.plane()), mesh));
             scene.terrainMaterials().forEach((local, material) ->
                     materials.put(WorldTileAddress.of(originX + local.x(), originY + local.y(), local.plane()), material));
+            scene.terrainAppearances().forEach((local, appearance) ->
+                    appearances.put(WorldTileAddress.of(originX + local.x(), originY + local.y(), local.plane()), appearance));
             scene.terrainLighting().forEach((local, light) ->
                     lighting.put(WorldTileAddress.of(originX + local.x(), originY + local.y(), local.plane()), light));
             int collisionOffsetX = (region.regionX() - prepared.minRegionX()) * WorldRegion.REGION_SIZE;
@@ -79,7 +82,8 @@ public final class RenderWindowSceneBuilder {
                 bridges.add(new WorldBridgeLink(address(region, bridge.upper()), address(region, bridge.lower())));
             }
         }
-        return new RenderWindowScene(prepared, meshes, materials, lighting, collision, objects, bridges);
+        return new RenderWindowScene(prepared, meshes, materials, appearances, lighting,
+                LightingProfile.osrs(), collision, objects, bridges);
     }
 
     private static WorldTileAddress address(WorldRegion region, com.rspsi.editor.model.TileCoordinate coordinate) {

@@ -1,6 +1,7 @@
 package com.rspsi.ui.workspace;
 
 import com.rspsi.editor.assets.AssetDescriptor;
+import com.rspsi.editor.plugin.EditorPluginHost;
 import javafx.scene.Node;
 import javafx.scene.layout.StackPane;
 
@@ -20,6 +21,10 @@ public final class AdaptiveToolPanel extends StackPane implements AutoCloseable 
     public void showCanonical(CanonicalSceneViewport viewport) {
         canonical.bind(viewport);
         getChildren().setAll(canonical);
+    }
+
+    public void bindPluginHost(EditorPluginHost host) {
+        canonical.bindPluginHost(host);
     }
 
     public void showLegacy() {

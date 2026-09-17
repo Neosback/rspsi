@@ -116,16 +116,25 @@ public final class MinimapBuilder {
                 if (x == 0 || y == 0 || x == document.width() - 1
                         || y == document.length() - 1) continue;
                 TileSnapshot tile = document.tile(plane, x, y).snapshot();
-                if ((tile.flags() & OsrsTileFlags.MINIMAP_HIDDEN) == 0
+                boolean bridgeLinked = plane == 0
+                        && plane + 1 < document.planes()
+                        && (document.tile(plane + 1, x, y).snapshot().flags()
+                        & OsrsTileFlags.BRIDGE) != 0;
+                if (!bridgeLinked
+                        && (tile.flags() & OsrsTileFlags.MINIMAP_HIDDEN) == 0
                         && !(plane > 0 && (tile.flags() & OsrsTileFlags.BRIDGE) != 0)) {
                     drawShapedTile(document, plane, x, y, definitions, pixels, width);
                 }
-                // A bridge exposes the tile authored on the next plane on
-                // the current minimap, matching the TSPS/RuneScape scene
-                // render-flag ordering.
-                if (plane < document.planes() - 1
+                // TSPS/OSRS relinks a bridge column before minimap rendering:
+                // plane 0 contains the authored plane-1 tile, and the base
+                // tile is retained only as linked-below metadata. Render the
+                // bridge source alone so non-overlay pixels remain the
+                // minimap sentinel instead of leaking the base tile color.
+                if (bridgeLinked) {
+                    drawShapedTile(document, plane + 1, x, y, definitions, pixels, width);
+                } else if (plane < document.planes() - 1
                         && (document.tile(plane + 1, x, y).snapshot().flags()
-                        & (OsrsTileFlags.MINIMAP_BRIDGE | OsrsTileFlags.BRIDGE)) != 0) {
+                        & OsrsTileFlags.MINIMAP_BRIDGE) != 0) {
                     drawShapedTile(document, plane + 1, x, y, definitions, pixels, width);
                 }
             }
@@ -196,6 +205,12 @@ public final class MinimapBuilder {
                         & (OsrsTileFlags.MINIMAP_BRIDGE | OsrsTileFlags.BRIDGE)) != 0) {
                     objects.addAll(document.tile(plane + 1, x, y).snapshot().objects());
                 }
+                // TSPS/OSRS renders one scene layer at a time: walls first,
+                // then game objects, then ground decorations. WorldDocument
+                // intentionally preserves cache placement order, which is
+                // not the same thing as renderer layer order when locations
+                // overlap. Keep the renderer contract explicit here.
+                objects.sort(java.util.Comparator.comparingInt(MinimapBuilder::minimapLayer));
                 for (var object : objects) {
                     var objectDefinition = definitions.object(object.id());
                     if (objectDefinition.isPresent() && objectDefinition.get().mapSceneId() >= 0) {
@@ -209,7 +224,7 @@ public final class MinimapBuilder {
                         continue;
                     }
                     int markerColor = objectDefinition
-                            .filter(objectDefinitionValue -> !objectDefinitionValue.interactions().isEmpty())
+                            .filter(com.rspsi.cache.definition.ObjectDefinitionView::interactive)
                             .map(objectDefinitionValue -> 0xFFEE0000)
                             .orElse(wallColor);
                     int offset = x * 4 + outputY * width * 4;
@@ -258,12 +273,17 @@ public final class MinimapBuilder {
         }
     }
 
+    private static int minimapLayer(com.rspsi.editor.model.WorldObject object) {
+        return object.category().isKnown() ? object.category().layerId() : Integer.MAX_VALUE;
+    }
+
     private static void drawMapScene(WorldDocument document, int tileX, int tileY,
                                      com.rspsi.cache.definition.ObjectDefinitionView definition,
                                      MapSceneSpriteView sprite, int[] pixels, int width) {
         int originX = tileX * 4
                 + (definition.width() * 4 - sprite.width()) / 2 + sprite.offsetX();
         int originY = (document.length() - tileY - definition.length()) * 4
+                + (definition.length() * 4 - sprite.height()) / 2
                 + sprite.offsetY();
         int[] spritePixels = sprite.argb();
         for (int y = 0; y < sprite.height(); y++) {

@@ -7,6 +7,11 @@ that can be checked in code.
 The product scope and controlled layout are locked in
 [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md).
 
+The feature/plugin ownership model is recorded in
+[`PLUGIN_ARCHITECTURE.md`](PLUGIN_ARCHITECTURE.md). In short, features own
+their state, tools, commands, inspectors, overlays, and other contributions;
+the Studio shell owns the hosts, placement, lifecycle, and frontend adapters.
+
 ## Ownership and dependency direction
 
 ```text
@@ -21,10 +26,87 @@ neutral cache/definition services
 Displee legacy adapter | OpenRune OSRS adapter
 ```
 
+The cache/provider selection is a separate startup layer from feature plugins.
+The launcher selects the OSRS bundle first; the bundle opens the cache,
+establishes revision identity, and initializes the cache/definition services.
+Only after that succeeds does Studio create the canonical project session and
+mount terrain, object, selection, collision, validation, and other feature
+plugins. Dear ImGui or JavaFX consumes the resulting neutral session; neither
+frontend is responsible for opening a cache or decoding archive formats.
+
+```text
+launcher selection
+        ↓
+OsrsBundle + cache identity
+        ↓
+WorldDocument / EditorSession / neutral assets
+        ↓
+first-party feature plugin host
+        ↓
+JavaFX or Dear ImGui adapter
+```
+
+This distinction preserves the existing OSRS selection workflow while
+preventing feature plugins from reaching into legacy static loaders. The
+current legacy `ClientPlugin`/OSRS loader remains a compatibility adapter for
+the old renderer; the long-term project composition uses `OsrsBundle`,
+`OsrsStudioProject`, and neutral cache services as the backend boundary.
+
 The neutral editor packages own world data, editing, selection, tool contracts,
 and renderer contracts. They may not import JavaFX, ImGui, OpenGL/LWJGL,
 Displee, or OpenRune types. Frontends and cache adapters translate at the
 boundary.
+
+## Future source/build boundary
+
+The long-term project model is source-first, but it must be layered onto the
+existing canonical model rather than replacing it with a new editor format:
+
+```text
+read-only base OSRS cache
+          +
+versioned OpenRune project sources
+          ↓
+SourceProjectLoader → WorldDocument / EditorSession
+          ↓
+commands → validation → semantic diff
+          ↓
+WorldCompiler → disposable output cache
+```
+
+The base cache is never an implicit write target. The project source records
+the base identity and semantic authored changes; the built cache is
+reproducible output. While a project is open, `WorldDocument` remains the
+working state so undo, redo, preview, and validation do not depend on parsing
+files after every pointer event. Source serialization and cache packing are
+explicit save/build operations.
+
+This future boundary is described in [`STUDIO_DIRECTION.md`](STUDIO_DIRECTION.md).
+It is not yet a second persistence implementation. Until the foundation gate
+passes, `ProjectLayout`, autosave, `CacheStore`, `MapService`, and staged output
+remain the supported paths.
+
+Future source/build services must consume the existing neutral contracts:
+`CacheStore`, `MapService`, `WorldDocument`, `EditorSession`, `EditorCommand`,
+`WorldValidator`, and neutral asset repositories. They must not introduce a
+second map model, cache facade, command history, or revision-specific branch
+into editor code.
+
+## Future workspace composition
+
+OpenRune Studio may add specialized workspaces around the same shell and core:
+
+- World: Map Editor first, then world-map and collision/navigation views;
+- Assets: asset browser, definition inspector, model/texture previews;
+- Content: interfaces, CS2, and cutscenes only after the world workflow is
+  mature;
+- Build: validation, semantic diff, packing, and revision audits.
+
+Each workspace may be a plugin or frontend contribution, but it cannot own
+project identity, world state, history, cache writes, or frontend-specific
+types. The shell uses a stable application frame with feature workspaces; it
+does not replace the whole JavaFX stage for each feature, and it does not add
+unrestricted docking during foundation work.
 
 ## FileStore and plugin boundaries
 
@@ -33,6 +115,19 @@ filesystem access, raw map/location payloads, OSRS definition decoding,
 models, sprites, XTEA, packing, and generic revision tooling. RSPSi's cache
 adapter may use it, but the editable world model does not depend on its
 archive layout or runtime types.
+
+FileStore does not replace the feature plugin system. These are orthogonal
+boundaries: FileStore is the selected OSRS cache backend, while editor plugins
+own tools, commands, inspectors, overlays, panels, and other contributions.
+`OsrsBundle` chooses and validates that backend before feature plugins are
+started. A selected modern OSRS cache is opened through the OpenRune adapter;
+a 317 cache remains on the quarantined Displee compatibility path. There is no
+automatic modern-cache fallback to the 317 path and no `FileStorePlugin`.
+
+If the shell exposes this state, it is a cache-source/capability display, not a
+plugin selector: `OpenRune FileStore (OSRS)` with `READ_ONLY`, `STAGED`, or
+explicit `DIRECT` output capability. The UI must not imply that a 317 decoder
+is an equivalent alternative for a modern cache.
 
 RSPSi owns the semantic layers that FileStore should not absorb:
 
@@ -50,13 +145,23 @@ just because a donor project contains one. A future FileStore contribution is
 acceptable only if it is generic, provenance-reviewed, independently useful,
 and consumed through the same RSPSi-owned interfaces.
 
+`Plugins/OSRSPlugin` is a transitional renderer bridge, not the modern Studio
+backend. It still installs the static loader adapters required by the legacy
+software renderer. Retire it only after the compatibility renderer has been
+migrated to neutral definitions/assets/scene services and the equivalent live
+render and parity checks pass. New code must use `CacheStore`, neutral
+definition views, `OsrsMapService`, and `RenderScene` instead of adding new
+static-loader calls.
+
 First-party plugins sit above this core. Terrain/object tools, selection,
 asset browsing, definition inspection, validation, debug overlays, collision
-previews, and minimap/scene-preview workflows may be packaged as plugins, but
-they can only register neutral tools/panels and execute core commands. They
-cannot own world state, history, project identity, cache writes, or frontend
-types. The plugin boundary is a packaging and capability boundary, not a
-second editor architecture.
+previews, and minimap/scene-preview workflows may be packaged as vertical
+feature plugins. A feature keeps its state, tools, commands, inspectors,
+overlays, and settings together, while the shell decides where those
+contributions appear. Plugins register through the neutral contribution
+registry and execute core commands; they cannot own world state, history,
+project identity, cache writes, or frontend types. The plugin boundary is a
+packaging and capability boundary, not a second editor architecture.
 
 ## Canonical APIs
 

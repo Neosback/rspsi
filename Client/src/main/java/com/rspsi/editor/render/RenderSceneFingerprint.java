@@ -30,6 +30,8 @@ public final class RenderSceneFingerprint {
                             .append('|').append(mesh == null ? "<missing>" : mesh.faces()).append(';');
                     TerrainMaterial material = scene.terrainMaterials().get(coordinate);
                     if (material != null) value.append("material=").append(material).append(';');
+                    TerrainAppearance appearance = scene.terrainAppearances().get(coordinate);
+                    if (appearance != null) value.append("appearance=").append(appearance).append(';');
                     TerrainLight lighting = scene.terrainLighting().get(coordinate);
                     if (lighting != null) value.append("lighting=").append(lighting).append(';');
                     var collision = scene.collision().get(coordinate);
@@ -39,7 +41,8 @@ public final class RenderSceneFingerprint {
         }
         value.append("objects=").append(scene.objects()).append(';');
         value.append("renderObjects=").append(scene.renderObjects()).append(';');
-        value.append("bridges=").append(scene.bridges());
+        value.append("bridges=").append(scene.bridges()).append(';');
+        value.append("lightingProfile=").append(scene.lightingProfile());
         return sha256(value.toString());
     }
 

@@ -14,6 +14,7 @@ public class GraphicLoaderOSRS extends GraphicLoader {
 
 	private Graphic[] graphics;
 	private int count;
+	private int revision = -1;
 	
 	@Override
 	public int count() {
@@ -29,6 +30,12 @@ public class GraphicLoaderOSRS extends GraphicLoader {
 
 	@Override
 	public void init(CacheArchiveView archive) {
+		init(archive, -1);
+	}
+
+	/** Initializes graphics using the selected cache revision's opcode rules. */
+	public void init(CacheArchiveView archive, int revision) {
+		this.revision = revision;
 
 		val highestId = Arrays.stream(archive.fileIds()).max().orElse(-1);
 		graphics = new Graphic[highestId + 1];
@@ -72,6 +79,19 @@ public class GraphicLoaderOSRS extends GraphicLoader {
 				graphic.setAmbience(buffer.readUByte());
 			} else if (opcode == 8) {
 				graphic.setModelShadow(buffer.readUByte());
+			} else if (opcode == 3) {
+				// OSRS revision 237+ uses the widened model id opcode. The
+				// older compatibility decoder left the four bytes unread,
+				// causing every following byte to be interpreted as another
+				// opcode and producing cascading spot-animation corruption.
+				int modelId = buffer.readInt();
+				if (revision >= 237) graphic.setModel(modelId);
+			} else if (opcode == 9) {
+				// Modern OSRS debug names are not rendered, but the payload
+				// must still be consumed so later opcodes stay aligned.
+				buffer.readOSRSString();
+			} else if (opcode == 10) {
+				// Modern caches can explicitly disable model rotation.
 			} else if (opcode == 40) {
 				int len = buffer.readUByte();
 				int[] originalColours = new int[len];

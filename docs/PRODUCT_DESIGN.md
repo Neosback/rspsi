@@ -101,11 +101,18 @@ subrevision, and cache fingerprint. A mismatch opens read-only in the first
 implementation; `ProjectCompatibility` makes that decision explicit for
 callers. Automatic ID migration is deferred.
 
-The frontend composition root is `OsrsStudioProject`. It exposes an opened
+The frontend composition root is `OsrsBundle`, which creates an
+`OsrsStudioProject`. It exposes an opened
 canonical session, neutral definitions, and asset search to the JavaFX bridge
 without exposing OpenRune, Displee, or archive types. The current safe output
 arrangement reads the OpenRune source and stages writes into a distinct output
 cache; a writable OpenRune packer remains a parity-gated milestone.
+
+The shell may display the selected cache source and its capability state, but
+this is not a feature-plugin selection. Supported modern OSRS projects use
+OpenRune FileStore through the bundle; `READ_ONLY`, `STAGED`, and explicit
+`DIRECT` describe output capability. The quarantined 317 compatibility path is
+not an automatic fallback for a modern cache.
 
 The JavaFX project-open workflow offers the same two explicit choices: inspect
 the source read-only, or select a separately prepared output cache for editing.
@@ -117,6 +124,41 @@ Each project directory contains `project.json`, `autosave/`, and `edits/`.
 `OsrsStudioProject.initializeProject(...)` records the selected cache identity
 there without copying the cache; later opens compare that identity and fail
 closed to read-only when it differs.
+
+## Long-term Studio direction
+
+The cache is a generated output, not the authoritative project format. The
+future source-first flow is documented in [`STUDIO_DIRECTION.md`](STUDIO_DIRECTION.md):
+
+```text
+immutable base OSRS cache + Git-controlled project sources
+                         ↓
+                    WorldDocument
+                         ↓
+              commands / validation / preview
+                         ↓
+                  disposable built cache
+```
+
+This is intentionally a later milestone. The current map editor must first
+finish its OSRS metadata, scene, collision, command, and parity gates. Until
+then, the verified cache adapter, project metadata, autosave, and staged output
+arrangement remain the supported implementation. The source project must not
+be introduced as a partial second persistence system.
+
+Long term, RSPSi can grow into OpenRune Studio with one shell and specialized
+workspaces: Map Editor first; then World Map/Collision diagnostics, Asset
+Browser/definition inspection, and much later Interfaces, CS2, and Cutscenes.
+These are workspace or plugin surfaces over the same core, not separate
+applications or competing world/cache models. The 742 editor and its runtime
+are out of scope; only its source-diff, inspector, build-status, and
+incremental-packaging ideas are retained.
+
+The stable shell should use a centered work area, side tools, a contextual
+inspector, controlled bottom tabs for Assets/History/Changes/Validation/Build/
+Console, and a persistent project/revision/dirty/build status row. JavaFX is
+the first frontend; Dear ImGui remains possible because these contracts stay
+UI-neutral.
 
 ## Editor layout
 

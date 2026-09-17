@@ -39,6 +39,11 @@
     -fx-background-color: #111827;
 }
 
+.canonical-scene-viewport:focused {
+    -fx-border-color: #60a5fa;
+    -fx-border-width: 2px;
+}
+
 .workspace-bottom-area {
     -fx-background-color: #111827;
 }

@@ -167,9 +167,17 @@ repository; only the generator and verifier contract are committed. The same
 helper decodes TSPS location bytes into `locations.json`; build-240 region
 `(50,50)` matched all 4,726 canonical ID/type/rotation/plane/coordinate tuples.
 The same helper exports `scene-geometry.json` from TSPS's authored terrain
-models; 4,481 populated tiles matched RSPSi vertex coordinates and face
-topology. This is geometry evidence only; full lighting/material render
-parity remains a separate gate.
+models; the revision-240 `(50,50)` fixture currently compares 4,441 populated
+tiles with zero geometry differences. The verifier records whether a fixture
+uses authored or effective bridge planes so post-relink scene exports are not
+mistaken for authored map data. This is geometry evidence only; full
+lighting/material render parity remains a separate gate.
+
+The generated-height path is also pinned to the OSRS client noise contract:
+opcode-0 terrain uses the fixed world-noise offsets `932731` and `556238`,
+and the integer cosine table interpolation matches the RuneLite/TSPS
+reference. Revision-240 region `(49,49)`, which contains generated-height
+terrain, now matches the independent TSPS semantic and geometry fixtures.
 
 The captured RuneLite checkout
 (`ced4c4aba7a3cb7cace42e1f0c25a5f79b7faef`) was inspected at:

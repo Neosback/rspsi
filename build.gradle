@@ -105,3 +105,88 @@ tasks.register('verifyOsrsRevision') {
         }
     }
 }
+
+// A repeatable multi-fixture foundation run. Reference caches and fixtures are
+// intentionally external to this repository; the manifest makes their paths
+// explicit without making them runtime dependencies of the product.
+tasks.register('verifyOsrsRevisionMatrix') {
+    description = 'Runs verifyOsrsRevision for every case in an explicit JSON parity manifest.'
+    group = 'verification'
+    dependsOn(':Client:check')
+    doLast {
+        def manifestPath = providers.environmentVariable('RSPSI_OSRS_PARITY_MANIFEST').orNull
+        if (manifestPath == null || manifestPath.isBlank()) {
+            logger.lifecycle('OSRS revision matrix verification: pending; set RSPSI_OSRS_PARITY_MANIFEST to an explicit JSON manifest.')
+            return
+        }
+        def manifestFile = file(manifestPath)
+        if (!manifestFile.isFile()) {
+            throw new GradleException('OSRS parity manifest does not exist: ' + manifestFile)
+        }
+        def cases = new groovy.json.JsonSlurper().parse(manifestFile)
+        if (!(cases instanceof List) || cases.isEmpty()) {
+            throw new GradleException('OSRS parity manifest must contain a non-empty JSON array.')
+        }
+        cases.eachWithIndex { entry, index ->
+            if (!(entry instanceof Map)) {
+                throw new GradleException('OSRS parity manifest case ' + index + ' must be an object.')
+            }
+            def required = ['cache', 'fixture', 'regionX', 'regionY', 'revision']
+            def missing = required.findAll { key -> entry[key] == null || entry[key].toString().isBlank() }
+            if (!missing.isEmpty()) {
+                throw new GradleException('OSRS parity manifest case ' + index
+                        + ' is missing: ' + missing.join(', '))
+            }
+            def cachePath = entry.cache.toString()
+            def fixturePath = entry.fixture.toString()
+            def regionX = entry.regionX.toString()
+            def regionY = entry.regionY.toString()
+            def revision = entry.revision.toString()
+            logger.lifecycle('OSRS revision matrix case ' + (index + 1) + '/' + cases.size()
+                    + ': region ' + regionX + ',' + regionY + ' revision ' + revision)
+            project(':Client').javaexec {
+                def javaLauncher = project(':Client').javaToolchains.launcherFor {
+                    languageVersion = JavaLanguageVersion.of(21)
+                }.get()
+                executable = javaLauncher.executablePath.asFile.absolutePath
+                classpath = project(':Client').sourceSets.main.runtimeClasspath
+                mainClass = 'com.rspsi.cache.verify.OsrsRevisionVerifier'
+                environment 'RSPSI_OSRS_PARITY_FIXTURE', fixturePath
+                environment 'RSPSI_OSRS_REQUIRE_PARITY',
+                        entry.requireParity == null ? 'false' : entry.requireParity.toString()
+                args cachePath, regionX, regionY, revision
+            }
+        }
+    }
+}
+
+tasks.register('verifyOsrsInstance') {
+    description = 'Runs the opt-in external OSRS instance-template parity fixture.'
+    group = 'verification'
+    dependsOn(':Client:check')
+    doLast {
+        def cachePath = providers.environmentVariable('RSPSI_OSRS_CACHE').orNull
+        def fixturePath = providers.environmentVariable('RSPSI_OSRS_INSTANCE_FIXTURE').orNull
+        def revision = providers.environmentVariable('RSPSI_OSRS_REVISION').orNull
+        if ([cachePath, fixturePath, revision].any { it == null || it.isBlank() }) {
+            logger.lifecycle('OSRS instance verification: external instance fixture remains pending; '
+                    + 'set RSPSI_OSRS_CACHE, RSPSI_OSRS_INSTANCE_FIXTURE, and RSPSI_OSRS_REVISION to run it.')
+        } else {
+            project(':Client').javaexec {
+                def javaLauncher = project(':Client').javaToolchains.launcherFor {
+                    languageVersion = JavaLanguageVersion.of(21)
+                }.get()
+                executable = javaLauncher.executablePath.asFile.absolutePath
+                classpath = project(':Client').sourceSets.main.runtimeClasspath
+                mainClass = 'com.rspsi.cache.verify.OsrsInstanceRevisionVerifier'
+                args cachePath, fixturePath, revision
+            }
+        }
+    }
+}
+
+tasks.register('foundationGate') {
+    description = 'Runs the repository foundation checks; external parity is opt-in via environment variables.'
+    group = 'verification'
+    dependsOn 'test', 'check', 'verifyOsrsRevision', 'verifyOsrsInstance'
+}

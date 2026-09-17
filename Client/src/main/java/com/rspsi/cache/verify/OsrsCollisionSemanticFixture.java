@@ -14,9 +14,11 @@ import java.util.List;
 import java.util.Objects;
 
 /** Independent OSRS collision flags exported from a reference scene builder. */
-public record OsrsCollisionSemanticFixture(int formatVersion, int width, int length,
-                                           int planes, int[] flags) {
+public record OsrsCollisionSemanticFixture(int formatVersion, String semantics,
+                                           int width, int length, int planes, int[] flags) {
     public static final int FORMAT_VERSION = 1;
+    public static final String CLIENT_CLIP_TYPE = "CLIENT_CLIP_TYPE";
+    public static final String OPENRUNE_ROUTE = "OPENRUNE_ROUTE";
 
     public OsrsCollisionSemanticFixture {
         if (formatVersion != FORMAT_VERSION) {
@@ -24,6 +26,9 @@ public record OsrsCollisionSemanticFixture(int formatVersion, int width, int len
         }
         if (width <= 0 || length <= 0 || planes <= 0) {
             throw new IllegalArgumentException("Collision fixture dimensions must be positive");
+        }
+        if (!CLIENT_CLIP_TYPE.equals(semantics) && !OPENRUNE_ROUTE.equals(semantics)) {
+            throw new IllegalArgumentException("Unsupported collision fixture semantics: " + semantics);
         }
         if (flags == null || flags.length != width * length * planes) {
             throw new IllegalArgumentException("Collision fixture has the wrong flag count");
@@ -37,10 +42,15 @@ public record OsrsCollisionSemanticFixture(int formatVersion, int width, int len
         JsonObject root = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
         return new OsrsCollisionSemanticFixture(
                 requiredInt(root, "formatVersion"),
+                optionalText(root, "semantics", CLIENT_CLIP_TYPE),
                 requiredInt(root, "width"),
                 requiredInt(root, "length"),
                 requiredInt(root, "planes"),
                 requiredArray(root, "flags"));
+    }
+
+    public boolean isAuthoritativeRouteSemantics() {
+        return OPENRUNE_ROUTE.equals(semantics);
     }
 
     /** Compares the reference's interior collision fields; scene borders are backend policy. */
@@ -90,6 +100,14 @@ public record OsrsCollisionSemanticFixture(int formatVersion, int width, int len
         int[] result = new int[array.size()];
         for (int i = 0; i < array.size(); i++) result[i] = array.get(i).getAsInt();
         return result;
+    }
+
+    private static String optionalText(JsonObject root, String name, String defaultValue) {
+        JsonElement value = root.get(name);
+        if (value == null || !value.isJsonPrimitive() || value.getAsString().isBlank()) {
+            return defaultValue;
+        }
+        return value.getAsString().trim();
     }
 
     public record Comparison(boolean matches, int differenceCount, List<String> samples) {

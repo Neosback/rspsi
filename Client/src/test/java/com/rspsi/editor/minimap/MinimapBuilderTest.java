@@ -69,6 +69,29 @@ class MinimapBuilderTest {
     }
 
     @Test
+    void shapedRasterRendersBridgeSourceWithoutLeakingBaseTileColor() {
+        WorldDocument document = new WorldDocument(3, 3, 2);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                1, 0, 0, 0, 0, List.of()));
+        document.tile(1, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 1, 1, 0, com.rspsi.editor.model.OsrsTileFlags.BRIDGE, List.of()));
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> underlay(int id) {
+                return id == 0 ? Optional.of(floor(id, 0x102030)) : Optional.empty();
+            }
+            @Override public Optional<FloorDefinitionView> overlay(int id) {
+                return id == 0 ? Optional.of(floor(id, 0xFF00FF)) : Optional.empty();
+            }
+        };
+
+        MinimapImage image = new MinimapBuilder().buildShaped(document, 0, definitions);
+
+        assertEquals(0xFF000000, image.pixel(4, 4));
+        assertEquals(0xFF000001, image.pixel(5, 4));
+    }
+
+    @Test
     void shapedRasterUsesOsrsHslWhenDefinitionProvidesBlendMetadata() {
         WorldDocument document = new WorldDocument(3, 3, 1);
         document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
@@ -174,9 +197,47 @@ class MinimapBuilderTest {
 
         MinimapImage image = new MinimapBuilder().buildShaped(document, 0, definitions);
 
-        assertEquals(0xFF123456, image.pixel(6, 4));
-        assertEquals(0xFFABCDEF, image.pixel(5, 5));
-        assertEquals(0xFF000001, image.pixel(5, 4));
+        assertEquals(0xFF123456, image.pixel(6, 5));
+        assertEquals(0xFFABCDEF, image.pixel(5, 6));
+        assertEquals(0xFF000001, image.pixel(5, 5));
+    }
+
+    @Test
+    void shapedRasterOrdersOverlappingMapScenesBySceneLayer() {
+        WorldDocument document = new WorldDocument(3, 3, 1);
+        // Deliberately place the ground object before the wall. The cache
+        // placement order is not the scene draw order; the ground layer must
+        // still be composited after the wall layer.
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+                List.of(new WorldObject(10, 10, 0, 0, 1, 1),
+                        new WorldObject(11, 0, 0, 0, 1, 1))));
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return id == 10
+                        ? Optional.of(new ObjectDefinitionView(10, "Ground", 1, 1,
+                        List.of(), new int[0], 10))
+                        : id == 11
+                        ? Optional.of(new ObjectDefinitionView(11, "Wall", 1, 1,
+                        List.of(), new int[0], 11))
+                        : Optional.empty();
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<MapSceneSpriteView> mapScene(int id) {
+                return id == 10
+                        ? Optional.of(new MapSceneSpriteView(10, 1, 1, 0, 0,
+                        new int[]{0xFF00AA00}))
+                        : id == 11
+                        ? Optional.of(new MapSceneSpriteView(11, 1, 1, 0, 0,
+                        new int[]{0xFFAA0000}))
+                        : Optional.empty();
+            }
+        };
+
+        MinimapImage image = new MinimapBuilder().buildShaped(document, 0, definitions);
+
+        assertEquals(0xFF00AA00, image.pixel(5, 5));
     }
 
     private static DefinitionProvider definitions() {

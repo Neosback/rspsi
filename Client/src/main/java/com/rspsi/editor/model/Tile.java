@@ -7,10 +7,12 @@ import java.util.List;
 public final class Tile {
     private final TileCoordinate coordinate;
     private TileSnapshot state;
+    private TerrainHeightSource heightSource;
 
     Tile(TileCoordinate coordinate) {
         this.coordinate = coordinate;
         this.state = new TileSnapshot(0, 0, 0, 0, 0, 0, 0, 0, 0, List.of());
+        this.heightSource = TerrainHeightSource.unknown();
     }
 
     public TileCoordinate coordinate() {
@@ -23,6 +25,15 @@ public final class Tile {
 
     public void restore(TileSnapshot state) {
         this.state = state;
+        this.heightSource = TerrainHeightSource.unknown();
+    }
+
+    public TerrainHeightSource heightSource() {
+        return heightSource;
+    }
+
+    public void heightSource(TerrainHeightSource heightSource) {
+        this.heightSource = java.util.Objects.requireNonNull(heightSource, "heightSource");
     }
 
     public List<WorldObject> objects() {

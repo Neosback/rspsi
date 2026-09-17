@@ -36,15 +36,15 @@ class InstanceChunkGridTest {
 
     @Test
     void materializesRotatedTerrainAndObjectsIntoCanonicalWorldTiles() {
-        int[][] destinationTiles = {{0, 0}, {0, 7}, {7, 7}, {7, 0}};
+        int[][] destinationTiles = {{1, 1}, {1, 6}, {6, 6}, {6, 1}};
         int[][] destinationCorners = {
                 {10, 20, 30, 40}, {20, 30, 40, 10},
                 {30, 40, 10, 20}, {40, 10, 20, 30}
         };
         for (int rotation = 0; rotation < 4; rotation++) {
             WorldDocument sourceDocument = new WorldDocument(64, 64, 4);
-            WorldObject object = new WorldObject(42, 10, 0, 0, 0, 0);
-            sourceDocument.tile(0, 0, 0).restore(new TileSnapshot(
+            WorldObject object = new WorldObject(42, 10, 0, 0, 1, 1);
+            sourceDocument.tile(0, 1, 1).restore(new TileSnapshot(
                     10, 20, 30, 40, 1, 2, 3, 0, 0, java.util.List.of(object)));
             WorldRegionWindow source = new WorldRegionWindow(0, 0, 1, 1,
                     java.util.Map.of(0, new WorldRegion(0, 0, sourceDocument)));
@@ -65,5 +65,25 @@ class InstanceChunkGridTest {
             assertEquals(new WorldObject(42, 10, rotation, 1, destinationX, destinationY),
                     destination.objects().get(0), rotation + ": object");
         }
+    }
+
+    @Test
+    void instanceBuilderUsesDefinitionFootprintForObjectAnchors() {
+        WorldDocument sourceDocument = new WorldDocument(64, 64, 1);
+        sourceDocument.tile(0, 2, 3).restore(new TileSnapshot(
+                10, 20, 30, 40, 1, 0, 0, 0, 0,
+                List.of(new WorldObject(42, 10, 0, 0, 2, 3))));
+        WorldRegionWindow source = new WorldRegionWindow(0, 0, 1, 1,
+                java.util.Map.of(0, new WorldRegion(0, 0, sourceDocument)));
+        InstanceChunkTemplate template = new InstanceChunkTemplate(0, 0, 0,
+                0, 0, 0, 1);
+        InstanceChunkGrid grid = InstanceChunkGrid.decode(
+                new int[][][]{{{template.encode()}}}, 0, 0);
+
+        WorldDocument instance = new InstanceWorldBuilder().build(source, grid, 8, 8, 1,
+                object -> new InstanceObjectFootprintResolver.Footprint(3, 2));
+
+        assertEquals(new WorldObject(42, 10, 1, 0, 3, 3),
+                instance.tile(0, 3, 3).snapshot().objects().get(0));
     }
 }

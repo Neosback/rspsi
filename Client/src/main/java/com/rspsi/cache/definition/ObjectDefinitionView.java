@@ -12,12 +12,21 @@ public record ObjectDefinitionView(
         int length,
         List<String> interactions,
         int[] modelIds,
-        int mapSceneId
+        int mapSceneId,
+        boolean interactive
 ) {
     /** Source-compatible constructor for definitions without map-scene data. */
     public ObjectDefinitionView(int id, String name, int width, int length,
                                 List<String> interactions, int[] modelIds) {
-        this(id, name, width, length, interactions, modelIds, -1);
+        this(id, name, width, length, interactions, modelIds, -1,
+                interactions != null && !interactions.isEmpty());
+    }
+
+    /** Source-compatible constructor for definitions with map-scene data. */
+    public ObjectDefinitionView(int id, String name, int width, int length,
+                                List<String> interactions, int[] modelIds, int mapSceneId) {
+        this(id, name, width, length, interactions, modelIds, mapSceneId,
+                interactions != null && !interactions.isEmpty());
     }
 
     public ObjectDefinitionView {
@@ -38,6 +47,7 @@ public record ObjectDefinitionView(
                 && width == value.width
                 && length == value.length
                 && mapSceneId == value.mapSceneId
+                && interactive == value.interactive
                 && Objects.equals(name, value.name)
                 && Objects.equals(interactions, value.interactions)
                 && Arrays.equals(modelIds, value.modelIds);
@@ -45,7 +55,7 @@ public record ObjectDefinitionView(
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(id, name, width, length, interactions, mapSceneId);
+        int result = Objects.hash(id, name, width, length, interactions, mapSceneId, interactive);
         return 31 * result + Arrays.hashCode(modelIds);
     }
 }

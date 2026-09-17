@@ -17,10 +17,12 @@ import java.util.function.BiFunction;
 import com.jagex.cache.graphics.Sprite;
 import com.jagex.net.ResourceProvider;
 import com.rspsi.cache.CacheFileType;
+import com.rspsi.cache.OsrsCacheIndexLayout;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.LegacyDefinitionProvider;
 import com.rspsi.cache.store.CacheStore;
 import com.rspsi.cache.store.CacheIndexView;
+import com.rspsi.cache.store.CacheStoreFactory;
 import com.rspsi.cache.store.LegacyDispleeCacheStore;
 import com.rspsi.core.misc.FixedIntegerKeyMap;
 
@@ -30,6 +32,12 @@ import org.apache.commons.lang3.ArrayUtils;
 
 @Slf4j
 public class Cache {
+
+    private enum CacheFormat {
+        LEGACY_317,
+        OSRS,
+        RS3
+    }
 
 
     @Setter
@@ -71,22 +79,35 @@ public class Cache {
     @Getter
     private CacheStore store;
 
+    /**
+     * The detected format controls both archive mapping and backend choice.
+     * Modern OSRS must never be treated as a legacy 317 cache merely because
+     * this compatibility facade is still used by the old client renderer.
+     */
+    private CacheFormat format;
+
     @Getter
     private final DefinitionProvider definitions = new LegacyDefinitionProvider();
 
     private Index modelArchive, mapArchive, configArchive, skeletonArchive, skinArchive, spriteIndex, textureIndex, spotAnimIndex, varbitIndex, locIndex;
 
     private boolean isCacheNewOSRS(CacheLibrary library) {
-        Index idx = library.index(2);
-        int indexCount = ArrayUtils.indexOf(library.indices(), null) - 1;
+        Index idx = library.index(OsrsCacheIndexLayout.CONFIGS);
+        if (idx == null) return false;
+        Index[] indices = library.indices();
+        int firstMissing = ArrayUtils.indexOf(indices, null);
+        // Preserve the historical trailing-slot convention used by the
+        // Displee detector while making the no-null case deterministic.
+        int indexCount = (firstMissing < 0 ? indices.length : firstMissing) - 1;
         return idx.getRevision() >= 300 && indexCount <= 24;
     }
 
     public Cache(Path path) {
         log.info("Loading cache at {}", path);
         indexedFileSystem = new CacheLibrary(path.toFile().toString(), false, null);
-        store = new LegacyDispleeCacheStore(indexedFileSystem);
         if (indexedFileSystem.is317()) {
+            format = CacheFormat.LEGACY_317;
+            store = new LegacyDispleeCacheStore(indexedFileSystem);
             modelArchive = indexedFileSystem.index(1);
             mapArchive = indexedFileSystem.index(4);
             configArchive = indexedFileSystem.index(0);
@@ -94,27 +115,35 @@ public class Cache {
             skeletonArchive = null;//317 loads inside skins
             log.info("Loaded cache in 317 format!");
         } else if (isCacheNewOSRS(indexedFileSystem)) {
-            modelArchive = indexedFileSystem.index(7);
-            mapArchive = indexedFileSystem.index(5);
-            configArchive = indexedFileSystem.index(2);
-            skeletonArchive = indexedFileSystem.index(0);
-            skinArchive = indexedFileSystem.index(1);
-            spriteIndex = indexedFileSystem.index(8);
-            textureIndex = indexedFileSystem.index(9);
-            log.info("Loaded cache in OSRS format!");
+            format = CacheFormat.OSRS;
+            // The compatibility facade remains in place for the old client,
+            // but all modern OSRS reads go through OpenRune FileStore.
+            store = CacheStoreFactory.openOsrs(path);
+            modelArchive = indexedFileSystem.index(OsrsCacheIndexLayout.MODELS);
+            mapArchive = indexedFileSystem.index(OsrsCacheIndexLayout.MAPS);
+            configArchive = indexedFileSystem.index(OsrsCacheIndexLayout.CONFIGS);
+            // DAT2 index 0 contains animation frame groups; index 1
+            // contains skeleton/frame-base groups.
+            skinArchive = indexedFileSystem.index(OsrsCacheIndexLayout.ANIMATIONS);
+            skeletonArchive = indexedFileSystem.index(OsrsCacheIndexLayout.SKELETONS);
+            spriteIndex = indexedFileSystem.index(OsrsCacheIndexLayout.SPRITES);
+            textureIndex = indexedFileSystem.index(OsrsCacheIndexLayout.TEXTURES);
+            log.info("Loaded cache in OSRS format through OpenRune FileStore!");
         } else if (indexedFileSystem.isRS3()) {
-            modelArchive = indexedFileSystem.index(7);
-            mapArchive = indexedFileSystem.index(5);
-            configArchive = indexedFileSystem.index(2);
-            skeletonArchive = indexedFileSystem.index(0);
-            skinArchive = indexedFileSystem.index(1);
-            spriteIndex = indexedFileSystem.index(8);
-            textureIndex = indexedFileSystem.index(9);
+            format = CacheFormat.RS3;
+            store = new LegacyDispleeCacheStore(indexedFileSystem);
+            modelArchive = indexedFileSystem.index(OsrsCacheIndexLayout.MODELS);
+            mapArchive = indexedFileSystem.index(OsrsCacheIndexLayout.MAPS);
+            configArchive = indexedFileSystem.index(OsrsCacheIndexLayout.CONFIGS);
+            skinArchive = indexedFileSystem.index(OsrsCacheIndexLayout.ANIMATIONS);
+            skeletonArchive = indexedFileSystem.index(OsrsCacheIndexLayout.SKELETONS);
+            spriteIndex = indexedFileSystem.index(OsrsCacheIndexLayout.SPRITES);
+            textureIndex = indexedFileSystem.index(OsrsCacheIndexLayout.TEXTURES);
             spotAnimIndex = indexedFileSystem.index(21);
             varbitIndex = indexedFileSystem.index(22);
             locIndex = indexedFileSystem.index(16);
             log.info("Loaded cache in RS3 format!");
-        } else if (indexedFileSystem.isRS3()) {
+        } else {
             throw new UnsupportedOperationException("Cache format not supported!");
         }
         resourceProvider = new ResourceProvider(this);
@@ -125,15 +154,22 @@ public class Cache {
     public ResourceProvider resourceProvider;
 
     public boolean is317() {
-        return indexedFileSystem.is317();
+        return format == CacheFormat.LEGACY_317;
     }
 
     public boolean isOsrs() {
-        return isCacheNewOSRS(indexedFileSystem);
+        return format == CacheFormat.OSRS;
     }
 
     public boolean isRs3() {
-        return indexedFileSystem.isRS3();
+        return format == CacheFormat.RS3;
+    }
+
+    /** Returns the revision reported by the detected modern cache index. */
+    public int revision() {
+        if (is317()) return 317;
+        Index revisionIndex = indexedFileSystem.index(OsrsCacheIndexLayout.CONFIGS);
+        return revisionIndex == null ? -1 : revisionIndex.getRevision();
     }
 
     public byte[] read(int index, int archive, int file) {
@@ -184,13 +220,13 @@ public class Cache {
 
     private int cacheIndex(CacheFileType type) {
         return switch (Objects.requireNonNull(type, "type")) {
-            case CONFIG -> is317() ? 0 : 2;
-            case MODEL -> is317() ? 1 : 7;
-            case ANIMATION -> is317() ? 2 : 1;
-            case MAP -> is317() ? 4 : 5;
-            case SKELETON -> is317() ? -1 : 0;
-            case SPRITE -> is317() ? -1 : 8;
-            case TEXTURE -> is317() ? -1 : 9;
+            case CONFIG -> is317() ? 0 : OsrsCacheIndexLayout.CONFIGS;
+            case MODEL -> is317() ? 1 : OsrsCacheIndexLayout.MODELS;
+            case ANIMATION -> is317() ? 2 : OsrsCacheIndexLayout.ANIMATIONS;
+            case MAP -> is317() ? 4 : OsrsCacheIndexLayout.MAPS;
+            case SKELETON -> is317() ? -1 : OsrsCacheIndexLayout.SKELETONS;
+            case SPRITE -> is317() ? -1 : OsrsCacheIndexLayout.SPRITES;
+            case TEXTURE -> is317() ? -1 : OsrsCacheIndexLayout.TEXTURES;
             case SOUND, VARBIT, LOC, SPOT -> -1;
         };
     }
@@ -208,7 +244,7 @@ public class Cache {
     public Sprite getSprite(int id) {
         if (spriteCache.contains(id))
             return spriteCache.get(id);
-        if (!isCacheNewOSRS(indexedFileSystem))
+        if (!isOsrs())
             throw new RuntimeException("Cannot grab sprite by ID on 317!");
         byte[] data = readFile(CacheFileType.SPRITE, id);
         if (data == null) throw new IllegalArgumentException("Sprite not found: " + id);
@@ -357,6 +393,10 @@ public class Cache {
     public final Sprite[] readLegacySprites(String archiveName, int maxCount,
                                             boolean emptyOnFirstFailure) {
         Objects.requireNonNull(archiveName, "archiveName");
+        if (!is317()) {
+            throw new UnsupportedOperationException(
+                    "Legacy named sprites are only available for 317 caches; use the neutral OSRS sprite index");
+        }
         if (maxCount < 0) {
             throw new IllegalArgumentException("Maximum sprite count cannot be negative");
         }
@@ -381,7 +421,16 @@ public class Cache {
     }
 
     public void close() throws IOException {
-        store.close();
+        try {
+            store.close();
+        } finally {
+            // Modern OSRS reads use FileStore. The Displee library is kept
+            // open only for deprecated compatibility accessors until those
+            // call sites are retired.
+            if (!is317()) {
+                indexedFileSystem.close();
+            }
+        }
     }
 
     public ResourceProvider getProvider() {

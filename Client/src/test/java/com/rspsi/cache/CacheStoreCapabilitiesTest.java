@@ -21,4 +21,12 @@ class CacheStoreCapabilitiesTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new CacheStoreCapabilities(true, true, true, CacheWriteMode.READ_ONLY));
     }
+
+    @Test
+    void buildOnlyMayBeReadOnlyButCannotBeAnEditorWriteTarget() {
+        CacheStoreCapabilities capabilities = new CacheStoreCapabilities(
+                false, true, true, CacheWriteMode.BUILD_ONLY);
+
+        assertEquals(CacheWriteMode.BUILD_ONLY, capabilities.writeMode());
+    }
 }

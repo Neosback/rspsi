@@ -54,6 +54,12 @@ public final class RevisionAudit {
                 definitionCheck("revision.definitions.textures", "textures", definitions.textureIds().size()),
                 definitionCheck("revision.definitions.models", "models", definitions.modelIds().size()),
                 definitionCheck("revision.definitions.mapScenes", "map-scene sprites", definitions.mapSceneIds().size()),
+                definitionCheck("revision.definitions.sequences", "sequences", definitions.sequenceIds().size()),
+                definitionCheck("revision.definitions.mapElements", "map elements", definitions.mapElementIds().size()),
+                sampleCheck("revision.definitions.sequenceDecode", "sequence",
+                        definitions.sequenceIds(), definitions::sequence),
+                sampleCheck("revision.definitions.mapElementDecode", "map element",
+                        definitions.mapElementIds(), definitions::mapElement),
                 modelGeometryCheck(definitions));
     }
 
@@ -68,6 +74,23 @@ public final class RevisionAudit {
                         VerificationCheck.Status.PASS, "model " + id + " geometry decoded")
                 : new VerificationCheck("revision.definitions.modelGeometry",
                         VerificationCheck.Status.WARN, "model " + id + " metadata is available but geometry is not");
+    }
+
+    private static VerificationCheck sampleCheck(
+            String id,
+            String name,
+            List<Integer> ids,
+            java.util.function.IntFunction<java.util.Optional<?>> lookup) {
+        if (ids.isEmpty()) {
+            return new VerificationCheck(id, VerificationCheck.Status.WARN,
+                    "no " + name + " IDs available for lazy decode sampling");
+        }
+        int sample = ids.get(0);
+        return lookup.apply(sample).isPresent()
+                ? new VerificationCheck(id, VerificationCheck.Status.PASS,
+                        name + " " + sample + " decoded through neutral provider")
+                : new VerificationCheck(id, VerificationCheck.Status.FAIL,
+                        name + " " + sample + " was indexed but could not be decoded");
     }
 
     private static VerificationCheck definitionCheck(String id, String name, int count) {

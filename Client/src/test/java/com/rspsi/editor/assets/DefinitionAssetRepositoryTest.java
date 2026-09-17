@@ -7,6 +7,9 @@ import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.cache.definition.ModelDefinitionView;
 import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.MapSceneSpriteView;
+import com.rspsi.cache.definition.SequenceDefinitionView;
+import com.rspsi.cache.definition.MapElementDefinitionView;
+import com.rspsi.cache.AssetCategory;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -99,6 +102,43 @@ class DefinitionAssetRepositoryTest {
         assertTrue(assets.get(7, "mapscene").isPresent());
     }
 
+    @Test
+    void sequencesAndMapElementsUseTheSameLazyAssetBoundary() {
+        DefinitionAssetRepository assets = new DefinitionAssetRepository(new Definitions());
+
+        AssetDescriptor sequence = assets.get(22, "sequence").orElseThrow();
+        assertEquals("Sequence 22", sequence.name());
+        assertEquals(List.of("Frames: 2", "Frame step: 1", "Priority: 5", "Skeletal ID: -1"),
+                sequence.details());
+
+        AssetDescriptor element = assets.get(31, "map-element").orElseThrow();
+        assertEquals("Bank", element.name());
+        assertTrue(assets.search("bank").contains(element));
+    }
+
+    @Test
+    void exposesTypedDefinitionsThroughTheNeutralAssetFacade() {
+        DefinitionAssetRepository assets = new DefinitionAssetRepository(new Definitions());
+
+        assertEquals("Castle wall", assets.object(12).orElseThrow().name());
+        assertEquals(4, assets.overlay(4).orElseThrow().id());
+        assertEquals(7, assets.mapScene(7).orElseThrow().id());
+        assertEquals(22, assets.sequence(22).orElseThrow().id());
+        assertEquals(31, assets.mapElement(31).orElseThrow().id());
+        assertTrue(assets.model(900).isPresent());
+        assertTrue(assets.underlay(4).isEmpty());
+    }
+
+    @Test
+    void reportsSessionAssetCapabilitiesWithoutExposingTheBackend() {
+        DefinitionAssetRepository assets = new DefinitionAssetRepository(new Definitions());
+
+        assertTrue(assets.capabilities().lazy());
+        assertTrue(assets.capabilities().supports(AssetCategory.OBJECTS));
+        assertEquals(List.of(12, 13), assets.ids(AssetCategory.OBJECTS));
+        assertTrue(assets.ids(AssetCategory.INTERFACES).isEmpty());
+    }
+
     private static class Definitions implements DefinitionProvider {
         @Override public Optional<ObjectDefinitionView> object(int id) {
             if (id == 12) return Optional.of(new ObjectDefinitionView(12, "Castle wall", 1, 1, List.of(), new int[0]));
@@ -122,10 +162,22 @@ class DefinitionAssetRepositoryTest {
             return id == 7 ? Optional.of(new MapSceneSpriteView(7, 2, 1, 1, -1,
                     new int[]{0xFF112233, 0xFF445566})) : Optional.empty();
         }
+        @Override public Optional<SequenceDefinitionView> sequence(int id) {
+            return id == 22 ? Optional.of(new SequenceDefinitionView(
+                    22, new int[]{100, 101}, new int[]{2, 3}, 1, true,
+                    -1, -1, 99, -1, 5, 2, -1)) : Optional.empty();
+        }
+        @Override public Optional<MapElementDefinitionView> mapElement(int id) {
+            return id == 31 ? Optional.of(new MapElementDefinitionView(
+                    31, 7, -1, "Bank", 0xFFFFFF, 0xFFFFFF, 2,
+                    true, true, false, List.of("Open"))) : Optional.empty();
+        }
         @Override public List<Integer> objectIds() { return List.of(12, 13); }
         @Override public List<Integer> overlayIds() { return List.of(4); }
         @Override public List<Integer> modelIds() { return List.of(900); }
         @Override public List<Integer> mapSceneIds() { return List.of(7); }
+        @Override public List<Integer> sequenceIds() { return List.of(22); }
+        @Override public List<Integer> mapElementIds() { return List.of(31); }
     }
 
     private static final class CountingDefinitions extends Definitions {

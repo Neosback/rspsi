@@ -82,4 +82,20 @@ class OsrsTerrainSemanticFixtureTest {
 
         assertTrue(new OsrsSceneGeometryFixture(1, List.of(tile)).compare(document).matches());
     }
+
+    @Test
+    void sceneGeometryFixtureResolvesBridgeEffectivePlaneToAuthoredSource() {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        document.tile(0, 4, 5).restore(new TileSnapshot(
+                -128, -128, -128, -128, 1, 0, 0, 0, 0, List.of()));
+        document.tile(1, 4, 5).restore(new TileSnapshot(
+                -512, -480, -448, -496, 2, 0, 0, 0, 2, List.of()));
+
+        TerrainMesh mesh = new TerrainMeshBuilder().build(document.tile(1, 4, 5).snapshot());
+        OsrsSceneGeometryFixture.TileGeometry tile = new OsrsSceneGeometryFixture.TileGeometry(
+                0, 4, 5, mesh.vertices(), mesh.faces());
+
+        assertTrue(new OsrsSceneGeometryFixture(1, List.of(tile))
+                .compare(document, OsrsScenePlaneMode.EFFECTIVE).matches());
+    }
 }

@@ -9,6 +9,10 @@ import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.cache.definition.ModelDefinitionView;
 import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.MapSceneSpriteView;
+import com.rspsi.cache.definition.SequenceDefinitionView;
+import com.rspsi.cache.definition.MapElementDefinitionView;
+import com.rspsi.cache.AssetCategory;
+import com.rspsi.cache.AssetRepositoryCapabilities;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -39,6 +43,35 @@ public final class DefinitionAssetRepository implements AssetRepository {
     }
 
     @Override
+    public AssetRepositoryCapabilities capabilities() {
+        return new AssetRepositoryCapabilities(java.util.EnumSet.of(
+                AssetCategory.OBJECTS,
+                AssetCategory.UNDERLAYS,
+                AssetCategory.OVERLAYS,
+                AssetCategory.TEXTURES,
+                AssetCategory.MODELS,
+                AssetCategory.MAP_SCENES,
+                AssetCategory.SEQUENCES,
+                AssetCategory.MAP_ELEMENTS), true);
+    }
+
+    @Override
+    public List<Integer> ids(AssetCategory category) {
+        if (category == null) return List.of();
+        return switch (category) {
+            case OBJECTS -> definitions.objectIds();
+            case UNDERLAYS -> definitions.underlayIds();
+            case OVERLAYS -> definitions.overlayIds();
+            case TEXTURES -> definitions.textureIds();
+            case MODELS -> definitions.modelIds();
+            case MAP_SCENES -> definitions.mapSceneIds();
+            case SEQUENCES -> definitions.sequenceIds();
+            case MAP_ELEMENTS -> definitions.mapElementIds();
+            default -> List.of();
+        };
+    }
+
+    @Override
     public List<AssetDescriptor> search(String query) {
         String needle = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         return allAssets().stream()
@@ -58,8 +91,64 @@ public final class DefinitionAssetRepository implements AssetRepository {
     }
 
     @Override
+    public Optional<ObjectDefinitionView> object(int id) {
+        return id < 0 ? Optional.empty() : definitions.object(id);
+    }
+
+    @Override
+    public Optional<FloorDefinitionView> underlay(int id) {
+        return id < 0 ? Optional.empty() : definitions.underlay(id);
+    }
+
+    @Override
+    public Optional<FloorDefinitionView> overlay(int id) {
+        return id < 0 ? Optional.empty() : definitions.overlay(id);
+    }
+
+    @Override
+    public Optional<TextureDefinitionView> texture(int id) {
+        return id < 0 ? Optional.empty() : definitions.texture(id);
+    }
+
+    @Override
+    public Optional<int[]> texturePixels(int id, double brightness, int textureSize) {
+        return id < 0 ? Optional.empty() : definitions.texturePixels(id, brightness, textureSize)
+                .map(int[]::clone);
+    }
+
+    @Override
+    public Optional<ModelDefinitionView> model(int id) {
+        return id < 0 ? Optional.empty() : definitions.model(id);
+    }
+
+    @Override
     public Optional<ModelGeometryView> modelGeometry(int id) {
         return id < 0 ? Optional.empty() : definitions.modelGeometry(id);
+    }
+
+    @Override
+    public Optional<MapSceneSpriteView> mapScene(int id) {
+        return id < 0 ? Optional.empty() : definitions.mapScene(id);
+    }
+
+    @Override
+    public Optional<SequenceDefinitionView> sequence(int id) {
+        return id < 0 ? Optional.empty() : definitions.sequence(id);
+    }
+
+    @Override
+    public Optional<MapElementDefinitionView> mapElement(int id) {
+        return id < 0 ? Optional.empty() : definitions.mapElement(id);
+    }
+
+    @Override
+    public Optional<ObjectCollisionView> objectCollision(int id) {
+        return id < 0 ? Optional.empty() : definitions.objectCollision(id);
+    }
+
+    @Override
+    public Optional<ObjectAppearanceView> objectAppearance(int id) {
+        return id < 0 ? Optional.empty() : definitions.objectAppearance(id);
     }
 
     private Optional<AssetDescriptor> descriptorFor(int id, String type) {
@@ -76,6 +165,10 @@ public final class DefinitionAssetRepository implements AssetRepository {
                     descriptor("model", id, "Model " + id, modelDetails(value)));
             case "sprite", "mapscene", "map-scene" -> definitions.mapScene(id).map(value ->
                     descriptor("sprite", id, "Map scene sprite " + id, spriteDetails(value)));
+            case "sequence", "seq" -> definitions.sequence(id).map(value ->
+                    descriptor("sequence", id, "Sequence " + id, sequenceDetails(value)));
+            case "map-element", "mapelement", "world-map-element" -> definitions.mapElement(id).map(value ->
+                    descriptor("map-element", id, mapElementName(value), mapElementDetails(value)));
             default -> Optional.empty();
         };
     }
@@ -97,6 +190,8 @@ public final class DefinitionAssetRepository implements AssetRepository {
                 definitions.modelIds().forEach(id -> add(assets, Optional.of(
                         descriptor("model", id, "Model " + id))));
                 definitions.mapSceneIds().forEach(id -> add(assets, descriptorFor(id, "sprite")));
+                definitions.sequenceIds().forEach(id -> add(assets, descriptorFor(id, "sequence")));
+                definitions.mapElementIds().forEach(id -> add(assets, descriptorFor(id, "map-element")));
                 current = assets.stream()
                         .sorted(Comparator.comparing(AssetDescriptor::type)
                                 .thenComparingInt(AssetDescriptor::id))
@@ -122,6 +217,10 @@ public final class DefinitionAssetRepository implements AssetRepository {
         List<String> details = new ArrayList<>();
         details.add("Size: " + object.width() + " × " + object.length());
         details.add("Models: " + java.util.Arrays.toString(object.modelIds()));
+        details.add("Interactive: " + object.interactive());
+        if (object.mapSceneId() >= 0) {
+            details.add("Map scene: " + object.mapSceneId());
+        }
         details.add("Actions: " + object.interactions());
         definitions.objectCollision(object.id()).ifPresent(collision ->
                 details.add("Collision: " + collisionSummary(collision)));
@@ -163,6 +262,25 @@ public final class DefinitionAssetRepository implements AssetRepository {
         return List.of("Dimensions: " + sprite.width() + " × " + sprite.height(),
                 "Offset: " + sprite.offsetX() + ", " + sprite.offsetY(),
                 "Pixels: " + (sprite.width() * sprite.height()));
+    }
+
+    private static List<String> sequenceDetails(SequenceDefinitionView sequence) {
+        return List.of("Frames: " + sequence.frameIds().length,
+                "Frame step: " + sequence.frameStep(),
+                "Priority: " + sequence.priority(),
+                "Skeletal ID: " + sequence.skeletalId());
+    }
+
+    private static String mapElementName(MapElementDefinitionView element) {
+        return element.name().isBlank() ? "Map element " + element.id() : element.name();
+    }
+
+    private static List<String> mapElementDetails(MapElementDefinitionView element) {
+        return List.of("Sprite: " + element.spriteId(),
+                "Text size: " + element.textSize(),
+                "World map: " + (element.worldMapVisible() ? "visible" : "hidden"),
+                "Minimap: " + (element.minimapVisible() ? "visible" : "hidden"),
+                "Actions: " + element.actions());
     }
 
     private static void add(List<AssetDescriptor> assets, Optional<AssetDescriptor> asset) {

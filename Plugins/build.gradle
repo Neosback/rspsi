@@ -19,6 +19,7 @@ subprojects {
     serviceLoader {
         serviceInterface 'com.rspsi.plugins.core.ClientPlugin'
         serviceInterface 'com.rspsi.plugins.ui.ApplicationPlugin'
+        serviceInterface 'com.rspsi.editor.plugin.EditorPlugin'
     }
 
     jar {

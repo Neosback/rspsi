@@ -2,6 +2,8 @@ package com.rspsi.ui.workspace;
 
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SessionStateListener;
+import com.rspsi.editor.plugin.EditorPluginHost;
+import com.rspsi.editor.plugin.EditorStatusItem;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.model.WorldWindow;
@@ -27,19 +29,22 @@ public final class WorkspaceStatusBar extends HBox implements AutoCloseable {
     private final Label cache = label("workspace-status-cache");
     private final Label dirty = label("workspace-status-dirty");
     private final Label hover = label("workspace-status-hover");
+    private final HBox pluginStatus = new HBox(12);
     private final SessionStateListener stateListener = ignored -> refreshOnFxThread();
     private EditorSession session;
     private String contextText = "No project loaded";
     private String cacheText = "Cache: unavailable";
     private String compatibilityText = "";
     private String hoverText = "Tile: —";
+    private EditorPluginHost pluginHost;
 
     public WorkspaceStatusBar() {
         setSpacing(16);
         setPadding(new Insets(6, 10, 6, 10));
         getStyleClass().add("workspace-status-bar");
         setAccessibleText("Workspace status");
-        getChildren().addAll(context, mode, cache, dirty, hover);
+        pluginStatus.getStyleClass().add("workspace-status-plugin-values");
+        getChildren().addAll(context, mode, cache, dirty, hover, pluginStatus);
         clear();
     }
 
@@ -61,6 +66,12 @@ public final class WorkspaceStatusBar extends HBox implements AutoCloseable {
         bind(session, contextText, "Cache: unavailable", "");
     }
 
+    /** Mounts dynamic feature status values without handing over the status bar. */
+    public void bindPluginHost(EditorPluginHost host) {
+        pluginHost = Objects.requireNonNull(host, "host");
+        refresh();
+    }
+
     public void refresh() {
         if (session == null) {
             clear();
@@ -77,6 +88,15 @@ public final class WorkspaceStatusBar extends HBox implements AutoCloseable {
         dirty.getStyleClass().add(session.isDirty()
                 ? "workspace-status-dirty" : "workspace-status-saved");
         hover.setText(hoverText);
+        pluginStatus.getChildren().clear();
+        if (pluginHost != null) {
+            for (EditorStatusItem item : pluginHost.registry().statusItems(pluginHost.context())) {
+                Label value = label("workspace-status-plugin-value");
+                value.setText(item.label() + ": " + item.value());
+                value.setAccessibleText(item.label() + ": " + item.value());
+                pluginStatus.getChildren().add(value);
+            }
+        }
         setAccessibleText(contextText + ". " + mode.getText() + ". " + cache.getText()
                 + ". " + dirty.getText());
     }
@@ -87,6 +107,7 @@ public final class WorkspaceStatusBar extends HBox implements AutoCloseable {
         cache.setText(cacheText);
         dirty.setText("");
         hover.setText(hoverText);
+        pluginStatus.getChildren().clear();
         setAccessibleText("Workspace status. " + contextText + ". Waiting for session.");
     }
 
@@ -125,5 +146,7 @@ public final class WorkspaceStatusBar extends HBox implements AutoCloseable {
             session.removeStateListener(stateListener);
             session = null;
         }
+        pluginHost = null;
+        pluginStatus.getChildren().clear();
     }
 }

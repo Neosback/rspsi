@@ -1,0 +1,297 @@
+package com.rspsi.editor.plugin;
+
+import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.assets.AssetRepository;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * Initializes and owns neutral editor plugins against one session and registry.
+ *
+ * <p>The host also owns plugin lifecycle. Closing it calls plugin shutdown in
+ * reverse initialization order and removes each plugin's registered
+ * contributions, allowing a JavaFX or Dear ImGui frontend to rebuild its
+ * projection without retaining stale tools or panels.</p>
+ */
+public final class EditorPluginHost implements AutoCloseable {
+    private final List<EditorPlugin> plugins;
+    private final EditorPluginRegistry registry;
+    private final EditorPluginContext context;
+    private final List<LoadedPlugin> loadedPlugins;
+    private final AtomicBoolean closed = new AtomicBoolean();
+
+    private EditorPluginHost(List<LoadedPlugin> loadedPlugins,
+                             EditorPluginRegistry registry,
+                             EditorPluginContext context) {
+        this.loadedPlugins = new ArrayList<>(loadedPlugins);
+        this.plugins = new ArrayList<>(this.loadedPlugins.stream().map(LoadedPlugin::plugin).toList());
+        this.registry = Objects.requireNonNull(registry, "registry");
+        this.context = Objects.requireNonNull(context, "context");
+    }
+
+    public List<EditorPlugin> plugins() {
+        return List.copyOf(plugins);
+    }
+
+    public EditorPluginRegistry registry() {
+        return registry;
+    }
+
+    public EditorPluginContext context() {
+        return context;
+    }
+
+    public static EditorPluginHost initialize(
+            Iterable<? extends EditorPlugin> plugins,
+            EditorSession session,
+            AssetRepository assets) {
+        return initialize(plugins, session, assets, Optional.empty());
+    }
+
+    public static EditorPluginHost initialize(
+            Iterable<? extends EditorPlugin> plugins,
+            EditorSession session,
+            AssetRepository assets,
+            EditorSceneAccess scene) {
+        return initialize(plugins, session, assets, Optional.of(scene));
+    }
+
+    private static EditorPluginHost initialize(
+            Iterable<? extends EditorPlugin> plugins,
+            EditorSession session,
+            AssetRepository assets,
+            Optional<EditorSceneAccess> scene) {
+        Objects.requireNonNull(plugins, "plugins");
+        EditorPluginRegistry registry = new EditorPluginRegistry();
+        EditorPluginResources resources = new EditorPluginResources();
+        EditorPluginContext context = new EditorPluginContext(session, assets, registry, scene, resources);
+        List<LoadedPlugin> initialized = new ArrayList<>();
+        Set<String> pluginIds = new HashSet<>();
+        try {
+            List<EditorPlugin> discoveredPlugins = new ArrayList<>();
+            for (EditorPlugin plugin : plugins) {
+                discoveredPlugins.add(Objects.requireNonNull(plugin, "plugin"));
+            }
+            List<EditorPlugin> orderedPlugins = orderPlugins(discoveredPlugins);
+            for (EditorPlugin checked : orderedPlugins) {
+                String pluginId = requireId(checked.id());
+                if (!pluginIds.add(pluginId)) {
+                    throw new IllegalArgumentException("Duplicate editor plugin: " + pluginId);
+                }
+                ContributionSet before = ContributionSet.capture(registry);
+                try {
+                    checked.initialize(context);
+                } catch (RuntimeException | Error failure) {
+                    removeContributions(registry, ContributionSet.capture(registry).difference(before));
+                    throw failure;
+                }
+                ContributionSet contributions = ContributionSet.capture(registry).difference(before);
+                initialized.add(new LoadedPlugin(checked, contributions));
+            }
+            registry.validateReferences();
+            return new EditorPluginHost(initialized, registry, context);
+        } catch (RuntimeException | Error failure) {
+            shutdownReverse(initialized, registry, context, failure);
+            closeResources(resources, failure);
+            registry.close();
+            throw failure;
+        }
+    }
+
+    /** Idempotently releases plugins and removes their registry contributions. */
+    @Override
+    public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        Throwable failure = null;
+        for (int index = loadedPlugins.size() - 1; index >= 0; index--) {
+            LoadedPlugin loaded = loadedPlugins.get(index);
+            try {
+                loaded.plugin().shutdown(context);
+            } catch (RuntimeException | Error error) {
+                failure = appendFailure(failure, error);
+            } finally {
+                removeContributions(registry, loaded.contributions());
+            }
+        }
+        loadedPlugins.clear();
+        plugins.clear();
+        closeResources(context.resources(), failure);
+        registry.close();
+        if (failure != null) {
+            throw new IllegalStateException("One or more editor plugins failed to shut down", failure);
+        }
+    }
+
+    private static void shutdownReverse(List<LoadedPlugin> loadedPlugins,
+                                        EditorPluginRegistry registry,
+                                        EditorPluginContext context,
+                                        Throwable originalFailure) {
+        for (int index = loadedPlugins.size() - 1; index >= 0; index--) {
+            LoadedPlugin loaded = loadedPlugins.get(index);
+            try {
+                loaded.plugin().shutdown(context);
+            } catch (RuntimeException | Error error) {
+                originalFailure.addSuppressed(error);
+            } finally {
+                removeContributions(registry, loaded.contributions());
+            }
+        }
+    }
+
+    private static void closeResources(EditorPluginResources resources, Throwable failure) {
+        try {
+            resources.close();
+        } catch (RuntimeException | Error resourceFailure) {
+            if (failure != null) failure.addSuppressed(resourceFailure);
+            else throw resourceFailure;
+        }
+    }
+
+    private static Throwable appendFailure(Throwable current, Throwable next) {
+        if (current == null) return next;
+        current.addSuppressed(next);
+        return current;
+    }
+
+    private static void removeContributions(EditorPluginRegistry registry,
+                                             ContributionSet contributions) {
+        contributions.tools().forEach(registry::removeTool);
+        contributions.commands().forEach(registry::removeCommand);
+        contributions.toolContexts().forEach(registry::removeToolContext);
+        contributions.assetProviders().forEach(registry::removeAssetProvider);
+        contributions.statuses().forEach(registry::removeStatus);
+        contributions.menus().forEach(registry::removeMenu);
+        contributions.overlays().forEach(registry::removeOverlay);
+        contributions.inspectors().forEach(registry::removeInspector);
+        contributions.validators().forEach(registry::removeValidator);
+        contributions.shortcuts().forEach(registry::removeShortcut);
+        contributions.panels().forEach(registry::removePanel);
+        contributions.workspaces().forEach(registry::removeWorkspace);
+    }
+
+    private static String requireId(String id) {
+        String value = Objects.requireNonNull(id, "plugin id").trim();
+        if (value.isEmpty()) {
+            throw new IllegalArgumentException("Plugin id cannot be empty");
+        }
+        return value;
+    }
+
+    private static List<EditorPlugin> orderPlugins(List<EditorPlugin> plugins) {
+        Map<String, EditorPlugin> byId = new java.util.LinkedHashMap<>();
+        Map<String, EditorPluginDescriptor> descriptors = new java.util.LinkedHashMap<>();
+        for (EditorPlugin plugin : plugins) {
+            String id = requireId(plugin.id());
+            if (byId.putIfAbsent(id, plugin) != null) {
+                throw new IllegalArgumentException("Duplicate editor plugin: " + id);
+            }
+            EditorPluginDescriptor descriptor = Objects.requireNonNull(plugin.descriptor(),
+                    "plugin descriptor");
+            if (!id.equals(descriptor.id())) {
+                throw new IllegalArgumentException("Plugin descriptor ID does not match plugin ID: " + id);
+            }
+            descriptors.put(id, descriptor);
+        }
+
+        Map<String, Integer> remaining = new java.util.LinkedHashMap<>();
+        Map<String, List<String>> dependents = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, EditorPluginDescriptor> entry : descriptors.entrySet()) {
+            List<String> dependencies = entry.getValue().dependencies();
+            remaining.put(entry.getKey(), dependencies.size());
+            for (String dependency : dependencies) {
+                if (!byId.containsKey(dependency)) {
+                    throw new IllegalArgumentException("Plugin " + entry.getKey()
+                            + " depends on missing plugin: " + dependency);
+                }
+                dependents.computeIfAbsent(dependency, ignored -> new ArrayList<>())
+                        .add(entry.getKey());
+            }
+        }
+
+        Comparator<EditorPlugin> stableOrder = Comparator.comparingInt(EditorPlugin::loadOrder)
+                .thenComparing(plugin -> String.valueOf(plugin.id()));
+        List<EditorPlugin> ready = byId.values().stream()
+                .filter(plugin -> remaining.get(plugin.id()) == 0)
+                .sorted(stableOrder)
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        List<EditorPlugin> ordered = new ArrayList<>(plugins.size());
+        while (!ready.isEmpty()) {
+            EditorPlugin plugin = ready.remove(0);
+            ordered.add(plugin);
+            for (String dependent : dependents.getOrDefault(plugin.id(), List.of())) {
+                int count = remaining.merge(dependent, -1, Integer::sum);
+                if (count == 0) {
+                    ready.add(byId.get(dependent));
+                    ready.sort(stableOrder);
+                }
+            }
+        }
+        if (ordered.size() != plugins.size()) {
+            throw new IllegalArgumentException("Editor plugin dependency cycle detected");
+        }
+        return List.copyOf(ordered);
+    }
+
+    private record LoadedPlugin(EditorPlugin plugin, ContributionSet contributions) {
+    }
+
+    private record ContributionSet(
+            List<String> tools,
+            List<String> commands,
+            List<String> toolContexts,
+            List<String> assetProviders,
+            List<String> statuses,
+            List<String> menus,
+            List<String> overlays,
+            List<String> inspectors,
+            List<String> validators,
+            List<String> shortcuts,
+            List<String> panels,
+            List<String> workspaces) {
+        private static ContributionSet capture(EditorPluginRegistry registry) {
+            return new ContributionSet(
+                    registry.toolIds(),
+                    registry.commandRegistrations().stream().map(EditorCommandRegistration::id).toList(),
+                    registry.toolContextRegistrations().stream().map(EditorToolContextRegistration::id).toList(),
+                    registry.assetProviderRegistrations().stream().map(EditorAssetProviderRegistration::id).toList(),
+                    registry.statusRegistrations().stream().map(EditorStatusRegistration::id).toList(),
+                    registry.menuRegistrations().stream().map(EditorMenuRegistration::id).toList(),
+                    registry.overlayRegistrations().stream().map(EditorOverlayRegistration::id).toList(),
+                    registry.inspectorRegistrations().stream().map(EditorInspectorRegistration::id).toList(),
+                    registry.validatorRegistrations().stream().map(EditorValidatorRegistration::id).toList(),
+                    registry.shortcutRegistrations().stream().map(EditorShortcutRegistration::id).toList(),
+                    registry.panels().stream().map(com.rspsi.editor.ui.PanelDescriptor::id).toList(),
+                    registry.workspaces().stream().map(com.rspsi.editor.ui.WorkspaceDefinition::id).toList());
+        }
+
+        private ContributionSet difference(ContributionSet before) {
+            return new ContributionSet(
+                    difference(tools, before.tools()),
+                    difference(commands, before.commands()),
+                    difference(toolContexts, before.toolContexts()),
+                    difference(assetProviders, before.assetProviders()),
+                    difference(statuses, before.statuses()),
+                    difference(menus, before.menus()),
+                    difference(overlays, before.overlays()),
+                    difference(inspectors, before.inspectors()),
+                    difference(validators, before.validators()),
+                    difference(shortcuts, before.shortcuts()),
+                    difference(panels, before.panels()),
+                    difference(workspaces, before.workspaces()));
+        }
+
+        private static List<String> difference(List<String> after, List<String> before) {
+            return after.stream().filter(id -> !before.contains(id)).toList();
+        }
+    }
+}

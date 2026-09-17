@@ -24,6 +24,84 @@ RSPSi OSRS cache adapter
 OpenRune FileStore
 ```
 
+## Review of the proposed architecture and final integrated decision
+
+The attached `Choose Client Base.md` and the pasted analyses are treated as
+design proposals, not as source-authoritative instructions. After comparing
+them with the current RSPSi code and the five checked-out resource
+repositories, the useful ideas are adopted below. Proposals that would
+introduce a second cache, renderer, world model, or frontend foundation are
+explicitly rejected.
+
+### FileStore is the OSRS cache backend, not a feature plugin
+
+The current implementation confirms that OpenRune FileStore can replace the
+old modern-cache reader responsibility:
+
+```text
+OsrsBundle
+  -> CacheStoreFactory.openOsrs(...)
+  -> OpenRuneCacheStore / OpenRune FileStore
+  -> revision-aware RSPSi map and definition adapters
+  -> OsrsStudioProject / EditorSession
+  -> first-party feature plugins
+```
+
+FileStore supplies cache opening, archive/file access, cache identity,
+definitions, models, sprites, XTEA, and cache tooling. RSPSi supplies the
+revision profile, explicit DAT2 archive identities, map/location semantics,
+the authored world, bridges and instances, collision policy, derived scene,
+commands, history, and frontend-neutral plugin contracts. FileStore is not
+large enough to replace those editor responsibilities, and expanding it until
+it owns them would create the second architecture this review is meant to
+prevent.
+
+There is therefore no `FileStorePlugin` and no feature-registry checkbox for a
+cache library. `OsrsBundle` is the selectable OSRS format/provider boundary.
+If the UI needs to show the choice, it should be labelled **Cache source:
+OpenRune FileStore (OSRS)** and display the capability state (`read-only`,
+`staged output`, or explicit `direct output`). It must not present OpenRune
+FileStore and a 317 loader as interchangeable decoder choices for the same
+modern cache. The legacy Displee path is quarantined compatibility code and
+has no automatic modern-cache fallback.
+
+The existing `OSRSPlugin` is not deleted in this cleanup. It still installs
+static loader adapters consumed by the compatibility/software renderer. It is
+now a migration bridge only. It may be retired after the renderer and viewport
+consume the neutral definition, model, texture, map-scene, animation, and
+`RenderScene` services directly, and the compatibility path has characterization
+and parity coverage. No new editor feature may add another dependency on those
+static loaders.
+
+### Final source choice by concern
+
+| Concern | Integrated choice | Why the other resources remain references |
+|---|---|---|
+| Production cache I/O and typed OSRS data | OpenRune FileStore behind RSPSi adapters | It is the only selected production ecosystem dependency; upstream types do not escape the adapter |
+| Map/location meaning and authored world | RSPSi neutral codecs and `WorldDocument` | TSPS, RuneLite, and the revision-240 editor provide comparison evidence without creating competing state |
+| Scene topology, bridges, instances, and render inputs | RSPSi neutral scene pipeline | TSPS and RuneLite are semantic references; the Environment Exporter is a GPL-bounded forensic reference |
+| Collision and route projections | RSPSi neutral collision layer, checked against OpenRune-Server semantics | Server internals and TSPS client clip flags are not interchangeable collision authorities |
+| Feature/plugin lifecycle | RSPSi contribution registry and host | RuneLite-melxin informs lifecycle, dependencies, ownership, and later external-plugin work; PF4J/hot reload is deferred |
+| Editor workflow | RSPSi JavaFX shell and vertical feature packages | OpenRune-Editor-Neosback and TSPS inform tools, picking, history, and edit-mode workflow only |
+| Current OSRS behavior | RuneLite and independent fixtures | RuneLite is an oracle, not a production cache/client dependency |
+| Server/build integration | Optional RSPSi `ServerAdapter`, first-party OpenRune adapter | OpenRune-Server contributes layout/build/runtime capability descriptions, not server classes to Studio core |
+
+### Client-base decision
+
+`Choose Client Base.md` is useful for a future browser/web client decision. Its
+TypeScript, React/Tauri, WebGL/WebGPU, and xRSPS/Neosback recommendations do
+not replace the current JVM desktop editor foundation. The present product
+remains Java 21 with JavaFX as the reference frontend, a neutral scene and
+command contract, and a future ImGui adapter over those same contracts. There
+will be no Kotlin rewrite, LWJGL/OpenGL renderer replacement, WebGPU migration,
+or React/Tauri shell added as a foundation prerequisite. Each can be evaluated
+later as an isolated frontend or renderer after parity evidence exists.
+
+This keeps the repository coherent: one production cache boundary, one
+authored world/session/history model, one scene contract, one plugin registry,
+and multiple references used to verify behavior rather than multiple systems
+used at runtime.
+
 The other projects are deliberately assigned narrower roles:
 
 | Resource | Final role | Use | Do not use |
@@ -31,11 +109,13 @@ The other projects are deliberately assigned narrower roles:
 | RSPSi | Product foundation | Desktop shell, project/session model, commands, world model, renderer API, UI-neutral contracts | Legacy `SceneGraph` as the new architecture |
 | OpenRune FileStore | Production cache/data dependency | Filesystem, raw map/location bytes, OSRS definitions, models, sprites, XTEA, packing, cache tools | Its internal cache types, render helpers, or a second editor world model in Studio |
 | RuneLite | Independent OSRS oracle | Coordinate/plane/bridge semantics, cache behavior, DevTools inspection, GPU/model correctness references | RuneLite client/cache as a second production backend |
+| melxin RuneLite/OpenOSRS fork | Architecture and plugin-platform reference | Full plugin lifecycle, PF4J/classloader patterns, API/mixin/injection layering, deobfuscation flow, focused client/rendering study, and JShell diagnostics | Forked RuneLite client/cache as production code or as an independent semantic oracle from RuneLite |
 | TSPS / Elvarg TypeScript client | Scene and client-behavior donor/oracle | `SceneBuilder`, `SceneTileModel`, collision, instances, model preparation, scene-to-render data, and edit-mode region-pack behavior | TypeScript client/server runtime, WebGL renderer, browser UI, or server content |
 | Neosback OpenRune-Editor | Editing-workflow donor | Brush/tool lifecycle, plugin host ideas, history grouping, region stamps, picking, editor UX | React/Tauri/WebGL/docking architecture or upstream types |
 | Domw71 revision-240 editor | Java integration and revision-240 case study | Standalone map-editor workflow, RuneLite-derived terrain/location codec, save/reload behavior, 2D/3D UX comparison | Runtime dependency, copied RuneLite cache module, or independent correctness authority |
 | OpenRune-Server | World/collision donor | Coordinates, location constants, collision flags, route/LOS/reach semantics | Server runtime, gameplay, networking, content, or cache manager types |
 | OpenRS2 and revision tools | Archaeology/audit reference | Historical caches, compression/XTEA diagnosis, revision drift investigations | Production cache API |
+| OSRS Environment Exporter | Focused scene/render/export donor | Scene-region lighting/material preparation, object/model placement, renderer backend separation, glTF and headless export workflow | Displee cache backend, Swing/OpenGL application shell, GPL-covered source or assets |
 
 ## What each resource actually contributes
 
@@ -71,6 +151,25 @@ is injected and renderer-coupled, while RSPSi needs an offline editable
 document. We use RuneLite to ask whether RSPSi agrees with current OSRS
 behavior, not to determine the shape of RSPSi's public API.
 
+### melxin RuneLite/OpenOSRS fork — architecture reference, not infrastructure
+
+The full fork is pinned outside the product repository at
+`../RSPSi-resources/RuneLite-melxin`, commit
+`1ad572d7dcdbc0fb67a4a00f0c2f959d5ab25abc`. Its module breadth makes it more
+useful than `runelite-api` alone for understanding the complete relationship
+between stable APIs, injected client implementations, mixins, deobfuscation,
+cache behavior, and external plugins.
+
+The most relevant paths are `runelite-client/plugins`, `runelite-api`,
+`runescape-api`, `runelite-mixins`, `injected-client`, `runescape-client`,
+`deobfuscator`, `cache`, and `runelite-jshell`. These inform Studio's future
+plugin/runtime-bridge and scene-reference work. The concrete scene findings
+are recorded in [`RUNELITE_SCENE_REFERENCE.md`](RUNELITE_SCENE_REFERENCE.md),
+including tile-layer order, bridge/effective-plane behavior, and the split
+between scene projections and authored state. They do not change the
+production rule: RSPSi owns the editable world and history, and OpenRune
+FileStore remains the only planned OSRS cache dependency.
+
 ### TSPS / Elvarg lineage — scene semantics plus edit-mode evidence
 
 TSPS is a BSD-2-Clause TypeScript OSRS client/server continuation with a
@@ -78,6 +177,17 @@ WebGL/browser client and an edit-mode plugin. The scene code is valuable for
 terrain topology, floor/material inputs, bridges, instance transforms,
 location/model placement, contouring, lighting preparation, and scene-to-GPU
 data extraction.
+
+The deeper scene review is now recorded in
+[`TSPS_SCENE_REFERENCE.md`](TSPS_SCENE_REFERENCE.md). It confirms that TSPS is
+the best concrete donor for revision-240 render preparation: radius-five
+underlay blending, final per-vertex HSL/UV terrain data, hidden shaped faces,
+shape/type-aware location model selection, ordered model transforms,
+contouring, normal merging, bridge projection, and opaque/alpha/priority GPU
+packet fields. RuneLite remains the semantic client oracle, while RSPSi keeps
+authored data, command history, collision policy, and renderer-neutral packet
+ownership. TSPS's mutable scene graph, WebGL/PicoGL buffer layout, browser
+runtime, and client collision flags are not adopted as Studio architecture.
 
 The edit-mode code adds a second useful slice: it edits terrain and locations
 as an explicit edit log, encodes revision-aware region packs, supports object
@@ -119,6 +229,24 @@ That makes it especially useful for a revision-240 compatibility case study:
 It is not independent from RuneLite, and it is not suitable as RSPSi's base.
 Its copied cache module would recreate the exact dependency duplication we are
 trying to remove.
+
+### OSRS Environment Exporter — scene/render/export reference
+
+The pinned `ConnorDY/OSRS-Environment-Exporter` checkout is a passing Kotlin
+reference build at commit `61d461d3bfd8217a470518924415d7de1b074b9c`. Its
+`SceneRegionBuilder` gives us a concrete RuneLite-derived implementation to
+compare against for underlay blending, directional brightness, overlay
+shape/rotation, object footprint placement, contouring, and normal merging.
+Its scene tile model and renderer classes also make the boundary between
+scene upload, CPU/GLSL priority handling, alpha, texture/UV data, and draw
+execution explicit. `SceneExporter`/`GlTFExporter` and `CliExporter` add a
+credible future export-plugin and headless-verification direction.
+
+The project is GPL-3.0 and uses Displee plus a Swing/LWJGL application shell;
+those are not being promoted into RSPSi. We will reimplement only neutral,
+tested contracts behind RSPSi's cache, scene, renderer, and plugin APIs. The
+full source-level findings and evidence limits are in
+[`OSRS_ENVIRONMENT_EXPORTER_REFERENCE.md`](OSRS_ENVIRONMENT_EXPORTER_REFERENCE.md).
 
 ## Foundation invariants before more plugins
 
@@ -192,6 +320,21 @@ by adding another runtime model.
 4. Complete the explicit revision-feature registry and audit report before
    adding another supported OSRS revision.
 5. Only after those pass, extract first-party asset browser, terrain/object,
-   validation, debug, and preview workflows behind the existing neutral plugin
-   boundary.
+   validation, debug, preview, and scene-export workflows behind the existing
+   neutral plugin boundary.
 
+## FileStore adoption decision
+
+The detailed FileStore review selects it as the primary OSRS cache and
+definition backend. Its filesystem, definition codecs, model/texture/sprite
+decoders, XTEA, and packing tools are valuable; its global `CacheManager`,
+read/write ambiguity, Displee-backed delegate, and build-only concerns are not
+allowed to become Studio state. The implementation uses a session-scoped
+neutral repository and explicit `READ_ONLY`, `STAGED`, `DIRECT`, and
+`BUILD_ONLY` capabilities. See
+[`OPENRUNE_FILESTORE_ADOPTION.md`](OPENRUNE_FILESTORE_ADOPTION.md).
+
+The source checkout also has a portability issue: the publishing build
+defaults to a hard-coded Windows path, while its README advertises an older
+published version. Studio pins published artifacts and treats any upstream
+fix as a separately tracked compatibility change.

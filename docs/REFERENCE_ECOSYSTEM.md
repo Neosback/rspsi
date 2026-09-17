@@ -28,6 +28,7 @@ and next actions—is [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md).
 | Collision and routefinding semantics | Focused donor | OpenRune-Server |
 | Modern terrain, locs, bridges, instances, models | Focused donor | TSPS |
 | Current OSRS correctness | Independent oracle | RuneLite |
+| Full plugin/runtime architecture reference | Donor/reference only | melxin RuneLite/OpenOSRS fork |
 | Live scene inspection and debug UX | First-class oracle | RuneLite DevTools |
 | Editing tools, transactions, fragments | Focused donor | OpenRune-Editor |
 | CS2 compiler/runtime | Later specialist | Neptune and TSPS |
@@ -36,6 +37,7 @@ and next actions—is [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md).
 | Revision drift strategy | Research only | runelite-cache-code-updater |
 | World-map visual QA | Reference only; do not bundle unclear-license assets | Explv/osrs_map_tiles |
 | Geometry debugging | Independent validation workflow | Model Exporter |
+| Scene lighting and export workflow | Focused donor/reference only | OSRS Environment Exporter |
 | Asset-browser UX | Reference only | Quill |
 | Advanced rendering | Later reference | 117 HD and GPU clients |
 | World model, commands, selection, renderer, UI | RSPSi-owned | Ours |
@@ -86,3 +88,16 @@ RuneLite DevTools is promoted to the live truth viewer for tile coordinates,
 scene/region/chunk relationships, flags, collision, object categories, and
 loading-line context. Studio will eventually implement equivalent offline
 debug overlays and inspectors rather than depending on RuneLite at runtime.
+
+The pinned full-fork scene study is summarized in
+[`RUNELITE_SCENE_REFERENCE.md`](RUNELITE_SCENE_REFERENCE.md). It records the
+four-plane tile grid, paint/model/object layers, bridge/effective-plane rules,
+renderer upload order, and the neutral plugin boundaries that follow from
+those facts.
+
+The pinned [OSRS Environment Exporter](https://github.com/ConnorDY/OSRS-Environment-Exporter)
+checkout is documented in [`OSRS_ENVIRONMENT_EXPORTER_REFERENCE.md`](OSRS_ENVIRONMENT_EXPORTER_REFERENCE.md).
+It is useful for focused scene-region lighting, model placement, renderer
+alpha/priority diagnostics, glTF export, and headless export ideas. Its
+GPL-3.0 source, Displee cache, and Swing/LWJGL application are reference-only;
+they do not change the single production spine.

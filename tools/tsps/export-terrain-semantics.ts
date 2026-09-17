@@ -11,13 +11,54 @@
  * The companion locations file is written beside the terrain file.
  * A scene-geometry.json export is written there as well for independent
  * terrain mesh comparison, along with collision.json for the common OSRS
- * collision flag layer.
+ * collision flag layer. Reference-shaped plane minimap PNGs are also emitted
+ * for renderer parity work; they are not product assets.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { deflateSync } from "node:zlib";
 
 type Module = Record<string, any>;
+
+function crc32(data: Buffer): number {
+    let crc = 0xffffffff;
+    for (const byte of data) {
+        crc ^= byte;
+        for (let bit = 0; bit < 8; bit++) {
+            crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+        }
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+    const typeBytes = Buffer.from(type, "ascii");
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length, 0);
+    const checksum = Buffer.alloc(4);
+    checksum.writeUInt32BE(crc32(Buffer.concat([typeBytes, data])), 0);
+    return Buffer.concat([length, typeBytes, data, checksum]);
+}
+
+function writeRgbaPng(target: string, width: number, height: number, rgba: Buffer): void {
+    const scanlines = Buffer.alloc(height * (width * 4 + 1));
+    for (let y = 0; y < height; y++) {
+        const scanlineOffset = y * (width * 4 + 1);
+        rgba.copy(scanlines, scanlineOffset + 1, y * width * 4, (y + 1) * width * 4);
+    }
+    const header = Buffer.alloc(13);
+    header.writeUInt32BE(width, 0);
+    header.writeUInt32BE(height, 4);
+    header[8] = 8;
+    header[9] = 6;
+    fs.writeFileSync(target, Buffer.concat([
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+        pngChunk("IHDR", header),
+        pngChunk("IDAT", deflateSync(scanlines)),
+        pngChunk("IEND", Buffer.alloc(0)),
+    ]));
+}
 
 async function importTsps(clientRoot: string, relativePath: string): Promise<Module> {
     return import(pathToFileURL(path.join(clientRoot, relativePath)).href);
@@ -44,6 +85,12 @@ async function main(): Promise<void> {
         "rs/scene/SceneBuilder.ts",
     );
     const { Scene } = await importTsps(clientRoot, "rs/scene/Scene.ts");
+    const { MinimapImageRenderer } = await importTsps(
+        clientRoot,
+        "rs/map/MinimapImageRenderer.ts",
+    );
+    const { SpriteLoader } = await importTsps(clientRoot, "rs/sprite/SpriteLoader.ts");
+    const { IndexType } = await importTsps(clientRoot, "rs/cache/IndexType.ts");
 
     const cacheInfo = cache.loadCacheList(cache.loadCacheInfos()).latest;
     const loaded = cache.loadCache(cacheInfo);
@@ -75,6 +122,23 @@ async function main(): Promise<void> {
         false,
         LocLoadType.NO_MODELS,
     );
+    let mapScenes = factory.getMapScenes();
+    // Some OSRS caches contain a valid named `mapscene` sprite archive while
+    // their graphic-defaults record leaves the map-scene id unset. TSPS's
+    // generic factory consequently returns an empty list even though the
+    // canonical sprite payload is present. Resolve that named archive only as
+    // an exporter fallback so the parity fixture reflects the cache itself.
+    if (!mapScenes.some(Boolean) && cacheInfo.game === "oldschool") {
+        const spriteIndex = cacheSystem.getIndex(IndexType.DAT2.sprites);
+        const mapSceneArchive = spriteIndex.getArchiveId("mapscene");
+        const namedMapScenes = SpriteLoader.loadIntoIndexedSprites(
+            spriteIndex,
+            mapSceneArchive,
+        );
+        if (namedMapScenes) {
+            mapScenes = namedMapScenes;
+        }
+    }
     // The full scene applies bridge relinking after mesh construction. For a
     // geometry fixture, retain the authored terrain planes so the comparison
     // is against RSPSi's canonical WorldDocument planes; bridge relationships
@@ -118,6 +182,35 @@ async function main(): Promise<void> {
         rotations,
         flags,
     }, null, 2)}\n`);
+    const metadataPath = path.join(path.dirname(output), "fixture.properties");
+    fs.writeFileSync(metadataPath, [
+        `region.x=${regionX}`,
+        `region.y=${regionY}`,
+        `revision=${loaded.info.revision}`,
+        "geometry.planeMode=AUTHORED",
+        `minimap.mapScenes=${mapScenes.some(Boolean)}`,
+        "",
+    ].join("\n"));
+
+    // Export the reference client's four plane minimaps as PNGs. These are
+    // intentionally generated outside RSPSi so MinimapParity can compare
+    // scene/material/map-scene behavior independently of the product code.
+    const minimapRenderer = new MinimapImageRenderer(loc, mapScenes);
+    const minimapDirectory = path.dirname(output);
+    fs.mkdirSync(minimapDirectory, { recursive: true });
+    for (let plane = 0; plane < 4; plane++) {
+        const pixels: Int32Array = minimapRenderer.renderMinimap(scene, plane);
+        const rgba = Buffer.alloc(pixels.length * 4);
+        for (let index = 0; index < pixels.length; index++) {
+            const rgb = pixels[index] >>> 0;
+            rgba[index * 4] = (rgb >>> 16) & 0xff;
+            rgba[index * 4 + 1] = (rgb >>> 8) & 0xff;
+            rgba[index * 4 + 2] = rgb & 0xff;
+            rgba[index * 4 + 3] = 0xff;
+        }
+        writeRgbaPng(path.join(minimapDirectory, `minimap-shaped-plane-${plane}.png`),
+            256, 256, rgba);
+    }
     // Location parity uses TSPS's cache-byte semantics directly. Scene tile
     // containers intentionally reject some edge/crowded placements, which is
     // useful for rendering but would make them a lossy map decoder oracle.
@@ -189,15 +282,18 @@ async function main(): Promise<void> {
     const collisionPath = path.join(path.dirname(output), "collision.json");
     fs.writeFileSync(collisionPath, `${JSON.stringify({
         formatVersion: 1,
+        semantics: "CLIENT_CLIP_TYPE",
         width: 64,
         length: 64,
         planes: 4,
         flags: collisionFlags,
     }, null, 2)}\n`);
     console.log(`wrote ${output}`);
+    console.log(`wrote ${metadataPath}`);
     console.log(`wrote ${locationPath}`);
     console.log(`wrote ${geometryPath}`);
     console.log(`wrote ${collisionPath}`);
+    console.log(`wrote ${minimapDirectory}`);
 }
 
 main().catch((error) => {

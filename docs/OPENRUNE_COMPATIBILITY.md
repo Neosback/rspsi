@@ -25,6 +25,52 @@ The OpenRune type is confined to the cache adapter package. The public factory
 accepts a `Path` and returns `CacheStore`; editor-facing code does not receive
 OpenRune objects.
 
+Selecting the OSRS provider is consequently a format/semantic decision, not a
+request to let a plugin replace FileStore. FileStore opens and reads the modern
+cache; the provider supplies the revision-aware archive map, definition
+decoders, map codecs, and neutral asset/session services. Feature plugins are
+mounted after that cache-ready project exists. This keeps the original RSPSi
+failure mode—interpreting newer data through a mostly-317 loader—from returning
+under a different name.
+
+`CacheStoreFactory.openOsrs(Path)` is the named production entry point for
+modern OSRS caches. The compatibility `com.jagex.Cache` facade detects the
+cache format before selecting its store: modern OSRS reads use OpenRune
+FileStore, while 317 remains on `LegacyDispleeCacheStore`. The old facade is
+still present for the renderer migration, but it no longer makes Displee the
+implicit backend for OSRS.
+
+This does not make FileStore a Studio feature plugin. `OsrsBundle` is the
+composition root that selects the backend, validates the revision, creates
+neutral services and starts feature plugins. A future cache-source control may
+show `OpenRune FileStore (OSRS)` and its output capability, but it must not
+offer a modern cache a guessed 317 decoder.
+
+The supported modern DAT2 mapping is explicit: animations/frame groups are
+index 0, skeleton/frame bases are index 1, configs are index 2, maps are index
+5, models are index 7, sprites are index 8, and textures are index 9. This is
+not interchangeable with the old 317 ordering. The live startup check found
+and corrected that reversal in the compatibility renderer path.
+
+The compatibility renderer also treats unavailable modern textures as a
+renderer-local degradation: the textured face falls back to a bounded shaded
+palette lookup. It does not reinterpret the cache as 317 and does not alter
+the neutral FileStore-backed scene or asset contracts. Full modern material and
+model rendering remains a separate renderer-parity gate.
+
+The selectable composition root is `OsrsBundle`. It opens the selected modern
+cache through `CacheStoreFactory.openOsrs`, validates project revision identity,
+exposes neutral definitions/assets, and starts feature plugins only after a
+session exists. This is why FileStore and the OSRS bundle are both needed:
+FileStore supplies bytes and cache identity, while the bundle supplies
+revision-240 interpretation and editor lifecycle.
+
+The optional `OpenRuneServerAdapter` is separate from that read path. It
+detects an OpenRune-Server checkout and describes the `or-cache` Gradle
+actions and LIVE/SERVER layout, but does not import server classes or require
+the checkout for cache-only editing. Runtime bridging and server-side route
+execution remain deferred capabilities.
+
 ## Neutral OSRS map path
 
 `MapIndexTable` discovers named `mX_Y` landscape and `lX_Y` location archives
@@ -106,7 +152,9 @@ An explicit
 explicitly selected output cache through OpenRune's published writable
 delegate. There is still no automatic fallback to a different backend because
 falling back could decode a cache with the wrong format and silently produce
-incorrect data.
+incorrect data. The legacy named-sprite reader now rejects non-317 caches;
+modern map-scene and map-function sprite reads use the neutral OSRS sprite
+index instead.
 
 `CacheStoreFactory.openRuneWithDispleeOutput(base, output)` packages this
 topology for callers: OpenRune remains the read/definition source, writes are
@@ -139,7 +187,7 @@ The companion `locations.json` export decodes the same TSPS location payload
 semantics without using scene-container capacity rules; all 4,726 placements
 match the canonical RSPSi objects for the same region.
 The companion `scene-geometry.json` export compares authored terrain mesh
-vertices and face topology on 4,481 populated tiles with zero differences.
+vertices and face topology on 4,441 populated tiles with zero differences.
 This is geometry evidence, not a claim of full lighting/material/render parity;
 the independent scene fingerprint remains a stronger optional check.
 The normal OpenRune source backend remains read-only. The application continues
@@ -147,6 +195,14 @@ to construct the legacy Displee backend by default for the compatibility launch
 path, while OSRS projects may explicitly select either staged Displee output or
 native OpenRune `CacheDelegate` output after the source/output paths are kept
 separate.
+
+The first-party OpenRune route-collision probe is not yet promoted to a parity
+fixture. The pinned OpenRune-Server checkout's object decoder expects config
+archive `55`, while the pinned TSPS revision-240 cache exposes archives `1–54`
+and `70+`; the server-side object table is therefore empty when the decoder is
+run directly against that cache. The existing TSPS collision export remains
+explicitly diagnostic (`CLIENT_CLIP_TYPE`) until a cache-layout-compatible
+`OPENRUNE_ROUTE` export is available.
 
 ## Next spike gate
 
@@ -189,7 +245,8 @@ as explicit PASS/FAIL/NOT_RUN checks. It does not write the supplied cache.
 An external parity directory can be supplied with
 `RSPSI_OSRS_PARITY_FIXTURE=/path/to/fixture` alongside the selected-region
 arguments. Its optional `fixture.properties` may identify `region.x`,
-`region.y`, `revision`, `cache.fingerprint`, and `scene.fingerprint`. An
+`region.y`, `revision`, `cache.fingerprint`, `scene.fingerprint`, and
+`geometry.planeMode` (`AUTHORED` or `EFFECTIVE`). An
 optional `minimap.mapScenes=true` property declares that the PNG captures
 include cache-backed map-scene sprites. Without it, shaped PNG comparison uses
 the terrain/wall baseline while normal product minimap construction still
@@ -207,13 +264,15 @@ neutral terrain parity service. An optional `locations.json` contains the
 independent delta-packed location decode and is compared against canonical
 object ID/type/rotation/plane/coordinate tuples. Identity mismatches fail the gate; missing
 fixture data remains visible as `WARN`/`NOT_RUN`. An optional
-`scene-geometry.json` compares authored terrain vertices and topology as a
-renderer-neutral 3D geometry export. This keeps RuneLite/TSPS
+`scene-geometry.json` compares authored or effective terrain vertices and
+topology as a renderer-neutral 3D geometry export, according to
+`geometry.planeMode`. This keeps RuneLite/TSPS
 captures and generated images outside the repository while making their
 provenance-controlled acceptance path executable.
 
 The optional `collision.json` export is intentionally diagnostic rather than
-a strict gate. TSPS exposes client-scene flags based on `clipType` and omits
+a strict gate. It declares `semantics=CLIENT_CLIP_TYPE`; TSPS exposes
+client-scene flags based on `clipType` and omits
 locations at its scene loading line, while RSPSi's canonical collision map
 follows OpenRune-Server's `solid`/`blockWalk` and routefinder semantics. The
 product-side collision gate is therefore the deterministic OpenRune
@@ -235,3 +294,18 @@ non-strict so fixture-free local cache checks keep reporting missing external
 evidence as `NOT_RUN` or `WARN`. A terrain snapshot is deliberately separate from the render
 fingerprint: it proves cache/scene semantics without making a renderer’s
 internal representation part of the cross-project contract.
+
+## FileStore adoption status
+
+The OpenRune FileStore source review is now part of the compatibility contract.
+FileStore remains the primary OSRS reader and definition ecosystem, while
+RSPSi owns authored world state, scene derivation, collision, history, and
+render packets. The normal FileStore reader is `READ_ONLY`; staged output and
+explicit direct output are separate capabilities. FileStore's global
+`CacheManager` is not used as Studio state, and no OpenRune type crosses the
+neutral adapter boundary.
+
+The selected OSRS asset facade currently covers objects, floors, textures,
+models, map-scene sprites, sequences, and map elements. Interfaces, items,
+NPCs, CS2, GameVals, and DB tables remain planned extension categories using
+the same session-scoped repository.

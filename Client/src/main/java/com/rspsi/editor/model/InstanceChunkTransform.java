@@ -69,8 +69,24 @@ public final class InstanceChunkTransform {
 
     /** Maps an object anchor and orientation while preserving its identity/type. */
     public WorldObject sourceObjectToScene(WorldObject source) {
+        return sourceObjectToScene(source, 1, 1);
+    }
+
+    /** Maps an object anchor using its unrotated definition footprint. */
+    public WorldObject sourceObjectToScene(WorldObject source, int footprintWidth,
+                                           int footprintLength) {
         Objects.requireNonNull(source, "source");
-        TileCoordinate mapped = sourceToScene(new TileCoordinate(source.plane(), source.x(), source.y()));
+        if (footprintWidth <= 0 || footprintLength <= 0) {
+            throw new IllegalArgumentException("Object footprint must be positive");
+        }
+        requireSourceTile(new TileCoordinate(source.plane(), source.x(), source.y()));
+        int localX = source.x() - template.sourceOriginX();
+        int localY = source.y() - template.sourceOriginY();
+        int[] rotated = rotateObject(localX, localY, template.rotation(),
+                footprintWidth, footprintLength, source.rotation());
+        TileCoordinate mapped = new TileCoordinate(template.targetPlane(),
+                template.sceneOriginX(sceneBaseX) + rotated[0],
+                template.sceneOriginY(sceneBaseY) + rotated[1]);
         return new WorldObject(source.id(), source.type(),
                 sourceObjectRotationToScene(source.rotation()), mapped.plane(), mapped.x(), mapped.y());
     }
@@ -110,6 +126,23 @@ public final class InstanceChunkTransform {
             case 2 -> new int[]{InstanceChunkTemplate.CHUNK_SIZE - 1 - x,
                     InstanceChunkTemplate.CHUNK_SIZE - 1 - y};
             default -> new int[]{InstanceChunkTemplate.CHUNK_SIZE - 1 - y, x};
+        };
+    }
+
+    /** Mirrors the client object-anchor rotation, including orientation-swapped dimensions. */
+    private static int[] rotateObject(int x, int y, int rotation,
+                                      int sizeX, int sizeY, int orientation) {
+        if ((orientation & 1) == 1) {
+            int temporary = sizeX;
+            sizeX = sizeY;
+            sizeY = temporary;
+        }
+        return switch (rotation & 3) {
+            case 0 -> new int[]{x, y};
+            case 1 -> new int[]{y, InstanceChunkTemplate.CHUNK_SIZE - 1 - x - (sizeX - 1)};
+            case 2 -> new int[]{InstanceChunkTemplate.CHUNK_SIZE - 1 - x - (sizeX - 1),
+                    InstanceChunkTemplate.CHUNK_SIZE - 1 - y - (sizeY - 1)};
+            default -> new int[]{InstanceChunkTemplate.CHUNK_SIZE - 1 - y - (sizeY - 1), x};
         };
     }
 }

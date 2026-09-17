@@ -39,9 +39,34 @@ public interface DefinitionProvider {
         return Optional.empty();
     }
 
+    /** Optional decoded texture pixels; the returned array is owned by the caller. */
+    default Optional<int[]> texturePixels(int id, double brightness, int textureSize) {
+        return Optional.empty();
+    }
+
     /** Optional map-scene sprite pixels for minimap/world-map composition. */
     default Optional<MapSceneSpriteView> mapScene(int id) {
         return Optional.empty();
+    }
+
+    /** Optional lazy animation sequence metadata. */
+    default Optional<SequenceDefinitionView> sequence(int id) {
+        return Optional.empty();
+    }
+
+    /** Available sequence IDs when the backend exposes a sequence index. */
+    default List<Integer> sequenceIds() {
+        return List.of();
+    }
+
+    /** Optional lazy world-map/minimap element metadata. */
+    default Optional<MapElementDefinitionView> mapElement(int id) {
+        return Optional.empty();
+    }
+
+    /** Available map-element IDs when the backend exposes a map-element index. */
+    default List<Integer> mapElementIds() {
+        return List.of();
     }
 
     /** Available zero-based map-scene sprite IDs, when the backend exposes them. */

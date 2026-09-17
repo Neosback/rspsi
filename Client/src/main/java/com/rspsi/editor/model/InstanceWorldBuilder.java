@@ -15,8 +15,27 @@ import java.util.Objects;
 public final class InstanceWorldBuilder {
     public WorldDocument build(WorldRegionWindow source, InstanceChunkGrid grid,
                                 int width, int length, int planes) {
+        return build(source, grid, width, length, planes,
+                InstanceObjectFootprintResolver.unit(), InstanceGeneratedHeightProvider.required());
+    }
+
+    /** Materializes an instance using definition-derived object footprints. */
+    public WorldDocument build(WorldRegionWindow source, InstanceChunkGrid grid,
+                               int width, int length, int planes,
+                               InstanceObjectFootprintResolver footprintResolver) {
+        return build(source, grid, width, length, planes, footprintResolver,
+                InstanceGeneratedHeightProvider.required());
+    }
+
+    /** Materializes an instance with explicit cache-independent height semantics. */
+    public WorldDocument build(WorldRegionWindow source, InstanceChunkGrid grid,
+                               int width, int length, int planes,
+                               InstanceObjectFootprintResolver footprintResolver,
+                               InstanceGeneratedHeightProvider generatedHeightProvider) {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(grid, "grid");
+        InstanceObjectFootprintResolver.requireNonNull(footprintResolver);
+        Objects.requireNonNull(generatedHeightProvider, "generatedHeightProvider");
         if (width <= 0 || length <= 0 || planes <= 0) {
             throw new IllegalArgumentException("Instance document dimensions must be positive");
         }
@@ -26,19 +45,22 @@ public final class InstanceWorldBuilder {
                 throw new IllegalArgumentException("Instance target plane is outside destination: "
                         + transform.template().targetPlane());
             }
-            copyChunk(source, grid, transform, result);
+            copyChunk(source, grid, transform, result, footprintResolver, generatedHeightProvider);
         }
         return result;
     }
 
     private static void copyChunk(WorldRegionWindow source, InstanceChunkGrid grid,
-                                  InstanceChunkTransform transform, WorldDocument result) {
+                                  InstanceChunkTransform transform, WorldDocument result,
+                                  InstanceObjectFootprintResolver footprintResolver,
+                                  InstanceGeneratedHeightProvider generatedHeightProvider) {
         InstanceChunkTemplate template = transform.template();
         for (int localX = 0; localX < InstanceChunkTemplate.CHUNK_SIZE; localX++) {
             for (int localY = 0; localY < InstanceChunkTemplate.CHUNK_SIZE; localY++) {
                 int sourceX = template.sourceOriginX() + localX;
                 int sourceY = template.sourceOriginY() + localY;
-                TileSnapshot sourceTile = source.tile(template.sourcePlane(), sourceX, sourceY).orElse(null);
+                WorldTileSource sourceTile = source.tileSource(
+                        template.sourcePlane(), sourceX, sourceY).orElse(null);
                 if (sourceTile == null) continue;
 
                 TileCoordinate sourceCoordinate = new TileCoordinate(template.sourcePlane(), sourceX, sourceY);
@@ -49,21 +71,75 @@ public final class InstanceWorldBuilder {
                         || destinationY < 0 || destinationY >= result.length()) {
                     continue;
                 }
-                result.tile(destination.plane(), destinationX, destinationY)
-                        .restore(rotate(sourceTile, transform, grid));
+                Tile target = result.tile(destination.plane(), destinationX, destinationY);
+                TileSnapshot rotated = rotate(sourceTile.snapshot(), transform);
+                target.restore(withSouthWestHeight(rotated,
+                        replayedHeight(sourceTile.heightSource(), template.targetPlane(), result,
+                                destinationX, destinationY, sourceX, sourceY,
+                                rotated.southWestHeight(), generatedHeightProvider)));
+                target.heightSource(sourceTile.heightSource());
+            }
+        }
+
+        // Add locations only after all terrain tiles have been materialized;
+        // a rotated multi-tile anchor can land on a tile processed later by
+        // the terrain pass.
+        for (int localX = 0; localX < InstanceChunkTemplate.CHUNK_SIZE; localX++) {
+            for (int localY = 0; localY < InstanceChunkTemplate.CHUNK_SIZE; localY++) {
+                int sourceX = template.sourceOriginX() + localX;
+                int sourceY = template.sourceOriginY() + localY;
+                TileSnapshot sourceTile = source.tile(template.sourcePlane(), sourceX, sourceY).orElse(null);
+                if (sourceTile == null) continue;
+                for (WorldObject object : sourceTile.objects()) {
+                    InstanceObjectFootprintResolver.Footprint footprint = footprintResolver.resolve(object);
+                    if (footprint == null) {
+                        throw new IllegalArgumentException("Footprint resolver returned null for object " + object.id());
+                    }
+                    WorldObject worldObject = regionLocalObjectToWorld(object, sourceX, sourceY);
+                    WorldObject mapped = transform.sourceObjectToScene(worldObject,
+                            footprint.width(), footprint.length());
+                    int objectX = mapped.x() - grid.sceneBaseX();
+                    int objectY = mapped.y() - grid.sceneBaseY();
+                    int placedWidth = (mapped.rotation() & 1) == 1
+                            ? footprint.length() : footprint.width();
+                    int placedLength = (mapped.rotation() & 1) == 1
+                            ? footprint.width() : footprint.length();
+                    // The reference scene builder does not add locations whose
+                    // anchor is on the outer scene border; those cells are
+                    // reserved for the scene's shared edge geometry.
+                    if (mapped.plane() < 0 || mapped.plane() >= result.planes()
+                            || objectX <= 0 || objectX >= result.width() - 1
+                            || objectY <= 0 || objectY >= result.length() - 1
+                            || objectX + placedWidth > result.width()
+                            || objectY + placedLength > result.length()) {
+                        continue;
+                    }
+                    Tile target = result.tile(mapped.plane(), objectX, objectY);
+                    TileSnapshot snapshot = target.snapshot();
+                    TerrainHeightSource heightSource = target.heightSource();
+                    List<WorldObject> objects = new ArrayList<>(snapshot.objects());
+                    objects.add(new WorldObject(mapped.id(), mapped.type(), mapped.rotation(),
+                            mapped.plane(), objectX, objectY));
+                    target.restore(new TileSnapshot(snapshot.southWestHeight(), snapshot.southEastHeight(),
+                            snapshot.northEastHeight(), snapshot.northWestHeight(), snapshot.underlayId(),
+                            snapshot.overlayId(), snapshot.overlayShape(), snapshot.overlayRotation(),
+                            snapshot.flags(), objects));
+                    target.heightSource(heightSource);
+                }
             }
         }
     }
 
-    private static TileSnapshot rotate(TileSnapshot source, InstanceChunkTransform transform,
-                                       InstanceChunkGrid grid) {
+    /** Region archives store object anchors in 0..63 local coordinates. */
+    private static WorldObject regionLocalObjectToWorld(WorldObject object, int sourceX, int sourceY) {
+        int regionOriginX = (sourceX >> 6) * WorldRegion.REGION_SIZE;
+        int regionOriginY = (sourceY >> 6) * WorldRegion.REGION_SIZE;
+        return new WorldObject(object.id(), object.type(), object.rotation(), object.plane(),
+                regionOriginX + object.x(), regionOriginY + object.y());
+    }
+
+    private static TileSnapshot rotate(TileSnapshot source, InstanceChunkTransform transform) {
         int rotation = transform.template().rotation();
-        List<WorldObject> objects = new ArrayList<>(source.objects().size());
-        for (WorldObject object : source.objects()) {
-            WorldObject mapped = transform.sourceObjectToScene(object);
-            objects.add(new WorldObject(mapped.id(), mapped.type(), mapped.rotation(), mapped.plane(),
-                    mapped.x() - grid.sceneBaseX(), mapped.y() - grid.sceneBaseY()));
-        }
         return new TileSnapshot(
                 corner(source, rotation, 0),
                 corner(source, rotation, 1),
@@ -72,9 +148,30 @@ public final class InstanceWorldBuilder {
                 source.underlayId(),
                 source.overlayId(),
                 source.overlayShape(),
-                (source.overlayRotation() + rotation) & 3,
+                source.overlayId() == 0 ? 0 : (source.overlayRotation() + rotation) & 3,
                 source.flags(),
-                objects);
+                List.of());
+    }
+
+    private static int replayedHeight(TerrainHeightSource source, int targetPlane,
+                                      WorldDocument result, int destinationX, int destinationY,
+                                      int sourceX, int sourceY, int authoredHeight,
+                                      InstanceGeneratedHeightProvider generatedHeightProvider) {
+        if (!source.cacheEncoded()) return authoredHeight;
+        if (targetPlane == 0) {
+            return source.generated()
+                    ? generatedHeightProvider.heightAt(sourceX, sourceY)
+                    : -source.explicitValue() * 8;
+        }
+        int previous = result.tile(targetPlane - 1, destinationX, destinationY)
+                .snapshot().southWestHeight();
+        return previous - (source.generated() ? 240 : source.explicitValue() * 8);
+    }
+
+    private static TileSnapshot withSouthWestHeight(TileSnapshot source, int height) {
+        return new TileSnapshot(height, source.southEastHeight(), source.northEastHeight(),
+                source.northWestHeight(), source.underlayId(), source.overlayId(),
+                source.overlayShape(), source.overlayRotation(), source.flags(), source.objects());
     }
 
     /** Returns the destination corner value: SW=0, SE=1, NE=2, NW=3. */

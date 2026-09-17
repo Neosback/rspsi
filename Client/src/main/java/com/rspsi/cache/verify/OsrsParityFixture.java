@@ -34,6 +34,7 @@ public record OsrsParityFixture(
         String cacheFingerprint,
         String sceneFingerprint,
         boolean mapSceneSprites,
+        OsrsScenePlaneMode geometryPlaneMode,
         OsrsTerrainSemanticFixture terrainSemantics,
         OsrsLocationSemanticFixture locations,
         OsrsSceneGeometryFixture sceneGeometry,
@@ -61,6 +62,7 @@ public record OsrsParityFixture(
         if (sceneFingerprint != null && sceneFingerprint.isBlank()) {
             throw new IllegalArgumentException("Fixture scene fingerprint cannot be blank");
         }
+        geometryPlaneMode = geometryPlaneMode == null ? OsrsScenePlaneMode.AUTHORED : geometryPlaneMode;
         minimaps = immutableImages(minimaps);
         shapedMinimaps = immutableImages(shapedMinimaps);
     }
@@ -129,6 +131,7 @@ public record OsrsParityFixture(
                 optionalProperty(properties, "cache.fingerprint"),
                 optionalProperty(properties, "scene.fingerprint"),
                 booleanProperty(properties, "minimap.mapScenes", false),
+                OsrsScenePlaneMode.parse(optionalProperty(properties, "geometry.planeMode")),
                 terrainSemantics,
                 locations,
                 sceneGeometry,

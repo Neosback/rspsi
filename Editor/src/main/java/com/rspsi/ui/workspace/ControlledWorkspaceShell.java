@@ -1,5 +1,7 @@
 package com.rspsi.ui.workspace;
 
+import com.rspsi.editor.plugin.EditorPluginHost;
+import com.rspsi.editor.input.EditorKeyEvent;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.editor.ui.PanelDescriptor;
 import com.rspsi.editor.ui.PanelPlacement;
@@ -9,6 +11,8 @@ import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.layout.HBox;
@@ -32,15 +36,17 @@ import java.util.Objects;
  * side rails, and bottom panels are tabs. There is no arbitrary docking or
  * renderer state hidden in this shell.</p>
  */
-public final class ControlledWorkspaceShell extends BorderPane {
+public final class ControlledWorkspaceShell extends BorderPane implements AutoCloseable {
     private static final double GAP = 8;
     private static final Insets PANEL_PADDING = new Insets(8);
 
     private final WorkspaceCatalog catalog;
     private final Map<String, Node> panels;
     private final ComboBox<String> workspacePicker = new ComboBox<>();
+    private final MenuButton pluginCommands = new MenuButton("Plugin commands");
     private Node bottomTabs;
     private Node statusBar;
+    private EditorPluginHost pluginHost;
     private String activeWorkspaceId;
 
     public ControlledWorkspaceShell(WorkspaceCatalog catalog,
@@ -66,6 +72,9 @@ public final class ControlledWorkspaceShell extends BorderPane {
         workspacePicker.setAccessibleText("Workspace preset");
         workspacePicker.setPromptText("Workspace");
         workspacePicker.setMinWidth(150);
+        pluginCommands.setAccessibleText("Plugin commands");
+        pluginCommands.setVisible(false);
+        pluginCommands.setManaged(false);
         workspacePicker.valueProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue != null && !newValue.equals(activeWorkspaceId)) show(newValue);
         });
@@ -84,6 +93,37 @@ public final class ControlledWorkspaceShell extends BorderPane {
     /** Returns the mounted persistent status row, if one was configured. */
     public Node statusBar() {
         return statusBar;
+    }
+
+    /** Routes a translated key event to the canonical viewport, if mounted. */
+    public boolean dispatchKey(EditorKeyEvent event, boolean textInputFocused) {
+        Objects.requireNonNull(event, "event");
+        Node viewport = panelNode("viewport");
+        return viewport instanceof ControlledViewportPanel controlled
+                && controlled.canonicalViewport().dispatchKey(event, textInputFocused);
+    }
+
+    /**
+     * Mounts one plugin host into all shell-owned contribution surfaces. The
+     * shell, rather than an individual panel, owns the lifecycle.
+     */
+    public void bindPluginHost(EditorPluginHost host) {
+        Objects.requireNonNull(host, "host");
+        if (pluginHost != null && pluginHost != host) pluginHost.close();
+        pluginHost = host;
+        if (panelNode("tools") instanceof AdaptiveToolPanel tools) tools.bindPluginHost(host);
+        if (panelNode("assets") instanceof AssetBrowserPanel assets) assets.bindPluginHost(host);
+        if (panelNode("inspector") instanceof SessionInspectorPanel inspector) {
+            inspector.bindPluginHost(host);
+        }
+        if (statusBar instanceof WorkspaceStatusBar status) status.bindPluginHost(host);
+        if (panelNode("command-palette") instanceof PluginCommandPalettePanel palette) {
+            palette.bindPluginHost(host);
+        }
+        if (panelNode("viewport") instanceof ControlledViewportPanel viewport) {
+            viewport.canonicalViewport().bindPluginHost(host);
+        }
+        rebuildPluginCommands();
     }
 
     public void show(String workspaceId) {
@@ -137,6 +177,8 @@ public final class ControlledWorkspaceShell extends BorderPane {
             HBox.setHgrow(top, Priority.ALWAYS);
             bar.getChildren().add(top);
         }
+        detach(pluginCommands);
+        bar.getChildren().add(pluginCommands);
         bar.getChildren().add(workspacePicker);
         super.setTop(bar);
     }
@@ -210,6 +252,25 @@ public final class ControlledWorkspaceShell extends BorderPane {
         setBottom(container);
     }
 
+    private void rebuildPluginCommands() {
+        pluginCommands.getItems().clear();
+        if (pluginHost == null) {
+            pluginCommands.setVisible(false);
+            pluginCommands.setManaged(false);
+            return;
+        }
+        for (var registration : pluginHost.registry().menuRegistrations()) {
+            MenuItem item = new MenuItem(registration.label());
+            item.setDisable(!pluginHost.context().session().canEdit());
+            item.setOnAction(event -> pluginHost.context().session().execute(
+                    pluginHost.registry().createCommand(registration.commandId())));
+            pluginCommands.getItems().add(item);
+        }
+        boolean available = !pluginCommands.getItems().isEmpty();
+        pluginCommands.setVisible(available);
+        pluginCommands.setManaged(available);
+    }
+
     private static String title(String id) {
         String[] words = id.split("-");
         return java.util.Arrays.stream(words)
@@ -217,5 +278,16 @@ public final class ControlledWorkspaceShell extends BorderPane {
                 .map(word -> Character.toUpperCase(word.charAt(0)) + word.substring(1))
                 .reduce((first, second) -> first + " " + second)
                 .orElse(id);
+    }
+
+    @Override
+    public void close() {
+        EditorPluginHost mounted = pluginHost;
+        pluginHost = null;
+        if (panelNode("viewport") instanceof ControlledViewportPanel viewport) {
+            viewport.canonicalViewport().clearPluginHost();
+        }
+        if (mounted != null) mounted.close();
+        rebuildPluginCommands();
     }
 }

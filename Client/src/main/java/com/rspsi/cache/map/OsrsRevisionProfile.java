@@ -30,9 +30,9 @@ public record OsrsRevisionProfile(int revision, MapGroupLayout mapGroupLayout,
 
     /** OpenRune's map packer uses numeric groups from revision 237 onward. */
     public static OsrsRevisionProfile forRevision(int revision) {
-        return new OsrsRevisionProfile(revision,
-                revision >= 237 ? MapGroupLayout.NUMERIC : MapGroupLayout.NAMED,
-                revision >= 209);
+        OsrsRevisionFeatures features = OsrsRevisionFeatures.forRevision(revision);
+        return new OsrsRevisionProfile(revision, features.mapGroupLayout(),
+                features.usesShortTerrainValues());
     }
 
     public enum MapGroupLayout {

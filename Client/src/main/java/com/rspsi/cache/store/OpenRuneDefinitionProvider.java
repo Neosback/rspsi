@@ -9,11 +9,18 @@ import com.rspsi.cache.definition.ModelDefinitionView;
 import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.cache.definition.MapSceneSpriteView;
+import com.rspsi.cache.definition.MapElementDefinitionView;
+import com.rspsi.cache.definition.SequenceDefinitionView;
 import dev.openrune.cache.filestore.definition.ModelDecoder;
 import dev.openrune.cache.filestore.definition.SpriteDecoder;
 import static dev.openrune.cache.ArchiveIndexKt.MODELS;
+import static dev.openrune.cache.ArchiveIndexKt.CONFIGS;
+import static dev.openrune.cache.ConfigTypeKt.SEQUENCE;
+import static dev.openrune.cache.ConfigTypeKt.MAP_ELEMENT;
 import dev.openrune.definition.game.IndexedSprite;
 import dev.openrune.definition.type.model.ModelType;
+import dev.openrune.definition.game.render.model.FaceNormal;
+import dev.openrune.definition.game.render.model.VertexNormal;
 import dev.openrune.OsrsCacheProvider;
 import dev.openrune.definition.type.ObjectType;
 import dev.openrune.definition.type.OverlayType;
@@ -27,28 +34,38 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.nio.charset.StandardCharsets;
 
 /**
  * OpenRune definition adapter. OpenRune objects are decoded once into maps,
  * then reduced to RSPSi-owned views before they reach editor code.
  */
 public final class OpenRuneDefinitionProvider implements DefinitionProvider {
+    private static final int OSRS_SEQUENCE_REVISION = 226;
+    private final Cache cache;
+    private final int revision;
     private final Map<Integer, ObjectType> objects = new HashMap<>();
     private final Map<Integer, UnderlayType> underlays = new HashMap<>();
     private final Map<Integer, OverlayType> overlays = new HashMap<>();
     private final Map<Integer, TextureType> textures = new HashMap<>();
+    private volatile Map<Integer, SpriteType> textureSprites;
     private final ModelDecoder modelDecoder;
     private final List<Integer> modelIds;
     private final Map<Integer, Optional<ModelType>> models = new HashMap<>();
     private final Map<Integer, Optional<ModelDefinitionView>> modelViews = new HashMap<>();
     private final Map<Integer, Optional<ModelGeometryView>> modelGeometryViews = new HashMap<>();
     private final Map<Integer, MapSceneSpriteView> mapScenes;
+    private final List<Integer> sequenceIds;
+    private final List<Integer> mapElementIds;
+    private final Map<Integer, Optional<SequenceDefinitionView>> sequences = new HashMap<>();
+    private final Map<Integer, Optional<MapElementDefinitionView>> mapElements = new HashMap<>();
 
     private OpenRuneDefinitionProvider(Cache cache, int revision) {
-        Objects.requireNonNull(cache, "cache");
+        this.cache = Objects.requireNonNull(cache, "cache");
         if (revision <= 0) {
             throw new IllegalArgumentException("OSRS cache revision must be positive");
         }
+        this.revision = revision;
         new OsrsCacheProvider.ObjectDecoder(revision).load(cache, objects);
         new OsrsCacheProvider.UnderlayDecoder().load(cache, underlays);
         new OsrsCacheProvider.OverlayDecoder().load(cache, overlays);
@@ -56,6 +73,8 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         modelDecoder = new ModelDecoder(cache, java.util.Collections.emptyList());
         modelIds = archiveIds(cache, MODELS);
         mapScenes = loadMapScenes(cache);
+        sequenceIds = archiveFileIds(cache, SEQUENCE);
+        mapElementIds = archiveFileIds(cache, MAP_ELEMENT);
     }
 
     public static OpenRuneDefinitionProvider load(Cache cache, int revision) {
@@ -76,9 +95,17 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         int[] modelIds = definition.getObjectModels() == null
                 ? new int[0]
                 : definition.getObjectModels().stream().mapToInt(Integer::intValue).toArray();
+        boolean interactive = definition.getInteractive() > 0;
+        if (definition.getInteractive() == -1) {
+            java.util.List<Integer> objectTypes = definition.getObjectTypes();
+            boolean modelDefaultsToInteractive = definition.getObjectModels() != null
+                    && (objectTypes == null
+                    || (!objectTypes.isEmpty() && objectTypes.get(0) == 10));
+            interactive = modelDefaultsToInteractive || !interactions.isEmpty();
+        }
         return Optional.of(new ObjectDefinitionView(definition.getId(), definition.getName(),
                 Math.max(1, definition.getSizeX()), Math.max(1, definition.getSizeY()),
-                interactions, modelIds, definition.getMapSceneID()));
+                interactions, modelIds, definition.getMapSceneID(), interactive));
     }
 
     @Override
@@ -89,6 +116,28 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     @Override
     public List<Integer> mapSceneIds() {
         return mapScenes.keySet().stream().sorted().toList();
+    }
+
+    @Override
+    public synchronized Optional<SequenceDefinitionView> sequence(int id) {
+        if (id < 0 || !sequenceIds.contains(id)) return Optional.empty();
+        return sequences.computeIfAbsent(id, this::decodeSequence);
+    }
+
+    @Override
+    public List<Integer> sequenceIds() {
+        return sequenceIds;
+    }
+
+    @Override
+    public synchronized Optional<MapElementDefinitionView> mapElement(int id) {
+        if (id < 0 || !mapElementIds.contains(id)) return Optional.empty();
+        return mapElements.computeIfAbsent(id, this::decodeMapElement);
+    }
+
+    @Override
+    public List<Integer> mapElementIds() {
+        return mapElementIds;
     }
 
     @Override
@@ -283,8 +332,42 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             return Optional.empty();
         }
         return Optional.of(new TextureDefinitionView(id, definition.isTransparent(), definition.getFileId(),
-                -1, definition.getAverageRgb(), definition.getAnimationDirection(),
+                definition.getAverageRgb(), -1, definition.getAnimationDirection(),
                 definition.getAnimationSpeed(), definition.isLowDetail()));
+    }
+
+    @Override
+    public synchronized Optional<int[]> texturePixels(int id, double brightness, int textureSize) {
+        // The pinned 2.4.19 artifact exposes the client-compatible 128px,
+        // BRIGHTNESS_MAX texture path only. Do not pretend a requested
+        // alternative gamma/size was honored at the neutral boundary.
+        if (id < 0 || !Double.isFinite(brightness) || Math.abs(brightness - 0.6) > 0.0001
+                || textureSize != 128) {
+            return Optional.empty();
+        }
+        TextureType definition = textures.get(id);
+        if (definition == null) return Optional.empty();
+        int[] pixels = definition.load(textureSprites());
+        return pixels == null ? Optional.empty() : Optional.of(pixels.clone());
+    }
+
+    private Map<Integer, SpriteType> textureSprites() {
+        Map<Integer, SpriteType> current = textureSprites;
+        if (current != null) return current;
+        synchronized (this) {
+            current = textureSprites;
+            if (current == null) {
+                Map<Integer, SpriteType> decoded = new HashMap<>();
+                try {
+                    new SpriteDecoder().load(cache, decoded);
+                } catch (RuntimeException ignored) {
+                    decoded.clear();
+                }
+                current = Map.copyOf(decoded);
+                textureSprites = current;
+            }
+        }
+        return current;
     }
 
     /** Decodes model metadata lazily so opening a cache does not load every mesh. */
@@ -342,8 +425,16 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             short[] colors = model.getTriangleColors();
             int[] alphas = model.getTriangleAlphas();
             int[] textures = model.getTriangleTextures();
+            int[] renderTypes = model.getTriangleRenderTypes();
+            int[] renderPriorities = model.getTriangleRenderPriorities();
+            int[] textureCoordinates = model.getTextureCoordinates();
+            int[] textureTriangles = flattenTextureTriangles(model);
+            model.computeNormals();
+            int[] vertexNormals = flattenVertexNormals(model.getVertexNormals());
+            int[] faceNormals = flattenFaceNormals(model.getFaceNormals());
             return Optional.of(new ModelGeometryView(model.getId(), vertices, triangles,
-                    colors, alphas, textures));
+                    colors, alphas, textures, renderTypes, renderPriorities,
+                    textureCoordinates, textureTriangles, vertexNormals, faceNormals));
         } catch (RuntimeException ignored) {
             // A malformed or partially supported model remains browseable by
             // metadata but cannot be handed to a renderer as unsafe geometry.
@@ -356,12 +447,315 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         return values;
     }
 
+    private static int[] flattenTextureTriangles(ModelType model) {
+        int count = model.getTextureTriangleCount();
+        int[] first = model.getTextureTriangleVertex1();
+        int[] second = model.getTextureTriangleVertex2();
+        int[] third = model.getTextureTriangleVertex3();
+        if (count <= 0 || first == null || second == null || third == null
+                || first.length < count || second.length < count || third.length < count) {
+            return new int[0];
+        }
+        int[] result = new int[count * 3];
+        for (int index = 0; index < count; index++) {
+            int offset = index * 3;
+            result[offset] = first[index];
+            result[offset + 1] = second[index];
+            result[offset + 2] = third[index];
+        }
+        return result;
+    }
+
+    private static int[] flattenVertexNormals(VertexNormal[] normals) {
+        if (normals == null || normals.length == 0) return new int[0];
+        int[] result = new int[normals.length * 4];
+        for (int index = 0; index < normals.length; index++) {
+            VertexNormal normal = normals[index];
+            int offset = index * 4;
+            result[offset] = normal.getX();
+            result[offset + 1] = normal.getY();
+            result[offset + 2] = normal.getZ();
+            result[offset + 3] = normal.getMagnitude();
+        }
+        return result;
+    }
+
+    private static int[] flattenFaceNormals(FaceNormal[] normals) {
+        if (normals == null || normals.length == 0) return new int[0];
+        int[] result = new int[normals.length * 3];
+        for (int index = 0; index < normals.length; index++) {
+            FaceNormal normal = normals[index];
+            int offset = index * 3;
+            result[offset] = normal.getX();
+            result[offset + 1] = normal.getY();
+            result[offset + 2] = normal.getZ();
+        }
+        return result;
+    }
+
     private static List<Integer> archiveIds(Cache cache, int index) {
         try {
             return java.util.Arrays.stream(cache.archives(index)).boxed().sorted().toList();
         } catch (RuntimeException ignored) {
             // Model archives are optional for definition-only or partial caches.
             return List.of();
+        }
+    }
+
+    private static List<Integer> archiveFileIds(Cache cache, int archive) {
+        try {
+            return java.util.Arrays.stream(cache.files(CONFIGS, archive)).boxed().sorted().toList();
+        } catch (RuntimeException ignored) {
+            return List.of();
+        }
+    }
+
+    private Optional<SequenceDefinitionView> decodeSequence(int id) {
+        byte[] data;
+        try {
+            data = cache.data(CONFIGS, SEQUENCE, id, null);
+        } catch (RuntimeException ignored) {
+            return Optional.empty();
+        }
+        if (data == null) return Optional.empty();
+
+        try {
+            ByteCursor cursor = new ByteCursor(data);
+            int[] frameIds = new int[0];
+            int[] frameLengths = new int[0];
+            int frameStep = -1;
+            boolean stretches = false;
+            int leftHandItem = -1;
+            int rightHandItem = -1;
+            int maxLoops = 99;
+            int precedenceAnimating = -1;
+            int priority = -1;
+            int replyMode = 2;
+            int skeletalId = -1;
+            while (cursor.remaining() > 0) {
+                int opcode = cursor.readUnsignedByte();
+                if (opcode == 0) break;
+                switch (opcode) {
+                    case 1 -> {
+                        int count = cursor.readUnsignedShort();
+                        frameLengths = new int[count];
+                        frameIds = new int[count];
+                        for (int index = 0; index < count; index++) {
+                            frameLengths[index] = cursor.readUnsignedShort();
+                        }
+                        for (int index = 0; index < count; index++) {
+                            frameIds[index] = cursor.readUnsignedShort();
+                        }
+                        for (int index = 0; index < count; index++) {
+                            frameIds[index] |= cursor.readUnsignedShort() << 16;
+                        }
+                    }
+                    case 2 -> frameStep = cursor.readUnsignedShort();
+                    case 3 -> cursor.skip(cursor.readUnsignedByte());
+                    case 4 -> stretches = true;
+                    case 5 -> cursor.skip(1);
+                    case 6 -> leftHandItem = cursor.readUnsignedShort();
+                    case 7 -> rightHandItem = cursor.readUnsignedShort();
+                    case 8 -> maxLoops = cursor.readUnsignedByte();
+                    case 9 -> precedenceAnimating = cursor.readUnsignedByte();
+                    case 10 -> priority = cursor.readUnsignedByte();
+                    case 11 -> replyMode = cursor.readUnsignedByte();
+                    case 12 -> {
+                        int count = cursor.readUnsignedByte();
+                        cursor.skip(count * 4);
+                    }
+                    case 13 -> {
+                        // OSRS revision 226+ stores a skeletal ID here.
+                        if (revision >= OSRS_SEQUENCE_REVISION) skeletalId = cursor.readInt();
+                        else skipFrameSounds(cursor);
+                    }
+                    case 14 -> {
+                        if (revision >= OSRS_SEQUENCE_REVISION) skipSparseFrameSounds(cursor, true);
+                        else skeletalId = cursor.readInt();
+                    }
+                    case 15 -> {
+                        if (revision >= OSRS_SEQUENCE_REVISION) cursor.skip(4);
+                        else skipSparseFrameSounds(cursor, false);
+                    }
+                    case 16 -> {
+                        if (revision < OSRS_SEQUENCE_REVISION) cursor.skip(4);
+                        else if (revision >= 233) cursor.skip(1);
+                    }
+                    case 17 -> cursor.skip(cursor.readUnsignedByte());
+                    case 18 -> cursor.readString();
+                    case 19 -> { }
+                    case 20 -> {
+                        cursor.skip(1);
+                        cursor.skip(4);
+                    }
+                    default -> throw new IllegalArgumentException("Unsupported sequence opcode " + opcode);
+                }
+            }
+            return Optional.of(new SequenceDefinitionView(id, frameIds, frameLengths,
+                    frameStep, stretches, normalizeSentinel(leftHandItem),
+                    normalizeSentinel(rightHandItem), maxLoops,
+                    normalizeSentinel(precedenceAnimating), normalizeSentinel(priority),
+                    replyMode, skeletalId));
+        } catch (RuntimeException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<MapElementDefinitionView> decodeMapElement(int id) {
+        byte[] data;
+        try {
+            data = cache.data(CONFIGS, MAP_ELEMENT, id, null);
+        } catch (RuntimeException ignored) {
+            return Optional.empty();
+        }
+        if (data == null) return Optional.empty();
+
+        try {
+            ByteCursor cursor = new ByteCursor(data);
+            int spriteId = -1;
+            int hoverSpriteId = -1;
+            String name = "";
+            int textColor = 0;
+            int hoverTextColor = 0;
+            int textSize = 0;
+            boolean worldMapVisible = true;
+            boolean minimapVisible = false;
+            boolean randomizePosition = true;
+            List<String> actions = new java.util.ArrayList<>();
+            while (cursor.remaining() > 0) {
+                int opcode = cursor.readUnsignedByte();
+                if (opcode == 0) break;
+                switch (opcode) {
+                    case 1 -> spriteId = cursor.readBigSmart();
+                    case 2 -> hoverSpriteId = cursor.readBigSmart();
+                    case 3 -> name = cursor.readString();
+                    case 4 -> textColor = cursor.readMedium();
+                    case 5 -> hoverTextColor = cursor.readMedium();
+                    case 6 -> textSize = cursor.readUnsignedByte();
+                    case 7 -> {
+                        int flags = cursor.readUnsignedByte();
+                        worldMapVisible = (flags & 1) != 0;
+                        minimapVisible = (flags & 2) != 0;
+                    }
+                    case 8 -> randomizePosition = cursor.readUnsignedByte() == 1;
+                    case 9 -> cursor.skip(12);
+                    case 10, 11, 12, 13, 14 -> actions.add(cursor.readString());
+                    case 15 -> skipMapElementPolygon(cursor);
+                    case 16 -> { }
+                    case 17 -> cursor.readString();
+                    case 18 -> cursor.readBigSmart();
+                    case 19 -> cursor.skip(2);
+                    case 20 -> cursor.skip(12);
+                    case 21, 22 -> cursor.skip(4);
+                    case 23 -> cursor.skip(3);
+                    case 24 -> cursor.skip(4);
+                    case 25 -> cursor.readBigSmart();
+                    case 28, 29, 30 -> cursor.skip(1);
+                    case 249 -> skipParams(cursor);
+                    default -> throw new IllegalArgumentException("Unsupported map element opcode " + opcode);
+                }
+            }
+            return Optional.of(new MapElementDefinitionView(id, spriteId, hoverSpriteId, name,
+                    textColor, hoverTextColor, textSize, worldMapVisible,
+                    minimapVisible, randomizePosition, actions));
+        } catch (RuntimeException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private static int normalizeSentinel(int value) {
+        return value == 65535 ? -1 : value;
+    }
+
+    private static void skipFrameSounds(ByteCursor cursor) {
+        int count = cursor.readUnsignedByte();
+        for (int index = 0; index < count; index++) {
+            cursor.skip(3);
+        }
+    }
+
+    private static void skipSparseFrameSounds(ByteCursor cursor, boolean hasUnknown) {
+        int count = cursor.readUnsignedShort();
+        for (int index = 0; index < count; index++) {
+            cursor.skip(2);
+            cursor.skip(hasUnknown ? 6 : 5);
+        }
+    }
+
+    private static void skipMapElementPolygon(ByteCursor cursor) {
+        int count = cursor.readUnsignedByte();
+        cursor.skip(count * 4);
+        cursor.skip(4);
+        int secondaryCount = cursor.readUnsignedByte();
+        cursor.skip(secondaryCount * 4);
+        cursor.skip(count);
+    }
+
+    private static void skipParams(ByteCursor cursor) {
+        int count = cursor.readUnsignedByte();
+        for (int index = 0; index < count; index++) {
+            boolean string = cursor.readUnsignedByte() == 1;
+            cursor.skip(3);
+            if (string) cursor.readString();
+            else cursor.skip(4);
+        }
+    }
+
+    private static final class ByteCursor {
+        private final byte[] data;
+        private int offset;
+
+        private ByteCursor(byte[] data) {
+            this.data = data;
+        }
+
+        private int remaining() {
+            return data.length - offset;
+        }
+
+        private void require(int count) {
+            if (count < 0 || remaining() < count) {
+                throw new IllegalArgumentException("Definition payload ended unexpectedly");
+            }
+        }
+
+        private int readUnsignedByte() {
+            require(1);
+            return data[offset++] & 0xFF;
+        }
+
+        private int readUnsignedShort() {
+            return (readUnsignedByte() << 8) | readUnsignedByte();
+        }
+
+        private int readMedium() {
+            return (readUnsignedByte() << 16) | (readUnsignedByte() << 8) | readUnsignedByte();
+        }
+
+        private int readInt() {
+            return (readUnsignedByte() << 24) | (readUnsignedByte() << 16)
+                    | (readUnsignedByte() << 8) | readUnsignedByte();
+        }
+
+        private int readBigSmart() {
+            require(1);
+            if ((data[offset] & 0x80) != 0) return readInt() & 0x7FFFFFFF;
+            int value = readUnsignedShort();
+            return value == 32767 ? -1 : value;
+        }
+
+        private String readString() {
+            int start = offset;
+            while (offset < data.length && data[offset] != 0) offset++;
+            require(1);
+            String value = new String(data, start, offset - start, StandardCharsets.ISO_8859_1);
+            offset++;
+            return value;
+        }
+
+        private void skip(int count) {
+            require(count);
+            offset += count;
         }
     }
 }

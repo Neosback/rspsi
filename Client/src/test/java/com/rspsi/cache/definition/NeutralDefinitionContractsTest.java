@@ -50,4 +50,21 @@ class NeutralDefinitionContractsTest {
                 () -> new ModelGeometryView(9, new int[]{0, 0, 0}, new int[]{0, 1, 2},
                         null, null, null));
     }
+
+    @Test
+    void enrichedModelGeometryPreservesRendererChannels() {
+        ModelGeometryView view = new ModelGeometryView(9,
+                new int[]{0, 0, 0, 10, 0, 0, 0, 10, 0},
+                new int[]{0, 1, 2},
+                new short[]{123}, new int[]{255}, new int[]{4},
+                new int[]{1}, new int[]{7}, new int[]{0},
+                new int[]{0, 1, 2}, new int[]{0, 256, 0, 1},
+                new int[]{0, 256, 0});
+
+        assertArrayEquals(new int[]{1}, view.triangleRenderTypes());
+        assertArrayEquals(new int[]{7}, view.triangleRenderPriorities());
+        assertArrayEquals(new int[]{0, 1, 2}, view.textureTriangleIndices());
+        assertArrayEquals(new int[]{0, 256, 0, 1}, view.vertexNormals());
+        assertArrayEquals(new int[]{0, 256, 0}, view.faceNormals());
+    }
 }

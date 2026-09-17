@@ -58,7 +58,10 @@ public class WorldDocument {
         for (int plane = 0; plane < planes; plane++) {
             for (int x = 0; x < width; x++) {
                 for (int y = 0; y < length; y++) {
-                    copy.tile(plane, x, y).restore(tile(plane, x, y).snapshot());
+                    Tile original = tile(plane, x, y);
+                    Tile destination = copy.tile(plane, x, y);
+                    destination.restore(original.snapshot());
+                    destination.heightSource(original.heightSource());
                 }
             }
         }

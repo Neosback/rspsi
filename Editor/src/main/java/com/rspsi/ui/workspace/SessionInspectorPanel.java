@@ -1,6 +1,9 @@
 package com.rspsi.ui.workspace;
 
 import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.plugin.EditorPluginHost;
+import com.rspsi.editor.plugin.EditorInspectorField;
+import com.rspsi.editor.plugin.EditorInspectorRegistration;
 import com.rspsi.editor.SessionChangeListener;
 import com.rspsi.editor.SelectionChangeListener;
 import com.rspsi.editor.SessionStateListener;
@@ -45,6 +48,7 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
     private WorldWindow window;
     private DefinitionProvider definitions;
     private CollisionMap collision;
+    private EditorPluginHost pluginHost;
 
     public SessionInspectorPanel() {
         this(null);
@@ -69,6 +73,12 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
     public void setDefinitionProvider(DefinitionProvider definitions) {
         this.definitions = definitions;
         rebuildCollision();
+        refresh();
+    }
+
+    /** Mounts feature-owned inspector sections into this shell-owned panel. */
+    public void bindPluginHost(EditorPluginHost host) {
+        this.pluginHost = Objects.requireNonNull(host, "host");
         refresh();
     }
 
@@ -143,6 +153,7 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
         row("Projectile blocked", directions(collisionTile.projectileBlocked()));
         row("Floor/object", collisionTile.floorBlocked() || collisionTile.objectBlocked()
                 ? (collisionTile.floorBlocked() ? "Floor" : "Object") : "No");
+        appendPluginInspectors();
     }
 
     private void showObject(WorldObject object) {
@@ -190,6 +201,7 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
             if (!appearance.recolors().isEmpty()) row("Recolors", appearance.recolors().toString());
             if (!appearance.retextures().isEmpty()) row("Retextures", appearance.retextures().toString());
         });
+        appendPluginInspectors();
     }
 
     private void clear(String message) {
@@ -230,6 +242,20 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
         values.addRow(row, key, text);
     }
 
+    private void appendPluginInspectors() {
+        if (pluginHost == null) return;
+        for (EditorInspectorRegistration registration : pluginHost.registry().inspectorRegistrations()) {
+            java.util.List<EditorInspectorField> fields = pluginHost.registry()
+                    .createInspector(registration.id()).inspect(pluginHost.context());
+            if (fields == null || fields.isEmpty()) continue;
+            int sectionRow = values.getRowCount();
+            Label heading = new Label(registration.category() + " · " + registration.label());
+            heading.getStyleClass().add("workspace-tool-section");
+            values.add(heading, 0, sectionRow, 2, 1);
+            for (EditorInspectorField field : fields) row(field.label(), field.value());
+        }
+    }
+
     private static String directions(java.util.Set<com.rspsi.editor.collision.CollisionDirection> directions) {
         return directions.isEmpty()
                 ? "None"
@@ -245,5 +271,6 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
             session = null;
         }
         collision = null;
+        pluginHost = null;
     }
 }

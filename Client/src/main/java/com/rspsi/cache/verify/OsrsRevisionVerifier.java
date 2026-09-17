@@ -6,6 +6,7 @@ import com.rspsi.cache.map.OsrsMapService;
 import com.rspsi.cache.map.OsrsRegionDecoder;
 import com.rspsi.cache.map.OsrsRegionEncoder;
 import com.rspsi.cache.map.OsrsRevisionProfile;
+import com.rspsi.cache.store.CacheStoreFactory;
 import com.rspsi.cache.store.OpenRuneCacheStore;
 import com.rspsi.editor.collision.OsrsCollisionBuilder;
 import com.rspsi.editor.assets.AssetDescriptor;
@@ -59,7 +60,7 @@ public final class OsrsRevisionVerifier {
     }
 
     public static VerificationReport inspectIndex(Path path) {
-        try (OpenRuneCacheStore store = OpenRuneCacheStore.open(path)) {
+        try (OpenRuneCacheStore store = CacheStoreFactory.openOsrs(path)) {
             MapIndexTable index = MapIndexTable.discover(store, OsrsMapService.OSRS_MAP_INDEX);
             List<String> errors = index.size() == 0
                     ? List.of("no OSRS map archives found; supplied cache is not accepted as OSRS evidence")
@@ -98,7 +99,7 @@ public final class OsrsRevisionVerifier {
                                                    Path parityFixturePath, boolean requireExternalParity) {
         List<String> messages = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        try (OpenRuneCacheStore store = OpenRuneCacheStore.open(path)) {
+        try (OpenRuneCacheStore store = CacheStoreFactory.openOsrs(path)) {
             var metadata = store.metadata(revision).orElseThrow();
             messages.add("cache metadata: " + metadata);
             OsrsRevisionProfile profile = OsrsRevisionProfile.forRevision(revision);
@@ -136,6 +137,31 @@ public final class OsrsRevisionVerifier {
             messages.add("asset descriptors: " + availableAssets.size());
             WorldDocument document = OsrsRegionDecoder.decode(landscape, locations, regionX, regionY,
                     profile.newTerrainFormat());
+            int placedMapSceneObjects = 0;
+            int placedMapSceneSprites = 0;
+            int placedMapSceneDefinitionsMissing = 0;
+            java.util.Map<Integer, Integer> missingMapSceneIds = new java.util.TreeMap<>();
+            for (int plane = 0; plane < document.planes(); plane++) {
+                for (int x = 0; x < document.width(); x++) {
+                    for (int y = 0; y < document.length(); y++) {
+                        for (var object : document.tile(plane, x, y).snapshot().objects()) {
+                            var definition = definitions.object(object.id());
+                            if (definition.isEmpty() || definition.get().mapSceneId() < 0) continue;
+                            placedMapSceneObjects++;
+                            if (definitions.mapScene(definition.get().mapSceneId()).isPresent()) {
+                                placedMapSceneSprites++;
+                            } else {
+                                placedMapSceneDefinitionsMissing++;
+                                missingMapSceneIds.merge(definition.get().mapSceneId(), 1, Integer::sum);
+                            }
+                        }
+                    }
+                }
+            }
+            messages.add("placed map-scene objects: " + placedMapSceneObjects
+                    + "; sprites resolved: " + placedMapSceneSprites
+                    + "; missing sprites: " + placedMapSceneDefinitionsMissing
+                    + "; missing IDs: " + missingMapSceneIds);
             int contextMinX = Math.max(0, regionX - 1);
             int contextMinY = Math.max(0, regionY - 1);
             int contextWidth = Math.min(256, regionX + 2) - contextMinX;
@@ -471,7 +497,8 @@ public final class OsrsRevisionVerifier {
             return check("scene.geometry.parity", VerificationCheck.Status.WARN,
                     "fixture contains no scene-geometry.json export");
         }
-        OsrsSceneGeometryFixture.Comparison comparison = fixture.sceneGeometry().compare(document);
+        OsrsSceneGeometryFixture.Comparison comparison = fixture.sceneGeometry().compare(
+                document, fixture.geometryPlaneMode());
         messages.add("scene geometry parity: " + comparison.differenceCount()
                 + " differing tiles" + (comparison.samples().isEmpty()
                 ? "" : "; samples=" + comparison.samples()));
@@ -503,12 +530,17 @@ public final class OsrsRevisionVerifier {
         messages.add("collision semantic parity: " + comparison.differenceCount()
                 + " differing interior tiles" + (comparison.samples().isEmpty()
                 ? "" : "; samples=" + comparison.samples()));
+        if (!fixture.collision().isAuthoritativeRouteSemantics()) {
+            return check("collision.parity", VerificationCheck.Status.WARN,
+                    "fixture semantics=" + fixture.collision().semantics()
+                            + "; diagnostic only because it is not the canonical OpenRune route layer"
+                            + (comparison.samples().isEmpty() ? "" : "; " + comparison.samples()));
+        }
         return check("collision.parity", comparison.matches()
                         ? VerificationCheck.Status.PASS : VerificationCheck.Status.WARN,
                 comparison.matches()
                         ? "independent collision flags match"
-                        : comparison.differenceCount() + " differing client/server collision tiles; "
-                        + "diagnostic only until the fixture is normalized to OpenRune route semantics"
+                        : comparison.differenceCount() + " differing canonical route collision tiles"
                         + (comparison.samples().isEmpty() ? "" : "; " + comparison.samples()));
     }
 
@@ -657,6 +689,7 @@ public final class OsrsRevisionVerifier {
         }
         var root = new com.google.gson.JsonObject();
         root.addProperty("formatVersion", 1);
+        root.addProperty("semantics", OsrsCollisionSemanticFixture.OPENRUNE_ROUTE);
         root.addProperty("width", collision.width());
         root.addProperty("length", collision.length());
         root.addProperty("planes", collision.planes());

@@ -71,6 +71,7 @@ import com.rspsi.swatches.BaseSwatch;
 import com.rspsi.swatches.OverlaySwatch;
 import com.rspsi.swatches.UnderlaySwatch;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.input.EditorKeyEvent;
 import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.DeleteObjectCommand;
 import com.rspsi.editor.FixUpperPlaneHeightsCommand;
@@ -83,7 +84,7 @@ import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.selection.ObjectSelection;
 import com.rspsi.editor.selection.ObjectSetSelection;
 import com.rspsi.editor.selection.Selection;
-import com.rspsi.cache.workspace.OsrsStudioProject;
+import com.rspsi.cache.workspace.OsrsBundle;
 import com.rspsi.cache.definition.LegacyDefinitionProvider;
 import com.rspsi.editor.model.WorldWindow;
 import com.rspsi.legacy.LegacyMapDocumentBridge;
@@ -108,6 +109,7 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.Tooltip;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.control.TextInputControl;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.paint.Color;
@@ -153,7 +155,7 @@ public class MainWindow extends Application {
 	private ControlledWorkspaceShell controlledWorkspaceShell;
 	private EditorSession controlledSession;
 	private LegacyMapDocumentBridge controlledDocumentBridge;
-	private OsrsStudioProject osrsStudioProject;
+	private OsrsBundle osrsBundle;
 	private SessionAutosaveCoordinator osrsAutosave;
 	private ScheduledFuture<?> osrsAutosaveTask;
 	private ProjectLayout osrsProjectLayout;
@@ -181,6 +183,13 @@ public class MainWindow extends Application {
 	private Mesh errorMesh;
 
 	public void fillSwatches() {
+		// The shell can be shown before a cache has been selected.  The legacy
+		// loaders are initialized by Client.load(), so an empty/read-only startup
+		// must leave the swatches empty instead of dereferencing their singletons.
+		if (FloorDefinitionLoader.instance == null || underlaySwatch == null || overlaySwatch == null) {
+			return;
+		}
+		int textureCount = TextureLoader.instance == null ? 0 : TextureLoader.instance.count();
 
 		for (int idx = 0; idx < FloorDefinitionLoader.getUnderlayCount(); idx++) {
 			Floor floor = FloorDefinitionLoader.getUnderlay(idx);
@@ -211,7 +220,7 @@ public class MainWindow extends Application {
 				continue;
 			Group g = new Group();
 			String label = "";
-			if (floor.getTexture() == -1 || floor.getTexture() > TextureLoader.instance.count()) {
+			if (floor.getTexture() == -1 || floor.getTexture() > textureCount) {
 				continue;
 			} else {
 				label = "[" + idx + "] texture(" + floor.getTexture() + ")";
@@ -236,7 +245,7 @@ public class MainWindow extends Application {
 				continue;
 			Group g = new Group();
 			String label = "";
-			if (floor.getTexture() == -1 || floor.getTexture() >= TextureLoader.instance.count()) {
+			if (floor.getTexture() == -1 || floor.getTexture() >= textureCount) {
 				label = "[" + idx + "] rgb(" + ColourUtils.getRed(floor.getRgb()) + "," + ColourUtils.getGreen(floor.getRgb()) + "," + ColourUtils.getBlue(floor.getRgb()) + ")";
 				Rectangle rect = new Rectangle();
 				rect.setWidth(32);
@@ -274,6 +283,7 @@ public class MainWindow extends Application {
 			double windowWidth = (Double) Settings.properties.getOrDefault("window_width",1240.0);
 			double windowHeight = (Double) Settings.properties.getOrDefault("window_height",800.0);
 			scene = new Scene(content,windowWidth,windowHeight);
+			scene.addEventFilter(KeyEvent.KEY_PRESSED, this::dispatchControlledShortcut);
 
 			scene.setFill(Color.TRANSPARENT);
 
@@ -642,13 +652,14 @@ public class MainWindow extends Application {
 					controlledDocumentBridge = null;
 				}
 				closeOsrsAutosave();
-				if (osrsStudioProject != null) {
-					osrsStudioProject.close();
-					osrsStudioProject = null;
+				if (osrsBundle != null) {
+					osrsBundle.close();
+					osrsBundle = null;
 				}
 				controlledSession = null;
 				osrsProjectActive = false;
 				if (controlledWorkspaceShell != null) {
+					controlledWorkspaceShell.close();
 					if (controlledWorkspaceShell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
 						viewport.close();
 					}
@@ -821,6 +832,18 @@ public class MainWindow extends Application {
 		}
 		primaryStage.sizeToScene();
 	}
+
+	/** Routes global editor shortcuts once, while preserving text-field input. */
+	private void dispatchControlledShortcut(KeyEvent event) {
+		if (controlledWorkspaceShell == null) return;
+		boolean textInputFocused = event.getTarget() instanceof TextInputControl;
+		EditorKeyEvent neutral = new EditorKeyEvent(
+				event.getCode().getName(), true, false,
+				event.isShiftDown(), event.isControlDown(), event.isAltDown(), event.isMetaDown());
+		if (controlledWorkspaceShell.dispatchKey(neutral, textInputFocused)) {
+			event.consume();
+		}
+	}
 	
 	private static ScheduledExecutorService service = Executors.newScheduledThreadPool(4);
 	private void setupAutoSave(){
@@ -921,20 +944,20 @@ public class MainWindow extends Application {
 			return;
 		}
 
-		OsrsStudioProject opened = null;
+		OsrsBundle opened = null;
 		SessionAutosaveCoordinator autosave = null;
 		try {
 			opened = outputCache == null
-					? OsrsStudioProject.openReadOnly(cacheDirectory.toPath(), metadata)
-					: OsrsStudioProject.openWithOpenRuneOutput(cacheDirectory.toPath(),
+					? OsrsBundle.openReadOnly(cacheDirectory.toPath(), metadata)
+					: OsrsBundle.openWithOpenRuneOutput(cacheDirectory.toPath(),
 							outputCache, metadata);
 			var projectRegion = opened.openRegion(region[0], region[1]);
 			if (projectRegion.region().session().canEdit()) {
 				autosave = opened.attachAutosave(layout, projectRegion.region().session());
 			}
 			closeOsrsAutosave();
-			if (osrsStudioProject != null) osrsStudioProject.close();
-			osrsStudioProject = opened;
+			if (osrsBundle != null) osrsBundle.close();
+			osrsBundle = opened;
 			osrsAutosave = autosave;
 			osrsProjectLayout = layout;
 			opened = null;
@@ -951,7 +974,7 @@ public class MainWindow extends Application {
 				controlledDocumentBridge = null;
 			}
 			ControlledWorkspaceBridge.bindProject(controlledWorkspaceShell, projectRegion,
-					osrsStudioProject.definitions(), osrsStudioProject.assets());
+					osrsBundle.definitions(), osrsBundle.assets());
 			startOsrsAutosave(projectRegion.region().session());
 			offerOsrsRecovery(projectRegion.region().session());
 			updateHistoryMenuState();

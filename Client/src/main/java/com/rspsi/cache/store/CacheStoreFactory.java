@@ -6,7 +6,7 @@ import dev.openrune.filesystem.Cache;
 import java.nio.file.Path;
 import java.util.Objects;
 
-/** Explicit backend construction; legacy Displee remains the application default. */
+/** Explicit backend construction for legacy and modern OSRS cache paths. */
 public final class CacheStoreFactory {
 
     private CacheStoreFactory() {
@@ -32,6 +32,17 @@ public final class CacheStoreFactory {
         return OpenRuneCacheStore.open(path);
     }
 
+    /**
+     * Opens the canonical production backend for an OSRS cache.
+     *
+     * <p>This named entry point is intentionally separate from {@link #legacy(Path)}.
+     * Callers selecting an OSRS project should use this method so a modern
+     * cache cannot silently fall back to the 317/Displee compatibility path.</p>
+     */
+    public static OpenRuneCacheStore openOsrs(Path path) {
+        return OpenRuneCacheStore.open(path);
+    }
+
     /** Opens an explicitly selected writable OpenRune output cache. */
     public static CacheStore openRuneWritable(Path path) {
         return OpenRuneCacheStore.openWritable(path);
@@ -50,7 +61,7 @@ public final class CacheStoreFactory {
         if (normalizedBase.equals(normalizedOutput)) {
             throw new IllegalArgumentException("OSRS base and output cache paths must differ");
         }
-        CacheStore base = openRune(normalizedBase);
+        CacheStore base = openOsrs(normalizedBase);
         try {
             return layered(base, new LegacyDispleeCacheStore(
                     new CacheLibrary(normalizedOutput.toString(), false, null)));

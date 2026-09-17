@@ -49,7 +49,7 @@ public final class OsrsStudioProject implements AutoCloseable {
         Objects.requireNonNull(layout, "layout");
         Objects.requireNonNull(cachePath, "cachePath");
         if (revision <= 0) throw new IllegalArgumentException("OSRS revision must be positive");
-        try (OpenRuneCacheStore cache = OpenRuneCacheStore.open(cachePath)) {
+        try (OpenRuneCacheStore cache = CacheStoreFactory.openOsrs(cachePath)) {
             OsrsCacheMetadata identity = cache.metadata(revision)
                     .orElseThrow(() -> new IOException("Selected cache did not expose an identity"));
             ProjectMetadata metadata = ProjectMetadata.forCache(identity);
@@ -118,7 +118,7 @@ public final class OsrsStudioProject implements AutoCloseable {
     public static OsrsStudioProject openReadOnly(Path cachePath, ProjectMetadata project) {
         Objects.requireNonNull(cachePath, "cachePath");
         Objects.requireNonNull(project, "project");
-        OpenRuneCacheStore base = OpenRuneCacheStore.open(cachePath);
+        OpenRuneCacheStore base = CacheStoreFactory.openOsrs(cachePath);
         try {
             DefinitionProvider definitions = base.definitionProvider(project.cacheRevision());
             AssetRepository assets = new DefinitionAssetRepository(definitions,
@@ -149,7 +149,7 @@ public final class OsrsStudioProject implements AutoCloseable {
         Objects.requireNonNull(basePath, "basePath");
         Objects.requireNonNull(outputPath, "outputPath");
         Objects.requireNonNull(project, "project");
-        OpenRuneCacheStore definitionsBase = OpenRuneCacheStore.open(basePath);
+        OpenRuneCacheStore definitionsBase = CacheStoreFactory.openOsrs(basePath);
         CacheStore outputStore = null;
         try {
             outputStore = CacheStoreFactory.openRuneWithDispleeOutput(basePath, outputPath);
@@ -179,7 +179,7 @@ public final class OsrsStudioProject implements AutoCloseable {
         if (basePath.toAbsolutePath().normalize().equals(outputPath.toAbsolutePath().normalize())) {
             throw new IllegalArgumentException("OSRS base and output cache paths must differ");
         }
-        OpenRuneCacheStore definitionsBase = OpenRuneCacheStore.open(basePath);
+        OpenRuneCacheStore definitionsBase = CacheStoreFactory.openOsrs(basePath);
         CacheStore outputStore = null;
         try {
             outputStore = CacheStoreFactory.openRuneWritable(outputPath);

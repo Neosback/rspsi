@@ -66,6 +66,12 @@ public class ObjectPreviewWindow extends Application {
 	}
 
 	public void fillList() {
+		// The preview window can be constructed before a cache is selected.  The
+		// definition loader is initialized only after Client.load(), so keep the
+		// empty shell usable until a real cache becomes available.
+		if (ObjectDefinitionLoader.instance == null) {
+			return;
+		}
 		controller.getDefinitionTable().setOnMouseClicked(mouseEvent -> {
 			if(mouseEvent.getButton() == MouseButton.SECONDARY) {
 				NamedValueObject obj = controller.getDefinitionTable().getSelectionModel().getSelectedItem();

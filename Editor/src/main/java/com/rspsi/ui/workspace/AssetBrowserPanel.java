@@ -2,6 +2,7 @@ package com.rspsi.ui.workspace;
 
 import com.rspsi.editor.assets.AssetDescriptor;
 import com.rspsi.editor.assets.AssetRepository;
+import com.rspsi.editor.plugin.EditorPluginHost;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.control.ComboBox;
@@ -20,6 +21,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.function.Consumer;
 
 /** JavaFX adapter for the neutral asset repository. */
@@ -37,6 +40,7 @@ public final class AssetBrowserPanel extends VBox {
     private final HBox horizontalFilters = new HBox(8);
     private final VBox verticalFilters = new VBox(6);
     private AssetRepository repository;
+    private EditorPluginHost pluginHost;
     private Consumer<AssetDescriptor> selectionListener = ignored -> { };
 
     public AssetBrowserPanel(AssetRepository repository) {
@@ -96,6 +100,12 @@ public final class AssetBrowserPanel extends VBox {
         refresh();
     }
 
+    /** Adds plugin-owned asset providers to the shell-owned browser. */
+    public void bindPluginHost(EditorPluginHost host) {
+        pluginHost = Objects.requireNonNull(host, "host");
+        refresh();
+    }
+
     public Optional<AssetDescriptor> selectedAsset() {
         return Optional.ofNullable(results.getSelectionModel().getSelectedItem());
     }
@@ -105,7 +115,17 @@ public final class AssetBrowserPanel extends VBox {
     }
 
     public void refresh() {
-        List<AssetDescriptor> assets = repository.search(searchField.getText());
+        List<AssetDescriptor> assets = new ArrayList<>(repository.search(searchField.getText()));
+        if (pluginHost != null) {
+            assets.addAll(pluginHost.registry().searchProvidedAssets(
+                    pluginHost.context(), searchField.getText()));
+        }
+        assets = assets.stream()
+                .distinct()
+                .sorted(Comparator.comparing(AssetDescriptor::type)
+                        .thenComparingInt(AssetDescriptor::id)
+                        .thenComparing(AssetDescriptor::name))
+                .toList();
         String selectedCategory = category.getValue();
         if (selectedCategory != null && !ALL.equals(selectedCategory)) {
             String type = selectedCategory.substring(0, selectedCategory.length() - 1).toLowerCase(Locale.ROOT);

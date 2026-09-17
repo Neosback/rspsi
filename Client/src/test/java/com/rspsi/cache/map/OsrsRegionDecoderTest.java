@@ -33,6 +33,9 @@ class OsrsRegionDecoderTest {
                 "modern overlay render marker must not change the definition ID");
         assertEquals(-56, upper.southWestHeight());
         assertEquals(-320, document.tile(1, 1, 0).snapshot().southWestHeight());
+        assertTrue(document.tile(0, 0, 0).heightSource().cacheEncoded());
+        assertTrue(document.tile(0, 1, 0).heightSource().generated());
+        assertEquals(2, document.tile(1, 0, 0).heightSource().explicitValue());
     }
 
     @Test
@@ -62,6 +65,16 @@ class OsrsRegionDecoderTest {
     void rejectsTruncatedTerrainPayloads() {
         assertThrows(IllegalArgumentException.class,
                 () -> OsrsRegionDecoder.decodeTerrain(new byte[]{0}, 0, 0, (x, y) -> 0));
+    }
+
+    @Test
+    void generatedHeightsUseOsrsWorldNoiseOffsets() {
+        byte[] generatedTerrain = new byte[2 * OsrsRegionDecoder.PLANES
+                * OsrsRegionDecoder.REGION_SIZE * OsrsRegionDecoder.REGION_SIZE];
+
+        WorldDocument document = OsrsRegionDecoder.decodeTerrain(generatedTerrain, 49, 49);
+
+        assertEquals(-256, document.tile(0, 3, 63).snapshot().southWestHeight());
     }
 
     private static byte[] terrainFixture() {

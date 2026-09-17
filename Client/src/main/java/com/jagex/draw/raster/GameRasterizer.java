@@ -56,6 +56,26 @@ public class GameRasterizer extends GameRaster {
 		return colourPalette[MapRegion.light(ColourUtils.toHsl(128, 255, 127), 96)];//colourPalette[MapRegion.light(0xFF0000, 96)];
 	}
 
+	/**
+	 * Converts a fixed-point HSL value into a palette colour without allowing
+	 * malformed compatibility data to address the palette outside its bounds.
+	 * Modern OSRS models can intentionally carry sentinel values when a
+	 * texture is unavailable to the legacy renderer.
+	 */
+	private int paletteColour(int fixedPointColour) {
+		int index = fixedPointColour >> 8;
+		if (index < 0) {
+			index = 0;
+		} else if (index >= colourPalette.length) {
+			index = colourPalette.length - 1;
+		}
+		return colourPalette[index];
+	}
+
+	private int safePaletteIndex(int colour) {
+		return Math.max(0, Math.min(0xffff, colour));
+	}
+
 
 	public void dispose() {
 		scanOffsets = null;
@@ -97,7 +117,7 @@ public class GameRasterizer extends GameRaster {
 			}
 			if (currentAlpha == 0) {
 				while (--k >= 0) {
-					j = colourPalette[j1 >> 8];
+					j = paletteColour(j1);
 					j1 += l1;
 					pixels[i++] = j;
 					pixels[i++] = j;
@@ -106,7 +126,7 @@ public class GameRasterizer extends GameRaster {
 				}
 				k = endX - startX & 3;
 				if (k > 0) {
-					j = colourPalette[j1 >> 8];
+					j = paletteColour(j1);
 					do {
 						pixels[i++] = j;
 					} while (--k > 0);
@@ -116,7 +136,7 @@ public class GameRasterizer extends GameRaster {
 				int j2 = currentAlpha;
 				int l2 = 256 - currentAlpha;
 				while (--k >= 0) {
-					j = colourPalette[j1 >> 8];
+					j = paletteColour(j1);
 					j1 += l1;
 					j = ((j & 0xff00ff) * l2 >> 8 & 0xff00ff) + ((j & 0xff00) * l2 >> 8 & 0xff00);
 					pixels[i++] = j + ((pixels[i] & 0xff00ff) * j2 >> 8 & 0xff00ff)
@@ -130,7 +150,7 @@ public class GameRasterizer extends GameRaster {
 				}
 				k = endX - startX & 3;
 				if (k > 0) {
-					j = colourPalette[j1 >> 8];
+					j = paletteColour(j1);
 					j = ((j & 0xff00ff) * l2 >> 8 & 0xff00ff) + ((j & 0xff00) * l2 >> 8 & 0xff00);
 					do {
 						pixels[i++] = j + ((pixels[i] & 0xff00ff) * j2 >> 8 & 0xff00ff)
@@ -158,7 +178,7 @@ public class GameRasterizer extends GameRaster {
 		k = endX - startX;
 		if (currentAlpha == 0) {
 			do {
-				pixels[i++] = colourPalette[j1 >> 8];
+				pixels[i++] = paletteColour(j1);
 				j1 += i2;
 			} while (--k > 0);
 			return;
@@ -166,7 +186,7 @@ public class GameRasterizer extends GameRaster {
 		int k2 = currentAlpha;
 		int i3 = 256 - currentAlpha;
 		do {
-			j = colourPalette[j1 >> 8];
+			j = paletteColour(j1);
 			j1 += i2;
 			j = ((j & 0xff00ff) * i3 >> 8 & 0xff00ff) + ((j & 0xff00) * i3 >> 8 & 0xff00);
 			pixels[i++] = j + ((pixels[i] & 0xff00ff) * k2 >> 8 & 0xff00ff) + ((pixels[i] & 0xff00) * k2 >> 8 & 0xff00);
@@ -1834,10 +1854,21 @@ public class GameRasterizer extends GameRaster {
 	public void drawTexturedTriangle(int faceYX, int faceYY, int faceYZ, int faceXX, int faceXY, int faceXZ, int k1, int l1, int i2, int j2,
 			int k2, int l2, int i3, int j3, int k3, int l3, int i4, int j4, int textureId) {
 
-        int[] pixels = TextureLoader.getTexturePixels(textureId);
+		// A modern model may reference a texture that is absent from the current
+		// cache or cannot be represented by this legacy rasterizer. In that case
+		// render the face with its shaded colours instead of allowing the -1
+		// texture/sentinel values to reach the palette lookup below.
+		if (TextureLoader.instance == null || textureId < 0 || TextureLoader.getTexture(textureId) == null) {
+			drawShadedTriangle(faceYX, faceYY, faceYZ, faceXX, faceXY, faceXZ,
+					safePaletteIndex(k1), safePaletteIndex(l1), safePaletteIndex(i2));
+			return;
+		}
+
+		int[] pixels = TextureLoader.getTexturePixels(textureId);
 
 		if(pixels == null) {
-			drawShadedTriangle(faceYX, faceYY, faceYZ, faceXX, faceXY, faceXZ, k1, l1, i2);
+			drawShadedTriangle(faceYX, faceYY, faceYZ, faceXX, faceXY, faceXZ,
+					safePaletteIndex(k1), safePaletteIndex(l1), safePaletteIndex(i2));
 			return;
 		}
 		currentTextureTransparent = !TextureLoader.getTextureTransparent(textureId);

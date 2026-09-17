@@ -16,12 +16,21 @@ the JavaFX desktop application accidentally.
 - [Architecture](docs/ARCHITECTURE.md)
 - [Resource catalog and provenance](docs/RESOURCE_CATALOG.md)
 - [OpenRune compatibility evidence](docs/OPENRUNE_COMPATIBILITY.md)
+- [External cache verification record](docs/EXTERNAL_CACHE_VERIFICATION_2026-09-17.md)
 - [Manual smoke checklist](docs/MANUAL_SMOKE_TEST.md)
+- [Scene semantics and frontend/plugin contract](docs/SCENE_SEMANTICS.md)
+- [OSRS scene pipeline and plugin attachment points](docs/OSRS_SCENE_PIPELINE.md)
+- [RuneLite scene reference for Studio tooling](docs/RUNELITE_SCENE_REFERENCE.md)
+- [OSRS Environment Exporter scene/render reference](docs/OSRS_ENVIRONMENT_EXPORTER_REFERENCE.md)
+- [Vertical feature/plugin architecture](docs/PLUGIN_ARCHITECTURE.md)
+- [Dear ImGui adapter boundary](docs/IMGUI_ADAPTER.md)
+- [Foundation completion audit](docs/FOUNDATION_AUDIT_2026-09-17.md)
+- [Ideas and future feature possibilities](docs/IDEAS.md)
 
 ## Verification
 
 ```text
-./gradlew test check verifyOsrsRevision
+./gradlew foundationGate
 ```
 
 To inspect an explicitly selected OSRS cache without modifying it:
@@ -32,6 +41,19 @@ RSPSI_OSRS_REGION_X=16 RSPSI_OSRS_REGION_Y=33 RSPSI_OSRS_REVISION=240 \\
 ./gradlew verifyOsrsRevision
 ```
 
+Instance parity uses a separately exported reference fixture:
+
+```text
+RSPSI_OSRS_CACHE=/path/to/cache \\
+RSPSI_OSRS_INSTANCE_FIXTURE=/tmp/instance.json RSPSI_OSRS_REVISION=240 \\
+./gradlew verifyOsrsInstance
+```
+
 Real caches and external research checkouts stay outside the repository. No
 external project becomes the RSPSi base, and resources marked for license
 review are not bundled or added as runtime dependencies.
+
+`foundationGate` is the required local/CI baseline. Without
+`RSPSI_OSRS_CACHE`, it runs the deterministic fixture suite and reports real
+cache parity as pending; release verification supplies an explicitly selected
+cache and, when required, `RSPSI_OSRS_REQUIRE_PARITY=true`.

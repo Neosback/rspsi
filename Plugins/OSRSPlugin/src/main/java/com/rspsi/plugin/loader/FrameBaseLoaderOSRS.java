@@ -8,7 +8,9 @@ import com.jagex.cache.loader.anim.FrameBaseLoader;
 import com.jagex.io.Buffer;
 import com.rspsi.cache.store.CacheArchiveView;
 import com.rspsi.cache.store.CacheIndexView;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class FrameBaseLoaderOSRS extends FrameBaseLoader {
 	
 	private Map<Integer, FrameBase> skeletons = Maps.newConcurrentMap();
@@ -45,12 +47,22 @@ public class FrameBaseLoaderOSRS extends FrameBaseLoader {
 
 	public void init(CacheIndexView skeletonIndex) {
 		for (CacheArchiveView archive : skeletonIndex.archives()) {
-			byte[] data = archive.file(0);
-			if (data != null) {
-				FrameBase base = decode(new Buffer(data));
-				skeletons.put(archive.id(), base);
+			try {
+				byte[] data = archive.file(0);
+				if (data != null) {
+					FrameBase base = decode(new Buffer(data));
+					skeletons.put(archive.id(), base);
+				}
+			} catch (RuntimeException exception) {
+				// A modern cache can contain sparse or non-frame-base archives in
+				// the animation index. One malformed group must not abort the
+				// entire OSRS project startup; identify it so the revision/layout
+				// can be audited instead of silently applying a 317 fallback.
+				log.warn("Skipping malformed OSRS skeleton archive {} files {}",
+						archive.id(), java.util.Arrays.toString(archive.fileIds()), exception);
 			}
 		}
+		log.info("Loaded {} OSRS skeleton archives from index {}", skeletons.size(), skeletonIndex.id());
 	}
 
 }

@@ -1,25 +1,10 @@
 package com.rspsi.ui.workspace;
 
 import com.rspsi.editor.tool.ChangeHeightTool;
-import com.rspsi.editor.tool.AttributeSelectionTool;
-import com.rspsi.editor.tool.BoxSelectTool;
-import com.rspsi.editor.tool.DeleteObjectTool;
-import com.rspsi.editor.tool.DuplicateObjectTool;
-import com.rspsi.editor.tool.DuplicateSelectionTool;
 import com.rspsi.editor.tool.EditorTool;
-import com.rspsi.editor.tool.FlattenTerrainTool;
-import com.rspsi.editor.tool.LassoSelectTool;
-import com.rspsi.editor.tool.MoveObjectTool;
-import com.rspsi.editor.tool.MoveSelectionTool;
-import com.rspsi.editor.tool.PaintFlagsTool;
-import com.rspsi.editor.tool.PaintOverlayTool;
-import com.rspsi.editor.tool.PaintUnderlayTool;
-import com.rspsi.editor.tool.PlaceObjectTool;
-import com.rspsi.editor.tool.RampTerrainTool;
-import com.rspsi.editor.tool.ReplaceSelectionTool;
-import com.rspsi.editor.tool.RotateObjectTool;
-import com.rspsi.editor.tool.RotateSelectionTool;
-import com.rspsi.editor.tool.SmoothTerrainTool;
+import com.rspsi.editor.plugin.EditorPluginHost;
+import com.rspsi.editor.plugin.EditorSetting;
+import com.rspsi.editor.plugin.EditorToolRegistration;
 import com.rspsi.editor.debug.DebugOverlayMode;
 import com.rspsi.editor.debug.DebugOverlaySettings;
 import com.rspsi.editor.collision.RoutePreviewMode;
@@ -59,6 +44,8 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private final List<CheckBox> debugButtons = new ArrayList<>();
     private final List<Button> actionButtons = new ArrayList<>();
     private final Map<CheckBox, DebugOverlayMode> debugModes = new LinkedHashMap<>();
+    private final List<ToggleButton> pluginButtons = new ArrayList<>();
+    private final Map<String, VBox> toolSections = new LinkedHashMap<>();
     private final Label status = new Label("Select a tool");
     private final TextField underlay = field("Underlay", "1");
     private final TextField overlay = field("Overlay", "1");
@@ -83,6 +70,10 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private final Label previewStatus = new Label("No preview");
     private final Label fragmentStatus = new Label("Select tiles, then copy");
     private CanonicalSceneViewport viewport;
+    private EditorPluginHost pluginHost;
+    private final VBox pluginSection;
+    private final VBox pluginContextSection;
+    private final GridPane legacySettings;
 
     public CanonicalToolPanel() {
         setSpacing(8);
@@ -101,37 +92,13 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
 
         VBox terrain = section("Terrain");
         addTool(terrain, "Select", () -> null, true);
-        addTool(terrain, "Paint underlay", () -> new PaintUnderlayTool(parse(underlay, "underlay")), false);
-        addTool(terrain, "Paint overlay", () -> new PaintOverlayTool(parse(overlay, "overlay")), false);
-        addTool(terrain, "Raise", () -> changeHeightTool(parse(height, "height")), false);
-        addTool(terrain, "Lower", () -> changeHeightTool(-parse(height, "height")), false);
-        addTool(terrain, "Flatten", () -> new FlattenTerrainTool(parse(flatten, "flatten")), false);
-        addTool(terrain, "Smooth", () -> new SmoothTerrainTool(50), false);
 
         VBox advancedTerrain = section("More terrain");
-        addTool(advancedTerrain, "Ramp", () -> new RampTerrainTool(
-                parse(rampStart, "ramp start"), parse(rampEnd, "ramp end")), false);
-        addTool(advancedTerrain, "Paint flags", () -> new PaintFlagsTool(parse(flags, "flags")), false);
         TitledPane advancedTerrainPane = collapsed("More terrain tools", advancedTerrain);
 
         VBox objects = section("Objects");
-        addTool(objects, "Place object", () -> new PlaceObjectTool(
-                parse(objectId, "object ID"), parse(objectType, "object type"),
-                parse(objectRotation, "object rotation")), false);
-        addTool(objects, "Move object", this::moveObjectTool, false);
-        addTool(objects, "Rotate object", this::rotateObjectTool, false);
-        addTool(objects, "Duplicate object", this::duplicateObjectTool, false);
-        addTool(objects, "Delete object", DeleteObjectTool::new, false);
 
         VBox selection = section("Selection / transforms");
-        addTool(selection, "Box select", BoxSelectTool::new, false);
-        addTool(selection, "Lasso select", LassoSelectTool::new, false);
-        addTool(selection, "Select by attribute", AttributeSelectionTool::new, false);
-        addTool(selection, "Move selection", this::moveSelectionTool, false);
-        addTool(selection, "Rotate selection", this::rotateSelectionTool, false);
-        addTool(selection, "Duplicate selection", this::duplicateSelectionTool, false);
-        addTool(selection, "Replace selection", () -> new ReplaceSelectionTool(
-                parse(replacementId, "replacement ID")), false);
         TitledPane selectionPane = collapsed("Selection tools", selection);
 
         VBox debug = section("Debug overlays");
@@ -202,27 +169,34 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         fragmentStatus.setWrapText(true);
         fragments.getChildren().addAll(fragmentButtons, fragmentStatus);
 
-        GridPane settings = new GridPane();
-        settings.setHgap(6);
-        settings.setVgap(5);
-        addSetting(settings, 0, "Underlay", underlay);
-        addSetting(settings, 1, "Overlay", overlay);
-        addSetting(settings, 2, "Height", height);
-        addSetting(settings, 3, "Height radius", heightRadius);
-        addSetting(settings, 4, "Height falloff", heightFalloff);
-        addSetting(settings, 5, "Flatten", flatten);
-        addSetting(settings, 6, "Flags", flags);
-        addSetting(settings, 7, "Ramp start", rampStart);
-        addSetting(settings, 8, "Ramp end", rampEnd);
-        addSetting(settings, 9, "Object ID", objectId);
-        addSetting(settings, 10, "Object type", objectType);
-        addSetting(settings, 11, "Object rotation", objectRotation);
-        addSetting(settings, 12, "Object turns", objectQuarterTurns);
-        addSetting(settings, 13, "Snap grid", snapGridSize);
-        addSetting(settings, 14, "Selection turns", selectionQuarterTurns);
-        addSetting(settings, 15, "Replacement ID", replacementId);
+        legacySettings = new GridPane();
+        legacySettings.setHgap(6);
+        legacySettings.setVgap(5);
+        addSetting(legacySettings, 0, "Underlay", underlay);
+        addSetting(legacySettings, 1, "Overlay", overlay);
+        addSetting(legacySettings, 2, "Height", height);
+        addSetting(legacySettings, 3, "Height radius", heightRadius);
+        addSetting(legacySettings, 4, "Height falloff", heightFalloff);
+        addSetting(legacySettings, 5, "Flatten", flatten);
+        addSetting(legacySettings, 6, "Flags", flags);
+        addSetting(legacySettings, 7, "Ramp start", rampStart);
+        addSetting(legacySettings, 8, "Ramp end", rampEnd);
+        addSetting(legacySettings, 9, "Object ID", objectId);
+        addSetting(legacySettings, 10, "Object type", objectType);
+        addSetting(legacySettings, 11, "Object rotation", objectRotation);
+        addSetting(legacySettings, 12, "Object turns", objectQuarterTurns);
+        addSetting(legacySettings, 13, "Snap grid", snapGridSize);
+        addSetting(legacySettings, 14, "Selection turns", selectionQuarterTurns);
+        addSetting(legacySettings, 15, "Replacement ID", replacementId);
+        pluginSection = section("Plugin tools");
+        pluginSection.setVisible(false);
+        pluginSection.setManaged(false);
+        pluginContextSection = section("Plugin context");
+        pluginContextSection.setVisible(false);
+        pluginContextSection.setManaged(false);
         getChildren().addAll(title, status, terrain, advancedTerrainPane, objects,
-                selectionPane, debug, preview, fragments, settings);
+                selectionPane, debug, preview, fragments, legacySettings, pluginSection,
+                pluginContextSection);
         setViewport(null);
     }
 
@@ -239,11 +213,44 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         status.setText("Object selected: " + asset.name() + " (" + asset.id() + ")");
     }
 
+    /** Mounts neutral tool contributions discovered by the plugin host. */
+    public void bindPluginHost(EditorPluginHost host) {
+        Objects.requireNonNull(host, "host");
+        pluginHost = host;
+        legacySettings.setVisible(false);
+        legacySettings.setManaged(false);
+        clearPluginContext();
+        pluginButtons.forEach(button -> {
+            if (button.getParent() instanceof VBox parent) {
+                parent.getChildren().remove(button);
+            }
+            toolButtons.remove(button);
+            group.getToggles().remove(button);
+        });
+        pluginButtons.clear();
+        pluginSection.getChildren().clear();
+        Label label = new Label("Plugin tools");
+        label.getStyleClass().add("workspace-tool-section");
+        pluginSection.getChildren().add(label);
+        for (EditorToolRegistration registration : host.registry().toolRegistrations()) {
+            int before = toolButtons.size();
+            VBox section = toolSections.getOrDefault(registration.category(), pluginSection);
+            addTool(section, registration.label(),
+                    () -> configuredTool(host, registration.id()), false,
+                    () -> renderPluginContext(host, registration.id()));
+            pluginButtons.add(toolButtons.get(before));
+        }
+        boolean available = pluginSection.getChildren().size() > 1;
+        pluginSection.setVisible(available);
+        pluginSection.setManaged(available);
+    }
+
     private void setViewport(CanonicalSceneViewport viewport) {
         this.viewport = viewport;
         toolButtons.forEach(button -> button.setDisable(viewport == null));
         debugButtons.forEach(button -> button.setDisable(viewport == null));
         actionButtons.forEach(button -> button.setDisable(viewport == null));
+        pluginContextSection.setDisable(viewport == null);
     }
 
     private VBox section(String title) {
@@ -251,6 +258,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         label.getStyleClass().add("workspace-tool-section");
         VBox section = new VBox(4);
         section.getChildren().add(label);
+        toolSections.put(title, section);
         return section;
     }
 
@@ -265,6 +273,11 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     }
 
     private void addTool(VBox section, String label, Supplier<EditorTool> factory, boolean select) {
+        addTool(section, label, factory, select, null);
+    }
+
+    private void addTool(VBox section, String label, Supplier<EditorTool> factory,
+                         boolean select, Runnable onSelected) {
         ToggleButton button = new ToggleButton(label);
         button.setMaxWidth(Double.MAX_VALUE);
         button.setMinHeight(30);
@@ -274,6 +287,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         VBox.setVgrow(button, Priority.NEVER);
         button.setOnAction(event -> {
             if (viewport == null) return;
+            clearPluginContext();
             if (select) {
                 viewport.deactivateTool();
                 status.setText("Selection");
@@ -282,6 +296,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
             try {
                 viewport.activateTool(factory.get());
                 status.setText(label);
+                if (onSelected != null) onSelected.run();
             } catch (IllegalArgumentException exception) {
                 group.selectToggle(null);
                 status.setText(exception.getMessage());
@@ -290,47 +305,102 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         section.getChildren().add(button);
     }
 
-    private ChangeHeightTool changeHeightTool(int delta) {
-        ChangeHeightTool tool = new ChangeHeightTool(delta);
-        tool.setRadius(parse(heightRadius, "height radius"));
-        tool.setFalloff(heightFalloff.getValue());
-        return tool;
+    private void renderPluginContext(EditorPluginHost host, String toolId) {
+        if (host != pluginHost || viewport == null) return;
+        List<EditorSetting> settings = host.registry().settingsForTool(host.context(), toolId);
+        if (settings.isEmpty()) return;
+
+        GridPane grid = new GridPane();
+        grid.setHgap(6);
+        grid.setVgap(5);
+        for (int index = 0; index < settings.size(); index++) {
+            EditorSetting setting = settings.get(index);
+            addSetting(grid, index, setting.label(), pluginSettingControl(setting));
+        }
+        pluginContextSection.getChildren().add(grid);
+        pluginContextSection.setVisible(true);
+        pluginContextSection.setManaged(true);
     }
 
-    private RotateSelectionTool rotateSelectionTool() {
-        RotateSelectionTool tool = new RotateSelectionTool();
-        tool.setQuarterTurns(parse(selectionQuarterTurns, "selection quarter turns"));
-        return tool;
+    private javafx.scene.control.Control pluginSettingControl(EditorSetting setting) {
+        return switch (setting.type()) {
+            case INTEGER -> numericSettingControl(setting, true);
+            case DECIMAL -> numericSettingControl(setting, false);
+            case BOOLEAN -> booleanSettingControl(setting);
+            case ENUM -> enumSettingControl(setting);
+        };
     }
 
-    private RotateObjectTool rotateObjectTool() {
-        RotateObjectTool tool = new RotateObjectTool();
-        tool.setQuarterTurns(parse(objectQuarterTurns, "object quarter turns"));
-        return tool;
+    private TextField numericSettingControl(EditorSetting setting, boolean integer) {
+        TextField field = field(setting.label(), String.valueOf(setting.value()));
+        field.setAccessibleText(setting.label() + " plugin setting");
+        Runnable commit = () -> {
+            try {
+                Object value = integer
+                        ? Integer.parseInt(field.getText().trim())
+                        : Double.parseDouble(field.getText().trim());
+                setting.setValue(value);
+                field.setText(String.valueOf(setting.value()));
+                field.pseudoClassStateChanged(INVALID, false);
+            } catch (IllegalArgumentException exception) {
+                field.pseudoClassStateChanged(INVALID, true);
+                status.setText(setting.label() + ": " + exception.getMessage());
+            }
+        };
+        field.setOnAction(event -> commit.run());
+        field.focusedProperty().addListener((observable, wasFocused, focused) -> {
+            if (!focused) commit.run();
+        });
+        return field;
     }
 
-    private MoveObjectTool moveObjectTool() {
-        MoveObjectTool tool = new MoveObjectTool();
-        tool.setSnapGridSize(parse(snapGridSize, "snap grid"));
-        return tool;
+    private CheckBox booleanSettingControl(EditorSetting setting) {
+        CheckBox check = new CheckBox();
+        check.setSelected(Boolean.TRUE.equals(setting.value()));
+        check.setAccessibleText(setting.label() + " plugin setting");
+        check.setOnAction(event -> {
+            try {
+                setting.setValue(check.isSelected());
+            } catch (IllegalArgumentException exception) {
+                status.setText(setting.label() + ": " + exception.getMessage());
+            }
+        });
+        return check;
     }
 
-    private DuplicateObjectTool duplicateObjectTool() {
-        DuplicateObjectTool tool = new DuplicateObjectTool();
-        tool.setSnapGridSize(parse(snapGridSize, "snap grid"));
-        return tool;
+    private ComboBox<String> enumSettingControl(EditorSetting setting) {
+        ComboBox<String> combo = new ComboBox<>();
+        combo.getItems().setAll(setting.options());
+        combo.getSelectionModel().select(String.valueOf(setting.value()));
+        combo.setMaxWidth(Double.MAX_VALUE);
+        combo.setAccessibleText(setting.label() + " plugin setting");
+        combo.setOnAction(event -> {
+            String value = combo.getValue();
+            if (value == null) return;
+            try {
+                setting.setValue(value);
+            } catch (IllegalArgumentException exception) {
+                status.setText(setting.label() + ": " + exception.getMessage());
+            }
+        });
+        return combo;
     }
 
-    private MoveSelectionTool moveSelectionTool() {
-        MoveSelectionTool tool = new MoveSelectionTool();
-        tool.setSnapGridSize(parse(snapGridSize, "snap grid"));
-        return tool;
+    private void clearPluginContext() {
+        pluginContextSection.getChildren().clear();
+        pluginContextSection.getChildren().add(sectionLabel("Plugin context"));
+        pluginContextSection.setVisible(false);
+        pluginContextSection.setManaged(false);
     }
 
-    private DuplicateSelectionTool duplicateSelectionTool() {
-        DuplicateSelectionTool tool = new DuplicateSelectionTool();
-        tool.setSnapGridSize(parse(snapGridSize, "snap grid"));
-        return tool;
+    private static Label sectionLabel(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("workspace-tool-section");
+        return label;
+    }
+
+    private EditorTool configuredTool(EditorPluginHost host, String id) {
+        return host.registry().createTool(id);
     }
 
     private void addDebug(VBox section, String label, DebugOverlayMode mode) {
@@ -437,7 +507,11 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
 
     @Override
     public void close() {
+        pluginHost = null;
+        legacySettings.setVisible(true);
+        legacySettings.setManaged(true);
         if (viewport != null) viewport.deactivateTool();
+        clearPluginContext();
         viewport = null;
         group.selectToggle(null);
         toolButtons.forEach(button -> button.setDisable(true));

@@ -58,6 +58,19 @@ class OsrsParityFixtureTest {
                 "fixture cache fingerprint does not match the selected cache"), problems);
     }
 
+    @Test
+    void identifiesClientCollisionFixturesAsNonAuthoritative(@TempDir Path directory) throws Exception {
+        Files.writeString(directory.resolve("collision.json"), """
+                {"formatVersion":1,"semantics":"CLIENT_CLIP_TYPE",
+                 "width":1,"length":1,"planes":1,"flags":[0]}
+                """);
+
+        OsrsCollisionSemanticFixture fixture = OsrsParityFixture.load(directory).collision();
+
+        assertEquals(OsrsCollisionSemanticFixture.CLIENT_CLIP_TYPE, fixture.semantics());
+        assertTrue(!fixture.isAuthoritativeRouteSemantics());
+    }
+
     private static void writePng(Path path, int width, int height, int color) throws Exception {
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         for (int y = 0; y < height; y++) {

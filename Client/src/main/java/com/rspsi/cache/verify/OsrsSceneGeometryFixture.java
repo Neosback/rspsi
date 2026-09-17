@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.terrain.TerrainFace;
 import com.rspsi.editor.terrain.TerrainMesh;
 import com.rspsi.editor.terrain.TerrainMeshBuilder;
@@ -57,18 +58,26 @@ public record OsrsSceneGeometryFixture(int formatVersion, List<TileGeometry> til
     }
 
     public Comparison compare(WorldDocument document) {
+        return compare(document, OsrsScenePlaneMode.AUTHORED);
+    }
+
+    public Comparison compare(WorldDocument document, OsrsScenePlaneMode planeMode) {
         Objects.requireNonNull(document, "document");
+        Objects.requireNonNull(planeMode, "planeMode");
         TerrainMeshBuilder builder = new TerrainMeshBuilder();
         int differences = 0;
         List<String> samples = new ArrayList<>(8);
         for (TileGeometry expected : tiles) {
-            if (expected.plane() >= document.planes()
+            int authoredPlane = planeMode == OsrsScenePlaneMode.EFFECTIVE
+                    ? authoredPlaneForEffectiveTile(document, expected.plane(), expected.x(), expected.y())
+                    : expected.plane();
+            if (authoredPlane >= document.planes()
                     || expected.x() >= document.width() || expected.y() >= document.length()) {
                 differences++;
                 addSample(samples, "fixture tile outside document: " + expected.coordinate());
                 continue;
             }
-            TerrainMesh actual = builder.build(document.tile(expected.plane(), expected.x(), expected.y()).snapshot());
+            TerrainMesh actual = builder.build(document.tile(authoredPlane, expected.x(), expected.y()).snapshot());
             if (!expected.matches(actual)) {
                 differences++;
                 addSample(samples, "geometry differs at " + expected.coordinate()
@@ -79,6 +88,23 @@ public record OsrsSceneGeometryFixture(int formatVersion, List<TileGeometry> til
             }
         }
         return new Comparison(differences == 0, differences, List.copyOf(samples));
+    }
+
+    /**
+     * Effective scene exports describe post-relink render planes. The document
+     * retains authored cache planes, so invert the bridge shift before building
+     * the comparable terrain mesh.
+     */
+    private static int authoredPlaneForEffectiveTile(WorldDocument document, int effectivePlane,
+                                                       int x, int y) {
+        if (effectivePlane < 0 || effectivePlane >= document.planes()
+                || x < 0 || x >= document.width() || y < 0 || y >= document.length()) {
+            return effectivePlane;
+        }
+        boolean bridge = document.planes() > 1
+                && OsrsTileFlags.hasBridge(document.tile(1, x, y).snapshot().flags());
+        return bridge && effectivePlane < document.planes() - 1
+                ? effectivePlane + 1 : effectivePlane;
     }
 
     private static void addSample(List<String> samples, String value) {

@@ -84,12 +84,18 @@ public final class WorldRegionWindow {
 
     /** Resolves a loaded canonical tile without inventing data for missing regions. */
     public Optional<TileSnapshot> tile(int plane, int worldX, int worldY) {
+        return tileSource(plane, worldX, worldY).map(WorldTileSource::snapshot);
+    }
+
+    /** Resolves a tile while retaining cache height-opcode provenance. */
+    public Optional<WorldTileSource> tileSource(int plane, int worldX, int worldY) {
         if (plane < 0 || !containsWorldTile(worldX, worldY)) return Optional.empty();
         int regionX = worldX >> 6;
         int regionY = worldY >> 6;
         WorldRegion region = regions.get((regionX << 8) | regionY);
         if (region == null || plane >= region.document().planes()) return Optional.empty();
-        return Optional.of(region.document().tile(plane, worldX & 63, worldY & 63).snapshot());
+        Tile tile = region.document().tile(plane, worldX & 63, worldY & 63);
+        return Optional.of(new WorldTileSource(tile.snapshot(), tile.heightSource()));
     }
 
     public Set<Integer> missingRegionIds() {

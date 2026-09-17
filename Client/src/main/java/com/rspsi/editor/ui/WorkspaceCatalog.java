@@ -19,7 +19,11 @@ public record WorkspaceCatalog(
                 throw new IllegalArgumentException("Duplicate panel descriptor: " + panel.id());
             }
         }
+        Map<String, WorkspaceDefinition> workspacesById = new HashMap<>();
         for (WorkspaceDefinition workspace : workspaces) {
+            if (workspacesById.put(workspace.id(), workspace) != null) {
+                throw new IllegalArgumentException("Duplicate workspace definition: " + workspace.id());
+            }
             for (PanelPlacement placement : workspace.placements()) {
                 PanelDescriptor panel = byId.get(placement.panelId());
                 if (panel == null) {
