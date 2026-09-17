@@ -111,10 +111,11 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         if (definition == null) {
             return Optional.empty();
         }
+        int clipType = definition.getClipType() < 0 ? 2 : definition.getClipType();
         return Optional.of(new ObjectCollisionView(definition.getId(),
                 Math.max(1, definition.getSizeX()), Math.max(1, definition.getSizeY()),
                 Math.max(0, definition.getSolid()), definition.getImpenetrable(),
-                definition.isHollow()));
+                definition.isHollow(), clipType));
     }
 
     @Override

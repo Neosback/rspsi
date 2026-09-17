@@ -201,7 +201,7 @@ public final class OsrsRevisionVerifier {
             messages.add("neutral minimap rasters: " + document.planes()
                     + " planes; " + minimapPixels + " semantic pixels; "
                     + shapedMinimapPixels + " shaped pixels");
-            exportParityImages(parityOutputPath(), minimaps, shapedMinimaps, messages, errors);
+            exportParityImages(parityOutputPath(), minimaps, shapedMinimaps, collision, messages, errors);
             byte[] encodedTerrain = OsrsRegionEncoder.encodeTerrain(document, profile.newTerrainFormat());
             byte[] encodedLocations = OsrsRegionEncoder.encodeLocations(document);
             WorldDocument roundTrip = OsrsRegionDecoder.decode(encodedTerrain, encodedLocations,
@@ -240,6 +240,8 @@ public final class OsrsRevisionVerifier {
             VerificationCheck locationParity = locationParityCheck(fixture, fixtureProblems, document, messages);
             VerificationCheck geometryParity = sceneGeometryParityCheck(fixture, fixtureProblems,
                     document, messages);
+            VerificationCheck collisionParity = collisionParityCheck(fixture, fixtureProblems,
+                    collision, messages);
             VerificationCheck minimapParity = minimapParityCheck(fixture, fixtureProblems,
                     minimaps, shapedMinimaps, messages, errors);
             if (renderParity.status() == VerificationCheck.Status.FAIL) {
@@ -257,6 +259,15 @@ public final class OsrsRevisionVerifier {
             if (geometryParity.status() == VerificationCheck.Status.FAIL) {
                 errors.add("scene geometry parity failed: " + geometryParity.detail());
             }
+            if (collisionParity.status() == VerificationCheck.Status.FAIL) {
+                errors.add("collision parity failed: " + collisionParity.detail());
+            }
+            // TSPS collision flags are useful diagnostics, but are not the
+            // authoritative gate: its client scene uses clipType and omits
+            // scene-edge locations, while RSPSi follows OpenRune's
+            // solid/blockWalk and routefinder vocabulary. The authoritative
+            // collision vectors remain in the normal test suite until a
+            // normalized RuneLite/OpenRune fixture is available.
             errors.addAll(requiredParityErrors(renderParity, geometryParity, terrainParity,
                     locationParity, minimapParity, requireExternalParity));
             if (issueErrors > 0) errors.add("world validation reported errors");
@@ -347,6 +358,7 @@ public final class OsrsRevisionVerifier {
                             terrainParity,
                             locationParity,
                             geometryParity,
+                            collisionParity,
                             minimapParity))));
         } catch (RuntimeException exception) {
             errors.add(exception.getClass().getSimpleName() + ": " + exception.getMessage());
@@ -468,6 +480,35 @@ public final class OsrsRevisionVerifier {
                         + (comparison.samples().isEmpty() ? "" : "; " + comparison.samples()));
     }
 
+    private static VerificationCheck collisionParityCheck(OsrsParityFixture fixture,
+                                                          List<String> fixtureProblems,
+                                                          com.rspsi.editor.collision.CollisionMap collision,
+                                                          List<String> messages) {
+        if (fixture == null && fixtureProblems.isEmpty()) {
+            return check("collision.parity", VerificationCheck.Status.NOT_RUN,
+                    "independent collision fixture was not supplied");
+        }
+        if (!fixtureProblems.isEmpty()) {
+            return check("collision.parity", VerificationCheck.Status.FAIL,
+                    "fixture is incompatible or could not be loaded");
+        }
+        if (fixture.collision() == null) {
+            return check("collision.parity", VerificationCheck.Status.WARN,
+                    "fixture contains no collision.json export");
+        }
+        OsrsCollisionSemanticFixture.Comparison comparison = fixture.collision().compare(collision);
+        messages.add("collision semantic parity: " + comparison.differenceCount()
+                + " differing interior tiles" + (comparison.samples().isEmpty()
+                ? "" : "; samples=" + comparison.samples()));
+        return check("collision.parity", comparison.matches()
+                        ? VerificationCheck.Status.PASS : VerificationCheck.Status.WARN,
+                comparison.matches()
+                        ? "independent collision flags match"
+                        : comparison.differenceCount() + " differing client/server collision tiles; "
+                        + "diagnostic only until the fixture is normalized to OpenRune route semantics"
+                        + (comparison.samples().isEmpty() ? "" : "; " + comparison.samples()));
+    }
+
     private static VerificationCheck minimapParityCheck(OsrsParityFixture fixture,
                                                         List<String> fixtureProblems,
                                                         Map<Integer, MinimapImage> actualMinimaps,
@@ -549,6 +590,7 @@ public final class OsrsRevisionVerifier {
     private static void exportParityImages(Path output,
                                            Map<Integer, MinimapImage> minimaps,
                                            Map<Integer, MinimapImage> shapedMinimaps,
+                                           com.rspsi.editor.collision.CollisionMap collision,
                                            List<String> messages,
                                            List<String> errors) {
         if (output == null) return;
@@ -556,10 +598,30 @@ public final class OsrsRevisionVerifier {
             Files.createDirectories(output);
             writeImages(output, "minimap-plane-", minimaps);
             writeImages(output, "minimap-shaped-plane-", shapedMinimaps);
+            writeCollision(output.resolve("rspsi-collision.json"), collision);
             messages.add("parity rasters exported: " + output);
         } catch (IOException | RuntimeException exception) {
             errors.add("could not export parity rasters: " + exception.getMessage());
         }
+    }
+
+    private static void writeCollision(Path target,
+                                       com.rspsi.editor.collision.CollisionMap collision) throws IOException {
+        List<Integer> flags = new ArrayList<>(collision.width() * collision.length() * collision.planes());
+        for (int plane = 0; plane < collision.planes(); plane++) {
+            for (int x = 0; x < collision.width(); x++) {
+                for (int y = 0; y < collision.length(); y++) {
+                    flags.add(collision.flags(plane, x, y));
+                }
+            }
+        }
+        var root = new com.google.gson.JsonObject();
+        root.addProperty("formatVersion", 1);
+        root.addProperty("width", collision.width());
+        root.addProperty("length", collision.length());
+        root.addProperty("planes", collision.planes());
+        root.add("flags", new com.google.gson.Gson().toJsonTree(flags));
+        Files.writeString(target, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(root) + "\n");
     }
 
     private static void writeImages(Path output, String prefix,
@@ -602,9 +664,12 @@ public final class OsrsRevisionVerifier {
                                               boolean required) {
         return requiredParityErrors(renderParity,
                 new VerificationCheck("scene.geometry.parity", VerificationCheck.Status.NOT_RUN,
-                        "fixture pending"), terrainParity, locationParity, minimapParity, required);
+                        "fixture pending"), terrainParity, locationParity,
+                new VerificationCheck("collision.parity", VerificationCheck.Status.NOT_RUN,
+                        "fixture pending"), minimapParity, required);
     }
 
+    /** Compatibility overload retained for callers that have terrain geometry but no collision fixture yet. */
     static List<String> requiredParityErrors(VerificationCheck renderParity,
                                               VerificationCheck geometryParity,
                                               VerificationCheck terrainParity,
@@ -623,6 +688,35 @@ public final class OsrsRevisionVerifier {
         }
         if (locationParity.status() != VerificationCheck.Status.PASS) {
             errors.add("required location parity is not passing: " + locationParity.status());
+        }
+        if (minimapParity.status() != VerificationCheck.Status.PASS) {
+            errors.add("required minimap parity is not passing: " + minimapParity.status());
+        }
+        return List.copyOf(errors);
+    }
+
+    static List<String> requiredParityErrors(VerificationCheck renderParity,
+                                              VerificationCheck geometryParity,
+                                              VerificationCheck terrainParity,
+                                              VerificationCheck locationParity,
+                                              VerificationCheck collisionParity,
+                                              VerificationCheck minimapParity,
+                                              boolean required) {
+        if (!required) return List.of();
+        List<String> errors = new ArrayList<>();
+        if (renderParity.status() != VerificationCheck.Status.PASS
+                && geometryParity.status() != VerificationCheck.Status.PASS) {
+            errors.add("required scene parity is not passing: render=" + renderParity.status()
+                    + ", geometry=" + geometryParity.status());
+        }
+        if (terrainParity.status() != VerificationCheck.Status.PASS) {
+            errors.add("required terrain parity is not passing: " + terrainParity.status());
+        }
+        if (locationParity.status() != VerificationCheck.Status.PASS) {
+            errors.add("required location parity is not passing: " + locationParity.status());
+        }
+        if (collisionParity.status() != VerificationCheck.Status.PASS) {
+            errors.add("required collision parity is not passing: " + collisionParity.status());
         }
         if (minimapParity.status() != VerificationCheck.Status.PASS) {
             errors.add("required minimap parity is not passing: " + minimapParity.status());

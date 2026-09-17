@@ -190,6 +190,15 @@ renderer-neutral 3D geometry export. This keeps RuneLite/TSPS
 captures and generated images outside the repository while making their
 provenance-controlled acceptance path executable.
 
+The optional `collision.json` export is intentionally diagnostic rather than
+a strict gate. TSPS exposes client-scene flags based on `clipType` and omits
+locations at its scene loading line, while RSPSi's canonical collision map
+follows OpenRune-Server's `solid`/`blockWalk` and routefinder semantics. The
+product-side collision gate is therefore the deterministic OpenRune
+`StepValidator` vector suite and focused bridge/wall/object tests. A future
+normalized RuneLite/OpenRune collision fixture can be promoted to the strict
+parity gate without changing the editor model.
+
 For visual debugging, set `RSPSI_OSRS_PARITY_OUTPUT=/explicit/output/path`
 with the selected-region arguments. The verifier then writes the derived
 `minimap-plane-N.png` and `minimap-shaped-plane-N.png` rasters to that path.

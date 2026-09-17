@@ -71,6 +71,14 @@ The locked product direction and workspace design are maintained in
 
 ## Phase gates
 
+Parity note: the TSPS `collision.json` export is retained as diagnostic
+evidence, not a strict release requirement, because TSPS uses client
+`clipType`/scene-edge rules while the canonical editor collision layer follows
+OpenRune-Server `solid`/`blockWalk` and routefinder semantics. Focused bridge,
+wall, object, and OpenRune `StepValidator` vector tests are the current
+authoritative collision gate; a normalized RuneLite/OpenRune fixture can be
+promoted later.
+
 ### Phase 0 — Safety net
 
 - Add JUnit 5 tests and fixture-backed semantic map tests. The bundled blank

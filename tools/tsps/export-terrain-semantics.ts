@@ -10,7 +10,8 @@
  *
  * The companion locations file is written beside the terrain file.
  * A scene-geometry.json export is written there as well for independent
- * terrain mesh comparison.
+ * terrain mesh comparison, along with collision.json for the common OSRS
+ * collision flag layer.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -177,9 +178,26 @@ async function main(): Promise<void> {
         formatVersion: 1,
         tiles: geometryTiles,
     }, null, 2)}\n`);
+    const collisionFlags: number[] = [];
+    for (let plane = 0; plane < 4; plane++) {
+        for (let x = 0; x < 64; x++) {
+            for (let y = 0; y < 64; y++) {
+                collisionFlags.push(scene.collisionMaps[plane].getFlag(x, y));
+            }
+        }
+    }
+    const collisionPath = path.join(path.dirname(output), "collision.json");
+    fs.writeFileSync(collisionPath, `${JSON.stringify({
+        formatVersion: 1,
+        width: 64,
+        length: 64,
+        planes: 4,
+        flags: collisionFlags,
+    }, null, 2)}\n`);
     console.log(`wrote ${output}`);
     console.log(`wrote ${locationPath}`);
     console.log(`wrote ${geometryPath}`);
+    console.log(`wrote ${collisionPath}`);
 }
 
 main().catch((error) => {

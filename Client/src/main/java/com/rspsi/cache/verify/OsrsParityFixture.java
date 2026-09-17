@@ -23,7 +23,7 @@ import java.util.stream.Stream;
  * directory may contain {@code fixture.properties}, an optional
  * {@code scene.fingerprint} value, an optional
  * {@code terrain-semantics.json}, {@code locations.json}, and optional
- * {@code scene-geometry.json} exports, and PNGs named
+ * {@code scene-geometry.json} and {@code collision.json} exports, and PNGs named
  * {@code minimap-plane-N.png} or {@code minimap-shaped-plane-N.png}.</p>
  */
 public record OsrsParityFixture(
@@ -36,6 +36,7 @@ public record OsrsParityFixture(
         OsrsTerrainSemanticFixture terrainSemantics,
         OsrsLocationSemanticFixture locations,
         OsrsSceneGeometryFixture sceneGeometry,
+        OsrsCollisionSemanticFixture collision,
         Map<Integer, MinimapImage> minimaps,
         Map<Integer, MinimapImage> shapedMinimaps
 ) {
@@ -114,6 +115,11 @@ public record OsrsParityFixture(
         if (Files.isRegularFile(geometryPath)) {
             sceneGeometry = OsrsSceneGeometryFixture.load(geometryPath);
         }
+        OsrsCollisionSemanticFixture collision = null;
+        Path collisionPath = directory.resolve("collision.json");
+        if (Files.isRegularFile(collisionPath)) {
+            collision = OsrsCollisionSemanticFixture.load(collisionPath);
+        }
 
         return new OsrsParityFixture(directory,
                 integerProperty(properties, "region.x"),
@@ -124,6 +130,7 @@ public record OsrsParityFixture(
                 terrainSemantics,
                 locations,
                 sceneGeometry,
+                collision,
                 minimaps, shapedMinimaps);
     }
 

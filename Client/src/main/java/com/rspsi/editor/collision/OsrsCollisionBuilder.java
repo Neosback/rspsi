@@ -158,8 +158,14 @@ public final class OsrsCollisionBuilder {
 
     private static void addObject(CollisionMap collision, WorldDocument document,
                                   WorldObject object, ObjectCollisionView definition) {
+        // Match the client/TSPS scene loader: id 0 is an empty location slot,
+        // not a collision-bearing object.
+        if (object.id() <= 0) {
+            return;
+        }
         int plane = resolvedPlane(document, object.plane(), object.x(), object.y());
-        if (plane < 0 || plane >= document.planes() || definition.blockWalk() == 0) {
+        if (plane < 0 || plane >= document.planes() || definition.clipType() == 0
+                || definition.blockWalk() == 0) {
             return;
         }
         int width = definition.width();
