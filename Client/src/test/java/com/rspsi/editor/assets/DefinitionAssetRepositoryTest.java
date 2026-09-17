@@ -17,10 +17,10 @@ class DefinitionAssetRepositoryTest {
     void searchesNeutralAssetDescriptorsByNameIdAndType() {
         DefinitionAssetRepository assets = new DefinitionAssetRepository(new Definitions());
 
-        assertEquals(List.of(new AssetDescriptor(12, "object", "Castle wall")),
-                assets.search("castle"));
-        assertEquals(List.of(new AssetDescriptor(12, "object", "Castle wall")),
-                assets.search("12"));
+        assertEquals(1, assets.search("castle").size());
+        assertEquals(12, assets.search("castle").get(0).id());
+        assertEquals(1, assets.search("12").size());
+        assertEquals(12, assets.search("12").get(0).id());
         assertEquals(1, assets.search("overlay").size());
     }
 
@@ -43,6 +43,7 @@ class DefinitionAssetRepositoryTest {
         AssetDescriptor descriptor = assets.get(12, "object").orElseThrow();
         assertEquals("Castle wall", descriptor.name());
         assertEquals(Optional.of("loc.castle_wall"), descriptor.symbolicName());
+        assertTrue(descriptor.details().contains("Size: 1 × 1"));
         assertEquals(List.of(descriptor), assets.search("loc.castle_wall"));
     }
 

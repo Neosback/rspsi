@@ -110,7 +110,10 @@ public final class AssetBrowserPanel extends VBox {
             return;
         }
         String symbolic = asset.symbolicName().map(value -> "\nSymbolic: " + value).orElse("");
-        details.setText(asset.name() + "\nType: " + asset.type() + " · ID: " + asset.id() + symbolic);
+        String properties = asset.details().isEmpty()
+                ? "" : "\n" + String.join("\n", asset.details());
+        details.setText(asset.name() + "\nType: " + asset.type() + " · ID: " + asset.id()
+                + symbolic + properties);
     }
 
     private static final class AssetCell extends ListCell<AssetDescriptor> {

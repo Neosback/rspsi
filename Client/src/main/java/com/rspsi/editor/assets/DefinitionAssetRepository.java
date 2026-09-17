@@ -1,6 +1,11 @@
 package com.rspsi.editor.assets;
 
 import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.cache.definition.ObjectCollisionView;
+import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectAppearanceView;
+import com.rspsi.cache.definition.FloorDefinitionView;
+import com.rspsi.cache.definition.TextureDefinitionView;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -52,20 +57,59 @@ public final class DefinitionAssetRepository implements AssetRepository {
         if (id < 0 || type == null) return Optional.empty();
         return switch (type.trim().toLowerCase(Locale.ROOT)) {
             case "object" -> definitions.object(id).map(value ->
-                    descriptor("object", id, name(value.name(), "Object", id)));
+                    descriptor("object", id, name(value.name(), "Object", id), objectDetails(value)));
             case "underlay" -> definitions.underlay(id).map(value ->
-                    descriptor("underlay", id, "Underlay " + id));
+                    descriptor("underlay", id, "Underlay " + id, floorDetails(value)));
             case "overlay" -> definitions.overlay(id).map(value ->
-                    descriptor("overlay", id, "Overlay " + id));
+                    descriptor("overlay", id, "Overlay " + id, floorDetails(value)));
             case "texture" -> definitions.texture(id).map(value ->
-                    descriptor("texture", id, "Texture " + id));
+                    descriptor("texture", id, "Texture " + id, textureDetails(value)));
             default -> Optional.empty();
         };
     }
 
     private AssetDescriptor descriptor(String type, int id, String displayName) {
+        return descriptor(type, id, displayName, List.of());
+    }
+
+    private AssetDescriptor descriptor(String type, int id, String displayName,
+                                       List<String> details) {
         Optional<String> symbolicName = symbolicNames.name(type, id);
-        return new AssetDescriptor(id, type, displayName, symbolicName == null ? Optional.empty() : symbolicName);
+        return new AssetDescriptor(id, type, displayName,
+                symbolicName == null ? Optional.empty() : symbolicName, details);
+    }
+
+    private List<String> objectDetails(ObjectDefinitionView object) {
+        List<String> details = new ArrayList<>();
+        details.add("Size: " + object.width() + " × " + object.length());
+        details.add("Models: " + java.util.Arrays.toString(object.modelIds()));
+        details.add("Actions: " + object.interactions());
+        definitions.objectCollision(object.id()).ifPresent(collision ->
+                details.add("Collision: " + collisionSummary(collision)));
+        definitions.objectAppearance(object.id()).ifPresent(appearance -> {
+            if (appearance.animationId() >= 0) details.add("Animation: " + appearance.animationId());
+            if (!appearance.recolors().isEmpty()) details.add("Recolors: " + appearance.recolors());
+            if (!appearance.retextures().isEmpty()) details.add("Retextures: " + appearance.retextures());
+        });
+        return List.copyOf(details);
+    }
+
+    private static String collisionSummary(ObjectCollisionView collision) {
+        return "walk=" + collision.blockWalk() + ", projectile="
+                + (collision.blockProjectile() ? "yes" : "no") + ", route="
+                + (collision.breakRouteFinding() ? "breaks" : "normal");
+    }
+
+    private static List<String> floorDetails(FloorDefinitionView floor) {
+        return List.of("Texture: " + floor.texture(),
+                String.format("RGB: 0x%06X", floor.rgb() & 0xFFFFFF),
+                "HSL: " + floor.hue() + " / " + floor.saturation() + " / " + floor.luminance());
+    }
+
+    private static List<String> textureDetails(TextureDefinitionView texture) {
+        return List.of("File: " + texture.fileId(),
+                "Average RGB: " + texture.averageRgb(),
+                "Animated: " + (texture.animationSpeed() > 0 ? "yes" : "no"));
     }
 
     private static void add(List<AssetDescriptor> assets, Optional<AssetDescriptor> asset) {

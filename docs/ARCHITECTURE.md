@@ -301,7 +301,9 @@ blocking, and roof semantics visible without placing collision logic in the
 JavaFX panel.
 When an OSRS-backed `AssetRepository` is supplied, the asset pane uses
 `AssetBrowserPanel` to search display names, numeric IDs, and optional
-RSCM/GameVal keys; a null repository preserves the legacy inspector fallback.
+RSCM/GameVal keys; descriptors also carry neutral property summaries for
+object size/models/actions/collision and floor/texture values. A null
+repository preserves the legacy inspector fallback.
 the controlled workflow and its manual coverage continue to be migrated.
 
 `WorkspaceStatusBar` is a persistent JavaFX state row below the controlled
