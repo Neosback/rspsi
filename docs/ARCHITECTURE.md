@@ -51,8 +51,9 @@ boundary.
 - `WorldFragment` is the canonical portable terrain/location copy-paste
   payload; fragment pastes are grouped commands rather than direct scene
   mutations.
-- `DirtyRegion` groups command invalidation by 8×8 chunk so future scene,
-  collision, minimap, and cache writers can rebuild only affected derived data.
+- `DirtyRegion` groups command invalidation by plane and 8×8 chunk so scene,
+  collision, minimap, and cache writers rebuild only affected derived data;
+  an explicit compatibility form can still invalidate every plane.
 - `TerrainMeshBuilder` owns the 13 shaped-tile topologies and four rotations;
   it produces neutral mesh data for renderers and is covered independently of
   the legacy `ShapedTile` class. The map-facing tile shape remains the encoded
@@ -201,10 +202,10 @@ boundary.
 - `WorldValidator` is the deterministic pre-save/parity diagnostic layer;
   renderers and UI panels consume its issues rather than reimplementing
   world invariants.
-- `EditorSession` records dirty work at 8×8 chunk granularity. An edit on a
-  chunk edge also invalidates the adjacent cardinal chunk so shared terrain
-  edges, floor blending, and picking can be rebuilt without rebuilding a
-  complete region.
+- `EditorSession` records dirty work at plane plus 8×8 chunk granularity. An
+  edit on a chunk edge also invalidates the adjacent cardinal chunk so shared
+  terrain edges, floor blending, and picking can be rebuilt without rebuilding
+  unrelated planes or a complete region.
 - `CommandTransaction` is the single rollback helper for grouped edits. It
   applies composite, paste, and multi-object delegates in order and undoes
   already-applied delegates if a later one fails, keeping failed commands out

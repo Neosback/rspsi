@@ -20,7 +20,7 @@ public final class EditorSession {
     private final CommandHistory history = new CommandHistory();
     private final List<SessionChangeListener> changeListeners = new CopyOnWriteArrayList<>();
     private final List<SessionStateListener> stateListeners = new CopyOnWriteArrayList<>();
-    private final Map<Long, DirtyRegion> dirtyRegions = new LinkedHashMap<>();
+    private final Map<DirtyChunkKey, DirtyRegion> dirtyRegions = new LinkedHashMap<>();
     private int savedHistoryPosition;
 
     public EditorSession(WorldDocument world) {
@@ -224,7 +224,10 @@ public final class EditorSession {
 
     private void markDirtyChunk(com.rspsi.editor.model.TileCoordinate coordinate) {
         DirtyRegion dirty = DirtyRegion.forTile(coordinate);
-        long key = ((long) dirty.chunkX() << 32) | (dirty.chunkY() & 0xFFFFFFFFL);
+        DirtyChunkKey key = new DirtyChunkKey(dirty.plane(), dirty.chunkX(), dirty.chunkY());
         dirtyRegions.merge(key, dirty, DirtyRegion::merge);
+    }
+
+    private record DirtyChunkKey(int plane, int chunkX, int chunkY) {
     }
 }

@@ -13,6 +13,7 @@ class DirtyRegionTest {
     void coordinatesAreGroupedByEightByEightChunk() {
         DirtyRegion region = DirtyRegion.forTile(new TileCoordinate(3, 15, 16));
 
+        assertEquals(3, region.plane());
         assertEquals(1, region.chunkX());
         assertEquals(2, region.chunkY());
         assertTrue(region.terrain());
@@ -53,5 +54,34 @@ class DirtyRegionTest {
                 region.chunkX() == 1 && region.chunkY() == 0));
         assertTrue(session.dirtyRegions().stream().anyMatch(region ->
                 region.chunkX() == 0 && region.chunkY() == 1));
+    }
+
+    @Test
+    void editsOnDifferentPlanesRemainSeparateInvalidationEntries() {
+        WorldDocument document = new WorldDocument(8, 8, 2);
+        EditorSession session = new EditorSession(document);
+        session.execute(new SetTileCommand(new TileCoordinate(0, 2, 2),
+                document.tile(0, 2, 2).snapshot(),
+                new com.rspsi.editor.model.TileSnapshot(0, 0, 0, 0, 7, 0, 0, 0, 0, java.util.List.of()),
+                "plane 0"));
+        session.execute(new SetTileCommand(new TileCoordinate(1, 2, 2),
+                document.tile(1, 2, 2).snapshot(),
+                new com.rspsi.editor.model.TileSnapshot(0, 0, 0, 0, 8, 0, 0, 0, 0, java.util.List.of()),
+                "plane 1"));
+
+        assertEquals(2, session.dirtyRegions().size());
+        assertTrue(session.dirtyRegions().stream().anyMatch(region -> region.plane() == 0));
+        assertTrue(session.dirtyRegions().stream().anyMatch(region -> region.plane() == 1));
+    }
+
+    @Test
+    void rendererExpansionStaysOnTheChangedPlane() {
+        WorldDocument document = new WorldDocument(10, 9, 2);
+        var changes = com.rspsi.editor.render.RenderChanges.fromDirtyRegions(
+                java.util.Set.of(new DirtyRegion(1, 1, 1, false, false, false, false, true)),
+                document);
+
+        assertEquals(2, changes.dirtyTiles().size());
+        assertTrue(changes.dirtyTiles().stream().allMatch(tile -> tile.plane() == 1));
     }
 }

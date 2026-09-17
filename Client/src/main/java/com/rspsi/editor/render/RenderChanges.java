@@ -22,8 +22,9 @@ public record RenderChanges(Set<TileCoordinate> dirtyTiles) {
 
     /**
      * Expands renderer-affecting dirty chunks into the tile coordinates needed
-     * for a derived scene rebuild. A dirty chunk has no plane of its own, so
-     * the expansion intentionally covers every document plane.
+     * for a derived scene rebuild. Canonical dirty chunks carry their plane;
+     * the compatibility constructor on {@link DirtyRegion} uses plane
+     * {@code -1} to explicitly request every document plane.
      */
     public static RenderChanges fromDirtyRegions(Set<DirtyRegion> dirtyRegions,
                                                   WorldDocument document) {
@@ -41,7 +42,12 @@ public record RenderChanges(Set<TileCoordinate> dirtyTiles) {
             }
             int endX = Math.min(startX + 8, document.width());
             int endY = Math.min(startY + 8, document.length());
-            for (int plane = 0; plane < document.planes(); plane++) {
+            int firstPlane = region.plane() < 0 ? 0 : region.plane();
+            int lastPlane = region.plane() < 0 ? document.planes() : region.plane() + 1;
+            if (firstPlane < 0 || lastPlane > document.planes()) {
+                throw new IllegalArgumentException("Dirty plane is outside the document: " + region.plane());
+            }
+            for (int plane = firstPlane; plane < lastPlane; plane++) {
                 for (int x = startX; x < endX; x++) {
                     for (int y = startY; y < endY; y++) {
                         tiles.add(new TileCoordinate(plane, x, y));
