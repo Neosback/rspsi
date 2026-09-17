@@ -24,6 +24,7 @@ import java.util.Optional;
 public final class DefinitionAssetRepository implements AssetRepository {
     private final DefinitionProvider definitions;
     private final SymbolicNameProvider symbolicNames;
+    private volatile List<AssetDescriptor> catalog;
 
     public DefinitionAssetRepository(DefinitionProvider definitions) {
         this(definitions, SymbolicNameProvider.none());
@@ -37,12 +38,7 @@ public final class DefinitionAssetRepository implements AssetRepository {
     @Override
     public List<AssetDescriptor> search(String query) {
         String needle = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
-        List<AssetDescriptor> assets = new ArrayList<>();
-        definitions.objectIds().forEach(id -> add(assets, get(id, "object")));
-        definitions.underlayIds().forEach(id -> add(assets, get(id, "underlay")));
-        definitions.overlayIds().forEach(id -> add(assets, get(id, "overlay")));
-        definitions.textureIds().forEach(id -> add(assets, get(id, "texture")));
-        return assets.stream()
+        return allAssets().stream()
                 .filter(asset -> needle.isEmpty()
                         || asset.name().toLowerCase(Locale.ROOT).contains(needle)
                         || asset.symbolicName().map(value -> value.toLowerCase(Locale.ROOT).contains(needle)).orElse(false)
@@ -55,6 +51,10 @@ public final class DefinitionAssetRepository implements AssetRepository {
     @Override
     public Optional<AssetDescriptor> get(int id, String type) {
         if (id < 0 || type == null) return Optional.empty();
+        return descriptorFor(id, type.trim().toLowerCase(Locale.ROOT));
+    }
+
+    private Optional<AssetDescriptor> descriptorFor(int id, String type) {
         return switch (type.trim().toLowerCase(Locale.ROOT)) {
             case "object" -> definitions.object(id).map(value ->
                     descriptor("object", id, name(value.name(), "Object", id), objectDetails(value)));
@@ -66,6 +66,28 @@ public final class DefinitionAssetRepository implements AssetRepository {
                     descriptor("texture", id, "Texture " + id, textureDetails(value)));
             default -> Optional.empty();
         };
+    }
+
+    /** Builds the immutable descriptor index once for the lifetime of a provider. */
+    private List<AssetDescriptor> allAssets() {
+        List<AssetDescriptor> current = catalog;
+        if (current != null) return current;
+        synchronized (this) {
+            current = catalog;
+            if (current == null) {
+                List<AssetDescriptor> assets = new ArrayList<>();
+                definitions.objectIds().forEach(id -> add(assets, descriptorFor(id, "object")));
+                definitions.underlayIds().forEach(id -> add(assets, descriptorFor(id, "underlay")));
+                definitions.overlayIds().forEach(id -> add(assets, descriptorFor(id, "overlay")));
+                definitions.textureIds().forEach(id -> add(assets, descriptorFor(id, "texture")));
+                current = assets.stream()
+                        .sorted(Comparator.comparing(AssetDescriptor::type)
+                                .thenComparingInt(AssetDescriptor::id))
+                        .toList();
+                catalog = current;
+            }
+        }
+        return current;
     }
 
     private AssetDescriptor descriptor(String type, int id, String displayName) {

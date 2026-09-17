@@ -55,7 +55,19 @@ class DefinitionAssetRepositoryTest {
         assertEquals(Optional.of("loc.castle_wall"), assets.get(12, "object").orElseThrow().symbolicName());
     }
 
-    private static final class Definitions implements DefinitionProvider {
+    @Test
+    void repeatedSearchesReuseTheNeutralDescriptorIndex() {
+        CountingDefinitions definitions = new CountingDefinitions();
+        DefinitionAssetRepository assets = new DefinitionAssetRepository(definitions);
+
+        assets.search("castle");
+        assets.search("12");
+
+        assertEquals(2, definitions.objectLookups);
+        assertEquals(1, definitions.overlayLookups);
+    }
+
+    private static class Definitions implements DefinitionProvider {
         @Override public Optional<ObjectDefinitionView> object(int id) {
             if (id == 12) return Optional.of(new ObjectDefinitionView(12, "Castle wall", 1, 1, List.of(), new int[0]));
             if (id == 13) return Optional.of(new ObjectDefinitionView(13, null, 1, 1, List.of(), new int[0]));
@@ -68,5 +80,20 @@ class DefinitionAssetRepositoryTest {
         @Override public Optional<TextureDefinitionView> texture(int id) { return Optional.empty(); }
         @Override public List<Integer> objectIds() { return List.of(12, 13); }
         @Override public List<Integer> overlayIds() { return List.of(4); }
+    }
+
+    private static final class CountingDefinitions extends Definitions {
+        private int objectLookups;
+        private int overlayLookups;
+
+        @Override public Optional<ObjectDefinitionView> object(int id) {
+            objectLookups++;
+            return super.object(id);
+        }
+
+        @Override public Optional<FloorDefinitionView> overlay(int id) {
+            overlayLookups++;
+            return super.overlay(id);
+        }
     }
 }
