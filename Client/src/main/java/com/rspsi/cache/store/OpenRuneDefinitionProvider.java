@@ -240,7 +240,9 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         }
         return Optional.of(new FloorDefinitionView(id, definition.getTexture(), definition.getPrimaryRgb(),
                 definition.getHue(), definition.getSaturation(), definition.getLightness(),
-                definition.getSecondaryHue(), definition.getSecondarySaturation()));
+                definition.getSecondaryHue(), definition.getSecondarySaturation(),
+                definition.getSecondaryRgb(), definition.getSecondaryHue(),
+                definition.getSecondarySaturation(), definition.getSecondaryLightness()));
     }
 
     @Override
@@ -250,7 +252,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             return Optional.empty();
         }
         return Optional.of(new TextureDefinitionView(id, definition.isTransparent(), definition.getFileId(),
-                definition.getAverageRgb(), definition.getAnimationDirection(),
+                -1, definition.getAverageRgb(), definition.getAnimationDirection(),
                 definition.getAnimationSpeed(), definition.isLowDetail()));
     }
 

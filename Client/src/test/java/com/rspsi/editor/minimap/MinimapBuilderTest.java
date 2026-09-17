@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.MapSceneSpriteView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldDocument;
@@ -85,6 +86,47 @@ class MinimapBuilderTest {
 
         assertEquals(pixel, new MinimapBuilder().buildShaped(document, 0, definitions).pixel(7, 7));
         assertNotEquals(0xFF102030, pixel);
+    }
+
+    @Test
+    void shapedRasterUsesSecondaryOverlayColorWhenProvided() {
+        WorldDocument document = new WorldDocument(3, 3, 1);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 1, 0, 0, 0, List.of()));
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) {
+                return Optional.of(new FloorDefinitionView(id, -1, 0x010203,
+                        0, 0, 0, 0, 0, 0x55371e, 0, 0, 0));
+            }
+        };
+
+        MinimapImage image = new MinimapBuilder().buildShaped(document, 0, definitions);
+
+        assertEquals(0xFF55371E, image.pixel(4, 4));
+    }
+
+    @Test
+    void shapedRasterUsesTextureAverageHslForTexturedOverlays() {
+        WorldDocument document = new WorldDocument(3, 3, 1);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 1, 0, 0, 0, List.of()));
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) {
+                return Optional.of(new FloorDefinitionView(id, 3, 0, 0, 0, 0, 0, 0));
+            }
+            @Override public Optional<TextureDefinitionView> texture(int id) {
+                return id == 3 ? Optional.of(new TextureDefinitionView(id, false, 450,
+                        -1, 0x121C, 0, 0, true)) : Optional.empty();
+            }
+        };
+
+        MinimapImage image = new MinimapBuilder().buildShaped(document, 0, definitions);
+
+        assertEquals(0xFF55371E, image.pixel(4, 4));
     }
 
     @Test

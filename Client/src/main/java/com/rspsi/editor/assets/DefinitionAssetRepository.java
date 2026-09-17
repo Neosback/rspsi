@@ -109,6 +109,7 @@ public final class DefinitionAssetRepository implements AssetRepository {
     private static List<String> textureDetails(TextureDefinitionView texture) {
         return List.of("File: " + texture.fileId(),
                 "Average RGB: " + texture.averageRgb(),
+                "Average HSL: " + texture.averageHsl(),
                 "Animated: " + (texture.animationSpeed() > 0 ? "yes" : "no"));
     }
 

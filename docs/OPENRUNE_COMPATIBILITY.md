@@ -109,7 +109,9 @@ terrain decoding, 63,630 neutral asset descriptors, collision and neutral
 scene construction, and semantic decode -> encode -> decode. The selected
 modern region contained a 2,040-byte location payload and 988 objects. A second
 live region check at `(50,50)` decoded an 11,157-byte location payload, built
-4,726 object projections, and produced 3,983 non-empty collision tiles. The
+4,726 object projections, produced 3,983 non-empty collision tiles, and
+matched an independently generated TSPS shaped-minimap fixture with zero
+pixel differences on all four planes. The
 OpenRune backend remains read-only. The application continues to construct the
 legacy Displee backend by default, and the validated Displee writer is an
 explicit staged output choice rather than an OpenRune-native writer claim.
