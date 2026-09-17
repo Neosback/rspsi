@@ -53,7 +53,37 @@ class OsrsRegionSaveCoordinatorTest {
         assertTrue(session.isDirty());
     }
 
-    private static final class RecordingStore implements CacheStore {
+    @Test
+    void failedFlushDoesNotMarkSessionSaved() {
+        FlushingFailureStore store = new FlushingFailureStore();
+        OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
+                new MapIndexEntry(50, 50, 100, 101, "m50_50", "l50_50"))));
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        EditorSession session = new EditorSession(document);
+        session.execute(new SetTileCommand(new TileCoordinate(0, 1, 1),
+                document.tile(0, 1, 1).snapshot(),
+                new TileSnapshot(0, 0, 0, 0, 7, 0, 0, 0, 0, List.of()), "paint"));
+
+        assertThrows(IllegalStateException.class,
+                () -> new OsrsRegionSaveCoordinator(maps).save(session, 50, 50));
+        assertTrue(session.isDirty());
+        assertEquals(0, session.savedHistoryPosition());
+    }
+
+    @Test
+    void readOnlySessionCannotWriteARegion() {
+        RecordingStore store = new RecordingStore();
+        OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
+                new MapIndexEntry(50, 50, 100, 101, "m50_50", "l50_50"))));
+        EditorSession session = EditorSession.readOnly(new WorldDocument(64, 64, 4));
+
+        assertThrows(IllegalStateException.class,
+                () -> new OsrsRegionSaveCoordinator(maps).save(session, 50, 50));
+        assertTrue(store.values.isEmpty());
+        assertEquals(0, store.flushes);
+    }
+
+    private static class RecordingStore implements CacheStore {
         private final Map<String, Integer> archiveIds = new HashMap<>();
         private final Map<String, byte[]> values = new HashMap<>();
         private int flushes;
@@ -86,5 +116,11 @@ class OsrsRegionSaveCoordinatorTest {
             throw new UnsupportedOperationException("read-only");
         }
         @Override public void writeLocations(int regionX, int regionY, byte[] data) { }
+    }
+
+    private static final class FlushingFailureStore extends RecordingStore {
+        @Override public void flush() {
+            throw new IllegalStateException("flush failed");
+        }
     }
 }

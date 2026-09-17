@@ -23,6 +23,9 @@ public final class OsrsRegionSaveCoordinator {
 
     public SaveResult save(EditorSession session, int regionX, int regionY) {
         Objects.requireNonNull(session, "session");
+        if (!session.canEdit()) {
+            throw new IllegalStateException("Cannot save a read-only editor session");
+        }
         WorldDocument document = session.world();
         byte[] landscape = OsrsRegionEncoder.encodeTerrain(document, maps.newTerrainFormat());
         byte[] locations = OsrsRegionEncoder.encodeLocations(document);
