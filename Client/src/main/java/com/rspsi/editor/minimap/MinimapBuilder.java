@@ -2,6 +2,7 @@ package com.rspsi.editor.minimap;
 
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
+import com.rspsi.cache.definition.MapSceneSpriteView;
 import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
@@ -87,8 +88,8 @@ public final class MinimapBuilder {
      * DefinitionProvider)} remains the stable one-pixel semantic baseline.
      * Colors use the OSRS HSL palette and radius-5 underlay blend when the
      * neutral definitions provide the required metadata, with deterministic
-     * RGB fallback for incomplete definitions. Palette/mapscene parity remains
-     * separate verification work.
+     * RGB fallback for incomplete definitions. Optional neutral map-scene
+     * sprites are composed after terrain and before wall markers.
      */
     public MinimapImage buildShaped(WorldDocument document, int plane,
                                     DefinitionProvider definitions) {
@@ -190,9 +191,17 @@ public final class MinimapBuilder {
                     objects.addAll(document.tile(plane + 1, x, y).snapshot().objects());
                 }
                 for (var object : objects) {
-                    int markerColor = definitions.object(object.id())
-                            .filter(definition -> !definition.interactions().isEmpty())
-                            .map(definition -> 0xFFEE0000)
+                    var objectDefinition = definitions.object(object.id());
+                    if (objectDefinition.isPresent() && objectDefinition.get().mapSceneId() >= 0) {
+                        var sprite = definitions.mapScene(objectDefinition.get().mapSceneId());
+                        if (sprite.isPresent()) {
+                            drawMapScene(document, x, y, objectDefinition.get(), sprite.get(), pixels, width);
+                            continue;
+                        }
+                    }
+                    int markerColor = objectDefinition
+                            .filter(objectDefinitionValue -> !objectDefinitionValue.interactions().isEmpty())
+                            .map(objectDefinitionValue -> 0xFFEE0000)
                             .orElse(wallColor);
                     int offset = x * 4 + outputY * width * 4;
                     int type = object.type();
@@ -236,6 +245,26 @@ public final class MinimapBuilder {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private static void drawMapScene(WorldDocument document, int tileX, int tileY,
+                                     com.rspsi.cache.definition.ObjectDefinitionView definition,
+                                     MapSceneSpriteView sprite, int[] pixels, int width) {
+        int originX = tileX * 4
+                + (definition.width() * 4 - sprite.width()) / 2 + sprite.offsetX();
+        int originY = (document.length() - tileY - definition.length()) * 4
+                + sprite.offsetY();
+        int[] spritePixels = sprite.argb();
+        for (int y = 0; y < sprite.height(); y++) {
+            int outputY = originY + y;
+            if (outputY < 0 || outputY >= document.length() * 4) continue;
+            for (int x = 0; x < sprite.width(); x++) {
+                int outputX = originX + x;
+                if (outputX < 0 || outputX >= document.width() * 4) continue;
+                int argb = spritePixels[y * sprite.width() + x];
+                if (argb != 0) pixels[outputY * width + outputX] = argb;
             }
         }
     }

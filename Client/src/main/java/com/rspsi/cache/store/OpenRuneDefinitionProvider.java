@@ -66,7 +66,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                 : definition.getObjectModels().stream().mapToInt(Integer::intValue).toArray();
         return Optional.of(new ObjectDefinitionView(definition.getId(), definition.getName(),
                 Math.max(1, definition.getSizeX()), Math.max(1, definition.getSizeY()),
-                interactions, modelIds));
+                interactions, modelIds, definition.getMapSceneID()));
     }
 
     @Override

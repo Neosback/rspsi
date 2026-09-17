@@ -31,6 +31,11 @@ public interface DefinitionProvider {
         return Optional.empty();
     }
 
+    /** Optional map-scene sprite pixels for minimap/world-map composition. */
+    default Optional<MapSceneSpriteView> mapScene(int id) {
+        return Optional.empty();
+    }
+
     /** Optional until a backend has supplied collision-relevant object fields. */
     default Optional<ObjectCollisionView> objectCollision(int id) {
         return Optional.empty();

@@ -2,6 +2,7 @@ package com.rspsi.editor.minimap;
 
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
+import com.rspsi.cache.definition.MapSceneSpriteView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
@@ -108,6 +109,32 @@ class MinimapBuilderTest {
         assertEquals(0xFFEE0000, image.pixel(4, 4));
         assertEquals(0xFFEE0000, image.pixel(5, 4));
         assertNotEquals(0xFFEE0000, image.pixel(4, 5));
+    }
+
+    @Test
+    void shapedRasterComposesNeutralMapSceneSpritesAtObjectBounds() {
+        WorldDocument document = new WorldDocument(3, 3, 1);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+                List.of(new WorldObject(99, 10, 0, 0, 1, 1))));
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return id == 99 ? Optional.of(new ObjectDefinitionView(99, "Castle", 1, 1,
+                        List.of(), new int[0], 7)) : Optional.empty();
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<MapSceneSpriteView> mapScene(int id) {
+                return id == 7 ? Optional.of(new MapSceneSpriteView(7, 2, 2, 0, 0,
+                        new int[]{0, 0xFF123456, 0xFFABCDEF, 0})) : Optional.empty();
+            }
+        };
+
+        MinimapImage image = new MinimapBuilder().buildShaped(document, 0, definitions);
+
+        assertEquals(0xFF123456, image.pixel(6, 4));
+        assertEquals(0xFFABCDEF, image.pixel(5, 5));
+        assertEquals(0xFF000001, image.pixel(5, 4));
     }
 
     private static DefinitionProvider definitions() {

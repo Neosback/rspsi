@@ -214,6 +214,11 @@ boundary.
   keeps missing definitions explicit and exposes canonical category/shape
   names, animation, transforms, contouring, and replacement metadata without
   coupling an inspector to Displee, OpenRune, JavaFX, or ImGui.
+- `MapSceneSpriteView` is the optional neutral ARGB asset boundary for
+  object/map-scene sprites. Minimap composition can center and clip these
+  sprites without knowing a cache index, graphics-defaults group, or sprite
+  decoder. A backend that cannot expose the selected sprite leaves it absent
+  rather than fabricating a visual asset.
 - `SessionInspectorPanel` caches the neutral collision map for its bound
   session and rebuilds it only after document/provider changes; hover
   inspection therefore reads collision snapshots without rebuilding the
