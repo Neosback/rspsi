@@ -155,12 +155,50 @@ public final class OsrsStudioProject implements AutoCloseable {
         }
     }
 
+    /**
+     * Opens an OpenRune source cache with an explicit writable OpenRune output
+     * cache. The two paths must differ; this method never turns the selected
+     * source cache into an implicit edit target.
+     */
+    public static OsrsStudioProject openWithOpenRuneOutput(Path basePath, Path outputPath,
+                                                            ProjectMetadata project) {
+        Objects.requireNonNull(basePath, "basePath");
+        Objects.requireNonNull(outputPath, "outputPath");
+        Objects.requireNonNull(project, "project");
+        if (basePath.toAbsolutePath().normalize().equals(outputPath.toAbsolutePath().normalize())) {
+            throw new IllegalArgumentException("OSRS base and output cache paths must differ");
+        }
+        OpenRuneCacheStore definitionsBase = OpenRuneCacheStore.open(basePath);
+        CacheStore outputStore = null;
+        try {
+            outputStore = CacheStoreFactory.openRuneWritable(outputPath);
+            DefinitionProvider definitions = definitionsBase.definitionProvider(project.cacheRevision());
+            AssetRepository assets = new DefinitionAssetRepository(definitions,
+                    definitionsBase.symbolicNameProvider());
+            return new OsrsStudioProject(outputStore, definitionsBase,
+                    new OsrsMapService(outputStore, project.cacheRevision()),
+                    definitions, assets, project);
+        } catch (RuntimeException exception) {
+            closeQuietly(outputStore);
+            definitionsBase.close();
+            throw exception;
+        }
+    }
+
     /** Opens a persisted OSRS project with the explicit staged output cache. */
     public static OsrsStudioProject openWithDispleeOutput(ProjectLayout layout,
                                                            Path basePath, Path outputPath)
             throws IOException {
         Objects.requireNonNull(layout, "layout");
         return openWithDispleeOutput(basePath, outputPath, layout.readMetadata());
+    }
+
+    /** Opens persisted project metadata with the explicit OpenRune output path. */
+    public static OsrsStudioProject openWithOpenRuneOutput(ProjectLayout layout,
+                                                            Path basePath, Path outputPath)
+            throws IOException {
+        Objects.requireNonNull(layout, "layout");
+        return openWithOpenRuneOutput(basePath, outputPath, layout.readMetadata());
     }
 
     public ProjectMetadata project() {

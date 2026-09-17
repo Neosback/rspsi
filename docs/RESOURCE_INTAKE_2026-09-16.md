@@ -212,7 +212,12 @@ Provenance and evidence:
 The revision audit now also records the neutral definition surface without
 depending on backend types. Live build 240 region `(50,50)` reports 62,522
 object IDs, 251 underlay IDs, 643 overlay IDs, and 214 texture IDs; focused
-partial-provider tests intentionally report missing families as warnings.
+partial-provider tests intentionally report missing families as warnings. The
+published OpenRune `tools` module is now an explicit cache-write dependency
+only for `CacheDelegate`, with the unrelated CS2 compiler transitively
+excluded; an external copied build-240 cache successfully persisted a modern
+terrain edit through `openRuneWritable` and reopened through the read-only
+OpenRune adapter.
 
 This is a verified seam, not completion of the entire cache migration. The
 legacy renderer and native OpenRune writer remain explicitly quarantined or

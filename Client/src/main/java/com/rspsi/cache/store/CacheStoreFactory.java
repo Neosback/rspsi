@@ -20,6 +20,11 @@ public final class CacheStoreFactory {
         return OpenRuneCacheStore.open(path);
     }
 
+    /** Opens an explicitly selected writable OpenRune output cache. */
+    public static CacheStore openRuneWritable(Path path) {
+        return OpenRuneCacheStore.openWritable(path);
+    }
+
     /**
      * Opens an OSRS cache read-only while staging writes into an explicit,
      * separately prepared Displee output cache. The paths must differ so a

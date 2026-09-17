@@ -12,6 +12,15 @@ dependencies {
     implementation 'dev.or2:osrs-fs:2.4.19'
     implementation 'dev.or2:osrs:2.4.19'
     implementation 'dev.or2:definition:2.4.19'
+    // Explicit opt-in writable adapter. The normal FileStore filesystem
+    // remains read-only; this module exposes OpenRune's CacheDelegate for a
+    // separately selected output cache.
+    implementation('dev.or2:tools:2.4.19') {
+        // The tools aggregate also pulls the later CS2 compiler, whose
+        // optional 4koma dependency is not published in the OpenRune host.
+        // CacheDelegate does not use that compiler.
+        exclude group: 'me.filby', module: 'clientscript-compiler'
+    }
 
     api group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     api group: 'org.tukaani', name: 'xz', version: '1.10'

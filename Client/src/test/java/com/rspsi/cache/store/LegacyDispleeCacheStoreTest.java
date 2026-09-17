@@ -1,6 +1,8 @@
 package com.rspsi.cache.store;
 
 import com.displee.cache.CacheLibrary;
+import com.rspsi.cache.CacheStoreCapabilities;
+import com.rspsi.cache.CacheWriteMode;
 import com.rspsi.cache.map.OsrsMapService;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldRegion;
@@ -71,6 +73,51 @@ class LegacyDispleeCacheStoreTest {
             // accepted as an OSRS output cache.
             try (CacheStore openRune = CacheStoreFactory.openRune(output)) {
                 OsrsMapService maps = new OsrsMapService(openRune, revision);
+                WorldRegion reopened = maps.loadRegion(regionX, regionY).orElseThrow();
+                assertEquals(expected, reopened.document().tile(0, 1, 1).snapshot().underlayId());
+            }
+        } finally {
+            deleteDirectory(output);
+        }
+    }
+
+    @Test
+    void persistsModernTerrainThroughOpenRuneWritableAdapterWhenCacheIsProvided() throws IOException {
+        String configuredPath = System.getenv("RSPSI_OSRS_WRITABLE_CACHE");
+        Assumptions.assumeTrue(configuredPath != null && !configuredPath.isBlank(),
+                "set RSPSI_OSRS_WRITABLE_CACHE to run the external-cache integration test");
+
+        Path source = Path.of(configuredPath);
+        Assumptions.assumeTrue(Files.isDirectory(source), "configured cache path is not a directory");
+        Path output = Files.createTempDirectory("rspsi-openrune-writable-output-");
+        try {
+            copyDirectory(source, output);
+            int regionX = envInt("RSPSI_OSRS_REGION_X", 16);
+            int regionY = envInt("RSPSI_OSRS_REGION_Y", 33);
+            int revision = envInt("RSPSI_OSRS_REVISION", 240);
+            int expected;
+
+            try (CacheStore store = CacheStoreFactory.openRuneWritable(output)) {
+                assertEquals(new CacheStoreCapabilities(true, true, true, CacheWriteMode.DIRECT),
+                        store.capabilities());
+                OsrsMapService maps = new OsrsMapService(store, revision);
+                WorldRegion region = maps.loadRegion(regionX, regionY).orElse(null);
+                Assumptions.assumeTrue(region != null, "configured cache does not contain the selected region");
+                var tile = region.document().tile(0, 1, 1);
+                TileSnapshot before = tile.snapshot();
+                expected = before.underlayId() >= 255 ? 1 : before.underlayId() + 1;
+                tile.restore(new TileSnapshot(before.southWestHeight(), before.southEastHeight(),
+                        before.northEastHeight(), before.northWestHeight(), expected,
+                        before.overlayId(), before.overlayShape(), before.overlayRotation(),
+                        before.flags(), before.objects()));
+                maps.writeLandscape(regionX, regionY,
+                        com.rspsi.cache.map.OsrsRegionEncoder.encodeTerrain(
+                                region.document(), maps.newTerrainFormat()));
+                maps.flush();
+            }
+
+            try (CacheStore reopenedStore = CacheStoreFactory.openRune(output)) {
+                OsrsMapService maps = new OsrsMapService(reopenedStore, revision);
                 WorldRegion reopened = maps.loadRegion(regionX, regionY).orElseThrow();
                 assertEquals(expected, reopened.document().tile(0, 1, 1).snapshot().underlayId());
             }

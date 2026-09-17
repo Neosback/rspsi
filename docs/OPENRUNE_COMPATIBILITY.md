@@ -67,9 +67,10 @@ provider with the neutral definition adapter for asset-browser callers.
 The pinned FileStore source declares write methods on the neutral-looking
 `Cache` interface, but its published file-backed `FileCache` inherits
 `ReadOnlyCache`, whose write and index-creation methods throw
-`UnsupportedOperationException`. The tools module writes through a separate
-Displee-backed build path. RSPSi therefore keeps `OpenRuneCacheStore` read-only
-and uses the neutral `LayeredCacheStore` for staged output.
+`UnsupportedOperationException`. RSPSi keeps the normal `OpenRuneCacheStore`
+reader read-only and uses the neutral `LayeredCacheStore` for staged output;
+the explicit `openWritable(Path)` path uses OpenRune's `CacheDelegate` for a
+direct output cache.
 
 The legacy Displee adapter now explicitly calls `CacheLibrary.update()` during
 `flush()`; closing a Displee library alone does not repack dirty archives. An
@@ -82,12 +83,14 @@ output is readable by the production OpenRune adapter.
 
 ## Explicit limitations
 
-The first OpenRune filesystem implementation is read-only. `write` throws
-`UnsupportedOperationException` until writable packing is implemented in that
-backend. The neutral `LayeredCacheStore` can now commit through an explicitly
-selected writable Displee output adapter, but there is no automatic fallback
-to Displee because falling back could decode a cache with the wrong format and
-silently produce incorrect data.
+The normal OpenRune filesystem implementation is read-only. `open(Path)` and
+`write` therefore remain read-only by default. An explicit
+`openWritable(Path)` adapter is now available through OpenRune's
+`CacheDelegate`; it uses the FileStore `Cache` contract while writing an
+explicitly selected output cache through OpenRune's published writable
+delegate. There is still no automatic fallback to a different backend because
+falling back could decode a cache with the wrong format and silently produce
+incorrect data.
 
 `CacheStoreFactory.openRuneWithDispleeOutput(base, output)` packages this
 topology for callers: OpenRune remains the read/definition source, writes are
@@ -96,8 +99,9 @@ The factory rejects identical paths.
 
 The staged output advertises `mapPacking=true` because its Displee adapter
 repacks dirty archive indexes during `flush()`. Its neutral capability is
-`writeMode=STAGED`; a direct Displee adapter reports `writeMode=DIRECT`, while
-OpenRune reports `writeMode=READ_ONLY`. These distinctions are exposed only
+`writeMode=STAGED`; direct Displee and explicit writable OpenRune adapters
+report `writeMode=DIRECT`, while the normal OpenRune reader reports
+`writeMode=READ_ONLY`. These distinctions are exposed only
 through the neutral boundary; the editor does not receive Displee index
 objects.
 
@@ -112,7 +116,7 @@ live region check at `(50,50)` decoded an 11,157-byte location payload, built
 4,726 object projections, produced 3,983 non-empty collision tiles, and
 matched an independently generated TSPS shaped-minimap fixture with zero
 pixel differences on all four planes. The
-OpenRune backend remains read-only. The application continues to construct the
+normal OpenRune source backend remains read-only. The application continues to construct the
 legacy Displee backend by default, and the validated Displee writer is an
 explicit staged output choice rather than an OpenRune-native writer claim.
 
@@ -125,9 +129,10 @@ existing representation. Revision-6 named maps and live build-240 numeric
 maps now pass this read-only comparison. Writable output-cache reopening is
 validated through the explicit Displee adapter and the OpenRune reader. The
 current supported arrangement is therefore formally retained as
-OpenRune-read/Displee-output staging; a native OpenRune writer remains future
-work and is not required to enable the safe staged path. Definition adapters
-are available, but are not yet the default product backend. The verifier also
+OpenRune-read/Displee-output staging; the direct writable OpenRune delegate is
+an explicit opt-in and remains separate from the default source-cache path.
+Definition adapters are available, but are not yet the default product
+backend. The verifier also
 compares the complete neutral derived scene after round-trip encoding; the
 bridge-heavy build-240 fixture currently passes that check with zero
 differences.

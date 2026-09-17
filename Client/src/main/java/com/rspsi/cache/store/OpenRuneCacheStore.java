@@ -1,6 +1,7 @@
 package com.rspsi.cache.store;
 
 import dev.openrune.filesystem.Cache;
+import dev.openrune.cache.CacheDelegate;
 import com.rspsi.cache.CacheStoreCapabilities;
 import com.rspsi.cache.CacheWriteMode;
 import com.rspsi.cache.OsrsCacheMetadata;
@@ -17,21 +18,38 @@ import java.util.Objects;
 /**
  * OpenRune FileStore compatibility adapter.
  *
- * The first spike intentionally supports reads only. The OpenRune file-backed
- * implementation is read-only, so silently pretending that writes succeeded
- * would risk corrupting edited maps.
+ * The normal {@link #open(Path)} path intentionally supports reads only. The
+ * OpenRune file-backed implementation is read-only; direct writes require the
+ * explicit {@link #openWritable(Path)} output-cache path.
  */
 public final class OpenRuneCacheStore implements CacheStore {
 
     private final Cache cache;
+    private final boolean writable;
 
     OpenRuneCacheStore(Cache cache) {
+        this(cache, false);
+    }
+
+    OpenRuneCacheStore(Cache cache, boolean writable) {
         this.cache = Objects.requireNonNull(cache, "cache");
+        this.writable = writable;
     }
 
     public static OpenRuneCacheStore open(Path path) {
         Objects.requireNonNull(path, "path");
         return new OpenRuneCacheStore(Cache.Companion.load(path));
+    }
+
+    /**
+     * Opens a writable OpenRune FileStore facade over an explicit output
+     * cache. The source/read-only {@link #open(Path)} path remains unchanged;
+     * callers must opt into this method when they intentionally want direct
+     * output-cache writes.
+     */
+    public static OpenRuneCacheStore openWritable(Path path) {
+        Objects.requireNonNull(path, "path");
+        return new OpenRuneCacheStore(new CacheDelegate(path.toString()), true);
     }
 
     /** Loads OpenRune definitions and immediately reduces them to RSPSi views. */
@@ -87,22 +105,33 @@ public final class OpenRuneCacheStore implements CacheStore {
 
     @Override
     public void write(int index, int archive, int file, byte[] data) {
-        throw new UnsupportedOperationException(
-                "OpenRune compatibility store is read-only until writable packing is validated");
+        Objects.requireNonNull(data, "data");
+        if (!writable) {
+            throw new UnsupportedOperationException(
+                    "OpenRune compatibility store is read-only; use openWritable for an explicit output cache");
+        }
+        cache.write(index, archive, file, data.clone(), null);
     }
 
     @Override
     public void flush() {
-        // No writes are accepted by this read-only spike.
+        if (writable) {
+            cache.update();
+        }
     }
 
     @Override
     public CacheStoreCapabilities capabilities() {
-        return new CacheStoreCapabilities(false, true, false, CacheWriteMode.READ_ONLY);
+        return writable
+                ? new CacheStoreCapabilities(true, true, true, CacheWriteMode.DIRECT)
+                : new CacheStoreCapabilities(false, true, false, CacheWriteMode.READ_ONLY);
     }
 
     @Override
     public void close() {
+        if (writable) {
+            cache.update();
+        }
         cache.close();
     }
 
