@@ -12,6 +12,7 @@ import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.MoveObjectTool;
 import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.editor.tool.TileSnapper;
+import com.rspsi.editor.viewport.Viewport;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -76,6 +77,31 @@ class CoreObjectTransformToolsTest {
                 world.tile(0, 4, 8).snapshot().objects());
         assertEquals(8, TileSnapper.snap(8, 4, 10));
         assertEquals(9, TileSnapper.snap(99, 4, 10));
+    }
+
+    @Test
+    void objectAwareMoveStartsAtTheObjectAnchorWhenClickedInsideFootprint() {
+        WorldDocument world = new WorldDocument(4, 4);
+        WorldObject object = new WorldObject(12, 10, 0, 0, 0, 0);
+        put(world, object);
+        EditorSession session = new EditorSession(world);
+        Viewport viewport = new Viewport() {
+            @Override public Optional<TileCoordinate> tileAt(float x, float y) {
+                return Optional.of(new TileCoordinate(0, 1, 1));
+            }
+
+            @Override public Optional<WorldObject> objectAt(float x, float y) {
+                return Optional.of(object);
+            }
+        };
+        EditorToolController controller = new EditorToolController();
+        controller.activate(new MoveObjectTool(), new ToolContext(session, new EmptyAssets(), viewport));
+
+        controller.pointerDown(pointer(1, 1));
+        controller.pointerUp(pointer(1, 1));
+
+        assertEquals(List.of(object), world.tile(0, 0, 0).snapshot().objects());
+        assertEquals(0, session.history().size());
     }
 
     @Test

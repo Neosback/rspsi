@@ -29,11 +29,14 @@ public final class MoveObjectTool implements EditorTool {
         if (context == null || event.button() != PointerButton.PRIMARY) return;
         clear();
         context.viewport().tileAt(event.x(), event.y()).ifPresent(coordinate -> {
-            object = context.viewport().objectAt(event.x(), event.y())
+            java.util.Optional<WorldObject> picked = context.viewport().objectAt(event.x(), event.y());
+            object = picked
                     .orElseGet(() -> context.session().world().tile(coordinate).snapshot().objects()
                             .stream().findFirst().orElse(null));
             if (object != null) {
-                target = coordinate;
+                target = picked.isPresent()
+                        ? new TileCoordinate(object.plane(), object.x(), object.y())
+                        : coordinate;
             }
         });
     }
