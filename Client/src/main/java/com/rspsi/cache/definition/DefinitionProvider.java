@@ -29,6 +29,11 @@ public interface DefinitionProvider {
         return Optional.empty();
     }
 
+    /** Optional decoded geometry for model previews and renderer preparation. */
+    default Optional<ModelGeometryView> modelGeometry(int id) {
+        return Optional.empty();
+    }
+
     /** Optional until the selected backend exposes texture definitions. */
     default Optional<TextureDefinitionView> texture(int id) {
         return Optional.empty();

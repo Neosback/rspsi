@@ -63,6 +63,7 @@ class RevisionAuditTest {
         assertEquals(VerificationCheck.Status.WARN, status(checks, "revision.definitions.overlays"));
         assertEquals(VerificationCheck.Status.WARN, status(checks, "revision.definitions.textures"));
         assertEquals(VerificationCheck.Status.WARN, status(checks, "revision.definitions.models"));
+        assertEquals(VerificationCheck.Status.WARN, status(checks, "revision.definitions.modelGeometry"));
     }
 
     private static VerificationCheck.Status status(List<VerificationCheck> checks, String id) {

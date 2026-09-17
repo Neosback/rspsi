@@ -248,8 +248,10 @@ Provenance and evidence:
 
 The revision audit now also records the neutral definition surface without
 depending on backend types. Live build 240 region `(50,50)` reports 62,522
-object IDs, 251 underlay IDs, 643 overlay IDs, and 214 texture IDs; focused
-partial-provider tests intentionally report missing families as warnings. The
+object IDs, 251 underlay IDs, 643 overlay IDs, 214 texture IDs, 62,040 model
+IDs, and 265 map-scene sprite IDs; a sampled model-geometry decode also
+passes. Focused partial-provider tests intentionally report missing families
+as warnings. The
 published OpenRune `tools` module is now an explicit cache-write dependency
 only for `CacheDelegate`, with the unrelated CS2 compiler transitively
 excluded; an external copied build-240 cache successfully persisted a modern
@@ -261,6 +263,19 @@ legacy renderer and native FileStore writer remain explicitly quarantined or
 deferred until their own parity gates pass; the separate published
 `CacheDelegate` output path is covered by the focused live-cache integration
 evidence.
+
+### Neutral model geometry adoption
+
+The pinned OpenRune FileStore `ModelType` fields were inspected at commit
+`236e3920aa077a5990f2915e74f1c7d7729db47e`. RSPSi adopts only the geometry
+needed by previews and future renderers: packed vertex XYZ positions, triangle
+ABC indices, optional face colors, alpha values, and texture IDs. The
+replacement boundary is `ModelGeometryView`; `OpenRuneDefinitionProvider`
+decodes it lazily and caches only selected model results. No `ModelType` or
+OpenRune mesh object crosses into editor code. `NeutralDefinitionContractsTest`
+verifies defensive ownership and index validation, while the strict build-240
+verifier reports `revision.definitions.modelGeometry: model 0 geometry
+decoded`.
 
 ## Additional research checkouts captured
 

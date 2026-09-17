@@ -227,6 +227,12 @@ boundary.
   sprites without knowing a cache index, graphics-defaults group, or sprite
   decoder. A backend that cannot expose the selected sprite leaves it absent
   rather than fabricating a visual asset.
+- `ModelDefinitionView` carries cheap model metadata for search and
+  inspection; `ModelGeometryView` is the separate lazy geometry boundary for
+  previews and future renderers. Geometry uses packed XYZ vertices and ABC
+  triangle indices with defensive ownership and optional face channels, so a
+  model browser never needs to expose an OpenRune `ModelType` or eagerly decode
+  the entire model index.
 - `SessionInspectorPanel` caches the neutral collision map for its bound
   session and rebuilds it only after document/provider changes; hover
   inspection therefore reads collision snapshots without rebuilding the

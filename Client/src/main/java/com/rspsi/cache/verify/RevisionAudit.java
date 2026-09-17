@@ -53,7 +53,21 @@ public final class RevisionAudit {
                 definitionCheck("revision.definitions.overlays", "overlays", definitions.overlayIds().size()),
                 definitionCheck("revision.definitions.textures", "textures", definitions.textureIds().size()),
                 definitionCheck("revision.definitions.models", "models", definitions.modelIds().size()),
-                definitionCheck("revision.definitions.mapScenes", "map-scene sprites", definitions.mapSceneIds().size()));
+                definitionCheck("revision.definitions.mapScenes", "map-scene sprites", definitions.mapSceneIds().size()),
+                modelGeometryCheck(definitions));
+    }
+
+    private static VerificationCheck modelGeometryCheck(DefinitionProvider definitions) {
+        if (definitions.modelIds().isEmpty()) {
+            return new VerificationCheck("revision.definitions.modelGeometry",
+                    VerificationCheck.Status.WARN, "no model IDs available for geometry sampling");
+        }
+        int id = definitions.modelIds().get(0);
+        return definitions.modelGeometry(id).isPresent()
+                ? new VerificationCheck("revision.definitions.modelGeometry",
+                        VerificationCheck.Status.PASS, "model " + id + " geometry decoded")
+                : new VerificationCheck("revision.definitions.modelGeometry",
+                        VerificationCheck.Status.WARN, "model " + id + " metadata is available but geometry is not");
     }
 
     private static VerificationCheck definitionCheck(String id, String name, int count) {

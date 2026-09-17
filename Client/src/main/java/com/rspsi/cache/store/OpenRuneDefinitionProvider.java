@@ -6,6 +6,7 @@ import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ModelDefinitionView;
+import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.cache.definition.MapSceneSpriteView;
 import dev.openrune.cache.filestore.definition.ModelDecoder;
@@ -38,7 +39,9 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     private final Map<Integer, TextureType> textures = new HashMap<>();
     private final ModelDecoder modelDecoder;
     private final List<Integer> modelIds;
+    private final Map<Integer, Optional<ModelType>> models = new HashMap<>();
     private final Map<Integer, Optional<ModelDefinitionView>> modelViews = new HashMap<>();
+    private final Map<Integer, Optional<ModelGeometryView>> modelGeometryViews = new HashMap<>();
     private final Map<Integer, MapSceneSpriteView> mapScenes;
 
     private OpenRuneDefinitionProvider(Cache cache, int revision) {
@@ -288,14 +291,69 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     @Override
     public synchronized Optional<ModelDefinitionView> model(int id) {
         if (id < 0) return Optional.empty();
-        return modelViews.computeIfAbsent(id, this::decodeModelView);
+        return modelViews.computeIfAbsent(id, key -> decodedModel(key).map(this::modelView));
     }
 
-    private Optional<ModelDefinitionView> decodeModelView(int id) {
-        ModelType model = modelDecoder.getModel(id);
-        if (model == null) return Optional.empty();
-        return Optional.of(new ModelDefinitionView(model.getId(), model.getVertexCount(),
-                model.getTriangleCount(), model.getTextureTriangleCount(), model.getRenderPriority()));
+    @Override
+    public synchronized Optional<ModelGeometryView> modelGeometry(int id) {
+        if (id < 0) return Optional.empty();
+        return modelGeometryViews.computeIfAbsent(id,
+                key -> decodedModel(key).flatMap(this::geometryView));
+    }
+
+    private ModelDefinitionView modelView(ModelType model) {
+        return new ModelDefinitionView(model.getId(), model.getVertexCount(),
+                model.getTriangleCount(), model.getTextureTriangleCount(), model.getRenderPriority());
+    }
+
+    private Optional<ModelType> decodedModel(int id) {
+        return models.computeIfAbsent(id, key -> Optional.ofNullable(modelDecoder.getModel(key)));
+    }
+
+    private Optional<ModelGeometryView> geometryView(ModelType model) {
+        try {
+            int[] verticesX = required(model.getVertexPositionsX());
+            int[] verticesY = required(model.getVertexPositionsY());
+            int[] verticesZ = required(model.getVertexPositionsZ());
+            int[] triangleA = required(model.getTriangleVertex1());
+            int[] triangleB = required(model.getTriangleVertex2());
+            int[] triangleC = required(model.getTriangleVertex3());
+            int vertexCount = model.getVertexCount();
+            int triangleCount = model.getTriangleCount();
+            if (verticesX.length != vertexCount || verticesY.length != vertexCount
+                    || verticesZ.length != vertexCount || triangleA.length != triangleCount
+                    || triangleB.length != triangleCount || triangleC.length != triangleCount) {
+                return Optional.empty();
+            }
+            int[] vertices = new int[vertexCount * 3];
+            for (int index = 0; index < vertexCount; index++) {
+                int offset = index * 3;
+                vertices[offset] = verticesX[index];
+                vertices[offset + 1] = verticesY[index];
+                vertices[offset + 2] = verticesZ[index];
+            }
+            int[] triangles = new int[triangleCount * 3];
+            for (int index = 0; index < triangleCount; index++) {
+                int offset = index * 3;
+                triangles[offset] = triangleA[index];
+                triangles[offset + 1] = triangleB[index];
+                triangles[offset + 2] = triangleC[index];
+            }
+            short[] colors = model.getTriangleColors();
+            int[] alphas = model.getTriangleAlphas();
+            int[] textures = model.getTriangleTextures();
+            return Optional.of(new ModelGeometryView(model.getId(), vertices, triangles,
+                    colors, alphas, textures));
+        } catch (RuntimeException ignored) {
+            // A malformed or partially supported model remains browseable by
+            // metadata but cannot be handed to a renderer as unsafe geometry.
+            return Optional.empty();
+        }
+    }
+
+    private static int[] required(int[] values) {
+        if (values == null) throw new IllegalArgumentException("Missing model array");
+        return values;
     }
 
     private static List<Integer> archiveIds(Cache cache, int index) {
