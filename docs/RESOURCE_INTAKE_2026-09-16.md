@@ -182,6 +182,37 @@ OpenRS2 cache 391/revision 6 and live build 240/cache 2710; modern output
 reopening passed through a copied cache and the explicit Displee adapter. A
 safe OpenRune-native writer is still not marked verified.
 
+### Neutral cache-view adoption
+
+The first loader-facing portion of the cache boundary is now implemented. The
+inspected OpenRune FileStore behavior is archive/file enumeration plus byte
+reads, represented in RSPSi by:
+
+- `com.rspsi.cache.store.CacheStore`
+- `com.rspsi.cache.store.CacheIndexView`
+- `com.rspsi.cache.store.CacheArchiveView`
+
+The RSPSi views intentionally expose only IDs, byte reads, and presence checks.
+Displee `Index`, `Archive`, and `File` objects remain inside the legacy and
+OpenRune adapter implementations. Client and OSRS compatibility loaders now
+initialize through these neutral views; the deprecated raw index accessor is
+retained only for the remaining legacy renderer compatibility path.
+
+Provenance and evidence:
+
+- Upstream references: OpenRune FileStore `filesystem/Cache.kt` and
+  `tools/CacheDelegate.kt` at commit `236e3920aa077a5990f2915e74f1c7d7729db47e`.
+- Behavior adopted: enumerate archive/file IDs, read archive bytes, preserve
+  missing-file semantics, and layer pending/output data over a base cache.
+- RSPSi replacement API: `CacheStore.fileIds`, `CacheIndexView`, and
+  `CacheArchiveView`; no upstream cache type appears in the loader API.
+- Tests: `CacheIndexViewTest`, the full Gradle test/check suite, and the live
+  `verifyOsrsRevision` runs against OpenRS2 cache 391 and live build 240.
+
+This is a verified seam, not completion of the entire cache migration. The
+legacy renderer and native OpenRune writer remain explicitly quarantined or
+deferred until their own parity gates pass.
+
 ## Additional research checkouts captured
 
 The remaining first-pass references are also checked out outside the RSPSi
