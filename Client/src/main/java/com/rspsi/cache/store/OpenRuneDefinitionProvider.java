@@ -157,11 +157,25 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             for (int id = 0; id < sprites.length; id++) {
                 IndexedSprite sprite = sprites[id];
                 if (sprite == null || sprite.getWidth() <= 0 || sprite.getHeight() <= 0) continue;
-                java.awt.image.BufferedImage image = sprite.toBufferedImage();
-                result.put(id, new MapSceneSpriteView(id, image.getWidth(), image.getHeight(),
-                        sprite.getOffsetX(), sprite.getOffsetY(),
-                        image.getRGB(0, 0, image.getWidth(), image.getHeight(), null,
-                                0, image.getWidth())));
+                /*
+                 * MinimapImageRenderer follows the client rasterizer: palette
+                 * index zero is transparent and every other index is copied as
+                 * an opaque palette colour. Do not use OpenRune's
+                 * toBufferedImage() here; its optional per-pixel alpha is a
+                 * general-purpose image concern, while the OSRS minimap
+                 * compositor deliberately ignores that alpha channel.
+                 */
+                byte[] raster = sprite.getRaster();
+                int[] palette = sprite.getPalette();
+                int[] argb = new int[sprite.getWidth() * sprite.getHeight()];
+                for (int pixel = 0; pixel < argb.length; pixel++) {
+                    int paletteIndex = raster[pixel] & 0xFF;
+                    if (paletteIndex != 0) {
+                        argb[pixel] = 0xFF000000 | (palette[paletteIndex] & 0x00FFFFFF);
+                    }
+                }
+                result.put(id, new MapSceneSpriteView(id, sprite.getWidth(), sprite.getHeight(),
+                        sprite.getOffsetX(), sprite.getOffsetY(), argb));
             }
             return Map.copyOf(result);
         } catch (RuntimeException ignored) {
