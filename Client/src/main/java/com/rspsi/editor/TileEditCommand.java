@@ -40,4 +40,18 @@ abstract class TileEditCommand implements EditCommand {
     public final Set<TileCoordinate> changedTiles() {
         return Set.of(coordinate);
     }
+
+    protected final TileSnapshot beforeSnapshot() {
+        return before;
+    }
+
+    protected final TileSnapshot afterSnapshot() {
+        return after;
+    }
+
+    protected final void requireUnchanged(String field, Object beforeValue, Object afterValue) {
+        if (!Objects.equals(beforeValue, afterValue)) {
+            throw new IllegalArgumentException(description + " cannot change " + field);
+        }
+    }
 }
