@@ -94,6 +94,9 @@ tasks.register('verifyOsrsRevision') {
             def verifierArguments = [cachePath]
             if (regionArguments.every { it != null }) verifierArguments.addAll(regionArguments)
             project(':Client').javaexec {
+                javaLauncher = project(':Client').javaToolchains.launcherFor {
+                    languageVersion = JavaLanguageVersion.of(21)
+                }
                 classpath = project(':Client').sourceSets.main.runtimeClasspath
                 mainClass = 'com.rspsi.cache.verify.OsrsRevisionVerifier'
                 args verifierArguments
