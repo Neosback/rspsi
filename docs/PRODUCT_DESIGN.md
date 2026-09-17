@@ -73,6 +73,12 @@ without exposing OpenRune, Displee, or archive types. The current safe output
 arrangement reads the OpenRune source and stages writes into a distinct output
 cache; a writable OpenRune packer remains a parity-gated milestone.
 
+The JavaFX project-open workflow offers the same two explicit choices: inspect
+the source read-only, or select a separately prepared output cache for editing.
+It never turns the selected source cache into an implicit write target.
+Editable sessions attach project-scoped neutral autosave and offer
+identity-checked recovery as one undoable command.
+
 Each project directory contains `project.json`, `autosave/`, and `edits/`.
 `OsrsStudioProject.initializeProject(...)` records the selected cache identity
 there without copying the cache; later opens compare that identity and fail

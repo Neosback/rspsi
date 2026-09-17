@@ -12,11 +12,13 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -67,6 +69,11 @@ import com.rspsi.swatches.BaseSwatch;
 import com.rspsi.swatches.OverlaySwatch;
 import com.rspsi.swatches.UnderlaySwatch;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.PasteFragmentCommand;
+import com.rspsi.editor.io.SessionAutosaveCoordinator;
+import com.rspsi.editor.io.SessionAutosaveStore;
+import com.rspsi.editor.model.TileBounds;
+import com.rspsi.editor.model.WorldFragment;
 import com.rspsi.cache.workspace.OsrsStudioProject;
 import com.rspsi.cache.definition.LegacyDefinitionProvider;
 import com.rspsi.editor.model.WorldWindow;
@@ -138,6 +145,9 @@ public class MainWindow extends Application {
 	private EditorSession controlledSession;
 	private LegacyMapDocumentBridge controlledDocumentBridge;
 	private OsrsStudioProject osrsStudioProject;
+	private SessionAutosaveCoordinator osrsAutosave;
+	private ScheduledFuture<?> osrsAutosaveTask;
+	private ProjectLayout osrsProjectLayout;
 	private boolean osrsProjectActive;
 	private final Runnable controlledMapReadyListener = this::bindControlledWorkspaceSession;
 
@@ -626,6 +636,7 @@ public class MainWindow extends Application {
 					controlledDocumentBridge.close();
 					controlledDocumentBridge = null;
 				}
+				closeOsrsAutosave();
 				if (osrsStudioProject != null) {
 					osrsStudioProject.close();
 					osrsStudioProject = null;
@@ -852,9 +863,9 @@ public class MainWindow extends Application {
 
 	/**
 	 * Opens the explicit OSRS project workflow without replacing the legacy
-	 * launch path. The first frontend milestone is intentionally read-only:
-	 * it proves project identity, cache loading, region selection, and neutral
-	 * inspector binding before a canonical OSRS viewport is introduced.
+	 * launch path. The source cache is always opened read-only. An explicitly
+	 * selected prepared output cache enables editing, staged autosave, and the
+	 * same neutral command/session workflow used by non-UI tests.
 	 */
 	private void openOsrsProject() {
 		if (controlledWorkspaceShell == null) {
@@ -882,6 +893,18 @@ public class MainWindow extends Application {
 		File cacheDirectory = cacheChooser.showDialog(stage);
 		if (cacheDirectory == null) return;
 
+		String openMode = FXDialogs.showConfirm(stage, "Choose OSRS project mode",
+				"The selected source cache is never edited directly. Choose a separate prepared output cache to enable editing, or inspect the project read-only.",
+				"Read-only", "Use output cache");
+		Path outputCache = null;
+		if ("Use output cache".equalsIgnoreCase(openMode)) {
+			DirectoryChooser outputChooser = new DirectoryChooser();
+			outputChooser.setTitle("Choose prepared writable OSRS output cache");
+			File outputDirectory = outputChooser.showDialog(stage);
+			if (outputDirectory == null) return;
+			outputCache = outputDirectory.toPath();
+		}
+
 		String regionInput = FXDialogs.showTextInput(stage, "Choose starting region",
 				"Enter region coordinates as regionX,regionY:", "50,50");
 		int[] region = parseRegion(regionInput);
@@ -892,12 +915,23 @@ public class MainWindow extends Application {
 		}
 
 		OsrsStudioProject opened = null;
+		SessionAutosaveCoordinator autosave = null;
 		try {
-			opened = OsrsStudioProject.openReadOnly(cacheDirectory.toPath(), metadata);
+			opened = outputCache == null
+					? OsrsStudioProject.openReadOnly(cacheDirectory.toPath(), metadata)
+					: OsrsStudioProject.openWithOpenRuneOutput(cacheDirectory.toPath(),
+							outputCache, metadata);
 			var projectRegion = opened.openRegion(region[0], region[1]);
+			if (projectRegion.region().session().canEdit()) {
+				autosave = opened.attachAutosave(layout, projectRegion.region().session());
+			}
+			closeOsrsAutosave();
 			if (osrsStudioProject != null) osrsStudioProject.close();
 			osrsStudioProject = opened;
+			osrsAutosave = autosave;
+			osrsProjectLayout = layout;
 			opened = null;
+			autosave = null;
 			osrsProjectActive = true;
 			if (clientInstance != null) {
 				clientInstance.removeMapReadyListener(controlledMapReadyListener);
@@ -908,14 +942,72 @@ public class MainWindow extends Application {
 			}
 			ControlledWorkspaceBridge.bindProject(controlledWorkspaceShell, projectRegion,
 					osrsStudioProject.definitions(), osrsStudioProject.assets());
+			startOsrsAutosave(projectRegion.region().session());
+			offerOsrsRecovery(projectRegion.region().session());
 			updateHistoryMenuState();
-			log.info("Opened read-only OSRS project {} at region {},{}",
+			log.info("Opened {} OSRS project {} at region {},{}",
+					projectRegion.region().session().canEdit() ? "editable" : "read-only",
 					layout.root(), region[0], region[1]);
-		} catch (RuntimeException exception) {
+		} catch (IOException | RuntimeException exception) {
+			if (autosave != null) autosave.close();
 			if (opened != null) opened.close();
 			FXDialogs.showException(stage, "Cannot open OSRS project",
 					"The cache or selected region could not be opened.", exception);
 		}
+	}
+
+	private void startOsrsAutosave(EditorSession session) {
+		if (osrsAutosave == null || !session.canEdit()) return;
+		osrsAutosaveTask = service.scheduleAtFixedRate(() -> {
+			try {
+				osrsAutosave.autosaveNow();
+				log.debug("OSRS project autosave completed");
+			} catch (Exception exception) {
+				log.warn("OSRS project autosave failed", exception);
+			}
+		}, 60, 60, TimeUnit.SECONDS);
+	}
+
+	private void offerOsrsRecovery(EditorSession session) {
+		if (osrsAutosave == null || osrsProjectLayout == null || !osrsAutosave.hasSnapshot()) {
+			return;
+		}
+		try {
+			if (!osrsAutosave.snapshotMatchesProject()) return;
+			SessionAutosaveStore.AutosaveSnapshot snapshot = osrsAutosave.readSnapshot();
+			if (snapshot.world().width() != session.world().width()
+					|| snapshot.world().length() != session.world().length()
+					|| snapshot.world().planes() != session.world().planes()) {
+				FXDialogs.showWarning(stage, "Autosave cannot be restored",
+						"The recovery snapshot belongs to a different region size or plane count. It was left untouched.");
+				return;
+			}
+			String response = FXDialogs.showConfirm(stage, "Recover OSRS autosave?",
+					"A matching recovery snapshot was found. Recover it as one undoable edit? The source cache remains unchanged until you save.",
+					"Recover", "Discard");
+			if ("Recover".equalsIgnoreCase(response)) {
+				TileBounds bounds = new TileBounds(0, 0, snapshot.world().width() - 1,
+						snapshot.world().length() - 1);
+				WorldFragment fragment = WorldFragment.capture(snapshot.world(), bounds);
+				session.execute(new PasteFragmentCommand(fragment, 0, 0,
+						"Recover OSRS autosave"));
+			}
+		} catch (IOException | RuntimeException exception) {
+			FXDialogs.showException(stage, "Cannot recover OSRS autosave",
+					"The recovery snapshot was not applied. The project remains open.", exception);
+		}
+	}
+
+	private void closeOsrsAutosave() {
+		if (osrsAutosaveTask != null) {
+			osrsAutosaveTask.cancel(false);
+			osrsAutosaveTask = null;
+		}
+		if (osrsAutosave != null) {
+			osrsAutosave.close();
+			osrsAutosave = null;
+		}
+		osrsProjectLayout = null;
 	}
 
 	private static int[] parseRegion(String value) {

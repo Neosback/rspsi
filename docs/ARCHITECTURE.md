@@ -384,6 +384,12 @@ selected backend capabilities: a matching project opened over a read-only
 OpenRune store is inspectable only, while the explicit staged output store can
 produce an editable session.
 
+The JavaFX project opener exposes that boundary explicitly: read-only source
+inspection or a separately prepared output cache. Editable sessions attach
+`SessionAutosaveCoordinator`, schedule recovery snapshots outside the core,
+and can recover a matching snapshot as one `PasteFragmentCommand`; the source
+cache remains untouched until the normal session save path is invoked.
+
 The composition root also exposes `openWindow(...)` and
 `openWindowAround(...)` for scene consumers. These load a bounded OSRS context,
 preserve missing-region holes, and stitch shared terrain borders before the

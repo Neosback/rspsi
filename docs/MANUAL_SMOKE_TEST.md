@@ -35,8 +35,9 @@ For the OSRS project foundation, also verify that a project directory contains
 `project.json`, `autosave/`, and `edits/`; opening it against its recorded cache
 is compatible, while opening it against a different revision or fingerprint
 is clearly read-only. The staged output/session API is covered separately by
-automated tests; the JavaFX OpenRune workflow is intentionally read-only until
-the native writer gate passes.
+automated tests. The JavaFX workflow offers the same safe read-only mode plus
+an explicit prepared-output-cache mode; the source cache is never edited
+directly.
 
 For the opt-in OSRS project workflow:
 
@@ -44,6 +45,8 @@ For the opt-in OSRS project workflow:
 - [ ] Choose `File > Open from > OSRS project…`.
 - [ ] Select a project folder containing `project.json`.
 - [ ] Select the OSRS cache recorded by that project.
+- [ ] Choose Read-only for inspection, or choose Use output cache and select a
+      separate prepared writable OSRS output cache.
 - [ ] Enter a valid starting region such as `50,50`.
 - [ ] Confirm the selected region appears in the controlled workspace and the
       canonical top-down scene preview, inspector, history, assets, validation,
@@ -62,5 +65,10 @@ For the opt-in OSRS project workflow:
 - [ ] Export the selected fragment to JSON, clear/reopen the workspace, then
       import the file at a new target. Confirm the imported fragment is one
       undoable history entry.
-- [ ] Confirm the status row clearly marks the OpenRune project read-only.
+- [ ] Confirm the status row clearly marks the project Editable or Read-only.
+- [ ] In editable mode, make a small command-backed edit and verify an
+      `autosave/session.json` snapshot appears under the project folder.
+- [ ] Reopen the same editable project and choose Recover when prompted;
+      confirm recovery is one undoable edit and the source cache remains
+      unchanged until Save.
 - [ ] Close/relaunch and confirm the legacy map workflow still opens normally.
