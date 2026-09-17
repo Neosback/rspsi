@@ -35,7 +35,11 @@ public record ObjectAppearanceView(
         if (from == null || to == null) return Map.of();
         int count = Math.min(from.length, to.length);
         for (int index = 0; index < count; index++) {
-            result.put(from[index], to[index]);
+            // Cache codecs commonly retain -1 sentinel slots for unused
+            // recolor/retexture entries. They are not appearance mappings.
+            if (from[index] >= 0 && to[index] >= 0) {
+                result.put(from[index], to[index]);
+            }
         }
         return Map.copyOf(result);
     }
