@@ -43,6 +43,40 @@ cache, scene, command, and parity gates pass.
 External repositories are research inputs. Whole-project dependencies and
 upstream runtime types do not cross into the editor core.
 
+## FileStore and plugin boundary
+
+OpenRune FileStore remains the production cache/data foundation. It owns cache
+filesystem access, raw map/location bytes, OSRS definitions, models, sprites,
+XTEA, packing, and generic cache/revision tooling. RSPSi owns the canonical
+editable world model and the semantic layers built from that data: coordinates,
+terrain, bridges, instances, collision, scene construction, commands, and
+rendering contracts. Collision and scene behavior are not folded into
+FileStore merely because FileStore supplies their inputs.
+
+The FileStore review identifies useful future candidates—an upstream-friendly
+map codec, a unified lazy asset facade, and revision-conformance tooling—but
+RSPSi first completes those seams behind its own neutral adapters. We do not
+copy a second `MapRegion`, scene graph, collision map, or model runtime into
+FileStore. Any future upstream contribution must be generic, provenance-safe,
+and independently useful outside the RSPSi editor.
+
+Workflow features are first-party plugins once the foundation is stable. The
+initial plugin set is expected to include terrain tools, object tools,
+selection, collision/route previews, asset browsing and definition inspection,
+validation/debug overlays, and minimap or scene-preview workflows. Plugins
+may register neutral tools, panels, inspectors, and commands, but they may not
+own `WorldDocument`, history, project identity, cache writes, or frontend
+types. Asset browsing is therefore a plugin-facing workflow over the core
+`AssetRepository`; it is not a second cache layer.
+
+The foundation must be completed before this plugin surface grows. The editor
+must have executable evidence for OSRS metadata and rules covering revision
+formats, explicit/generated heights, floor blending, shaped tiles and
+rotations, regions/chunks, coordinate conversions, bridges/effective planes,
+location categories/types/orientations, object configs and footprints,
+collision flags, model transforms, and instance boundaries. This prevents
+plugins from encoding competing interpretations of the game world.
+
 ## Data flow
 
 ```text
@@ -133,9 +167,14 @@ Work advances only when the current gate has executable evidence:
    locations, collision, instances, minimap, and region boundaries.
 4. Editing core: all mutations through `EditorSession` and commands, grouped
    history, unified selection, and dirty-region updates.
-5. Workflow: terrain sculpting, object transforms, selection, collision tools,
-   asset browsing, inspectors, and controlled JavaFX workspaces.
-6. Retirement: remove legacy product paths and make OpenRune the supported
+5. Foundation completion: revision features, metadata, scene/world semantics,
+   unified asset access, representative fixtures, and revision audits are
+   complete before broad workflow extraction.
+6. Workflow: terrain sculpting, object transforms, selection, collision tools,
+   asset browsing, inspectors, validation/debug overlays, and controlled
+   JavaFX workspaces are first-party plugins over the stable core.
+7. Retirement: remove legacy product paths and make OpenRune the supported
    default only after the previous gates pass.
 
-No renderer rewrite or Dear ImGui migration starts before gates 1–4 pass.
+No renderer rewrite, Dear ImGui migration, or broad plugin extraction starts
+before gates 1–5 pass.

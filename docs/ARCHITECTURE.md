@@ -26,6 +26,38 @@ and renderer contracts. They may not import JavaFX, ImGui, OpenGL/LWJGL,
 Displee, or OpenRune types. Frontends and cache adapters translate at the
 boundary.
 
+## FileStore and plugin boundaries
+
+OpenRune FileStore is the production cache/data layer. It is responsible for
+filesystem access, raw map/location payloads, OSRS definition decoding,
+models, sprites, XTEA, packing, and generic revision tooling. RSPSi's cache
+adapter may use it, but the editable world model does not depend on its
+archive layout or runtime types.
+
+RSPSi owns the semantic layers that FileStore should not absorb:
+
+- map/location codec contracts as consumed by the editor;
+- `WorldDocument`, `TerrainTile`, `WorldObject`, coordinates, regions, and
+  chunks;
+- bridges, effective/render planes, instances, collision, route previews,
+  scene construction, shaped-tile meshes, and floor-blending inputs;
+- sessions, commands, history, selection, dirty regions, and renderer APIs.
+
+The current RSPSi neutral services are therefore the canonical implementation
+while upstream FileStore improvements remain candidates. We must not add a
+second production map model, collision engine, scene graph, or model runtime
+just because a donor project contains one. A future FileStore contribution is
+acceptable only if it is generic, provenance-reviewed, independently useful,
+and consumed through the same RSPSi-owned interfaces.
+
+First-party plugins sit above this core. Terrain/object tools, selection,
+asset browsing, definition inspection, validation, debug overlays, collision
+previews, and minimap/scene-preview workflows may be packaged as plugins, but
+they can only register neutral tools/panels and execute core commands. They
+cannot own world state, history, project identity, cache writes, or frontend
+types. The plugin boundary is a packaging and capability boundary, not a
+second editor architecture.
+
 ## Canonical APIs
 
 - `WorldDocument` is the mutable document model; `WorldModel` is a temporary

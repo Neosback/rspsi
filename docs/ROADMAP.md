@@ -20,6 +20,50 @@ permission to copy code, bundle assets, or add a runtime dependency.
 The locked product direction and workspace design are maintained in
 [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md).
 
+## Design update: FileStore boundary and foundation-first plugin sequencing
+
+The latest FileStore review is adopted as an architectural refinement, not as
+a request to turn FileStore into the editor. FileStore is already the right
+production foundation for cache I/O, OSRS definitions, models, sprites,
+RSCM/GameVal, XTEA, packing, and cache tooling. The missing Studio behavior is
+semantic: editable map regions, world coordinates, scene construction,
+collision, rendering rules, and commands. Those remain RSPSi-owned or belong
+in small sibling layers behind neutral interfaces.
+
+The near-term ownership boundary is:
+
+| Layer | Owns | Does not own |
+|---|---|---|
+| OpenRune FileStore | Cache filesystem, raw map/location bytes, definitions, models, sprites, XTEA, packing, generic cache/revision tools | Editor world state, collision, scene graph, renderer, commands, UI plugins |
+| RSPSi cache adapter | Revision profiles, map-index discovery, map/location codecs, project identity, output-cache coordination | OpenRune or Displee types in the editor model |
+| RSPSi world/scene layers | `WorldDocument`, terrain semantics, coordinates, bridges, instances, collision, route previews, shaped-tile meshes, floor blending inputs, model runtime inputs | Cache archive layout and frontend state |
+| RSPSi core | Sessions, commands, history, selection, dirty regions, renderer API, plugin contracts | JavaFX, ImGui, OpenGL, raw cache backends |
+| First-party plugins | Terrain/object tools, asset browser, inspectors, validation, debug overlays, minimap/preview workflows | Direct mutation of world/cache state or alternate history systems |
+
+The proposed FileStore `osrs-map` and unified asset APIs are candidate
+upstream improvements, not new production dependencies to add by copying
+code. RSPSi will first complete and verify its own neutral map and asset
+seams. A later upstream contribution or sibling module is justified only when
+it is generic, independently useful, and does not duplicate the canonical
+RSPSi editor model.
+
+The plugin rule is deliberately strict: a feature may be presented as a
+first-party plugin, but it must use `EditorSession`, `EditorCommand`,
+`SelectionModel`, `AssetRepository`, `SceneRenderer`, and neutral inspector or
+workspace contracts. Asset browsing can therefore be a plugin without making
+the cache, definitions, or world model a plugin. History, selection, project
+identity, cache coordination, and the canonical world model remain core
+services.
+
+Foundation completion is now an explicit prerequisite. Before adding a large
+set of tools or plugins, the project must demonstrate that it understands and
+tests OSRS metadata and semantics: revision-driven map/location formats,
+explicit versus generated heights, underlay/overlay blending, all 13 shaped
+tile topologies and rotations, 64×64 regions, 8×8 chunks, world/region/local
+coordinates, bridges and effective planes, location layers/types/orientations,
+object footprints and configs, collision/route flags, model transforms, and
+region/instance boundaries.
+
 ## Current baseline
 
 | Area | Status | Evidence / next action |
@@ -37,8 +81,10 @@ The locked product direction and workspace design are maintained in
 | OSRS cache support | implemented-unverified | `OSRSPlugin` discovers named and revision-237+ numeric map groups through `CacheStore`; external revision-6 named and live build-240 numeric terrain/location verification passes, the explicit Displee output adapter persists modern edits across reopen, and the opt-in OpenRune `CacheDelegate` writer now persists underlay, overlay shape/rotation, tile flags, shared-corner heights, and object rotation through the same neutral project/session path; default source-cache reads remain read-only until broader output parity is complete |
 | Neutral cache boundary | in-progress | `CacheStore` facade now covers regular resources, named sprite reads, the legacy byte accessor, and neutral `CacheIndexView`/`CacheArchiveView` loader initialization with archive/file enumeration; legacy named-sprite archive construction is contained inside the compatibility `Cache` facade, client/editor gzip handling uses neutral `CacheCompression`, shared `Buffer` no longer accepts Displee `File`, `verifyCacheBackendBoundary` prevents new raw backend imports from escaping approved adapters, Displee dependencies are no longer exported transitively by `Client`, and `CacheStoreFactory.legacy(Path)` provides a neutral compatibility entrypoint; all raw `Cache` escape hatches are explicitly deprecated, while old renderer archive types remain quarantined until the compatibility path can be retired |
 | Neutral map service | verified | `MapIndexTable` and `OsrsMapService` provide named and modern numeric-group OSRS map discovery, protection against partial name-hash matches, correct split-group file-0 and packed-group file-0/file-1 reads/writes, revision-aware pre-209 byte and 209+ short terrain codecs, canonical region and bounded multi-region window loading with explicit holes, and safe writes to existing regions; external revision-6 named and live build-240 numeric terrain/location verification and semantic round trips pass for the supported read/staged scope |
+| FileStore and sibling-layer boundary | in-progress | Current adapters keep OpenRune focused on cache/filesystem/definition concerns while RSPSi owns the neutral map, world, scene, and editor contracts; next close the boundary audit for generic upstream candidates, document provenance for any contribution, and reject duplicate production implementations of map semantics, collision, scene construction, or rendering |
+| Revision feature registry and conformance audit | in-progress | `OsrsRevisionProfile` and `RevisionAudit` centralize current map-group/codec decisions and report cache layout checks; expand the profile into an explicit feature registry and fixture-driven revision audit before supporting another OSRS revision or scattering new revision conditionals |
 | OSRS region save coordination | verified | `OsrsRegionSaveCoordinator` pre-encodes terrain/location payloads using the map service's revision-specific format, supports single- and multi-region batches, rejects read-only/duplicate sessions, writes and flushes through the neutral map service, and marks sessions saved only after the complete batch succeeds; failed writes/flushes preserve dirty markers; `OsrsSessionLoader` returns clean save-capable sessions, and modern live-build output persistence reopens successfully through both Displee and the OpenRune reader; native OpenRune writing remains a separate gated capability |
-| Neutral definitions | implemented-unverified | Object/floor/texture/collision views plus lazy OpenRune model metadata, model-index enumeration, and sampled neutral model geometry, map-scene IDs, immutable `MapSceneSpriteView` assets, texture average-HSL metadata, and object appearance metadata (animation, contouring, transforms, recolor/retexture pairs) now cross the neutral boundary; the OpenRune adapter supports graphics-defaults and named `mapscene` sprite-group discovery, and the build-240 verifier exposes 62,040 model IDs and 265 map-scene sprites; `DefinitionAssetRepository` and `OpenRuneSymbolicNameProvider` expose optional neutral RSCM/GameVal keys and rich neutral asset property summaries, while model descriptors stay lightweight until a model is selected; the controlled browser now filters models and sprites; the repository caches its immutable descriptor index for responsive repeated asset searches; mapping-file lifecycle and broad real-cache definition parity remain |
+| Neutral definitions and unified asset facade | implemented-unverified | Object/floor/texture/collision views plus lazy OpenRune model metadata, model-index enumeration, and sampled neutral model geometry, map-scene IDs, immutable `MapSceneSpriteView` assets, texture average-HSL metadata, and object appearance metadata (animation, contouring, transforms, recolor/retexture pairs) now cross the neutral boundary; the OpenRune adapter supports graphics-defaults and named `mapscene` sprite-group discovery, and the build-240 verifier exposes 62,040 model IDs and 265 map-scene sprites; `DefinitionAssetRepository` and `OpenRuneSymbolicNameProvider` expose optional neutral RSCM/GameVal keys and rich neutral asset property summaries, while model descriptors stay lightweight until a model is selected; the controlled browser now filters models and sprites; the repository caches its immutable descriptor index for responsive repeated asset searches; mapping-file lifecycle, broader real-cache definition parity, and a stable lazy `OsrsAssets`-style facade remain |
 | Command/session editing core | in-progress | Core model, canonical `EditorCommand` history, exact history navigation with replay rollback, session, neutral save handler, OSRS region session loader, centralized atomic grouped rollback, and migrated tools are covered; built-in tile/composite commands no longer depend on the deprecated `EditCommand` alias, explicit underlay, overlay, height, tile-flag, and upper-plane-height commands now back canonical edits, the legacy fix-heights action dispatches through the neutral command whenever a controlled session is present, OSRS workspace menu and keyboard Undo/Redo/Save actions target the bound canonical session even when its history is empty, and Delete uses a grouped canonical object command; remaining legacy input and full UI migration remain |
 | Session state notifications | implemented-unverified | Neutral edit/save-state and selection listeners now support synchronized frontend panels; thread/FX scheduling and full legacy binding remain |
 | WorldFragment copy/paste | implemented-unverified | Canonical multi-plane fragment capture, versioned neutral JSON import/export, and atomic paste/undo command are covered; the canonical JavaFX tool rail now copies the active tile/area/object selection to the system clipboard, supports JSON file import/export, and pastes through the same undoable command path |
@@ -58,6 +104,7 @@ The locked product direction and workspace design are maintained in
 | Route and line-of-sight preview | implemented-unverified | Neutral bounded `RouteFinder`, `LineValidator`, `Reachability`, and `RoutePreviewService` provide collision-aware routes, OpenRune-compatible swept footprint checks for square actors, edge-aware rectangular line-of-sight and line-of-walk validation, actor/target footprint-aware LOS, destination location semantics, explicit optional route-blocker semantics, corner-cutting protection, projectile traces, object-footprint reach previews, and safe map-edge handling; the controlled JavaFX viewport now renders immutable route/LOS/reach results with start/target markers and exposes Route/LOS/Reach controls; broader OpenRune-Server route/reach parity remains |
 | Neutral world validation | implemented-unverified | `WorldValidator` reports broken intra-document shared edges, unsupported OSRS map values, duplicate/invalid objects using canonical shape semantics, missing definitions, and definition-backed footprint bounds; region-context validation distinguishes an object extending into neighboring loaded context from invalid standalone data, `WorldRegionWindow` reports verifiable cross-region corner mismatches, and the controlled workspace exposes live diagnostics with a neutral definition adapter, while full parity rules remain |
 | UI-neutral editor contracts | in-progress | Neutral pointer, tool, inspector, viewport, renderer, and controlled workspace seams introduced; command-backed tools and the JavaFX canonical viewport consume neutral state without exposing JavaFX types to editor-core; `UiNeutralImportTest` now fails the build if editor/project/map/definition contracts import JavaFX, ImGui, LWJGL/OpenGL, Displee, OpenRS2, or OpenRune-Server types, while the remaining legacy adapters and full input/UI migration remain |
+| First-party plugin boundary | in-progress | The existing plugin loader and neutral tool/workspace contracts provide a starting seam, but canonical asset browsing, terrain/object tools, validation, debug overlays, and preview workflows are not yet isolated as capability-scoped plugins; define one small plugin contract that can execute commands and register neutral panels/tools without owning world state, history, cache writes, or frontend types |
 | Live legacy document bridge | in-progress | MapRegion terrain import, scene-object anchor import, shared-corner height/floor/flag synchronization, and footprint-aware object replacement are implemented; UI smoke coverage remains |
 | OpenRune backend | in-progress | 2.4.19 compatibility spike and neutral OSRS region decoder are isolated behind `CacheStore`; external revision-6 named and live build-240 numeric terrain/location verification passes, staged modern output persists through the explicit Displee adapter, and an opt-in OpenRune `CacheDelegate` writer now reopens a persisted terrain edit through OpenRune; the normal source reader remains read-only and legacy remains the default |
 | Resource catalog and provenance | implemented-unverified | [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md) and [`RESOURCE_INTAKE_2026-09-16.md`](RESOURCE_INTAKE_2026-09-16.md) record roles, commits, license evidence, inspected paths, and current adoption tests |
@@ -126,9 +173,46 @@ promoted later.
   and visual-map evidence set described in [`RESOURCE_CATALOG.md`](RESOURCE_CATALOG.md).
 - Do not bundle or depend on resources marked `license-review`.
 
-### Phase 4 — Editing improvements
+### Phase 4 — Foundation completion
+
+Before expanding the workflow surface or extracting first-party plugins, close
+the semantic foundation. This phase is complete only when the following are
+covered by executable fixtures or explicit parity evidence:
+
+- `OsrsRevisionFeatures` (or the final equivalent) drives map/location and
+  definition decisions without scattered revision branches;
+- explicit and generated heights, underlay/overlay blending, all 13 shaped
+  tile topologies × four rotations, terrain materials, and shared edges;
+- 64×64 regions, 8×8 chunks, world/region/local coordinates, loading-line
+  holes, neighboring-region context, and instance transforms;
+- bridges, authored versus effective/render planes, floor/roof/render flags,
+  wall/wall-decor/ground/ground-decor categories, loc types, orientations,
+  footprints, configs, and object-derived collision;
+- model transforms, contouring inputs, recolor/retexture metadata, minimap
+  inputs, and the distinction between decoded cache data and derived scene
+  data;
+- unified lazy asset access for objects, floors, overlays, underlays, models,
+  textures, sprites, sequences, and map elements without archive knowledge in
+  Studio plugins;
+- revision audit reports for every supported cache fixture and semantic
+  decode → encode → decode evidence for terrain and locations.
+
+The exit gate is a green `verifyOsrsRevision` run over representative plain,
+water/swamp, bridge/multi-plane, wall-heavy, region-boundary, and instance
+fixtures, with the remaining warnings classified. No new large plugin or
+renderer subsystem starts while a foundation item is unknown or represented
+by a second competing model.
+
+### Phase 5 — Editing improvements
 
 Prioritize terrain sculpting, object transforms, richer selection, collision tools, then region/asset workflows. Every operation must use the command/history path.
+
+Once the foundation gate passes, package the workflow as first-party plugins in
+this order: terrain tools, object tools, selection, collision/route previews,
+asset browser/definition inspection, validation/debug overlays, and minimap or
+scene preview. Each plugin registers neutral tools/panels and delegates all
+mutation to core commands. Plugin permissions, external plugin discovery,
+Lua/CS2 scripting, and a public Plugin Hub remain later work.
 
 The first controlled JavaFX workspace shell is now available as a frontend
 adapter. It materializes the neutral workspace presets into fixed tool and
@@ -160,5 +244,9 @@ workflow and a small canonical top-down scene preview are now in place. The
 independent TSPS terrain-semantic export path is implemented and passes for
 build 240; the remaining parity evidence is an independent scene fingerprint
 or equivalent 3D render export, plus broader output/cache and manual smoke
-coverage. Do not replace the legacy renderer or change product defaults before
-those gates pass.
+coverage. The immediate design priority is now Phase 4 foundation completion:
+close revision-feature, metadata, blending, bridge/plane, object/config,
+collision, asset-facade, and representative-fixture gaps before extracting
+the workflow into first-party plugins. Do not replace the legacy renderer,
+change product defaults, or multiply plugin/tool implementations before those
+gates pass.
