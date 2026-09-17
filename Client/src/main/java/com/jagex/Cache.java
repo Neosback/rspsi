@@ -244,6 +244,13 @@ public class Cache {
         return store.read(5, groupId, fileId);
     }
 
+    /**
+     * Compatibility-only byte accessor for the old loader family. The read
+     * itself now goes through {@link CacheStore}; callers that need a
+     * cache-library index should use the explicitly deprecated index accessor
+     * above and remain quarantined from the editor core.
+     */
+    @Deprecated
     public final byte[] getFile(CacheFileType type, int file) {
         try {
             if (fileRetrieverOverride != null) {
@@ -253,25 +260,21 @@ public class Cache {
             }
             switch (type) {
                 case CONFIG:
-                    return configArchive.archive(file).file(0).getData();
                 case MODEL:
-                    return modelArchive.archive(file).file(0).getData();
                 case ANIMATION:
-                    return skinArchive.archive(file).file(0).getData();
                 case SKELETON:
-                    return skeletonArchive.archive(file).file(0).getData();
+                case MAP:
+                    return readFile(type, file);
                 case SOUND:
                     break;
-                case MAP:
-                    return mapArchive.archive(file).file(0).getData();
                 case TEXTURE:
                     break;
                 case SPOT:
-                    return spotAnimIndex.archive(file >>> 8).file(file & 0xff).getData();
+                    return store.read(21, file >>> 8, file & 0xff);
                 case VARBIT:
-                    return varbitIndex.archive(file >>> 1416501898).file(file & 0x3ffff).getData();
+                    return store.read(22, file >>> 1416501898, file & 0x3ffff);
                 case LOC:
-                    return locIndex.archive(file >> 8).file((file) & (1 << 8) - 1).getData();
+                    return store.read(16, file >>> 8, file & 0xff);
             }
         } catch (Exception ex) {
             //ex.printStackTrace();

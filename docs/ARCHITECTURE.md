@@ -141,10 +141,11 @@ boundary.
   results.
 - Cache and definitions are accessed through RSPSi interfaces, never raw
   archive/index/file objects.
-- `Cache.readFile(...)` and `Cache.readNamedFile(...)` are the first byte-oriented
-  seams for the legacy client/resource path. New consumers receive bytes through
-  those methods; the deprecated `Cache.getFile(CacheFileType)` index accessor is
-  retained only for compatibility loaders that still require Displee indexes.
+- `Cache.readFile(...)`, `Cache.readNamedFile(...)`, and the deprecated
+  byte-returning `Cache.getFile(CacheFileType, int)` are the byte-oriented seams
+  for the legacy client/resource path. New consumers receive bytes through those
+  methods; the deprecated `Cache.getFile(CacheFileType)` index accessor remains
+  only for compatibility loaders that still require Displee indexes.
   This is an incremental boundary, not a claim that all legacy loaders have
   already migrated.
 - `CacheStore.metadata(revision)` is an optional neutral identity capability;
