@@ -8,13 +8,17 @@ import com.rspsi.editor.ui.WorkspaceDefinition;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.util.StringConverter;
 
 import java.util.Comparator;
 import java.util.List;
@@ -34,8 +38,10 @@ public final class ControlledWorkspaceShell extends BorderPane {
 
     private final WorkspaceCatalog catalog;
     private final Map<String, Node> panels;
+    private final ComboBox<String> workspacePicker = new ComboBox<>();
     private Node bottomTabs;
     private Node statusBar;
+    private String activeWorkspaceId;
 
     public ControlledWorkspaceShell(WorkspaceCatalog catalog,
                                     WorkspaceDefinition workspace,
@@ -46,6 +52,23 @@ public final class ControlledWorkspaceShell extends BorderPane {
         var stylesheet = getClass().getResource("/css/workspace.css");
         if (stylesheet != null) getStylesheets().add(stylesheet.toExternalForm());
         setPadding(Insets.EMPTY);
+        workspacePicker.getItems().setAll(catalog.workspaces().stream()
+                .map(WorkspaceDefinition::id).toList());
+        workspacePicker.setConverter(new StringConverter<>() {
+            @Override public String toString(String value) {
+                return value == null ? "" : title(value);
+            }
+
+            @Override public String fromString(String value) {
+                return value;
+            }
+        });
+        workspacePicker.setAccessibleText("Workspace preset");
+        workspacePicker.setPromptText("Workspace");
+        workspacePicker.setMinWidth(150);
+        workspacePicker.valueProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue != null && !newValue.equals(activeWorkspaceId)) show(newValue);
+        });
         show(workspace);
     }
 
@@ -69,6 +92,10 @@ public final class ControlledWorkspaceShell extends BorderPane {
 
     public void show(WorkspaceDefinition workspace) {
         Objects.requireNonNull(workspace, "workspace");
+        activeWorkspaceId = workspace.id();
+        if (!workspace.id().equals(workspacePicker.getValue())) {
+            workspacePicker.setValue(workspace.id());
+        }
         detachMountedPanels();
         detach(statusBar);
         detach(bottomTabs);
@@ -98,6 +125,20 @@ public final class ControlledWorkspaceShell extends BorderPane {
         bottomTabs = bottom.getTabs().isEmpty() ? null : bottom;
         rebuildBottom();
         setCenter(center);
+    }
+
+    /** Mounts the legacy menu/grab bar beside the constrained workspace selector. */
+    public void setTopBar(Node top) {
+        HBox bar = new HBox(8);
+        bar.getStyleClass().add("workspace-top-bar");
+        detach(workspacePicker);
+        if (top != null) {
+            detach(top);
+            HBox.setHgrow(top, Priority.ALWAYS);
+            bar.getChildren().add(top);
+        }
+        bar.getChildren().add(workspacePicker);
+        super.setTop(bar);
     }
 
     /** Mounts the persistent state row below the controlled bottom panels. */

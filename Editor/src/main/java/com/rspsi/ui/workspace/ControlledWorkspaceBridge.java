@@ -72,7 +72,7 @@ public final class ControlledWorkspaceBridge {
         WorkspaceCatalog catalog = StandardWorkspaceCatalog.create();
         ControlledWorkspaceShell shell = new ControlledWorkspaceShell(
                 catalog, catalog.workspace("map"), panels);
-        shell.setTop(controller.getGrabBar());
+        shell.setTopBar(controller.getGrabBar());
         shell.setStatusBar(new WorkspaceStatusBar());
         return shell;
     }

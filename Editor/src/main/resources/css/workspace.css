@@ -2,6 +2,22 @@
     -fx-background-color: #0f172a;
 }
 
+.workspace-top-bar {
+    -fx-background-color: #0f172a;
+    -fx-padding: 6px 8px;
+    -fx-alignment: center-right;
+}
+
+.workspace-top-bar .combo-box {
+    -fx-background-color: #24324a;
+    -fx-border-color: #475569;
+}
+
+.workspace-top-bar .combo-box:focused {
+    -fx-border-color: #93c5fd;
+    -fx-border-width: 2px;
+}
+
 .workspace-tools,
 .workspace-inspector,
 .workspace-bottom-tabs {
