@@ -11,8 +11,11 @@ import com.rspsi.editor.tool.PaintUnderlayTool;
 import com.rspsi.editor.tool.PlaceObjectTool;
 import com.rspsi.editor.tool.RotateObjectTool;
 import com.rspsi.editor.tool.SmoothTerrainTool;
+import com.rspsi.editor.debug.DebugOverlayMode;
+import com.rspsi.editor.debug.DebugOverlaySettings;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
@@ -21,7 +24,9 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -33,6 +38,8 @@ import java.util.function.Supplier;
 public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private final ToggleGroup group = new ToggleGroup();
     private final List<ToggleButton> toolButtons = new ArrayList<>();
+    private final List<CheckBox> debugButtons = new ArrayList<>();
+    private final Map<CheckBox, DebugOverlayMode> debugModes = new LinkedHashMap<>();
     private final Label status = new Label("Select a tool");
     private final TextField underlay = field("Underlay", "1");
     private final TextField overlay = field("Overlay", "1");
@@ -70,6 +77,15 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addTool(objects, "Duplicate object", DuplicateObjectTool::new, false);
         addTool(objects, "Delete object", DeleteObjectTool::new, false);
 
+        VBox debug = section("Debug overlays");
+        addDebug(debug, "Tile grid", DebugOverlayMode.TILE_GRID);
+        addDebug(debug, "Chunk grid", DebugOverlayMode.CHUNK_GRID);
+        addDebug(debug, "Region grid", DebugOverlayMode.REGION_GRID);
+        addDebug(debug, "Window boundary", DebugOverlayMode.LOADED_WORLD_WINDOW);
+        addDebug(debug, "Tile flags", DebugOverlayMode.TILE_FLAGS);
+        addDebug(debug, "Collision", DebugOverlayMode.COLLISION);
+        addDebug(debug, "Bridge links", DebugOverlayMode.BRIDGE_LINKS);
+
         GridPane settings = new GridPane();
         settings.setHgap(6);
         settings.setVgap(5);
@@ -79,7 +95,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addSetting(settings, 3, "Flatten", flatten);
         addSetting(settings, 4, "Object ID", objectId);
         addSetting(settings, 5, "Object type", objectType);
-        getChildren().addAll(title, status, terrain, objects, settings);
+        getChildren().addAll(title, status, terrain, objects, debug, settings);
         setViewport(null);
     }
 
@@ -91,6 +107,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private void setViewport(CanonicalSceneViewport viewport) {
         this.viewport = viewport;
         toolButtons.forEach(button -> button.setDisable(viewport == null));
+        debugButtons.forEach(button -> button.setDisable(viewport == null));
     }
 
     private VBox section(String title) {
@@ -127,6 +144,24 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         section.getChildren().add(button);
     }
 
+    private void addDebug(VBox section, String label, DebugOverlayMode mode) {
+        CheckBox check = new CheckBox(label);
+        check.setAccessibleText("Toggle " + label + " overlay");
+        check.setOnAction(event -> updateDebugSettings());
+        debugButtons.add(check);
+        debugModes.put(check, mode);
+        section.getChildren().add(check);
+    }
+
+    private void updateDebugSettings() {
+        if (viewport == null) return;
+        java.util.EnumSet<DebugOverlayMode> modes = java.util.EnumSet.noneOf(DebugOverlayMode.class);
+        for (Map.Entry<CheckBox, DebugOverlayMode> entry : debugModes.entrySet()) {
+            if (entry.getKey().isSelected()) modes.add(entry.getValue());
+        }
+        viewport.setDebugOverlaySettings(new DebugOverlaySettings(modes));
+    }
+
     private static TextField field(String label, String value) {
         TextField field = new TextField(value);
         field.setAccessibleText(label + " value");
@@ -156,5 +191,9 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         viewport = null;
         group.selectToggle(null);
         toolButtons.forEach(button -> button.setDisable(true));
+        debugButtons.forEach(button -> {
+            button.setSelected(false);
+            button.setDisable(true);
+        });
     }
 }

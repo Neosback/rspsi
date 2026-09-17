@@ -122,6 +122,16 @@
     -fx-border-width: 2px;
 }
 
+.canonical-tool-panel .check-box {
+    -fx-text-fill: #cbd5e1;
+    -fx-padding: 3px 0;
+}
+
+.canonical-tool-panel .check-box:focused {
+    -fx-border-color: #93c5fd;
+    -fx-border-width: 2px;
+}
+
 .workspace-tool-section {
     -fx-text-fill: #94a3b8;
     -fx-font-size: 11px;
