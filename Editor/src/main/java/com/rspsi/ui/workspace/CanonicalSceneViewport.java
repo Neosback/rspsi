@@ -1,6 +1,8 @@
 package com.rspsi.ui.workspace;
 
 import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.editor.assets.AssetDescriptor;
+import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SelectionChangeListener;
 import com.rspsi.editor.collision.CollisionDirection;
@@ -8,6 +10,8 @@ import com.rspsi.editor.collision.CollisionTileSnapshot;
 import com.rspsi.editor.debug.DebugGridLevel;
 import com.rspsi.editor.debug.DebugOverlayMode;
 import com.rspsi.editor.debug.DebugOverlaySettings;
+import com.rspsi.editor.input.PointerButton;
+import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
@@ -22,6 +26,9 @@ import com.rspsi.editor.render.SessionSceneController;
 import com.rspsi.editor.terrain.TerrainFace;
 import com.rspsi.editor.terrain.TerrainMesh;
 import com.rspsi.editor.terrain.TerrainVertex;
+import com.rspsi.editor.tool.EditorTool;
+import com.rspsi.editor.tool.EditorToolController;
+import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.editor.viewport.Viewport;
 import javafx.application.Platform;
 import javafx.scene.canvas.Canvas;
@@ -29,6 +36,8 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -45,6 +54,7 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     private static final double TILE_PIXELS = 10.0;
 
     private final Canvas canvas = new Canvas();
+    private final EditorToolController toolController = new EditorToolController();
     private final SelectionChangeListener selectionListener = ignored -> redrawOnFxThread();
     private EditorSession session;
     private WorldWindow worldWindow;
@@ -53,13 +63,19 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     private int plane;
     private DebugOverlaySettings debugOverlaySettings = DebugOverlaySettings.none();
     private Consumer<Optional<TileCoordinate>> hoverListener = ignored -> { };
+    private AssetRepository assets = EmptyAssetRepository.INSTANCE;
     private boolean closed;
 
     public CanonicalSceneViewport() {
         getStyleClass().add("canonical-scene-viewport");
         setAccessibleText("Canonical OSRS scene preview");
         setFocusTraversable(true);
-        canvas.setOnMouseClicked(event -> pickAndSelect(event.getX(), event.getY()));
+        canvas.setOnMousePressed(this::toolPointerDown);
+        canvas.setOnMouseDragged(this::toolPointerDrag);
+        canvas.setOnMouseReleased(this::toolPointerUp);
+        canvas.setOnMouseClicked(event -> {
+            if (toolController.activeTool() == null) pickAndSelect(event.getX(), event.getY());
+        });
         canvas.setOnMouseMoved(event -> notifyHover(event.getX(), event.getY()));
         canvas.setOnMouseExited(event -> hoverListener.accept(Optional.empty()));
         getChildren().add(canvas);
@@ -72,17 +88,40 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     /** Binds a canonical scene with optional neutral definitions for footprints and materials. */
     public void bind(EditorSession session, WorldWindow worldWindow,
                      DefinitionProvider definitions) {
+        bind(session, worldWindow, definitions, null);
+    }
+
+    /** Binds the canonical scene and the optional neutral asset source used by tools. */
+    public void bind(EditorSession session, WorldWindow worldWindow,
+                     DefinitionProvider definitions, AssetRepository assets) {
         Objects.requireNonNull(session, "session");
         Objects.requireNonNull(worldWindow, "worldWindow");
         closeBinding();
         this.session = session;
         this.worldWindow = worldWindow;
+        this.assets = assets == null ? EmptyAssetRepository.INSTANCE : assets;
         session.selection().addChangeListener(selectionListener);
         closed = false;
         scene = null;
         sceneController = definitions == null
                 ? new SessionSceneController(session, this)
                 : new SessionSceneController(session, this, new RenderSceneBuilder(definitions));
+        redrawOnFxThread();
+    }
+
+    public EditorTool activeTool() {
+        return toolController.activeTool();
+    }
+
+    /** Activates a neutral editor tool for canonical viewport pointer input. */
+    public void activateTool(EditorTool tool) {
+        if (session == null) throw new IllegalStateException("Viewport is not bound to a session");
+        toolController.activate(tool, new ToolContext(session, assets, this));
+        redrawOnFxThread();
+    }
+
+    public void deactivateTool() {
+        toolController.deactivate();
         redrawOnFxThread();
     }
 
@@ -229,6 +268,65 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
             graphics.fillOval(centerX - 3, centerY - 3, 6, 6);
         }
         drawSelections(graphics, width, length);
+        drawToolOverlay(graphics);
+    }
+
+    private void drawToolOverlay(GraphicsContext graphics) {
+        EditorTool tool = toolController.activeTool();
+        if (tool == null) return;
+        tool.renderOverlay(new com.rspsi.editor.render.OverlayDraw() {
+            @Override public void tileOutline(TileCoordinate tile) {
+                if (tile.plane() != plane || tile.x() < 0 || tile.y() < 0
+                        || scene == null || tile.x() >= scene.document().width()
+                        || tile.y() >= scene.document().length()) return;
+                graphics.setStroke(Color.color(0.25, 0.88, 1.0, 0.95));
+                graphics.setLineWidth(1.5);
+                graphics.strokeRect(tile.x() * TILE_PIXELS + 1, tile.y() * TILE_PIXELS + 1,
+                        TILE_PIXELS - 2, TILE_PIXELS - 2);
+            }
+
+            @Override public void label(String text, float x, float y) {
+                graphics.setFill(Color.color(0.96, 0.98, 1.0, 0.95));
+                graphics.setFont(Font.font(9));
+                graphics.fillText(text, x, y);
+            }
+        });
+    }
+
+    private void toolPointerDown(MouseEvent event) {
+        if (toolController.activeTool() == null) return;
+        toolController.pointerDown(pointerEvent(event));
+        redrawOnFxThread();
+    }
+
+    private void toolPointerDrag(MouseEvent event) {
+        if (toolController.activeTool() == null) return;
+        toolController.pointerDrag(pointerEvent(event));
+        redrawOnFxThread();
+    }
+
+    private void toolPointerUp(MouseEvent event) {
+        if (toolController.activeTool() == null) return;
+        toolController.pointerUp(pointerEvent(event));
+        redrawOnFxThread();
+    }
+
+    private static PointerEvent pointerEvent(MouseEvent event) {
+        return new PointerEvent((float) event.getX(), (float) event.getY(), button(event),
+                event.isShiftDown(), event.isControlDown(), event.isAltDown());
+    }
+
+    private static PointerButton button(MouseEvent event) {
+        if (event.getButton() == MouseButton.PRIMARY || event.isPrimaryButtonDown()) {
+            return PointerButton.PRIMARY;
+        }
+        if (event.getButton() == MouseButton.SECONDARY || event.isSecondaryButtonDown()) {
+            return PointerButton.SECONDARY;
+        }
+        if (event.getButton() == MouseButton.MIDDLE || event.isMiddleButtonDown()) {
+            return PointerButton.MIDDLE;
+        }
+        return PointerButton.NONE;
     }
 
     private void drawDebugOverlays(GraphicsContext graphics, int width, int length) {
@@ -408,11 +506,13 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
             sceneController.close();
             sceneController = null;
         }
+        toolController.deactivate();
         if (session != null) session.selection().removeChangeListener(selectionListener);
         session = null;
         worldWindow = null;
         scene = null;
         hoverListener = ignored -> { };
+        assets = EmptyAssetRepository.INSTANCE;
     }
 
     @Override
@@ -420,5 +520,11 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
         if (closed) return;
         closed = true;
         closeBinding();
+    }
+
+    private static final class EmptyAssetRepository implements AssetRepository {
+        private static final EmptyAssetRepository INSTANCE = new EmptyAssetRepository();
+        @Override public java.util.List<AssetDescriptor> search(String query) { return java.util.List.of(); }
+        @Override public Optional<AssetDescriptor> get(int id, String type) { return Optional.empty(); }
     }
 }

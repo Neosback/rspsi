@@ -1,6 +1,7 @@
 package com.rspsi.ui.workspace;
 
 import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.model.WorldWindow;
 import javafx.scene.Node;
@@ -31,6 +32,12 @@ public final class ControlledViewportPanel extends StackPane implements AutoClos
     public void showCanonical(EditorSession session, WorldWindow window,
                               DefinitionProvider definitions) {
         canonicalViewport.bind(session, window, definitions);
+        getChildren().setAll(canonicalViewport);
+    }
+
+    public void showCanonical(EditorSession session, WorldWindow window,
+                              DefinitionProvider definitions, AssetRepository assets) {
+        canonicalViewport.bind(session, window, definitions, assets);
         getChildren().setAll(canonicalViewport);
     }
 
