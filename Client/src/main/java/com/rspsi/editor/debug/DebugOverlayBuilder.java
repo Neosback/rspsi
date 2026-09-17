@@ -2,7 +2,6 @@ package com.rspsi.editor.debug;
 
 import com.rspsi.editor.collision.CollisionMap;
 import com.rspsi.editor.collision.CollisionTileSnapshot;
-import com.rspsi.editor.collision.OsrsCollisionBuilder;
 import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileInspectorSnapshot;
@@ -46,7 +45,7 @@ public final class DebugOverlayBuilder {
                             ? java.util.Optional.of(CollisionTileSnapshot.from(collision, coordinate))
                             : java.util.Optional.<CollisionTileSnapshot>empty();
                     int effectivePlane = bridge
-                            ? Math.max(0, OsrsCollisionBuilder.resolvedPlane(document, plane, x, y))
+                            ? Math.max(0, document.effectivePlane(plane, x, y))
                             : plane;
                     planeTiles.add(new DebugTileSnapshot(coordinate, address,
                             new TileInspectorSnapshot(address, tile, bridge, roofRelated),

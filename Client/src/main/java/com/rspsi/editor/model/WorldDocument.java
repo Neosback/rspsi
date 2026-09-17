@@ -2,6 +2,7 @@ package com.rspsi.editor.model;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -75,18 +76,39 @@ public class WorldDocument {
         return tile(coordinate.plane(), coordinate.x(), coordinate.y());
     }
 
+    /**
+     * Returns the effective OSRS plane for authored terrain/object data at a
+     * local tile. A bridge flag on authored plane 1 demotes the complete
+     * column by one plane; plane 0 consequently has no effective collision
+     * surface at that column, matching the scene-builder ordering.
+     */
+    public int effectivePlane(int authoredPlane, int x, int y) {
+        if (authoredPlane < 0 || authoredPlane >= planes) {
+            throw new IndexOutOfBoundsException("Invalid authored plane: " + authoredPlane);
+        }
+        tile(authoredPlane, x, y);
+        boolean bridged = planes > 1 && OsrsTileFlags.hasBridge(tile(1, x, y).snapshot().flags());
+        return bridged ? authoredPlane - 1 : authoredPlane;
+    }
+
+    public int effectivePlane(TileCoordinate coordinate) {
+        Objects.requireNonNull(coordinate, "coordinate");
+        return effectivePlane(coordinate.plane(), coordinate.x(), coordinate.y());
+    }
+
     /** Returns the bridge relation for one authored tile, when its flag is set. */
     public Optional<BridgeLink> bridgeLink(TileCoordinate coordinate) {
         if (coordinate == null || coordinate.plane() == 0
                 || coordinate.plane() >= planes
-                || coordinate.x() >= width || coordinate.y() >= length) {
+                || coordinate.x() < 0 || coordinate.x() >= width
+                || coordinate.y() < 0 || coordinate.y() >= length) {
             return Optional.empty();
         }
         if (!OsrsTileFlags.hasBridge(tile(1, coordinate.x(), coordinate.y()).snapshot().flags())) {
             return Optional.empty();
         }
         return Optional.of(new BridgeLink(coordinate,
-                new TileCoordinate(coordinate.plane() - 1, coordinate.x(), coordinate.y())));
+                new TileCoordinate(effectivePlane(coordinate), coordinate.x(), coordinate.y())));
     }
 
     /** Returns all authored-plane bridge links represented by the document flags. */

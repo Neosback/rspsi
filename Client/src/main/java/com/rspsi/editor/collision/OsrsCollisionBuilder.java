@@ -70,15 +70,13 @@ public final class OsrsCollisionBuilder {
         return collision;
     }
 
-    /** Resolves the authored plane using the LINK_BELOW flag on plane 1. */
+    /**
+     * Compatibility delegate for callers that still use the collision
+     * builder as their bridge-plane lookup. New code should use
+     * {@link WorldDocument#effectivePlane(int, int, int)} directly.
+     */
     public static int resolvedPlane(WorldDocument document, int authoredPlane, int x, int y) {
-        Objects.requireNonNull(document, "document");
-        if (authoredPlane < 0 || authoredPlane >= document.planes()) {
-            throw new IndexOutOfBoundsException("Invalid authored plane: " + authoredPlane);
-        }
-        boolean bridged = document.planes() > BRIDGE_FLAG_PLANE
-                && (document.tile(BRIDGE_FLAG_PLANE, x, y).snapshot().flags() & LINK_BELOW) != 0;
-        return bridged ? authoredPlane - 1 : authoredPlane;
+        return Objects.requireNonNull(document, "document").effectivePlane(authoredPlane, x, y);
     }
 
     private static int terrainMask(int flags) {
