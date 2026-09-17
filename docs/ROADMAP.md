@@ -25,7 +25,7 @@ The locked product direction and workspace design are maintained in
 | Area | Status | Evidence / next action |
 |---|---|---|
 | Gradle multi-module build | verified | `./gradlew test` compiles all modules; tests now run on JUnit Platform |
-| JavaFX editor and software renderer | implemented-unverified | Existing `Editor` and `Client` modules; retain during stabilization |
+| JavaFX editor and software renderer | implemented-unverified | Existing `Editor` and `Client` modules; retain during stabilization; bundled blank terrain and object fixtures are now characterized by executable compatibility tests |
 | Manual JavaFX smoke coverage | implemented-unverified | `./gradlew :Editor:run` reaches the JavaFX application task, but interactive acceptance is pending because the desktop was locked during the 2026-09-16 attempt; rerun [`MANUAL_SMOKE_TEST.md`](MANUAL_SMOKE_TEST.md) on an unlocked desktop |
 | Four-plane terrain and shaped tiles | implemented-unverified | Legacy `MapRegion`/`SceneGraph` behavior remains protected while the neutral `WorldDocument`, OSRS decoder/encoder, and 52-case terrain topology matrix cover four planes; live build-240 verification decodes 64x64x4 regions, while legacy characterization and external scene parity remain |
 | Underlays, overlays, flags, bridges | implemented-unverified | Neutral tile snapshots, OSRS byte/short codecs, bridge links, and semantic round-trip tests cover the model; bridge-heavy live fixtures and legacy workflow smoke coverage remain |
@@ -73,7 +73,9 @@ The locked product direction and workspace design are maintained in
 
 ### Phase 0 — Safety net
 
-- Add JUnit 5 tests and fixture-backed semantic map tests.
+- Add JUnit 5 tests and fixture-backed semantic map tests. The bundled blank
+  terrain and object resources now have executable legacy characterization
+  coverage; real interactive smoke acceptance remains separate.
 - Document the manual smoke checklist in `docs/MANUAL_SMOKE_TEST.md`.
 - Keep the baseline commit before structural refactors.
 

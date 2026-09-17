@@ -1,6 +1,7 @@
 package com.rspsi.compatibility;
 
 import com.jagex.map.MapRegion;
+import com.jagex.map.SceneGraph;
 import com.jagex.chunk.Chunk;
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +21,25 @@ class MapRegionCompatibilityTest {
         assertEquals(4, region.tileHeights.length);
         assertEquals(65, region.tileHeights[0].length);
         assertEquals(region.tileHeights[0][0][0], region.tileHeights[0][64][64]);
+    }
+
+    @Test
+    void blankObjectFixtureLoadsAsAnEmptyLegacyScene() throws IOException {
+        byte[] fixture = readResource("/misc/blank_regionO.dat");
+        assertEquals(1, fixture.length);
+
+        MapRegion region = new MapRegion(null, 64, 64);
+        SceneGraph scene = new SceneGraph(64, 64, 4);
+        region.unpackObjects(scene, fixture, 0, 0);
+
+        for (int plane = 0; plane < scene.tiles.length; plane++) {
+            for (int x = 0; x < scene.width; x++) {
+                for (int y = 0; y < scene.length; y++) {
+                    assertNull(scene.tiles[plane][x][y],
+                            "blank object fixture materialized a tile at " + plane + "," + x + "," + y);
+                }
+            }
+        }
     }
 
     @Test
