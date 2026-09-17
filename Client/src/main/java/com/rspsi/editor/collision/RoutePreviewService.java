@@ -45,7 +45,8 @@ public final class RoutePreviewService {
         return switch (mode) {
             case ROUTE -> route(map, mode, start, target, maxVisited, actorSize,
                     useRouteBlockers);
-            case LINE_OF_SIGHT -> lineOfSight(map, start, target);
+            case LINE_OF_SIGHT -> lineOfSight(map, start, target, targetWidth, targetLength,
+                    actorSize);
             case REACH -> reach(map, start, target, targetWidth, targetLength,
                     maxVisited, actorSize, useRouteBlockers);
         };
@@ -64,9 +65,11 @@ public final class RoutePreviewService {
     }
 
     private static RoutePreview lineOfSight(CollisionMap map, TileCoordinate start,
-                                            TileCoordinate target) {
+                                            TileCoordinate target, int targetWidth,
+                                            int targetLength, int actorSize) {
         List<TileCoordinate> path = RouteFinder.line(start, target);
-        boolean clear = RouteFinder.hasLineOfSight(map, start, target);
+        boolean clear = LineValidator.hasLineOfSight(map, start, actorSize, actorSize,
+                target, targetWidth, targetLength);
         return new RoutePreview(RoutePreviewMode.LINE_OF_SIGHT, start, target, path, clear,
                 clear ? "Line of sight is clear" : "Line of sight is blocked");
     }

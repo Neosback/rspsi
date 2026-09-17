@@ -37,6 +37,23 @@ class RoutePreviewServiceTest {
     }
 
     @Test
+    void lineOfSightUsesActorAndTargetFootprints() {
+        CollisionMap map = new CollisionMap(6, 2, 1);
+        TileCoordinate start = new TileCoordinate(0, 0, 0);
+        TileCoordinate target = new TileCoordinate(0, 4, 0);
+        map.add(new TileCoordinate(0, 3, 0), CollisionFlag.WALL_WEST_PROJECTILE);
+
+        RoutePreview blocked = RoutePreviewService.evaluate(map,
+                RoutePreviewMode.LINE_OF_SIGHT, start, target, 2, 1, 100, 2, false);
+        assertFalse(blocked.successful());
+
+        map.remove(new TileCoordinate(0, 3, 0), CollisionFlag.WALL_WEST_PROJECTILE);
+        RoutePreview clear = RoutePreviewService.evaluate(map,
+                RoutePreviewMode.LINE_OF_SIGHT, start, target, 2, 1, 100, 2, false);
+        assertTrue(clear.successful());
+    }
+
+    @Test
     void reachUsesTargetFootprint() {
         CollisionMap map = new CollisionMap(5, 3, 1);
         TileCoordinate start = new TileCoordinate(0, 0, 1);
