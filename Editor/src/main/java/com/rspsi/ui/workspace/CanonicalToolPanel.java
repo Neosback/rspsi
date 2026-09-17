@@ -13,15 +13,18 @@ import com.rspsi.editor.tool.RotateObjectTool;
 import com.rspsi.editor.tool.SmoothTerrainTool;
 import com.rspsi.editor.debug.DebugOverlayMode;
 import com.rspsi.editor.debug.DebugOverlaySettings;
+import com.rspsi.editor.collision.RoutePreviewMode;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.Button;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.scene.layout.HBox;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -47,6 +50,11 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private final TextField flatten = field("Flatten", "0");
     private final TextField objectId = field("Object ID", "0");
     private final TextField objectType = field("Object type", "10");
+    private final TextField startX = field("Start X", "0");
+    private final TextField startY = field("Start Y", "0");
+    private final TextField targetX = field("Target X", "1");
+    private final TextField targetY = field("Target Y", "0");
+    private final Label previewStatus = new Label("No preview");
     private CanonicalSceneViewport viewport;
 
     public CanonicalToolPanel() {
@@ -86,6 +94,29 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addDebug(debug, "Collision", DebugOverlayMode.COLLISION);
         addDebug(debug, "Bridge links", DebugOverlayMode.BRIDGE_LINKS);
 
+        VBox preview = section("Route / LOS preview");
+        GridPane previewFields = new GridPane();
+        previewFields.setHgap(6);
+        previewFields.setVgap(5);
+        addSetting(previewFields, 0, "Start X", startX);
+        addSetting(previewFields, 1, "Start Y", startY);
+        addSetting(previewFields, 2, "Target X", targetX);
+        addSetting(previewFields, 3, "Target Y", targetY);
+        HBox previewButtons = new HBox(4);
+        Button route = previewButton("Route", RoutePreviewMode.ROUTE);
+        Button los = previewButton("LOS", RoutePreviewMode.LINE_OF_SIGHT);
+        Button reach = previewButton("Reach", RoutePreviewMode.REACH);
+        Button clear = new Button("Clear");
+        clear.setAccessibleText("Clear route preview");
+        clear.setOnAction(event -> {
+            if (viewport != null) viewport.clearRoutePreview();
+            previewStatus.setText("No preview");
+        });
+        previewButtons.getChildren().addAll(route, los, reach, clear);
+        previewStatus.getStyleClass().add("workspace-panel-status");
+        previewStatus.setWrapText(true);
+        preview.getChildren().addAll(previewFields, previewButtons, previewStatus);
+
         GridPane settings = new GridPane();
         settings.setHgap(6);
         settings.setVgap(5);
@@ -95,7 +126,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addSetting(settings, 3, "Flatten", flatten);
         addSetting(settings, 4, "Object ID", objectId);
         addSetting(settings, 5, "Object type", objectType);
-        getChildren().addAll(title, status, terrain, objects, debug, settings);
+        getChildren().addAll(title, status, terrain, objects, debug, preview, settings);
         setViewport(null);
     }
 
@@ -160,6 +191,24 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
             if (entry.getKey().isSelected()) modes.add(entry.getValue());
         }
         viewport.setDebugOverlaySettings(new DebugOverlaySettings(modes));
+    }
+
+    private Button previewButton(String label, RoutePreviewMode mode) {
+        Button button = new Button(label);
+        button.setAccessibleText("Preview " + label);
+        button.setMinHeight(30);
+        button.setOnAction(event -> {
+            if (viewport == null) return;
+            try {
+                var result = viewport.previewRoute(mode, parse(startX, "start X"),
+                        parse(startY, "start Y"), parse(targetX, "target X"),
+                        parse(targetY, "target Y"), 1, false);
+                previewStatus.setText(result.message());
+            } catch (IllegalArgumentException | IllegalStateException exception) {
+                previewStatus.setText(exception.getMessage());
+            }
+        });
+        return button;
     }
 
     private static TextField field(String label, String value) {

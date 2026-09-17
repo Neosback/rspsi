@@ -50,5 +50,9 @@ For the opt-in OSRS project workflow:
       and status panels are populated.
 - [ ] Click a terrain tile in the canonical preview and confirm the neutral
       selection and inspector update to the selected plane/tile.
+- [ ] In the canonical tool rail, enter valid local start/target coordinates,
+      run Route, LOS, and Reach previews, and confirm the viewport shows the
+      result plus a readable success/blocked status. Select an object before
+      running Reach and confirm its resolved footprint is used.
 - [ ] Confirm the status row clearly marks the OpenRune project read-only.
 - [ ] Close/relaunch and confirm the legacy map workflow still opens normally.

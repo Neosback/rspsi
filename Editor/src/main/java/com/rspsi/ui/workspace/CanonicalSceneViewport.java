@@ -7,6 +7,10 @@ import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SelectionChangeListener;
 import com.rspsi.editor.collision.CollisionDirection;
 import com.rspsi.editor.collision.CollisionTileSnapshot;
+import com.rspsi.editor.collision.CollisionMap;
+import com.rspsi.editor.collision.RoutePreview;
+import com.rspsi.editor.collision.RoutePreviewMode;
+import com.rspsi.editor.collision.RoutePreviewService;
 import com.rspsi.editor.debug.DebugGridLevel;
 import com.rspsi.editor.debug.DebugOverlayMode;
 import com.rspsi.editor.debug.DebugOverlaySettings;
@@ -16,6 +20,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldWindow;
+import com.rspsi.editor.selection.ObjectSelection;
 import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.editor.render.RenderChanges;
@@ -62,6 +67,7 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     private SessionSceneController sceneController;
     private int plane;
     private DebugOverlaySettings debugOverlaySettings = DebugOverlaySettings.none();
+    private RoutePreview routePreview;
     private Consumer<Optional<TileCoordinate>> hoverListener = ignored -> { };
     private AssetRepository assets = EmptyAssetRepository.INSTANCE;
     private boolean closed;
@@ -145,6 +151,48 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     /** Updates frontend rendering only; semantic overlay data remains neutral. */
     public void setDebugOverlaySettings(DebugOverlaySettings settings) {
         this.debugOverlaySettings = Objects.requireNonNull(settings, "settings");
+        redrawOnFxThread();
+    }
+
+    /** Returns the latest neutral route/LOS/reach result shown by this viewport. */
+    public Optional<RoutePreview> routePreview() {
+        return Optional.ofNullable(routePreview);
+    }
+
+    /** Computes a bounded collision preview in local scene coordinates. */
+    public RoutePreview previewRoute(RoutePreviewMode mode, int startX, int startY,
+                                     int targetX, int targetY, int actorSize,
+                                     boolean useRouteBlockers) {
+        if (scene == null) throw new IllegalStateException("Viewport is not bound to a scene");
+        TileCoordinate start = new TileCoordinate(plane, startX, startY);
+        TileCoordinate target = new TileCoordinate(plane, targetX, targetY);
+        RoutePreview preview;
+        if (mode == RoutePreviewMode.REACH && session != null
+                && session.selection().current() instanceof ObjectSelection selection) {
+            WorldObject object = selection.object();
+            int width = 1;
+            int length = 1;
+            for (var renderObject : scene.renderObjects()) {
+                if (renderObject.object().equals(object)) {
+                    width = renderObject.footprintWidth();
+                    length = renderObject.footprintLength();
+                    target = new TileCoordinate(plane, object.x(), object.y());
+                    break;
+                }
+            }
+            preview = RoutePreviewService.evaluate(collisionMap(), mode, start, target,
+                    width, length, 4096, actorSize, useRouteBlockers);
+        } else {
+            preview = RoutePreviewService.evaluate(collisionMap(), mode, start, target,
+                    4096, actorSize, useRouteBlockers);
+        }
+        routePreview = preview;
+        redrawOnFxThread();
+        return preview;
+    }
+
+    public void clearRoutePreview() {
+        routePreview = null;
         redrawOnFxThread();
     }
 
@@ -268,7 +316,53 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
             graphics.fillOval(centerX - 3, centerY - 3, 6, 6);
         }
         drawSelections(graphics, width, length);
+        drawRoutePreview(graphics);
         drawToolOverlay(graphics);
+    }
+
+    private void drawRoutePreview(GraphicsContext graphics) {
+        if (routePreview == null || routePreview.start().plane() != plane) return;
+        graphics.setLineWidth(3.0);
+        graphics.setStroke(routePreview.successful()
+                ? Color.web("#22c55e") : Color.web("#f43f5e"));
+        if (routePreview.mode() == RoutePreviewMode.LINE_OF_SIGHT) {
+            graphics.setLineDashes(4.0, 3.0);
+        } else {
+            graphics.setLineDashes();
+        }
+        var path = routePreview.path();
+        for (int i = 1; i < path.size(); i++) {
+            TileCoordinate from = path.get(i - 1);
+            TileCoordinate to = path.get(i);
+            graphics.strokeLine((from.x() + 0.5) * TILE_PIXELS,
+                    (from.y() + 0.5) * TILE_PIXELS,
+                    (to.x() + 0.5) * TILE_PIXELS,
+                    (to.y() + 0.5) * TILE_PIXELS);
+        }
+        graphics.setLineDashes();
+        drawPreviewMarker(graphics, routePreview.start(), Color.web("#38bdf8"), "S");
+        drawPreviewMarker(graphics, routePreview.target(),
+                routePreview.successful() ? Color.web("#22c55e") : Color.web("#f43f5e"), "T");
+    }
+
+    private static void drawPreviewMarker(GraphicsContext graphics, TileCoordinate tile,
+                                          Color color, String label) {
+        double centerX = (tile.x() + 0.5) * TILE_PIXELS;
+        double centerY = (tile.y() + 0.5) * TILE_PIXELS;
+        graphics.setFill(color);
+        graphics.fillOval(centerX - 4, centerY - 4, 8, 8);
+        graphics.setFill(Color.WHITE);
+        graphics.setFont(Font.font(8));
+        graphics.fillText(label, centerX - 2.5, centerY + 3);
+    }
+
+    private CollisionMap collisionMap() {
+        CollisionMap map = new CollisionMap(scene.document().width(), scene.document().length(),
+                scene.document().planes());
+        scene.collision().forEach((coordinate, snapshot) -> {
+            if (map.contains(coordinate)) map.set(coordinate, snapshot.rawFlags());
+        });
+        return map;
     }
 
     private void drawToolOverlay(GraphicsContext graphics) {
@@ -511,6 +605,7 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
         session = null;
         worldWindow = null;
         scene = null;
+        routePreview = null;
         hoverListener = ignored -> { };
         assets = EmptyAssetRepository.INSTANCE;
     }

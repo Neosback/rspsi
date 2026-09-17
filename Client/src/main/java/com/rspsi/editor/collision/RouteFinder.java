@@ -139,6 +139,35 @@ public final class RouteFinder {
         return true;
     }
 
+    /** Returns the grid cells crossed by the same integer line used by LOS. */
+    public static List<TileCoordinate> line(TileCoordinate start, TileCoordinate target) {
+        Objects.requireNonNull(start, "start");
+        Objects.requireNonNull(target, "target");
+        if (start.plane() != target.plane()) return List.of();
+        List<TileCoordinate> result = new ArrayList<>();
+        int x = start.x();
+        int y = start.y();
+        int dx = Math.abs(target.x() - x);
+        int dy = Math.abs(target.y() - y);
+        int sx = Integer.compare(target.x(), x);
+        int sy = Integer.compare(target.y(), y);
+        int error = dx - dy;
+        result.add(new TileCoordinate(start.plane(), x, y));
+        while (x != target.x() || y != target.y()) {
+            int twice = 2 * error;
+            if (twice > -dy) {
+                error -= dy;
+                x += sx;
+            }
+            if (twice < dx) {
+                error += dx;
+                y += sy;
+            }
+            result.add(new TileCoordinate(start.plane(), x, y));
+        }
+        return List.copyOf(result);
+    }
+
     private static boolean canMove(CollisionMap map, TileCoordinate from,
                                    CollisionDirection direction, int size,
                                    boolean useRouteBlockers) {

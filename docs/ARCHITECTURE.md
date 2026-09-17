@@ -83,6 +83,11 @@ boundary.
 - `Reachability` uses the same default-off/explicit-on route-blocker choice as
   `RouteFinder`, so object reach previews cannot silently use a different
   collision layer.
+- `RoutePreviewService` packages route, projectile line-of-sight, and
+  object-footprint reach results as immutable neutral data. Frontends render
+  `RoutePreview` without constructing or mutating collision state; the
+  controlled JavaFX viewport is the first consumer and supports a selected
+  object's resolved footprint for reach checks.
 - `CollisionTileSnapshot` exposes ordinary movement blockers, the optional
   route-blocker layer, projectile blockers, and decoded floor/object/roof
   state so collision overlays can show routefinding semantics without
@@ -125,7 +130,8 @@ boundary.
   press/drag/release events into `PointerEvent`, dispatches them through
   `EditorToolController`, and renders tool overlays through `OverlayDraw`;
   `CanonicalToolPanel` provides the first constrained OSRS tool selector,
-  numeric brush settings, and multi-select debug overlay toggles, while
+  numeric brush settings, multi-select debug overlay toggles, and bounded
+  route/LOS/reach preview controls, while
   `AdaptiveToolPanel` leaves the existing legacy rail intact for compatibility
   sessions. Legacy viewports remain compatible because object picking is
   optional.
