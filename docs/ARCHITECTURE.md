@@ -172,6 +172,9 @@ boundary.
   limited to the legacy facade, old renderer/definition decoders, and explicit
   cache adapters. Any new product code that imports Displee or OpenRune must
   first establish an intentional adapter boundary.
+- Displee dependencies are `implementation` dependencies of `Client`, not
+  transitive editor API dependencies. The old compatibility classes can still
+  compile and run, while `Editor` and future frontends consume RSPSi contracts.
 - The raw `Cache` escape hatches (`getIndexedFileSystem`, `writegetFile`, and
   `createArchive`) are explicitly deprecated. They remain only so the current
   compatibility client can be retired after OSRS parity, not as extension

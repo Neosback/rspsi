@@ -3,8 +3,10 @@ description = 'Client'
 apply plugin: 'java-library'
 
 dependencies {
-    api 'com.displee:rs-cache-library:7.3.0'
-    api 'com.displee:disio:2.3'
+    // Raw cache-library types are confined to legacy adapters/renderers and
+    // must not become part of the editor module's transitive API.
+    implementation 'com.displee:rs-cache-library:7.3.0'
+    implementation 'com.displee:disio:2.3'
 
     // Isolated compatibility spike; OpenRune types must not leak into editor APIs.
     implementation 'dev.or2:filesystem:2.4.19'
