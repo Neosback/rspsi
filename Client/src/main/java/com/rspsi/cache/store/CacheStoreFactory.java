@@ -12,6 +12,18 @@ public final class CacheStoreFactory {
     private CacheStoreFactory() {
     }
 
+    /**
+     * Opens the legacy cache backend from a path without exposing Displee to
+     * the caller. This remains a compatibility backend; OSRS production
+     * callers should prefer {@link #openRune(Path)}.
+     */
+    public static CacheStore legacy(Path path) {
+        Objects.requireNonNull(path, "path");
+        return legacy(new CacheLibrary(path.toAbsolutePath().normalize().toString(), false, null));
+    }
+
+    /** Raw compatibility overload retained for old integrations only. */
+    @Deprecated
     public static CacheStore legacy(CacheLibrary library) {
         return new LegacyDispleeCacheStore(library);
     }

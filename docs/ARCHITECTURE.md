@@ -175,6 +175,9 @@ boundary.
 - Displee dependencies are `implementation` dependencies of `Client`, not
   transitive editor API dependencies. The old compatibility classes can still
   compile and run, while `Editor` and future frontends consume RSPSi contracts.
+- `CacheStoreFactory.legacy(Path)` is the path-based compatibility entrypoint;
+  the raw `legacy(CacheLibrary)` overload is deprecated for integrations that
+  have not migrated yet.
 - The raw `Cache` escape hatches (`getIndexedFileSystem`, `writegetFile`, and
   `createArchive`) are explicitly deprecated. They remain only so the current
   compatibility client can be retired after OSRS parity, not as extension
