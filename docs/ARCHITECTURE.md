@@ -465,8 +465,11 @@ and writes canonical terrain fields and scene-object changes back to
 `MapRegion`/`SceneGraph`. Cache persistence remains a separate save boundary.
 
 `PaintOverlayTool`, `ChangeHeightTool`, and `PaintFlagsTool` now use the same
-neutral pointer/session/composite-command path. They are first-party core tools
-and do not add editing behavior to `SceneGraph`.
+neutral pointer/session/composite-command path. Their atomic mutations are
+represented by the explicit `PaintOverlayCommand`, `ChangeHeightCommand`, and
+`ChangeTileFlagsCommand` types; `PaintUnderlayTool` uses the corresponding
+`PaintUnderlayCommand`. They are first-party core tools and do not add editing
+behavior to `SceneGraph`.
 
 `FlattenTerrainTool` and `SmoothTerrainTool` extend that same path. Flatten
 writes a uniform four-corner height, while smooth samples corresponding shared
