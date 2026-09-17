@@ -1,5 +1,6 @@
 package com.rspsi.ui.workspace;
 
+import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SelectionChangeListener;
 import com.rspsi.editor.collision.CollisionDirection;
@@ -15,6 +16,7 @@ import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.editor.render.RenderChanges;
 import com.rspsi.editor.render.RenderScene;
+import com.rspsi.editor.render.RenderSceneBuilder;
 import com.rspsi.editor.render.SceneRenderer;
 import com.rspsi.editor.render.SessionSceneController;
 import com.rspsi.editor.terrain.TerrainFace;
@@ -64,6 +66,12 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     }
 
     public void bind(EditorSession session, WorldWindow worldWindow) {
+        bind(session, worldWindow, null);
+    }
+
+    /** Binds a canonical scene with optional neutral definitions for footprints and materials. */
+    public void bind(EditorSession session, WorldWindow worldWindow,
+                     DefinitionProvider definitions) {
         Objects.requireNonNull(session, "session");
         Objects.requireNonNull(worldWindow, "worldWindow");
         closeBinding();
@@ -72,7 +80,9 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
         session.selection().addChangeListener(selectionListener);
         closed = false;
         scene = null;
-        sceneController = new SessionSceneController(session, this);
+        sceneController = definitions == null
+                ? new SessionSceneController(session, this)
+                : new SessionSceneController(session, this, new RenderSceneBuilder(definitions));
         redrawOnFxThread();
     }
 
