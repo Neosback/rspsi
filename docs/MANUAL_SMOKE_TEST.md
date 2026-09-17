@@ -2,8 +2,13 @@
 
 Run after changes affecting loading, editing, rendering, saving, or plugins.
 
+Use the project baseline of Java 21 and JavaFX 21. The Gradle toolchain is
+configured to select Java 21 automatically; if the local JDK is not discoverable
+by Gradle, set `JAVA_HOME` to a JDK 21 installation before running the checklist.
+
 1. Run `./gradlew test`.
-2. Launch the editor with `./gradlew :Editor:run`.
+2. Launch the editor with `./gradlew :Editor:run` and leave it open for the
+   interactive steps below.
 3. Load a known 317/legacy cache and confirm the loading screen completes.
 4. Open a map and verify camera movement, tile hover, plane switching, and minimap output.
 5. Paint an underlay and overlay, change a flag, and modify a height.

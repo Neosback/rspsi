@@ -5,6 +5,10 @@ The existing JavaFX editor and renderer remain the compatibility surface while
 the cache, world model, editing history, scene, and UI contracts move behind
 small RSPSi-owned APIs.
 
+The supported build/runtime baseline is Java 21 with JavaFX 21. Gradle selects
+the Java 21 toolchain for all modules so a newer system JDK is not used to run
+the JavaFX desktop application accidentally.
+
 ## Start here
 
 - [Roadmap and progress ledger](docs/ROADMAP.md)

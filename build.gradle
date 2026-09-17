@@ -29,6 +29,11 @@ subprojects {
     apply plugin: 'java-library'
     apply plugin: 'io.freefair.lombok'
 
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
 
@@ -61,7 +66,7 @@ subprojects {
 
     apply plugin: 'org.openjfx.javafxplugin'
     javafx {
-        version = "17"
+        version = "21"
         modules = ['javafx.base', 'javafx.fxml', 'javafx.graphics', 'javafx.controls', 'javafx.media', 'javafx.swing']
     }
 
