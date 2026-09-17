@@ -31,6 +31,7 @@ public final class AssetBrowserPanel extends VBox {
     private final ListView<AssetDescriptor> results = new ListView<>();
     private final Label status = new Label();
     private final Label details = new Label();
+    private final ModelPreviewCanvas modelPreview = new ModelPreviewCanvas();
     private final Label searchLabel = new Label("Search");
     private final StackPane filterHost = new StackPane();
     private final HBox horizontalFilters = new HBox(8);
@@ -75,6 +76,8 @@ public final class AssetBrowserPanel extends VBox {
         details.setWrapText(true);
         details.setMinHeight(48);
         details.getStyleClass().add("workspace-asset-details");
+        modelPreview.setVisible(false);
+        modelPreview.setManaged(false);
 
         searchField.textProperty().addListener((observable, oldValue, newValue) -> refresh());
         category.valueProperty().addListener((observable, oldValue, newValue) -> refresh());
@@ -83,7 +86,7 @@ public final class AssetBrowserPanel extends VBox {
             selectionListener.accept(newValue);
         });
 
-        getChildren().addAll(title, filterHost, status, results, new Separator(), details);
+        getChildren().addAll(title, filterHost, status, results, new Separator(), modelPreview, details);
         updateFilterLayout(getWidth());
         refresh();
     }
@@ -145,6 +148,10 @@ public final class AssetBrowserPanel extends VBox {
         // Search results use lightweight model descriptors. Resolve only the
         // selected item, so listing a large model index does not decode every mesh.
         AssetDescriptor resolved = repository.get(asset.id(), asset.type()).orElse(asset);
+        boolean isModel = "model".equals(asset.type());
+        modelPreview.setVisible(isModel);
+        modelPreview.setManaged(isModel);
+        modelPreview.setGeometry(isModel ? repository.modelGeometry(asset.id()).orElse(null) : null);
         String symbolic = resolved.symbolicName().map(value -> "\nSymbolic: " + value).orElse("");
         String properties = resolved.details().isEmpty()
                 ? "" : "\n" + String.join("\n", resolved.details());

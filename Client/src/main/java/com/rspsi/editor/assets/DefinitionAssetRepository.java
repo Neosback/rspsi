@@ -7,6 +7,7 @@ import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.cache.definition.ModelDefinitionView;
+import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.MapSceneSpriteView;
 
 import java.util.ArrayList;
@@ -54,6 +55,11 @@ public final class DefinitionAssetRepository implements AssetRepository {
     public Optional<AssetDescriptor> get(int id, String type) {
         if (id < 0 || type == null) return Optional.empty();
         return descriptorFor(id, type.trim().toLowerCase(Locale.ROOT));
+    }
+
+    @Override
+    public Optional<ModelGeometryView> modelGeometry(int id) {
+        return id < 0 ? Optional.empty() : definitions.modelGeometry(id);
     }
 
     private Optional<AssetDescriptor> descriptorFor(int id, String type) {

@@ -110,6 +110,11 @@ Validation/Debug. The viewport is permanent and centered. Tools stay beside
 it, the inspector stays at a side, and the lower area switches between assets,
 history, validation, and console. Command palette and search are overlays.
 
+The asset browser resolves selected model geometry through the neutral
+`AssetRepository` contract and renders a small JavaFX preview. This is an
+inspection aid, not a second scene renderer; the eventual map renderer keeps
+its own gated `SceneRenderer` implementation.
+
 Panels declare a preferred region, allowed regions, and minimum dimensions.
 JavaFX renders these neutral contracts now; Dear ImGui may render them later.
 The controlled JavaFX shell also keeps a persistent status row visible for

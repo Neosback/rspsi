@@ -5,6 +5,7 @@ import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.cache.definition.ModelDefinitionView;
+import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.MapSceneSpriteView;
 import org.junit.jupiter.api.Test;
 
@@ -83,6 +84,7 @@ class DefinitionAssetRepositoryTest {
         assertEquals(List.of("Vertices: 24", "Triangles: 12", "Texture triangles: 2",
                 "Render priority: 3"), selected.details());
         assertEquals(1, definitions.modelLookups);
+        assertEquals(3, assets.modelGeometry(900).orElseThrow().vertexCount());
     }
 
     @Test
@@ -110,6 +112,11 @@ class DefinitionAssetRepositoryTest {
         @Override public Optional<TextureDefinitionView> texture(int id) { return Optional.empty(); }
         @Override public Optional<ModelDefinitionView> model(int id) {
             return id == 900 ? Optional.of(new ModelDefinitionView(900, 24, 12, 2, 3)) : Optional.empty();
+        }
+        @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+            return id == 900 ? Optional.of(new ModelGeometryView(900,
+                    new int[]{0, 0, 0, 10, 0, 0, 0, 10, 0},
+                    new int[]{0, 1, 2}, null, null, null)) : Optional.empty();
         }
         @Override public Optional<MapSceneSpriteView> mapScene(int id) {
             return id == 7 ? Optional.of(new MapSceneSpriteView(7, 2, 1, 1, -1,
