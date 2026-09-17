@@ -31,4 +31,29 @@ class OsrsRevisionVerifierTest {
         assertTrue(report.lines().contains("PASS cache.open: opened"));
         assertTrue(report.lines().contains("NOT_RUN render.parity: fixture pending"));
     }
+
+    @Test
+    void strictParityModeTurnsMissingIndependentEvidenceIntoErrors() {
+        VerificationCheck render = new VerificationCheck("render.parity",
+                VerificationCheck.Status.NOT_RUN, "fixture pending");
+        VerificationCheck minimap = new VerificationCheck("minimap.parity",
+                VerificationCheck.Status.WARN, "no images");
+
+        List<String> errors = OsrsRevisionVerifier.requiredParityErrors(render, minimap, true);
+
+        assertEquals(2, errors.size());
+        assertTrue(errors.get(0).contains("render parity"));
+        assertTrue(errors.get(1).contains("minimap parity"));
+        assertTrue(OsrsRevisionVerifier.requiredParityErrors(render, minimap, false).isEmpty());
+    }
+
+    @Test
+    void strictParityModeAcceptsOnlyPassingChecks() {
+        VerificationCheck render = new VerificationCheck("render.parity",
+                VerificationCheck.Status.PASS, "matched");
+        VerificationCheck minimap = new VerificationCheck("minimap.parity",
+                VerificationCheck.Status.PASS, "matched");
+
+        assertTrue(OsrsRevisionVerifier.requiredParityErrors(render, minimap, true).isEmpty());
+    }
 }

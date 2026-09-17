@@ -158,3 +158,8 @@ neutral minimap parity service. Identity mismatches fail the gate; missing
 fixture data remains visible as `WARN`/`NOT_RUN`. This keeps RuneLite/TSPS
 captures and generated images outside the repository while making their
 provenance-controlled acceptance path executable.
+
+For release/CI acceptance, set `RSPSI_OSRS_REQUIRE_PARITY=true` as well. The
+verifier will then fail unless both `render.parity` and `minimap.parity` are
+`PASS`; the default remains non-strict so fixture-free local cache checks keep
+reporting missing external evidence as `NOT_RUN` or `WARN`.

@@ -50,7 +50,7 @@ public final class OsrsRevisionVerifier {
         VerificationReport report = args.length == 1
                 ? inspectIndex(path)
                 : inspectRegion(path, Integer.parseInt(args[1]), Integer.parseInt(args[2]),
-                Integer.parseInt(args[3]), parityFixturePath());
+                Integer.parseInt(args[3]), parityFixturePath(), requireExternalParity());
         report.lines().forEach(System.out::println);
         if (!report.errors().isEmpty()) System.exit(1);
     }
@@ -84,6 +84,15 @@ public final class OsrsRevisionVerifier {
      */
     public static VerificationReport inspectRegion(Path path, int regionX, int regionY, int revision,
                                                    Path parityFixturePath) {
+        return inspectRegion(path, regionX, regionY, revision, parityFixturePath, false);
+    }
+
+    /**
+     * Inspects a region with an optional release-level requirement for
+     * independent RuneLite/TSPS render and minimap evidence.
+     */
+    public static VerificationReport inspectRegion(Path path, int regionX, int regionY, int revision,
+                                                   Path parityFixturePath, boolean requireExternalParity) {
         List<String> messages = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         try (OpenRuneCacheStore store = OpenRuneCacheStore.open(path)) {
@@ -231,6 +240,7 @@ public final class OsrsRevisionVerifier {
             if (minimapParity.status() == VerificationCheck.Status.FAIL) {
                 errors.add("minimap parity failed: " + minimapParity.detail());
             }
+            errors.addAll(requiredParityErrors(renderParity, minimapParity, requireExternalParity));
             if (issueErrors > 0) errors.add("world validation reported errors");
             if (revisionAudit.stream().anyMatch(check -> check.status() == VerificationCheck.Status.FAIL)) {
                 errors.add("revision audit reported incompatible cache assumptions");
@@ -410,6 +420,25 @@ public final class OsrsRevisionVerifier {
     private static Path parityFixturePath() {
         String value = System.getenv("RSPSI_OSRS_PARITY_FIXTURE");
         return value == null || value.isBlank() ? null : Path.of(value);
+    }
+
+    private static boolean requireExternalParity() {
+        String value = System.getenv("RSPSI_OSRS_REQUIRE_PARITY");
+        return value != null && value.equalsIgnoreCase("true");
+    }
+
+    static List<String> requiredParityErrors(VerificationCheck renderParity,
+                                              VerificationCheck minimapParity,
+                                              boolean required) {
+        if (!required) return List.of();
+        List<String> errors = new ArrayList<>();
+        if (renderParity.status() != VerificationCheck.Status.PASS) {
+            errors.add("required render parity is not passing: " + renderParity.status());
+        }
+        if (minimapParity.status() != VerificationCheck.Status.PASS) {
+            errors.add("required minimap parity is not passing: " + minimapParity.status());
+        }
+        return List.copyOf(errors);
     }
 
     private static List<VerificationCheck> concatChecks(List<VerificationCheck> prefix,
