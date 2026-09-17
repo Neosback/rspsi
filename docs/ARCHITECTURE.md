@@ -405,6 +405,12 @@ the initial `RenderScene`, consumes session-owned dirty chunks as bounded
 renderer updates, and removes its listener on close. JavaFX and future ImGui
 frontends can host this binding without placing UI types in the editor core.
 
+The OSRS project opener also binds the window-level Undo, Redo, and Save menu
+actions to the same canonical `EditorSession` used by the controlled panels.
+Legacy sessions retain their compatibility fallback, but an active OSRS
+project can no longer send a menu action to the stale legacy session or
+`SceneGraph` history.
+
 The canonical JavaFX tool rail exposes the existing fragment contracts as a
 small clipboard workflow: selection is captured with `WorldFragment.capture`,
 encoded by `WorldFragmentCodec`, and pasted through `PasteFragmentCommand`.

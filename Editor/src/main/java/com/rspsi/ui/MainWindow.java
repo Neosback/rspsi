@@ -432,22 +432,8 @@ public class MainWindow extends Application {
 				updateHistoryMenuState();
 			});
 
-			controller.getUndoMenuItem().setOnAction(evt -> {
-				if (controlledSession != null && controlledSession.history().canUndo()) {
-					controlledSession.undo();
-				} else {
-					SceneGraph.undo();
-				}
-				updateHistoryMenuState();
-			});
-			controller.getRedoMenuItem().setOnAction(evt -> {
-				if (controlledSession != null && controlledSession.history().canRedo()) {
-					controlledSession.redo();
-				} else {
-					SceneGraph.redo();
-				}
-				updateHistoryMenuState();
-			});
+			controller.getUndoMenuItem().setOnAction(evt -> handleUndo());
+			controller.getRedoMenuItem().setOnAction(evt -> handleRedo());
 			updateHistoryMenuState();
 
 			controller.getDeleteSelectedTilesBtn().setOnAction(evt -> TileDeleteDialog.instance.show());
@@ -641,6 +627,8 @@ public class MainWindow extends Application {
 					osrsStudioProject.close();
 					osrsStudioProject = null;
 				}
+				controlledSession = null;
+				osrsProjectActive = false;
 				if (controlledWorkspaceShell != null) {
 					if (controlledWorkspaceShell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
 						viewport.close();
@@ -933,6 +921,9 @@ public class MainWindow extends Application {
 			opened = null;
 			autosave = null;
 			osrsProjectActive = true;
+			// The controlled panels bind directly to this session. Keep the
+			// window-level menu bridge on the same source of truth as well.
+			controlledSession = projectRegion.region().session();
 			if (clientInstance != null) {
 				clientInstance.removeMapReadyListener(controlledMapReadyListener);
 			}
@@ -1045,6 +1036,24 @@ public class MainWindow extends Application {
 		controller.getRedoMenuItem().setDisable(!canRedo);
 	}
 
+	private void handleUndo() {
+		if (controlledSession != null && controlledSession.history().canUndo()) {
+			controlledSession.undo();
+		} else {
+			SceneGraph.undo();
+		}
+		updateHistoryMenuState();
+	}
+
+	private void handleRedo() {
+		if (controlledSession != null && controlledSession.history().canRedo()) {
+			controlledSession.redo();
+		} else {
+			SceneGraph.redo();
+		}
+		updateHistoryMenuState();
+	}
+
 	@Subscribe(threadMode = ThreadMode.ASYNC)
 	public void onStatusUpdate(StatusUpdate update) {
 		//Platform.runLater(() -> controller.getStatusLabel().setText(update.getText()));
@@ -1075,6 +1084,10 @@ public class MainWindow extends Application {
 
 		});
 		controller.getSaveMenuItem().setOnAction(act -> {
+			if (osrsProjectActive && controlledSession != null) {
+				saveCanonicalSession();
+				return;
+			}
 			int startX = clientInstance.xCameraPos;
 			int startY = clientInstance.yCameraPos;
 
@@ -1149,6 +1162,21 @@ public class MainWindow extends Application {
 			clientInstance.yCameraPos = startY;
 
 		});
+	}
+
+	private void saveCanonicalSession() {
+		if (!controlledSession.canSave()) {
+			FXDialogs.showWarning(stage, "Cannot save OSRS project",
+					"This project session is read-only or has no output cache configured.");
+			return;
+		}
+		try {
+			controlledSession.save();
+			updateHistoryMenuState();
+		} catch (RuntimeException exception) {
+			FXDialogs.showException(stage, "Cannot save OSRS project",
+					"The canonical session could not write its configured output cache.", exception);
+		}
 	}
 
 	public void setupOpenOptions() throws Exception {
