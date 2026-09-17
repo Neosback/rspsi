@@ -7,6 +7,7 @@ import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.cache.definition.ModelDefinitionView;
+import com.rspsi.cache.definition.MapSceneSpriteView;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -67,6 +68,8 @@ public final class DefinitionAssetRepository implements AssetRepository {
                     descriptor("texture", id, "Texture " + id, textureDetails(value)));
             case "model" -> definitions.model(id).map(value ->
                     descriptor("model", id, "Model " + id, modelDetails(value)));
+            case "sprite", "mapscene", "map-scene" -> definitions.mapScene(id).map(value ->
+                    descriptor("sprite", id, "Map scene sprite " + id, spriteDetails(value)));
             default -> Optional.empty();
         };
     }
@@ -87,6 +90,7 @@ public final class DefinitionAssetRepository implements AssetRepository {
                 // large model index, and searching it must not decode every mesh.
                 definitions.modelIds().forEach(id -> add(assets, Optional.of(
                         descriptor("model", id, "Model " + id))));
+                definitions.mapSceneIds().forEach(id -> add(assets, descriptorFor(id, "sprite")));
                 current = assets.stream()
                         .sorted(Comparator.comparing(AssetDescriptor::type)
                                 .thenComparingInt(AssetDescriptor::id))
@@ -147,6 +151,12 @@ public final class DefinitionAssetRepository implements AssetRepository {
                 "Triangles: " + model.triangleCount(),
                 "Texture triangles: " + model.textureTriangleCount(),
                 "Render priority: " + model.renderPriority());
+    }
+
+    private static List<String> spriteDetails(MapSceneSpriteView sprite) {
+        return List.of("Dimensions: " + sprite.width() + " × " + sprite.height(),
+                "Offset: " + sprite.offsetX() + ", " + sprite.offsetY(),
+                "Pixels: " + (sprite.width() * sprite.height()));
     }
 
     private static void add(List<AssetDescriptor> assets, Optional<AssetDescriptor> asset) {

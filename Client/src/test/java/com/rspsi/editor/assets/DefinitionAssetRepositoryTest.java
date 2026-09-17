@@ -5,6 +5,7 @@ import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.cache.definition.ModelDefinitionView;
+import com.rspsi.cache.definition.MapSceneSpriteView;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -84,6 +85,18 @@ class DefinitionAssetRepositoryTest {
         assertEquals(1, definitions.modelLookups);
     }
 
+    @Test
+    void mapSceneSpritesAreSearchableWithNeutralMetadata() {
+        DefinitionAssetRepository assets = new DefinitionAssetRepository(new Definitions());
+
+        AssetDescriptor descriptor = assets.get(7, "sprite").orElseThrow();
+        assertEquals("Map scene sprite 7", descriptor.name());
+        assertEquals(List.of("Dimensions: 2 × 1", "Offset: 1, -1", "Pixels: 2"),
+                descriptor.details());
+        assertEquals(List.of(descriptor), assets.search("sprite 7"));
+        assertTrue(assets.get(7, "mapscene").isPresent());
+    }
+
     private static class Definitions implements DefinitionProvider {
         @Override public Optional<ObjectDefinitionView> object(int id) {
             if (id == 12) return Optional.of(new ObjectDefinitionView(12, "Castle wall", 1, 1, List.of(), new int[0]));
@@ -98,9 +111,14 @@ class DefinitionAssetRepositoryTest {
         @Override public Optional<ModelDefinitionView> model(int id) {
             return id == 900 ? Optional.of(new ModelDefinitionView(900, 24, 12, 2, 3)) : Optional.empty();
         }
+        @Override public Optional<MapSceneSpriteView> mapScene(int id) {
+            return id == 7 ? Optional.of(new MapSceneSpriteView(7, 2, 1, 1, -1,
+                    new int[]{0xFF112233, 0xFF445566})) : Optional.empty();
+        }
         @Override public List<Integer> objectIds() { return List.of(12, 13); }
         @Override public List<Integer> overlayIds() { return List.of(4); }
         @Override public List<Integer> modelIds() { return List.of(900); }
+        @Override public List<Integer> mapSceneIds() { return List.of(7); }
     }
 
     private static final class CountingDefinitions extends Definitions {

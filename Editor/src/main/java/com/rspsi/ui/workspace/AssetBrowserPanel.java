@@ -53,7 +53,7 @@ public final class AssetBrowserPanel extends VBox {
         searchField.setAccessibleText("Search assets by name, symbolic key, or numeric ID");
         HBox.setHgrow(searchField, Priority.ALWAYS);
 
-        category.getItems().setAll(ALL, "Objects", "Underlays", "Overlays", "Textures", "Models");
+        category.getItems().setAll(ALL, "Objects", "Underlays", "Overlays", "Textures", "Models", "Sprites");
         category.setValue(ALL);
         category.setAccessibleText("Asset category filter");
         category.setPrefWidth(110);
