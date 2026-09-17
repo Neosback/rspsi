@@ -5,7 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /** Groups several edits into one user-visible history entry. */
-public final class CompositeEditCommand implements EditCommand {
+public final class CompositeEditCommand implements EditorCommand {
     private final String description;
     private final List<EditorCommand> commands;
 

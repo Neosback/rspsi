@@ -7,7 +7,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /** Shared immutable implementation for atomic terrain-state commands. */
-abstract class TileEditCommand implements EditCommand {
+abstract class TileEditCommand implements EditorCommand {
     private final TileCoordinate coordinate;
     private final TileSnapshot before;
     private final TileSnapshot after;

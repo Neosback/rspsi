@@ -47,7 +47,8 @@ boundary.
   unified selection value after each selection operation. Neither listener
   carries UI types or owns the state it observes.
 - `EditorCommand` is the canonical mutation contract; `EditCommand` remains a
-  temporary source-compatible alias.
+  source-compatible alias for external callers while all built-in commands use
+  the canonical interface directly.
 - `CommandHistory.moveTo(...)` and `EditorSession.jumpToHistory(...)` provide
   exact history navigation with one consolidated session update; failed
   forward replay rolls back commands already reapplied.
