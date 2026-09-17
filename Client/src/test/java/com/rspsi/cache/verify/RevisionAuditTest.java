@@ -2,6 +2,7 @@ package com.rspsi.cache.verify;
 
 import com.rspsi.cache.CacheStoreCapabilities;
 import com.rspsi.cache.OsrsCacheMetadata;
+import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.map.MapIndexEntry;
 import com.rspsi.cache.map.MapIndexTable;
 import com.rspsi.cache.store.CacheStore;
@@ -37,6 +38,30 @@ class RevisionAuditTest {
 
         assertEquals(VerificationCheck.Status.FAIL, status(checks, "revision.mapLayout"));
         assertTrue(checks.stream().anyMatch(value -> value.status() == VerificationCheck.Status.FAIL));
+    }
+
+    @Test
+    void reportsNeutralDefinitionAvailabilityWithoutRequiringBackendTypes() {
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public java.util.Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) {
+                return java.util.Optional.empty();
+            }
+            @Override public java.util.Optional<com.rspsi.cache.definition.FloorDefinitionView> underlay(int id) {
+                return java.util.Optional.empty();
+            }
+            @Override public java.util.Optional<com.rspsi.cache.definition.FloorDefinitionView> overlay(int id) {
+                return java.util.Optional.empty();
+            }
+            @Override public List<Integer> objectIds() { return List.of(1, 2); }
+            @Override public List<Integer> underlayIds() { return List.of(1); }
+        };
+
+        List<VerificationCheck> checks = RevisionAudit.auditDefinitions(definitions);
+
+        assertEquals(VerificationCheck.Status.PASS, status(checks, "revision.definitions.objects"));
+        assertEquals(VerificationCheck.Status.PASS, status(checks, "revision.definitions.underlays"));
+        assertEquals(VerificationCheck.Status.WARN, status(checks, "revision.definitions.overlays"));
+        assertEquals(VerificationCheck.Status.WARN, status(checks, "revision.definitions.textures"));
     }
 
     private static VerificationCheck.Status status(List<VerificationCheck> checks, String id) {

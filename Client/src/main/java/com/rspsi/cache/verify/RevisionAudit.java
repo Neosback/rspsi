@@ -1,6 +1,7 @@
 package com.rspsi.cache.verify;
 
 import com.rspsi.cache.OsrsCacheMetadata;
+import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.map.MapIndexEntry;
 import com.rspsi.cache.map.MapIndexTable;
 import com.rspsi.cache.map.OsrsRevisionProfile;
@@ -37,6 +38,27 @@ public final class RevisionAudit {
                     "backend capability is compatible with the selected profile"));
         }
         return List.copyOf(checks);
+    }
+
+    /**
+     * Audits the neutral definition surface without assuming a particular
+     * cache library or archive layout. Empty sets remain warnings because a
+     * deliberately partial provider is valid for focused tools.
+     */
+    public static List<VerificationCheck> auditDefinitions(DefinitionProvider definitions) {
+        Objects.requireNonNull(definitions, "definitions");
+        return List.of(
+                definitionCheck("revision.definitions.objects", "objects", definitions.objectIds().size()),
+                definitionCheck("revision.definitions.underlays", "underlays", definitions.underlayIds().size()),
+                definitionCheck("revision.definitions.overlays", "overlays", definitions.overlayIds().size()),
+                definitionCheck("revision.definitions.textures", "textures", definitions.textureIds().size()));
+    }
+
+    private static VerificationCheck definitionCheck(String id, String name, int count) {
+        return new VerificationCheck(id,
+                count > 0 ? VerificationCheck.Status.PASS : VerificationCheck.Status.WARN,
+                count > 0 ? count + " " + name + " IDs exposed by neutral provider"
+                        : "no " + name + " IDs exposed by neutral provider");
     }
 
     private static VerificationCheck metadataCheck(OsrsCacheMetadata metadata, int requestedRevision) {

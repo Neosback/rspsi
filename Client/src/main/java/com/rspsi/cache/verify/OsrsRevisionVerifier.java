@@ -116,6 +116,7 @@ public final class OsrsRevisionVerifier {
             messages.add("location bytes: " + locations.length + (emptyLocations ? " (archive absent)" : ""));
             DefinitionProvider definitions = store.definitionProvider(revision);
             List<VerificationCheck> revisionAudit = RevisionAudit.audit(store, revision, maps.index());
+            List<VerificationCheck> definitionAudit = RevisionAudit.auditDefinitions(definitions);
             messages.add("definition provider: ready");
             AssetRepository assets = new DefinitionAssetRepository(definitions, store.symbolicNameProvider());
             List<AssetDescriptor> availableAssets = assets.search("");
@@ -234,6 +235,9 @@ public final class OsrsRevisionVerifier {
             if (revisionAudit.stream().anyMatch(check -> check.status() == VerificationCheck.Status.FAIL)) {
                 errors.add("revision audit reported incompatible cache assumptions");
             }
+            if (definitionAudit.stream().anyMatch(check -> check.status() == VerificationCheck.Status.FAIL)) {
+                errors.add("definition audit reported unavailable required definitions");
+            }
             if (!sceneComplete) errors.add("neutral scene did not cover every document tile");
             if (!objectProjectionComplete) errors.add("neutral scene object projections did not match canonical objects");
             if (!windowSceneComplete) errors.add("window scene did not cover every loaded region tile");
@@ -243,7 +247,7 @@ public final class OsrsRevisionVerifier {
             if (!minimapComplete) errors.add("neutral minimap dimensions did not match the document");
             return new VerificationReport(path, regionX, regionY, revision, maps.index().size(),
                     true, true, equal, messages, errors,
-                    concatChecks(revisionAudit, List.of(
+                    concatChecks(revisionAudit, concatChecks(definitionAudit, List.of(
                             check("cache.open", VerificationCheck.Status.PASS, "OpenRune cache opened"),
                             check("cache.capabilities", VerificationCheck.Status.PASS,
                                     capabilities(store)),
@@ -312,7 +316,7 @@ public final class OsrsRevisionVerifier {
                                     "neutral scene equality after round trip: " + sceneRoundTripEqual
                                             + " (" + sceneRoundTripReport.differenceCount() + " differences)"),
                             renderParity,
-                            minimapParity)));
+                            minimapParity))));
         } catch (RuntimeException exception) {
             errors.add(exception.getClass().getSimpleName() + ": " + exception.getMessage());
             return new VerificationReport(path, regionX, regionY, revision, 0,

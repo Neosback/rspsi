@@ -209,6 +209,11 @@ Provenance and evidence:
 - Tests: `CacheIndexViewTest`, the full Gradle test/check suite, and the live
   `verifyOsrsRevision` runs against OpenRS2 cache 391 and live build 240.
 
+The revision audit now also records the neutral definition surface without
+depending on backend types. Live build 240 region `(50,50)` reports 62,522
+object IDs, 251 underlay IDs, 643 overlay IDs, and 214 texture IDs; focused
+partial-provider tests intentionally report missing families as warnings.
+
 This is a verified seam, not completion of the entire cache migration. The
 legacy renderer and native OpenRune writer remain explicitly quarantined or
 deferred until their own parity gates pass.
