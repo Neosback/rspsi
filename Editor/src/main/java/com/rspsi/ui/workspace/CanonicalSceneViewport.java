@@ -20,7 +20,17 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldWindow;
+import com.rspsi.editor.model.TileBounds;
+import com.rspsi.editor.model.WorldFragment;
+import com.rspsi.editor.io.WorldFragmentCodec;
+import com.rspsi.editor.PasteFragmentCommand;
+import com.rspsi.editor.selection.FragmentSelection;
 import com.rspsi.editor.selection.ObjectSelection;
+import com.rspsi.editor.selection.ObjectSetSelection;
+import com.rspsi.editor.selection.Selection;
+import com.rspsi.editor.selection.TileAreaSelection;
+import com.rspsi.editor.selection.TileSelection;
+import com.rspsi.editor.selection.TileSetSelection;
 import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.editor.render.RenderChanges;
@@ -43,6 +53,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -194,6 +206,68 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     public void clearRoutePreview() {
         routePreview = null;
         redrawOnFxThread();
+    }
+
+    /** Copies the selected world rectangle as versioned neutral JSON. */
+    public String copySelectionToClipboard() {
+        if (session == null) return "No editor session";
+        WorldFragment fragment = selectedFragment();
+        if (fragment == null) return "Select tiles or objects first";
+        ClipboardContent content = new ClipboardContent();
+        content.putString(WorldFragmentCodec.encode(fragment));
+        Clipboard.getSystemClipboard().setContent(content);
+        session.selection().selectFragment(fragment);
+        return "Copied fragment " + fragment.bounds().width() + " × " + fragment.bounds().height();
+    }
+
+    /** Pastes the clipboard fragment through one undoable canonical command. */
+    public String pasteFragmentFromClipboard(int targetX, int targetY) {
+        if (session == null) return "No editor session";
+        if (!Clipboard.getSystemClipboard().hasString()) return "Clipboard has no world fragment";
+        try {
+            WorldFragment fragment = WorldFragmentCodec.decode(
+                    Clipboard.getSystemClipboard().getString());
+            session.execute(new PasteFragmentCommand(fragment, targetX, targetY));
+            return "Pasted fragment " + fragment.bounds().width() + " × " + fragment.bounds().height();
+        } catch (RuntimeException exception) {
+            return "Paste failed: " + exception.getMessage();
+        }
+    }
+
+    private WorldFragment selectedFragment() {
+        Selection selection = session.selection().current();
+        if (selection instanceof FragmentSelection fragment) return fragment.fragment();
+        TileBounds bounds = null;
+        if (selection instanceof TileSelection tile) {
+            bounds = new TileBounds(tile.coordinate().x(), tile.coordinate().y(),
+                    tile.coordinate().x(), tile.coordinate().y());
+        } else if (selection instanceof TileAreaSelection area) {
+            bounds = area.bounds();
+        } else if (selection instanceof TileSetSelection tiles) {
+            bounds = boundsOf(tiles.coordinates());
+        } else if (selection instanceof ObjectSelection object) {
+            bounds = new TileBounds(object.object().x(), object.object().y(),
+                    object.object().x(), object.object().y());
+        } else if (selection instanceof ObjectSetSelection objects) {
+            bounds = boundsOf(objects.objects().stream()
+                    .map(object -> new TileCoordinate(object.plane(), object.x(), object.y())).toList());
+        }
+        return bounds == null ? null : WorldFragment.capture(session.world(), bounds);
+    }
+
+    private static TileBounds boundsOf(java.util.Collection<TileCoordinate> tiles) {
+        if (tiles == null || tiles.isEmpty()) return null;
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        for (TileCoordinate tile : tiles) {
+            minX = Math.min(minX, tile.x());
+            minY = Math.min(minY, tile.y());
+            maxX = Math.max(maxX, tile.x());
+            maxY = Math.max(maxY, tile.y());
+        }
+        return new TileBounds(minX, minY, maxX, maxY);
     }
 
     /** Installs a frontend callback for hover inspection without changing selection. */

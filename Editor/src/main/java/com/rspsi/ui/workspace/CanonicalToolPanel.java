@@ -57,6 +57,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private final TextField targetX = field("Target X", "1");
     private final TextField targetY = field("Target Y", "0");
     private final Label previewStatus = new Label("No preview");
+    private final Label fragmentStatus = new Label("Select tiles, then copy");
     private CanonicalSceneViewport viewport;
 
     public CanonicalToolPanel() {
@@ -120,6 +121,31 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         previewStatus.setWrapText(true);
         preview.getChildren().addAll(previewFields, previewButtons, previewStatus);
 
+        VBox fragments = section("World fragment");
+        HBox fragmentButtons = new HBox(4);
+        Button copy = new Button("Copy");
+        copy.setAccessibleText("Copy selected world fragment");
+        copy.setOnAction(event -> fragmentStatus("Copied", viewport == null
+                ? "No viewport" : viewport.copySelectionToClipboard()));
+        Button paste = new Button("Paste");
+        paste.setAccessibleText("Paste world fragment at target coordinates");
+        paste.setOnAction(event -> {
+            if (viewport == null) {
+                fragmentStatus("Paste", "No viewport");
+                return;
+            }
+            try {
+                fragmentStatus("Paste", viewport.pasteFragmentFromClipboard(
+                        parse(targetX, "target X"), parse(targetY, "target Y")));
+            } catch (IllegalArgumentException exception) {
+                fragmentStatus("Paste", exception.getMessage());
+            }
+        });
+        fragmentButtons.getChildren().addAll(copy, paste);
+        fragmentStatus.getStyleClass().add("workspace-panel-status");
+        fragmentStatus.setWrapText(true);
+        fragments.getChildren().addAll(fragmentButtons, fragmentStatus);
+
         GridPane settings = new GridPane();
         settings.setHgap(6);
         settings.setVgap(5);
@@ -130,7 +156,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addSetting(settings, 4, "Object ID", objectId);
         addSetting(settings, 5, "Object type", objectType);
         addSetting(settings, 6, "Object rotation", objectRotation);
-        getChildren().addAll(title, status, terrain, objects, debug, preview, settings);
+        getChildren().addAll(title, status, terrain, objects, debug, preview, fragments, settings);
         setViewport(null);
     }
 
@@ -221,6 +247,10 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
             }
         });
         return button;
+    }
+
+    private void fragmentStatus(String action, String message) {
+        fragmentStatus.setText(action + ": " + message);
     }
 
     private static TextField field(String label, String value) {

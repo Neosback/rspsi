@@ -54,5 +54,8 @@ For the opt-in OSRS project workflow:
       run Route, LOS, and Reach previews, and confirm the viewport shows the
       result plus a readable success/blocked status. Select an object before
       running Reach and confirm its resolved footprint is used.
+- [ ] Select a tile or area, use World fragment > Copy, change the target
+      coordinates, then use Paste. Confirm the document changes once and one
+      Undo removes the complete paste.
 - [ ] Confirm the status row clearly marks the OpenRune project read-only.
 - [ ] Close/relaunch and confirm the legacy map workflow still opens normally.
