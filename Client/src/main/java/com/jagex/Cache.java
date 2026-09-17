@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.function.BiFunction;
 
 import com.jagex.cache.graphics.Sprite;
@@ -134,6 +135,53 @@ public class Cache {
         store.flush();
     }
 
+    /**
+     * Reads a regular cache resource through the byte-oriented boundary.
+     * Legacy index objects remain available below for compatibility loaders,
+     * but new consumers should not need to know their archive types.
+     */
+    public final byte[] readFile(CacheFileType type, int archive) {
+        try {
+            if (fileRetrieverOverride != null) {
+                Optional<byte[]> data = fileRetrieverOverride.apply(type, archive);
+                if (data.isPresent()) return data.get();
+            }
+            int index = cacheIndex(type);
+            if (index < 0) return null;
+            return store.read(index, archive, 0);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    /** Reads a named archive without exposing a Displee archive object. */
+    public final byte[] readNamedFile(CacheFileType type, String archiveName, int file) {
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(archiveName, "archiveName");
+        if (file < 0) throw new IllegalArgumentException("Cache file cannot be negative");
+        try {
+            int index = cacheIndex(type);
+            if (index < 0) return null;
+            int archive = store.archiveId(index, archiveName);
+            return archive < 0 ? null : store.read(index, archive, file);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private int cacheIndex(CacheFileType type) {
+        return switch (Objects.requireNonNull(type, "type")) {
+            case CONFIG -> is317() ? 0 : 2;
+            case MODEL -> is317() ? 1 : 7;
+            case ANIMATION -> is317() ? 2 : 1;
+            case MAP -> is317() ? 4 : 5;
+            case SKELETON -> is317() ? -1 : 0;
+            case SPRITE -> is317() ? -1 : 8;
+            case TEXTURE -> is317() ? -1 : 9;
+            case SOUND, VARBIT, LOC, SPOT -> -1;
+        };
+    }
+
 
     private FixedIntegerKeyMap<Sprite> spriteCache = new FixedIntegerKeyMap<Sprite>(100);
 
@@ -143,12 +191,16 @@ public class Cache {
             return spriteCache.get(id);
         if (!isCacheNewOSRS(indexedFileSystem))
             throw new RuntimeException("Cannot grab sprite by ID on 317!");
-        Sprite sprite = Sprite.decode(ByteBuffer.wrap(spriteIndex.archive(id).file(0).getData()));
+        byte[] data = readFile(CacheFileType.SPRITE, id);
+        if (data == null) throw new IllegalArgumentException("Sprite not found: " + id);
+        Sprite sprite = Sprite.decode(ByteBuffer.wrap(data));
         spriteCache.put(id, sprite);
         System.out.println("GETSPRITE " + id);
         return sprite;
     }
 
+    /** Compatibility-only access for legacy loaders that still require indexes. */
+    @Deprecated
     public final Index getFile(CacheFileType index) {
         try {
             switch (index) {

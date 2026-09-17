@@ -512,7 +512,8 @@ public final class Client implements Runnable {
 				mapFunctions = Arrays.copyOf(functions, lastIdx + 1);
 			} else {
 				try {
-					mapScenes = Sprite.unpackAndDecode(ByteBuffer.wrap(cache.getFile(CacheFileType.SPRITE).archive("mapscene").file(0).getData()));
+					mapScenes = Sprite.unpackAndDecode(ByteBuffer.wrap(
+							cache.readNamedFile(CacheFileType.SPRITE, "mapscene", 0)));
 				} catch (Exception e) {
 					mapScenes = new Sprite[0];
 				}
