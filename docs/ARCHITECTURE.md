@@ -139,8 +139,9 @@ boundary.
   press/drag/release events into `PointerEvent`, dispatches them through
   `EditorToolController`, and renders tool overlays through `OverlayDraw`;
   `CanonicalToolPanel` provides the first constrained OSRS tool selector,
-  numeric brush settings, multi-select debug overlay toggles, and bounded
-  route/LOS/reach preview controls, while
+  numeric brush settings, core terrain/object tools, collapsed advanced terrain
+  and selection/multi-object tools, multi-select debug overlay toggles, and
+  bounded route/LOS/reach preview controls, while
   `AdaptiveToolPanel` leaves the existing legacy rail intact for compatibility
   sessions. Legacy viewports remain compatible because object picking is
   optional. `AssetBrowserPanel` forwards neutral object selections into the

@@ -1,15 +1,24 @@
 package com.rspsi.ui.workspace;
 
 import com.rspsi.editor.tool.ChangeHeightTool;
+import com.rspsi.editor.tool.AttributeSelectionTool;
+import com.rspsi.editor.tool.BoxSelectTool;
 import com.rspsi.editor.tool.DeleteObjectTool;
 import com.rspsi.editor.tool.DuplicateObjectTool;
+import com.rspsi.editor.tool.DuplicateSelectionTool;
 import com.rspsi.editor.tool.EditorTool;
 import com.rspsi.editor.tool.FlattenTerrainTool;
+import com.rspsi.editor.tool.LassoSelectTool;
 import com.rspsi.editor.tool.MoveObjectTool;
+import com.rspsi.editor.tool.MoveSelectionTool;
+import com.rspsi.editor.tool.PaintFlagsTool;
 import com.rspsi.editor.tool.PaintOverlayTool;
 import com.rspsi.editor.tool.PaintUnderlayTool;
 import com.rspsi.editor.tool.PlaceObjectTool;
+import com.rspsi.editor.tool.RampTerrainTool;
+import com.rspsi.editor.tool.ReplaceSelectionTool;
 import com.rspsi.editor.tool.RotateObjectTool;
+import com.rspsi.editor.tool.RotateSelectionTool;
 import com.rspsi.editor.tool.SmoothTerrainTool;
 import com.rspsi.editor.debug.DebugOverlayMode;
 import com.rspsi.editor.debug.DebugOverlaySettings;
@@ -20,6 +29,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Button;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.GridPane;
@@ -51,9 +61,13 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private final TextField overlay = field("Overlay", "1");
     private final TextField height = field("Height", "8");
     private final TextField flatten = field("Flatten", "0");
+    private final TextField flags = field("Flags", "0");
+    private final TextField rampStart = field("Ramp start", "0");
+    private final TextField rampEnd = field("Ramp end", "64");
     private final TextField objectId = field("Object ID", "0");
     private final TextField objectType = field("Object type", "10");
     private final TextField objectRotation = field("Object rotation", "0");
+    private final TextField replacementId = field("Replacement ID", "0");
     private final TextField startX = field("Start X", "0");
     private final TextField startY = field("Start Y", "0");
     private final TextField targetX = field("Target X", "1");
@@ -82,6 +96,12 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addTool(terrain, "Flatten", () -> new FlattenTerrainTool(parse(flatten, "flatten")), false);
         addTool(terrain, "Smooth", () -> new SmoothTerrainTool(50), false);
 
+        VBox advancedTerrain = section("More terrain");
+        addTool(advancedTerrain, "Ramp", () -> new RampTerrainTool(
+                parse(rampStart, "ramp start"), parse(rampEnd, "ramp end")), false);
+        addTool(advancedTerrain, "Paint flags", () -> new PaintFlagsTool(parse(flags, "flags")), false);
+        TitledPane advancedTerrainPane = collapsed("More terrain tools", advancedTerrain);
+
         VBox objects = section("Objects");
         addTool(objects, "Place object", () -> new PlaceObjectTool(
                 parse(objectId, "object ID"), parse(objectType, "object type"),
@@ -90,6 +110,17 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addTool(objects, "Rotate object", RotateObjectTool::new, false);
         addTool(objects, "Duplicate object", DuplicateObjectTool::new, false);
         addTool(objects, "Delete object", DeleteObjectTool::new, false);
+
+        VBox selection = section("Selection / transforms");
+        addTool(selection, "Box select", BoxSelectTool::new, false);
+        addTool(selection, "Lasso select", LassoSelectTool::new, false);
+        addTool(selection, "Select by attribute", AttributeSelectionTool::new, false);
+        addTool(selection, "Move selection", MoveSelectionTool::new, false);
+        addTool(selection, "Rotate selection", RotateSelectionTool::new, false);
+        addTool(selection, "Duplicate selection", DuplicateSelectionTool::new, false);
+        addTool(selection, "Replace selection", () -> new ReplaceSelectionTool(
+                parse(replacementId, "replacement ID")), false);
+        TitledPane selectionPane = collapsed("Selection tools", selection);
 
         VBox debug = section("Debug overlays");
         addDebug(debug, "Tile grid", DebugOverlayMode.TILE_GRID);
@@ -166,10 +197,15 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addSetting(settings, 1, "Overlay", overlay);
         addSetting(settings, 2, "Height", height);
         addSetting(settings, 3, "Flatten", flatten);
-        addSetting(settings, 4, "Object ID", objectId);
-        addSetting(settings, 5, "Object type", objectType);
-        addSetting(settings, 6, "Object rotation", objectRotation);
-        getChildren().addAll(title, status, terrain, objects, debug, preview, fragments, settings);
+        addSetting(settings, 4, "Flags", flags);
+        addSetting(settings, 5, "Ramp start", rampStart);
+        addSetting(settings, 6, "Ramp end", rampEnd);
+        addSetting(settings, 7, "Object ID", objectId);
+        addSetting(settings, 8, "Object type", objectType);
+        addSetting(settings, 9, "Object rotation", objectRotation);
+        addSetting(settings, 10, "Replacement ID", replacementId);
+        getChildren().addAll(title, status, terrain, advancedTerrainPane, objects,
+                selectionPane, debug, preview, fragments, settings);
         setViewport(null);
     }
 
@@ -199,6 +235,16 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         VBox section = new VBox(4);
         section.getChildren().add(label);
         return section;
+    }
+
+    private static TitledPane collapsed(String title, VBox content) {
+        TitledPane pane = new TitledPane(title, content);
+        pane.setExpanded(false);
+        pane.setAnimated(false);
+        pane.setMaxWidth(Double.MAX_VALUE);
+        pane.setAccessibleText(title);
+        pane.getStyleClass().add("workspace-collapsible-tools");
+        return pane;
     }
 
     private void addTool(VBox section, String label, Supplier<EditorTool> factory, boolean select) {
