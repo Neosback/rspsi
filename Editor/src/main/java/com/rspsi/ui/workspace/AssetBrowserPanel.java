@@ -10,8 +10,10 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import java.util.List;
@@ -29,6 +31,10 @@ public final class AssetBrowserPanel extends VBox {
     private final ListView<AssetDescriptor> results = new ListView<>();
     private final Label status = new Label();
     private final Label details = new Label();
+    private final Label searchLabel = new Label("Search");
+    private final StackPane filterHost = new StackPane();
+    private final HBox horizontalFilters = new HBox(8);
+    private final VBox verticalFilters = new VBox(6);
     private AssetRepository repository;
     private Consumer<AssetDescriptor> selectionListener = ignored -> { };
 
@@ -42,7 +48,6 @@ public final class AssetBrowserPanel extends VBox {
         Label title = new Label("Assets");
         title.getStyleClass().add("workspace-panel-title");
 
-        Label searchLabel = new Label("Search");
         searchLabel.setLabelFor(searchField);
         searchField.setPromptText("Name, symbolic key, or ID");
         searchField.setAccessibleText("Search assets by name, symbolic key, or numeric ID");
@@ -53,8 +58,13 @@ public final class AssetBrowserPanel extends VBox {
         category.setAccessibleText("Asset category filter");
         category.setPrefWidth(110);
 
-        HBox filters = new HBox(8, searchLabel, searchField, category);
-        filters.getStyleClass().add("workspace-asset-filters");
+        horizontalFilters.getChildren().setAll(searchLabel, searchField, category);
+        horizontalFilters.getStyleClass().add("workspace-asset-filters");
+        verticalFilters.getStyleClass().add("workspace-asset-filters");
+        filterHost.getChildren().setAll(horizontalFilters);
+        filterHost.setMinHeight(Region.USE_PREF_SIZE);
+        filterHost.widthProperty().addListener((observable, oldValue, newValue) ->
+                updateFilterLayout(newValue.doubleValue()));
 
         status.getStyleClass().add("workspace-panel-status");
         results.setPlaceholder(new Label("No matching assets."));
@@ -73,7 +83,8 @@ public final class AssetBrowserPanel extends VBox {
             selectionListener.accept(newValue);
         });
 
-        getChildren().addAll(title, filters, status, results, new Separator(), details);
+        getChildren().addAll(title, filterHost, status, results, new Separator(), details);
+        updateFilterLayout(getWidth());
         refresh();
     }
 
@@ -102,6 +113,28 @@ public final class AssetBrowserPanel extends VBox {
         if (selected != null) results.getSelectionModel().select(selected);
         status.setText(assets.size() + (assets.size() == 1 ? " asset" : " assets"));
         showDetails(results.getSelectionModel().getSelectedItem());
+    }
+
+    private void updateFilterLayout(double width) {
+        boolean narrow = width > 0 && width < 460;
+        if (narrow) {
+            if (filterHost.getChildren().size() != 1 || filterHost.getChildren().get(0) != verticalFilters) {
+                horizontalFilters.getChildren().clear();
+                verticalFilters.getChildren().setAll(searchLabel, searchField, category);
+                filterHost.getChildren().setAll(verticalFilters);
+            }
+        } else if (filterHost.getChildren().size() != 1 || filterHost.getChildren().get(0) != horizontalFilters) {
+            verticalFilters.getChildren().clear();
+            horizontalFilters.getChildren().setAll(searchLabel, searchField, category);
+            filterHost.getChildren().setAll(horizontalFilters);
+        }
+        searchField.setMaxWidth(Double.MAX_VALUE);
+        category.setMaxWidth(narrow ? Double.MAX_VALUE : 110);
+        if (narrow) {
+            VBox.setVgrow(searchField, Priority.NEVER);
+        } else {
+            HBox.setHgrow(searchField, Priority.ALWAYS);
+        }
     }
 
     private void showDetails(AssetDescriptor asset) {
