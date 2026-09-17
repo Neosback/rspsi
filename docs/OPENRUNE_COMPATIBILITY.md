@@ -83,6 +83,17 @@ path against live build 240 without mutating the source cache. It does not
 make OpenRune's file-backed cache writable, but it does establish that staged
 output is readable by the production OpenRune adapter.
 
+The explicit native `CacheDelegate` output path is also covered by the copied-
+cache integration suite. Against the captured live build-240 cache at region
+`(50,50)`, the test opened `openRuneWritable(output)`, changed terrain through
+`OsrsMapService`, flushed, closed, and reopened the output with the normal
+OpenRune reader. The edited underlay survived the reopen. The project
+composition integration additionally persisted overlay shape/rotation, tile
+flags, shared-corner heights, and object rotation through
+`OsrsStudioProject.openWithOpenRuneOutput(...)`. This proves the direct
+delegate arrangement for the currently supported map payloads; it does not
+authorize source-cache mutation or make the native writer the default backend.
+
 ## Explicit limitations
 
 The normal OpenRune filesystem implementation is read-only. `open(Path)` and
@@ -131,9 +142,11 @@ The companion `scene-geometry.json` export compares authored terrain mesh
 vertices and face topology on 4,481 populated tiles with zero differences.
 This is geometry evidence, not a claim of full lighting/material/render parity;
 the independent scene fingerprint remains a stronger optional check.
-normal OpenRune source backend remains read-only. The application continues to construct the
-legacy Displee backend by default, and the validated Displee writer is an
-explicit staged output choice rather than an OpenRune-native writer claim.
+The normal OpenRune source backend remains read-only. The application continues
+to construct the legacy Displee backend by default for the compatibility launch
+path, while OSRS projects may explicitly select either staged Displee output or
+native OpenRune `CacheDelegate` output after the source/output paths are kept
+separate.
 
 ## Next spike gate
 
@@ -142,10 +155,12 @@ load it through `CacheStoreFactory.openRune(Path)`, and compare terrain,
 objects, floors, flags, shapes, rotations, and region coordinates with the
 existing representation. Revision-6 named maps and live build-240 numeric
 maps now pass this read-only comparison. Writable output-cache reopening is
-validated through the explicit Displee adapter and the OpenRune reader. The
-current supported arrangement is therefore formally retained as
-OpenRune-read/Displee-output staging; the direct writable OpenRune delegate is
-an explicit opt-in and remains separate from the default source-cache path.
+validated through both the explicit Displee adapter and the native OpenRune
+delegate, with the OpenRune reader used for the reopen check. The current
+supported arrangements are therefore OpenRune-read/Displee-output staging and
+explicit OpenRune-read/OpenRune-output composition; both keep the source cache
+read-only and separate from the output target. The native delegate remains
+opt-in and is not the default compatibility backend.
 Definition adapters are available, but are not yet the default product
 backend. The verifier also
 compares the complete neutral derived scene after round-trip encoding; the
