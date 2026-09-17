@@ -73,6 +73,7 @@ import com.rspsi.swatches.UnderlaySwatch;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.DeleteObjectCommand;
+import com.rspsi.editor.FixUpperPlaneHeightsCommand;
 import com.rspsi.editor.PasteFragmentCommand;
 import com.rspsi.editor.io.SessionAutosaveCoordinator;
 import com.rspsi.editor.io.SessionAutosaveStore;
@@ -589,6 +590,16 @@ public class MainWindow extends Application {
 						+ "the tile height at z = 0. This may cause a few issues for some tiles you will have to fix yourself. \n\nWould you like to continue?", 
 						"Yes", "No");
 				if(result.equalsIgnoreCase("Yes")) {
+					if (controlledSession != null) {
+						if (!controlledSession.canEdit()) {
+							FXDialogs.showWarning(primaryStage, "Read-only project",
+									"The current OSRS session is read-only; no height changes were made.");
+							return;
+						}
+						controlledSession.execute(new FixUpperPlaneHeightsCommand());
+						updateHistoryMenuState();
+						return;
+					}
 					for(int plane = 1;plane<4;plane++) {
 						for(int absX = 0;absX<clientInstance.sceneGraph.width;absX++) {
 							for(int absY = 0;absY<clientInstance.sceneGraph.length;absY++) {

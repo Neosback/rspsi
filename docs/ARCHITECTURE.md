@@ -49,6 +49,10 @@ boundary.
 - `EditorCommand` is the canonical mutation contract; `EditCommand` remains a
   source-compatible alias for external callers while all built-in commands use
   the canonical interface directly.
+- The legacy “fix upper-plane heights” action now dispatches through
+  `FixUpperPlaneHeightsCommand` whenever a controlled session is present; the
+  bridge updates the existing renderer and legacy map arrays from the command,
+  while the old direct loop remains only as the no-session fallback.
 - `CommandHistory.moveTo(...)` and `EditorSession.jumpToHistory(...)` provide
   exact history navigation with one consolidated session update; failed
   forward replay rolls back commands already reapplied.
