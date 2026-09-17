@@ -186,6 +186,29 @@ RuneLite chunk packing and four rotation cases are covered by
 `InstanceChunkTemplateTest`, `InstanceChunkTransformTest`, and
 `InstanceChunkGridTest` in RSPSi.
 
+The TSPS `CollisionMap` was also exercised through the reference-only helper,
+which now writes an optional external `collision.json` snapshot. That snapshot
+is useful for inspecting client collision flags, but it is not treated as a
+strict product parity oracle: TSPS gates location collision with `clipType`
+and intentionally skips locations on its scene loading line, whereas
+OpenRune-Server maps OSRS definitions through `solid`/`blockWalk` and adds its
+routefinder layer. RSPSi preserves `clipType` in the neutral
+`ObjectCollisionView`, uses it to avoid false client-side collisions, and keeps
+the OpenRune-compatible collision map as the canonical editor representation.
+
+Provenance and evidence:
+
+- Reference path: TSPS `client/rs/scene/CollisionMap.ts` and
+  `client/rs/scene/Scene.ts` at commit `83415f76589a360eacbd0e635fe0557d06a510f0`.
+- Behavior adopted: client collision bit vocabulary, floor/decor/location
+  layers, wall direction families, and bridge-plane relinking diagnostics.
+- RSPSi replacement API: `CollisionMap`, `CollisionFlag`,
+  `OsrsCollisionBuilder`, and neutral `ObjectCollisionView`.
+- Tests: `OsrsCollisionBuilderTest`, `OpenRuneStepValidatorParityTest`, and
+  `OpenRuneCollisionSemanticsTest`; the live verifier reports the TSPS
+  collision snapshot as diagnostic until a normalized RuneLite/OpenRune
+  fixture is captured.
+
 ## Current production dependency evidence
 
 The OpenRune FileStore compatibility spike is pinned to `2.4.19` in
