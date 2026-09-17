@@ -12,6 +12,9 @@ import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.MoveObjectTool;
 import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.editor.tool.TileSnapper;
+import com.rspsi.editor.tool.MoveSelectionTool;
+import com.rspsi.editor.tool.ReplaceSelectionTool;
+import com.rspsi.editor.tool.RotateSelectionTool;
 import com.rspsi.editor.viewport.Viewport;
 import org.junit.jupiter.api.Test;
 
@@ -130,6 +133,53 @@ class CoreObjectTransformToolsTest {
         assertEquals(List.of(), world.tile(0, 4, 2).snapshot().objects());
         assertEquals(2, session.selection().current() instanceof com.rspsi.editor.selection.ObjectSetSelection set
                 ? set.objects().size() : -1);
+    }
+
+    @Test
+    void moveRotateAndReplaceSelectionUseSeparateAtomicCommands() {
+        WorldDocument world = new WorldDocument(8, 8);
+        WorldObject first = new WorldObject(12, 10, 0, 0, 1, 1);
+        WorldObject second = new WorldObject(13, 22, 1, 0, 2, 1);
+        put(world, first);
+        put(world, second);
+        EditorSession session = new EditorSession(world);
+        session.selection().selectObjects(java.util.Set.of(first, second));
+        EditorToolController controller = new EditorToolController();
+
+        controller.activate(new MoveSelectionTool(), context(session));
+        controller.pointerDown(pointer(1, 1));
+        controller.pointerDrag(pointer(3, 2));
+        controller.pointerUp(pointer(3, 2));
+
+        assertEquals(List.of(new WorldObject(12, 10, 0, 0, 3, 2)),
+                world.tile(0, 3, 2).snapshot().objects());
+        assertEquals(List.of(new WorldObject(13, 22, 1, 0, 4, 2)),
+                world.tile(0, 4, 2).snapshot().objects());
+        assertEquals(1, session.history().size());
+
+        controller.activate(new RotateSelectionTool(), context(session));
+        controller.pointerDown(pointer(3, 2));
+        assertEquals(2, session.history().size());
+        assertEquals(1, world.tile(0, 3, 2).snapshot().objects().get(0).rotation());
+
+        controller.activate(new ReplaceSelectionTool(99), context(session));
+        controller.pointerDown(pointer(3, 2));
+        assertEquals(3, session.history().size());
+        assertEquals(99, world.tile(0, 3, 2).snapshot().objects().get(0).id());
+        assertEquals(99, world.tile(0, 4, 2).snapshot().objects().get(0).id());
+
+        session.undo();
+        assertEquals(List.of(new WorldObject(12, 10, 1, 0, 3, 2)),
+                world.tile(0, 3, 2).snapshot().objects());
+        session.undo();
+        assertEquals(List.of(new WorldObject(12, 10, 0, 0, 3, 2)),
+                world.tile(0, 3, 2).snapshot().objects());
+        assertEquals(List.of(new WorldObject(13, 22, 1, 0, 4, 2)),
+                world.tile(0, 4, 2).snapshot().objects());
+        session.undo();
+        assertEquals(List.of(first), world.tile(0, 1, 1).snapshot().objects());
+        assertEquals(List.of(second), world.tile(0, 2, 1).snapshot().objects());
+        assertEquals(0, world.tile(0, 1, 1).snapshot().objects().get(0).rotation());
     }
 
     private static void put(WorldDocument world, WorldObject object) {
