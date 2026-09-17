@@ -3,12 +3,15 @@ package com.rspsi.editor;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.tool.DeleteObjectTool;
 import com.rspsi.editor.tool.PlaceObjectTool;
 import com.rspsi.editor.tool.RotateObjectTool;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.ToolContext;
+import com.rspsi.editor.viewport.Viewport;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -36,6 +39,31 @@ class CoreObjectToolsTest {
         controller.pointerDown(click);
         assertTrue(world.tile(0, 1, 1).snapshot().objects().isEmpty());
         assertEquals(3, session.history().size());
+    }
+
+    @Test
+    void deleteToolUsesObjectAwareViewportBeforeTileFallback() {
+        WorldDocument world = new WorldDocument(2, 2);
+        WorldObject first = new WorldObject(100, 10, 0, 0, 1, 1);
+        WorldObject second = new WorldObject(101, 10, 0, 0, 1, 1);
+        world.tile(0, 1, 1).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(first, second)));
+        EditorSession session = new EditorSession(world);
+        Viewport viewport = new Viewport() {
+            @Override public Optional<TileCoordinate> tileAt(float x, float y) {
+                return Optional.of(new TileCoordinate(0, 1, 1));
+            }
+
+            @Override public Optional<WorldObject> objectAt(float x, float y) {
+                return Optional.of(second);
+            }
+        };
+        EditorToolController controller = new EditorToolController();
+        controller.activate(new DeleteObjectTool(), new ToolContext(session, new EmptyAssets(), viewport));
+
+        controller.pointerDown(new PointerEvent(1, 1, PointerButton.PRIMARY, false, false, false));
+
+        assertEquals(List.of(first), world.tile(0, 1, 1).snapshot().objects());
     }
 
     private static final class EmptyAssets implements com.rspsi.editor.assets.AssetRepository {

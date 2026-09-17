@@ -29,10 +29,10 @@ public final class MoveObjectTool implements EditorTool {
         if (context == null || event.button() != PointerButton.PRIMARY) return;
         clear();
         context.viewport().tileAt(event.x(), event.y()).ifPresent(coordinate -> {
-            List<com.rspsi.editor.model.WorldObject> objects = context.session().world()
-                    .tile(coordinate).snapshot().objects();
-            if (!objects.isEmpty()) {
-                object = objects.get(0);
+            object = context.viewport().objectAt(event.x(), event.y())
+                    .orElseGet(() -> context.session().world().tile(coordinate).snapshot().objects()
+                            .stream().findFirst().orElse(null));
+            if (object != null) {
                 target = coordinate;
             }
         });

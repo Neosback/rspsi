@@ -4,6 +4,7 @@ import com.rspsi.editor.RotateObjectCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.render.OverlayDraw;
 
 import java.util.List;
@@ -16,14 +17,19 @@ public final class RotateObjectTool implements EditorTool {
     @Override public void deactivate() { context = null; }
     @Override public void pointerDown(PointerEvent event) {
         if (context == null || event.button() != PointerButton.PRIMARY) return;
-        context.viewport().tileAt(event.x(), event.y()).ifPresent(this::rotateAt);
+        context.viewport().objectAt(event.x(), event.y())
+                .or(() -> context.viewport().tileAt(event.x(), event.y()).flatMap(this::firstObject))
+                .ifPresent(this::rotate);
     }
     @Override public void pointerDrag(PointerEvent event) { }
     @Override public void pointerUp(PointerEvent event) { }
     @Override public ToolInspector inspector() { return () -> List.of(); }
     @Override public void renderOverlay(OverlayDraw draw) { }
-    private void rotateAt(TileCoordinate coordinate) {
-        context.session().world().tile(coordinate).snapshot().objects().stream().findFirst()
-                .ifPresent(object -> context.session().execute(new RotateObjectCommand(object, (object.rotation() + 1) & 3)));
+    private java.util.Optional<WorldObject> firstObject(TileCoordinate coordinate) {
+        return context.session().world().tile(coordinate).snapshot().objects().stream().findFirst();
+    }
+
+    private void rotate(WorldObject object) {
+        context.session().execute(new RotateObjectCommand(object, (object.rotation() + 1) & 3));
     }
 }

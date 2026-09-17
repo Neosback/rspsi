@@ -16,14 +16,19 @@ public final class DeleteObjectTool implements EditorTool {
     @Override public void deactivate() { context = null; }
     @Override public void pointerDown(PointerEvent event) {
         if (context == null || event.button() != PointerButton.PRIMARY) return;
-        context.viewport().tileAt(event.x(), event.y()).ifPresent(this::deleteAt);
+        context.viewport().objectAt(event.x(), event.y())
+                .or(() -> context.viewport().tileAt(event.x(), event.y()).flatMap(this::firstObject))
+                .ifPresent(this::delete);
     }
     @Override public void pointerDrag(PointerEvent event) { }
     @Override public void pointerUp(PointerEvent event) { }
     @Override public ToolInspector inspector() { return () -> List.of(); }
     @Override public void renderOverlay(OverlayDraw draw) { }
-    private void deleteAt(TileCoordinate coordinate) {
-        context.session().world().tile(coordinate).snapshot().objects().stream().findFirst()
-                .ifPresent(object -> context.session().execute(new DeleteObjectCommand(object)));
+    private java.util.Optional<com.rspsi.editor.model.WorldObject> firstObject(TileCoordinate coordinate) {
+        return context.session().world().tile(coordinate).snapshot().objects().stream().findFirst();
+    }
+
+    private void delete(com.rspsi.editor.model.WorldObject object) {
+        context.session().execute(new DeleteObjectCommand(object));
     }
 }

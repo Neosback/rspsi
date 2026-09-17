@@ -20,6 +20,7 @@ import com.rspsi.editor.render.SessionSceneController;
 import com.rspsi.editor.terrain.TerrainFace;
 import com.rspsi.editor.terrain.TerrainMesh;
 import com.rspsi.editor.terrain.TerrainVertex;
+import com.rspsi.editor.viewport.Viewport;
 import javafx.application.Platform;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -38,7 +39,7 @@ import java.util.function.Consumer;
  * It gives the controlled OSRS project workflow a real neutral scene surface
  * while the faithful legacy/GPU renderer remains a separately gated task.</p>
  */
-public final class CanonicalSceneViewport extends StackPane implements SceneRenderer, AutoCloseable {
+public final class CanonicalSceneViewport extends StackPane implements SceneRenderer, Viewport, AutoCloseable {
     private static final double TILE_PIXELS = 10.0;
 
     private final Canvas canvas = new Canvas();
@@ -145,12 +146,37 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
         return Optional.of(new PickResult(tile, plane));
     }
 
+    @Override
+    public Optional<TileCoordinate> tileAt(float x, float y) {
+        return pick(x, y).map(PickResult::tile);
+    }
+
+    @Override
+    public Optional<WorldObject> objectAt(float x, float y) {
+        if (scene == null) return Optional.empty();
+        return tileAt(x, y).flatMap(tile -> scene.renderObjects().stream()
+                .filter(renderObject -> renderObject.object().plane() == tile.plane())
+                .filter(renderObject -> contains(renderObject, tile))
+                .map(com.rspsi.editor.render.RenderObject::object)
+                .findFirst());
+    }
+
     private void pickAndSelect(double x, double y) {
         if (session == null) return;
-        pick((float) x, (float) y).ifPresent(result -> {
+        objectAt((float) x, (float) y).ifPresentOrElse(object -> {
+            session.selection().selectObject(object);
+            requestFocus();
+        }, () -> pick((float) x, (float) y).ifPresent(result -> {
             session.selection().select(result.tile());
             requestFocus();
-        });
+        }));
+    }
+
+    private static boolean contains(com.rspsi.editor.render.RenderObject renderObject,
+                                    TileCoordinate tile) {
+        WorldObject object = renderObject.object();
+        return tile.x() >= object.x() && tile.x() < object.x() + renderObject.footprintWidth()
+                && tile.y() >= object.y() && tile.y() < object.y() + renderObject.footprintLength();
     }
 
     private void notifyHover(double x, double y) {
