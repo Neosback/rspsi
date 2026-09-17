@@ -2,12 +2,16 @@ package com.rspsi.ui.workspace;
 
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.SessionStateListener;
+import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTileAddress;
+import com.rspsi.editor.model.WorldWindow;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Compact, persistent workspace state for the controlled JavaFX shell.
@@ -22,18 +26,20 @@ public final class WorkspaceStatusBar extends HBox implements AutoCloseable {
     private final Label mode = label("workspace-status-mode");
     private final Label cache = label("workspace-status-cache");
     private final Label dirty = label("workspace-status-dirty");
+    private final Label hover = label("workspace-status-hover");
     private final SessionStateListener stateListener = ignored -> refreshOnFxThread();
     private EditorSession session;
     private String contextText = "No project loaded";
     private String cacheText = "Cache: unavailable";
     private String compatibilityText = "";
+    private String hoverText = "Tile: —";
 
     public WorkspaceStatusBar() {
         setSpacing(16);
         setPadding(new Insets(6, 10, 6, 10));
         getStyleClass().add("workspace-status-bar");
         setAccessibleText("Workspace status");
-        getChildren().addAll(context, mode, cache, dirty);
+        getChildren().addAll(context, mode, cache, dirty, hover);
         clear();
     }
 
@@ -46,6 +52,7 @@ public final class WorkspaceStatusBar extends HBox implements AutoCloseable {
         this.contextText = nonBlank(contextText, "OSRS project");
         this.cacheText = nonBlank(cacheText, "Cache: unavailable");
         this.compatibilityText = compatibilityText == null ? "" : compatibilityText.trim();
+        this.hoverText = "Tile: —";
         this.session.addStateListener(stateListener);
         refresh();
     }
@@ -69,6 +76,7 @@ public final class WorkspaceStatusBar extends HBox implements AutoCloseable {
         dirty.getStyleClass().removeAll("workspace-status-dirty", "workspace-status-saved");
         dirty.getStyleClass().add(session.isDirty()
                 ? "workspace-status-dirty" : "workspace-status-saved");
+        hover.setText(hoverText);
         setAccessibleText(contextText + ". " + mode.getText() + ". " + cache.getText()
                 + ". " + dirty.getText());
     }
@@ -78,7 +86,22 @@ public final class WorkspaceStatusBar extends HBox implements AutoCloseable {
         mode.setText("Waiting for session");
         cache.setText(cacheText);
         dirty.setText("");
+        hover.setText(hoverText);
         setAccessibleText("Workspace status. " + contextText + ". Waiting for session.");
+    }
+
+    /** Updates only the non-selecting coordinate readout in the status row. */
+    public void setHover(WorldWindow window, Optional<TileCoordinate> coordinate) {
+        Objects.requireNonNull(window, "window");
+        Objects.requireNonNull(coordinate, "coordinate");
+        hoverText = coordinate.map(tile -> {
+            WorldTileAddress address = WorldTileAddress.of(window.worldX(tile),
+                    window.worldY(tile), tile.plane());
+            return String.format("Tile p%d local %d,%d · world %d,%d · region %d · chunk %d,%d",
+                    tile.plane(), tile.x(), tile.y(), address.worldX(), address.worldY(),
+                    address.regionId(), address.chunkX(), address.chunkY());
+        }).orElse("Tile: —");
+        if (session != null) refreshOnFxThread();
     }
 
     private void refreshOnFxThread() {

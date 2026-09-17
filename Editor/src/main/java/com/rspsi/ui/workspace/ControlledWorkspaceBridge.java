@@ -140,6 +140,9 @@ public final class ControlledWorkspaceBridge {
             }
             if (shell.panelNode("inspector") instanceof SessionInspectorPanel inspector) {
                 viewport.canonicalViewport().setHoverListener(hover -> {
+                    if (shell.statusBar() instanceof WorkspaceStatusBar status) {
+                        status.setHover(window, hover);
+                    }
                     if (hover.isEmpty() || session.selection().current() != null) {
                         if (hover.isEmpty()) inspector.refresh();
                         return;

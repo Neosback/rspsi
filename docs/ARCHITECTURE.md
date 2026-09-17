@@ -308,7 +308,9 @@ the controlled workflow and its manual coverage continue to be migrated.
 bottom tabs. It reports the active OSRS region/project context, cache revision,
 editable versus read-only state, compatibility issues, and saved/dirty state.
 It observes only `EditorSession` state and is intentionally not a cache or
-renderer status channel. Preset changes detach and remount the row safely, so
+renderer status channel. Its coordinate readout accepts neutral hover data and
+shows local, world, region, and chunk coordinates without changing selection.
+Preset changes detach and remount the row safely, so
 the fixed workspace can change without losing session state.
 
 `ControlledWorkspaceBridge.bindSession(...)` is the shared frontend binding

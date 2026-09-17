@@ -50,6 +50,8 @@ For the opt-in OSRS project workflow:
       and status panels are populated.
 - [ ] Click a terrain tile in the canonical preview and confirm the neutral
       selection and inspector update to the selected plane/tile.
+- [ ] Hover adjacent tiles and confirm the status row updates local, world,
+      region, and chunk coordinates without changing the current selection.
 - [ ] In the canonical tool rail, enter valid local start/target coordinates,
       run Route, LOS, and Reach previews, and confirm the viewport shows the
       result plus a readable success/blocked status. Select an object before
