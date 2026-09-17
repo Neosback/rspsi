@@ -128,6 +128,38 @@ class LegacyMapDocumentBridgeTest {
     }
 
     @Test
+    void synchronizesCanonicalObjectDeletionBackToTheLegacyScene() {
+        MapRegion region = new MapRegion(null, 3, 3);
+        SceneGraph scene = new SceneGraph(3, 3, 4);
+        SceneTile tile = new SceneTile(1, 1, 0);
+        ObjectKey key = new ObjectKey(1, 1, 100, 0, 2, true, false);
+        Wall wall = new Wall(key, 1, 1, 0);
+        wall.setPlane(0);
+        tile.wall = wall;
+        scene.tiles[0][1][1] = tile;
+
+        WorldDocument document = LegacyMapDocumentBridge.importDocument(region, scene);
+        EditorSession session = new EditorSession(document);
+        AtomicInteger refreshes = new AtomicInteger();
+        LegacyMapDocumentBridge bridge = new LegacyMapDocumentBridge(region, scene,
+                refreshes::incrementAndGet);
+        bridge.attach(session);
+
+        TileCoordinate coordinate = new TileCoordinate(0, 1, 1);
+        TileSnapshot before = document.tile(coordinate).snapshot();
+        TileSnapshot after = new TileSnapshot(before.southWestHeight(), before.southEastHeight(),
+                before.northEastHeight(), before.northWestHeight(), before.underlayId(),
+                before.overlayId(), before.overlayShape(), before.overlayRotation(),
+                before.flags(), java.util.List.of());
+
+        session.execute(new SetTileCommand(coordinate, before, after, "delete object"));
+
+        assertTrue(scene.tiles[0][1][1].getExistingObjects().isEmpty());
+        assertEquals(1, refreshes.get());
+        bridge.close();
+    }
+
+    @Test
     void invalidChangedTilesAreIgnoredWithoutRefresh() {
         MapRegion region = new MapRegion(null, 2, 2);
         WorldDocument document = LegacyMapDocumentBridge.importTerrain(region);
