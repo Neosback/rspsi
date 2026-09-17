@@ -256,6 +256,11 @@ boundary.
 - `MinimapParity` compares neutral ARGB rasters with exact mismatch counts and
   bounded pixel samples. It is the corresponding fixture seam for visual
   minimap comparisons and does not assume a particular frontend image type.
+- `OsrsParityFixture` is the external fixture adapter for the verifier. It
+  validates optional region/revision/cache identity properties, loads PNG
+  minimap references by plane, and leaves the fixture directory outside the
+  repository. `RSPSI_OSRS_PARITY_FIXTURE` enables those comparisons; without it
+  the verifier reports parity as `NOT_RUN` rather than inventing an oracle.
 - `MinimapBuilder` produces a deterministic ARGB raster from canonical tiles
   and neutral floor definitions. It includes an explicit blocked-tile color,
   optional cardinal underlay blending, and deterministic missing-definition

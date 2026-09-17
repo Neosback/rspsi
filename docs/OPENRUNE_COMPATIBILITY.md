@@ -143,3 +143,13 @@ one region, also set `RSPSI_OSRS_REGION_X`, `RSPSI_OSRS_REGION_Y`, and
 revision profile, map/location payloads, neutral definition loading,
 validation, collision construction, and semantic decode/encode/decode equality
 as explicit PASS/FAIL/NOT_RUN checks. It does not write the supplied cache.
+
+An external parity directory can be supplied with
+`RSPSI_OSRS_PARITY_FIXTURE=/path/to/fixture` alongside the selected-region
+arguments. Its optional `fixture.properties` may identify `region.x`,
+`region.y`, `revision`, `cache.fingerprint`, and `scene.fingerprint`. PNGs named
+`minimap-plane-N.png` and `minimap-shaped-plane-N.png` are compared through the
+neutral minimap parity service. Identity mismatches fail the gate; missing
+fixture data remains visible as `WARN`/`NOT_RUN`. This keeps RuneLite/TSPS
+captures and generated images outside the repository while making their
+provenance-controlled acceptance path executable.

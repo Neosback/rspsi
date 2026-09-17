@@ -16,6 +16,7 @@ import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.minimap.MinimapBuilder;
 import com.rspsi.editor.minimap.MinimapImage;
+import com.rspsi.editor.minimap.MinimapParity;
 import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.RenderSceneBuilder;
 import com.rspsi.editor.render.RenderSceneFingerprint;
@@ -24,9 +25,12 @@ import com.rspsi.editor.render.RenderWindowSceneBuilder;
 import com.rspsi.editor.validation.ValidationIssue;
 import com.rspsi.editor.validation.WorldValidator;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Explicit real-cache verification entry point. It is never run against an
@@ -44,7 +48,8 @@ public final class OsrsRevisionVerifier {
         Path path = Path.of(args[0]);
         VerificationReport report = args.length == 1
                 ? inspectIndex(path)
-                : inspectRegion(path, Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]));
+                : inspectRegion(path, Integer.parseInt(args[1]), Integer.parseInt(args[2]),
+                Integer.parseInt(args[3]), parityFixturePath());
         report.lines().forEach(System.out::println);
         if (!report.errors().isEmpty()) System.exit(1);
     }
@@ -68,6 +73,16 @@ public final class OsrsRevisionVerifier {
     }
 
     public static VerificationReport inspectRegion(Path path, int regionX, int regionY, int revision) {
+        return inspectRegion(path, regionX, regionY, revision, parityFixturePath());
+    }
+
+    /**
+     * Inspects a region and optionally compares it with an external fixture.
+     * The fixture path is explicit so normal verification never reads an
+     * implicit cache or silently picks up local reference data.
+     */
+    public static VerificationReport inspectRegion(Path path, int regionX, int regionY, int revision,
+                                                   Path parityFixturePath) {
         List<String> messages = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         try (OpenRuneCacheStore store = OpenRuneCacheStore.open(path)) {
@@ -155,12 +170,16 @@ public final class OsrsRevisionVerifier {
             boolean minimapComplete = true;
             int minimapPixels = 0;
             int shapedMinimapPixels = 0;
+            Map<Integer, MinimapImage> minimaps = new LinkedHashMap<>();
+            Map<Integer, MinimapImage> shapedMinimaps = new LinkedHashMap<>();
             for (int plane = 0; plane < document.planes(); plane++) {
                 MinimapImage minimap = new MinimapBuilder().build(document, plane, definitions);
+                minimaps.put(plane, minimap);
                 minimapComplete &= minimap.width() == document.width()
                         && minimap.height() == document.length();
                 minimapPixels += minimap.width() * minimap.height();
                 MinimapImage shapedMinimap = new MinimapBuilder().buildShaped(document, plane, definitions);
+                shapedMinimaps.put(plane, shapedMinimap);
                 minimapComplete &= shapedMinimap.width() == document.width() * 4
                         && shapedMinimap.height() == document.length() * 4;
                 shapedMinimapPixels += shapedMinimap.width() * shapedMinimap.height();
@@ -175,6 +194,32 @@ public final class OsrsRevisionVerifier {
             boolean equal = semanticallyEqual(document, roundTrip);
             messages.add("decode-encode-decode semantic equality: " + equal);
             if (!equal) errors.add("semantic round-trip mismatch");
+
+            OsrsParityFixture fixture = null;
+            List<String> fixtureProblems = new ArrayList<>();
+            if (parityFixturePath != null) {
+                try {
+                    fixture = OsrsParityFixture.load(parityFixturePath);
+                    fixtureProblems.addAll(fixture.compatibilityProblems(regionX, regionY,
+                            revision, metadata.fingerprint()));
+                    if (!fixtureProblems.isEmpty()) {
+                        errors.addAll(fixtureProblems);
+                    }
+                    messages.add("parity fixture: " + parityFixturePath);
+                } catch (IOException | RuntimeException exception) {
+                    fixtureProblems.add("could not load parity fixture: " + exception.getMessage());
+                    errors.addAll(fixtureProblems);
+                }
+            }
+            VerificationCheck renderParity = renderParityCheck(fixture, fixtureProblems, sceneFingerprint);
+            VerificationCheck minimapParity = minimapParityCheck(fixture, fixtureProblems,
+                    minimaps, shapedMinimaps, messages, errors);
+            if (renderParity.status() == VerificationCheck.Status.FAIL) {
+                errors.add("render parity failed: " + renderParity.detail());
+            }
+            if (minimapParity.status() == VerificationCheck.Status.FAIL) {
+                errors.add("minimap parity failed: " + minimapParity.detail());
+            }
             if (issueErrors > 0) errors.add("world validation reported errors");
             if (revisionAudit.stream().anyMatch(check -> check.status() == VerificationCheck.Status.FAIL)) {
                 errors.add("revision audit reported incompatible cache assumptions");
@@ -252,10 +297,8 @@ public final class OsrsRevisionVerifier {
                                     "locations included in canonical semantic comparison: " + equal),
                             check("semantic.roundtrip", equal ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
                                     "decode -> encode -> decode semantic equality: " + equal),
-                            check("render.parity", VerificationCheck.Status.NOT_RUN,
-                                    "RuneLite/TSPS render fixtures are not bundled"),
-                            check("minimap.parity", VerificationCheck.Status.NOT_RUN,
-                                    "minimap comparison fixture is not bundled"))));
+                            renderParity,
+                            minimapParity)));
         } catch (RuntimeException exception) {
             errors.add(exception.getClass().getSimpleName() + ": " + exception.getMessage());
             return new VerificationReport(path, regionX, regionY, revision, 0,
@@ -268,6 +311,87 @@ public final class OsrsRevisionVerifier {
 
     private static VerificationCheck check(String id, VerificationCheck.Status status, String detail) {
         return new VerificationCheck(id, status, detail);
+    }
+
+    private static VerificationCheck renderParityCheck(OsrsParityFixture fixture,
+                                                       List<String> fixtureProblems,
+                                                       String actualFingerprint) {
+        if (fixture == null && fixtureProblems.isEmpty()) {
+            return check("render.parity", VerificationCheck.Status.NOT_RUN,
+                    "RuneLite/TSPS render fixture directory was not supplied");
+        }
+        if (!fixtureProblems.isEmpty()) {
+            return check("render.parity", VerificationCheck.Status.FAIL,
+                    "fixture is incompatible or could not be loaded");
+        }
+        if (fixture.sceneFingerprint() == null) {
+            return check("render.parity", VerificationCheck.Status.WARN,
+                    "fixture has no scene.fingerprint value");
+        }
+        boolean matches = fixture.sceneFingerprint().equals(actualFingerprint);
+        return check("render.parity", matches ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
+                matches ? "neutral scene fingerprint matches fixture"
+                        : "neutral scene fingerprint differs; expected=" + fixture.sceneFingerprint()
+                        + ", actual=" + actualFingerprint);
+    }
+
+    private static VerificationCheck minimapParityCheck(OsrsParityFixture fixture,
+                                                        List<String> fixtureProblems,
+                                                        Map<Integer, MinimapImage> actualMinimaps,
+                                                        Map<Integer, MinimapImage> actualShapedMinimaps,
+                                                        List<String> messages,
+                                                        List<String> errors) {
+        if (fixture == null && fixtureProblems.isEmpty()) {
+            return check("minimap.parity", VerificationCheck.Status.NOT_RUN,
+                    "minimap fixture directory was not supplied");
+        }
+        if (!fixtureProblems.isEmpty()) {
+            return check("minimap.parity", VerificationCheck.Status.FAIL,
+                    "fixture is incompatible or could not be loaded");
+        }
+        if (!fixture.hasMinimapImages()) {
+            return check("minimap.parity", VerificationCheck.Status.WARN,
+                    "fixture contains no minimap PNGs");
+        }
+
+        int compared = 0;
+        int differingPixels = 0;
+        int missingImages = 0;
+        for (Map.Entry<Integer, MinimapImage> entry : fixture.minimaps().entrySet()) {
+            MinimapImage actual = actualMinimaps.get(entry.getKey());
+            if (actual == null) {
+                missingImages++;
+                errors.add("fixture references missing semantic minimap plane " + entry.getKey());
+                continue;
+            }
+            MinimapParity.Report report = MinimapParity.compare(entry.getValue(), actual);
+            compared++;
+            differingPixels += report.differingPixels();
+            messages.add("minimap parity plane " + entry.getKey() + ": " + report.differingPixels()
+                    + " differing pixels");
+        }
+        for (Map.Entry<Integer, MinimapImage> entry : fixture.shapedMinimaps().entrySet()) {
+            MinimapImage actual = actualShapedMinimaps.get(entry.getKey());
+            if (actual == null) {
+                missingImages++;
+                errors.add("fixture references missing shaped minimap plane " + entry.getKey());
+                continue;
+            }
+            MinimapParity.Report report = MinimapParity.compare(entry.getValue(), actual);
+            compared++;
+            differingPixels += report.differingPixels();
+            messages.add("shaped minimap parity plane " + entry.getKey() + ": "
+                    + report.differingPixels() + " differing pixels");
+        }
+        boolean matches = compared > 0 && differingPixels == 0 && missingImages == 0;
+        return check("minimap.parity", matches ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
+                compared + " fixture images compared; " + differingPixels
+                        + " differing pixels" + (missingImages == 0 ? "" : ", " + missingImages + " missing"));
+    }
+
+    private static Path parityFixturePath() {
+        String value = System.getenv("RSPSI_OSRS_PARITY_FIXTURE");
+        return value == null || value.isBlank() ? null : Path.of(value);
     }
 
     private static List<VerificationCheck> concatChecks(List<VerificationCheck> prefix,
