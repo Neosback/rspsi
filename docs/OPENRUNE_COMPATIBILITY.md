@@ -84,7 +84,10 @@ output is readable by the production OpenRune adapter.
 ## Explicit limitations
 
 The normal OpenRune filesystem implementation is read-only. `open(Path)` and
-`write` therefore remain read-only by default. An explicit
+`write` therefore remain read-only by default. Project identity fingerprints
+are computed from non-empty index IDs and reference-table CRCs, which are
+canonical across OpenRune's read-only `FileCache` and writable `CacheDelegate`.
+An explicit
 `openWritable(Path)` adapter is now available through OpenRune's
 `CacheDelegate`; it uses the FileStore `Cache` contract while writing an
 explicitly selected output cache through OpenRune's published writable

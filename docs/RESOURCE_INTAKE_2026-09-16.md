@@ -220,8 +220,10 @@ terrain edit through `openRuneWritable` and reopened through the read-only
 OpenRune adapter.
 
 This is a verified seam, not completion of the entire cache migration. The
-legacy renderer and native OpenRune writer remain explicitly quarantined or
-deferred until their own parity gates pass.
+legacy renderer and native FileStore writer remain explicitly quarantined or
+deferred until their own parity gates pass; the separate published
+`CacheDelegate` output path is covered by the focused live-cache integration
+evidence.
 
 ## Additional research checkouts captured
 

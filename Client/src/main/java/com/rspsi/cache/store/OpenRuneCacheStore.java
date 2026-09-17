@@ -12,7 +12,9 @@ import com.rspsi.editor.assets.SymbolicNameProvider;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -71,14 +73,21 @@ public final class OpenRuneCacheStore implements CacheStore {
         return new DefinitionAssetRepository(definitionProvider(revision), symbolicNameProvider());
     }
 
-    /** Returns a stable identity derived from the cache's reference-table versions. */
+    /**
+     * Returns a stable identity derived from canonical index IDs and CRCs.
+     *
+     * <p>OpenRune's read-only {@code FileCache} and writable {@code CacheDelegate}
+     * expose different raw version-table encodings. Index IDs and reference
+     * table CRCs are the common representation, so using them avoids falsely
+     * treating the same cache as a different project when switching adapters.</p>
+     */
     @Override
     public java.util.Optional<OsrsCacheMetadata> metadata(int revision) {
         if (revision <= 0) {
             throw new IllegalArgumentException("OSRS cache revision must be positive");
         }
         return java.util.Optional.of(new OsrsCacheMetadata(revision, null,
-                fingerprint(cache.getVersionTable())));
+                fingerprint(cache)));
     }
 
     @Override
@@ -135,14 +144,39 @@ public final class OpenRuneCacheStore implements CacheStore {
         cache.close();
     }
 
-    private static String fingerprint(byte[] bytes) {
+    private static String fingerprint(Cache cache) {
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes.clone());
-            StringBuilder result = new StringBuilder(digest.length * 2);
-            for (byte value : digest) result.append(String.format("%02x", value & 0xFF));
+            int[] indices = Arrays.stream(cache.indices())
+                    .filter(index -> cache.archives(index).length > 0)
+                    .toArray();
+            Arrays.sort(indices);
+            byte[] versionTable = cache.getVersionTable();
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            ByteBuffer entry = ByteBuffer.allocate(Integer.BYTES * 2);
+            for (int index : indices) {
+                entry.clear();
+                entry.putInt(index).putInt(canonicalCrc(cache, versionTable, index)).flip();
+                digest.update(entry);
+            }
+            byte[] hash = digest.digest();
+            StringBuilder result = new StringBuilder(hash.length * 2);
+            for (byte value : hash) result.append(String.format("%02x", value & 0xFF));
             return result.toString();
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("JVM does not provide SHA-256", exception);
         }
+    }
+
+    private static int canonicalCrc(Cache cache, byte[] versionTable, int index) {
+        // FileCache exposes the raw reference-table bytes but its crc(index)
+        // method is intentionally unimplemented. CacheDelegate exposes the
+        // same value through its Displee delegate, so keep this conversion
+        // local to the adapter and never leak either representation outward.
+        int offset = 5 + index * 8;
+        if (!(cache instanceof CacheDelegate)
+                && index >= 0 && offset >= 5 && offset + Integer.BYTES <= versionTable.length) {
+            return ByteBuffer.wrap(versionTable, offset, Integer.BYTES).getInt();
+        }
+        return cache.crc(index);
     }
 }
