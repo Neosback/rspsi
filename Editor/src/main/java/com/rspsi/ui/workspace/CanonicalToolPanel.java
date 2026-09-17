@@ -33,6 +33,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
+import javafx.css.PseudoClass;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -52,6 +53,7 @@ import java.util.function.Supplier;
  * objects owned by the viewport and editor core.
  */
 public final class CanonicalToolPanel extends VBox implements AutoCloseable {
+    private static final PseudoClass INVALID = PseudoClass.getPseudoClass("invalid");
     private final ToggleGroup group = new ToggleGroup();
     private final List<ToggleButton> toolButtons = new ArrayList<>();
     private final List<CheckBox> debugButtons = new ArrayList<>();
@@ -424,8 +426,11 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
 
     private static int parse(TextField field, String name) {
         try {
-            return Integer.parseInt(field.getText().trim());
+            int value = Integer.parseInt(field.getText().trim());
+            field.pseudoClassStateChanged(INVALID, false);
+            return value;
         } catch (NumberFormatException exception) {
+            field.pseudoClassStateChanged(INVALID, true);
             throw new IllegalArgumentException("Invalid " + name);
         }
     }

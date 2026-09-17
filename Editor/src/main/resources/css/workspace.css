@@ -153,3 +153,9 @@
     -fx-text-fill: #f8fafc;
     -fx-font-size: 12px;
 }
+
+.canonical-tool-panel .text-field:invalid,
+.canonical-tool-panel .combo-box:invalid {
+    -fx-border-color: #fca5a5;
+    -fx-border-width: 2px;
+}
