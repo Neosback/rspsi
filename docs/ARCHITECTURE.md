@@ -177,6 +177,10 @@ boundary.
   keeps missing definitions explicit and exposes canonical category/shape
   names, animation, transforms, contouring, and replacement metadata without
   coupling an inspector to Displee, OpenRune, JavaFX, or ImGui.
+- `SessionInspectorPanel` caches the neutral collision map for its bound
+  session and rebuilds it only after document/provider changes; hover
+  inspection therefore reads collision snapshots without rebuilding the
+  entire map for every pointer event.
 - `ObjectAppearanceView` is optional neutral object model metadata: animation,
   ground contouring, scale/translation, recolor, and retexture pairs. Legacy
   and OpenRune adapters may provide it independently of collision data; an

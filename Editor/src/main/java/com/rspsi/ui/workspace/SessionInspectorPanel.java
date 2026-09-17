@@ -38,12 +38,13 @@ import java.util.Objects;
 public final class SessionInspectorPanel extends VBox implements AutoCloseable {
     private final Label status = new Label();
     private final GridPane values = new GridPane();
-    private final SessionChangeListener changeListener = ignored -> refreshOnFxThread();
+    private final SessionChangeListener changeListener = ignored -> changed();
     private final SessionStateListener stateListener = ignored -> refreshOnFxThread();
     private final SelectionChangeListener selectionListener = ignored -> refreshOnFxThread();
     private EditorSession session;
     private WorldWindow window;
     private DefinitionProvider definitions;
+    private CollisionMap collision;
 
     public SessionInspectorPanel() {
         this(null);
@@ -67,6 +68,7 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
     /** Replaces the neutral definition source used for object details. */
     public void setDefinitionProvider(DefinitionProvider definitions) {
         this.definitions = definitions;
+        rebuildCollision();
         refresh();
     }
 
@@ -78,6 +80,7 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
         }
         this.session = Objects.requireNonNull(session, "session");
         this.window = Objects.requireNonNull(window, "window");
+        rebuildCollision();
         this.session.addChangeListener(changeListener);
         this.session.addStateListener(stateListener);
         this.session.selection().addChangeListener(selectionListener);
@@ -134,9 +137,6 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
         row("Flags", String.format("0x%02X", snapshot.rawFlags()));
         row("Bridge", snapshot.bridge() ? "Yes" : "No");
         row("Roof flag", snapshot.roofRelated() ? "Present" : "Absent");
-        CollisionMap collision = definitions == null
-                ? OsrsCollisionBuilder.fromTerrain(session.world())
-                : OsrsCollisionBuilder.fromTerrainAndObjects(session.world(), definitions);
         CollisionTileSnapshot collisionTile = CollisionTileSnapshot.from(collision, coordinate);
         row("Movement blocked", directions(collisionTile.movementBlocked()));
         row("Route blocked", directions(collisionTile.routeBlocked()));
@@ -205,6 +205,21 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
         }
     }
 
+    private void changed() {
+        rebuildCollision();
+        refreshOnFxThread();
+    }
+
+    private void rebuildCollision() {
+        if (session == null) {
+            collision = null;
+            return;
+        }
+        collision = definitions == null
+                ? OsrsCollisionBuilder.fromTerrain(session.world())
+                : OsrsCollisionBuilder.fromTerrainAndObjects(session.world(), definitions);
+    }
+
     private void row(String name, String value) {
         int row = values.getRowCount();
         Label key = new Label(name);
@@ -229,5 +244,6 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
             session.selection().removeChangeListener(selectionListener);
             session = null;
         }
+        collision = null;
     }
 }
