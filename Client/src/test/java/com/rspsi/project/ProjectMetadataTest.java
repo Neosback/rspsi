@@ -31,4 +31,17 @@ class ProjectMetadataTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new OsrsCacheMetadata(0, null, "cache"));
     }
+
+    @Test
+    void futureMetadataFormatFailsClosed() throws Exception {
+        Path file = Files.createTempFile("rspsi-future-project", ".json");
+        Files.writeString(file, """
+                {"formatVersion":2,"game":"oldschool","cacheRevision":240,
+                 "cacheSubRevision":null,"cacheFingerprint":"cache"}
+                """);
+
+        Exception error = assertThrows(java.io.IOException.class,
+                () -> ProjectMetadataStore.read(file));
+        assertTrue(error.getMessage().contains("newer than the supported format"));
+    }
 }

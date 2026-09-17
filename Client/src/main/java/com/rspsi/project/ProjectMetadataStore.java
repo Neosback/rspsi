@@ -45,6 +45,11 @@ public final class ProjectMetadataStore {
         if (metadata == null) {
             throw new IOException("Project metadata is empty: " + path);
         }
+        if (metadata.formatVersion() > ProjectMetadata.CURRENT_FORMAT_VERSION) {
+            throw new IOException("Project metadata format " + metadata.formatVersion()
+                    + " is newer than the supported format "
+                    + ProjectMetadata.CURRENT_FORMAT_VERSION + ": " + path);
+        }
         return metadata;
     }
 }
