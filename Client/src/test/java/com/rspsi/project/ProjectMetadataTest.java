@@ -19,6 +19,7 @@ class ProjectMetadataTest {
         ProjectMetadataStore.write(file, metadata);
 
         assertEquals(metadata, ProjectMetadataStore.read(file));
+        assertTrue(Files.readString(file).contains("\"game\": \"oldschool\""));
         assertTrue(metadata.matches(CACHE));
         assertFalse(metadata.matches(new OsrsCacheMetadata(241, 0, "sha256:new")));
     }
