@@ -51,9 +51,11 @@ interchange format for tooling. That interchange export is not a claim that
 OSRS caches use a legacy binary map-index file internally.
 
 `OpenRuneDefinitionProvider` similarly decodes objects, underlays, overlays,
-textures, and lazy model metadata with OpenRune codecs, then exposes only
-RSPSi-owned definition views. Full model geometry remains outside the provider
-until a neutral mesh representation is validated.
+textures, map-scene sprites, and lazy model metadata with OpenRune codecs, then
+exposes only RSPSi-owned definition views. Map-scene discovery first reads the
+OSRS graphics-defaults group and falls back to the named `mapscene` archive in
+the sprite index for DAT2-style caches. Full model geometry remains outside the
+provider until a neutral mesh representation is validated.
 
 `OpenRuneSymbolicNameProvider` adapts already-loaded RSCM/GameVal reverse
 mappings into the neutral `SymbolicNameProvider`. It is optional, does not
@@ -173,7 +175,12 @@ An external parity directory can be supplied with
 `RSPSI_OSRS_PARITY_FIXTURE=/path/to/fixture` alongside the selected-region
 arguments. Its optional `fixture.properties` may identify `region.x`,
 `region.y`, `revision`, `cache.fingerprint`, and `scene.fingerprint`. An
-optional `terrain-semantics.json` file is a TSPS-exported, independent
+optional `minimap.mapScenes=true` property declares that the PNG captures
+include cache-backed map-scene sprites. Without it, shaped PNG comparison uses
+the terrain/wall baseline while normal product minimap construction still
+composes available sprites. This keeps older independent captures from being
+mistaken for full asset-render parity. An optional `terrain-semantics.json`
+file is a TSPS-exported, independent
 64x64x4 semantic snapshot containing flattened heights, underlays, overlays,
 shapes, rotations, and flags. The repository includes the reference-only
 export helper at

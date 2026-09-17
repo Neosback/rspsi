@@ -243,7 +243,7 @@ public final class OsrsRevisionVerifier {
             VerificationCheck collisionParity = collisionParityCheck(fixture, fixtureProblems,
                     collision, messages);
             VerificationCheck minimapParity = minimapParityCheck(fixture, fixtureProblems,
-                    minimaps, shapedMinimaps, messages, errors);
+                    document, definitions, minimaps, shapedMinimaps, messages, errors);
             if (renderParity.status() == VerificationCheck.Status.FAIL) {
                 errors.add("render parity failed: " + renderParity.detail());
             }
@@ -511,6 +511,8 @@ public final class OsrsRevisionVerifier {
 
     private static VerificationCheck minimapParityCheck(OsrsParityFixture fixture,
                                                         List<String> fixtureProblems,
+                                                        WorldDocument document,
+                                                        DefinitionProvider definitions,
                                                         Map<Integer, MinimapImage> actualMinimaps,
                                                         Map<Integer, MinimapImage> actualShapedMinimaps,
                                                         List<String> messages,
@@ -531,6 +533,17 @@ public final class OsrsRevisionVerifier {
         int compared = 0;
         int differingPixels = 0;
         int missingImages = 0;
+        Map<Integer, MinimapImage> comparisonShapedMinimaps = actualShapedMinimaps;
+        if (!fixture.mapSceneSprites() && !fixture.shapedMinimaps().isEmpty()) {
+            comparisonShapedMinimaps = new LinkedHashMap<>();
+            MinimapBuilder builder = new MinimapBuilder();
+            DefinitionProvider terrainOnlyDefinitions = withoutMapScenes(definitions);
+            for (int plane = 0; plane < document.planes(); plane++) {
+                comparisonShapedMinimaps.put(plane,
+                        builder.buildShaped(document, plane, terrainOnlyDefinitions));
+            }
+            messages.add("minimap parity: map-scene sprites excluded; fixture does not declare minimap.mapScenes=true");
+        }
         for (Map.Entry<Integer, MinimapImage> entry : fixture.minimaps().entrySet()) {
             MinimapImage actual = actualMinimaps.get(entry.getKey());
             if (actual == null) {
@@ -547,7 +560,7 @@ public final class OsrsRevisionVerifier {
                     + report.actualHeight() + ")" + sampleDifferences(report));
         }
         for (Map.Entry<Integer, MinimapImage> entry : fixture.shapedMinimaps().entrySet()) {
-            MinimapImage actual = actualShapedMinimaps.get(entry.getKey());
+            MinimapImage actual = comparisonShapedMinimaps.get(entry.getKey());
             if (actual == null) {
                 missingImages++;
                 errors.add("fixture references missing shaped minimap plane " + entry.getKey());
@@ -566,6 +579,30 @@ public final class OsrsRevisionVerifier {
         return check("minimap.parity", matches ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
                 compared + " fixture images compared; " + differingPixels
                         + " differing pixels" + (missingImages == 0 ? "" : ", " + missingImages + " missing"));
+    }
+
+    private static DefinitionProvider withoutMapScenes(DefinitionProvider delegate) {
+        return new DefinitionProvider() {
+            @Override
+            public java.util.Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) {
+                return delegate.object(id);
+            }
+
+            @Override
+            public java.util.Optional<com.rspsi.cache.definition.FloorDefinitionView> underlay(int id) {
+                return delegate.underlay(id);
+            }
+
+            @Override
+            public java.util.Optional<com.rspsi.cache.definition.FloorDefinitionView> overlay(int id) {
+                return delegate.overlay(id);
+            }
+
+            @Override
+            public java.util.Optional<com.rspsi.cache.definition.TextureDefinitionView> texture(int id) {
+                return delegate.texture(id);
+            }
+        };
     }
 
     private static String sampleDifferences(MinimapParity.Report report) {

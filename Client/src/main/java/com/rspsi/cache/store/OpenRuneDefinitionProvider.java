@@ -139,14 +139,19 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
 
     /**
      * Loads the graphics-defaults map-scene group when the cache exposes it.
-     * The current OpenRune sprite decoder enumerates the sprite index, so
-     * this remains an opt-in adapter surface until a targeted group decoder
-     * can be used without eagerly decoding unrelated sprite archives.
+     * Some DAT2-style caches do not expose a usable graphics-defaults file;
+     * OpenRune-Editor handles those through the named {@code mapscene}
+     * archive in the OSRS sprite index, so keep that fallback inside this
+     * adapter rather than making minimap/editor code understand either cache
+     * layout.
      */
     private static Map<Integer, MapSceneSpriteView> loadMapScenes(Cache cache) {
         try {
             byte[] defaults = cache.data(17, 3, 0, null);
             int group = graphicsDefaultMapSceneGroup(defaults);
+            if (group < 0) {
+                group = cache.archiveId(8, "mapscene");
+            }
             if (group < 0) return Map.of();
             Map<Integer, SpriteType> spriteGroups = new HashMap<>();
             new SpriteDecoder().load(cache, spriteGroups);

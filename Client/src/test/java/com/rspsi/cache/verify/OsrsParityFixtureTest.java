@@ -22,6 +22,7 @@ class OsrsParityFixtureTest {
                 revision=240
                 cache.fingerprint=cache-a
                 scene.fingerprint=scene-a
+                minimap.mapScenes=true
                 """);
         writePng(directory.resolve("minimap-plane-0.png"), 2, 1, 0xFF102030);
         writePng(directory.resolve("minimap-shaped-plane-1.png"), 4, 4, 0xFFA0B0C0);
@@ -32,6 +33,7 @@ class OsrsParityFixtureTest {
         assertEquals(33, fixture.regionY());
         assertEquals(240, fixture.revision());
         assertEquals("scene-a", fixture.sceneFingerprint());
+        assertTrue(fixture.mapSceneSprites());
         assertEquals(2, fixture.minimaps().get(0).width());
         assertEquals(0xFF102030, fixture.minimaps().get(0).pixel(0, 0));
         assertEquals(4, fixture.shapedMinimaps().get(1).height());

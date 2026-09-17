@@ -33,6 +33,7 @@ public record OsrsParityFixture(
         Integer revision,
         String cacheFingerprint,
         String sceneFingerprint,
+        boolean mapSceneSprites,
         OsrsTerrainSemanticFixture terrainSemantics,
         OsrsLocationSemanticFixture locations,
         OsrsSceneGeometryFixture sceneGeometry,
@@ -127,6 +128,7 @@ public record OsrsParityFixture(
                 integerProperty(properties, "revision"),
                 optionalProperty(properties, "cache.fingerprint"),
                 optionalProperty(properties, "scene.fingerprint"),
+                booleanProperty(properties, "minimap.mapScenes", false),
                 terrainSemantics,
                 locations,
                 sceneGeometry,
@@ -178,6 +180,14 @@ public record OsrsParityFixture(
     private static String optionalProperty(Properties properties, String key) {
         String value = properties.getProperty(key);
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static boolean booleanProperty(Properties properties, String key, boolean defaultValue) {
+        String value = optionalProperty(properties, key);
+        if (value == null) return defaultValue;
+        if (value.equalsIgnoreCase("true")) return true;
+        if (value.equalsIgnoreCase("false")) return false;
+        throw new IllegalArgumentException("Fixture property " + key + " must be true or false");
     }
 
     private static Map<Integer, MinimapImage> immutableImages(Map<Integer, MinimapImage> images) {
