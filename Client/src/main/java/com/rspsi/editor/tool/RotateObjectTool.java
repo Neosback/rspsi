@@ -12,6 +12,13 @@ import java.util.List;
 /** Rotates the first object owned by the clicked tile clockwise. */
 public final class RotateObjectTool implements EditorTool {
     private ToolContext context;
+    private int quarterTurns = 1;
+
+    public int quarterTurns() { return quarterTurns; }
+    public void setQuarterTurns(int quarterTurns) {
+        this.quarterTurns = Math.floorMod(quarterTurns, 4);
+    }
+
     @Override public String id() { return "rotate-object"; }
     @Override public void activate(ToolContext context) { this.context = context; }
     @Override public void deactivate() { context = null; }
@@ -23,13 +30,16 @@ public final class RotateObjectTool implements EditorTool {
     }
     @Override public void pointerDrag(PointerEvent event) { }
     @Override public void pointerUp(PointerEvent event) { }
-    @Override public ToolInspector inspector() { return () -> List.of(); }
+    @Override public ToolInspector inspector() { return () -> List.of(
+            new PropertyDescriptor("quarterTurns", "Quarter turns", PropertyDescriptor.ValueType.INTEGER, 0, 3)); }
     @Override public void renderOverlay(OverlayDraw draw) { }
     private java.util.Optional<WorldObject> firstObject(TileCoordinate coordinate) {
         return context.session().world().tile(coordinate).snapshot().objects().stream().findFirst();
     }
 
     private void rotate(WorldObject object) {
-        context.session().execute(new RotateObjectCommand(object, (object.rotation() + 1) & 3));
+        if (quarterTurns != 0) {
+            context.session().execute(new RotateObjectCommand(object, (object.rotation() + quarterTurns) & 3));
+        }
     }
 }

@@ -14,6 +14,7 @@ import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.editor.tool.TileSnapper;
 import com.rspsi.editor.tool.MoveSelectionTool;
 import com.rspsi.editor.tool.ReplaceSelectionTool;
+import com.rspsi.editor.tool.RotateObjectTool;
 import com.rspsi.editor.tool.RotateSelectionTool;
 import com.rspsi.editor.viewport.Viewport;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,26 @@ class CoreObjectTransformToolsTest {
                 world.tile(0, 1, 1).snapshot().objects());
         session.undo();
         assertEquals(List.of(), world.tile(0, 1, 1).snapshot().objects());
+    }
+
+    @Test
+    void rotateObjectToolUsesConfiguredQuarterTurnsAndZeroIsNoOp() {
+        WorldDocument world = new WorldDocument(4, 4);
+        WorldObject object = new WorldObject(12, 10, 0, 0, 0, 0);
+        put(world, object);
+        EditorSession session = new EditorSession(world);
+        RotateObjectTool tool = new RotateObjectTool();
+        tool.setQuarterTurns(2);
+        EditorToolController controller = new EditorToolController();
+        controller.activate(tool, context(session));
+        controller.pointerDown(pointer(0, 0));
+
+        assertEquals(2, world.tile(0, 0, 0).snapshot().objects().get(0).rotation());
+        assertEquals(1, session.history().size());
+
+        tool.setQuarterTurns(0);
+        controller.pointerDown(pointer(0, 0));
+        assertEquals(1, session.history().size());
     }
 
     @Test
