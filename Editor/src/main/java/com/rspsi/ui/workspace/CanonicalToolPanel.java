@@ -28,6 +28,7 @@ import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleButton;
@@ -60,6 +61,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private final TextField underlay = field("Underlay", "1");
     private final TextField overlay = field("Overlay", "1");
     private final TextField height = field("Height", "8");
+    private final TextField heightRadius = field("Height radius", "0");
     private final TextField flatten = field("Flatten", "0");
     private final TextField flags = field("Flags", "0");
     private final TextField rampStart = field("Ramp start", "0");
@@ -72,6 +74,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private final TextField startY = field("Start Y", "0");
     private final TextField targetX = field("Target X", "1");
     private final TextField targetY = field("Target Y", "0");
+    private final ComboBox<ChangeHeightTool.Falloff> heightFalloff = new ComboBox<>();
     private final Label previewStatus = new Label("No preview");
     private final Label fragmentStatus = new Label("Select tiles, then copy");
     private CanonicalSceneViewport viewport;
@@ -82,6 +85,10 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         setMinWidth(148);
         getStyleClass().addAll("workspace-panel", "canonical-tool-panel");
         setAccessibleText("OSRS editing tools");
+        heightFalloff.getItems().setAll(ChangeHeightTool.Falloff.values());
+        heightFalloff.getSelectionModel().select(ChangeHeightTool.Falloff.NONE);
+        heightFalloff.setAccessibleText("Height brush falloff");
+        heightFalloff.setMaxWidth(Double.MAX_VALUE);
 
         Label title = new Label("OSRS Tools");
         title.getStyleClass().add("workspace-panel-title");
@@ -91,8 +98,8 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addTool(terrain, "Select", () -> null, true);
         addTool(terrain, "Paint underlay", () -> new PaintUnderlayTool(parse(underlay, "underlay")), false);
         addTool(terrain, "Paint overlay", () -> new PaintOverlayTool(parse(overlay, "overlay")), false);
-        addTool(terrain, "Raise", () -> new ChangeHeightTool(parse(height, "height")), false);
-        addTool(terrain, "Lower", () -> new ChangeHeightTool(-parse(height, "height")), false);
+        addTool(terrain, "Raise", () -> changeHeightTool(parse(height, "height")), false);
+        addTool(terrain, "Lower", () -> changeHeightTool(-parse(height, "height")), false);
         addTool(terrain, "Flatten", () -> new FlattenTerrainTool(parse(flatten, "flatten")), false);
         addTool(terrain, "Smooth", () -> new SmoothTerrainTool(50), false);
 
@@ -196,14 +203,16 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addSetting(settings, 0, "Underlay", underlay);
         addSetting(settings, 1, "Overlay", overlay);
         addSetting(settings, 2, "Height", height);
-        addSetting(settings, 3, "Flatten", flatten);
-        addSetting(settings, 4, "Flags", flags);
-        addSetting(settings, 5, "Ramp start", rampStart);
-        addSetting(settings, 6, "Ramp end", rampEnd);
-        addSetting(settings, 7, "Object ID", objectId);
-        addSetting(settings, 8, "Object type", objectType);
-        addSetting(settings, 9, "Object rotation", objectRotation);
-        addSetting(settings, 10, "Replacement ID", replacementId);
+        addSetting(settings, 3, "Height radius", heightRadius);
+        addSetting(settings, 4, "Height falloff", heightFalloff);
+        addSetting(settings, 5, "Flatten", flatten);
+        addSetting(settings, 6, "Flags", flags);
+        addSetting(settings, 7, "Ramp start", rampStart);
+        addSetting(settings, 8, "Ramp end", rampEnd);
+        addSetting(settings, 9, "Object ID", objectId);
+        addSetting(settings, 10, "Object type", objectType);
+        addSetting(settings, 11, "Object rotation", objectRotation);
+        addSetting(settings, 12, "Replacement ID", replacementId);
         getChildren().addAll(title, status, terrain, advancedTerrainPane, objects,
                 selectionPane, debug, preview, fragments, settings);
         setViewport(null);
@@ -271,6 +280,13 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
             }
         });
         section.getChildren().add(button);
+    }
+
+    private ChangeHeightTool changeHeightTool(int delta) {
+        ChangeHeightTool tool = new ChangeHeightTool(delta);
+        tool.setRadius(parse(heightRadius, "height radius"));
+        tool.setFalloff(heightFalloff.getValue());
+        return tool;
     }
 
     private void addDebug(VBox section, String label, DebugOverlayMode mode) {
@@ -356,7 +372,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         return field;
     }
 
-    private static void addSetting(GridPane grid, int row, String label, TextField field) {
+    private static void addSetting(GridPane grid, int row, String label, javafx.scene.control.Control field) {
         Label text = new Label(label);
         text.setLabelFor(field);
         text.getStyleClass().add("workspace-property-key");
