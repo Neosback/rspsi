@@ -172,6 +172,10 @@ boundary.
   limited to the legacy facade, old renderer/definition decoders, and explicit
   cache adapters. Any new product code that imports Displee or OpenRune must
   first establish an intentional adapter boundary.
+- The raw `Cache` escape hatches (`getIndexedFileSystem`, `writegetFile`, and
+  `createArchive`) are explicitly deprecated. They remain only so the current
+  compatibility client can be retired after OSRS parity, not as extension
+  points for new editor features.
 - `CacheStore` reads and writes use defensive byte-array ownership at each
   concrete backend. Decoders can therefore inspect or transform returned data
   without mutating a live cache buffer or a pending output write.

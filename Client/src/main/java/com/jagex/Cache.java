@@ -49,8 +49,19 @@ public class Cache {
     private BiFunction<Integer, Integer, Optional<byte[]>> mapRetrieverOverride;
 
 
-    @Getter
     private CacheLibrary indexedFileSystem;
+
+    /**
+     * Legacy-only escape hatch for the old renderer/cache loaders.
+     *
+     * <p>New editor code must use {@link #getStore()} and neutral cache
+     * views. This method remains source-compatible while the compatibility
+     * client is being retired.</p>
+     */
+    @Deprecated
+    public final CacheLibrary getIndexedFileSystem() {
+        return indexedFileSystem;
+    }
 
     /**
      * Byte-oriented cache boundary for code that must not depend on Displee.
@@ -291,6 +302,8 @@ public class Cache {
     }
 
 
+    /** Legacy write accessor retained for compatibility loaders only. */
+    @Deprecated
     public final File writegetFile(CacheFileType index, String name, int file, byte[] data) {
         try {
             switch (index) {
@@ -323,6 +336,8 @@ public class Cache {
         return null;
     }
 
+    /** Legacy named-archive accessor retained for compatibility rendering only. */
+    @Deprecated
     public final Archive createArchive(int file, String name) {
         return configArchive.archive(file);
     }
