@@ -51,6 +51,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private final TextField flatten = field("Flatten", "0");
     private final TextField objectId = field("Object ID", "0");
     private final TextField objectType = field("Object type", "10");
+    private final TextField objectRotation = field("Object rotation", "0");
     private final TextField startX = field("Start X", "0");
     private final TextField startY = field("Start Y", "0");
     private final TextField targetX = field("Target X", "1");
@@ -80,7 +81,8 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
 
         VBox objects = section("Objects");
         addTool(objects, "Place object", () -> new PlaceObjectTool(
-                parse(objectId, "object ID"), parse(objectType, "object type"), 0), false);
+                parse(objectId, "object ID"), parse(objectType, "object type"),
+                parse(objectRotation, "object rotation")), false);
         addTool(objects, "Move object", MoveObjectTool::new, false);
         addTool(objects, "Rotate object", RotateObjectTool::new, false);
         addTool(objects, "Duplicate object", DuplicateObjectTool::new, false);
@@ -127,6 +129,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         addSetting(settings, 3, "Flatten", flatten);
         addSetting(settings, 4, "Object ID", objectId);
         addSetting(settings, 5, "Object type", objectType);
+        addSetting(settings, 6, "Object rotation", objectRotation);
         getChildren().addAll(title, status, terrain, objects, debug, preview, settings);
         setViewport(null);
     }
