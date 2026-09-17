@@ -20,20 +20,33 @@ import java.util.ArrayList;
  */
 public final class OsrsProjectSessionLoader {
     private final CacheStore store;
+    private final CacheStore identityStore;
     private final OsrsSessionLoader sessions;
     private final ProjectMetadata project;
     private final int revision;
 
     public OsrsProjectSessionLoader(CacheStore store, OsrsMapService maps,
                                     ProjectMetadata project) {
+        this(store, store, maps, project);
+    }
+
+    /**
+     * Creates a loader with a separate identity source for staged/direct
+     * output projects. Map reads and writes use {@code store}; compatibility
+     * is assessed against the stable source cache represented by
+     * {@code identityStore}.
+     */
+    public OsrsProjectSessionLoader(CacheStore store, CacheStore identityStore,
+                                    OsrsMapService maps, ProjectMetadata project) {
         this.store = Objects.requireNonNull(store, "store");
+        this.identityStore = Objects.requireNonNull(identityStore, "identityStore");
         this.sessions = new OsrsSessionLoader(Objects.requireNonNull(maps, "maps"));
         this.project = Objects.requireNonNull(project, "project");
         this.revision = project.cacheRevision();
     }
 
     public OpenedProject load(int regionX, int regionY) {
-        Optional<OsrsCacheMetadata> cache = store.metadata(revision);
+        Optional<OsrsCacheMetadata> cache = identityStore.metadata(revision);
         ProjectCompatibility compatibility = cache
                 .map(value -> ProjectCompatibility.assess(project, value))
                 .orElseGet(() -> new ProjectCompatibility(true,

@@ -165,7 +165,10 @@ boundary.
   This is an incremental boundary, not a claim that all legacy loaders have
   already migrated.
 - `CacheStore.metadata(revision)` is an optional neutral identity capability;
-  project compatibility can compare revision, subrevision, and fingerprint
+  project compatibility can compare revision, subrevision, and fingerprint.
+  A project using a separate output cache assesses identity against its stable
+  source cache while map reads/writes use the output layer, so saving does not
+  make the same project falsely incompatible on its next open
   without depending on an OpenRune store class. Legacy stores may leave it
   unavailable.
 - `LayeredCacheStore` keeps base-cache reads separate from staged output-layer

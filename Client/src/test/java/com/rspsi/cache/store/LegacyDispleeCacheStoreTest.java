@@ -20,6 +20,7 @@ import java.util.Comparator;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Optional integration coverage for the writable Displee output adapter.
@@ -150,7 +151,7 @@ class LegacyDispleeCacheStoreTest {
 
             int expected;
             try (OsrsStudioProject studio = OsrsStudioProject.openWithOpenRuneOutput(
-                source, output, project)) {
+                    source, output, project)) {
                 var opened = studio.openRegion(regionX, regionY);
                 var session = opened.region().session();
                 var tile = session.world().tile(0, 1, 1);
@@ -165,6 +166,16 @@ class LegacyDispleeCacheStoreTest {
                 session.save();
                 assertEquals(expected, tile.snapshot().underlayId());
                 assertEquals(0, session.history().position() - session.savedHistoryPosition());
+            }
+
+            // The output cache's content fingerprint changes after the save,
+            // but the project remains authored against the unchanged source
+            // cache and must reopen as editable.
+            try (OsrsStudioProject reopenedProject = OsrsStudioProject.openWithOpenRuneOutput(
+                    source, output, project)) {
+                var reopened = reopenedProject.openRegion(regionX, regionY);
+                assertFalse(reopened.readOnly());
+                assertEquals(CacheWriteMode.DIRECT, reopened.writeMode());
             }
 
             try (CacheStore reopenedStore = CacheStoreFactory.openRune(output)) {

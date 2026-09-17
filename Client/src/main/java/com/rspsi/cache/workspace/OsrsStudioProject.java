@@ -29,6 +29,7 @@ import java.util.Optional;
  */
 public final class OsrsStudioProject implements AutoCloseable {
     private final CacheStore store;
+    private final CacheStore identityStore;
     private final AutoCloseable definitionStore;
     private final ProjectMetadata project;
     private final OsrsMapService maps;
@@ -81,25 +82,33 @@ public final class OsrsStudioProject implements AutoCloseable {
     public OsrsStudioProject(CacheStore store, OsrsMapService maps,
                              DefinitionProvider definitions, AssetRepository assets,
                              ProjectMetadata project) {
-        this(store, null, maps, definitions, assets, project);
+        this(store, store, null, maps, definitions, assets, project);
     }
 
     private OsrsStudioProject(CacheStore store, AutoCloseable definitionStore,
                               OsrsMapService maps, DefinitionProvider definitions, AssetRepository assets,
                               ProjectMetadata project) {
+        this(store, store, definitionStore, maps, definitions, assets, project);
+    }
+
+    private OsrsStudioProject(CacheStore store, CacheStore identityStore,
+                              AutoCloseable definitionStore, OsrsMapService maps,
+                              DefinitionProvider definitions, AssetRepository assets,
+                              ProjectMetadata project) {
         this.store = Objects.requireNonNull(store, "store");
+        this.identityStore = Objects.requireNonNull(identityStore, "identityStore");
         this.definitionStore = definitionStore;
         this.definitions = Objects.requireNonNull(definitions, "definitions");
         this.assets = Objects.requireNonNull(assets, "assets");
         this.project = Objects.requireNonNull(project, "project");
         this.maps = Objects.requireNonNull(maps, "maps");
-        this.sessions = new OsrsProjectSessionLoader(store, maps, project);
+        this.sessions = new OsrsProjectSessionLoader(store, identityStore, maps, project);
     }
 
     private OsrsStudioProject(CacheStore store, AutoCloseable definitionStore,
                               DefinitionProvider definitions, AssetRepository assets,
                               ProjectMetadata project) {
-        this(store, definitionStore, new OsrsMapService(store, project.cacheRevision()),
+        this(store, store, definitionStore, new OsrsMapService(store, project.cacheRevision()),
                 definitions, assets, project);
     }
 
@@ -145,7 +154,7 @@ public final class OsrsStudioProject implements AutoCloseable {
             DefinitionProvider definitions = definitionsBase.definitionProvider(project.cacheRevision());
             AssetRepository assets = new DefinitionAssetRepository(definitions,
                     definitionsBase.symbolicNameProvider());
-            return new OsrsStudioProject(outputStore, definitionsBase,
+            return new OsrsStudioProject(outputStore, definitionsBase, definitionsBase,
                     new OsrsMapService(outputStore, project.cacheRevision()),
                     definitions, assets, project);
         } catch (RuntimeException exception) {
@@ -175,7 +184,7 @@ public final class OsrsStudioProject implements AutoCloseable {
             DefinitionProvider definitions = definitionsBase.definitionProvider(project.cacheRevision());
             AssetRepository assets = new DefinitionAssetRepository(definitions,
                     definitionsBase.symbolicNameProvider());
-            return new OsrsStudioProject(outputStore, definitionsBase,
+            return new OsrsStudioProject(outputStore, definitionsBase, definitionsBase,
                     new OsrsMapService(outputStore, project.cacheRevision()),
                     definitions, assets, project);
         } catch (RuntimeException exception) {
@@ -210,7 +219,7 @@ public final class OsrsStudioProject implements AutoCloseable {
     }
 
     public Optional<OsrsCacheMetadata> cacheIdentity() {
-        return store.metadata(project.cacheRevision());
+        return identityStore.metadata(project.cacheRevision());
     }
 
     public DefinitionProvider definitions() {
