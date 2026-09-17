@@ -1,5 +1,6 @@
 package com.rspsi.ui.workspace;
 
+import com.rspsi.editor.assets.AssetDescriptor;
 import javafx.scene.Node;
 import javafx.scene.layout.StackPane;
 
@@ -24,6 +25,11 @@ public final class AdaptiveToolPanel extends StackPane implements AutoCloseable 
     public void showLegacy() {
         canonical.close();
         getChildren().setAll(legacy);
+    }
+
+    /** Passes a neutral asset selection to the canonical tool rail when mounted. */
+    public void setObjectAsset(AssetDescriptor asset) {
+        canonical.setObjectAsset(asset);
     }
 
     @Override

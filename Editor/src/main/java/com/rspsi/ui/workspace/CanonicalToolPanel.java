@@ -14,6 +14,7 @@ import com.rspsi.editor.tool.SmoothTerrainTool;
 import com.rspsi.editor.debug.DebugOverlayMode;
 import com.rspsi.editor.debug.DebugOverlaySettings;
 import com.rspsi.editor.collision.RoutePreviewMode;
+import com.rspsi.editor.assets.AssetDescriptor;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.control.CheckBox;
@@ -133,6 +134,14 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     public void bind(CanonicalSceneViewport viewport) {
         setViewport(Objects.requireNonNull(viewport, "viewport"));
         status.setText("Select a tool");
+    }
+
+    /** Configures the place-object tool from a neutral asset-browser result. */
+    public void setObjectAsset(AssetDescriptor asset) {
+        Objects.requireNonNull(asset, "asset");
+        if (!"object".equalsIgnoreCase(asset.type())) return;
+        objectId.setText(Integer.toString(asset.id()));
+        status.setText("Object selected: " + asset.name() + " (" + asset.id() + ")");
     }
 
     private void setViewport(CanonicalSceneViewport viewport) {

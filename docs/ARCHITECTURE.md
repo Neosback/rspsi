@@ -134,7 +134,9 @@ boundary.
   route/LOS/reach preview controls, while
   `AdaptiveToolPanel` leaves the existing legacy rail intact for compatibility
   sessions. Legacy viewports remain compatible because object picking is
-  optional.
+  optional. `AssetBrowserPanel` forwards neutral object selections into the
+  canonical placement settings, so the browser can configure placement
+  without exposing cache or definition types to a tool.
 - `SceneRenderer` consumes neutral scenes and changes and returns neutral pick
   results.
 - Cache and definitions are accessed through RSPSi interfaces, never raw

@@ -54,12 +54,15 @@ public final class ControlledWorkspaceBridge {
         controller.getLegacyViewport().setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         controller.getLegacyInspector().setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
 
+        AdaptiveToolPanel tools = new AdaptiveToolPanel(controller.getLegacyToolRail());
+        AssetBrowserPanel browser = assets == null ? null : new AssetBrowserPanel(assets);
+        if (browser != null) {
+            browser.onAssetSelected(tools::setObjectAsset);
+        }
         Map<String, Node> panels = new LinkedHashMap<>();
-        panels.put("tools", new AdaptiveToolPanel(controller.getLegacyToolRail()));
+        panels.put("tools", tools);
         panels.put("viewport", new ControlledViewportPanel(controller.getLegacyViewport()));
-        panels.put("assets", assets == null
-                ? controller.getLegacyInspector()
-                : new AssetBrowserPanel(assets));
+        panels.put("assets", browser == null ? controller.getLegacyInspector() : browser);
         panels.put("inspector", new SessionInspectorPanel(new LegacyDefinitionProvider()));
         panels.put("history", new SessionHistoryPanel());
         panels.put("validation", new ValidationPanel());
@@ -131,6 +134,9 @@ public final class ControlledWorkspaceBridge {
             viewport.showCanonical(session, window, definitions, assets);
             if (shell.panelNode("tools") instanceof AdaptiveToolPanel tools) {
                 tools.showCanonical(viewport.canonicalViewport());
+                if (shell.panelNode("assets") instanceof AssetBrowserPanel browser) {
+                    browser.selectedAsset().ifPresent(tools::setObjectAsset);
+                }
             }
             if (shell.panelNode("inspector") instanceof SessionInspectorPanel inspector) {
                 viewport.canonicalViewport().setHoverListener(hover -> {
