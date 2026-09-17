@@ -193,8 +193,9 @@ strict product parity oracle: TSPS gates location collision with `clipType`
 and intentionally skips locations on its scene loading line, whereas
 OpenRune-Server maps OSRS definitions through `solid`/`blockWalk` and adds its
 routefinder layer. RSPSi preserves `clipType` in the neutral
-`ObjectCollisionView`, uses it to avoid false client-side collisions, and keeps
-the OpenRune-compatible collision map as the canonical editor representation.
+`ObjectCollisionView` for client-scene diagnostics, while the canonical editor
+collision builder follows OpenRune's `solid`/`blockWalk` mapping and keeps the
+routefinder layer authoritative.
 
 Provenance and evidence:
 

@@ -164,8 +164,11 @@ public final class OsrsCollisionBuilder {
             return;
         }
         int plane = resolvedPlane(document, object.plane(), object.x(), object.y());
-        if (plane < 0 || plane >= document.planes() || definition.clipType() == 0
-                || definition.blockWalk() == 0) {
+        // Canonical editor collision follows OpenRune-Server's ObjectServer
+        // mapping: solid/blockWalk controls movement collision. The neutral
+        // clipType is retained for client-scene diagnostics and must not
+        // change the server/routefinder collision layer.
+        if (plane < 0 || plane >= document.planes() || definition.blockWalk() == 0) {
             return;
         }
         int width = definition.width();

@@ -82,9 +82,9 @@ class OsrsCollisionBuilderTest {
     }
 
     @Test
-    void doesNotCollideForAnObjectWithZeroClipType() {
+    void keepsOpenRuneCollisionWhenClientClipTypeDiffers() {
         WorldDocument document = new WorldDocument(4, 4, 1);
-        WorldObject object = new WorldObject(44, 0, 0, 0, 1, 1);
+        WorldObject object = new WorldObject(44, 10, 0, 0, 1, 1);
         document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0, 0, 0, 0, 0, 0,
                 java.util.List.of(object)));
         DefinitionProvider definitions = new DefinitionProvider() {
@@ -98,7 +98,8 @@ class OsrsCollisionBuilderTest {
 
         CollisionMap collision = OsrsCollisionBuilder.fromTerrainAndObjects(document, definitions);
 
-        assertEquals(0, collision.flags(0, 1, 1));
+        assertEquals(CollisionFlag.LOC | CollisionFlag.LOC_PROJECTILE,
+                collision.flags(0, 1, 1));
     }
 
     @Test
