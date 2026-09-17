@@ -20,6 +20,7 @@ import com.rspsi.editor.minimap.MinimapParity;
 import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.RenderSceneBuilder;
 import com.rspsi.editor.render.RenderSceneFingerprint;
+import com.rspsi.editor.render.RenderSceneParity;
 import com.rspsi.editor.render.RenderWindowScene;
 import com.rspsi.editor.render.RenderWindowSceneBuilder;
 import com.rspsi.editor.validation.ValidationIssue;
@@ -192,8 +193,17 @@ public final class OsrsRevisionVerifier {
             WorldDocument roundTrip = OsrsRegionDecoder.decode(encodedTerrain, encodedLocations,
                     regionX, regionY, profile.newTerrainFormat());
             boolean equal = semanticallyEqual(document, roundTrip);
+            RenderScene roundTripScene = new RenderSceneBuilder(definitions).build(roundTrip);
+            RenderSceneParity.Report sceneRoundTripReport = RenderSceneParity.compare(scene, roundTripScene);
+            boolean sceneRoundTripEqual = sceneRoundTripReport.matches();
             messages.add("decode-encode-decode semantic equality: " + equal);
+            messages.add("neutral scene round-trip equality: " + sceneRoundTripEqual
+                    + " (" + sceneRoundTripReport.differenceCount() + " differences)");
             if (!equal) errors.add("semantic round-trip mismatch");
+            if (!sceneRoundTripEqual) {
+                errors.add("neutral scene round-trip mismatch: "
+                        + sceneRoundTripReport.differenceCount() + " differences");
+            }
 
             OsrsParityFixture fixture = null;
             List<String> fixtureProblems = new ArrayList<>();
@@ -297,6 +307,10 @@ public final class OsrsRevisionVerifier {
                                     "locations included in canonical semantic comparison: " + equal),
                             check("semantic.roundtrip", equal ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
                                     "decode -> encode -> decode semantic equality: " + equal),
+                            check("scene.roundtrip", sceneRoundTripEqual
+                                            ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
+                                    "neutral scene equality after round trip: " + sceneRoundTripEqual
+                                            + " (" + sceneRoundTripReport.differenceCount() + " differences)"),
                             renderParity,
                             minimapParity)));
         } catch (RuntimeException exception) {

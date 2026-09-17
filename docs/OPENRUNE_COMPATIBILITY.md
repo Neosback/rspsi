@@ -125,7 +125,10 @@ validated through the explicit Displee adapter and the OpenRune reader. The
 current supported arrangement is therefore formally retained as
 OpenRune-read/Displee-output staging; a native OpenRune writer remains future
 work and is not required to enable the safe staged path. Definition adapters
-are available, but are not yet the default product backend.
+are available, but are not yet the default product backend. The verifier also
+compares the complete neutral derived scene after round-trip encoding; the
+bridge-heavy build-240 fixture currently passes that check with zero
+differences.
 
 ## Explicit verification
 
