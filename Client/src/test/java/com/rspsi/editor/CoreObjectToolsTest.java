@@ -66,6 +66,28 @@ class CoreObjectToolsTest {
         assertEquals(List.of(first), world.tile(0, 1, 1).snapshot().objects());
     }
 
+    @Test
+    void groupedObjectDeletionIsOneUndoableSessionEdit() {
+        WorldDocument world = new WorldDocument(3, 3);
+        WorldObject first = new WorldObject(100, 10, 0, 0, 0, 0);
+        WorldObject second = new WorldObject(101, 10, 1, 0, 2, 2);
+        world.tile(0, 0, 0).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(first)));
+        world.tile(0, 2, 2).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(second)));
+        EditorSession session = new EditorSession(world);
+
+        session.execute(new CompositeEditCommand("Delete selected objects", List.of(
+                new DeleteObjectCommand(first), new DeleteObjectCommand(second))));
+
+        assertTrue(world.tile(0, 0, 0).snapshot().objects().isEmpty());
+        assertTrue(world.tile(0, 2, 2).snapshot().objects().isEmpty());
+        assertEquals(1, session.history().size());
+        assertTrue(session.undo());
+        assertEquals(List.of(first), world.tile(0, 0, 0).snapshot().objects());
+        assertEquals(List.of(second), world.tile(0, 2, 2).snapshot().objects());
+    }
+
     private static final class EmptyAssets implements com.rspsi.editor.assets.AssetRepository {
         @Override public List<com.rspsi.editor.assets.AssetDescriptor> search(String query) { return List.of(); }
         @Override public Optional<com.rspsi.editor.assets.AssetDescriptor> get(int id, String type) { return Optional.empty(); }
