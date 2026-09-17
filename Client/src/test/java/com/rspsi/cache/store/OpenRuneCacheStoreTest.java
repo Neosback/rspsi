@@ -18,6 +18,9 @@ class OpenRuneCacheStoreTest {
         cache.values.put("5:123:0", new byte[]{1, 2, 3});
 
         try (CacheStore store = new OpenRuneCacheStore(cache)) {
+            byte[] firstRead = store.read(5, 123, 0);
+            assertArrayEquals(new byte[]{1, 2, 3}, firstRead);
+            firstRead[0] = 99;
             assertArrayEquals(new byte[]{1, 2, 3}, store.read(5, 123, 0));
             assertNull(store.read(5, 999, 0));
         }

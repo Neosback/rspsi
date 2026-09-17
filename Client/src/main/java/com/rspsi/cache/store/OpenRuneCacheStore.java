@@ -65,7 +65,8 @@ public final class OpenRuneCacheStore implements CacheStore {
 
     @Override
     public byte[] read(int index, int archive, int file) {
-        return cache.data(index, archive, file, null);
+        byte[] data = cache.data(index, archive, file, null);
+        return data == null ? null : data.clone();
     }
 
     @Override

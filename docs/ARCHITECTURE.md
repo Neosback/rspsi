@@ -150,6 +150,9 @@ boundary.
   `CacheArchiveView` plus `CacheStore.fileIds(...)` contract. The legacy store
   and OpenRune store provide the same archive/file view, while old renderer
   classes that still need Displee archive objects remain explicitly quarantined.
+- `CacheStore` reads and writes use defensive byte-array ownership at each
+  concrete backend. Decoders can therefore inspect or transform returned data
+  without mutating a live cache buffer or a pending output write.
 - Neutral replacement maps are sorted before publication so record snapshots
   and `RenderSceneFingerprint` values remain reproducible across separate cache
   openings.

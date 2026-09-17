@@ -13,6 +13,10 @@ import java.util.Optional;
  */
 public interface CacheStore extends AutoCloseable {
 
+    /**
+     * Reads a file as an owned byte array. Implementations must not return a
+     * mutable array backed by their cache library.
+     */
     byte[] read(int index, int archive, int file);
 
     /**
@@ -33,6 +37,7 @@ public interface CacheStore extends AutoCloseable {
         return new int[0];
     }
 
+    /** Writes a file without retaining the caller's mutable array. */
     void write(int index, int archive, int file, byte[] data);
 
     void flush();

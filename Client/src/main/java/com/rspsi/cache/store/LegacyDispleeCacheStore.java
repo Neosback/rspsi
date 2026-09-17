@@ -25,7 +25,8 @@ public final class LegacyDispleeCacheStore implements CacheStore {
                     || cacheIndex.archive(archive).file(file) == null) {
                 return null;
             }
-            return cacheIndex.archive(archive).file(file).getData();
+            byte[] data = cacheIndex.archive(archive).file(file).getData();
+            return data == null ? null : data.clone();
         } catch (RuntimeException ignored) {
             return null;
         }
@@ -66,7 +67,7 @@ public final class LegacyDispleeCacheStore implements CacheStore {
     @Override
     public void write(int index, int archive, int file, byte[] data) {
         Objects.requireNonNull(data, "data");
-        library.index(index).archive(archive).add(file, data);
+        library.index(index).archive(archive).add(file, data.clone());
     }
 
     @Override
