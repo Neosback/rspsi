@@ -55,7 +55,7 @@ public final class ControlledWorkspaceBridge {
         controller.getLegacyInspector().setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
 
         Map<String, Node> panels = new LinkedHashMap<>();
-        panels.put("tools", controller.getLegacyToolRail());
+        panels.put("tools", new AdaptiveToolPanel(controller.getLegacyToolRail()));
         panels.put("viewport", new ControlledViewportPanel(controller.getLegacyViewport()));
         panels.put("assets", assets == null
                 ? controller.getLegacyInspector()
@@ -90,6 +90,9 @@ public final class ControlledWorkspaceBridge {
         Objects.requireNonNull(window, "window");
         if (shell.panelNode("history") instanceof SessionHistoryPanel history) {
             history.bind(session);
+        }
+        if (shell.panelNode("tools") instanceof AdaptiveToolPanel tools) {
+            tools.showLegacy();
         }
         if (shell.panelNode("inspector") instanceof SessionInspectorPanel inspector) {
             inspector.setDefinitionProvider(definitions);
@@ -126,6 +129,9 @@ public final class ControlledWorkspaceBridge {
         }
         if (shell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
             viewport.showCanonical(session, window, definitions, assets);
+            if (shell.panelNode("tools") instanceof AdaptiveToolPanel tools) {
+                tools.showCanonical(viewport.canonicalViewport());
+            }
             if (shell.panelNode("inspector") instanceof SessionInspectorPanel inspector) {
                 viewport.canonicalViewport().setHoverListener(hover -> {
                     if (hover.isEmpty() || session.selection().current() != null) {

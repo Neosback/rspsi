@@ -101,6 +101,34 @@
     -fx-font-weight: bold;
 }
 
+.canonical-tool-panel .toggle-button {
+    -fx-background-color: #24324a;
+    -fx-text-fill: #e2e8f0;
+    -fx-alignment: center-left;
+    -fx-padding: 6px 8px;
+}
+
+.canonical-tool-panel .toggle-button:hover {
+    -fx-background-color: #334766;
+}
+
+.canonical-tool-panel .toggle-button:selected {
+    -fx-background-color: #2563eb;
+    -fx-text-fill: #ffffff;
+}
+
+.canonical-tool-panel .toggle-button:focused {
+    -fx-border-color: #93c5fd;
+    -fx-border-width: 2px;
+}
+
+.workspace-tool-section {
+    -fx-text-fill: #94a3b8;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 6px 0 1px 0;
+}
+
 .workspace-panel-status {
     -fx-text-fill: #cbd5e1;
     -fx-font-size: 12px;

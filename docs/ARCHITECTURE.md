@@ -124,7 +124,10 @@ boundary.
   by all frontends. The canonical JavaFX viewport translates native
   press/drag/release events into `PointerEvent`, dispatches them through
   `EditorToolController`, and renders tool overlays through `OverlayDraw`;
-  legacy viewports remain compatible because object picking is optional.
+  `CanonicalToolPanel` provides the first constrained OSRS tool selector and
+  numeric brush settings, while `AdaptiveToolPanel` leaves the existing
+  legacy rail intact for compatibility sessions. Legacy viewports remain
+  compatible because object picking is optional.
 - `SceneRenderer` consumes neutral scenes and changes and returns neutral pick
   results.
 - Cache and definitions are accessed through RSPSi interfaces, never raw
