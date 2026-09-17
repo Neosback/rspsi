@@ -407,7 +407,12 @@ project identity, and history position to `ProjectLayout.sessionAutosaveFile()`
 (`autosave/session.json`) using the same atomic-replacement rule as project
 metadata. Its layout-aware overloads read the project metadata and canonical
 path together. Recovery restores a standalone `WorldDocument`; it never opens
-or rewrites the source cache.
+or rewrites the source cache. `SessionAutosaveCoordinator` binds that store to
+an `EditorSession`: every edit, undo, redo, and save-marker transition updates
+the recovery snapshot without changing the session's saved marker. It has no
+scheduler, so JavaFX or a future frontend supplies timer policy. The
+`OsrsStudioProject.attachAutosave(...)` seam verifies project identity before
+attaching the coordinator.
 
 When a legacy map reaches its existing ready state, the client emits a small
 map-ready lifecycle callback. In controlled mode `MainWindow` imports terrain

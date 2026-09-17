@@ -10,6 +10,8 @@ import com.rspsi.cache.store.CacheStoreFactory;
 import com.rspsi.cache.store.OpenRuneCacheStore;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.assets.DefinitionAssetRepository;
+import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.io.SessionAutosaveCoordinator;
 import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.project.ProjectMetadata;
 import com.rspsi.project.ProjectLayout;
@@ -238,6 +240,23 @@ public final class OsrsStudioProject implements AutoCloseable {
     public OsrsProjectSessionLoader.OpenedProject openRegion(int regionX, int regionY) {
         ensureOpen();
         return sessions.load(regionX, regionY);
+    }
+
+    /**
+     * Attaches project-scoped recovery snapshots to a loaded editor session.
+     * The metadata check prevents a coordinator from writing recovery data
+     * under a different project identity by accident.
+     */
+    public SessionAutosaveCoordinator attachAutosave(ProjectLayout layout,
+                                                       EditorSession session)
+            throws IOException {
+        ensureOpen();
+        Objects.requireNonNull(layout, "layout");
+        Objects.requireNonNull(session, "session");
+        if (!project.equals(layout.readMetadata())) {
+            throw new IOException("Project metadata does not match the opened OSRS project");
+        }
+        return new SessionAutosaveCoordinator(layout, project, session);
     }
 
     /**
