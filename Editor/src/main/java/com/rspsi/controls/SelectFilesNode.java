@@ -17,7 +17,7 @@ import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
-import org.displee.util.GZIPUtils;
+import com.rspsi.cache.store.CacheCompression;
 
 public class SelectFilesNode extends Group {
 	
@@ -78,7 +78,7 @@ public class SelectFilesNode extends Group {
 		try {
 			byte[] data = Files.readAllBytes(new File(objectText.getText()).toPath());
 			if(objectText.getText().endsWith(".gz")) {
-				data = GZIPUtils.unzip(data);
+				data = CacheCompression.gunzip(data);
 			}
 			return data;
 		} catch (IOException e) {
@@ -91,7 +91,7 @@ public class SelectFilesNode extends Group {
 		try {
 			byte[] data = Files.readAllBytes(new File(landscapeText.getText()).toPath());
 			if(landscapeText.getText().endsWith(".gz")) {
-				data = GZIPUtils.unzip(data);
+				data = CacheCompression.gunzip(data);
 			}
 			return data;
 		} catch (IOException e) {

@@ -1,6 +1,5 @@
 package com.jagex;
 
-import com.displee.cache.index.archive.Archive;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jagex.cache.anim.Graphic;
@@ -26,6 +25,7 @@ import com.jagex.util.Constants;
 import com.jagex.util.ObjectKey;
 import com.jagex.util.TextRenderUtils;
 import com.rspsi.cache.CacheFileType;
+import com.rspsi.cache.store.CacheCompression;
 import com.rspsi.core.misc.Vector2;
 import com.rspsi.game.DisplayCanvas;
 import com.rspsi.options.KeyboardState;
@@ -46,7 +46,6 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.TextAlignment;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.displee.util.GZIPUtils;
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
@@ -480,36 +479,8 @@ public final class Client implements Runnable {
 
 
 			if(cache.is317()) {
-
-				Archive graphics = cache.createArchive(4, "2d graphics");
-
-
-				Sprite[] scenes = new Sprite[1000];
-				Sprite[] functions = new Sprite[1000];
-				int lastIdx = 0;
-				try {
-
-					for (int scene = 0; scene < 93; scene++) {
-						scenes[scene] = new Sprite(graphics, "mapscene", scene);
-						lastIdx = scene;
-					}
-				} catch (Exception ex) {
-					//ex.printStackTrace();
-				}
-				mapScenes = Arrays.copyOf(scenes, lastIdx + 1);
-
-				lastIdx = 0;
-
-				try {
-					for (int function = 0; function < functions.length; function++) {
-						functions[function] = new Sprite(graphics, "mapfunction", function);
-						lastIdx = function;
-					}
-				} catch (Exception ex) {
-					//ex.printStackTrace();
-				}
-
-				mapFunctions = Arrays.copyOf(functions, lastIdx + 1);
+				mapScenes = cache.readLegacySprites("mapscene", 93, false);
+				mapFunctions = cache.readLegacySprites("mapfunction", 1000, false);
 			} else {
 				try {
 					mapScenes = Sprite.unpackAndDecode(ByteBuffer.wrap(
@@ -518,21 +489,7 @@ public final class Client implements Runnable {
 					mapScenes = new Sprite[0];
 				}
 				try {
-					int lastIdx = 0;
-
-					Archive graphics = cache.createArchive(4, "2d graphics");
-					Sprite[] functions = new Sprite[1000];
-					try {
-						for (int function = 0; function < functions.length; function++) {
-							functions[function] = new Sprite(graphics, "mapfunction", function);
-							lastIdx = function;
-						}
-					} catch (Exception ex) {
-						//ex.printStackTrace();
-						lastIdx = -1;
-					}
-
-					mapFunctions = lastIdx == -1 ? new Sprite[0] : Arrays.copyOf(functions, lastIdx + 1);
+					mapFunctions = cache.readLegacySprites("mapfunction", 1000, true);
 				} catch(Exception ex){
 					mapFunctions = new Sprite[0];
 				}
@@ -1382,7 +1339,7 @@ public final class Client implements Runnable {
 	public void processLoadedResources(ResourceResponse response) {
 		byte[] unzipped;
 		try {
-				unzipped = GZIPUtils.unzip(response.getData());
+				unzipped = CacheCompression.gunzip(response.getData());
 			
 			if(unzipped == null) {
 				unzipped = response.getData();

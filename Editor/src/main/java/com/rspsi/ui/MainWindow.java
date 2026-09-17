@@ -24,7 +24,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import org.displee.util.GZIPUtils;
+import com.rspsi.cache.store.CacheCompression;
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
@@ -1160,7 +1160,7 @@ public class MainWindow extends Application {
 
 				if (landscapeFile.getName().endsWith(".gz")) {
 					try {
-						tileMap = GZIPUtils.gzipBytes(tileMap);
+						tileMap = CacheCompression.gzip(tileMap);
 						if(tileMap == null)
 							throw new IOException("GZIP error");
 					} catch (IOException e) {
@@ -1173,7 +1173,7 @@ public class MainWindow extends Application {
 				}
 				if (objectFile.getName().endsWith(".gz")) {
 					try {
-						objectMap = GZIPUtils.gzipBytes(objectMap);
+						objectMap = CacheCompression.gzip(objectMap);
 						if(objectMap == null)
 							throw new IOException("GZIP error");
 					} catch (IOException e) {

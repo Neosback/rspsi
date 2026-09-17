@@ -2,7 +2,7 @@ package com.jagex.net;
 
 
 
-import org.displee.util.GZIPUtils;
+import com.rspsi.cache.store.CacheCompression;
 
 import java.io.IOException;
 
@@ -26,7 +26,7 @@ public class ResourceResponse {
 	}
 	
 	public byte[] decompress() {
-		byte[] unzipped = GZIPUtils.unzip(data);
+		byte[] unzipped = CacheCompression.gunzip(data);
 		return unzipped == null ? data : unzipped;
 	}
 

@@ -9,6 +9,7 @@ import lombok.Setter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.Objects;
 import java.util.function.BiFunction;
@@ -324,6 +325,44 @@ public class Cache {
 
     public final Archive createArchive(int file, String name) {
         return configArchive.archive(file);
+    }
+
+    /**
+     * Loads the old named-sprite groups used by the compatibility renderer.
+     *
+     * <p>This is deliberately kept on the legacy cache facade. New OSRS
+     * editor code should use the neutral sprite definition provider instead of
+     * constructing Displee archives or legacy {@link Sprite} instances.</p>
+     *
+     * @param archiveName legacy group name, such as {@code mapscene}
+     * @param maxCount maximum number of sequential sprite IDs to probe
+     * @param emptyOnFirstFailure whether a first decode failure produces an
+     *                             empty array (the non-317 behavior)
+     */
+    public final Sprite[] readLegacySprites(String archiveName, int maxCount,
+                                            boolean emptyOnFirstFailure) {
+        Objects.requireNonNull(archiveName, "archiveName");
+        if (maxCount < 0) {
+            throw new IllegalArgumentException("Maximum sprite count cannot be negative");
+        }
+        if (maxCount == 0) {
+            return new Sprite[0];
+        }
+        Sprite[] sprites = new Sprite[maxCount];
+        int lastIndex = emptyOnFirstFailure ? -1 : 0;
+        try {
+            Archive graphics = createArchive(4, "2d graphics");
+            for (int id = 0; id < maxCount; id++) {
+                sprites[id] = new Sprite(graphics, archiveName, id);
+                lastIndex = id;
+            }
+        } catch (Exception ignored) {
+            // Legacy loading stops at the first missing named sprite.
+            if (emptyOnFirstFailure) {
+                lastIndex = -1;
+            }
+        }
+        return lastIndex == -1 ? new Sprite[0] : Arrays.copyOf(sprites, lastIndex + 1);
     }
 
     public void close() throws IOException {

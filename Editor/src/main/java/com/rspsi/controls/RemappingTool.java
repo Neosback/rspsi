@@ -48,7 +48,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
-import org.displee.util.GZIPUtils;
+import com.rspsi.cache.store.CacheCompression;
 
 public class RemappingTool extends Application {
 
@@ -165,7 +165,7 @@ public class RemappingTool extends Application {
 				if(FileUtils.isDatOrGzFile(file)) {
 					
 						if(FileUtils.isGzFile(file)) {
-							data = GZIPUtils.unzip(data);
+							data = CacheCompression.gunzip(data);
 						}
 						
 						if(validObjectFileIds.contains(FileUtils.getNameAsInteger(file))) {
@@ -222,7 +222,7 @@ public class RemappingTool extends Application {
 					byte[] data = chunk.objectMapData;
 					System.out.println("data size " + data.length);
 					if (FileUtils.isGzFile(out)) {
-						data = GZIPUtils.gzipBytes(data);
+							data = CacheCompression.gzip(data);
 						System.out.println("gz size " + data.length);
 					}
 					Files.write(out.toPath(), data);

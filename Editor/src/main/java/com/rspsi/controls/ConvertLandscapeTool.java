@@ -17,7 +17,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
-import org.displee.util.GZIPUtils;
+import com.rspsi.cache.store.CacheCompression;
 
 import java.io.File;
 import java.io.IOException;
@@ -139,7 +139,7 @@ public class ConvertLandscapeTool extends Application {
 							File outputFile = new File(outputDir, file.getName());
 							if (FileUtils.isDatOrGzFile(file)) {
 								if (FileUtils.isGzFile(file)) {
-									data = GZIPUtils.unzip(data);
+									data = CacheCompression.gunzip(data);
 								}
 
 								Chunk chunk = new Chunk(0);
@@ -151,7 +151,7 @@ public class ConvertLandscapeTool extends Application {
 								byte[] tileMap = saveTerrainBlock(chunk);
 
 								if (file.getName().endsWith(".gz")) {
-									tileMap = GZIPUtils.gzipBytes(tileMap);
+									tileMap = CacheCompression.gzip(tileMap);
 								}
 
 								Files.write(outputFile.toPath(), tileMap);

@@ -160,6 +160,11 @@ boundary.
   `CacheArchiveView` plus `CacheStore.fileIds(...)` contract. The legacy store
   and OpenRune store provide the same archive/file view, while old renderer
   classes that still need Displee archive objects remain explicitly quarantined.
+- The legacy client no longer constructs named-sprite archives itself. Its
+  compatibility `Cache` facade owns the remaining Displee archive operation
+  through `readLegacySprites(...)`; the client/editor resource path uses the
+  project-owned `CacheCompression` byte utility. This is a containment step,
+  not a claim that the old renderer classes are migrated.
 - `CacheStore` reads and writes use defensive byte-array ownership at each
   concrete backend. Decoders can therefore inspect or transform returned data
   without mutating a live cache buffer or a pending output write.
