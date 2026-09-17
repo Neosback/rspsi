@@ -411,6 +411,11 @@ Legacy sessions retain their compatibility fallback, but an active OSRS
 project can no longer send a menu action to the stale legacy session or
 `SceneGraph` history.
 
+The JavaFX keyboard adapter follows the same bridge for Ctrl+Z/Ctrl+Y. It does
+not select a history implementation itself; the active window dispatches to
+the canonical session when an OSRS project is open and retains the legacy
+fallback for the compatibility editor.
+
 The canonical JavaFX tool rail exposes the existing fragment contracts as a
 small clipboard workflow: selection is captured with `WorldFragment.capture`,
 encoded by `WorldFragmentCodec`, and pasted through `PasteFragmentCommand`.

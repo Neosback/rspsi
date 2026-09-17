@@ -1054,6 +1054,16 @@ public class MainWindow extends Application {
 		updateHistoryMenuState();
 	}
 
+	/** Dispatches keyboard undo through the same bridge as the Edit menu. */
+	public void undoActiveEditorSession() {
+		handleUndo();
+	}
+
+	/** Dispatches keyboard redo through the same bridge as the Edit menu. */
+	public void redoActiveEditorSession() {
+		handleRedo();
+	}
+
 	@Subscribe(threadMode = ThreadMode.ASYNC)
 	public void onStatusUpdate(StatusUpdate update) {
 		//Platform.runLater(() -> controller.getStatusLabel().setText(update.getText()));

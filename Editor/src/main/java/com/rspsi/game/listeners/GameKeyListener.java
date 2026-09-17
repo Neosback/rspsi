@@ -97,9 +97,21 @@ public class GameKeyListener implements EventHandler<InputEvent> {
 				System.exit(0);
 			}
 
-			if(keyEvent.isControlDown() && keyEvent.getCode() == KeyCode.Y && event.getEventType() == KeyEvent.KEY_PRESSED) {
-				SceneGraph.redo();
-				
+			if (keyEvent.isControlDown()
+					&& (keyEvent.getCode() == KeyCode.Z || keyEvent.getCode() == KeyCode.Y)
+					&& event.getEventType() == KeyEvent.KEY_PRESSED) {
+				MainWindow window = MainWindow.getSingleton();
+				if (window == null) {
+					if (keyEvent.getCode() == KeyCode.Z) {
+						SceneGraph.undo();
+					} else {
+						SceneGraph.redo();
+					}
+				} else if (keyEvent.getCode() == KeyCode.Z) {
+					window.undoActiveEditorSession();
+				} else {
+					window.redoActiveEditorSession();
+				}
 				event.consume();
 			}
 
