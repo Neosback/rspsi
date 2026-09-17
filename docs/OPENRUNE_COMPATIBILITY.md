@@ -107,7 +107,9 @@ passed named-map terrain and location decoding, while cache id 2710 (live
 build 240, captured 2026-09-16) passed modern numeric-group discovery, modern
 terrain decoding, 63,630 neutral asset descriptors, collision and neutral
 scene construction, and semantic decode -> encode -> decode. The selected
-modern region contained a 2,040-byte location payload and 988 objects. The
+modern region contained a 2,040-byte location payload and 988 objects. A second
+live region check at `(50,50)` decoded an 11,157-byte location payload, built
+4,726 object projections, and produced 3,983 non-empty collision tiles. The
 OpenRune backend remains read-only. The application continues to construct the
 legacy Displee backend by default, and the validated Displee writer is an
 explicit staged output choice rather than an OpenRune-native writer claim.
