@@ -58,6 +58,11 @@ boundary.
   the legacy `ShapedTile` class. The map-facing tile shape remains the encoded
   0..11 value; mesh topology 0 is the flat model and overlay values map to
   topology 1..12 at this boundary.
+- `TerrainTile`/`TileSnapshot` use one-based cache-facing floor IDs with zero
+  meaning absent for both underlays and overlays. Definition providers remain
+  zero-based, so the map adapters subtract one only at lookup boundaries. The
+  modern overlay high bit is masked in the decoder and is not allowed to leak
+  into the editor model.
 - `TerrainSharedEdgeInvariantTest` verifies every pair of the 13 topologies ×
   four rotations across east/west and north/south neighbors. Shared corner
   positions and heights must agree; this is a geometry invariant, not a

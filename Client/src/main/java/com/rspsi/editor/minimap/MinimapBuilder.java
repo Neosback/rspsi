@@ -68,7 +68,8 @@ public final class MinimapBuilder {
                 if ((tile.flags() & OsrsTileFlags.BLOCK_MAP_SQUARE) != 0) {
                     pixels[index] = BLOCKED_COLOR;
                 } else if (tile.overlayId() != 0) {
-                    pixels[index] = color(definitions.overlay(tile.overlayId()), tile.overlayId(), false);
+                    pixels[index] = color(overlayDefinition(definitions, tile.overlayId()),
+                            tile.overlayId(), false);
                 } else if (blendUnderlays) {
                     pixels[index] = blendedUnderlay(document, plane, x, y, definitions);
                 } else {
@@ -136,7 +137,8 @@ public final class MinimapBuilder {
         int underlay = hasUnderlay
                 ? blendedOsrsUnderlay(document, sourcePlane, x, y, definitions)
                 : 0;
-        int overlay = osrsColor(definitions.overlay(tile.overlayId()), tile.overlayId(), false);
+        int overlay = osrsColor(overlayDefinition(definitions, tile.overlayId()),
+                tile.overlayId(), false);
         int shape = hasOverlay ? tile.overlayShape() + 1 : 0;
         if (shape < 0 || shape >= TILE_SHAPE.length) {
             throw new IllegalArgumentException("Encoded overlay shape must be between 0 and 11");
@@ -387,5 +389,11 @@ public final class MinimapBuilder {
     private static java.util.Optional<FloorDefinitionView> underlayDefinition(
             DefinitionProvider definitions, int encodedId) {
         return encodedId <= 0 ? java.util.Optional.empty() : definitions.underlay(encodedId - 1);
+    }
+
+    /** Terrain overlay values are one-based; definition files are zero-based. */
+    private static java.util.Optional<FloorDefinitionView> overlayDefinition(
+            DefinitionProvider definitions, int encodedId) {
+        return encodedId <= 0 ? java.util.Optional.empty() : definitions.overlay(encodedId - 1);
     }
 }

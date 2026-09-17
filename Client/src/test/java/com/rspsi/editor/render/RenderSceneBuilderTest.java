@@ -160,7 +160,7 @@ class RenderSceneBuilderTest {
                         0, 0, 0, 0, 0)) : Optional.empty();
             }
             @Override public Optional<FloorDefinitionView> overlay(int id) {
-                return id == 3 ? Optional.of(new FloorDefinitionView(id, 17, 0xA0B0C0,
+                return id == 2 ? Optional.of(new FloorDefinitionView(id, 17, 0xA0B0C0,
                         0, 0, 0, 0, 0)) : Optional.empty();
             }
 

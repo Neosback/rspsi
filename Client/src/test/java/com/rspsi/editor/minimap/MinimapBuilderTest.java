@@ -118,8 +118,8 @@ class MinimapBuilderTest {
                         : id == 1 ? Optional.of(floor(id, 0x203040)) : Optional.empty();
             }
             @Override public Optional<FloorDefinitionView> overlay(int id) {
-                return id == 3 ? Optional.of(floor(id, 0x102030))
-                        : id == 4 ? Optional.of(floor(id, 0xA0B0C0)) : Optional.empty();
+                return id == 2 ? Optional.of(floor(id, 0x102030))
+                        : id == 3 ? Optional.of(floor(id, 0xA0B0C0)) : Optional.empty();
             }
         };
     }

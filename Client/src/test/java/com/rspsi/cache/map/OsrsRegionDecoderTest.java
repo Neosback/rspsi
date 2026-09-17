@@ -23,11 +23,14 @@ class OsrsRegionDecoderTest {
 
         assertEquals(-40, ground.southWestHeight());
         assertEquals(-80, ground.southEastHeight());
-        assertEquals(3, ground.overlayId());
+        assertEquals(4, ground.overlayId());
         assertEquals(6, ground.flags());
         assertEquals(7, ground.underlayId());
         assertEquals(6, ground.overlayShape());
         assertEquals(3, ground.overlayRotation());
+        assertEquals(1, document.tile(0, 1, 0).snapshot().overlayId());
+        assertEquals(1, document.tile(0, 2, 0).snapshot().overlayId(),
+                "modern overlay render marker must not change the definition ID");
         assertEquals(-56, upper.southWestHeight());
         assertEquals(-320, document.tile(1, 1, 0).snapshot().southWestHeight());
     }
@@ -68,11 +71,19 @@ class OsrsRegionDecoderTest {
                 for (int y = 0; y < OsrsRegionDecoder.REGION_SIZE; y++) {
                     if (plane == 0 && x == 0 && y == 0) {
                         writeShort(out, 29); // shape 6, rotation 3
-                        writeShort(out, 4);  // canonical overlay id 3
+                        writeShort(out, 4);  // one-based overlay id 4
                         writeShort(out, 88); // underlay id 7
                         writeShort(out, 55); // flags 0x06
                         writeShort(out, 1);
                         out.write(5);
+                    } else if (plane == 0 && x == 1 && y == 0) {
+                        writeShort(out, 2); // shape 0, rotation 0
+                        writeShort(out, 1); // first overlay definition, one-based
+                        writeShort(out, 0); // generated base height
+                    } else if (plane == 0 && x == 2 && y == 0) {
+                        writeShort(out, 2); // shape 0, rotation 0
+                        writeShort(out, 0x8001); // overlay 1 plus modern marker bit
+                        writeShort(out, 0); // generated base height
                     } else if (plane == 1 && x == 0 && y == 0) {
                         writeShort(out, 1);
                         out.write(2);

@@ -254,7 +254,11 @@ public final class OsrsRegionDecoder {
             }
             if (opcode <= 49) {
                 int rawOverlay = readTerrainValue(cursor, newTerrainFormat, false);
-                overlays[plane][x][y] = (rawOverlay - 1) & 0xFFFF;
+                // Terrain overlay values are one-based in the cache. Keep
+                // that representation in the neutral model (zero means no
+                // overlay), while masking the modern high-bit render marker
+                // the same way current OSRS clients do.
+                overlays[plane][x][y] = rawOverlay & 0x7FFF;
                 shapes[plane][x][y] = (opcode - 2) >>> 2;
                 rotations[plane][x][y] = (opcode - 2) & 0x3;
             } else if (opcode <= 81) {

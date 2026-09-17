@@ -38,7 +38,7 @@ public final class OsrsRegionEncoder {
                         requireRange(tile.overlayId(), 1, newTerrainFormat ? 65534 : 254, "overlay ID");
                         requireRange(tile.overlayShape(), 0, 11, "overlay shape");
                         writeTerrainValue(out, 2 + tile.overlayShape() * 4 + tile.overlayRotation(), newTerrainFormat);
-                        writeTerrainValue(out, tile.overlayId() + 1, newTerrainFormat);
+                        writeTerrainValue(out, tile.overlayId(), newTerrainFormat);
                     } else if (tile.overlayShape() != 0 || tile.overlayRotation() != 0) {
                         throw new IllegalArgumentException("Overlay shape/rotation requires an overlay ID");
                     }
