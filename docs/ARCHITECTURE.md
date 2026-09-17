@@ -121,7 +121,10 @@ boundary.
   loaded east and north region edges; incomplete windows report only the
   boundaries that can actually be proven.
 - `EditorTool`, `ToolContext`, `PointerEvent`, and `ToolInspector` are shared
-  by all frontends.
+  by all frontends. The canonical JavaFX viewport translates native
+  press/drag/release events into `PointerEvent`, dispatches them through
+  `EditorToolController`, and renders tool overlays through `OverlayDraw`;
+  legacy viewports remain compatible because object picking is optional.
 - `SceneRenderer` consumes neutral scenes and changes and returns neutral pick
   results.
 - Cache and definitions are accessed through RSPSi interfaces, never raw
