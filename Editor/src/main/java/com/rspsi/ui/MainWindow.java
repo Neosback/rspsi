@@ -1032,21 +1032,19 @@ public class MainWindow extends Application {
 		if (controller == null) {
 			return;
 		}
-		boolean canUndo = controlledSession != null && controlledSession.history().canUndo();
-		boolean canRedo = controlledSession != null && controlledSession.history().canRedo();
-		if (!canUndo) {
-			canUndo = !SceneGraph.undoList.isEmpty();
-		}
-		if (!canRedo) {
-			canRedo = !SceneGraph.redoList.isEmpty();
-		}
+		boolean canUndo = controlledSession != null
+				? controlledSession.history().canUndo()
+				: !SceneGraph.undoList.isEmpty();
+		boolean canRedo = controlledSession != null
+				? controlledSession.history().canRedo()
+				: !SceneGraph.redoList.isEmpty();
 		controller.getUndoMenuItem().setDisable(!canUndo);
 		controller.getRedoMenuItem().setDisable(!canRedo);
 	}
 
 	private void handleUndo() {
-		if (controlledSession != null && controlledSession.history().canUndo()) {
-			controlledSession.undo();
+		if (controlledSession != null) {
+			if (controlledSession.history().canUndo()) controlledSession.undo();
 		} else {
 			SceneGraph.undo();
 		}
@@ -1054,8 +1052,8 @@ public class MainWindow extends Application {
 	}
 
 	private void handleRedo() {
-		if (controlledSession != null && controlledSession.history().canRedo()) {
-			controlledSession.redo();
+		if (controlledSession != null) {
+			if (controlledSession.history().canRedo()) controlledSession.redo();
 		} else {
 			SceneGraph.redo();
 		}

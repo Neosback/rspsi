@@ -409,7 +409,7 @@ The OSRS project opener also binds the window-level Undo, Redo, and Save menu
 actions to the same canonical `EditorSession` used by the controlled panels.
 Legacy sessions retain their compatibility fallback, but an active OSRS
 project can no longer send a menu action to the stale legacy session or
-`SceneGraph` history.
+`SceneGraph` history, including when the canonical history is empty.
 
 The JavaFX keyboard adapter follows the same bridge for Ctrl+Z/Ctrl+Y. It does
 not select a history implementation itself; the active window dispatches to
