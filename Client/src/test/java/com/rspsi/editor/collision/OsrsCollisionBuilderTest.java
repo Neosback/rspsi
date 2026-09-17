@@ -7,8 +7,11 @@ import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.OsrsTileFlags;
+import com.rspsi.editor.model.WorldRegion;
+import com.rspsi.editor.model.WorldRegionWindow;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -100,6 +103,31 @@ class OsrsCollisionBuilderTest {
 
         assertEquals(CollisionFlag.LOC | CollisionFlag.LOC_PROJECTILE,
                 collision.flags(0, 1, 1));
+    }
+
+    @Test
+    void preservesWallReciprocalAcrossRegionBoundary() {
+        WorldDocument westDocument = new WorldDocument(64, 64, 1);
+        WorldObject wall = new WorldObject(45, 0, 2, 0, 63, 12);
+        westDocument.tile(0, 63, 12).restore(new TileSnapshot(0, 0, 0, 0, 0, 0, 0, 0, 0,
+                java.util.List.of(wall)));
+        WorldRegion west = new WorldRegion(10, 20, westDocument);
+        WorldRegion east = new WorldRegion(11, 20, new WorldDocument(64, 64, 1));
+        WorldRegionWindow window = new WorldRegionWindow(10, 20, 2, 1,
+                Map.of(west.regionId(), west, east.regionId(), east));
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) { return Optional.empty(); }
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectCollisionView> objectCollision(int id) {
+                return Optional.of(new ObjectCollisionView(id, 1, 1, 2, false, false));
+            }
+        };
+
+        CollisionMap collision = OsrsCollisionBuilder.fromWindow(window, definitions);
+
+        assertEquals(CollisionFlag.WALL_EAST, collision.flags(0, 63, 12) & CollisionFlag.WALL_EAST);
+        assertEquals(CollisionFlag.WALL_WEST, collision.flags(0, 64, 12) & CollisionFlag.WALL_WEST);
     }
 
     @Test

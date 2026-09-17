@@ -43,6 +43,9 @@ public final class RenderWindowSceneBuilder {
         var collision = new LinkedHashMap<WorldTileAddress, CollisionTileSnapshot>();
         List<WorldRenderObject> objects = new ArrayList<>();
         List<WorldBridgeLink> bridges = new ArrayList<>();
+        CollisionMap windowCollision = definitions == null
+                ? OsrsCollisionBuilder.fromWindow(prepared)
+                : OsrsCollisionBuilder.fromWindow(prepared, definitions);
 
         for (WorldRegion region : prepared.regions().values().stream()
                 .sorted(java.util.Comparator.comparingInt(WorldRegion::regionX)
@@ -56,15 +59,15 @@ public final class RenderWindowSceneBuilder {
                     materials.put(WorldTileAddress.of(originX + local.x(), originY + local.y(), local.plane()), material));
             scene.terrainLighting().forEach((local, light) ->
                     lighting.put(WorldTileAddress.of(originX + local.x(), originY + local.y(), local.plane()), light));
-            CollisionMap regionCollision = definitions == null
-                    ? OsrsCollisionBuilder.fromTerrain(region.document())
-                    : OsrsCollisionBuilder.fromTerrainAndObjects(region.document(), definitions);
+            int collisionOffsetX = (region.regionX() - prepared.minRegionX()) * WorldRegion.REGION_SIZE;
+            int collisionOffsetY = (region.regionY() - prepared.minRegionY()) * WorldRegion.REGION_SIZE;
             for (int plane = 0; plane < region.document().planes(); plane++) {
                 for (int x = 0; x < region.document().width(); x++) {
                     for (int y = 0; y < region.document().length(); y++) {
-                        var local = new com.rspsi.editor.model.TileCoordinate(plane, x, y);
+                        var local = new com.rspsi.editor.model.TileCoordinate(plane,
+                                collisionOffsetX + x, collisionOffsetY + y);
                         collision.put(WorldTileAddress.of(originX + x, originY + y, plane),
-                                CollisionTileSnapshot.from(regionCollision, local));
+                                CollisionTileSnapshot.from(windowCollision, local));
                     }
                 }
             }

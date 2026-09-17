@@ -9,6 +9,8 @@ import com.rspsi.editor.model.OsrsLocShape;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.OsrsTileFlags;
+import com.rspsi.editor.model.WorldRegion;
+import com.rspsi.editor.model.WorldRegionWindow;
 
 import java.util.Objects;
 
@@ -34,6 +36,49 @@ public final class OsrsCollisionBuilder {
     public static CollisionMap fromTerrain(WorldDocument document) {
         Objects.requireNonNull(document, "document");
         CollisionMap collision = new CollisionMap(document.width(), document.length(), document.planes());
+        addTerrain(collision, document, 0, 0);
+        return collision;
+    }
+
+    /**
+     * Builds terrain collision for a bounded region window. Unlike a set of
+     * independent region maps, this preserves wall flags that spill across a
+     * 64x64 boundary while retaining missing regions as holes.
+     */
+    public static CollisionMap fromWindow(WorldRegionWindow window) {
+        return fromWindow(window, null);
+    }
+
+    /** Builds a world-addressed collision map for all loaded regions in a window. */
+    public static CollisionMap fromWindow(WorldRegionWindow window,
+                                          DefinitionProvider definitions) {
+        Objects.requireNonNull(window, "window");
+        int planes = window.regions().values().stream()
+                .mapToInt(region -> region.document().planes()).max().orElse(4);
+        int width = window.regionWidth() * WorldRegion.REGION_SIZE;
+        int length = window.regionHeight() * WorldRegion.REGION_SIZE;
+        CollisionMap collision = new CollisionMap(width, length, planes);
+        int originX = window.minRegionX() * WorldRegion.REGION_SIZE;
+        int originY = window.minRegionY() * WorldRegion.REGION_SIZE;
+
+        for (WorldRegion region : window.regions().values()) {
+            int offsetX = (region.regionX() - window.minRegionX()) * WorldRegion.REGION_SIZE;
+            int offsetY = (region.regionY() - window.minRegionY()) * WorldRegion.REGION_SIZE;
+            addTerrain(collision, region.document(), offsetX, offsetY);
+        }
+        if (definitions != null) {
+            for (WorldRegion region : window.regions().values()) {
+                int offsetX = (region.regionX() - window.minRegionX()) * WorldRegion.REGION_SIZE;
+                int offsetY = (region.regionY() - window.minRegionY()) * WorldRegion.REGION_SIZE;
+                addObjects(collision, region.document(), definitions, offsetX, offsetY);
+            }
+        }
+        applyBridgeBoundaryWalls(window, collision, originX, originY);
+        return collision;
+    }
+
+    private static void addTerrain(CollisionMap collision, WorldDocument document,
+                                   int offsetX, int offsetY) {
         for (int plane = 0; plane < document.planes(); plane++) {
             for (int x = 0; x < document.width(); x++) {
                 for (int y = 0; y < document.length(); y++) {
@@ -44,30 +89,35 @@ public final class OsrsCollisionBuilder {
                     }
                     int resolvedPlane = resolvedPlane(document, plane, x, y);
                     if (resolvedPlane >= 0 && resolvedPlane < document.planes()) {
-                        collision.add(new com.rspsi.editor.model.TileCoordinate(resolvedPlane, x, y), mask);
+                        addAt(collision, resolvedPlane, x + offsetX, y + offsetY, mask);
                     }
                 }
             }
         }
-        return collision;
     }
 
     /** Adds definition-backed location collision to terrain/bridge collision. */
     public static CollisionMap fromTerrainAndObjects(WorldDocument document, DefinitionProvider definitions) {
         Objects.requireNonNull(definitions, "definitions");
         CollisionMap collision = fromTerrain(document);
+        addObjects(collision, document, definitions, 0, 0);
+        applyBridgeBoundaryWalls(document, collision);
+        return collision;
+    }
+
+    private static void addObjects(CollisionMap collision, WorldDocument document,
+                                   DefinitionProvider definitions, int offsetX, int offsetY) {
         for (int plane = 0; plane < document.planes(); plane++) {
             for (int x = 0; x < document.width(); x++) {
                 for (int y = 0; y < document.length(); y++) {
                     for (WorldObject object : document.tile(plane, x, y).snapshot().objects()) {
                         definitions.objectCollision(object.id())
-                                .ifPresent(definition -> addObject(collision, document, object, definition));
+                                .ifPresent(definition -> addObject(collision, document, object,
+                                        definition, offsetX, offsetY));
                     }
                 }
             }
         }
-        applyBridgeBoundaryWalls(document, collision);
-        return collision;
     }
 
     /**
@@ -100,6 +150,11 @@ public final class OsrsCollisionBuilder {
      * editor's movement, projectile, and routefinding views stay aligned.</p>
      */
     private static void applyBridgeBoundaryWalls(WorldDocument document, CollisionMap collision) {
+        applyBridgeBoundaryWalls(document, collision, 0, 0);
+    }
+
+    private static void applyBridgeBoundaryWalls(WorldDocument document, CollisionMap collision,
+                                                 int offsetX, int offsetY) {
         int wallWest = CollisionFlag.WALL_WEST
                 | CollisionFlag.WALL_WEST_PROJECTILE
                 | CollisionFlag.WALL_WEST_ROUTE_BLOCKER;
@@ -125,22 +180,70 @@ public final class OsrsCollisionBuilder {
 
                 // A west neighbor exposes its east edge to the bridge tile.
                 if (x > 0 && !hasBridge(document, x - 1, y)) {
-                    copyDirectionalFlags(collision, 1, 0, x - 1, y, wallEast);
+                    copyDirectionalFlags(collision, 1, 0, x - 1 + offsetX, y + offsetY, wallEast);
                 }
                 // An east neighbor exposes its west edge to the bridge tile.
                 if (x + 1 < document.width() && !hasBridge(document, x + 1, y)) {
-                    copyDirectionalFlags(collision, 1, 0, x + 1, y, wallWest);
+                    copyDirectionalFlags(collision, 1, 0, x + 1 + offsetX, y + offsetY, wallWest);
                 }
                 // A south neighbor exposes its north edge to the bridge tile.
                 if (y > 0 && !hasBridge(document, x, y - 1)) {
-                    copyDirectionalFlags(collision, 1, 0, x, y - 1, wallNorth);
+                    copyDirectionalFlags(collision, 1, 0, x + offsetX, y - 1 + offsetY, wallNorth);
                 }
                 // A north neighbor exposes its south edge to the bridge tile.
                 if (y + 1 < document.length() && !hasBridge(document, x, y + 1)) {
-                    copyDirectionalFlags(collision, 1, 0, x, y + 1, wallSouth);
+                    copyDirectionalFlags(collision, 1, 0, x + offsetX, y + 1 + offsetY, wallSouth);
                 }
             }
         }
+    }
+
+    private static void applyBridgeBoundaryWalls(WorldRegionWindow window, CollisionMap collision,
+                                                 int originX, int originY) {
+        int wallWest = CollisionFlag.WALL_WEST
+                | CollisionFlag.WALL_WEST_PROJECTILE
+                | CollisionFlag.WALL_WEST_ROUTE_BLOCKER;
+        int wallEast = CollisionFlag.WALL_EAST
+                | CollisionFlag.WALL_EAST_PROJECTILE
+                | CollisionFlag.WALL_EAST_ROUTE_BLOCKER;
+        int wallSouth = CollisionFlag.WALL_SOUTH
+                | CollisionFlag.WALL_SOUTH_PROJECTILE
+                | CollisionFlag.WALL_SOUTH_ROUTE_BLOCKER;
+        int wallNorth = CollisionFlag.WALL_NORTH
+                | CollisionFlag.WALL_NORTH_PROJECTILE
+                | CollisionFlag.WALL_NORTH_ROUTE_BLOCKER;
+
+        for (WorldRegion region : window.regions().values()) {
+            WorldDocument document = region.document();
+            int offsetX = (region.regionX() - window.minRegionX()) * WorldRegion.REGION_SIZE;
+            int offsetY = (region.regionY() - window.minRegionY()) * WorldRegion.REGION_SIZE;
+            if (document.planes() <= BRIDGE_FLAG_PLANE) continue;
+            for (int x = 0; x < document.width(); x++) {
+                for (int y = 0; y < document.length(); y++) {
+                    if (!hasBridge(document, x, y)) continue;
+                    int worldX = region.regionX() * WorldRegion.REGION_SIZE + x;
+                    int worldY = region.regionY() * WorldRegion.REGION_SIZE + y;
+                    if (x > 0 && !hasBridge(window, worldX - 1, worldY)) {
+                        copyDirectionalFlags(collision, 1, 0, offsetX + x - 1, offsetY + y, wallEast);
+                    }
+                    if (x + 1 < document.width() && !hasBridge(window, worldX + 1, worldY)) {
+                        copyDirectionalFlags(collision, 1, 0, offsetX + x + 1, offsetY + y, wallWest);
+                    }
+                    if (y > 0 && !hasBridge(window, worldX, worldY - 1)) {
+                        copyDirectionalFlags(collision, 1, 0, offsetX + x, offsetY + y - 1, wallNorth);
+                    }
+                    if (y + 1 < document.length() && !hasBridge(window, worldX, worldY + 1)) {
+                        copyDirectionalFlags(collision, 1, 0, offsetX + x, offsetY + y + 1, wallSouth);
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean hasBridge(WorldRegionWindow window, int worldX, int worldY) {
+        return window.tile(BRIDGE_FLAG_PLANE, worldX, worldY)
+                .map(tile -> OsrsTileFlags.hasBridge(tile.flags()))
+                .orElse(false);
     }
 
     private static boolean hasBridge(WorldDocument document, int x, int y) {
@@ -157,7 +260,8 @@ public final class OsrsCollisionBuilder {
     }
 
     private static void addObject(CollisionMap collision, WorldDocument document,
-                                  WorldObject object, ObjectCollisionView definition) {
+                                  WorldObject object, ObjectCollisionView definition,
+                                  int offsetX, int offsetY) {
         // Match the client/TSPS scene loader: id 0 is an empty location slot,
         // not a collision-bearing object.
         if (object.id() <= 0) {
@@ -184,7 +288,8 @@ public final class OsrsCollisionBuilder {
         }
         if (shape.category() == ObjectCategory.GROUND_DECOR) {
             if (definition.blockWalk() == 1) {
-                addAt(collision, plane, object.x(), object.y(), CollisionFlag.GROUND_DECOR);
+                addAt(collision, plane, object.x() + offsetX, object.y() + offsetY,
+                        CollisionFlag.GROUND_DECOR);
             }
             return;
         }
@@ -193,12 +298,13 @@ public final class OsrsCollisionBuilder {
         if (shape.category() == ObjectCategory.GROUND) {
             for (int x = 0; x < width; x++) {
                 for (int y = 0; y < length; y++) {
-                    addAt(collision, plane, object.x() + x, object.y() + y,
+                    addAt(collision, plane, object.x() + x + offsetX, object.y() + y + offsetY,
                             CollisionFlag.LOC | projectileMask | routeMask);
                 }
             }
         } else if (shape.category() == ObjectCategory.WALL) {
-            addWall(collision, plane, object.x(), object.y(), object.rotation(), shape.id(),
+            addWall(collision, plane, object.x() + offsetX, object.y() + offsetY,
+                    object.rotation(), shape.id(),
                     projectileMask, routeMask);
         }
     }
