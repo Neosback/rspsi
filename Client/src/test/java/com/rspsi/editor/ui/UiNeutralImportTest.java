@@ -30,6 +30,7 @@ class UiNeutralImportTest {
             "import imgui.",
             "import org.lwjgl.",
             "import com.displee.",
+            "import dev.openrune.",
             "import org.openrs2.",
             "import org.rsmod.",
             "import org.openrune.");

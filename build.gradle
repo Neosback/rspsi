@@ -73,7 +73,7 @@ subprojects {
 tasks.register('verifyOsrsRevision') {
     description = 'Runs the current neutral OSRS cache/map compatibility suite.'
     group = 'verification'
-    dependsOn(':Client:test', ':Plugins:OSRSPlugin:test')
+    dependsOn(':Client:check', ':Plugins:OSRSPlugin:check')
     doLast {
         def cachePath = providers.environmentVariable('RSPSI_OSRS_CACHE').orNull
         if (cachePath == null || cachePath.isBlank()) {

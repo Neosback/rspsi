@@ -41,7 +41,16 @@ tasks.register('verifyUiNeutralCore') {
     group = 'verification'
     inputs.files(neutralCoreSources)
     doLast {
-        def forbidden = ['javafx.', 'imgui.', 'org.lwjgl.', 'com.displee.', 'dev.openrune.']
+        def forbidden = [
+                'javafx.',
+                'imgui.',
+                'org.lwjgl.',
+                'com.displee.',
+                'dev.openrune.',
+                'org.openrs2.',
+                'org.rsmod.',
+                'org.openrune.'
+        ]
         neutralCoreSources.files.each { source ->
             source.eachLine { line, number ->
                 if (forbidden.any { token -> line.contains(token) }) {
