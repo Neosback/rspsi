@@ -119,6 +119,12 @@ live region check at `(50,50)` decoded an 11,157-byte location payload, built
 4,726 object projections, produced 3,983 non-empty collision tiles, and
 matched an independently generated TSPS shaped-minimap fixture with zero
 pixel differences on all four planes. The
+same external fixture now also contains `terrain-semantics.json`, exported
+from TSPS `SceneBuilder`; RSPSi compares all 16,384 tiles and reports zero
+differing height/underlay/overlay/shape/rotation/flag fields for build 240.
+The companion `locations.json` export decodes the same TSPS location payload
+semantics without using scene-container capacity rules; all 4,726 placements
+match the canonical RSPSi objects for the same region.
 normal OpenRune source backend remains read-only. The application continues to construct the
 legacy Displee backend by default, and the validated Displee writer is an
 explicit staged output choice rather than an OpenRune-native writer claim.
@@ -162,9 +168,18 @@ as explicit PASS/FAIL/NOT_RUN checks. It does not write the supplied cache.
 An external parity directory can be supplied with
 `RSPSI_OSRS_PARITY_FIXTURE=/path/to/fixture` alongside the selected-region
 arguments. Its optional `fixture.properties` may identify `region.x`,
-`region.y`, `revision`, `cache.fingerprint`, and `scene.fingerprint`. PNGs named
+`region.y`, `revision`, `cache.fingerprint`, and `scene.fingerprint`. An
+optional `terrain-semantics.json` file is a TSPS-exported, independent
+64x64x4 semantic snapshot containing flattened heights, underlays, overlays,
+shapes, rotations, and flags. The repository includes the reference-only
+export helper at
+`tools/tsps/export-terrain-semantics.ts`; it requires `TSPS_CLIENT_ROOT` and
+must be run against an explicitly pinned TSPS checkout/cache. PNGs named
 `minimap-plane-N.png` and `minimap-shaped-plane-N.png` are compared through the
-neutral minimap parity service. Identity mismatches fail the gate; missing
+neutral minimap parity service. Terrain snapshots are compared through the
+neutral terrain parity service. An optional `locations.json` contains the
+independent delta-packed location decode and is compared against canonical
+object ID/type/rotation/plane/coordinate tuples. Identity mismatches fail the gate; missing
 fixture data remains visible as `WARN`/`NOT_RUN`. This keeps RuneLite/TSPS
 captures and generated images outside the repository while making their
 provenance-controlled acceptance path executable.
@@ -176,6 +191,9 @@ This output is opt-in and derived from the supplied cache; it is not a checked-
 in fixture or a replacement for the independent oracle images.
 
 For release/CI acceptance, set `RSPSI_OSRS_REQUIRE_PARITY=true` as well. The
-verifier will then fail unless both `render.parity` and `minimap.parity` are
-`PASS`; the default remains non-strict so fixture-free local cache checks keep
-reporting missing external evidence as `NOT_RUN` or `WARN`.
+verifier will then fail unless `render.parity`, `terrain.parity`,
+`location.parity`, and `minimap.parity` are `PASS`; the default remains non-strict so fixture-free
+local cache checks keep reporting missing external evidence as `NOT_RUN` or
+`WARN`. A terrain snapshot is deliberately separate from the render
+fingerprint: it proves cache/scene semantics without making a renderer’s
+internal representation part of the cross-project contract.

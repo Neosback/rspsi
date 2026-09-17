@@ -56,4 +56,21 @@ class OsrsRevisionVerifierTest {
 
         assertTrue(OsrsRevisionVerifier.requiredParityErrors(render, minimap, true).isEmpty());
     }
+
+    @Test
+    void strictParityModeRequiresIndependentTerrainSemanticsToo() {
+        VerificationCheck render = new VerificationCheck("render.parity",
+                VerificationCheck.Status.PASS, "matched");
+        VerificationCheck terrain = new VerificationCheck("terrain.parity",
+                VerificationCheck.Status.WARN, "fixture pending");
+        VerificationCheck location = new VerificationCheck("location.parity",
+                VerificationCheck.Status.PASS, "matched");
+        VerificationCheck minimap = new VerificationCheck("minimap.parity",
+                VerificationCheck.Status.PASS, "matched");
+
+        List<String> errors = OsrsRevisionVerifier.requiredParityErrors(render, terrain, location, minimap, true);
+
+        assertEquals(1, errors.size());
+        assertTrue(errors.get(0).contains("terrain parity"));
+    }
 }

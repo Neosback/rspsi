@@ -21,7 +21,8 @@ import java.util.stream.Stream;
  *
  * <p>Fixtures are deliberately kept outside the product repository. A
  * directory may contain {@code fixture.properties}, an optional
- * {@code scene.fingerprint} value, and PNGs named
+ * {@code scene.fingerprint} value, an optional
+ * {@code terrain-semantics.json} and {@code locations.json} exports, and PNGs named
  * {@code minimap-plane-N.png} or {@code minimap-shaped-plane-N.png}.</p>
  */
 public record OsrsParityFixture(
@@ -31,6 +32,8 @@ public record OsrsParityFixture(
         Integer revision,
         String cacheFingerprint,
         String sceneFingerprint,
+        OsrsTerrainSemanticFixture terrainSemantics,
+        OsrsLocationSemanticFixture locations,
         Map<Integer, MinimapImage> minimaps,
         Map<Integer, MinimapImage> shapedMinimaps
 ) {
@@ -94,12 +97,25 @@ public record OsrsParityFixture(
             throw exception.unwrap();
         }
 
+        OsrsTerrainSemanticFixture terrainSemantics = null;
+        Path terrainPath = directory.resolve("terrain-semantics.json");
+        if (Files.isRegularFile(terrainPath)) {
+            terrainSemantics = OsrsTerrainSemanticFixture.load(terrainPath);
+        }
+        OsrsLocationSemanticFixture locations = null;
+        Path locationsPath = directory.resolve("locations.json");
+        if (Files.isRegularFile(locationsPath)) {
+            locations = OsrsLocationSemanticFixture.load(locationsPath);
+        }
+
         return new OsrsParityFixture(directory,
                 integerProperty(properties, "region.x"),
                 integerProperty(properties, "region.y"),
                 integerProperty(properties, "revision"),
                 optionalProperty(properties, "cache.fingerprint"),
                 optionalProperty(properties, "scene.fingerprint"),
+                terrainSemantics,
+                locations,
                 minimaps, shapedMinimaps);
     }
 

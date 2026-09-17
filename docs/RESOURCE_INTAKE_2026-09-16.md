@@ -158,6 +158,15 @@ topology used by the RSPSi-owned `TerrainMeshBuilder`. The arrays match the
 existing 52-case topology matrix; TSPS remains the donor/oracle and its code
 is not copied into the product.
 
+The reference-only helper [`tools/tsps/export-terrain-semantics.ts`](../tools/tsps/export-terrain-semantics.ts)
+can export a pinned TSPS `SceneBuilder` region into the external
+`terrain-semantics.json` fixture format. Build-240 region `(50,50)` was
+compared through that fixture: all 16,384 tile height/underlay/overlay/
+shape/rotation/flag fields matched RSPSi. The JSON export remains outside the
+repository; only the generator and verifier contract are committed. The same
+helper decodes TSPS location bytes into `locations.json`; build-240 region
+`(50,50)` matched all 4,726 canonical ID/type/rotation/plane/coordinate tuples.
+
 The captured RuneLite checkout
 (`ced4c4aba7a3cb7cace42e1f0c25a5f79b7faef`) was inspected at:
 
