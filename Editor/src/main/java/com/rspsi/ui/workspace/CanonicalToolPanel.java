@@ -44,6 +44,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private final ToggleGroup group = new ToggleGroup();
     private final List<ToggleButton> toolButtons = new ArrayList<>();
     private final List<CheckBox> debugButtons = new ArrayList<>();
+    private final List<Button> actionButtons = new ArrayList<>();
     private final Map<CheckBox, DebugOverlayMode> debugModes = new LinkedHashMap<>();
     private final Label status = new Label("Select a tool");
     private final TextField underlay = field("Underlay", "1");
@@ -113,6 +114,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         Button reach = previewButton("Reach", RoutePreviewMode.REACH);
         Button clear = new Button("Clear");
         clear.setAccessibleText("Clear route preview");
+        actionButtons.add(clear);
         clear.setOnAction(event -> {
             if (viewport != null) viewport.clearRoutePreview();
             previewStatus.setText("No preview");
@@ -126,10 +128,12 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         HBox fragmentButtons = new HBox(4);
         Button copy = new Button("Copy");
         copy.setAccessibleText("Copy selected world fragment");
+        actionButtons.add(copy);
         copy.setOnAction(event -> fragmentStatus("Copied", viewport == null
                 ? "No viewport" : viewport.copySelectionToClipboard()));
         Button paste = new Button("Paste");
         paste.setAccessibleText("Paste world fragment at target coordinates");
+        actionButtons.add(paste);
         paste.setOnAction(event -> {
             if (viewport == null) {
                 fragmentStatus("Paste", "No viewport");
@@ -144,9 +148,11 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         });
         Button export = new Button("Export");
         export.setAccessibleText("Export selected world fragment to a file");
+        actionButtons.add(export);
         export.setOnAction(event -> chooseExportFile());
         Button importButton = new Button("Import");
         importButton.setAccessibleText("Import a world fragment file at target coordinates");
+        actionButtons.add(importButton);
         importButton.setOnAction(event -> chooseImportFile());
         fragmentButtons.getChildren().addAll(copy, paste, export, importButton);
         fragmentStatus.getStyleClass().add("workspace-panel-status");
@@ -184,6 +190,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
         this.viewport = viewport;
         toolButtons.forEach(button -> button.setDisable(viewport == null));
         debugButtons.forEach(button -> button.setDisable(viewport == null));
+        actionButtons.forEach(button -> button.setDisable(viewport == null));
     }
 
     private VBox section(String title) {
@@ -240,6 +247,7 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
 
     private Button previewButton(String label, RoutePreviewMode mode) {
         Button button = new Button(label);
+        actionButtons.add(button);
         button.setAccessibleText("Preview " + label);
         button.setMinHeight(30);
         button.setOnAction(event -> {
@@ -328,5 +336,6 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
             button.setSelected(false);
             button.setDisable(true);
         });
+        actionButtons.forEach(button -> button.setDisable(true));
     }
 }
