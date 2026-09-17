@@ -422,8 +422,8 @@ public final class Sprite extends GameRaster {
 	}
 	
 	public Sprite(Archive archive, String name, int id) {
-		Buffer sprite = new Buffer(archive.file(name + ".dat"));
-		Buffer meta = new Buffer(archive.file("index.dat"));
+		Buffer sprite = new Buffer(archive.file(name + ".dat").getData());
+		Buffer meta = new Buffer(archive.file("index.dat").getData());
 		if (sprite.getPayload() == null)
 			return;
 		meta.setPosition(sprite.readUShort());

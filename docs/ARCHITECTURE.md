@@ -165,6 +165,13 @@ boundary.
   through `readLegacySprites(...)`; the client/editor resource path uses the
   project-owned `CacheCompression` byte utility. This is a containment step,
   not a claim that the old renderer classes are migrated.
+- The shared `Buffer` is byte-only. Legacy sprite/image/texture decoders may
+  still receive Displee archives, but they extract bytes at that boundary
+  instead of making the cache-library `File` type part of a reusable I/O API.
+- `:Client:verifyCacheBackendBoundary` keeps the remaining raw cache imports
+  limited to the legacy facade, old renderer/definition decoders, and explicit
+  cache adapters. Any new product code that imports Displee or OpenRune must
+  first establish an intentional adapter boundary.
 - `CacheStore` reads and writes use defensive byte-array ownership at each
   concrete backend. Decoders can therefore inspect or transform returned data
   without mutating a live cache buffer or a pending output write.

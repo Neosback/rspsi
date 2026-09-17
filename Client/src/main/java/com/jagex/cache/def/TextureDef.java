@@ -11,7 +11,7 @@ public final class TextureDef
 
 	public static void unpackConfig(Archive streamLoader)
 	{
-		Buffer buffer = new Buffer(streamLoader.file("textures.dat"));
+		Buffer buffer = new Buffer(streamLoader.file("textures.dat").getData());
 		int count = buffer.readUShort();
 		textures = new TextureDef[count];
 		for (int i = 0; i != count; ++i)

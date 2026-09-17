@@ -128,8 +128,8 @@ public final class IndexedImage extends GameRaster {
 	}
 
 	public IndexedImage(Archive archive, String name, int id) throws Exception {
-		Buffer image = new Buffer(archive.file(name + ".dat"));
-		Buffer meta = new Buffer(archive.file("index.dat"));
+		Buffer image = new Buffer(archive.file(name + ".dat").getData());
+		Buffer meta = new Buffer(archive.file("index.dat").getData());
 		
 
 		meta.setPosition(image.readUShort());

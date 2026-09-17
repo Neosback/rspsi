@@ -1,6 +1,5 @@
 package com.jagex.io;
 
-import com.displee.cache.index.archive.file.File;
 import com.google.common.base.Preconditions;
 
 import java.math.BigInteger;
@@ -35,11 +34,6 @@ public final class Buffer {
 	}
 	public Buffer(byte[] payload) {
 		this.payload = payload;
-		position = 0;
-	}
-
-	public Buffer(File payload) {
-		this.payload = payload.getData();
 		position = 0;
 	}
 
