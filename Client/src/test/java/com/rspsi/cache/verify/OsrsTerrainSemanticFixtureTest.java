@@ -3,6 +3,8 @@ package com.rspsi.cache.verify;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.terrain.TerrainMesh;
+import com.rspsi.editor.terrain.TerrainMeshBuilder;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -66,5 +68,18 @@ class OsrsTerrainSemanticFixtureTest {
         OsrsLocationSemanticFixture fixture = new OsrsLocationSemanticFixture(1, List.of(object));
 
         assertTrue(fixture.compare(document).matches());
+    }
+
+    @Test
+    void sceneGeometryFixtureUsesCanonicalMeshCoordinatesAndTopology() {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        document.tile(0, 4, 5).restore(new TileSnapshot(
+                -128, -96, -64, -112, 3, 7, 8, 2, 0, List.of()));
+        TerrainMesh mesh = new TerrainMeshBuilder().build(document.tile(0, 4, 5).snapshot());
+
+        OsrsSceneGeometryFixture.TileGeometry tile = new OsrsSceneGeometryFixture.TileGeometry(
+                0, 4, 5, mesh.vertices(), mesh.faces());
+
+        assertTrue(new OsrsSceneGeometryFixture(1, List.of(tile)).compare(document).matches());
     }
 }

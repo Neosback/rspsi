@@ -125,6 +125,10 @@ differing height/underlay/overlay/shape/rotation/flag fields for build 240.
 The companion `locations.json` export decodes the same TSPS location payload
 semantics without using scene-container capacity rules; all 4,726 placements
 match the canonical RSPSi objects for the same region.
+The companion `scene-geometry.json` export compares authored terrain mesh
+vertices and face topology on 4,481 populated tiles with zero differences.
+This is geometry evidence, not a claim of full lighting/material/render parity;
+the independent scene fingerprint remains a stronger optional check.
 normal OpenRune source backend remains read-only. The application continues to construct the
 legacy Displee backend by default, and the validated Displee writer is an
 explicit staged output choice rather than an OpenRune-native writer claim.
@@ -180,7 +184,9 @@ neutral minimap parity service. Terrain snapshots are compared through the
 neutral terrain parity service. An optional `locations.json` contains the
 independent delta-packed location decode and is compared against canonical
 object ID/type/rotation/plane/coordinate tuples. Identity mismatches fail the gate; missing
-fixture data remains visible as `WARN`/`NOT_RUN`. This keeps RuneLite/TSPS
+fixture data remains visible as `WARN`/`NOT_RUN`. An optional
+`scene-geometry.json` compares authored terrain vertices and topology as a
+renderer-neutral 3D geometry export. This keeps RuneLite/TSPS
 captures and generated images outside the repository while making their
 provenance-controlled acceptance path executable.
 
@@ -191,9 +197,10 @@ This output is opt-in and derived from the supplied cache; it is not a checked-
 in fixture or a replacement for the independent oracle images.
 
 For release/CI acceptance, set `RSPSI_OSRS_REQUIRE_PARITY=true` as well. The
-verifier will then fail unless `render.parity`, `terrain.parity`,
-`location.parity`, and `minimap.parity` are `PASS`; the default remains non-strict so fixture-free
-local cache checks keep reporting missing external evidence as `NOT_RUN` or
-`WARN`. A terrain snapshot is deliberately separate from the render
+verifier will then fail unless an independent scene evidence check passes
+(`render.parity` or `scene.geometry.parity`) and `terrain.parity`,
+`location.parity`, and `minimap.parity` are `PASS`; the default remains
+non-strict so fixture-free local cache checks keep reporting missing external
+evidence as `NOT_RUN` or `WARN`. A terrain snapshot is deliberately separate from the render
 fingerprint: it proves cache/scene semantics without making a renderer’s
 internal representation part of the cross-project contract.

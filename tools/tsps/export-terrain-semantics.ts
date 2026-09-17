@@ -9,6 +9,8 @@
  *   npx tsx tools/tsps/export-terrain-semantics.ts 50 50 /tmp/fixture/terrain-semantics.json
  *
  * The companion locations file is written beside the terrain file.
+ * A scene-geometry.json export is written there as well for independent
+ * terrain mesh comparison.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -40,6 +42,7 @@ async function main(): Promise<void> {
         clientRoot,
         "rs/scene/SceneBuilder.ts",
     );
+    const { Scene } = await importTsps(clientRoot, "rs/scene/Scene.ts");
 
     const cacheInfo = cache.loadCacheList(cache.loadCacheInfos()).latest;
     const loaded = cache.loadCache(cacheInfo);
@@ -71,6 +74,16 @@ async function main(): Promise<void> {
         false,
         LocLoadType.NO_MODELS,
     );
+    // The full scene applies bridge relinking after mesh construction. For a
+    // geometry fixture, retain the authored terrain planes so the comparison
+    // is against RSPSi's canonical WorldDocument planes; bridge relationships
+    // are verified separately through flags and bridge-link tests.
+    const geometryScene = new Scene(Scene.MAX_LEVELS, 64, 64);
+    const terrainData = builder.getTerrainData(regionX, regionY);
+    if (!terrainData) throw new Error(`No terrain data for ${regionX},${regionY}`);
+    builder.decodeTerrain(geometryScene, terrainData, 0, 0,
+        regionX * 64, regionY * 64, regionX, regionY);
+    builder.addTileModels(geometryScene, false);
 
     const heights: number[] = [];
     const underlays: number[] = [];
@@ -140,8 +153,33 @@ async function main(): Promise<void> {
             a.id - b.id || a.plane - b.plane || a.x - b.x || a.y - b.y
                 || a.type - b.type || a.rotation - b.rotation),
     }, null, 2)}\n`);
+    const geometryTiles: Record<string, number | number[]>[] = [];
+    for (let plane = 0; plane < 4; plane++) {
+        for (let x = 1; x < 63; x++) {
+            for (let y = 1; y < 63; y++) {
+                const model = geometryScene.tiles[plane][x][y]?.tileModel;
+                if (!model) continue;
+                const vertices: number[] = [];
+                for (let i = 0; i < model.vertexX.length; i++) {
+                    vertices.push(model.vertexX[i] - x * 128,
+                        model.vertexZ[i] - y * 128, model.vertexY[i]);
+                }
+                const faces: number[] = [];
+                for (let i = 0; i < model.facesA.length; i++) {
+                    faces.push(model.facesA[i], model.facesB[i], model.facesC[i]);
+                }
+                geometryTiles.push({ plane, x, y, vertices, faces });
+            }
+        }
+    }
+    const geometryPath = path.join(path.dirname(output), "scene-geometry.json");
+    fs.writeFileSync(geometryPath, `${JSON.stringify({
+        formatVersion: 1,
+        tiles: geometryTiles,
+    }, null, 2)}\n`);
     console.log(`wrote ${output}`);
     console.log(`wrote ${locationPath}`);
+    console.log(`wrote ${geometryPath}`);
 }
 
 main().catch((error) => {

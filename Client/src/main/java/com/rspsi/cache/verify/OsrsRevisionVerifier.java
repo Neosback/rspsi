@@ -238,6 +238,8 @@ public final class OsrsRevisionVerifier {
             VerificationCheck renderParity = renderParityCheck(fixture, fixtureProblems, sceneFingerprint);
             VerificationCheck terrainParity = terrainParityCheck(fixture, fixtureProblems, document, messages);
             VerificationCheck locationParity = locationParityCheck(fixture, fixtureProblems, document, messages);
+            VerificationCheck geometryParity = sceneGeometryParityCheck(fixture, fixtureProblems,
+                    document, messages);
             VerificationCheck minimapParity = minimapParityCheck(fixture, fixtureProblems,
                     minimaps, shapedMinimaps, messages, errors);
             if (renderParity.status() == VerificationCheck.Status.FAIL) {
@@ -252,8 +254,11 @@ public final class OsrsRevisionVerifier {
             if (locationParity.status() == VerificationCheck.Status.FAIL) {
                 errors.add("location parity failed: " + locationParity.detail());
             }
-            errors.addAll(requiredParityErrors(renderParity, terrainParity, locationParity, minimapParity,
-                    requireExternalParity));
+            if (geometryParity.status() == VerificationCheck.Status.FAIL) {
+                errors.add("scene geometry parity failed: " + geometryParity.detail());
+            }
+            errors.addAll(requiredParityErrors(renderParity, geometryParity, terrainParity,
+                    locationParity, minimapParity, requireExternalParity));
             if (issueErrors > 0) errors.add("world validation reported errors");
             if (revisionAudit.stream().anyMatch(check -> check.status() == VerificationCheck.Status.FAIL)) {
                 errors.add("revision audit reported incompatible cache assumptions");
@@ -341,6 +346,7 @@ public final class OsrsRevisionVerifier {
                             renderParity,
                             terrainParity,
                             locationParity,
+                            geometryParity,
                             minimapParity))));
         } catch (RuntimeException exception) {
             errors.add(exception.getClass().getSimpleName() + ": " + exception.getMessage());
@@ -431,6 +437,34 @@ public final class OsrsRevisionVerifier {
                 comparison.matches()
                         ? "independent location semantics match"
                         : comparison.differenceCount() + " differing location placements"
+                        + (comparison.samples().isEmpty() ? "" : "; " + comparison.samples()));
+    }
+
+    private static VerificationCheck sceneGeometryParityCheck(OsrsParityFixture fixture,
+                                                               List<String> fixtureProblems,
+                                                               WorldDocument document,
+                                                               List<String> messages) {
+        if (fixture == null && fixtureProblems.isEmpty()) {
+            return check("scene.geometry.parity", VerificationCheck.Status.NOT_RUN,
+                    "independent scene geometry fixture was not supplied");
+        }
+        if (!fixtureProblems.isEmpty()) {
+            return check("scene.geometry.parity", VerificationCheck.Status.FAIL,
+                    "fixture is incompatible or could not be loaded");
+        }
+        if (fixture.sceneGeometry() == null) {
+            return check("scene.geometry.parity", VerificationCheck.Status.WARN,
+                    "fixture contains no scene-geometry.json export");
+        }
+        OsrsSceneGeometryFixture.Comparison comparison = fixture.sceneGeometry().compare(document);
+        messages.add("scene geometry parity: " + comparison.differenceCount()
+                + " differing tiles" + (comparison.samples().isEmpty()
+                ? "" : "; samples=" + comparison.samples()));
+        return check("scene.geometry.parity", comparison.matches()
+                        ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
+                comparison.matches()
+                        ? "independent terrain geometry matches"
+                        : comparison.differenceCount() + " differing scene geometry tiles"
                         + (comparison.samples().isEmpty() ? "" : "; " + comparison.samples()));
     }
 
@@ -566,10 +600,23 @@ public final class OsrsRevisionVerifier {
                                               VerificationCheck locationParity,
                                               VerificationCheck minimapParity,
                                               boolean required) {
+        return requiredParityErrors(renderParity,
+                new VerificationCheck("scene.geometry.parity", VerificationCheck.Status.NOT_RUN,
+                        "fixture pending"), terrainParity, locationParity, minimapParity, required);
+    }
+
+    static List<String> requiredParityErrors(VerificationCheck renderParity,
+                                              VerificationCheck geometryParity,
+                                              VerificationCheck terrainParity,
+                                              VerificationCheck locationParity,
+                                              VerificationCheck minimapParity,
+                                              boolean required) {
         if (!required) return List.of();
         List<String> errors = new ArrayList<>();
-        if (renderParity.status() != VerificationCheck.Status.PASS) {
-            errors.add("required render parity is not passing: " + renderParity.status());
+        if (renderParity.status() != VerificationCheck.Status.PASS
+                && geometryParity.status() != VerificationCheck.Status.PASS) {
+            errors.add("required scene parity is not passing: render=" + renderParity.status()
+                    + ", geometry=" + geometryParity.status());
         }
         if (terrainParity.status() != VerificationCheck.Status.PASS) {
             errors.add("required terrain parity is not passing: " + terrainParity.status());

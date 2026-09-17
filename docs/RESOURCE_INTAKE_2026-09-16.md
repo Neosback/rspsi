@@ -166,6 +166,10 @@ shape/rotation/flag fields matched RSPSi. The JSON export remains outside the
 repository; only the generator and verifier contract are committed. The same
 helper decodes TSPS location bytes into `locations.json`; build-240 region
 `(50,50)` matched all 4,726 canonical ID/type/rotation/plane/coordinate tuples.
+The same helper exports `scene-geometry.json` from TSPS's authored terrain
+models; 4,481 populated tiles matched RSPSi vertex coordinates and face
+topology. This is geometry evidence only; full lighting/material render
+parity remains a separate gate.
 
 The captured RuneLite checkout
 (`ced4c4aba7a3cb7cace42e1f0c25a5f79b7faef`) was inspected at:

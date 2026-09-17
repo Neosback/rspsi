@@ -22,7 +22,8 @@ import java.util.stream.Stream;
  * <p>Fixtures are deliberately kept outside the product repository. A
  * directory may contain {@code fixture.properties}, an optional
  * {@code scene.fingerprint} value, an optional
- * {@code terrain-semantics.json} and {@code locations.json} exports, and PNGs named
+ * {@code terrain-semantics.json}, {@code locations.json}, and optional
+ * {@code scene-geometry.json} exports, and PNGs named
  * {@code minimap-plane-N.png} or {@code minimap-shaped-plane-N.png}.</p>
  */
 public record OsrsParityFixture(
@@ -34,6 +35,7 @@ public record OsrsParityFixture(
         String sceneFingerprint,
         OsrsTerrainSemanticFixture terrainSemantics,
         OsrsLocationSemanticFixture locations,
+        OsrsSceneGeometryFixture sceneGeometry,
         Map<Integer, MinimapImage> minimaps,
         Map<Integer, MinimapImage> shapedMinimaps
 ) {
@@ -107,6 +109,11 @@ public record OsrsParityFixture(
         if (Files.isRegularFile(locationsPath)) {
             locations = OsrsLocationSemanticFixture.load(locationsPath);
         }
+        OsrsSceneGeometryFixture sceneGeometry = null;
+        Path geometryPath = directory.resolve("scene-geometry.json");
+        if (Files.isRegularFile(geometryPath)) {
+            sceneGeometry = OsrsSceneGeometryFixture.load(geometryPath);
+        }
 
         return new OsrsParityFixture(directory,
                 integerProperty(properties, "region.x"),
@@ -116,6 +123,7 @@ public record OsrsParityFixture(
                 optionalProperty(properties, "scene.fingerprint"),
                 terrainSemantics,
                 locations,
+                sceneGeometry,
                 minimaps, shapedMinimaps);
     }
 
