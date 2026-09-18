@@ -76,6 +76,17 @@ public final class SoftwareSceneRenderer {
         }
         alpha.sort(Comparator.comparingInt((DrawWork value) -> alphaOrder.get(value.command))
                 .thenComparingInt(value -> value.command.firstIndex()));
+        // The depth test below only accepts a strictly nearer fragment
+        // (pixelDepth >= depth[offset] is skipped), so exactly-coplanar
+        // opaque faces - e.g. a decal sitting exactly on the terrain height
+        // it decorates - can only be resolved by draw order, never depth.
+        // Higher RuneScape face priority must draw first so it claims the
+        // depth value and a same-depth lower-priority face is then skipped.
+        // This mirrors the real client: priority affects paint order, never
+        // a depth offset (see GpuPriority/OpenGlSceneRenderer for the same
+        // no-longer-synthetic-bias contract). The sort is stable, so faces
+        // with equal priority keep their original relative order.
+        opaque.sort(Comparator.comparingInt((DrawWork value) -> value.command.priority()).reversed());
 
         int rasterized = 0;
         for (DrawWork work : opaque) {

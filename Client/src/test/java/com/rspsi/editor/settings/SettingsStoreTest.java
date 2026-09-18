@@ -110,7 +110,10 @@ class SettingsStoreTest {
 
         SettingsStore restored = new SettingsStore(RenderSettingKeys.registry());
         assertTrue(SettingsJsonStore.load(file, restored).isEmpty());
-        assertEquals(0, restored.snapshot().get(RenderSettingKeys.MSAA_SAMPLES));
+        // 4 is the registry default now that MSAA is implemented end-to-end
+        // (GlFramebuffer); it was 0 only while the setting was clamped
+        // unavailable pending the FBO acceptance gate.
+        assertEquals(4, restored.snapshot().get(RenderSettingKeys.MSAA_SAMPLES));
         assertEquals(SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
                 restored.snapshot().get(RenderSettingKeys.PLANE_SELECTION));
         Files.deleteIfExists(file);

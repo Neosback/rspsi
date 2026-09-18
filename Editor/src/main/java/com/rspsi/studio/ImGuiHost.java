@@ -1,5 +1,6 @@
 package com.rspsi.studio;
 
+import com.rspsi.studio.theme.StudioTheme;
 import imgui.ImGui;
 import imgui.glfw.ImGuiImplGlfw;
 import imgui.gl3.ImGuiImplGl3;
@@ -18,6 +19,7 @@ public final class ImGuiHost implements AutoCloseable {
         Objects.requireNonNull(window, "window");
         if (initialized) throw new IllegalStateException("ImGui is already initialized");
         ImGui.createContext();
+        StudioTheme.apply();
         ImGui.getIO().addConfigFlags(ImGuiConfigFlags.DockingEnable);
         // Layout persistence will move to ~/.openrune-studio/layouts once the
         // workspace manager owns named layouts.  Never write one beside the

@@ -1,25 +1,39 @@
 # OpenRune Studio UI Foundation
 
-Status: implemented in the JavaFX shell; interactive migration and packaging
-acceptance remain in progress.
+Status: **originally implemented in the JavaFX shell; that shell is now the
+transitional/reference surface.** Per `docs/ROADMAP.md` (the authoritative
+execution plan), the native GLFW + OpenGL 3.3 + Dear ImGui shell
+(`com.rspsi.studio.*`) is the production frontend and JavaFX is scheduled for
+removal in `ROADMAP.md` Phase 9. The shell composition, workflow model, and
+theme intent recorded below remain the design target — they should be
+projected onto the native ImGui shell, not redefined, per
+`docs/IMGUI_ADAPTER.md`.
 
-This document defines the first production UI shell for OpenRune Studio. It is
-intentionally a shell contract, not a second editor architecture. The JavaFX
-frontend projects the neutral session, scene snapshot, selection, commands,
-asset repository, and plugin contributions that already belong to Studio core.
+This document defines the production UI shell contract for OpenRune Studio.
+It is intentionally a shell contract, not a second editor architecture. Both
+the JavaFX and native ImGui frontends project the same neutral session, scene
+snapshot, selection, commands, asset repository, and plugin contributions that
+already belong to Studio core.
 
 ## Locked decisions
 
-- JavaFX 21 is the first production frontend.
-- AtlantaFX Primer Dark is the base theme and RSPSi owns the application
-  tokens layered on top of it.
-- Ikonli Material Design is the icon source for new shell controls.
-- ControlsFX remains available for mature utility controls.
+- The native GLFW + Dear ImGui shell is the production frontend; JavaFX 21
+  remains available only as a transitional/reference surface until
+  `ROADMAP.md` Phase 9 removes it.
+- AtlantaFX Primer Dark is the JavaFX reference theme; the native shell uses
+  its own Dear ImGui style pass implementing the same dark
+  viewport/panel-separation and accent intent described below (see "Theme and
+  icon rules").
+- Ikonli Material Design is the icon source for JavaFX shell controls; the
+  native shell uses its own icon/glyph approach for the same semantic set.
+- ControlsFX remains available for mature JavaFX utility controls.
 - DockFX and MaterialFX are not added to the foundation. Studio uses a small,
-  constrained docking model that is easier to test and keep consistent.
-- Dear ImGui remains a later frontend adapter over the same neutral contracts.
-- The current legacy viewport remains the compatibility viewport until the
-  independent scene and GPU gates pass.
+  constrained docking model (ImGui docking, multi-viewport disabled) that is
+  easier to test and keep consistent, matching this document's "controlled
+  layout behavior" below.
+- The legacy JavaFX viewport (`EmbeddedOpenGlViewport`) is compatibility-only
+  and not the production scene renderer; the native FBO viewport
+  (`NativeSceneViewport`) is.
 
 AtlantaFX is used as a CSS-first JavaFX theme layer, Ikonli supplies JavaFX
 icon nodes, and ControlsFX remains an optional utility-control library. Their
@@ -203,10 +217,12 @@ The UI foundation is complete when:
 - panels can hide, resize, detach, and redock without leaking nodes;
 - plugin contributions mount and unload cleanly;
 - icon controls expose labels, tooltips, and accessible descriptions;
-- JavaFX and the future ImGui projection produce identical command,
+- JavaFX and the native ImGui projection produce identical command,
   selection, history, dirty-state, and plugin-lifecycle results;
-- macOS, Windows, and Linux packaged runtimes load AtlantaFX, Ikonli fonts,
-  detached windows, and restored layout state.
+- macOS, Windows, and Linux packaged runtimes load fonts/icons, detached or
+  docked windows, and restored layout state for whichever frontend they run
+  (AtlantaFX/Ikonli for the JavaFX reference surface, the native style pass
+  for the ImGui shell).
 
 The remaining interactive gate is deliberately separate from the foundation
 compile gate: the legacy viewport must pass open/edit/undo/save/reopen smoke

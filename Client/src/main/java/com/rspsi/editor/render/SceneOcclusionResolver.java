@@ -10,6 +10,33 @@ public final class SceneOcclusionResolver {
     private SceneOcclusionResolver() {
     }
 
+    /**
+     * Returns true only when every triangle referenced by {@code command} is
+     * individually occluded. This is the command-granularity counterpart of
+     * {@link #occludesTriangle}, used to decide whether to skip an entire
+     * already-merged draw command without rebuilding its geometry: a command
+     * is conservatively considered visible (returns false) as soon as any one
+     * of its triangles is not fully occluded.
+     */
+    public static boolean occludesCommand(GpuDrawCommand command, GpuUploadPlan plan,
+                                          CameraState camera, List<SceneOccluder> occluders) {
+        Objects.requireNonNull(command, "command");
+        Objects.requireNonNull(plan, "plan");
+        Objects.requireNonNull(camera, "camera");
+        Objects.requireNonNull(occluders, "occluders");
+        if (occluders.isEmpty()) return false;
+        for (int offset = command.firstIndex();
+             offset < command.firstIndex() + command.indexCount(); offset += 3) {
+            GpuSceneVertex first = plan.vertices().get(plan.indices().get(offset));
+            GpuSceneVertex second = plan.vertices().get(plan.indices().get(offset + 1));
+            GpuSceneVertex third = plan.vertices().get(plan.indices().get(offset + 2));
+            if (!occludesTriangle(command, first, second, third, camera, occluders)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** Returns true only when the complete triangle is behind one occluder. */
     public static boolean occludesTriangle(GpuDrawCommand command,
                                            GpuSceneVertex first,

@@ -26,22 +26,35 @@ public final class DashboardView {
         Objects.requireNonNull(loadCache, "load cache callback");
         Objects.requireNonNull(openMapEditor, "open workspace callback");
 
-        int[] size = {1280, 800};
-        ImGui.setNextWindowPos(0, 0);
-        ImGui.setNextWindowSize(size[0], size[1]);
+        // Track the real window size every frame (like MapEditorView already
+        // does via getIO().getDisplaySizeX/Y) instead of a hardcoded
+        // 1280x800 - the dashboard previously did not resize with the
+        // window at all.
+        imgui.ImGuiViewport mainViewport = ImGui.getMainViewport();
+        ImGui.setNextWindowPos(mainViewport.getPosX(), mainViewport.getPosY());
+        ImGui.setNextWindowSize(mainViewport.getSizeX(), mainViewport.getSizeY());
         int flags = imgui.flag.ImGuiWindowFlags.NoDecoration
                 | imgui.flag.ImGuiWindowFlags.NoMove
                 | imgui.flag.ImGuiWindowFlags.NoSavedSettings
-                | imgui.flag.ImGuiWindowFlags.NoBringToFrontOnFocus;
+                | imgui.flag.ImGuiWindowFlags.NoBringToFrontOnFocus
+                | imgui.flag.ImGuiWindowFlags.NoDocking;
         if (!ImGui.begin("OpenRune Studio", flags)) {
             ImGui.end();
             return;
         }
 
+        // Center a fixed-width readable column instead of stretching every
+        // widget the full window width on a wide/ultrawide display.
+        float contentWidth = Math.min(720.0f, ImGui.getContentRegionAvailX());
+        float margin = Math.max(24.0f, (ImGui.getContentRegionAvailX() - contentWidth) * 0.5f);
+        ImGui.dummy(1.0f, 32.0f);
+        ImGui.indent(margin);
+
+        ImGui.pushStyleColor(imgui.flag.ImGuiCol.Text, 0.88f, 0.91f, 0.98f, 1.0f);
         ImGui.text("OPENRUNE STUDIO");
-        ImGui.text("Cache-first editing for RuneScape worlds");
-        ImGui.separator();
-        ImGui.spacing();
+        ImGui.popStyleColor();
+        ImGui.textDisabled("Cache-first editing for RuneScape worlds");
+        ImGui.dummy(1.0f, 12.0f);
 
         ImGui.separatorText("Cache");
         ImGui.textDisabled("The selected cache stays alive while workspaces change.");
@@ -70,6 +83,7 @@ public final class DashboardView {
         ImGui.button("Interface Studio  ·  Coming soon");
         ImGui.endDisabled();
 
+        ImGui.unindent(margin);
         ImGui.end();
     }
 

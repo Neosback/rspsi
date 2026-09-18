@@ -62,7 +62,31 @@ Save/Discard/Cancel was not exercised because the current native slice has no
 command-backed edit surface yet.
 
 No JavaFX/AWT viewport or second cache prompt is accepted as evidence for the
-native path. MSAA remains explicitly unavailable until its later FBO gate.
+native path. MSAA is now enabled by default (registry `0..8`, default `4`,
+clamped to the driver's `GL_MAX_SAMPLES` by `GlFramebuffer`) as of the
+camera-upload/priority renderer fix below; it is no longer clamped
+unavailable.
+
+Automated (non-interactive) renderer regression check, 2026-09-18, macOS
+ARM (Apple M2), Java 21: after the camera-upload/priority-bias fix below,
+`./gradlew :Editor:run` was launched in the background against the locally
+configured cache and log output was captured, not a visual/interactive
+session. The renderer initialized (`Native OpenGL Apple / Apple M2 / 4.1
+Metal - 90.5`), decoded a full definition set (62,426 objects, 8,560
+sprites, 214/214 textures), and rendered a substantial real scene
+(source=989001 vertices, rendered=316996 triangles, textures decoded=23
+fallback=0 unavailable=0, firstGLerror=0) with no exception and no further
+error output over the following ~15+ seconds while the process stayed
+alive. This is evidence that the shader compiles, the new
+`GpuCommandVisibility`/upload-fingerprint path and priority-descending
+opaque ordering do not crash or throw on a large real scene, and
+`firstGlError` stayed 0 - it is **not** evidence about visual correctness
+(no z-fighting, correct colors/shapes, cull-face winding). Orbit/pan/zoom,
+Dashboard navigation, and dirty-session Save/Discard/Cancel were not
+exercised in this pass; a genuine interactive smoke test per the checklist
+above, ideally including a camera-drag check of the new
+`geometryUploaded`/`textureUploaded`/`drawCalls` diagnostics added to the
+Inspector panel, remains open.
 
 ## Exit decision
 

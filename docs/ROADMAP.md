@@ -178,10 +178,22 @@ This phase is intentionally before the large UI migration.
 
 ### Vanilla-compatible rendering corrections
 
-- [ ] Remove synthetic priority-to-NDC depth bands from vanilla mode. Keep
-  them only as an explicit debug visualization if useful.
-- [ ] Implement the real face bias convention and CPU-side priority ordering,
-  including the 12 priority groups and special interleave behavior.
+- [x] Remove synthetic priority-to-NDC depth bands from vanilla mode. Keep
+  them only as an explicit debug visualization if useful. (`GpuPriority` and
+  `OpenGlSceneRenderer`'s vertex shader now apply only the true client
+  face-bias byte, matching RuneLite's `vert.glsl`
+  `screenPos.z += float(bias) / 128.0`; verified against a real revision-240
+  cache render with `foundationGate` and the full render test suite passing.)
+- [x] Implement the real face bias convention and CPU-side priority ordering,
+  including the 12 priority groups and special interleave behavior. (Alpha
+  ordering already matched via `RsFaceOrderPlanner`; removing the depth bias
+  also required adding priority-descending opaque draw ordering in both
+  `SoftwareSceneRenderer` and `OpenGlSceneRenderer` so exactly-coplanar
+  opaque faces, e.g. a decal on the terrain height it decorates, resolve by
+  draw order rather than a synthetic depth offset, matching RuneLite's
+  "priority affects order, never depth" behavior. Render modes
+  `SORTED`/`SORTED_NO_DEPTH`/`UNSORTED`/`UNSORTED_NO_DEPTH` below remain
+  unimplemented.)
 - [ ] Add explicit render modes: `DEFAULT`, `SORTED`, `SORTED_NO_DEPTH`,
   `UNSORTED`, and `UNSORTED_NO_DEPTH`.
 - [ ] Match RuneLite/OSRS projection and reversed-depth behavior in
@@ -271,8 +283,18 @@ Make the renderer a proper viewport backend before adding the full editor shell.
   texture-array-layer mapping and lazy upload.
 - [ ] Separate topology, geometry, texture, material, visibility, and
   animation generations/fingerprints.
-- [ ] Make camera movement update uniforms/visibility/order only; it must never
-  rebuild scene VBOs/EBOs or recreate the texture array.
+- [x] Make camera movement update uniforms/visibility/order only; it must never
+  rebuild scene VBOs/EBOs or recreate the texture array. (Fixed ahead of the
+  rest of this phase because it was the dominant "very laggy" cause:
+  `OcclusionPlanFilter` used to embed the camera in the fingerprint that
+  gated `uploadGeometry`/`uploadTextureArray`, and also rebuilt a
+  single-triangle-per-command index list every frame near any occluder.
+  Replaced with `GpuCommandVisibility`, a per-frame `BitSet` over the
+  already-uploaded plan's existing merged commands that never touches
+  vertex/index data. `OpenGlSceneRenderer.draw()` now gates upload on the
+  plan's own camera-independent fingerprint only. The rest of this phase -
+  the `GlDevice`/`GlShaderProgram`/etc. decomposition, 8×8 zones, and
+  picking pass below - remains queued.)
 - [ ] Use 8×8 zones/chunks as GPU ownership and invalidation units with opaque
   geometry, alpha geometry, object metadata, roof ranges, pick IDs, and bounds.
 - [ ] Invalidate neighboring chunks only for real seam/lighting dependencies.
@@ -283,7 +305,11 @@ Make the renderer a proper viewport backend before adding the full editor shell.
 
 - [ ] Add a GPU ID-buffer picking pass with stable object/tile/vertex IDs.
 - [ ] Add renderer statistics for uploads, chunk rebuilds, texture misses,
-  draw calls, visible zones, and frame time.
+  draw calls, visible zones, and frame time. (`OpenGlSceneRenderer.Statistics`
+  now reports per-frame `geometryUploaded`/`textureUploaded`/`drawCalls`,
+  surfaced in the Map Editor viewport panel, so a camera-upload regression is
+  visible without a profiler. Chunk rebuilds, visible-zone counts, and frame
+  time remain unimplemented since chunking/zones do not exist yet.)
 - [ ] Keep software and native render plans comparable for the same scene.
 
 ### Exit gate
@@ -298,6 +324,20 @@ software-vs-native fixture comparisons remain within the defined tolerance.
 
 Port the concepts of the existing controlled shell to ImGui. Do not copy the
 JavaFX implementation or recreate every old button.
+
+Progress note: `DashboardView` and `MapEditorView` no longer use raw
+unstyled Dear ImGui - `StudioTheme` applies a dark, low-rounding palette in
+the spirit of `docs/UI_UX_FOUNDATION.md`'s theme rules, reserving the accent
+color for active/hovered/selected state. `MapEditorView` now hosts a real
+`ImGui.dockSpace` with a built-in default `Tools | Viewport | Inspector`
+split plus a bottom drawer, built once via the DockBuilder API (with a View >
+Reset layout command) instead of four fixed-pixel, unmovable windows; panels
+can now be resized/moved/redocked by the user. `DashboardView` now tracks
+the real window size every frame instead of a hardcoded 1280x800. None of
+the specific checklist items below are fully satisfied yet (tool rail
+contents, context toolbar levels, Outliner, status bar, and layout
+save/restore beyond the one-time default remain open), so no boxes are
+checked, but the shell is no longer built directly on stock ImGui geometry.
 
 ### Input and viewport
 

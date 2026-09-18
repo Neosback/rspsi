@@ -1,5 +1,14 @@
 # OpenRune Studio Direction
 
+**Superseded status note:** `docs/ROADMAP.md` is now the single authoritative
+execution plan and explicitly replaces prior planning documents. The native
+GLFW + OpenGL 3.3 + Dear ImGui shell (`com.rspsi.studio.*`) is the product;
+JavaFX is transitional and scheduled for removal in `ROADMAP.md` Phase 9. Any
+statement below implying JavaFX is still "first" or that a Dear ImGui
+migration is future/excluded work is stale and should be read through that
+lens. The product-direction and source/build-pipeline content below remains
+valid.
+
 This document records the long-term product direction discovered while
 reviewing the source-first editor and cache-builder workflow shown in the
 reference material. It is a design target, not permission to begin every
@@ -202,15 +211,13 @@ The controlled layout remains intentionally constrained:
   world context;
 - no unrestricted docking system in the foundation phase.
 
-The current JavaFX implementation of this shell is tracked in
-[`UI_UX_FOUNDATION.md`](UI_UX_FOUNDATION.md). It adds a Map Editor workspace
-tab, context toolbar, outliner/inspector hosts, utility drawer, semantic
-Ikonli icons, and user-scoped layout persistence while keeping future
-Interface, Model, Cutscene, Asset, and Build workspaces on the same shell.
-
-JavaFX renders these contracts first. Dear ImGui remains a future frontend
-option because the core contracts contain no JavaFX, ImGui, LWJGL, or OpenGL
-types.
+The shell composition (tool rail, context toolbar, outliner/inspector hosts,
+utility drawer, workspace tabs) is recorded in
+[`UI_UX_FOUNDATION.md`](UI_UX_FOUNDATION.md) — originally implemented in
+JavaFX, now the design target for the native Dear ImGui shell, which is the
+production frontend per `ROADMAP.md`. The core contracts contain no JavaFX,
+ImGui, LWJGL, or OpenGL types, which is what allowed the frontend to change
+without changing the underlying session/scene/command/plugin model.
 
 ## Workflow ideas worth adopting
 
@@ -251,8 +258,12 @@ out of the foundation and are not being copied:
 - a browser-style IDE or a full Git hosting client;
 - unrestricted docking;
 - live cache mutation on every brush event;
-- public plugin distribution, Lua, CS2 execution, interfaces, or cutscenes;
-- a renderer replacement or Dear ImGui migration.
+- public plugin distribution, Lua, CS2 execution, interfaces, or cutscenes.
+
+(The Dear ImGui migration and renderer decomposition are no longer excluded:
+they are `ROADMAP.md`'s locked architecture and active Phase 1/3/4 work, not
+out-of-scope research. This bullet is retained only as a historical note that
+they were once deferred.)
 
 ## Decision rule for future work
 
@@ -288,6 +299,8 @@ packet-first: `WorldRegionWindow`/`SceneWindow` provide context,
 `RenderScene`/`EditorSceneSnapshot` provide immutable derived state, and
 `TerrainRenderPacket`/`ModelRenderPacket` provide complete renderer inputs.
 OpenGL 3.3 is the selected embedded desktop backend, but native GPU handles
-remain outside neutral editor contracts. JavaFX hosts the surface, the
-software renderer remains the deterministic reference, and Dear ImGui must
-consume the same packets and diagnostic annotations when added.
+remain outside neutral editor contracts. The native GLFW/Dear ImGui shell now
+hosts the production surface, the software renderer remains the deterministic
+reference, and Dear ImGui consumes the same packets and diagnostic
+annotations; JavaFX remains available only as a transitional/reference
+surface per `ROADMAP.md` Phase 9.

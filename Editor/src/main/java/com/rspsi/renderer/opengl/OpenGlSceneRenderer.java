@@ -1,5 +1,6 @@
 package com.rspsi.renderer.opengl;
 
+import com.rspsi.editor.render.GpuCommandVisibility;
 import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
@@ -10,7 +11,6 @@ import com.rspsi.editor.render.GpuColorEncoding;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
 import com.rspsi.editor.render.RenderPresentation;
 import com.rspsi.editor.render.SceneFog;
-import com.rspsi.editor.render.OcclusionPlanFilter;
 import com.rspsi.editor.render.TextureAnimation;
 import com.rspsi.editor.render.RsFaceOrderPlanner;
 
@@ -233,7 +233,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // The CPU reference renderer does not cull triangles, and the
         // winding contract is not yet parity-verified for every OSRS model
         // and shaped-tile family. Keep both sides visible in the Phase 0
-        // native baseline; culling returns only with measured evidence.
+        // native baseline; culling returns only with measured evidence
+        // (BackfacePolicy.nativeWinding() already records the intended
+        // clockwise convention for when that verification lands).
         glDisable(GL_CULL_FACE);
         glClearColor(0.063f, 0.094f, 0.153f, 1.0f);
         captureGlError();
@@ -252,18 +254,32 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
               RenderPresentation presentation, int clientCycle) {
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        final GpuUploadPlan renderPlan = plan == null ? null : OcclusionPlanFilter.filter(plan, camera);
-        if (renderPlan == null || renderPlan.vertices().isEmpty() || renderPlan.indices().isEmpty()) {
-            statistics = statisticsFor(plan, renderPlan);
+        if (plan == null || plan.vertices().isEmpty() || plan.indices().isEmpty()) {
+            statistics = statisticsFor(plan, null, false, false, 0);
             captureGlError();
             return;
         }
-        if (!renderPlan.fingerprint().equals(uploadedFingerprint)) uploadGeometry(renderPlan);
-        String textureFingerprint = textureFingerprint(renderPlan.textures());
-        if (!textureFingerprint.equals(uploadedTextureFingerprint)) {
-            uploadTextureArray(renderPlan.textures());
-            uploadedTextureFingerprint = textureFingerprint;
+        // Geometry/texture upload is gated on the plan's own camera-independent
+        // fingerprint only, and always uploads the complete, unfiltered plan.
+        // Occlusion visibility below is a separate, cheap, per-frame decision
+        // (GpuCommandVisibility) that never rebuilds vertex/index data or
+        // shatters merged draw commands - camera movement alone must never
+        // trigger a glBufferData re-upload. geometryUploaded/textureUploaded
+        // are surfaced through Statistics so camera-drag regressions can be
+        // caught by a debug overlay/log rather than assumed fixed.
+        boolean geometryUploaded = false;
+        boolean textureUploaded = false;
+        if (!plan.fingerprint().equals(uploadedFingerprint)) {
+            uploadGeometry(plan);
+            geometryUploaded = true;
+            String textureFingerprint = textureFingerprint(plan.textures());
+            if (!textureFingerprint.equals(uploadedTextureFingerprint)) {
+                uploadTextureArray(plan.textures());
+                uploadedTextureFingerprint = textureFingerprint;
+                textureUploaded = true;
+            }
         }
+        GpuCommandVisibility visibility = GpuCommandVisibility.of(plan, camera);
 
         glUseProgram(program);
         glUniform3f(cameraLocation, camera.x(), camera.y(), camera.z());
@@ -276,7 +292,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glUniform1f(brightnessLocation, (float) presentation.brightness());
         glUniform1f(exposureLocation, (float) presentation.exposure());
         glUniform1i(smoothBandingLocation, presentation.smoothBanding() ? 1 : 0);
-        SceneFog.Bounds fogBounds = SceneFog.bounds(renderPlan);
+        SceneFog.Bounds fogBounds = SceneFog.bounds(plan);
         glUniform1i(useFogLocation, presentation.fogDepthTiles() > 0 ? 1 : 0);
         glUniform1f(fogWestLocation, fogBounds.minX());
         glUniform1f(fogEastLocation, fogBounds.maxX());
@@ -288,24 +304,46 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 (presentation.fogColor() & 0xFF) / 255.0f);
         glPolygonMode(GL_FRONT_AND_BACK, presentation.wireframe() ? GL_LINE : GL_FILL);
         glBindVertexArray(vertexArray);
-        for (GpuDrawCommand command : renderPlan.commands()) {
-            if (command.pass() == GpuDrawCommand.SubmissionPass.OPAQUE) {
-                drawCommand(renderPlan, command, camera, false, clientCycle);
+        int drawCalls = 0;
+        List<GpuDrawCommand> commands = plan.commands();
+        // GL_LESS only accepts a strictly nearer fragment, so exactly-coplanar
+        // opaque faces (e.g. a decal on the terrain height it decorates) can
+        // only be resolved by draw order, never depth - see the matching
+        // comment/sort in SoftwareSceneRenderer.render for why higher
+        // priority must be submitted first. List.sort is stable, so indices
+        // are only reordered relative to distinct priority values.
+        List<Integer> opaqueOrder = new ArrayList<>();
+        for (int index = 0; index < commands.size(); index++) {
+            if (commands.get(index).pass() == GpuDrawCommand.SubmissionPass.OPAQUE) {
+                opaqueOrder.add(index);
+            }
+        }
+        opaqueOrder.sort(Comparator.comparingInt((Integer index) -> commands.get(index).priority()).reversed());
+        for (int index : opaqueOrder) {
+            if (visibility.visible(index)) {
+                drawCommand(plan, commands.get(index), camera, false, clientCycle);
+                drawCalls++;
             }
         }
         // The software reference renderer composites transparent triangles
         // back-to-front. Keep opaque submission order stable, but apply the
         // same depth ordering to alpha ranges in the native backend.
         List<GpuDrawCommand> alpha = new ArrayList<>();
-        for (GpuDrawCommand command : renderPlan.commands()) {
-            if (command.pass() == GpuDrawCommand.SubmissionPass.ALPHA) alpha.add(command);
+        for (int index = 0; index < commands.size(); index++) {
+            GpuDrawCommand command = commands.get(index);
+            if (command.pass() == GpuDrawCommand.SubmissionPass.ALPHA && visibility.visible(index)) {
+                alpha.add(command);
+            }
         }
         alpha = RsFaceOrderPlanner.orderAlpha(alpha,
-                command -> averageDepth(renderPlan, command, camera));
-        for (GpuDrawCommand command : alpha) drawCommand(renderPlan, command, camera, true, clientCycle);
+                command -> averageDepth(plan, command, camera));
+        for (GpuDrawCommand command : alpha) {
+            drawCommand(plan, command, camera, true, clientCycle);
+            drawCalls++;
+        }
         glBindVertexArray(0);
         glUseProgram(0);
-        statistics = statisticsFor(plan, renderPlan);
+        statistics = statisticsFor(plan, visibility, geometryUploaded, textureUploaded, drawCalls);
         captureGlError();
         if (!diagnosticsLogged) {
             LOGGER.info("Native OpenGL {} / {} / {}; source={} vertices, rendered={} triangles, "
@@ -322,15 +360,20 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return statistics;
     }
 
-    private Statistics statisticsFor(GpuUploadPlan source, GpuUploadPlan rendered) {
-        int sourceVertices = source == null ? 0 : source.vertices().size();
-        int sourceIndices = source == null ? 0 : source.indices().size();
-        int renderedIndices = rendered == null ? 0 : rendered.indices().size();
+    private Statistics statisticsFor(GpuUploadPlan plan, GpuCommandVisibility visibility,
+                                     boolean geometryUploaded, boolean textureUploaded, int drawCalls) {
+        int sourceVertices = plan == null ? 0 : plan.vertices().size();
+        int sourceIndices = plan == null ? 0 : plan.indices().size();
+        int renderedIndices = 0;
         int terrainTriangles = 0;
         int objectTriangles = 0;
-        if (rendered != null) {
-            for (GpuDrawCommand command : rendered.commands()) {
+        if (plan != null && visibility != null) {
+            List<GpuDrawCommand> commands = plan.commands();
+            for (int index = 0; index < commands.size(); index++) {
+                if (!visibility.visible(index)) continue;
+                GpuDrawCommand command = commands.get(index);
                 int triangles = command.indexCount() / 3;
+                renderedIndices += command.indexCount();
                 if (command.layer() == SceneLayer.Kind.TERRAIN) terrainTriangles += triangles;
                 else objectTriangles += triangles;
             }
@@ -338,8 +381,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         int decoded = 0;
         int fallback = 0;
         int unavailable = 0;
-        if (source != null) {
-            for (RenderTextureResource resource : source.textures().values()) {
+        if (plan != null) {
+            for (RenderTextureResource resource : plan.textures().values()) {
                 switch (resource.pixelStatus()) {
                     case AVAILABLE -> decoded++;
                     case AVERAGE_COLOR_FALLBACK -> fallback++;
@@ -350,7 +393,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return new Statistics(sourceVertices, sourceIndices, renderedIndices,
                 terrainTriangles, objectTriangles, decoded, fallback, unavailable,
                 safeGlString(GL_VENDOR), safeGlString(GL_RENDERER), safeGlString(GL_VERSION),
-                firstGlError);
+                firstGlError, geometryUploaded, textureUploaded, drawCalls);
     }
 
     private void captureGlError() {
@@ -363,13 +406,23 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return value == null ? "unknown" : value;
     }
 
+    /**
+     * {@code geometryUploaded}/{@code textureUploaded} report whether this
+     * frame performed a {@code glBufferData}/texture-array upload; both
+     * should be {@code false} for every frame after the first one a given
+     * scene is resident, including every frame of camera movement. {@code
+     * drawCalls} is the number of {@code glDrawElements} calls issued this
+     * frame - it should stay proportional to the scene's merged command
+     * count, not explode near occluders.
+     */
     public record Statistics(int sourceVertices, int sourceIndices, int renderedIndices,
                              int terrainTriangles, int objectTriangles,
                              int decodedTextures, int fallbackTextures, int unavailableTextures,
-                             String vendor, String renderer, String version, int firstGlError) {
+                             String vendor, String renderer, String version, int firstGlError,
+                             boolean geometryUploaded, boolean textureUploaded, int drawCalls) {
         private static Statistics empty() {
             return new Statistics(0, 0, 0, 0, 0, 0, 0, 0,
-                    "unknown", "unknown", "unknown", GL_NO_ERROR);
+                    "unknown", "unknown", "unknown", GL_NO_ERROR, false, false, 0);
         }
 
         public int renderedTriangles() {
@@ -616,12 +669,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             out float vRenderType;
             out vec3 vColor;
             out float vFogAmount;
-            float priorityBand(float priority) {
-                priority = clamp(priority, 0.0, 11.0);
-                if (priority <= 3.0) return priority;
-                if (priority <= 7.0) return 4.0 + floor((priority - 4.0) / 2.0);
-                return 6.0 + min(1.0, floor((priority - 8.0) / 2.0));
-            }
             void main() {
                 vec3 d = aPosition - uCamera;
                 float cy = cos(uYaw), sy = sin(uYaw);
@@ -632,10 +679,14 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 float depth = d.y * sp + forward * cp;
                 vec4 projected = vec4(uFocal / uAspect * x, uFocal * y,
                                       uDepthA * depth + uDepthB, depth);
-                float band = priorityBand(aPriority);
-                float bias = band * 0.015;
-                if (band == 7.0) bias += 0.01;
-                projected.z -= (bias + uFaceBias / 128.0) * projected.w;
+                // Only the true client per-face depth bias applies here,
+                // matching RuneLite's real vertex shader
+                // (screenPos.z += float(bias) / 128.0). RuneScape face
+                // priority (aPriority) affects draw order only - see
+                // RsFaceOrderPlanner for the alpha-pass ordering and the
+                // opaque submission loop in OpenGlSceneRenderer.draw - and
+                // must never synthesize an additional depth offset here.
+                projected.z -= (uFaceBias / 128.0) * projected.w;
                 gl_Position = projected;
                 vUv = aUv;
                 vEncodedColor = aEncodedColor;

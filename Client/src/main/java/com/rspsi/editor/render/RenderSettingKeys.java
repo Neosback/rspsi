@@ -82,8 +82,10 @@ public final class RenderSettingKeys {
         registry.register(SettingSpec.decimal(EXPOSURE, 0.0, -8.0, 8.0, SettingScope.VIEWPORT,
                 "Exposure", "Frontend exposure offset; does not alter authored colors.",
                 Set.of(SettingInvalidation.REDRAW)));
-        registry.register(SettingSpec.integer(MSAA_SAMPLES, 0, 0, 0, SettingScope.GLOBAL,
-                "MSAA samples", "Reserved until the complete FBO/MSAA acceptance gate passes; currently unavailable.",
+        registry.register(SettingSpec.integer(MSAA_SAMPLES, 4, 0, 8, SettingScope.GLOBAL,
+                "MSAA samples", "Multisample anti-aliasing for the scene framebuffer. "
+                        + "GlFramebuffer clamps the requested value to the driver's GL_MAX_SAMPLES "
+                        + "and rounds down to a power of two; 0 disables MSAA.",
                 Set.of(SettingInvalidation.FRAMEBUFFER)));
         registry.register(SettingSpec.integer(FOG_DEPTH_TILES, 0, 0, 1000, SettingScope.VIEWPORT,
                 "Fog depth", "Distance from the scene edge where presentation fog reaches the background.",

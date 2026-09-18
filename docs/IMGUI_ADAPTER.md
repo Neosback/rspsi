@@ -1,19 +1,27 @@
 # Dear ImGui adapter boundary
 
-Status: architecture locked; implementation deferred until the controlled
-JavaFX workflow has interactive acceptance.
+Status: **implemented and now the primary production frontend.**
+`docs/ROADMAP.md` is the authoritative execution plan and supersedes the
+"deferred until JavaFX acceptance" framing this document originally had. The
+native GLFW + OpenGL 3.3 + Dear ImGui shell (`com.rspsi.studio.*`) is wired as
+the application's `mainClass` and is enforced by the `verifyNativeBoundary`
+Gradle check; JavaFX is the transitional/reference surface scheduled for
+removal in `ROADMAP.md` Phase 9, not the other way around. The ownership
+rules, frame contract, and contribution-mapping guidance below remain
+accurate and are exactly what the ImGui shell must follow.
 
-Dear ImGui does not change the OpenRune Studio foundation. It is a second
-frontend adapter over the same session, scene, command, asset, and plugin
-contracts. Adding ImGui must not create a second world model, coordinate
-system, renderer scene graph, history stack, or plugin registry.
+Dear ImGui does not change the OpenRune Studio foundation. It is a frontend
+adapter over the same session, scene, command, asset, and plugin contracts.
+ImGui must not create a second world model, coordinate system, renderer scene
+graph, history stack, or plugin registry.
 
-The JavaFX reference host establishes the shell composition that ImGui must
-project rather than redefine: workspace tabs, tool rail, context toolbar,
-viewport host, outliner/inspector, utility drawer, and status row. JavaFX-only
-layout persistence is implemented by `WorkspaceLayoutStore`; an ImGui host may
-have different docking state, but it must persist that state outside project
-and world data and keep the same stable contribution IDs.
+`docs/UI_UX_FOUNDATION.md` records the shell composition ImGui should project
+rather than redefine: workspace tabs, tool rail, context toolbar, viewport
+host, outliner/inspector, utility drawer, and status row (that document was
+originally written against the JavaFX host and needs the same status
+correction — its UX/composition content still applies). Layout persistence
+must live outside project and world data and keep the same stable
+contribution IDs regardless of which frontend is rendering.
 
 The adapter also starts after OSRS bundle selection. `OsrsBundle` and its
 OpenRune FileStore adapter own cache opening and revision identity; ImGui only
@@ -72,9 +80,12 @@ The ImGui host should project the existing registry as follows:
 - `EditorOverlayRegistration` → viewport overlay draw calls; and
 - `EditorShortcutRegistration` → deterministic scene-level shortcut dispatch.
 
-The JavaFX reference host now routes scene-level key events through
-`EditorInputRouter`; the future ImGui host should call the same neutral method
-after translating its key state and reporting its text-input focus flag.
+The JavaFX reference host routes scene-level key events through
+`EditorInputRouter`. The native ImGui host (`com.rspsi.studio.*`) does not yet
+call it — wiring GLFW key/mouse state through the same neutral method (rather
+than handling shortcuts ad hoc in the native shell) remains open follow-up
+work and should happen before the native shell grows more shortcut-driven
+tools.
 
 Plugin IDs and contribution IDs are the stable identity across JavaFX and
 ImGui. Frontends may differ in docking, styling, and control arrangement, but
@@ -115,5 +126,7 @@ manual workflow pass in both frontends for:
 5. keyboard focus and shortcut precedence; and
 6. plugin unload/remount without stale UI contributions.
 
-Until that gate exists, JavaFX remains the reference host and ImGui remains a
-planned adapter—not a reason to weaken or fork the foundation.
+Until that gate exists, do not weaken or fork the foundation to accelerate
+either frontend — the native ImGui shell is the production path, and JavaFX
+is retained only as a transitional/reference surface until `ROADMAP.md`
+Phase 9 removes it.
