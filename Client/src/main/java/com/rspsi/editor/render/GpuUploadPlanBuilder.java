@@ -41,7 +41,7 @@ public final class GpuUploadPlanBuilder {
                             face.alpha() == 255 ? GpuDrawCommand.SubmissionPass.OPAQUE
                                     : GpuDrawCommand.SubmissionPass.ALPHA,
                             first, face.textureId(), face.priority(),
-                            terrainDepthBias(face), -1);
+                            terrainDepthBias(face), -1, GpuDrawCommand.RenderMode.DEFAULT);
                 }
             }
             for (SceneLayer layer : tile.layers()) {
@@ -53,9 +53,9 @@ public final class GpuUploadPlanBuilder {
                                     model.objectId(), mapping))
                             .forEach(textureTriangles::add);
                 }
-                appendModels(tile, layer, layer.modelIndices(), GpuDrawCommand.SubmissionPass.OPAQUE,
+                appendModels(tile, layer, layer.modelIndices(), GpuDrawCommand.SubmissionPass.OPAQUE, packet.textures(),
                         vertices, indices, commands);
-                appendModels(tile, layer, layer.modelIndices(), GpuDrawCommand.SubmissionPass.ALPHA,
+                appendModels(tile, layer, layer.modelIndices(), GpuDrawCommand.SubmissionPass.ALPHA, packet.textures(),
                         vertices, indices, commands);
             }
         }
@@ -100,6 +100,7 @@ public final class GpuUploadPlanBuilder {
 
     private static void appendModels(SceneTileSnapshot tile, SceneLayer layer,
                                      List<Integer> modelIndices, GpuDrawCommand.SubmissionPass pass,
+                                     java.util.Map<Integer, RenderTextureResource> textures,
                                      List<GpuSceneVertex> vertices, List<Integer> indices,
                                      List<GpuDrawCommand> commands) {
         for (int modelIndex : modelIndices) {
@@ -109,7 +110,8 @@ public final class GpuUploadPlanBuilder {
                 // opaque and 255 is fully invisible. Terrain alpha is a
                 // separate opacity convention and is handled above.
                 if (face.renderType() == 2 || face.alpha() == 255) continue;
-                boolean transparent = face.alpha() != 0 || face.renderType() == 3;
+                boolean transparent = face.alpha() != 0 || face.renderType() == 3
+                        || hasTransparentTexturePixels(face.textureId(), textures);
                 if ((pass == GpuDrawCommand.SubmissionPass.ALPHA) != transparent) continue;
                 ModelVertex a = model.vertices().get(face.a());
                 ModelVertex b = model.vertices().get(face.b());
@@ -130,14 +132,36 @@ public final class GpuUploadPlanBuilder {
                 indices.add(base + 1);
                 indices.add(base + 2);
                 appendCommand(commands, tile.worldAddress(), layer.kind(), pass,
-                        first, face.textureId(), face.priority(), face.depthBias(), model.objectId());
+                        first, face.textureId(), submissionPriority(layer.kind(), face.priority()),
+                        face.depthBias(), model.objectId(),
+                        model.renderMode());
             }
         }
     }
 
+    /**
+     * SceneLocs gives wall decorations a scene priority of 10.  Model face
+     * priorities are still retained when they are higher, but using the
+     * model's raw default (normally zero) makes coplanar castle trim compete
+     * with the wall it decorates.  Carry that category priority into both the
+     * native and software submission plans so depth/order behavior stays
+     * backend-independent.
+     */
+    private static int submissionPriority(SceneLayer.Kind layer, int facePriority) {
+        return layer == SceneLayer.Kind.WALL_DECORATION
+                ? Math.max(10, facePriority) : facePriority;
+    }
+
+    private static boolean hasTransparentTexturePixels(int textureId,
+                                                       java.util.Map<Integer, RenderTextureResource> textures) {
+        RenderTextureResource texture = textures.get(textureId);
+        return texture != null && texture.hasTransparentPixels();
+    }
+
     private static void appendCommand(List<GpuDrawCommand> commands, WorldTileAddress tile,
                                       SceneLayer.Kind layer, GpuDrawCommand.SubmissionPass pass,
-                                      int firstIndex, int textureId, int priority, int depthBias, int objectId) {
+                                      int firstIndex, int textureId, int priority, int depthBias, int objectId,
+                                      GpuDrawCommand.RenderMode renderMode) {
         if (!commands.isEmpty()) {
             int last = commands.size() - 1;
             GpuDrawCommand previous = commands.get(last);
@@ -146,13 +170,13 @@ public final class GpuUploadPlanBuilder {
             // range would make the native backend blend them in source order.
             if (pass != GpuDrawCommand.SubmissionPass.ALPHA
                     && previous.canMerge(tile, layer, pass, textureId, priority, depthBias,
-                    objectId, firstIndex)) {
+                    objectId, firstIndex, renderMode)) {
                 commands.set(last, previous.extend(3));
                 return;
             }
         }
         commands.add(new GpuDrawCommand(tile, layer, pass, firstIndex, 3,
-                textureId, priority, depthBias, objectId));
+                textureId, priority, depthBias, objectId, renderMode));
     }
 
     private static String fingerprint(String packetFingerprint, List<GpuSceneVertex> vertices,
@@ -171,7 +195,7 @@ public final class GpuUploadPlanBuilder {
             digest.update(counts);
 
             if (!commands.isEmpty()) {
-                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 32);
+                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 36);
                 for (GpuDrawCommand cmd : commands) {
                     cmdBuffer.putInt(cmd.tile().plane())
                             .putInt(cmd.tile().worldX())
@@ -180,7 +204,8 @@ public final class GpuUploadPlanBuilder {
                             .putInt(cmd.pass().ordinal())
                             .putInt(cmd.firstIndex())
                             .putInt(cmd.indexCount())
-                            .putInt(cmd.textureId());
+                            .putInt(cmd.textureId())
+                            .putInt(cmd.renderMode().ordinal());
                 }
                 cmdBuffer.flip();
                 digest.update(cmdBuffer);

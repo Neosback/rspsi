@@ -73,7 +73,7 @@ public final class RenderSettingKeys {
                 "Show renderer geometry edges.", Set.of(SettingInvalidation.REDRAW)));
         registry.register(SettingSpec.integer(ACTIVE_PLANE, 0, 0, 3, SettingScope.VIEWPORT,
                 "Active plane", "Plane used by authored/effective plane projections.", visibility));
-        registry.register(SettingSpec.enumeration(PLANE_SELECTION, SceneVisibilityPolicy.PlaneSelection.ALL,
+        registry.register(SettingSpec.enumeration(PLANE_SELECTION, SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
                 List.of(SceneVisibilityPolicy.PlaneSelection.values()), SettingScope.VIEWPORT,
                 "Plane selection", "Choose all, authored, or bridge-effective plane projection.", visibility));
         registry.register(SettingSpec.decimal(BRIGHTNESS, 1.0, 0.0, 4.0, SettingScope.VIEWPORT,

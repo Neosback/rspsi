@@ -22,7 +22,7 @@ class RenderConfigCompilerTest {
         assertTrue(config.terrainVisible());
         assertTrue(config.objectsVisible());
         assertTrue(config.roofsVisible());
-        assertEquals(SceneVisibilityPolicy.PlaneSelection.ALL, config.planeSelection());
+        assertEquals(SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE, config.planeSelection());
         // 4 is the registry default now that MSAA is implemented end-to-end
         // (GlFramebuffer); it was 0 only while the setting was clamped
         // unavailable pending the FBO acceptance gate.

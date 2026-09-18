@@ -49,9 +49,13 @@ final class OpenRuneTextureDefinitionDecoder {
             try {
                 byte[] bytes = cache.data(TEXTURE_INDEX, TEXTURE_ARCHIVE, id, null);
                 TextureRecord record = TextureRecord.decode(id, bytes);
-                definitions.put(id, new TextureType(id, record.transparent(), record.fileId(),
+                // The fifth byte in the post-233 cache record is the client
+                // low-detail flag, not a material-alpha flag. RuneLite's
+                // TextureProvider and GPU TextureManager derive cutout
+                // transparency from decoded sprite pixels instead.
+                definitions.put(id, new TextureType(id, false, record.fileId(),
                         record.averageRgb(), record.animationDirection(), record.animationSpeed(),
-                        false));
+                        record.lowDetail()));
             } catch (RuntimeException failure) {
                 if (failures.size() < 8) {
                     failures.add("texture " + id + ": " + describe(failure));
@@ -79,7 +83,7 @@ final class OpenRuneTextureDefinitionDecoder {
         }
     }
 
-    record TextureRecord(int fileId, int averageRgb, boolean transparent,
+    record TextureRecord(int fileId, int averageRgb, boolean lowDetail,
                          int animationDirection, int animationSpeed) {
         static TextureRecord decode(int id, byte[] bytes) {
             if (bytes == null) throw new IllegalArgumentException("cache returned no data");
@@ -90,14 +94,14 @@ final class OpenRuneTextureDefinitionDecoder {
             ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN);
             int fileId = buffer.getShort() & 0xFFFF;
             int averageRgb = buffer.getShort() & 0xFFFF;
-            boolean transparent = buffer.get() == 1;
+            boolean lowDetail = buffer.get() == 1;
             int animationDirection = buffer.get() & 0xFF;
             int animationSpeed = buffer.get() & 0xFF;
             if (fileId < 0 || averageRgb < 0 || averageRgb > 0xFFFF
                     || animationDirection > 4) {
                 throw new IllegalArgumentException("invalid fields for texture " + id);
             }
-            return new TextureRecord(fileId, averageRgb, transparent,
+            return new TextureRecord(fileId, averageRgb, lowDetail,
                     animationDirection, animationSpeed);
         }
     }

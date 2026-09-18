@@ -23,7 +23,9 @@ public record ModelRenderPacket(
         int maxZ,
         boolean supportsAnimation,
         boolean supportsParticles,
-        int placementHeight
+        int placementHeight,
+        boolean roofRelated,
+        GpuDrawCommand.RenderMode renderMode
 ) {
     /** Compatibility constructor before model placement elevation was explicit. */
     public ModelRenderPacket(TileCoordinate anchor, int objectId, ObjectCategory category,
@@ -32,7 +34,20 @@ public record ModelRenderPacket(
                              int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
                              boolean supportsAnimation, boolean supportsParticles) {
         this(anchor, objectId, category, vertices, triangles, textureTriangles, animationId,
-                minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles, 0);
+                minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles,
+                0, false, GpuDrawCommand.RenderMode.DEFAULT);
+    }
+
+    /** Compatibility constructor before explicit placement and roof metadata. */
+    public ModelRenderPacket(TileCoordinate anchor, int objectId, ObjectCategory category,
+                             List<ModelVertex> vertices, List<ModelTriangle> triangles,
+                             List<TextureTriangle> textureTriangles, int animationId,
+                             int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
+                             boolean supportsAnimation, boolean supportsParticles,
+                             int placementHeight, boolean roofRelated) {
+        this(anchor, objectId, category, vertices, triangles, textureTriangles, animationId,
+                minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles,
+                placementHeight, roofRelated, GpuDrawCommand.RenderMode.DEFAULT);
     }
 
     public ModelRenderPacket {
@@ -41,6 +56,7 @@ public record ModelRenderPacket(
         vertices = List.copyOf(Objects.requireNonNull(vertices, "vertices"));
         triangles = List.copyOf(Objects.requireNonNull(triangles, "triangles"));
         textureTriangles = List.copyOf(Objects.requireNonNull(textureTriangles, "textureTriangles"));
+        renderMode = Objects.requireNonNull(renderMode, "renderMode");
         if (objectId < 0 || animationId < -1 || minX > maxX || minY > maxY || minZ > maxZ) {
             throw new IllegalArgumentException("Invalid model packet identity or bounds");
         }
@@ -62,7 +78,15 @@ public record ModelRenderPacket(
     public ModelRenderPacket withAnchor(TileCoordinate newAnchor) {
         return new ModelRenderPacket(newAnchor, objectId, category, vertices, triangles,
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
-                supportsAnimation, supportsParticles, placementHeight);
+                supportsAnimation, supportsParticles, placementHeight, roofRelated, renderMode);
+    }
+
+    /** Returns this packet with an explicit RuneLite-compatible render mode. */
+    public ModelRenderPacket withRenderMode(GpuDrawCommand.RenderMode newRenderMode) {
+        return new ModelRenderPacket(anchor, objectId, category, vertices, triangles,
+                textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
+                supportsAnimation, supportsParticles, placementHeight, roofRelated,
+                newRenderMode);
     }
 
     /** Triangle indices suitable for the opaque submission pass. */

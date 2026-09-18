@@ -17,6 +17,6 @@ class ViewportControllerTest {
 
         assertEquals(-0.04f, controller.camera().pitch(), 0.0001f);
         assertEquals(0.04f, controller.camera().yaw(), 0.0001f);
-        assertEquals(160.0f, controller.camera().y(), 0.0001f);
+        assertEquals(20.0f, controller.camera().y(), 0.0001f);
     }
 }

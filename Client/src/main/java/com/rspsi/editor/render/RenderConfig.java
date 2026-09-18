@@ -125,6 +125,7 @@ public record RenderConfig(
 
     private boolean modelVisible(ModelRenderPacket model) {
         if (!objectsVisible) return false;
+        if (!roofsVisible && model.roofRelated()) return false;
         return switch (model.category()) {
             case WALL -> wallsVisible;
             case WALL_DECOR -> wallDecorationsVisible;
@@ -167,7 +168,7 @@ public record RenderConfig(
     public static RenderConfig vanillaDefault() {
         return new RenderConfig(RenderProfile.VANILLA_COMPATIBILITY,
                 true, true, true, true, true, true, true, true, false,
-                false, false, 0, SceneVisibilityPolicy.PlaneSelection.ALL,
+                false, false, 0, SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
                 1.0, 0.0, 0, 0, 0x101827);
     }
 }

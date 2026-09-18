@@ -34,4 +34,16 @@ class OsrsLocShapeTest {
         assertEquals(ObjectCategory.WALL, wall.category());
         assertEquals("Straight wall", wall.shape().orElseThrow().displayName());
     }
+
+    @Test
+    void exposesRuneliteWallOrientationBitfields() {
+        assertEquals(1, new WorldObject(1, 0, 0, 0, 0, 0).wallOrientationA());
+        assertEquals(2, new WorldObject(1, 0, 1, 0, 0, 0).wallOrientationA());
+        assertEquals(4, new WorldObject(1, 0, 2, 0, 0, 0).wallOrientationA());
+        assertEquals(8, new WorldObject(1, 0, 3, 0, 0, 0).wallOrientationA());
+        assertEquals(16, new WorldObject(1, 1, 0, 0, 0, 0).wallOrientationA());
+        assertEquals(32, new WorldObject(1, 1, 1, 0, 0, 0).wallOrientationA());
+        assertEquals(2, new WorldObject(1, 2, 0, 0, 0, 0).wallOrientationB());
+        assertEquals(0, new WorldObject(1, 10, 0, 0, 0, 0).wallOrientationA());
+    }
 }

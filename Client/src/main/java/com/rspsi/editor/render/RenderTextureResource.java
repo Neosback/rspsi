@@ -119,6 +119,19 @@ public final class RenderTextureResource {
 
     public boolean hasPixels() { return pixelStatus == PixelStatus.AVAILABLE; }
 
+    /**
+     * Returns whether decoded indexed-sprite pixels contain the OSRS cutout
+     * sentinel. The texture definition's fifth record byte is a low-detail
+     * flag; it is not evidence that a material belongs in the alpha pass.
+     */
+    public boolean hasTransparentPixels() {
+        if (pixelStatus != PixelStatus.AVAILABLE) return false;
+        for (int pixel : pixels) {
+            if ((pixel & 0xFFFFFF) == 0) return true;
+        }
+        return false;
+    }
+
     /** True when the resource has a valid layer that can be uploaded to GL. */
     public boolean hasGpuPixels() {
         return pixelStatus == PixelStatus.AVAILABLE

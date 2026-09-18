@@ -20,4 +20,23 @@ public record WorldObject(int id, int type, int rotation, int plane, int x, int 
     public java.util.Optional<OsrsLocShape> shape() {
         return OsrsLocShape.fromId(type);
     }
+
+    /**
+     * RuneLite {@code WallObject.getOrientationA()} semantics for this
+     * location. Cardinal wall shapes use 1/2/4/8 for west/north/east/south;
+     * diagonal wall shapes use 16/32/64/128 for north-west/north-east/
+     * south-east/south-west. Non-wall locations have no wall orientation.
+     */
+    public int wallOrientationA() {
+        return switch (type) {
+            case 0, 2 -> 1 << rotation;
+            case 1, 3 -> 1 << (rotation + 4);
+            default -> 0;
+        };
+    }
+
+    /** RuneLite {@code WallObject.getOrientationB()} for the second L-wall. */
+    public int wallOrientationB() {
+        return type == 2 ? 1 << ((rotation + 1) & 3) : 0;
+    }
 }

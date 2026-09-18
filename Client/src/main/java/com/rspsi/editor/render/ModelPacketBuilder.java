@@ -9,7 +9,6 @@ import com.rspsi.cache.definition.SkeletonDefinitionView;
 import com.rspsi.cache.definition.SequenceDefinitionView;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
-import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 
@@ -102,18 +101,29 @@ public final class ModelPacketBuilder {
                         animatedGeometry = ModelAnimation.apply(animatedGeometry, frame, skeleton.orElseThrow());
                     }
                 }
+                int variantStart = parts.vertices.size();
                 append(parts, object, appearance, animatedGeometry, document,
                         variant, footprintWidth, footprintLength);
+                if (variant.sourceType() == 2 && parts.vertices.size() > variantStart) {
+                    // TSPS keeps the two type-2 L-wall models separate until
+                    // ModelData.mergeNormals(model0, model1, 0, 0, 0, false).
+                    // The neutral packet flattens them, so retain the ranges
+                    // long enough to reproduce that pre-lighting merge.
+                    parts.wallVariantRanges.add(new VertexRange(variantStart, parts.vertices.size()));
+                }
             }
         }
         if (parts.vertices.isEmpty() || parts.triangles.isEmpty()) return Optional.empty();
         int[] bounds = bounds(parts.vertices);
-        return Optional.of(new ModelRenderPacket(
+        ModelRenderPacket packet = new ModelRenderPacket(
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
                 appearance.animationId(), bounds[0], bounds[1], bounds[2],
                 bounds[3], bounds[4], bounds[5], animation.isPresent(), false,
-                objectCenterHeight(document, object, footprintWidth, footprintLength)));
+                objectCenterHeight(document, object, footprintWidth, footprintLength),
+                object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
+                GpuDrawCommand.RenderMode.DEFAULT);
+        return Optional.of(mergeWallVariantNormals(packet, parts.wallVariantRanges));
     }
 
     private Optional<AnimationFrameView> animationFrame(int animationId, int clientCycle) {
@@ -549,7 +559,57 @@ public final class ModelPacketBuilder {
                 vertices, triangles, packet.textureTriangles(), packet.animationId(),
                 packet.minX(), packet.minY(), packet.minZ(), packet.maxX(), packet.maxY(),
                 packet.maxZ(), packet.supportsAnimation(), packet.supportsParticles(),
-                packet.placementHeight());
+                packet.placementHeight(), packet.roofRelated(), packet.renderMode());
+    }
+
+    /**
+     * Reproduces the TSPS/ModelData merge between the two models that make up
+     * a type-2 L-wall. The ranges are intentionally limited to source type 2
+     * variants so ordinary duplicate vertices within one model are not
+     * accidentally smoothed across a model seam.
+     */
+    private ModelRenderPacket mergeWallVariantNormals(ModelRenderPacket packet,
+                                                       List<VertexRange> ranges) {
+        if (ranges.size() < 2) return packet;
+        Map<PositionKey, List<VertexReference>> references = new java.util.LinkedHashMap<>();
+        for (int rangeIndex = 0; rangeIndex < ranges.size(); rangeIndex++) {
+            VertexRange range = ranges.get(rangeIndex);
+            for (int vertexIndex = range.start(); vertexIndex < range.end(); vertexIndex++) {
+                ModelVertex vertex = packet.vertices().get(vertexIndex);
+                if (vertex.normalMagnitude() == 0) continue;
+                references.computeIfAbsent(new PositionKey(vertex.x(), vertex.y(), vertex.z()),
+                        ignored -> new ArrayList<>())
+                        .add(new VertexReference(rangeIndex, vertexIndex, vertex));
+            }
+        }
+
+        List<ModelVertex> merged = new ArrayList<>(packet.vertices());
+        boolean changed = false;
+        for (List<VertexReference> group : references.values()) {
+            if (group.size() < 2 || group.stream().map(VertexReference::packetIndex).distinct().count() < 2) {
+                continue;
+            }
+            for (VertexReference target : group) {
+                Normal accumulated = normal(target.vertex());
+                boolean foundOtherRange = false;
+                for (VertexReference source : group) {
+                    if (source.packetIndex() == target.packetIndex()) continue;
+                    Normal sourceNormal = normal(source.vertex());
+                    accumulated = new Normal(accumulated.x + sourceNormal.x,
+                            accumulated.y + sourceNormal.y,
+                            accumulated.z + sourceNormal.z,
+                            accumulated.magnitude + sourceNormal.magnitude);
+                    foundOtherRange = true;
+                }
+                if (!foundOtherRange) continue;
+                ModelVertex original = target.vertex();
+                merged.set(target.vertexIndex(), new ModelVertex(original.x(), original.y(), original.z(),
+                        accumulated.x, accumulated.y, accumulated.z, accumulated.magnitude,
+                        original.u(), original.v()));
+                changed = true;
+            }
+        }
+        return changed ? relight(packet, List.copyOf(merged)) : packet;
     }
 
     private static Normal normal(ModelVertex vertex) {
@@ -564,6 +624,9 @@ public final class ModelPacketBuilder {
     }
 
     private record VertexKey(int plane, int x, int y, int z) {
+    }
+
+    private record PositionKey(int x, int y, int z) {
     }
 
     private record VertexReference(int packetIndex, int vertexIndex, ModelVertex vertex) {
@@ -989,11 +1052,6 @@ public final class ModelPacketBuilder {
         int localX = object.x() * 128 + x;
         int localZ = object.y() * 128 + z;
         int heightPlane = object.plane();
-        if (object.plane() == 0 && document.planes() > 1
-                && OsrsTileFlags.hasBridge(document.tile(1, object.x(), object.y())
-                .snapshot().flags())) {
-            heightPlane = 1;
-        }
         int surface = sampleHeight(document, heightPlane, localX, localZ);
         int center = sampleHeight(document, heightPlane,
                 object.x() * 128 + footprintWidth * 64,
@@ -1036,13 +1094,7 @@ public final class ModelPacketBuilder {
 
     private static int objectCenterHeight(WorldDocument document, WorldObject object,
                                           int footprintWidth, int footprintLength) {
-        int plane = object.plane();
-        if (object.plane() == 0 && document.planes() > 1
-                && OsrsTileFlags.hasBridge(document.tile(1, object.x(), object.y())
-                .snapshot().flags())) {
-            plane = 1;
-        }
-        return sampleHeight(document, plane,
+        return sampleHeight(document, object.plane(),
                 object.x() * 128 + footprintWidth * 64,
                 object.y() * 128 + footprintLength * 64);
     }
@@ -1077,6 +1129,7 @@ public final class ModelPacketBuilder {
         List<Normal> normals = new ArrayList<>();
         for (int index = 0; index < vertices.size(); index++) normals.add(new Normal(0, 0, 0, 0));
         int[] indices = geometry.triangleIndices();
+        int[] renderTypes = geometry.triangleRenderTypes();
         for (int face = 0; face < geometry.triangleCount(); face++) {
             int index = face * 3;
             int a = indices[index];
@@ -1088,9 +1141,17 @@ public final class ModelPacketBuilder {
                 c = swap;
             }
             Normal normal = faceNormal(vertices.get(a), vertices.get(b), vertices.get(c));
-            addNormal(normals, a, normal);
-            addNormal(normals, b, normal);
-            addNormal(normals, c, normal);
+            // ModelData.calculateVertexNormals() accumulates only render type
+            // 0 faces. Type 1 is flat-lit from faceNormals, while hidden and
+            // other special faces must not pull a wall corner's smooth normal
+            // toward an unrelated face. Including them produces the visible
+            // bright/dark seams at wall joins that the client does not have.
+            int renderType = valueAt(renderTypes, face, 0);
+            if (renderType == 0) {
+                addNormal(normals, a, normal);
+                addNormal(normals, b, normal);
+                addNormal(normals, c, normal);
+            }
         }
         // RuneLite/TSPS retain the accumulated components and the face-count
         // magnitude. Lighting divides by that magnitude; normalizing the
@@ -1202,6 +1263,10 @@ public final class ModelPacketBuilder {
         private final List<ModelVertex> vertices = new ArrayList<>();
         private final List<ModelTriangle> triangles = new ArrayList<>();
         private final List<TextureTriangle> textureTriangles = new ArrayList<>();
+        private final List<VertexRange> wallVariantRanges = new ArrayList<>();
+    }
+
+    private record VertexRange(int start, int end) {
     }
 
     private record RawVertex(int x, int y, int z) {

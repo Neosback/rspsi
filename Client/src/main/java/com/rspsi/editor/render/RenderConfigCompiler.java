@@ -23,7 +23,7 @@ public final class RenderConfigCompiler {
                 settings.getOrDefault(RenderSettingKeys.WIREFRAME, false),
                 settings.getOrDefault(RenderSettingKeys.ACTIVE_PLANE, 0),
                 settings.getOrDefault(RenderSettingKeys.PLANE_SELECTION,
-                        SceneVisibilityPolicy.PlaneSelection.ALL),
+                        SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE),
                 settings.getOrDefault(RenderSettingKeys.BRIGHTNESS, 1.0),
                 settings.getOrDefault(RenderSettingKeys.EXPOSURE, 0.0),
                 settings.getOrDefault(RenderSettingKeys.MSAA_SAMPLES, 0),

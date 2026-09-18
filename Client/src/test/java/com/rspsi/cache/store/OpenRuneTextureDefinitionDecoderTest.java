@@ -15,7 +15,7 @@ class OpenRuneTextureDefinitionDecoderTest {
 
         assertEquals(300, record.fileId());
         assertEquals(0x3456, record.averageRgb());
-        assertTrue(record.transparent());
+        assertTrue(record.lowDetail());
         assertEquals(4, record.animationDirection());
         assertEquals(9, record.animationSpeed());
     }

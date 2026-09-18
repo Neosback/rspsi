@@ -45,7 +45,7 @@ import static org.lwjgl.opengl.GL11.GL_FILL;
 import static org.lwjgl.opengl.GL11.GL_FLOAT;
 import static org.lwjgl.opengl.GL11.GL_FRONT_AND_BACK;
 import static org.lwjgl.opengl.GL11.GL_LINE;
-import static org.lwjgl.opengl.GL11.GL_GREATER;
+import static org.lwjgl.opengl.GL11.GL_GEQUAL;
 import static org.lwjgl.opengl.GL11.GL_NEAREST;
 import static org.lwjgl.opengl.GL11.GL_ONE;
 import static org.lwjgl.opengl.GL11.GL_ONE_MINUS_SRC_ALPHA;
@@ -270,7 +270,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glUniform1i(textureLocation, 0);
         glUseProgram(0);
         glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_GREATER);
+        glDepthFunc(GL_GEQUAL);
         glClearDepth(0.0);
         glDisable(GL_BLEND);
         glDepthMask(true);
@@ -300,7 +300,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // holes and ghosted fragments while the camera moves.
         glViewport(0, 0, width, height);
         glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_GREATER);
+        glDepthFunc(GL_GEQUAL);
         glDepthMask(true);
         glDisable(GL_BLEND);
         glDisable(GL_CULL_FACE);
@@ -364,12 +364,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         resetDrawState();
         int drawCalls = 0;
         List<GpuDrawCommand> commands = plan.commands();
-        // GL_LESS only accepts a strictly nearer fragment, so exactly-coplanar
-        // opaque faces (e.g. a decal on the terrain height it decorates) can
-        // only be resolved by draw order, never depth - see the matching
-        // comment/sort in SoftwareSceneRenderer.render for why higher
-        // priority must be submitted first. List.sort is stable, so indices
-        // are only reordered relative to distinct priority values.
+        // RuneLite uses GL_LEQUAL for its forward-Z native path.  This
+        // reversed-Z path uses the equivalent GL_GEQUAL so exactly-coplanar
+        // wall trim/decor faces can be resolved by the OSRS submission order
+        // instead of failing a strict depth test. List.sort is stable, so
+        // indices are only reordered relative to distinct priority values.
         List<Integer> opaqueOrder = opaqueOrder(plan, commands, visibility);
         drawCalls += drawBatches(plan, commands, opaqueOrder, visibility, camera, false, clientCycle);
         // The software reference renderer composites transparent triangles
@@ -396,7 +395,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // next frame's clear.
         glDepthMask(true);
         glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_GREATER);
+        glDepthFunc(GL_GEQUAL);
         glDisable(GL_BLEND);
         glPolygonMode(GL_FRONT_AND_BACK, presentation.wireframe() ? GL_LINE : GL_FILL);
         lastFrameDepthWrites = true;
@@ -917,7 +916,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 float depth = up * sp + forward * cp;
                 vec4 projected = vec4(uFocal / uAspect * x, uFocal * y,
                                       uDepthA * depth + uDepthB, depth);
-                // With Reversed-Z (glDepthFunc(GL_GREATER)), larger values in
+                // With Reversed-Z (glDepthFunc(GL_GEQUAL)), larger values in
                 // projected.z are nearer to the camera. Adding the RuneScape
                 // per-face depth bias brings the face towards the camera,
                 // matching RuneLite's real vert.glsl (screenPos.z += float(bias) / 128.0).

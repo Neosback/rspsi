@@ -221,6 +221,111 @@ def nativeStudioSources = fileTree(project(':Editor').file('src/main/java/com/rs
     include '**/*.java'
 }
 
+def renderingParityManifestFile = file('docs/RENDERING_PARITY_MANIFEST.json')
+def renderingParityReportDirectory = layout.buildDirectory.dir('reports/rendering')
+
+tasks.register('renderingAuditReport') {
+    description = 'Validates the checked-in rendering parity matrix and generates Markdown and JSON reports.'
+    group = 'verification'
+    inputs.file(renderingParityManifestFile)
+    outputs.dir(renderingParityReportDirectory)
+    doLast {
+        if (!renderingParityManifestFile.isFile()) {
+            throw new GradleException('Rendering parity manifest does not exist: ' + renderingParityManifestFile)
+        }
+        def manifest = new groovy.json.JsonSlurper().parse(renderingParityManifestFile)
+        if (!(manifest instanceof Map) || manifest.schemaVersion != 1
+                || !(manifest.entries instanceof List) || manifest.entries.isEmpty()) {
+            throw new GradleException('Rendering parity manifest must be schemaVersion=1 with a non-empty entries array.')
+        }
+        def allowedStatuses = (manifest.statuses ?: []).collect { it.toString() } as Set
+        def required = ['id', 'domain', 'title', 'status', 'priority', 'runelite', 'rspsi', 'tsps', 'evidence', 'nextAction']
+        def ids = [] as Set
+        manifest.entries.eachWithIndex { entry, index ->
+            if (!(entry instanceof Map)) {
+                throw new GradleException('Rendering parity entry ' + index + ' must be an object.')
+            }
+            def missing = required.findAll { key ->
+                entry[key] == null || (entry[key] instanceof Collection && entry[key].isEmpty())
+                        || (!(entry[key] instanceof Collection) && entry[key].toString().isBlank())
+            }
+            if (!missing.isEmpty()) {
+                throw new GradleException('Rendering parity entry ' + index + ' is missing: ' + missing.join(', '))
+            }
+            def id = entry.id.toString()
+            if (!ids.add(id)) throw new GradleException('Duplicate rendering parity entry: ' + id)
+            if (!allowedStatuses.contains(entry.status.toString())) {
+                throw new GradleException('Invalid rendering parity status for ' + id + ': ' + entry.status)
+            }
+            ['runelite', 'rspsi', 'tsps', 'evidence'].each { key ->
+                if (!(entry[key] instanceof Collection) || entry[key].any { it == null || it.toString().isBlank() }) {
+                    throw new GradleException('Rendering parity entry ' + id + ' must contain non-empty ' + key + ' references.')
+                }
+            }
+            if (['partial', 'blocked', 'deferred'].contains(entry.status.toString())) {
+                if (!entry.reason || entry.reason.toString().isBlank()) {
+                    throw new GradleException('Rendering parity gap ' + id + ' needs a reason.')
+                }
+            }
+            if (entry.nextAction.toString().isBlank()) {
+                throw new GradleException('Rendering parity entry ' + id + ' needs a nextAction.')
+            }
+        }
+
+        def entries = manifest.entries.collect { entry ->
+            [id: entry.id.toString(), domain: entry.domain.toString(), title: entry.title.toString(),
+             status: entry.status.toString(), priority: entry.priority.toString(),
+             runelite: entry.runelite.collect { it.toString() }, rspsi: entry.rspsi.collect { it.toString() },
+             tsps: entry.tsps.collect { it.toString() }, evidence: entry.evidence.collect { it.toString() },
+             reason: entry.reason == null ? null : entry.reason.toString(), nextAction: entry.nextAction.toString()]
+        }
+        def counts = entries.groupBy { it.status }.collectEntries { status, values -> [(status): values.size()] }
+        def domains = entries.groupBy { it.domain }.collectEntries { domain, values -> [(domain): values.size()] }
+        def report = [schemaVersion: 1, referenceRevision: manifest.referenceRevision,
+                      sourceManifest: renderingParityManifestFile.path, generatedFiles: [
+                              'build/reports/rendering/rendering-parity.md',
+                              'build/reports/rendering/rendering-parity.json'],
+                      counts: counts, domains: domains, entries: entries]
+        def reportDirectory = renderingParityReportDirectory.get().asFile
+        reportDirectory.mkdirs()
+        def json = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(report)) + System.lineSeparator()
+        file(reportDirectory).toPath().resolve('rendering-parity.json').toFile().text = json
+
+        def markdown = new StringBuilder()
+        markdown.append('# Rendering parity audit').append(System.lineSeparator()).append(System.lineSeparator())
+        markdown.append('Source: `docs/RENDERING_PARITY_MANIFEST.json`  ').append(System.lineSeparator())
+        markdown.append('Reference: `').append(manifest.referenceRevision).append('`').append(System.lineSeparator()).append(System.lineSeparator())
+        markdown.append('## Summary').append(System.lineSeparator()).append(System.lineSeparator())
+        markdown.append('| Status | Count |').append(System.lineSeparator()).append('|---|---:|').append(System.lineSeparator())
+        ['covered', 'partial', 'blocked', 'deferred'].each { status ->
+            markdown.append('| ').append(status).append(' | ').append(counts[status] ?: 0).append(' |').append(System.lineSeparator())
+        }
+        markdown.append(System.lineSeparator()).append('## Matrix').append(System.lineSeparator()).append(System.lineSeparator())
+        markdown.append('| ID | Domain | Priority | Status | RuneLite | RSPSi | TSPS | Next action |').append(System.lineSeparator())
+        markdown.append('|---|---|---|---|---|---|---|---|').append(System.lineSeparator())
+        entries.each { entry ->
+            def refs = { values -> values.join('<br>') }
+            markdown.append('| `').append(entry.id).append('` | ').append(entry.domain).append(' | ')
+                    .append(entry.priority).append(' | ').append(entry.status).append(' | ')
+                    .append(refs(entry.runelite)).append(' | ').append(refs(entry.rspsi)).append(' | ')
+                    .append(refs(entry.tsps)).append(' | ').append(entry.nextAction.replace('|', '\\|')).append(' |')
+                    .append(System.lineSeparator())
+        }
+        markdown.append(System.lineSeparator()).append('## Documented gaps').append(System.lineSeparator()).append(System.lineSeparator())
+        entries.findAll { it.status in ['partial', 'blocked', 'deferred'] }.each { entry ->
+            markdown.append('- **').append(entry.id).append('** — ').append(entry.reason).append(' Next: ').append(entry.nextAction).append(System.lineSeparator())
+        }
+        file(reportDirectory).toPath().resolve('rendering-parity.md').toFile().text = markdown.toString()
+        logger.lifecycle('Rendering parity audit: ' + entries.size() + ' entries; ' + counts.collect { key, value -> key + '=' + value }.join(', '))
+    }
+}
+
+tasks.register('renderingAuditGate') {
+    description = 'Validates the rendering parity source manifest without requiring an external cache.'
+    group = 'verification'
+    dependsOn 'renderingAuditReport'
+}
+
 tasks.register('verifyNativeBoundary') {
     description = 'Rejects transitional JavaFX/AWT/settings imports from the native Studio shell.'
     group = 'verification'
@@ -297,11 +402,12 @@ tasks.register('parityGate') {
     description = 'Runs strict Phase 0 external cache and semantic/render parity fixtures.'
     group = 'verification'
     dependsOn(':Client:check')
+    dependsOn('renderingAuditGate')
     dependsOn('verifyOsrsRevisionMatrix')
 }
 
 tasks.register('foundationGate') {
     description = 'Runs deterministic repository foundation checks without external cache dependencies.'
     group = 'verification'
-    dependsOn 'test', 'check', ':Client:check', ':Editor:check', 'verifyNativeBoundary'
+    dependsOn 'test', 'check', ':Client:check', ':Editor:check', 'verifyNativeBoundary', 'renderingAuditGate'
 }

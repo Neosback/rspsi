@@ -77,10 +77,64 @@ public record SceneVisibilityPolicy(
     /** Filters a packet without mutating its source tiles or texture repository. */
     public GpuScenePacket apply(GpuScenePacket packet) {
         Objects.requireNonNull(packet, "packet");
-        List<SceneTileSnapshot> visible = packet.tiles().stream().filter(this::includes).toList();
-        if (visible.size() == packet.tiles().size()) return packet;
+        // Roof visibility is a model-level projection. A roof lives on the
+        // same tile as the terrain and walls below it; dropping the complete
+        // tile creates the characteristic holes seen around castle roofs and
+        // bridge approaches.
+        List<SceneTileSnapshot> visible = packet.tiles().stream()
+                .filter(this::includesPlaneAndBridge)
+                .map(this::filterRoofGeometry)
+                .toList();
+        if (visible.equals(packet.tiles())) return packet;
         return new GpuScenePacket(packet.window(), visible, packet.lightingProfile(),
                 fingerprint(packet.fingerprint(), visible), packet.textures());
+    }
+
+    private boolean includesPlaneAndBridge(SceneTileSnapshot tile) {
+        if (planeSelection == PlaneSelection.AUTHORED_PLANE
+                && tile.coordinate().plane() != selectedPlane) {
+            return false;
+        }
+        if (planeSelection == PlaneSelection.EFFECTIVE_PLANE
+                && tile.effectivePlane() != selectedPlane) {
+            return false;
+        }
+        return !hideBridgeUpperGeometry || !tile.visibleBelow();
+    }
+
+    private SceneTileSnapshot filterRoofGeometry(SceneTileSnapshot tile) {
+        if (!hideRoofGeometry || !tile.roofRelated()) return tile;
+
+        java.util.Map<Integer, Integer> remapped = new java.util.HashMap<>();
+        List<ModelRenderPacket> models = new java.util.ArrayList<>();
+        for (int index = 0; index < tile.models().size(); index++) {
+            ModelRenderPacket model = tile.models().get(index);
+            if (model.roofRelated()) continue;
+            remapped.put(index, models.size());
+            models.add(model);
+        }
+
+        List<SceneLayer> layers = new java.util.ArrayList<>();
+        for (SceneLayer layer : tile.layers()) {
+            if (layer.kind() == SceneLayer.Kind.TERRAIN) {
+                layers.add(layer);
+                continue;
+            }
+            List<Integer> all = remap(layer.modelIndices(), remapped);
+            if (!all.isEmpty()) {
+                layers.add(new SceneLayer(layer.kind(), all,
+                        remap(layer.opaqueModelIndices(), remapped),
+                        remap(layer.transparentModelIndices(), remapped)));
+            }
+        }
+        return new SceneTileSnapshot(tile.coordinate(), tile.worldAddress(), tile.tileFlags(),
+                tile.effectivePlane(), tile.bridge(), tile.terrain(), models, layers,
+                tile.occluders(), false, tile.visibleBelow());
+    }
+
+    private static List<Integer> remap(List<Integer> source,
+                                       java.util.Map<Integer, Integer> remapped) {
+        return source.stream().filter(remapped::containsKey).map(remapped::get).toList();
     }
 
     private String fingerprint(String packetFingerprint, List<SceneTileSnapshot> visible) {

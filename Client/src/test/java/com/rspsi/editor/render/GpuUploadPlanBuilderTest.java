@@ -3,6 +3,7 @@ package com.rspsi.editor.render;
 import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldTileAddress;
+import com.rspsi.cache.definition.TextureDefinitionView;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -31,10 +32,11 @@ class GpuUploadPlanBuilderTest {
                 List.of(new ModelTriangle(0, 1, 2, 7, 8, -1, -1, 0, 2, 1,
                         0, 0, 1, 0, 0, 1, 7, 23),
                         new ModelTriangle(0, 1, 2, 7, 8, -1, -1, 255, 2, 1,
-                                0, 0, 1, 0, 0, 1, 7, 23)), List.of(), -1,
-                0, 0, 0, 128, 32, 128, false, false);
+                        0, 0, 1, 0, 0, 1, 7, 23)), List.of(), -1,
+                0, 0, 0, 128, 32, 128, false, false)
+                .withRenderMode(GpuDrawCommand.RenderMode.SORTED_NO_DEPTH);
         SceneLayer terrainLayer = new SceneLayer(SceneLayer.Kind.TERRAIN, List.of());
-        SceneLayer objectLayer = new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0));
+        SceneLayer objectLayer = new SceneLayer(SceneLayer.Kind.WALL_DECORATION, List.of(0));
         SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
                 Optional.empty(), Optional.of(terrain), List.of(model),
                 List.of(terrainLayer, objectLayer), List.of(), false, false);
@@ -58,6 +60,10 @@ class GpuUploadPlanBuilderTest {
         assertEquals(3, plan.commands().get(0).indexCount());
         assertEquals(3, plan.commands().get(1).firstIndex());
         assertEquals(23, plan.commands().get(1).depthBias());
+        assertEquals(10, plan.commands().get(1).priority(),
+                "wall decorations inherit the RuneLite/TSPS scene priority");
+        assertEquals(GpuDrawCommand.RenderMode.SORTED_NO_DEPTH,
+                plan.commands().get(1).renderMode());
         assertFalse(plan.fingerprint().isBlank());
     }
 
@@ -91,6 +97,61 @@ class GpuUploadPlanBuilderTest {
         assertEquals(GpuDrawCommand.SubmissionPass.OPAQUE, plan.commands().get(0).pass());
         assertEquals(GpuDrawCommand.SubmissionPass.ALPHA, plan.commands().get(1).pass());
         assertEquals(6, plan.vertices().size());
+    }
+
+    @Test
+    void textureRecordFlagDoesNotMoveAnOpaqueFaceIntoTheAlphaPass() {
+        TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
+        ModelRenderPacket model = new ModelRenderPacket(coordinate, 8, ObjectCategory.GROUND,
+                List.of(new ModelVertex(0, 0, 0, 1, 0, 0, 1, 0, 0),
+                        new ModelVertex(128, 0, 0, 1, 0, 0, 1, 1, 0),
+                        new ModelVertex(0, 0, 128, 1, 0, 0, 1, 0, 1)),
+                List.of(new ModelTriangle(0, 1, 2, 1, 1, 1, 7, 0, 0, 0)), List.of(), -1,
+                0, 0, 0, 128, 0, 128, false, false);
+        SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
+                Optional.empty(), Optional.empty(), List.of(model),
+                List.of(new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0))),
+                List.of(), false, false);
+        RenderTextureResource texture = new RenderTextureResource(7,
+                new TextureDefinitionView(7, true, 7, 0x336699, 0, 0, false),
+                1, 1, new int[]{0x336699}, RenderTextureResource.PixelStatus.AVAILABLE, "");
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
+                        Map.of()), 3200, 3200, 1, 0, java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "transparent-material", Map.of(7, texture));
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(1, plan.commands().size());
+        assertEquals(GpuDrawCommand.SubmissionPass.OPAQUE, plan.commands().get(0).pass());
+    }
+
+    @Test
+    void transparentTexturePixelsMoveAnOpaqueFaceIntoTheAlphaPass() {
+        TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
+        ModelRenderPacket model = new ModelRenderPacket(coordinate, 9, ObjectCategory.GROUND,
+                List.of(new ModelVertex(0, 0, 0, 1, 0, 0, 1, 0, 0),
+                        new ModelVertex(128, 0, 0, 1, 0, 0, 1, 1, 0),
+                        new ModelVertex(0, 0, 128, 1, 0, 0, 1, 0, 1)),
+                List.of(new ModelTriangle(0, 1, 2, 1, 1, 1, 7, 0, 0, 0)), List.of(), -1,
+                0, 0, 0, 128, 0, 128, false, false);
+        SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
+                Optional.empty(), Optional.empty(), List.of(model),
+                List.of(new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0))),
+                List.of(), false, false);
+        RenderTextureResource texture = new RenderTextureResource(7,
+                new TextureDefinitionView(7, false, 7, 0x336699, 0, 0, false),
+                1, 1, new int[]{0}, RenderTextureResource.PixelStatus.AVAILABLE, "");
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
+                        Map.of()), 3200, 3200, 1, 0, java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "transparent-pixels", Map.of(7, texture));
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(GpuDrawCommand.SubmissionPass.ALPHA, plan.commands().get(0).pass());
     }
 
     @Test

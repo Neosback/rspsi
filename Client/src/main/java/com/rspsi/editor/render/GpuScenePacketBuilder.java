@@ -68,7 +68,7 @@ public final class GpuScenePacketBuilder {
                     .findFirst();
             int effectivePlane = bridge.map(value -> value.lower().plane()).orElse(address.plane());
             int flags = scene.document().tile(local.plane(), local.x(), local.y()).snapshot().flags();
-            List<SceneLayer> layers = layers(terrain, models);
+            List<SceneLayer> layers = layers(terrain, models, scene.textures());
             boolean roofRelated = localObjects.roofRelated(local);
             tiles.add(new SceneTileSnapshot(addressToCoordinate(address), address, flags, effectivePlane,
                     bridge, Optional.ofNullable(terrain), models, layers, List.of(), roofRelated,
@@ -116,14 +116,14 @@ public final class GpuScenePacketBuilder {
                     new TileCoordinate(value.effective().plane(), value.effective().worldX(), value.effective().worldY())));
             TerrainRenderPacket terrain = scene.terrainPackets().get(address);
             List<ModelRenderPacket> models = scene.modelPackets().getOrDefault(address, List.of());
-            List<SceneLayer> layers = layers(terrain, models);
+            List<SceneLayer> layers = layers(terrain, models, scene.textures());
             List<SceneOccluder> occluders = occluders(address, scene, models);
             int tileFlags = scene.tileFlags().getOrDefault(address, 0);
             boolean roofRelated = scene.objects().stream()
                     .filter(value -> value.address().equals(address))
                     .map(value -> value.object().shape().map(shape -> shape.id() >= 12 && shape.id() <= 21)
                             .orElse(false))
-                    .findFirst().orElse(false);
+                    .anyMatch(Boolean::booleanValue);
             tiles.add(new SceneTileSnapshot(addressToCoordinate(address), address, tileFlags, effectivePlane, bridge,
                     Optional.ofNullable(terrain), models, layers, occluders, roofRelated,
                     effectivePlane < address.plane()));
@@ -188,18 +188,20 @@ public final class GpuScenePacketBuilder {
         }
     }
 
-    private static List<SceneLayer> layers(TerrainRenderPacket terrain, List<ModelRenderPacket> models) {
+    private static List<SceneLayer> layers(TerrainRenderPacket terrain, List<ModelRenderPacket> models,
+                                           java.util.Map<Integer, RenderTextureResource> textures) {
         List<SceneLayer> result = new ArrayList<>();
         if (terrain != null) result.add(new SceneLayer(SceneLayer.Kind.TERRAIN, List.of()));
-        addLayer(result, SceneLayer.Kind.WALL, models, ObjectCategory.WALL);
-        addLayer(result, SceneLayer.Kind.WALL_DECORATION, models, ObjectCategory.WALL_DECOR);
-        addLayer(result, SceneLayer.Kind.GROUND_OBJECT, models, ObjectCategory.GROUND);
-        addLayer(result, SceneLayer.Kind.GROUND_DECORATION, models, ObjectCategory.GROUND_DECOR);
+        addLayer(result, SceneLayer.Kind.WALL, models, ObjectCategory.WALL, textures);
+        addLayer(result, SceneLayer.Kind.WALL_DECORATION, models, ObjectCategory.WALL_DECOR, textures);
+        addLayer(result, SceneLayer.Kind.GROUND_OBJECT, models, ObjectCategory.GROUND, textures);
+        addLayer(result, SceneLayer.Kind.GROUND_DECORATION, models, ObjectCategory.GROUND_DECOR, textures);
         return List.copyOf(result);
     }
 
     private static void addLayer(List<SceneLayer> layers, SceneLayer.Kind kind,
-                                 List<ModelRenderPacket> models, ObjectCategory category) {
+                                 List<ModelRenderPacket> models, ObjectCategory category,
+                                 java.util.Map<Integer, RenderTextureResource> textures) {
         List<Integer> indices = new ArrayList<>();
         for (int index = 0; index < models.size(); index++) {
             if (models.get(index).category() == category) indices.add(index);
@@ -208,7 +210,7 @@ public final class GpuScenePacketBuilder {
         List<Integer> opaque = new ArrayList<>();
         List<Integer> transparent = new ArrayList<>();
         for (int index : indices) {
-            if (hasTransparentGeometry(models.get(index))) transparent.add(index);
+            if (hasTransparentGeometry(models.get(index), textures)) transparent.add(index);
             else opaque.add(index);
         }
         layers.add(new SceneLayer(kind, indices, opaque, transparent));
@@ -220,10 +222,18 @@ public final class GpuScenePacketBuilder {
      * as a non-opaque face because it is an alpha/visibility-controlled
      * material in the client model path.
      */
-    private static boolean hasTransparentGeometry(ModelRenderPacket model) {
+    private static boolean hasTransparentGeometry(ModelRenderPacket model,
+                                                  java.util.Map<Integer, RenderTextureResource> textures) {
         return model.triangles().stream()
-                .anyMatch(face -> face.alpha() != 255
-                        && (face.alpha() != 0 || face.renderType() == 3));
+                .anyMatch(face -> face.alpha() != 255 && isTransparentFace(face, textures));
+    }
+
+    /** TSPS marks a face transparent when either its face alpha or material requires it. */
+    private static boolean isTransparentFace(ModelTriangle face,
+                                             java.util.Map<Integer, RenderTextureResource> textures) {
+        return face.alpha() != 0 || face.renderType() == 3
+                || (face.textureId() >= 0 && textures.get(face.textureId()) != null
+                && textures.get(face.textureId()).hasTransparentPixels());
     }
 
     /** Emits only explicit definition-backed occluders; movement blocking alone is not visual occlusion. */
@@ -266,18 +276,27 @@ public final class GpuScenePacketBuilder {
      * pass; these inputs preserve the exact wall edges and heights first.
      */
     private static List<WallOccluder> clippedWallOccluders(com.rspsi.editor.model.WorldObject object) {
-        int rotation = object.rotation() & 3;
         if (object.type() == 0) {
-            return List.of(wall(rotation % 2 == 0 ? 1 : 2,
-                    rotation == 0 ? 0 : rotation == 2 ? 1 : 0,
-                    rotation == 1 ? 1 : rotation == 3 ? 0 : 0));
+            return wallForOrientation(object.wallOrientationA()).stream().toList();
         }
         if (object.type() != 2) return List.of();
-        return switch (rotation) {
-            case 0 -> List.of(wall(1, 0, 0), wall(2, 0, 1));
-            case 1 -> List.of(wall(2, 0, 1), wall(1, 1, 0));
-            case 2 -> List.of(wall(1, 1, 0), wall(2, 0, 0));
-            default -> List.of(wall(2, 0, 0), wall(1, 0, 0));
+        List<WallOccluder> result = new ArrayList<>();
+        result.addAll(wallForOrientation(object.wallOrientationA()));
+        result.addAll(wallForOrientation(object.wallOrientationB()));
+        return List.copyOf(result);
+    }
+
+    /** Converts RuneLite's orientation bitfield into a fixed wall edge. */
+    private static List<WallOccluder> wallForOrientation(int orientation) {
+        return switch (orientation) {
+            case 1 -> List.of(wall(1, 0, 0)); // west
+            case 2 -> List.of(wall(2, 0, 1)); // north
+            case 4 -> List.of(wall(1, 1, 0)); // east
+            case 8 -> List.of(wall(2, 0, 0)); // south
+            // Diagonal wall orientations are not valid fixed-axis occluder
+            // planes; they remain visible geometry but are intentionally not
+            // emitted into this conservative occlusion pass.
+            default -> List.of();
         };
     }
 

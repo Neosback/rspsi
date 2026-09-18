@@ -277,6 +277,44 @@ class ModelPacketBuilderTest {
     }
 
     @Test
+    void mergesNormalsAcrossTheTwoModelsOfAnLWallBeforeLighting() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 2, 0, 0, 0, 0))));
+        DefinitionProvider definitions = typedDefinitions(2, 7, triangle(7, 100));
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions).build(document).get(0);
+
+        // Both client wall variants share the footprint centre vertex. TSPS
+        // merges that pair before lighting; the flattened neutral packet must
+        // retain the two-face normal contribution at both copies.
+        assertEquals(2, packet.vertices().get(0).normalMagnitude());
+        assertEquals(2, packet.vertices().get(3).normalMagnitude());
+    }
+
+    @Test
+    void flatWallFacesDoNotContaminateSmoothVertexNormals() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 0, 0, 0, 0, 0))));
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128},
+                new int[]{0, 1, 2, 0, 2, 3},
+                new short[]{100, 100}, new int[]{0, 0}, new int[]{-1, -1},
+                new int[]{0, 1}, new int[]{0, 0}, new int[0], new int[0], null, null);
+        DefinitionProvider definitions = typedDefinitions(0, 7, geometry);
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions).build(document).get(0);
+
+        // The second face is flat (type 1) and must not add a second normal
+        // contribution to the shared corner.
+        assertEquals(1, packet.vertices().get(0).normalMagnitude());
+        assertEquals(1, packet.vertices().get(1).normalMagnitude());
+        assertEquals(1, packet.vertices().get(2).normalMagnitude());
+        assertEquals(0, packet.vertices().get(3).normalMagnitude());
+    }
+
+    @Test
     void usesNormalModelTypeForDiagonalCentrePiece() {
         WorldDocument document = new WorldDocument(1, 1, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
