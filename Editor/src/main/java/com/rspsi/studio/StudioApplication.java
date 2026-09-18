@@ -136,7 +136,7 @@ public final class StudioApplication implements AutoCloseable {
         currentPlan = null;
         renderedSettingsRevision = -1L;
         cancelPendingScene();
-        sceneStatus = "Loading region scene...";
+        sceneStatus = "Loading terrain, objects, and GPU buffers...";
         int[] region = parseRegion(dashboard.regionText());
         if (region == null) {
             sceneStatus = "Enter a valid region as X,Y or a region ID.";
@@ -158,10 +158,17 @@ public final class StudioApplication implements AutoCloseable {
         RenderWindowScene scene = new RenderWindowSceneBuilder(cache.bundle().definitions()).build(window);
         SceneWindow sceneWindow = SceneWindow.from(window);
         GpuScenePacket packet = new GpuScenePacketBuilder().build(sceneWindow, scene);
+        // Flattening a real region creates a large immutable GPU plan. Keep
+        // this work on the loader thread so the native window remains
+        // responsive while the scene is being prepared.
+        long settingsRevision = renderSettings.revision();
+        RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(config.apply(packet));
         double centerX = sceneWindow.sceneBaseX() * 128.0 + window.worldWindow().width() * 64.0;
         double centerZ = sceneWindow.sceneBaseY() * 128.0 + window.worldWindow().length() * 64.0;
-        return new LoadedMapScene(opened, packet, new com.rspsi.editor.render.CameraState(
-                (float) centerX, 2400.0f, (float) centerZ - 4200.0f,
+        return new LoadedMapScene(opened, packet, plan, settingsRevision,
+                new com.rspsi.editor.render.CameraState(
+                (float) centerX, -2400.0f, (float) centerZ - 4200.0f,
                 (float) -Math.toRadians(28.0), 0.0f));
     }
 
@@ -170,6 +177,8 @@ public final class StudioApplication implements AutoCloseable {
         try {
             loadedScene = pendingScene.join();
             sceneViewport.setCamera(loadedScene.camera());
+            currentPlan = loadedScene.plan();
+            renderedSettingsRevision = loadedScene.settingsRevision();
             initializePlugins(loadedScene);
             sceneStatus = "Region " + loadedScene.opened().region().regionX()
                     + "," + loadedScene.opened().region().regionY() + " ready.";
@@ -307,5 +316,7 @@ public final class StudioApplication implements AutoCloseable {
 
     private record LoadedMapScene(OsrsProjectSessionLoader.OpenedProject opened,
                                   GpuScenePacket packet,
+                                  GpuUploadPlan plan,
+                                  long settingsRevision,
                                   com.rspsi.editor.render.CameraState camera) { }
 }

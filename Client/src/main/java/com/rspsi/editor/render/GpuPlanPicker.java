@@ -79,8 +79,10 @@ public final class GpuPlanPicker {
         float cameraY = (height * 0.5f - screenY) / focal;
         float yawDepth = -cameraY * (float) Math.sin(camera.pitch())
                 + (float) Math.cos(camera.pitch());
-        float worldY = cameraY * (float) Math.cos(camera.pitch())
-                + (float) Math.sin(camera.pitch());
+        // The scene's canonical Y axis points down (OSRS terrain heights are
+        // negative-up), so invert the reconstructed camera-up displacement.
+        float worldY = -(cameraY * (float) Math.cos(camera.pitch())
+                + (float) Math.sin(camera.pitch()));
         float worldX = cameraX * (float) Math.cos(camera.yaw())
                 + yawDepth * (float) Math.sin(camera.yaw());
         float worldZ = -cameraX * (float) Math.sin(camera.yaw())

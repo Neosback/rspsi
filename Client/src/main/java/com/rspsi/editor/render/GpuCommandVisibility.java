@@ -18,12 +18,25 @@ import java.util.Objects;
  * at the same granularity {@link GpuUploadPlanBuilder} produced them.</p>
  */
 public final class GpuCommandVisibility {
+    /**
+     * Occlusion is an optimization, never a prerequisite for drawing. A real
+     * region can contain hundreds of thousands of triangles and thousands of
+     * wall planes; evaluating every command against every plane would stall
+     * the UI thread during the first frame. Keep the exact resolver for small
+     * fixtures and deliberately draw all commands when the broad-phase budget
+     * is exceeded.
+     */
+    private static final int MAX_OCCLUSION_COMMANDS = 10_000;
+    private static final long MAX_OCCLUSION_TESTS = 250_000L;
+
     private final BitSet occluded;
     private final int commandCount;
+    private final boolean occlusionApplied;
 
-    private GpuCommandVisibility(BitSet occluded, int commandCount) {
+    private GpuCommandVisibility(BitSet occluded, int commandCount, boolean occlusionApplied) {
         this.occluded = occluded;
         this.commandCount = commandCount;
+        this.occlusionApplied = occlusionApplied;
     }
 
     public static GpuCommandVisibility of(GpuUploadPlan plan, CameraState camera) {
@@ -31,7 +44,11 @@ public final class GpuCommandVisibility {
         Objects.requireNonNull(camera, "camera");
         List<GpuDrawCommand> commands = plan.commands();
         BitSet occluded = new BitSet(commands.size());
-        if (!plan.occluders().isEmpty()) {
+        long estimatedTests = (long) commands.size() * plan.occluders().size();
+        boolean occlusionApplied = !plan.occluders().isEmpty()
+                && commands.size() <= MAX_OCCLUSION_COMMANDS
+                && estimatedTests <= MAX_OCCLUSION_TESTS;
+        if (occlusionApplied) {
             for (int index = 0; index < commands.size(); index++) {
                 if (SceneOcclusionResolver.occludesCommand(index, commands.get(index), plan, camera,
                         plan.occluders())) {
@@ -39,7 +56,12 @@ public final class GpuCommandVisibility {
                 }
             }
         }
-        return new GpuCommandVisibility(occluded, commands.size());
+        return new GpuCommandVisibility(occluded, commands.size(), occlusionApplied);
+    }
+
+    /** True when the camera-dependent occluder resolver ran for this frame. */
+    public boolean occlusionApplied() {
+        return occlusionApplied;
     }
 
     /** Returns true when the command at {@code commandIndex} should be drawn this frame. */

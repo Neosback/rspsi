@@ -222,7 +222,8 @@ public final class GpuScenePacketBuilder {
      */
     private static boolean hasTransparentGeometry(ModelRenderPacket model) {
         return model.triangles().stream()
-                .anyMatch(face -> face.alpha() != 0 || face.renderType() == 3);
+                .anyMatch(face -> face.alpha() != 255
+                        && (face.alpha() != 0 || face.renderType() == 3));
     }
 
     /** Emits only explicit definition-backed occluders; movement blocking alone is not visual occlusion. */

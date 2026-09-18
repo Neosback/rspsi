@@ -66,8 +66,20 @@ public final class SceneOcclusionResolver {
      * frame, which dominated frame time once the per-frame geometry
      * re-upload was fixed separately.
      */
+    /*
+     * GpuUploadPlan is a value record whose generated hashCode walks every
+     * vertex, index, command, texture, and occluder.  Using it as a normal
+     * WeakHashMap key makes the supposedly cheap per-frame lookup O(scene
+     * size), which can completely starve the UI thread on a real region.
+     *
+     * Plans are immutable and renderers replace the plan when a scene is
+     * rebuilt, so identity is the correct cache key here.  The cache is
+     * bounded to the most recent plans below rather than retaining every
+     * scene ever opened.
+     */
     private static final java.util.Map<GpuUploadPlan, CommandBounds[]> BOUNDS_CACHE =
-            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+            java.util.Collections.synchronizedMap(new java.util.IdentityHashMap<>());
+    private static final int MAX_CACHED_PLANS = 4;
 
     public static CommandBounds boundsOf(int commandIndex, GpuDrawCommand command, GpuUploadPlan plan) {
         Objects.requireNonNull(command, "command");
@@ -79,6 +91,16 @@ public final class SceneOcclusionResolver {
             }
             return array;
         });
+        if (BOUNDS_CACHE.size() > MAX_CACHED_PLANS) {
+            synchronized (BOUNDS_CACHE) {
+                while (BOUNDS_CACHE.size() > MAX_CACHED_PLANS) {
+                    java.util.Iterator<GpuUploadPlan> iterator = BOUNDS_CACHE.keySet().iterator();
+                    if (!iterator.hasNext()) break;
+                    iterator.next();
+                    iterator.remove();
+                }
+            }
+        }
         if (commandIndex >= 0 && commandIndex < cached.length) {
             return cached[commandIndex];
         }

@@ -14,6 +14,7 @@ public final class StudioIcons {
     public static final String TILE = "\uf00a";         // material: grid_on
     public static final String AREA = "\uf0b2";         // material: select_all
     public static final String TERRAIN = "\uf1fc";      // material: terrain
+    public static final String WATER = "\uf043";        // material: water_drop
     public static final String HEIGHT = "\uf06e";       // material: visibility
     public static final String OBJECT = "\uf1b2";       // material: category
     public static final String MAP = "\uf279";          // material: map

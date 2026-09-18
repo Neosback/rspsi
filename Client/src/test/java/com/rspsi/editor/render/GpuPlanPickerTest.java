@@ -57,7 +57,7 @@ class GpuPlanPickerTest {
                 List.of(), Map.of(), "picker-terrain-test");
 
         // Camera directly above tile 3201, 3200 looking down (-pitch = 90 deg = -PI/2)
-        CameraState camera = new CameraState(originX + 30, 100, originZ + 30, (float) -Math.PI / 2, 0);
+        CameraState camera = new CameraState(originX + 30, -100, originZ + 30, (float) -Math.PI / 2, 0);
         var result = new GpuPlanPicker().pick(plan, camera, 100, 100, 50, 50).orElseThrow();
 
         assertEquals(3201, result.tile().x());

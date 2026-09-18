@@ -38,7 +38,11 @@ public final class ViewportController {
         if (wheel != 0.0f) {
             float zoom = wheel * 180.0f;
             camera = new CameraState(camera.x(),
-                    Math.max(160.0f, camera.y() - zoom),
+                    // Keep zooming along the OSRS down-axis. A positive wheel
+                    // delta moves the camera farther above the scene (more
+                    // negative Y); clamping to positive Y inverted the scene
+                    // once the canonical negative-up convention was restored.
+                    camera.y() - zoom,
                     camera.z() + zoom, camera.pitch(), camera.yaw());
         }
     }

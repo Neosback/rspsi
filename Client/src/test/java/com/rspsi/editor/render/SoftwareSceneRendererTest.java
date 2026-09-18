@@ -29,6 +29,20 @@ class SoftwareSceneRendererTest {
     }
 
     @Test
+    void negativeOsrsHeightProjectsAboveTheCameraPlane() {
+        GpuSceneVertex first = vertex(-20, -40, 100, 0x1200);
+        GpuSceneVertex second = vertex(20, -40, 100, 0x1200);
+        GpuSceneVertex third = vertex(0, -10, 100, 0x1200);
+        SoftwareRenderFrame frame = new SoftwareSceneRenderer().render(
+                plan(List.of(first, second, third), Map.of()),
+                new CameraState(0, 0, 0, 0, 0), 100, 100,
+                new SceneCameraProjection((float) Math.toRadians(60), 1, 1000));
+
+        assertNotEquals(0xFF101827, frame.pixel(50, 35));
+        assertEquals(0xFF101827, frame.pixel(50, 55));
+    }
+
+    @Test
     void rejectsBackFacingTrianglesUsingClientWinding() {
         List<GpuSceneVertex> vertices = List.of(
                 vertex(-20, -20, 100, 0x1200),

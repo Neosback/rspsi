@@ -81,7 +81,7 @@ public record ModelRenderPacket(
             ModelTriangle face = triangles.get(index);
             // Client render type 2 is an intentionally hidden face, not an
             // opaque submission.
-            if (face.renderType() == 2) continue;
+            if (face.renderType() == 2 || face.alpha() == 255) continue;
             boolean faceTransparent = face.alpha() != 0 || face.renderType() == 3;
             if (faceTransparent == transparent) indices.add(index);
         }

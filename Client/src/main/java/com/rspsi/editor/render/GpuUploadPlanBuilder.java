@@ -40,7 +40,8 @@ public final class GpuUploadPlanBuilder {
                     appendCommand(commands, tile.worldAddress(), SceneLayer.Kind.TERRAIN,
                             face.alpha() == 255 ? GpuDrawCommand.SubmissionPass.OPAQUE
                                     : GpuDrawCommand.SubmissionPass.ALPHA,
-                            first, face.textureId(), face.priority(), 0, -1);
+                            first, face.textureId(), face.priority(),
+                            terrainDepthBias(face), -1);
                 }
             }
             for (SceneLayer layer : tile.layers()) {
@@ -88,6 +89,15 @@ public final class GpuUploadPlanBuilder {
                 face.textureId(), face.alpha(), face.priority());
     }
 
+    /**
+     * Overlay and underlay meshes occupy the same tile plane. Give the
+     * authored overlay a minimal client-style bias so the native depth buffer
+     * does not alternate between coplanar fragments along every tile seam.
+     */
+    private static int terrainDepthBias(TerrainRenderFace face) {
+        return face.material() == 1 ? 1 : 0;
+    }
+
     private static void appendModels(SceneTileSnapshot tile, SceneLayer layer,
                                      List<Integer> modelIndices, GpuDrawCommand.SubmissionPass pass,
                                      List<GpuSceneVertex> vertices, List<Integer> indices,
@@ -95,7 +105,10 @@ public final class GpuUploadPlanBuilder {
         for (int modelIndex : modelIndices) {
             ModelRenderPacket model = tile.models().get(modelIndex);
             for (ModelTriangle face : model.triangles()) {
-                if (face.renderType() == 2) continue;
+                // Model alpha follows the RuneScape convention: zero is
+                // opaque and 255 is fully invisible. Terrain alpha is a
+                // separate opacity convention and is handled above.
+                if (face.renderType() == 2 || face.alpha() == 255) continue;
                 boolean transparent = face.alpha() != 0 || face.renderType() == 3;
                 if ((pass == GpuDrawCommand.SubmissionPass.ALPHA) != transparent) continue;
                 ModelVertex a = model.vertices().get(face.a());

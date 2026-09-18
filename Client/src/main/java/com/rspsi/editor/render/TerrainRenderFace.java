@@ -10,6 +10,7 @@ public record TerrainRenderFace(
         int alpha,
         int priority
 ) {
+    /** Terrain alpha is opacity: 255 is fully opaque and 0 is a hole. */
     public TerrainRenderFace {
         if (a < 0 || b < 0 || c < 0 || material < 0 || material > 1) {
             throw new IllegalArgumentException("Invalid terrain face indices or material");

@@ -21,6 +21,7 @@ public record ModelTriangle(
         int baseColor,
         int depthBias
 ) {
+    /** Model alpha is transparency: 0 is opaque and 255 is fully invisible. */
     /** Compatibility constructor for packets created before per-face UVs. */
     public ModelTriangle(int a, int b, int c, int colorA, int colorB, int colorC,
                          int textureId, int alpha, int priority, int renderType) {

@@ -11,6 +11,7 @@ import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
 import com.rspsi.editor.plugin.EditorTaskService;
 import com.rspsi.editor.plugin.EditorToolRegistration;
 import com.rspsi.editor.render.GpuUploadPlan;
+import com.rspsi.editor.render.RenderConfigCompiler;
 import com.rspsi.editor.render.RenderSettingKeys;
 import com.rspsi.editor.settings.SettingKey;
 import com.rspsi.editor.settings.SettingsSnapshot;
@@ -83,6 +84,7 @@ public final class MapEditorView {
     private static final String ICON_TILE = StudioIcons.TILE;
     private static final String ICON_AREA = StudioIcons.AREA;
     private static final String ICON_TERRAIN = StudioIcons.TERRAIN;
+    private static final String ICON_WATER = StudioIcons.WATER;
     private static final String ICON_HEIGHT = StudioIcons.HEIGHT;
     private static final String ICON_OBJECT = StudioIcons.OBJECT;
     private static final String ICON_STAMP = StudioIcons.PREFAB;
@@ -129,6 +131,7 @@ public final class MapEditorView {
         bindInputRouter(pluginLifecycle);
         openCommandPaletteShortcut();
         routeSceneShortcuts();
+        routeToolRailShortcuts(pluginLifecycle, viewport);
         renderMainMenu(cache, openDashboard, settings, pluginLifecycle);
         renderDockHost();
         renderToolRail(pluginLifecycle, viewport);
@@ -358,18 +361,23 @@ public final class MapEditorView {
         ImGui.begin(TOOL_RAIL_WINDOW, LOCKED_RAIL_FLAGS);
         lockCurrentDockNode();
         ImGui.dummy(0.0f, 4.0f);
-        if (StudioWidgets.railButton("selector", ICON_MOUSE, "Select / interact", "select".equals(activeSelector), "Q")) {
+        if (StudioWidgets.railButton("selector", ICON_MOUSE, "Select — interact, inspect", "select".equals(activeSelector), "1")) {
             activateSelector(pluginLifecycle, viewport, "select");
         }
-        if (StudioWidgets.railButton("tile-selector", ICON_TILE, "Tile selector", "tile".equals(activeSelector), "T")) {
-            activateSelector(pluginLifecycle, viewport, "tile");
+        if (StudioWidgets.railButton("terrain-tool", ICON_TERRAIN,
+                "Terrain — paint, slope, blend", "terrain".equals(activeSelector), "2")) {
+            activateSelector(pluginLifecycle, viewport, "terrain");
         }
         if (StudioWidgets.railButton("object-selector", ICON_OBJECT,
-                "Object selector — interact, copy, delete", "object".equals(activeSelector), "O")) {
+                "Objects — place, move, delete", "object".equals(activeSelector), "3")) {
             activateSelector(pluginLifecycle, viewport, "object");
         }
-        if (StudioWidgets.railButton("area-selector", ICON_AREA, "Area / multi-tile selector",
-                "area".equals(activeSelector), "A")) {
+        if (StudioWidgets.railButton("water-tool", ICON_WATER,
+                "Water — rivers, lakes, banks", "water".equals(activeSelector), "4")) {
+            activateSelector(pluginLifecycle, viewport, "water");
+        }
+        if (StudioWidgets.railButton("area-selector", ICON_AREA,
+                "Area — multi-tile select · Alt+click = sample", "area".equals(activeSelector), "5")) {
             activateSelector(pluginLifecycle, viewport, "area");
         }
         ImGui.separator();
@@ -380,10 +388,36 @@ public final class MapEditorView {
         ImGui.end();
     }
 
+    /**
+     * The five primary tools are always reachable by number, independent of
+     * plugin/tool registration state — a newcomer should never need to learn
+     * a registration ID to switch what they are doing.
+     */
+    private void routeToolRailShortcuts(EditorPluginLifecycleManager pluginLifecycle,
+                                        NativeSceneViewport viewport) {
+        if (ImGui.getIO().getWantTextInput()) return;
+        if (ImGui.isKeyPressed(ImGuiKey._1, false)) activateSelector(pluginLifecycle, viewport, "select");
+        else if (ImGui.isKeyPressed(ImGuiKey._2, false)) activateSelector(pluginLifecycle, viewport, "terrain");
+        else if (ImGui.isKeyPressed(ImGuiKey._3, false)) activateSelector(pluginLifecycle, viewport, "object");
+        else if (ImGui.isKeyPressed(ImGuiKey._4, false)) activateSelector(pluginLifecycle, viewport, "water");
+        else if (ImGui.isKeyPressed(ImGuiKey._5, false)) activateSelector(pluginLifecycle, viewport, "area");
+    }
+
     private void activateSelector(EditorPluginLifecycleManager pluginLifecycle,
                                   NativeSceneViewport viewport, String selector) {
         activeSelector = selector;
         activeToolId = "selector." + selector;
+        // Picking a primary tool also reveals its context panel and drawer —
+        // a newcomer should never have to separately click a second rail to
+        // see the controls for the tool they just chose. Select/Area are
+        // modifiers over whatever context is already active, so they leave
+        // it alone.
+        switch (selector) {
+            case "terrain" -> activeActivity = "Tiles";
+            case "object" -> activeActivity = "Objects";
+            case "water" -> activeActivity = "Water";
+            default -> { }
+        }
         // Keep the existing neutral selection registration as the shared
         // scene interaction surface until selector-specific commands land.
         activateTool(pluginLifecycle, viewport, "selection.box", activeToolId);
@@ -418,11 +452,14 @@ public final class MapEditorView {
             var stats = viewport.statistics();
             ImGui.pushFont(StudioFonts.mono(), 1.0f);
             ImGui.textDisabled("Revision " + cache.identity().revision() + "  ·  "
-                    + stats.renderedTriangles() + " tris  ·  " + stats.drawCalls() + " draws");
+                    + stats.renderedTriangles() + " tris  ·  " + stats.drawCalls() + " draws"
+                    + "  ·  GL " + stats.firstGlError()
+                    + (stats.missingTextures() == 0 ? "" : "  ·  missing tex " + stats.missingTextures()));
             ImGui.popFont();
             viewport.render(plan, ImGui.getContentRegionAvailX(),
                     Math.max(160.0f, ImGui.getContentRegionAvailY()),
-                    settings.snapshot().get(RenderSettingKeys.MSAA_SAMPLES));
+                    settings.snapshot().get(RenderSettingKeys.MSAA_SAMPLES),
+                    new RenderConfigCompiler().compile(settings.snapshot()).presentation());
         }
         ImGui.end();
     }
@@ -464,6 +501,7 @@ public final class MapEditorView {
         switch (activeActivity) {
             case "Tiles" -> renderTerrainContext();
             case "Objects" -> renderObjectContext();
+            case "Water" -> renderWaterContext();
             case "World" -> renderWorldContext();
             case "Environment" -> renderEnvironmentContext(settings);
             case "Validation" -> renderValidationContext();
@@ -476,10 +514,10 @@ public final class MapEditorView {
     private void renderActivityRail() {
         ImGui.begin(ACTIVITY_RAIL_WINDOW, LOCKED_RAIL_FLAGS);
         lockCurrentDockNode();
-        String[] labels = {"Tiles", "Objects", "World", "Environment", "Validation"};
-        String[] tooltips = {"Tile tools", "Object tools", "World map tools",
+        String[] labels = {"Tiles", "Objects", "Water", "World", "Environment", "Validation"};
+        String[] tooltips = {"Tile tools", "Object tools", "Water tools", "World map tools",
                 "Environment tools", "Validation"};
-        String[] icons = {ICON_TILE, ICON_OBJECT, ICON_MAP, ICON_ENVIRONMENT, ICON_VALIDATE};
+        String[] icons = {ICON_TILE, ICON_OBJECT, ICON_WATER, ICON_MAP, ICON_ENVIRONMENT, ICON_VALIDATE};
         for (int index = 0; index < labels.length; index++) {
             if (StudioWidgets.railButton("activity-" + labels[index], icons[index], labels[index],
                     labels[index].equals(activeActivity), tooltips[index])) activeActivity = labels[index];
@@ -520,6 +558,28 @@ public final class MapEditorView {
         ImGui.button("Stone path##region-swatch", -1.0f, 28.0f);
         ImGui.button("Grass edge##region-swatch", -1.0f, 28.0f);
         ImGui.button("Water / animated##region-swatch", -1.0f, 28.0f);
+    }
+
+    private void renderWaterContext() {
+        StudioWidgets.heading("Water", "Draw a path for the river or lake — banks blend automatically.");
+        ImGui.radioButton("River path##water-mode", true);
+        ImGui.sameLine();
+        ImGui.radioButton("Lake / pool##water-mode", false);
+        StudioWidgets.section("Shape");
+        int[] width = {3};
+        ImGui.sliderInt("Width", width, 1, 12);
+        float[] flow = {0.0f};
+        ImGui.sliderFloat("Flow direction", flow, 0.0f, 360.0f);
+        ImBoolean autoBank = new ImBoolean(true);
+        ImGui.checkbox("Auto-blend banks into surrounding terrain##water-channel", autoBank);
+        ImGui.checkbox("Animate surface##water-channel", new ImBoolean(true));
+        StudioWidgets.section("Crossings");
+        ImGui.button("Place bridge##water-bridge", -1.0f, 28.0f);
+        ImGui.textDisabled("A bridge snaps to the river's centerline and sets the effective plane.");
+        StudioWidgets.section("In This Region");
+        ImGui.textDisabled("Water swatches will show cache-backed materials here.");
+        ImGui.button("Underground river##region-swatch", -1.0f, 28.0f);
+        ImGui.button("Still pool##region-swatch", -1.0f, 28.0f);
     }
 
     private void renderHeightContext() {
@@ -615,6 +675,8 @@ public final class MapEditorView {
             renderTerrainDrawer();
         } else if ("Objects".equals(activeActivity)) {
             renderAssetDrawer();
+        } else if ("Water".equals(activeActivity)) {
+            renderWaterDrawer();
         } else {
             renderUtilityTabs(pluginLifecycle);
         }
@@ -657,6 +719,20 @@ public final class MapEditorView {
         ImGui.radioButton("Gradient", false);
         ImGui.sameLine();
         ImGui.textDisabled("Preview before apply · all edits are undoable");
+    }
+
+    private void renderWaterDrawer() {
+        ImGui.textDisabled("WATER TOOL");
+        ImGui.sameLine();
+        ImGui.radioButton("River##drawer-water-mode", true);
+        ImGui.sameLine();
+        ImGui.radioButton("Lake##drawer-water-mode", false);
+        ImGui.sameLine();
+        ImGui.checkbox("Auto-blend banks", new ImBoolean(true));
+        ImGui.sameLine();
+        ImGui.button("Place bridge##drawer-bridge");
+        ImGui.sameLine();
+        ImGui.textDisabled("Ghost preview · click to commit the path");
     }
 
     private void renderAssetDrawer() {
@@ -732,7 +808,8 @@ public final class MapEditorView {
         ImGui.sameLine();
         var stats = viewport.statistics();
         ImGui.textDisabled("  " + stats.renderedTriangles() + " tris  ·  " + stats.drawCalls() + " draws  ·  GL "
-                + stats.firstGlError());
+                + stats.firstGlError() + (stats.missingTextures() == 0
+                ? "" : "  ·  missing tex " + stats.missingTextures()));
         ImGui.popFont();
         ImGui.end();
         ImGui.popStyleVar();

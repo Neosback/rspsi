@@ -49,6 +49,7 @@ public final class GlFramebuffer implements AutoCloseable {
     private int width;
     private int height;
     private int samples;
+    private int framebufferStatus = GL_FRAMEBUFFER_COMPLETE;
     private boolean closed;
 
     public void resize(int width, int height, int requestedSamples) {
@@ -91,6 +92,9 @@ public final class GlFramebuffer implements AutoCloseable {
     public int height() { return height; }
 
     public int samples() { return samples; }
+
+    /** Status of the most recently created render target. */
+    public int framebufferStatus() { return framebufferStatus; }
 
     @Override
     public void close() {
@@ -143,6 +147,7 @@ public final class GlFramebuffer implements AutoCloseable {
 
     private void checkComplete(String target) {
         int status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        framebufferStatus = status;
         if (status != GL_FRAMEBUFFER_COMPLETE) {
             throw new IllegalStateException(target + " is incomplete: 0x" + Integer.toHexString(status));
         }
@@ -170,5 +175,6 @@ public final class GlFramebuffer implements AutoCloseable {
         resolveTexture = 0;
         multisampleDepth = 0;
         resolveDepth = 0;
+        framebufferStatus = GL_FRAMEBUFFER_COMPLETE;
     }
 }

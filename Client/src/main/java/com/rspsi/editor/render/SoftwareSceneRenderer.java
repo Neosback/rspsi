@@ -114,10 +114,13 @@ public final class SoftwareSceneRenderer {
         float cosPitch = (float) Math.cos(camera.pitch());
         float sinPitch = (float) Math.sin(camera.pitch());
         float dx = bounds.centerX() - camera.x();
-        float dy = bounds.centerY() - camera.y();
+        // OSRS world Y is a down-axis: terrain heights are negative as they
+        // rise. Convert to the renderer's camera-up delta before applying
+        // pitch so higher tiles project upward instead of downward.
+        float upDelta = camera.y() - bounds.centerY();
         float dz = bounds.centerZ() - camera.z();
         float yawDepth = dx * sinYaw + dz * cosYaw;
-        return dy * sinPitch + yawDepth * cosPitch;
+        return upDelta * sinPitch + yawDepth * cosPitch;
     }
 
     /** Renders the immutable frame contract used by native backends as well. */
@@ -158,7 +161,9 @@ public final class SoftwareSceneRenderer {
 
     private static ViewVertex view(GpuSceneVertex vertex, CameraState camera) {
         float dx = vertex.x() - camera.x();
-        float dy = vertex.y() - camera.y();
+        // The canonical scene uses the RuneScape convention where smaller
+        // world-Y values are physically higher.
+        float upDelta = camera.y() - vertex.y();
         float dz = vertex.z() - camera.z();
         float cosYaw = (float) Math.cos(camera.yaw());
         float sinYaw = (float) Math.sin(camera.yaw());
@@ -166,8 +171,8 @@ public final class SoftwareSceneRenderer {
         float yawDepth = dx * sinYaw + dz * cosYaw;
         float cosPitch = (float) Math.cos(camera.pitch());
         float sinPitch = (float) Math.sin(camera.pitch());
-        float viewY = dy * cosPitch - yawDepth * sinPitch;
-        float depth = dy * sinPitch + yawDepth * cosPitch;
+        float viewY = upDelta * cosPitch - yawDepth * sinPitch;
+        float depth = upDelta * sinPitch + yawDepth * cosPitch;
         return new ViewVertex(yawX, viewY, depth, vertex);
     }
 
@@ -256,7 +261,9 @@ public final class SoftwareSceneRenderer {
                 float w0 = edge(triangle.b.x, triangle.b.y, triangle.c.x, triangle.c.y, px, py);
                 float w1 = edge(triangle.c.x, triangle.c.y, triangle.a.x, triangle.a.y, px, py);
                 float w2 = edge(triangle.a.x, triangle.a.y, triangle.b.x, triangle.b.y, px, py);
-                if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+                if (area > 0.0f
+                        ? (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)
+                        : (w0 > 0.0f || w1 > 0.0f || w2 > 0.0f)) continue;
                 w0 /= area;
                 w1 /= area;
                 w2 /= area;
@@ -265,7 +272,9 @@ public final class SoftwareSceneRenderer {
                 if (!Float.isFinite(reciprocalDepth) || reciprocalDepth <= 0.0f) continue;
                 float pixelDepth = 1.0f / reciprocalDepth;
                 int offset = y * width + x;
-                if (!Float.isFinite(pixelDepth) || pixelDepth >= depth[offset]) continue;
+                if (!Float.isFinite(pixelDepth)) continue;
+                boolean noDepth = command.renderMode().noDepth();
+                if (!noDepth && pixelDepth >= depth[offset]) continue;
                 float perspectiveA = (w0 / triangle.a.depth) / reciprocalDepth;
                 float perspectiveB = (w1 / triangle.b.depth) / reciprocalDepth;
                 float perspectiveC = (w2 / triangle.c.depth) / reciprocalDepth;
@@ -284,7 +293,7 @@ public final class SoftwareSceneRenderer {
                 if (opacity <= 0) continue;
                 if (!alphaPass || opacity >= 255) {
                     pixels[offset] = color;
-                    depth[offset] = pixelDepth;
+                    if (!noDepth) depth[offset] = pixelDepth;
                 } else {
                     pixels[offset] = blend(pixels[offset], color, opacity);
                 }
@@ -315,16 +324,18 @@ public final class SoftwareSceneRenderer {
                 int scale = Math.max(0, Math.min(128, Math.round(light)));
                 return scaleRgb(sampled, scale);
             }
-            int gray = Math.max(0, Math.min(255, Math.round(light * 2.0f)));
-            return 0xFF000000 | (gray << 16) | (gray << 8) | gray;
+            int scale = Math.max(0, Math.min(128, Math.round(light)));
+            if (texture != null
+                    && texture.pixelStatus() == RenderTextureResource.PixelStatus.AVERAGE_COLOR_FALLBACK) {
+                return scaleRgb(texture.pixelAt(0, 0), scale);
+            }
+            // A missing definition/pixel payload is a cache contract failure,
+            // not a valid grayscale material. Keep it visible in CPU parity
+            // images just as the native backend does.
+            return scaleRgb(0xFFFF00FF, scale);
         }
         if (flat) {
             return 0xFF000000 | OsrsTerrainColorMath.packedHslToRgb(a.encodedColor(), 0.6);
-        }
-        if (presentation.smoothBanding()) {
-            int packedHsl = (int) (a.encodedColor() * screenWa
-                    + b.encodedColor() * screenWb + c.encodedColor() * screenWc);
-            return 0xFF000000 | OsrsTerrainColorMath.packedHslToRgb(packedHsl, 0.6);
         }
         int first = OsrsTerrainColorMath.packedHslToRgb(a.encodedColor(), 0.6);
         int second = OsrsTerrainColorMath.packedHslToRgb(b.encodedColor(), 0.6);

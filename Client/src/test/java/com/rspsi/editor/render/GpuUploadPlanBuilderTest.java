@@ -29,7 +29,9 @@ class GpuUploadPlanBuilderTest {
                         new ModelVertex(96, 0, 64, 1, 2, 3, 1, 1, 0),
                         new ModelVertex(64, 32, 64, 1, 2, 3, 1, 0, 1)),
                 List.of(new ModelTriangle(0, 1, 2, 7, 8, -1, -1, 0, 2, 1,
-                        0, 0, 1, 0, 0, 1, 7, 23)), List.of(), -1,
+                        0, 0, 1, 0, 0, 1, 7, 23),
+                        new ModelTriangle(0, 1, 2, 7, 8, -1, -1, 255, 2, 1,
+                                0, 0, 1, 0, 0, 1, 7, 23)), List.of(), -1,
                 0, 0, 0, 128, 32, 128, false, false);
         SceneLayer terrainLayer = new SceneLayer(SceneLayer.Kind.TERRAIN, List.of());
         SceneLayer objectLayer = new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0));
@@ -57,6 +59,38 @@ class GpuUploadPlanBuilderTest {
         assertEquals(3, plan.commands().get(1).firstIndex());
         assertEquals(23, plan.commands().get(1).depthBias());
         assertFalse(plan.fingerprint().isBlank());
+    }
+
+    @Test
+    void modelAlphaUsesOpaqueBlendedAndInvisibleFaceClasses() {
+        TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
+        List<ModelVertex> vertices = List.of(
+                new ModelVertex(0, 0, 0, 1, 0, 0, 1, 0, 0),
+                new ModelVertex(128, 0, 0, 1, 0, 0, 1, 1, 0),
+                new ModelVertex(0, 0, 128, 1, 0, 0, 1, 0, 1));
+        List<ModelTriangle> faces = List.of(
+                new ModelTriangle(0, 1, 2, 1, 1, 1, -1, 0, 0, 0),
+                new ModelTriangle(0, 1, 2, 1, 1, 1, -1, 128, 0, 0),
+                new ModelTriangle(0, 1, 2, 1, 1, 1, -1, 255, 0, 0));
+        ModelRenderPacket model = new ModelRenderPacket(coordinate, 7,
+                ObjectCategory.GROUND, vertices, faces, List.of(), -1,
+                0, 0, 0, 128, 0, 128, false, false);
+        SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
+                Optional.empty(), Optional.empty(), List.of(model),
+                List.of(new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0))),
+                List.of(), false, false);
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
+                        Map.of()), 3200, 3200, 1, 0, java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "alpha-classes", Map.of());
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(2, plan.commands().size());
+        assertEquals(GpuDrawCommand.SubmissionPass.OPAQUE, plan.commands().get(0).pass());
+        assertEquals(GpuDrawCommand.SubmissionPass.ALPHA, plan.commands().get(1).pass());
+        assertEquals(6, plan.vertices().size());
     }
 
     @Test
@@ -95,6 +129,7 @@ class GpuUploadPlanBuilderTest {
 
         assertEquals(GpuColorEncoding.TEXTURE_LIGHTNESS,
                 plan.vertices().get(0).colorEncoding());
+        assertEquals(1, plan.commands().get(0).depthBias());
     }
 
     @Test

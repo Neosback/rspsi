@@ -18,7 +18,9 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private boolean initialized;
     private boolean closed;
     private final ViewportController navigation = new ViewportController(
-            new CameraState(3200.0f, 2400.0f, -4200.0f,
+            // OSRS world-Y points down; the camera sits at a negative height
+            // above the terrain so negative terrain heights rise on screen.
+            new CameraState(3200.0f, -2400.0f, -4200.0f,
                     (float) -Math.toRadians(28.0), 0.0f));
 
     public void initialize() {
@@ -42,12 +44,18 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     }
 
     public void render(GpuUploadPlan plan, float availableWidth, float availableHeight, int samples) {
+        render(plan, availableWidth, availableHeight, samples, RenderPresentation.neutral());
+    }
+
+    public void render(GpuUploadPlan plan, float availableWidth, float availableHeight, int samples,
+                       RenderPresentation presentation) {
         ensureReady();
         int width = Math.max(1, Math.round(availableWidth));
         int height = Math.max(1, Math.round(availableHeight));
         framebuffer.resize(width, height, samples);
         framebuffer.bindForScene();
-        renderer.draw(plan, navigation.camera(), width, height, RenderPresentation.neutral());
+        renderer.setFramebufferStatus(framebuffer.framebufferStatus());
+        renderer.draw(plan, navigation.camera(), width, height, presentation);
         framebuffer.resolve();
         ImGui.image(framebuffer.texture(), width, height, 0.0f, 1.0f, 1.0f, 0.0f);
         updateCameraFromInput();
