@@ -4,6 +4,7 @@ import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.RenderPresentation;
 import com.rspsi.editor.render.ViewportController;
+import com.rspsi.editor.viewport.Viewport;
 import com.rspsi.renderer.opengl.OpenGlSceneRenderer;
 import imgui.ImGui;
 import imgui.flag.ImGuiMouseButton;
@@ -11,7 +12,7 @@ import imgui.flag.ImGuiMouseButton;
 import java.util.Objects;
 
 /** Owns the native scene renderer and presents its resolved FBO texture to ImGui. */
-public final class NativeSceneViewport implements AutoCloseable {
+public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private final OpenGlSceneRenderer renderer = new OpenGlSceneRenderer();
     private final GlFramebuffer framebuffer = new GlFramebuffer();
     private boolean initialized;
@@ -32,6 +33,12 @@ public final class NativeSceneViewport implements AutoCloseable {
 
     public OpenGlSceneRenderer.Statistics statistics() {
         return renderer.statistics();
+    }
+
+    /** Picking is intentionally deferred until native scene coordinates are exposed. */
+    @Override
+    public java.util.Optional<com.rspsi.editor.model.TileCoordinate> tileAt(float x, float y) {
+        return java.util.Optional.empty();
     }
 
     public void render(GpuUploadPlan plan, float availableWidth, float availableHeight, int samples) {

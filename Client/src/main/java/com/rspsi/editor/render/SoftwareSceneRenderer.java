@@ -102,22 +102,22 @@ public final class SoftwareSceneRenderer {
 
     private static float averageDepth(GpuUploadPlan plan, GpuDrawCommand command,
                                       CameraState camera) {
-        float total = 0.0f;
-        int count = 0;
+        // The bounding-box center is a cheaper, more representative sort key
+        // than the average of every vertex - a merged command's vertex
+        // density can skew a raw average away from the command's true
+        // depth, and this reuses SceneOcclusionResolver.CommandBounds
+        // instead of a second bespoke per-vertex walk.
+        SceneOcclusionResolver.CommandBounds bounds =
+                SceneOcclusionResolver.CommandBounds.of(command, plan);
         float cosYaw = (float) Math.cos(camera.yaw());
         float sinYaw = (float) Math.sin(camera.yaw());
         float cosPitch = (float) Math.cos(camera.pitch());
         float sinPitch = (float) Math.sin(camera.pitch());
-        for (int offset = command.firstIndex(); offset < command.firstIndex() + command.indexCount(); offset++) {
-            GpuSceneVertex vertex = plan.vertices().get(plan.indices().get(offset));
-            float dx = vertex.x() - camera.x();
-            float dy = vertex.y() - camera.y();
-            float dz = vertex.z() - camera.z();
-            float yawDepth = dx * sinYaw + dz * cosYaw;
-            total += dy * sinPitch + yawDepth * cosPitch;
-            count++;
-        }
-        return count == 0 ? Float.NEGATIVE_INFINITY : total / count;
+        float dx = bounds.centerX() - camera.x();
+        float dy = bounds.centerY() - camera.y();
+        float dz = bounds.centerZ() - camera.z();
+        float yawDepth = dx * sinYaw + dz * cosYaw;
+        return dy * sinPitch + yawDepth * cosPitch;
     }
 
     /** Renders the immutable frame contract used by native backends as well. */

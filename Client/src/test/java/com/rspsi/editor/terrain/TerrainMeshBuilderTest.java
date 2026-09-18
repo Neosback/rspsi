@@ -52,6 +52,23 @@ class TerrainMeshBuilderTest {
         assertTrue(north.vertices().contains(new TerrainVertex(64, 128, 12)));
     }
 
+    @Test
+    void allFacesHaveConsistentWinding() {
+        TileSnapshot tile = tile(10, 20, 30, 40, 0, 0);
+        for (int shape = 0; shape < TerrainMeshBuilder.shapeCount(); shape++) {
+            for (int rotation = 0; rotation < 4; rotation++) {
+                TerrainMesh mesh = builder.build(topologyTile(tile, shape, rotation));
+                for (TerrainFace face : mesh.faces()) {
+                    TerrainVertex a = mesh.vertices().get(face.a());
+                    TerrainVertex b = mesh.vertices().get(face.b());
+                    TerrainVertex c = mesh.vertices().get(face.c());
+                    int cross = (b.x() - a.x()) * (c.y() - a.y()) - (b.y() - a.y()) * (c.x() - a.x());
+                    assertTrue(cross > 0, "Shape " + shape + " rot " + rotation + " face " + face + " cross=" + cross);
+                }
+            }
+        }
+    }
+
     private static TileSnapshot tile(int sw, int se, int ne, int nw, int shape, int rotation) {
         return new TileSnapshot(sw, se, ne, nw, 0, shape == 0 ? 0 : 1,
                 shape, rotation, 0, List.of());

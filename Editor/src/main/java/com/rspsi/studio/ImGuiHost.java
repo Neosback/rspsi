@@ -1,6 +1,7 @@
 package com.rspsi.studio;
 
 import com.rspsi.studio.theme.StudioTheme;
+import com.rspsi.studio.theme.StudioFonts;
 import imgui.ImGui;
 import imgui.glfw.ImGuiImplGlfw;
 import imgui.gl3.ImGuiImplGl3;
@@ -20,10 +21,14 @@ public final class ImGuiHost implements AutoCloseable {
         if (initialized) throw new IllegalStateException("ImGui is already initialized");
         ImGui.createContext();
         StudioTheme.apply();
+        StudioFonts.apply(window.handle());
         ImGui.getIO().addConfigFlags(ImGuiConfigFlags.DockingEnable);
-        // Layout persistence will move to ~/.openrune-studio/layouts once the
-        // workspace manager owns named layouts.  Never write one beside the
-        // Gradle project during the host bootstrap.
+        // The controlled single-window shell deliberately keeps native
+        // multi-viewport behavior disabled; every panel remains in the same
+        // GLFW/OpenGL context as the scene viewport.
+        ImGui.getIO().removeConfigFlags(ImGuiConfigFlags.ViewportsEnable);
+        // NativeWorkspaceLayoutStore owns the versioned layout payload under
+        // ~/.rspsi/ui; never write ImGui state beside the Gradle project.
         ImGui.getIO().setIniFilename(null);
         if (!glfw.initForOpenGL(window.handle(), true)) {
             ImGui.destroyContext();

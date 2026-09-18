@@ -2,6 +2,7 @@ package com.rspsi.editor.render;
 
 import com.rspsi.editor.model.WorldTileAddress;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -146,22 +147,57 @@ public final class GpuUploadPlanBuilder {
                                       List<GpuTextureTriangle> textureTriangles,
                                       java.util.Map<Integer, RenderTextureResource> textures,
                                       List<SceneOccluder> occluders) {
-        StringBuilder value = new StringBuilder(packetFingerprint);
-        value.append("|vertices=").append(vertices)
-                .append("|indices=").append(indices)
-                .append("|commands=").append(commands)
-                .append("|textureTriangles=").append(textureTriangles)
-                .append("|occluders=").append(occluders);
-        textures.values().stream().sorted(java.util.Comparator.comparingInt(RenderTextureResource::id))
-                .forEach(texture -> value.append("|texture=").append(texture.id())
-                        .append(':').append(texture.pixelStatus())
-                        .append(':').append(texture.width()).append('x').append(texture.height())
-                        .append(':').append(java.util.Arrays.hashCode(texture.pixels())));
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(value.toString().getBytes(StandardCharsets.UTF_8));
-            StringBuilder result = new StringBuilder(digest.length * 2);
-            for (byte item : digest) result.append(String.format("%02x", item & 0xFF));
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(packetFingerprint.getBytes(StandardCharsets.UTF_8));
+            ByteBuffer counts = ByteBuffer.allocate(32);
+            counts.putInt(vertices.size()).putInt(indices.size())
+                    .putInt(commands.size()).putInt(textureTriangles.size())
+                    .putInt(occluders.size()).putInt(textures.size());
+            counts.flip();
+            digest.update(counts);
+
+            if (!commands.isEmpty()) {
+                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 32);
+                for (GpuDrawCommand cmd : commands) {
+                    cmdBuffer.putInt(cmd.tile().plane())
+                            .putInt(cmd.tile().worldX())
+                            .putInt(cmd.tile().worldY())
+                            .putInt(cmd.layer().ordinal())
+                            .putInt(cmd.pass().ordinal())
+                            .putInt(cmd.firstIndex())
+                            .putInt(cmd.indexCount())
+                            .putInt(cmd.textureId());
+                }
+                cmdBuffer.flip();
+                digest.update(cmdBuffer);
+            }
+
+            if (!indices.isEmpty()) {
+                int sampleCount = Math.min(indices.size(), 256);
+                ByteBuffer idxBuffer = ByteBuffer.allocate(sampleCount * Integer.BYTES);
+                int stride = Math.max(1, indices.size() / sampleCount);
+                for (int i = 0; i < indices.size() && idxBuffer.hasRemaining(); i += stride) {
+                    idxBuffer.putInt(indices.get(i));
+                }
+                idxBuffer.flip();
+                digest.update(idxBuffer);
+            }
+
+            textures.values().stream().sorted(java.util.Comparator.comparingInt(RenderTextureResource::id))
+                    .forEach(texture -> {
+                        digest.update(Integer.toString(texture.id()).getBytes(StandardCharsets.UTF_8));
+                        digest.update(texture.pixelStatus().name().getBytes(StandardCharsets.UTF_8));
+                        ByteBuffer dims = ByteBuffer.allocate(12);
+                        dims.putInt(texture.width()).putInt(texture.height())
+                                .putInt(java.util.Arrays.hashCode(texture.pixels()));
+                        dims.flip();
+                        digest.update(dims);
+                    });
+
+            byte[] hash = digest.digest();
+            StringBuilder result = new StringBuilder(hash.length * 2);
+            for (byte item : hash) result.append(String.format("%02x", item & 0xFF));
             return result.toString();
         } catch (NoSuchAlgorithmException exception) {
             throw new AssertionError(exception);

@@ -42,7 +42,10 @@ public record GpuDrawCommand(
     boolean canMerge(WorldTileAddress nextTile, SceneLayer.Kind nextLayer,
                      SubmissionPass nextPass, int nextTextureId,
                      int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex) {
-        return tile.equals(nextTile) && layer == nextLayer && pass == nextPass
+        boolean tileCompatible = tile.equals(nextTile)
+                || (layer == SceneLayer.Kind.TERRAIN && nextLayer == SceneLayer.Kind.TERRAIN
+                    && tile.plane() == nextTile.plane());
+        return tileCompatible && layer == nextLayer && pass == nextPass
                 && textureId == nextTextureId && priority == nextPriority
                 && depthBias == nextDepthBias
                 && objectId == nextObjectId

@@ -18,6 +18,19 @@ rebuild; priority no longer synthesizes depth (bias-only, matching
 RuneLite's `screenPos.z += float(bias)/128.0`); upload/draw-call counters
 exist in `Statistics`; MSAA setting is wired through to the multisample FBO.
 
+**Update 2026-09-18 (later same day):** P1, P2, P3, and C2 below are now
+implemented and verified (full test suite, `foundationGate`, and a
+non-interactive `:Editor:run` smoke test against a real cache with zero GL
+errors). C0 was investigated and retracted - it does not describe a real bug
+in this codebase (see the C0 section). **P0 (the vertex-format redesign +
+`glMultiDrawElements` submission) is still the single biggest remaining lag
+source and was deliberately not attempted in this pass** - it is large
+enough, and touches enough shader/vertex-layout surface I cannot visually
+verify, that it deserves its own pass with visual confirmation of the
+current fixes first. C1 (culling) also remains open pending a visual
+winding check. See the per-section status notes below for exactly what
+changed and what's still open.
+
 ---
 
 ## 1. What the two oracles actually do
@@ -77,7 +90,7 @@ tiny per-frame CPU + draw counts measured in single digits.**
 
 ## 2. Remaining RSPSi divergences — performance (the lag)
 
-### P0 — Draw-call and per-command uniform explosion
+### P0 — Draw-call and per-command uniform explosion  **[OPEN — not attempted]**
 
 `OpenGlSceneRenderer.drawCommand()` issues, per command: ~9 `glUniform*`
 calls (incl. `uFaceBias`, `uTextureLayer`, `uTextured`, `uTerrain`,
@@ -109,7 +122,7 @@ re-upload fix.
 vertex layout change. Parity tests are unaffected (same triangles, same
 order within a pass).
 
-### P1 — Per-triangle CPU occlusion every frame
+### P1 — Per-triangle CPU occlusion every frame  **[DONE]**
 
 `GpuCommandVisibility.of` → `SceneOcclusionResolver.occludesCommand` walks
 **every triangle of every command × every occluder** on the CPU per frame.
@@ -123,7 +136,7 @@ AABB corners against occluder planes — O(commands × occluders), roughly
 100× less work, still conservative (may draw a few extra commands). Keep
 `occludesTriangle` untouched for `SoftwareSceneRenderer`.
 
-### P2 — Alpha sorting recomputes per-vertex depths every frame
+### P2 — Alpha sorting recomputes per-vertex depths every frame  **[DONE]**
 
 `averageDepth()` walks all alpha vertices per frame, and merged commands
 make per-command average depth a poor painter's key anyway. Short term:
@@ -132,7 +145,7 @@ corner depth. Long term (RuneLite's answer): per-face alpha ordering is a
 GPU/compute problem; for an editor, AABB-depth with back-to-front
 submission is acceptable and already better than source order.
 
-### P3 — Texture array churn + no mipmaps
+### P3 — Texture array churn + no mipmaps  **[DONE — mipmaps; texture-array-churn-on-single-edit part still open]**
 
 `uploadTextureArray` deletes and **fully reallocates** the array (all
 layers) whenever any texture changes, and samples with `GL_NEAREST`/no
@@ -151,24 +164,29 @@ memory.
 
 ## 3. Remaining RSPSi divergences — correctness (the "renders wrong")
 
-### C0 — Transparency is split per-model, not per-face  (highest visual impact)
+### C0 — RETRACTED: not a bug in this codebase
 
-`GpuScenePacketBuilder.hasTransparentGeometry()` sends a model to the ALPHA
-pass if **any** face has `alpha != 0 || renderType == 3`. The ALPHA pass
-renders with `glDepthMask(false)`, so the model's *opaque* faces stop
-writing depth: self-overlapping geometry inside one model (railings, trees,
-fences, stalls — anything with a glass/leaf/partial-alpha face) blends
-against itself in draw order and against later geometry incorrectly. Both
-oracles classify **per face**: RuneLite at upload
-(`boolean alpha = transparencies[face] != 0` → separate opaque/alpha
-buffers, `SceneUploader.java` L682), TSPS via per-face `v_alphaCutOff`.
+**Correction (checked against the actual working-tree code, not from
+memory):** this finding does not hold. `GpuUploadPlanBuilder.appendModels()`
+already classifies **per face**, independently for each pass call:
+```java
+boolean transparent = face.alpha() != 0 || face.renderType() == 3;
+if ((pass == GpuDrawCommand.SubmissionPass.ALPHA) != transparent) continue;
+```
+so a model with a mix of opaque and alpha faces already emits its opaque
+faces into the OPAQUE pass (full depth write) and only its genuinely alpha
+faces into the ALPHA pass (`glDepthMask(false)`) — exactly what RuneLite and
+TSPS do. `GpuScenePacketBuilder.hasTransparentGeometry()` /
+`SceneLayer.opaqueModelIndices()`/`transparentModelIndices()` are a
+*different*, model-level partition; traced every consumer
+(`SceneLayer`'s own Javadoc, `RenderConfig.filterTile()`, which only remaps
+the index lists after visibility filtering and never branches on them) and
+found no code path where this partition affects depth-mask or pass
+assignment - it exists to preserve OSRS-style category submission order for
+inspectors/compatibility renderers, per `SceneLayer`'s own doc comment.
+No self-overlapping-model depth bug was found; no fix applied.
 
-**Fix:** classify faces, not models. Emit each face into the opaque range
-list unless that face itself is alpha; the alpha pass keeps depth-mask-off
-only for actual alpha faces. This requires the index reordering from P0-2
-(per-face bucketing) — do them together.
-
-### C1 — No back-face culling
+### C1 — No back-face culling  **[OPEN — needs a visual winding check before enabling; not attempted]**
 
 RuneLite culls (`GL_CULL_FACE`, client CW winding); TSPS culls the scene
 pass. RSPSi disables it (`OpenGlSceneRenderer.initialize`), so interior
@@ -182,7 +200,7 @@ FBO's vertical UV flip, then `glFrontFace(GL_CW); glEnable(GL_CULL_FACE);`
 convention). Gate with a render setting (default on) so a bad model family
 can be diagnosed.
 
-### C2 — Indexed-texture transparency discards black texels
+### C2 — Indexed-texture transparency discards black texels  **[DONE]**
 
 `frag` discards when `r==0 && g==0 && b==0`, and the upload forces
 `alpha = 0xFF`. RuneLite instead uploads palette index 0 with **alpha 0**
@@ -196,17 +214,23 @@ discard;` removing the rgb test.
 
 ### C3 — Minor, record-only
 
-* `fract()` on animated UVs in the fragment shader creates a derivative
-  discontinuity at the wrap seam (mip shimmer line). RuneLite adds the
-  offset in the vertex shader and relies on wrap mode; with CLAMP_TO_EDGE +
-  128×128 tiles RSPSi's `fract` is functionally needed but should move to
-  the vertex shader so derivatives stay continuous per triangle.
-* Textured-face lightness uses `/128.0`; RuneLite uses `/127.0`
+* **[OPEN, deliberately skipped]** `fract()` on animated UVs in the fragment
+  shader creates a derivative discontinuity at the wrap seam (mip shimmer
+  line). The suggested fix (move to the vertex shader) needs more thought
+  than "just relocate it": per-vertex `fract()` before interpolation would
+  wrap each vertex's UV independently, and a triangle whose vertices straddle
+  the wrap boundary (e.g. u=0.99 and u=1.01→0.01) would then interpolate
+  *backward* through the whole 0..1 range instead of continuing forward past
+  1.0 - a worse seam than today's, not a better one. Left as-is pending a
+  correct design (e.g. add the offset per-vertex without wrapping, keep
+  `fract` in the fragment shader) that can actually be visually verified.
+* **[DONE]** Textured-face lightness uses `/128.0`; RuneLite uses `/127.0`
   (`frag.glsl`). Cosmetic constant; align when touching the shader anyway.
-* Depth curve is conventional (`GL_LESS`, near=1/far=200000). Precision at
-  editor distances is adequate (≈0.3 units at 100k view units on 24-bit
-  depth); RuneLite's reversed-Z is better but is a coordinated
-  matrix+func+clear+shader change — deliberately not mixed into this pass.
+* **[DEFERRED, as originally noted]** Depth curve is conventional
+  (`GL_LESS`, near=1/far=200000). Precision at editor distances is adequate
+  (≈0.3 units at 100k view units on 24-bit depth); RuneLite's reversed-Z is
+  better but is a coordinated matrix+func+clear+shader change — deliberately
+  not mixed into this pass.
 
 ---
 

@@ -96,4 +96,46 @@ class GpuUploadPlanBuilderTest {
         assertEquals(GpuColorEncoding.TEXTURE_LIGHTNESS,
                 plan.vertices().get(0).colorEncoding());
     }
+
+    @Test
+    void contiguousTerrainTilesMergeIntoSingleDrawCommand() {
+        WorldTileAddress a1 = WorldTileAddress.of(3200, 3200, 0);
+        TileCoordinate c1 = new TileCoordinate(0, 3200, 3200);
+        TerrainRenderPacket t1 = new TerrainRenderPacket(c1,
+                List.of(new TerrainRenderVertex(0, 0, 12, 100, 0, 0),
+                        new TerrainRenderVertex(128, 0, 12, 101, 128, 0),
+                        new TerrainRenderVertex(0, 128, 16, 102, 0, 128)),
+                List.of(new TerrainRenderFace(0, 1, 2, 0, -1, 255, 0)),
+                0, 0, -1, 100, -1, false, false, -1);
+        SceneTileSnapshot tile1 = new SceneTileSnapshot(c1, a1, 0, 0,
+                Optional.empty(), Optional.of(t1), List.of(),
+                List.of(new SceneLayer(SceneLayer.Kind.TERRAIN, List.of())),
+                List.of(), false, false);
+
+        WorldTileAddress a2 = WorldTileAddress.of(3201, 3200, 0);
+        TileCoordinate c2 = new TileCoordinate(0, 3201, 3200);
+        TerrainRenderPacket t2 = new TerrainRenderPacket(c2,
+                List.of(new TerrainRenderVertex(0, 0, 12, 100, 0, 0),
+                        new TerrainRenderVertex(128, 0, 12, 101, 128, 0),
+                        new TerrainRenderVertex(0, 128, 16, 102, 0, 128)),
+                List.of(new TerrainRenderFace(0, 1, 2, 0, -1, 255, 0)),
+                0, 0, -1, 100, -1, false, false, -1);
+        SceneTileSnapshot tile2 = new SceneTileSnapshot(c2, a2, 0, 0,
+                Optional.empty(), Optional.of(t2), List.of(),
+                List.of(new SceneLayer(SceneLayer.Kind.TERRAIN, List.of())),
+                List.of(), false, false);
+
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
+                        Map.of()), 3200, 3200, 1, 0, java.util.Set.of(), List.of()),
+                List.of(tile1, tile2), LightingProfile.osrs(), "merge-test", Map.of());
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(6, plan.vertices().size());
+        assertEquals(6, plan.indices().size());
+        // Both tiles merged into exactly ONE draw command
+        assertEquals(1, plan.commands().size());
+        assertEquals(6, plan.commands().get(0).indexCount());
+    }
 }

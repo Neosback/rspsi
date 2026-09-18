@@ -33,7 +33,7 @@ public final class GpuCommandVisibility {
         BitSet occluded = new BitSet(commands.size());
         if (!plan.occluders().isEmpty()) {
             for (int index = 0; index < commands.size(); index++) {
-                if (SceneOcclusionResolver.occludesCommand(commands.get(index), plan, camera,
+                if (SceneOcclusionResolver.occludesCommand(index, commands.get(index), plan, camera,
                         plan.occluders())) {
                     occluded.set(index);
                 }

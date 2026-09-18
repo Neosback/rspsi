@@ -119,7 +119,8 @@ public final class StudioApplication implements AutoCloseable {
             renderedSettingsRevision = renderSettings.revision();
         }
         mapEditor.render(cache, currentPlan, sceneViewport, sceneStatus,
-                this::requestDashboard, renderSettings, pluginLifecycle);
+                this::requestDashboard, renderSettings, pluginLifecycle,
+                loadedScene != null && loadedScene.opened().region().session().isDirty());
         renderClosePrompt();
     }
 
@@ -296,6 +297,7 @@ public final class StudioApplication implements AutoCloseable {
         closed = true;
         sceneExecutor.shutdownNow();
         closePluginLifecycle();
+        mapEditor.close();
         sceneViewport.close();
         SettingsJsonStore.save(settingsFile, renderSettings);
         cacheSessions.close();

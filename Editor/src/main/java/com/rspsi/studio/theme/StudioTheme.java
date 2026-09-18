@@ -9,12 +9,10 @@ import imgui.flag.ImGuiCol;
  *
  * <p>Implements the theme rules recorded in {@code docs/UI_UX_FOUNDATION.md}:
  * dark viewport/panel separation, a restrained accent color reserved for
- * active/selected state (not decorative headers), visible focus rings, and
- * low corner rounding in the spirit of dense technical tools (ImHex, VS
- * Code) rather than a rounded consumer-app look. This intentionally does
- * not touch fonts - monospace-vs-normal text selection for
- * coordinates/IDs/diagnostics happens per-widget where that content is
- * rendered, not as a single global font swap.</p>
+ * active/selected state, visible focus rings, and low corner rounding in the
+ * spirit of dense technical tools rather than a rounded consumer application.
+ * Controls are deliberately flat; hierarchy comes from spacing, typography,
+ * and quiet surfaces instead of stock ImGui bevels.</p>
  */
 public final class StudioTheme {
     private StudioTheme() {
@@ -48,24 +46,25 @@ public final class StudioTheme {
         ImGui.styleColorsDark();
         ImGuiStyle style = ImGui.getStyle();
 
-        // Low, near-zero rounding: a professional authoring tool, not a
-        // rounded consumer app. A little rounding on inputs/tabs keeps focus
-        // states legible without looking decorative.
-        style.setWindowRounding(0.0f);
+        // Subtle curvature gives the shell a crafted IDE feel without making
+        // the map editor look like a rounded consumer application.
+        style.setWindowRounding(4.0f);
         style.setChildRounding(2.0f);
-        style.setFrameRounding(2.0f);
-        style.setPopupRounding(2.0f);
-        style.setScrollbarRounding(2.0f);
-        style.setGrabRounding(2.0f);
-        style.setTabRounding(2.0f);
-        style.setWindowBorderSize(1.0f);
-        style.setChildBorderSize(1.0f);
+        style.setFrameRounding(3.0f);
+        style.setPopupRounding(4.0f);
+        style.setScrollbarRounding(6.0f);
+        style.setGrabRounding(3.0f);
+        style.setTabRounding(4.0f);
+        style.setWindowBorderSize(0.0f);
+        style.setChildBorderSize(0.0f);
         style.setPopupBorderSize(1.0f);
         style.setFrameBorderSize(0.0f);
-        style.setWindowPadding(8.0f, 8.0f);
-        style.setFramePadding(6.0f, 4.0f);
-        style.setItemSpacing(6.0f, 6.0f);
-        style.setIndentSpacing(14.0f);
+        style.setWindowPadding(12.0f, 10.0f);
+        style.setFramePadding(8.0f, 5.0f);
+        style.setItemSpacing(7.0f, 6.0f);
+        style.setItemInnerSpacing(6.0f, 4.0f);
+        style.setIndentSpacing(18.0f);
+        style.setScrollbarSize(10.0f);
 
         color(style, ImGuiCol.Text, TEXT);
         color(style, ImGuiCol.TextDisabled, TEXT_DISABLED);
@@ -95,15 +94,15 @@ public final class StudioTheme {
 
         // Buttons stay neutral until interacted with; the accent is earned
         // by hover/press/selection, not painted on every control by default.
-        color(style, ImGuiCol.Button, BG_FIELD);
-        color(style, ImGuiCol.ButtonHovered, ACCENT_HOVER);
+        color(style, ImGuiCol.Button, BG_PANEL_ALT);
+        color(style, ImGuiCol.ButtonHovered, ACCENT_MUTED);
         color(style, ImGuiCol.ButtonActive, ACCENT_ACTIVE);
 
-        color(style, ImGuiCol.Header, ACCENT_MUTED);
-        color(style, ImGuiCol.HeaderHovered, ACCENT_HOVER);
+        color(style, ImGuiCol.Header, ACCENT_MUTED, 0.72f);
+        color(style, ImGuiCol.HeaderHovered, ACCENT_MUTED);
         color(style, ImGuiCol.HeaderActive, ACCENT_ACTIVE);
 
-        color(style, ImGuiCol.Separator, BORDER);
+        color(style, ImGuiCol.Separator, BORDER, 0.75f);
         color(style, ImGuiCol.SeparatorHovered, ACCENT);
         color(style, ImGuiCol.SeparatorActive, ACCENT_ACTIVE);
 
@@ -133,6 +132,7 @@ public final class StudioTheme {
 
         color(style, ImGuiCol.NavCursor, ACCENT);
         color(style, ImGuiCol.DragDropTarget, ACCENT);
+        color(style, ImGuiCol.UnsavedMarker, rgb(0xD9, 0xA4, 0x41));
     }
 
     private static void color(ImGuiStyle style, int slot, float[] rgb) {
