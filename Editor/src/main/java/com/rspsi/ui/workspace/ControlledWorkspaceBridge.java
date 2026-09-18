@@ -258,9 +258,21 @@ public final class ControlledWorkspaceBridge {
     private static void installAnimationRefresh(ControlledViewportPanel viewport,
                                                 SceneWindow window,
                                                 SettingsStore settings) {
+        // Texture animation is evaluated in the OpenGL shader. Rebuilding the
+        // complete scene every client cycle is only necessary for animated
+        // model geometry, and is prohibitively expensive for a normal map
+        // region. Keep the native viewport responsive when a scene has no
+        // CPU-animated models at all.
+        if (viewport.canonicalViewport().sceneSnapshot() == null
+                || viewport.canonicalViewport().sceneSnapshot().modelPackets().stream()
+                .noneMatch(com.rspsi.editor.render.ModelRenderPacket::supportsAnimation)) {
+            return;
+        }
         AtomicBoolean queued = new AtomicBoolean();
         AtomicInteger lastCycle = new AtomicInteger(-1);
         viewport.openGlViewport().setAnimationTick(cycle -> {
+            int previous = lastCycle.get();
+            if (previous >= 0 && cycle - previous < 5) return;
             if (!queued.compareAndSet(false, true)) return;
             Platform.runLater(() -> {
                 try {
