@@ -220,6 +220,10 @@ public final class OsrsStudioProject implements AutoCloseable {
         return store.capabilities();
     }
 
+    public String backendName() {
+        return store.backendName();
+    }
+
     public Optional<OsrsCacheMetadata> cacheIdentity() {
         return identityStore.metadata(project.cacheRevision());
     }

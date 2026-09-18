@@ -10,8 +10,9 @@ Validation.
 ```text
 Application launch
   → Studio Dashboard
-  → choose recent/new project, cache, region, or settings
-  → create/reuse one project/session
+  → asynchronously validate and prepare the remembered cache
+  → choose Map Editor, a region, or settings
+  → hand the prepared cache session to the workspace
   → enter the selected workspace
 ```
 
@@ -31,7 +32,7 @@ is planned; they do not pretend that unfinished functionality is available.
 
 ### Project entry
 
-The dashboard will eventually show:
+The dashboard shows:
 
 - recent RSPSi projects;
 - recent OpenRune Server connections;
@@ -39,21 +40,26 @@ The dashboard will eventually show:
 - revision and compatibility diagnostics;
 - `Open Project`, `Open Cache`, and `Create Blank Project` actions.
 
-The active JavaFX launcher now presents this dashboard first. The dashboard
-stores the selected cache through the existing `Settings` store and passes it
-directly to Map Editor, so the editor does not immediately ask for the same
-cache again. Choosing a cache also updates the remembered-cache preference
-immediately, so the choice survives closing the dashboard before a workspace
-is opened. An optional `regionX,regionY` or numeric region-ID field supports
-debug launches directly into a map region; the primary **Open Map Editor**
-action uses that field too. Leaving it empty opens the editor's normal
-actionable empty state. An invalid or missing remembered cache is shown as an
-explicit “no cache selected” status, but it does not block opening the Map
-Editor shell. From that empty state, **Open Local Cache** selects a cache
-directory and loads it directly; it does not invoke the legacy map-file
-chooser. The legacy cache/plugin form remains available from OpenRune Content
-Studio settings for compatibility and plugin management, but it is no longer
-the startup gate.
+The active JavaFX launcher presents this dashboard first. It asks the shared
+OpenRune/FileStore cache-session service to validate and prepare the remembered
+cache asynchronously. The selected path is persisted only after a successful
+load. The Dashboard displays the cache name, revision, backend, and map
+availability while loading, and shows the actionable failure when loading
+cannot complete.
+
+Map Editor remains disabled until the cache reaches `READY`. Once ready, the
+prepared cache session is passed directly to Map Editor, so the editor does
+not ask for the same cache again and does not report a misleading “cache
+loaded” state without a modern project/session. An optional `regionX,regionY`
+or numeric region-ID field supports debug launches directly into a map region;
+the same modern `openRegion` route is used by later Map-menu region loads.
+Leaving it empty opens a cache-ready editor with no active region. That state
+identifies the loaded cache and asks the user to choose a region from the Map
+menu. Invalid region input preserves the current valid session.
+
+The legacy cache/plugin form remains available from OpenRune Content Studio
+settings for compatibility and plugin management, but it is no longer the
+normal startup path or the source of truth for Map Editor readiness.
 
 ### Settings
 
@@ -72,18 +78,19 @@ without an explicit command or project action.
 ## Current implementation boundary
 
 `StudioDashboard` is a reusable JavaFX surface with callback-based actions.
-It deliberately has no cache or renderer dependencies. The launcher now uses
-it as the default visible route and only creates the Map Editor after the user
-chooses a workspace action. Startup is split into:
+It deliberately has no cache or renderer dependencies. The launcher now owns
+one application-level neutral cache session and uses the dashboard as the
+default visible route. Startup is split into:
 
 1. application chrome and dashboard;
-2. optional project/cache selection;
-3. session creation after the Map Editor action;
-4. optional direct region request;
+2. asynchronous cache validation/loading;
+3. prepared cache-session handoff after the Map Editor action;
+4. optional direct region request through `openRegion`;
 5. workspace activation.
 
-This prevents eager cache loading and makes the future startup experience
-faster and easier to recover when no project is configured.
+This prevents duplicate cache choosers and makes the startup experience
+recoverable when a cache is missing or invalid. A failed replacement never
+discards the previous valid cache session.
 
 ## UX rules
 

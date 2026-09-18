@@ -287,13 +287,6 @@ public final class ControlledWorkspaceBridge {
         return shell.statusBar() instanceof WorkspaceStatusBar status ? status : null;
     }
 
-    public static void installQuickLaunch(ControlledWorkspaceShell shell, QuickLaunchHandler handler) {
-        if (shell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
-            viewport.installQuickLaunch(handler);
-            viewport.setWaitingForInput(true);
-        }
-    }
-
     private static Label placeholder(String title, String message) {
         Label label = new Label(title + "\n" + message);
         label.setWrapText(true);

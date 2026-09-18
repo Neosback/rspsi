@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 
@@ -23,6 +24,7 @@ import com.rspsi.util.RetentionFileChooser;
 import com.rspsi.util.Settings;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -30,6 +32,10 @@ import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import com.rspsi.ui.workspace.StudioDashboard;
+import com.rspsi.cache.workspace.CacheSessionState;
+import com.rspsi.cache.workspace.CacheSessionStatus;
+import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.cache.workspace.OsrsCacheSessionService;
 
 @Slf4j
 @Getter
@@ -44,6 +50,7 @@ public class LauncherWindow extends Application {
 	private List<String> oldCachePaths;
 	private Parent legacySettingsContent;
 	private StudioDashboard dashboard;
+	private OsrsCacheSessionService cacheSessions;
 
 	@Override
 	public void start(Stage primaryStage) throws Exception {
@@ -53,6 +60,7 @@ public class LauncherWindow extends Application {
 
 	private void startDashboard(Stage primaryStage) throws Exception {
 		java.nio.file.Files.createDirectories(Paths.get(System.getProperty("user.home"), ".rspsi"));
+		ThemeService.apply(ThemeService.Theme.PRIMER_DARK);
 		singleton = this;
 		this.primaryStage = primaryStage;
 		String savedCache = Settings.getSetting("cacheLocation", "");
@@ -61,14 +69,16 @@ public class LauncherWindow extends Application {
 		}
 		if (savedCache == null || !new File(savedCache).isDirectory()) savedCache = "";
 		oldCachePaths = Settings.getSetting("oldCache", Lists.newArrayList());
+		cacheSessions = new OsrsCacheSessionService();
 
 		dashboard = new StudioDashboard(
 				(thisCache, region) -> launchEditor(thisCache, region),
-				this::showLegacySettings,
-				this::showStudioSettings,
 				this::chooseCache);
 		dashboard.setCachePath(savedCache);
 		Scene scene = new Scene(dashboard, 1320, 860);
+		var dashboardStyles = getClass().getResource("/css/workspace.css");
+		if (dashboardStyles != null) scene.getStylesheets().add(dashboardStyles.toExternalForm());
+		scene.setFill(Color.web("#111827"));
 		primaryStage.setTitle("OpenRune Content Studio");
 		primaryStage.initStyle(StageStyle.DECORATED);
 		primaryStage.setScene(scene);
@@ -77,6 +87,9 @@ public class LauncherWindow extends Application {
 		primaryStage.setMinHeight(680);
 		primaryStage.show();
 		FXUtils.centerStage(primaryStage);
+		if (!savedCache.isBlank()) {
+			loadSelectedCache(Path.of(savedCache));
+		}
 	}
 
 	private void loadLegacySettingsContent() throws IOException {
@@ -100,9 +113,30 @@ public class LauncherWindow extends Application {
 		File selected = RetentionFileChooser.showOpenFolderDialog(primaryStage, null);
 		if (selected == null) return;
 		String path = selected.getAbsolutePath() + File.separator;
-		if (dashboard != null) dashboard.setCachePath(path);
+		if (dashboard != null) {
+			dashboard.setCachePath(path);
+			dashboard.setCacheStatus(new CacheSessionStatus(CacheSessionState.LOADING,
+				selected.toPath(), null, "Loading OpenRune cache…", null));
+		}
 		if (controller != null) controller.getCacheLocation().getEditor().setText(path);
-		rememberCache(path);
+		loadSelectedCache(selected.toPath());
+	}
+
+	private void loadSelectedCache(Path path) {
+		if (cacheSessions == null) return;
+		Path normalized = path.toAbsolutePath().normalize();
+		if (dashboard != null) {
+			dashboard.setCachePath(normalized.toString() + File.separator);
+			dashboard.setCacheStatus(new CacheSessionStatus(CacheSessionState.LOADING,
+				normalized, null, "Loading OpenRune cache…", null));
+		}
+		cacheSessions.load(normalized).whenComplete((loaded, failure) -> Platform.runLater(() -> {
+			if (dashboard != null) dashboard.setCacheStatus(cacheSessions.status());
+			if (loaded != null && failure == null) {
+				String persisted = loaded.path().toString() + File.separator;
+				rememberCache(persisted);
+			}
+		}));
 	}
 
 	/**
@@ -118,7 +152,6 @@ public class LauncherWindow extends Application {
 		Settings.properties.put("lastCacheLocation", path);
 		Settings.saveSettings();
 		putOldPath(path);
-		if (dashboard != null) dashboard.setCachePath(path);
 		if (controller != null) controller.getCacheLocation().getEditor().setText(path);
 	}
 
@@ -151,19 +184,25 @@ public class LauncherWindow extends Application {
 	}
 
 	private void launchEditor(String cachePath, String region) {
-		boolean cacheAvailable = cachePath != null && !cachePath.isBlank()
-				&& new File(cachePath).isDirectory();
-		String normalized = cacheAvailable
-				? new File(cachePath).getAbsolutePath() + File.separator : "";
-		Config.cacheLocation.set(normalized);
-		if (cacheAvailable) {
-			rememberCache(normalized);
+		if (cacheSessions == null || cachePath == null || cachePath.isBlank()) {
+			FXDialogs.showWarning(primaryStage, "Cache required",
+					"Choose and load a valid OSRS cache on the dashboard before opening Map Editor.");
+			return;
 		}
+		Path normalizedPath = Path.of(cachePath).toAbsolutePath().normalize();
+		LoadedOsrsCacheSession loaded = cacheSessions.current()
+				.filter(session -> session.path().equals(normalizedPath)).orElse(null);
+		if (loaded == null) {
+			FXDialogs.showWarning(primaryStage, "Cache is still loading",
+					"Wait for the Dashboard to report the selected OpenRune cache as ready.");
+			return;
+		}
+		String normalized = normalizedPath + File.separator;
+		Config.cacheLocation.set(normalized);
+		rememberCache(normalized);
 		MainWindow window = new MainWindow();
-		// A debug region only has meaning with a cache. Without one, preserve the
-		// empty Map Editor state instead of sending an unresolvable request into
-		// the legacy client loop.
-		window.setStartupRegion(cacheAvailable ? normalizeRegion(region) : "");
+		window.setStartupCacheSession(loaded);
+		window.setStartupRegion(normalizeRegion(region));
 		Stage editorStage = new Stage();
 		editorStage.setX(primaryStage.getX());
 		editorStage.setY(primaryStage.getY());
@@ -172,6 +211,14 @@ public class LauncherWindow extends Application {
 			primaryStage.hide();
 		} catch (Exception exception) {
 			FXDialogs.showException(primaryStage, "Cannot open Map Editor", "The editor could not be started.", exception);
+		}
+	}
+
+	@Override
+	public void stop() {
+		if (cacheSessions != null) {
+			cacheSessions.close();
+			cacheSessions = null;
 		}
 	}
 
@@ -353,6 +400,7 @@ public class LauncherWindow extends Application {
 	}
 	
 	private void fillOldPaths() {
+		if (controller == null) return;
 		controller.getCacheLocation().getItems().clear();
 		controller.getCacheLocation().getItems().addAll(oldCachePaths);
 	}

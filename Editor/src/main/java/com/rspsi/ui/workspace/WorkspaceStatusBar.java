@@ -66,6 +66,20 @@ public final class WorkspaceStatusBar extends HBox implements AutoCloseable {
         bind(session, contextText, "Cache: unavailable", "");
     }
 
+    /** Shows cache readiness before a region/session has been opened. */
+    public void showCacheReady(String cacheText) {
+        this.cacheText = nonBlank(cacheText, "Cache: ready");
+        if (session == null) clear();
+        else refresh();
+    }
+
+    /** Shows the compatibility cache bootstrap state before a region exists. */
+    public void showCacheLoading(String cacheText) {
+        this.cacheText = nonBlank(cacheText, "Cache: loading");
+        if (session == null) clear();
+        else refresh();
+    }
+
     /** Mounts dynamic feature status values without handing over the status bar. */
     public void bindPluginHost(EditorPluginHost host) {
         pluginHost = Objects.requireNonNull(host, "host");

@@ -28,6 +28,13 @@ public final class OpenRuneCacheStore implements CacheStore {
 
     /** Keep the runtime identity visible in diagnostics alongside the Gradle pin. */
     public static final String FILESTORE_VERSION = "3.0.2";
+    /**
+     * FileStore intentionally exposes bytes and archive structure, not the
+     * game build number. This is the audited decoder profile used by the
+     * current OpenRune editor cache fixtures; callers can override it with
+     * RSPSI_OSRS_REVISION when working with another supported profile.
+     */
+    public static final int DEFAULT_OSRS_REVISION = 240;
 
     private final Cache cache;
     private final boolean writable;
@@ -44,6 +51,53 @@ public final class OpenRuneCacheStore implements CacheStore {
     public static OpenRuneCacheStore open(Path path) {
         Objects.requireNonNull(path, "path");
         return new OpenRuneCacheStore(Cache.Companion.load(path));
+    }
+
+    /**
+     * Validates an OpenRune cache and selects the decoder profile before a
+     * project is opened. Do not use Displee's {@code isOSRS()} heuristic here:
+     * it is a legacy format classifier and rejects valid OpenRune-produced
+     * caches with newer index layouts. FileStore itself is the authority for
+     * opening and inspecting this cache.
+     */
+    public static int detectRevision(Path path) {
+        Objects.requireNonNull(path, "path");
+        Path normalized = path.toAbsolutePath().normalize();
+        Cache cache = Cache.Companion.load(normalized);
+        try {
+            int[] indices = cache.indices();
+            if (!contains(indices, com.rspsi.cache.OsrsCacheIndexLayout.CONFIGS)
+                    || !contains(indices, com.rspsi.cache.OsrsCacheIndexLayout.MAPS)
+                    || cache.archives(com.rspsi.cache.OsrsCacheIndexLayout.CONFIGS).length == 0
+                    || cache.archives(com.rspsi.cache.OsrsCacheIndexLayout.MAPS).length == 0) {
+                throw new IllegalArgumentException(
+                        "Selected directory does not contain OpenRune OSRS config and map indices");
+            }
+            return configuredRevision();
+        } finally {
+            cache.close();
+        }
+    }
+
+    private static boolean contains(int[] values, int expected) {
+        for (int value : values) if (value == expected) return true;
+        return false;
+    }
+
+    private static int configuredRevision() {
+        String configured = System.getProperty("rspsi.osrs.revision");
+        if (configured == null || configured.isBlank()) {
+            configured = System.getenv("RSPSI_OSRS_REVISION");
+        }
+        if (configured != null && !configured.isBlank()) {
+            try {
+                int revision = Integer.parseInt(configured.trim());
+                if (revision > 0) return revision;
+            } catch (NumberFormatException ignored) {
+                // Fall back to the audited OpenRune profile below.
+            }
+        }
+        return DEFAULT_OSRS_REVISION;
     }
 
     /**

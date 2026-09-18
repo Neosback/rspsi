@@ -10,11 +10,13 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.Node;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.io.File;
 
 /**
  * Hosts the Map Editor viewport.
@@ -28,7 +30,6 @@ public final class ControlledViewportPanel extends StackPane implements AutoClos
     private final Node legacyViewport;
     private final CanonicalSceneViewport canonicalViewport = new CanonicalSceneViewport();
     private EmbeddedOpenGlViewport openGlViewport;
-    private QuickLaunchCard quickLaunch;
     private GpuScenePacket sourcePacket;
     private SettingsStore renderSettings;
     private Consumer<SettingChange> renderSettingsListener;
@@ -40,30 +41,12 @@ public final class ControlledViewportPanel extends StackPane implements AutoClos
         // Do not mount the legacy JavaFX Canvas while the Map Editor is
         // waiting for a project. The normal shell therefore has no hidden
         // renderer fallback and does not spend time drawing an unused scene.
-        Label waiting = new Label("Open a project to begin");
+        Label waiting = new Label("Select a cache on the dashboard to begin");
         waiting.getStyleClass().add("workspace-panel-status");
         StackPane waitingSurface = new StackPane(waiting);
         waitingSurface.setAlignment(Pos.CENTER);
-        waitingSurface.setAccessibleText("Map Editor is waiting for a project");
+        waitingSurface.setAccessibleText("Map Editor is waiting for a cache");
         getChildren().add(waitingSurface);
-    }
-
-    public void installQuickLaunch(QuickLaunchHandler handler) {
-        if (quickLaunch != null) getChildren().remove(quickLaunch);
-        quickLaunch = new QuickLaunchCard(handler);
-        StackPane.setAlignment(quickLaunch, Pos.CENTER);
-        getChildren().add(quickLaunch);
-    }
-
-    public void setWaitingForInput(boolean waiting) {
-        if (quickLaunch != null) {
-            quickLaunch.setVisible(waiting);
-            quickLaunch.setManaged(waiting);
-        }
-    }
-
-    public void recordRecent(String value) {
-        if (quickLaunch != null) quickLaunch.recordRecent(value);
     }
 
     public CanonicalSceneViewport canonicalViewport() {
@@ -74,6 +57,81 @@ public final class ControlledViewportPanel extends StackPane implements AutoClos
     public EmbeddedOpenGlViewport openGlViewport() {
         if (openGlViewport == null) openGlViewport = new EmbeddedOpenGlViewport();
         return openGlViewport;
+    }
+
+    /** Shows the cache-ready state before a region has been selected. */
+    public void showCacheReady(String cachePath) {
+        clearRenderSettingsBinding();
+        sourcePacket = null;
+        Label title = new Label("Cache ready");
+        title.getStyleClass().add("workspace-panel-title");
+        String name = cachePath == null || cachePath.isBlank()
+                ? "Selected OSRS cache" : new File(cachePath).getName();
+        Label detail = new Label(name + " is loaded. Choose a region from Map > Open Coordinates,"
+                + " or use the optional debug region on the dashboard next time.");
+        detail.setWrapText(true);
+        detail.setMaxWidth(520);
+        detail.getStyleClass().add("workspace-panel-status");
+        VBox content = new VBox(8, title, detail);
+        content.setPadding(new Insets(24));
+        content.setMaxWidth(560);
+        content.getStyleClass().add("workspace-placeholder");
+        StackPane surface = new StackPane(content);
+        surface.setAlignment(Pos.CENTER);
+        surface.setAccessibleText("Cache ready; choose a region to begin editing");
+        getChildren().setAll(surface);
+    }
+
+    /**
+     * Shows the compatibility cache bootstrap state while the legacy client
+     * prepares definitions, textures, map indexes, and its resource thread.
+     *
+     * <p>The old client painted this progress state into its JavaFX canvas.
+     * The controlled shell intentionally does not mount that canvas, so the
+     * state must be represented by the shell viewport itself.</p>
+     */
+    public void showCacheLoading() {
+        clearRenderSettingsBinding();
+        sourcePacket = null;
+        Label title = new Label("Loading cache data");
+        title.getStyleClass().add("workspace-panel-title");
+        Label detail = new Label("Preparing definitions, textures, map indexes, and editor services…");
+        detail.setWrapText(true);
+        detail.setMaxWidth(520);
+        detail.getStyleClass().add("workspace-panel-status");
+        ProgressBar progress = new ProgressBar();
+        progress.setProgress(-1);
+        progress.setPrefWidth(360);
+        progress.setAccessibleText("Cache loading progress");
+        VBox content = new VBox(12, title, detail, progress);
+        content.setPadding(new Insets(24));
+        content.setMaxWidth(560);
+        content.getStyleClass().add("workspace-placeholder");
+        StackPane surface = new StackPane(content);
+        surface.setAlignment(Pos.CENTER);
+        surface.setAccessibleText("Loading cache data before opening the Map Editor");
+        getChildren().setAll(surface);
+    }
+
+    /** Shows an explicit region-loading state while FileStore decodes the session. */
+    public void showRegionLoading(String location) {
+        clearRenderSettingsBinding();
+        sourcePacket = null;
+        Label title = new Label("Loading region");
+        title.getStyleClass().add("workspace-panel-title");
+        Label detail = new Label("Preparing " + (location == null || location.isBlank()
+                ? "the selected region" : location) + " from the loaded OpenRune cache…");
+        detail.setWrapText(true);
+        detail.setMaxWidth(520);
+        detail.getStyleClass().add("workspace-panel-status");
+        VBox content = new VBox(8, title, detail);
+        content.setPadding(new Insets(24));
+        content.setMaxWidth(560);
+        content.getStyleClass().add("workspace-placeholder");
+        StackPane surface = new StackPane(content);
+        surface.setAlignment(Pos.CENTER);
+        surface.setAccessibleText("Loading the selected region from the OpenRune cache");
+        getChildren().setAll(surface);
     }
 
     /** Shows an immutable GPU packet while retaining the canonical session separately. */
@@ -169,7 +227,6 @@ public final class ControlledViewportPanel extends StackPane implements AutoClos
         canonicalViewport.close();
         getChildren().clear();
         getChildren().add(legacyViewport);
-        if (quickLaunch != null) getChildren().add(quickLaunch);
     }
 
     @Override

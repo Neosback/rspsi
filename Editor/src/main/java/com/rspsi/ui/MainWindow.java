@@ -19,6 +19,8 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -84,6 +86,7 @@ import com.rspsi.editor.selection.ObjectSelection;
 import com.rspsi.editor.selection.ObjectSetSelection;
 import com.rspsi.editor.selection.Selection;
 import com.rspsi.cache.workspace.OsrsBundle;
+import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.cache.definition.LegacyDefinitionProvider;
 import com.rspsi.editor.model.WorldWindow;
 import com.rspsi.legacy.LegacyMapDocumentBridge;
@@ -160,8 +163,16 @@ public class MainWindow extends Application {
 	private ScheduledFuture<?> osrsAutosaveTask;
 	private ProjectLayout osrsProjectLayout;
 	private boolean osrsProjectActive;
+	/** Shared, dashboard-prepared read-only cache session. */
+	private LoadedOsrsCacheSession startupCacheSession;
 	/** Optional direct region supplied by the startup dashboard/debug launcher. */
 	private String startupRegion;
+	/** Prevents the startup region from being opened more than once. */
+	private boolean startupRegionRequested;
+	private final ChangeListener<Boolean> clientGameLoadedListener = (observable, wasLoaded, isLoaded) -> {
+		if (!Boolean.TRUE.equals(isLoaded)) return;
+		Platform.runLater(this::finishCacheBootstrap);
+	};
 	private final Runnable controlledMapReadyListener = this::bindControlledWorkspaceSession;
 
 	private Scene scene;
@@ -294,6 +305,13 @@ public class MainWindow extends Application {
 			primaryStage.initStyle(StageStyle.TRANSPARENT);
 			primaryStage.setScene(scene);
 			primaryStage.getIcons().addAll(ResourceLoader.getSingleton().getIcons());
+			if (controlledWorkspaceShell != null
+					&& controlledWorkspaceShell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
+				// Keep this visible from the first rendered editor frame. The old
+				// client loading bar lived in the retired canvas and was otherwise
+				// invisible in the controlled shell.
+				viewport.showCacheLoading();
+			}
 
 			ChangeListener<Number> stageSizeListener = (observable, oldValue, newValue) -> {
 				if((boolean) Settings.properties.getOrDefault("remember_size",true) == true) {
@@ -523,32 +541,38 @@ public class MainWindow extends Application {
 			controller.getShowObjectViewBtn().setOnAction(evt -> objectPreviewWindow.stage.show());
 
 
-			clientInstance = Client.initialize(controller.getGamePane().widthProperty().intValue(),
-					controller.getGamePane().heightProperty().intValue());
-			if (controlledWorkspaceShell != null) {
+			/*
+			 * The controlled shell deliberately detaches the legacy FXML game pane,
+			 * so its layout size is legitimately 0x0. The compatibility client still
+			 * performs its cache bootstrap on a background thread and needs a valid
+			 * raster size for its internal loading/status buffer, even though that
+			 * buffer is never mounted as the visible renderer.
+			 */
+			int compatibilityWidth = Math.max(640, (int) scene.getWidth());
+			int compatibilityHeight = Math.max(480, (int) scene.getHeight());
+			clientInstance = Client.initialize(compatibilityWidth, compatibilityHeight);
+			Client.gameLoaded.addListener(clientGameLoadedListener);
+			if (controlledWorkspaceShell != null && startupCacheSession == null) {
 				clientInstance.addMapReadyListener(controlledMapReadyListener);
-				ControlledWorkspaceBridge.installQuickLaunch(controlledWorkspaceShell,
-						new com.rspsi.ui.workspace.QuickLaunchHandler() {
-							@Override public void openLocalCache() { openLocalCacheFromQuickLaunch(); }
-							@Override public void createBlankCanvas() { controller.getNewMapButton().fire(); }
-							@Override public void openProject() { controller.getOpenOsrsProjectButton().fire(); }
-							@Override public void openCoordinates(String value) { quickLoadLocation(value, false); }
-							@Override public void openRegionId(String value) { quickLoadLocation(value, true); }
-						});
 			}
 
 			String configuredCache = Config.cacheLocation.get();
 			if (configuredCache != null && !configuredCache.isBlank()
 					&& Files.isDirectory(Paths.get(configuredCache))) {
 				clientInstance.loadCache(Paths.get(configuredCache));
+				if (startupCacheSession != null
+						&& controlledWorkspaceShell != null
+						&& controlledWorkspaceShell.statusBar() instanceof com.rspsi.ui.workspace.WorkspaceStatusBar status) {
+					status.showCacheLoading(startupCacheSession.backendName()
+							+ " · preparing revision " + startupCacheSession.identity().revision());
+				}
 			} else {
-				log.info("No cache selected; opening Map Editor in its actionable empty state");
+				log.info("Map Editor opened without a cache; cache selection is controlled by the dashboard");
 			}
-			if (startupRegion != null && !startupRegion.isBlank()) {
-				String requestedRegion = startupRegion.trim();
-				Platform.runLater(() -> quickLoadLocation(requestedRegion,
-						!requestedRegion.contains(",")));
-			}
+			// The requested region is opened after the compatibility cache has
+			// finished bootstrapping. This preserves the normal loading sequence:
+			// cache data first, then region data.
+			if (Client.gameLoaded.get()) Platform.runLater(this::finishCacheBootstrap);
 
 			CanvasPane gamePane = new CanvasPane(clientInstance.getGameCanvas());
 
@@ -661,6 +685,7 @@ public class MainWindow extends Application {
 
 				Settings.putSetting("shutdown", true);
 				if (clientInstance != null) {
+					Client.gameLoaded.removeListener(clientGameLoadedListener);
 					clientInstance.removeMapReadyListener(controlledMapReadyListener);
 					try {
 						clientInstance.exit();
@@ -678,6 +703,7 @@ public class MainWindow extends Application {
 					osrsBundle.close();
 					osrsBundle = null;
 				}
+				startupCacheSession = null;
 				controlledSession = null;
 				osrsProjectActive = false;
 				if (controlledWorkspaceShell != null) {
@@ -896,10 +922,6 @@ public class MainWindow extends Application {
 				|| clientInstance.mapRegion == null || clientInstance.sceneGraph == null) {
 			return;
 		}
-		if (controlledWorkspaceShell.panelNode("viewport") instanceof com.rspsi.ui.workspace.ControlledViewportPanel viewport) {
-			viewport.setWaitingForInput(false);
-			viewport.recordRecent(clientInstance.getBaseX() + "," + clientInstance.getBaseY());
-		}
 		Platform.runLater(() -> {
 			if (controlledWorkspaceShell == null || clientInstance == null
 				|| clientInstance.mapRegion == null || clientInstance.sceneGraph == null) {
@@ -939,33 +961,64 @@ public class MainWindow extends Application {
 				x = Integer.parseInt(parts[0]);
 				y = Integer.parseInt(parts[1]);
 			}
-			Client.runLater.add(() -> clientInstance.loadCoordinates(x, y, 1, 1));
+			if (startupCacheSession != null) {
+				openModernRegion(x / 64, y / 64);
+			} else {
+				Client.runLater.add(() -> clientInstance.loadCoordinates(x, y, 1, 1));
+			}
 		} catch (NumberFormatException exception) {
 			FXDialogs.showWarning(stage, "Invalid location", "Enter coordinates as x,y or a numeric region ID.");
 		}
 	}
 
-	/**
-	 * The empty-state "Open Local Cache" action selects a cache directory. It
-	 * must not forward to the legacy "open map files" command, which is a
-	 * different workflow and was the reason startup could appear to ask for the
-	 * same source twice.
-	 */
-	private void openLocalCacheFromQuickLaunch() {
-		DirectoryChooser chooser = new DirectoryChooser();
-		chooser.setTitle("Choose OSRS cache directory");
-		File selected = chooser.showDialog(stage);
-		if (selected == null || clientInstance == null) return;
-
-		String path = selected.getAbsolutePath() + File.separator;
-		Config.cacheLocation.set(path);
-		Settings.properties.put("cacheLocation", path);
-		Settings.properties.put("lastCacheLocation", path);
-		Settings.saveSettings();
-		if (LauncherWindow.getSingleton() != null) {
-			LauncherWindow.getSingleton().rememberCache(path);
+	/** Completes the visible cache bootstrap and optionally starts the region load. */
+	private void finishCacheBootstrap() {
+		if (controlledWorkspaceShell == null) return;
+		if (startupRegion != null && !startupRegion.isBlank() && !startupRegionRequested) {
+			startupRegionRequested = true;
+			String requestedRegion = startupRegion.trim();
+			quickLoadLocation(requestedRegion, !requestedRegion.contains(","));
+			return;
 		}
-		clientInstance.loadCache(selected.toPath());
+		if (startupRegionRequested) return;
+		if (startupCacheSession != null
+				&& controlledWorkspaceShell.statusBar() instanceof com.rspsi.ui.workspace.WorkspaceStatusBar status) {
+			status.showCacheReady(startupCacheSession.backendName()
+					+ " · revision " + startupCacheSession.identity().revision());
+		}
+		if (controlledWorkspaceShell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
+			viewport.showCacheReady(startupCacheSession == null ? "" : startupCacheSession.path().toString());
+		}
+	}
+
+	private void openModernRegion(int regionX, int regionY) {
+		LoadedOsrsCacheSession cache = startupCacheSession;
+		if (cache == null || controlledWorkspaceShell == null) {
+			FXDialogs.showWarning(stage, "Cache not ready",
+					"Load a cache on the OpenRune Studio dashboard before opening a region.");
+			return;
+		}
+		if (controlledWorkspaceShell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
+			viewport.showRegionLoading("region " + regionX + "," + regionY);
+		}
+		CompletableFuture.supplyAsync(() -> cache.openRegion(regionX, regionY), service)
+				.whenComplete((opened, failure) -> Platform.runLater(() -> {
+					if (failure != null) {
+						Throwable cause = failure instanceof CompletionException && failure.getCause() != null
+								? failure.getCause() : failure;
+						Exception detail = cause instanceof Exception exception
+								? exception : new RuntimeException(cause);
+						FXDialogs.showException(stage, "Cannot open region",
+								"The selected region could not be decoded from the loaded OpenRune cache.", detail);
+						return;
+					}
+					controlledSession = opened.region().session();
+					osrsProjectActive = true;
+					ControlledWorkspaceBridge.bindProject(controlledWorkspaceShell, opened,
+							cache.bundle().definitions(), cache.bundle().assets());
+					updateHistoryMenuState();
+					log.info("Opened OpenRune region {},{} from {}", regionX, regionY, cache.path());
+				}));
 	}
 
 	/**
@@ -1464,6 +1517,11 @@ public class MainWindow extends Application {
 	/** Sets an optional dashboard/debug region before {@link #start(Stage)}. */
 	public void setStartupRegion(String startupRegion) {
 		this.startupRegion = startupRegion == null ? "" : startupRegion.trim();
+	}
+
+	/** Supplies the already validated cache selected on the Studio dashboard. */
+	public void setStartupCacheSession(LoadedOsrsCacheSession startupCacheSession) {
+		this.startupCacheSession = startupCacheSession;
 	}
 
 }

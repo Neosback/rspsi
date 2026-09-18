@@ -8,15 +8,23 @@ by Gradle, set `JAVA_HOME` to a JDK 21 installation before running the checklist
 
 1. Run `./gradlew test`.
 2. Launch the editor with `./gradlew :Editor:run` and leave it open for the
-   interactive steps below.
-3. Load a known 317/legacy cache and confirm the loading screen completes.
-4. Open a map and verify camera movement, tile hover, plane switching, and minimap output.
-5. Paint an underlay and overlay, change a flag, and modify a height.
-6. Select, place, and delete an object.
-7. Copy/import a tile selection and verify rotation/plane options.
-8. Undo and redo each edit; confirm the visual state returns exactly.
-9. Export map/object files, close, reopen, and verify the edits remain.
-10. Confirm autosave recovery after a controlled restart when an autosave exists.
+   interactive steps below. Confirm the Dashboard appears first.
+3. Confirm the Dashboard automatically loads the last valid cache, shows its
+   revision/backend/map availability, and keeps Map Editor disabled while the
+   cache is loading. If no valid cache is remembered, choose one on the
+   Dashboard and wait for `Ready`; no second cache chooser should appear when
+   Map Editor opens.
+4. Open Map Editor without coordinates and confirm it shows a cache-ready
+   empty-region state, not “Open a project to begin”.
+5. Open a map from the Dashboard with a valid coordinate/region ID and verify
+   that the same prepared session mounts the OpenGL viewport immediately.
+6. Verify camera movement, tile hover, plane switching, and minimap output.
+7. Paint an underlay and overlay, change a flag, and modify a height.
+8. Select, place, and delete an object.
+9. Copy/import a tile selection and verify rotation/plane options.
+10. Undo and redo each edit; confirm the visual state returns exactly.
+11. Export map/object files, close, reopen, and verify the edits remain.
+12. Confirm autosave recovery after a controlled restart when an autosave exists.
 
 For the opt-in controlled workspace migration, set `controlledWorkspace` to
 `true` in `~/.rspsi/settings.json` and repeat steps 2–10. Confirm that the

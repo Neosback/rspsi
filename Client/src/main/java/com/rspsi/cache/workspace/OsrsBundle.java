@@ -75,6 +75,12 @@ public final class OsrsBundle implements AutoCloseable {
         }
     }
 
+    /** Opens a read-only OSRS bundle using the revision advertised by the cache. */
+    public static OsrsBundle openReadOnly(Path cachePath) {
+        return openReadOnly(cachePath,
+                com.rspsi.cache.store.OpenRuneCacheStore.detectRevision(cachePath));
+    }
+
     /** Opens a staged Displee output while keeping the OSRS bundle boundary. */
     public static OsrsBundle openWithDispleeOutput(Path basePath, Path outputPath,
                                                     ProjectMetadata metadata) {
@@ -136,6 +142,10 @@ public final class OsrsBundle implements AutoCloseable {
     public DefinitionProvider definitions() { return project.definitions(); }
 
     public AssetRepository assets() { return project.assets(); }
+
+    public String backendName() { return project.backendName(); }
+
+    public int mapCount() { return project.maps().index().size(); }
 
     public Optional<ServerAdapter> serverAdapter() { return Optional.ofNullable(serverAdapter); }
 

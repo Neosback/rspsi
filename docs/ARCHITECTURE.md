@@ -30,19 +30,22 @@ Displee legacy adapter | OpenRune OSRS adapter
 ```
 
 The cache/provider selection is a separate startup layer from feature plugins.
-The launcher selects the OSRS bundle first; the bundle opens the cache,
-establishes revision identity, and initializes the cache/definition services.
-Only after that succeeds does Studio create the canonical project session and
-mount terrain, object, selection, collision, validation, and other feature
-plugins. Dear ImGui or JavaFX consumes the resulting neutral session; neither
-frontend is responsible for opening a cache or decoding archive formats.
+The Dashboard asks the application-level `OsrsCacheSessionService` to open the
+selected cache asynchronously through OpenRune FileStore. The service keeps a
+previous valid session until a replacement succeeds, establishes revision
+identity, and prepares definitions, assets, map services, and the `OsrsBundle`.
+Only after that succeeds does Studio enable Map Editor and hand it the shared
+cache session. A selected region then creates the canonical project/session
+through the modern `openRegion` path. Dear ImGui or JavaFX consumes the
+resulting neutral session; neither frontend is responsible for opening a cache
+or decoding archive formats.
 
 ```text
-launcher selection
+Dashboard cache load
         ↓
-OsrsBundle + cache identity
+OsrsCacheSessionService + OsrsBundle + cache identity
         ↓
-WorldDocument / EditorSession / neutral assets
+optional openRegion → WorldDocument / EditorSession / neutral assets
         ↓
 first-party feature plugin host
         ↓
