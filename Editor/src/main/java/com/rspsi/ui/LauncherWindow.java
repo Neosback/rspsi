@@ -202,7 +202,11 @@ public class LauncherWindow extends Application {
 		rememberCache(normalized);
 		MainWindow window = new MainWindow();
 		window.setStartupCacheSession(loaded);
-		window.setStartupRegion(normalizeRegion(region));
+		// Keep the first launch useful and deterministic: region 50,50 is
+		// Lumbridge. The field remains editable for another region or world
+		// coordinate pair before opening the workspace.
+		String requestedRegion = region == null || region.isBlank() ? "50,50" : region;
+		window.setStartupRegion(normalizeRegion(requestedRegion));
 		Stage editorStage = new Stage();
 		editorStage.setX(primaryStage.getX());
 		editorStage.setY(primaryStage.getY());

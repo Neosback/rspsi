@@ -1474,6 +1474,10 @@ public class MainWindow extends Application {
 			int hash = pickHash.getHash();
 			int width = pickHash.getWidth();
 			int length = pickHash.getLength();
+			if (startupCacheSession != null) {
+				openModernRegion(hash >> 8, hash & 0xff);
+				return;
+			}
 			Client.runLater.add(() -> { 
 				clientInstance.loadCoordinates((hash >> 8) * 64, (hash & 0xff) * 64, width, length);
 				fullMapView.resizeMap();
@@ -1499,6 +1503,10 @@ public class MainWindow extends Application {
 			int y = pickCoords.getYCoordinate();	
 			x /= 64;
 			y /= 64;
+			if (startupCacheSession != null) {
+				openModernRegion(x, y);
+				return;
+			}
 			int hash = (x << 8) + y;
 			int width = pickCoords.getWidth();
 			int length = pickCoords.getLength();

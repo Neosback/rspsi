@@ -68,8 +68,14 @@ public final class StudioDashboard extends BorderPane {
         HBox cacheRow = new HBox(8, cacheField, cacheChooserButton);
         cacheRow.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(cacheField, Priority.ALWAYS);
-        regionField.setPromptText("Optional: regionX,regionY or region ID (debug launch)");
-        regionField.setAccessibleText("Optional direct region for map editor debug launch");
+        regionField.setText("50,50");
+        regionField.setPromptText("Region X,Y, world X,Y, or region ID");
+        regionField.setTooltip(new javafx.scene.control.Tooltip(
+                "Starting region. Lumbridge is 50,50. You can also enter world coordinates or a region ID."));
+        regionField.setAccessibleText("Starting region or world coordinates for Map Editor");
+        regionField.setOnAction(event -> {
+            if (cacheReady) openMapEditor.accept(cacheField.getText(), regionField.getText());
+        });
         HBox startup = new HBox(8, cacheRow, regionField);
         startup.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(cacheRow, Priority.ALWAYS);
