@@ -12,6 +12,34 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SettingsStoreTest {
     @Test
+    void renderSettingsHaveDeclaredConsumers() {
+        SettingsContractValidator.validateOrThrow(
+                RenderSettingKeys.registry(), RenderSettingKeys.consumerCatalog());
+    }
+
+    @Test
+    void contractRejectsAnUnconsumedRegisteredSetting() {
+        SettingsRegistry registry = new SettingsRegistry();
+        SettingKey<Boolean> key = new SettingKey<>("test.unconsumed", Boolean.class);
+        registry.register(SettingSpec.of(key, false, SettingScope.GLOBAL,
+                "Unconsumed", "Test setting", java.util.Set.of(SettingInvalidation.NONE)));
+
+        assertThrows(IllegalStateException.class, () ->
+                SettingsContractValidator.validateOrThrow(registry, new SettingConsumerCatalog()));
+    }
+
+    @Test
+    void contractRejectsAnUnknownConsumerReference() {
+        SettingsRegistry registry = new SettingsRegistry();
+        SettingKey<Boolean> key = new SettingKey<>("test.unknown", Boolean.class);
+        SettingConsumerCatalog consumers = new SettingConsumerCatalog();
+        consumers.register("test", key);
+
+        assertThrows(IllegalStateException.class, () ->
+                SettingsContractValidator.validateOrThrow(registry, consumers));
+    }
+
+    @Test
     void layersResolveInDocumentedPrecedenceAndEmitInvalidation() {
         SettingsStore store = new SettingsStore(RenderSettingKeys.registry());
         List<SettingChange> changes = new ArrayList<>();

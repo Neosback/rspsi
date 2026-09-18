@@ -127,8 +127,17 @@ tasks.register('verifyRetiredLoaderBoundary') {
     }
 }
 
+tasks.register('verifySettingsContract', JavaExec) {
+    description = 'Verifies that every registered setting has a valid declared consumer.'
+    group = 'verification'
+    dependsOn tasks.named('classes')
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.rspsi.editor.settings.SettingsContractVerifier'
+}
+
 tasks.named('check') {
     dependsOn(tasks.named('verifyUiNeutralCore'))
     dependsOn(tasks.named('verifyCacheBackendBoundary'))
     dependsOn(tasks.named('verifyRetiredLoaderBoundary'))
+    dependsOn(tasks.named('verifySettingsContract'))
 }

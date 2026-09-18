@@ -4,6 +4,7 @@ import com.rspsi.editor.settings.SettingInvalidation;
 import com.rspsi.editor.settings.SettingKey;
 import com.rspsi.editor.settings.SettingScope;
 import com.rspsi.editor.settings.SettingSpec;
+import com.rspsi.editor.settings.SettingConsumerCatalog;
 import com.rspsi.editor.settings.SettingsRegistry;
 
 import java.util.List;
@@ -91,6 +92,18 @@ public final class RenderSettingKeys {
                 "Fog color", "Presentation-only RGB color used by scene-edge fog.",
                 Set.of(SettingInvalidation.REDRAW)));
         return registry;
+    }
+
+    /** Declares the render configuration compiler as the consumer of every render key. */
+    public static SettingConsumerCatalog consumerCatalog() {
+        SettingConsumerCatalog consumers = new SettingConsumerCatalog();
+        consumers.register("render-config", PROFILE, TERRAIN_VISIBLE, OBJECTS_VISIBLE,
+                WALLS_VISIBLE, WALL_DECORATIONS_VISIBLE, GROUND_OBJECTS_VISIBLE,
+                GROUND_DECORATIONS_VISIBLE, ROOFS_VISIBLE, BRIDGE_TILES_VISIBLE,
+                HIDDEN_TILES_VISIBLE, COLLISION_VISIBLE, WIREFRAME, ACTIVE_PLANE,
+                PLANE_SELECTION, BRIGHTNESS, EXPOSURE, MSAA_SAMPLES, FOG_DEPTH_TILES,
+                FOG_COLOR);
+        return consumers;
     }
 
     private static SettingKey<Boolean> bool(String id) {
