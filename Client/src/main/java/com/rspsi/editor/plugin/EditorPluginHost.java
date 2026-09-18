@@ -2,6 +2,8 @@ package com.rspsi.editor.plugin;
 
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.assets.AssetRepository;
+import com.rspsi.editor.settings.SettingsStore;
+import com.rspsi.editor.settings.EditorSettingKeys;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -64,15 +66,42 @@ public final class EditorPluginHost implements AutoCloseable {
         return initialize(plugins, session, assets, Optional.of(scene));
     }
 
+    /** Initializes plugins with application-owned neutral services. */
+    public static EditorPluginHost initialize(
+            Iterable<? extends EditorPlugin> plugins,
+            EditorSession session,
+            AssetRepository assets,
+            EditorSceneAccess scene,
+            SettingsStore settings,
+            EditorTaskService tasks,
+            EditorNotificationService notifications) {
+        return initialize(plugins, session, assets, Optional.ofNullable(scene),
+                settings, tasks, notifications);
+    }
+
     private static EditorPluginHost initialize(
             Iterable<? extends EditorPlugin> plugins,
             EditorSession session,
             AssetRepository assets,
             Optional<EditorSceneAccess> scene) {
+        return initialize(plugins, session, assets, scene,
+                new SettingsStore(EditorSettingKeys.registry()),
+                new EditorTaskService(), new EditorNotificationService());
+    }
+
+    private static EditorPluginHost initialize(
+            Iterable<? extends EditorPlugin> plugins,
+            EditorSession session,
+            AssetRepository assets,
+            Optional<EditorSceneAccess> scene,
+            SettingsStore settings,
+            EditorTaskService tasks,
+            EditorNotificationService notifications) {
         Objects.requireNonNull(plugins, "plugins");
         EditorPluginRegistry registry = new EditorPluginRegistry();
         EditorPluginResources resources = new EditorPluginResources();
-        EditorPluginContext context = new EditorPluginContext(session, assets, registry, scene, resources);
+        EditorPluginContext context = new EditorPluginContext(session, assets, registry, scene,
+                settings, tasks, notifications, resources);
         List<LoadedPlugin> initialized = new ArrayList<>();
         Set<String> pluginIds = new HashSet<>();
         try {
@@ -199,6 +228,11 @@ public final class EditorPluginHost implements AutoCloseable {
                     "plugin descriptor");
             if (!id.equals(descriptor.id())) {
                 throw new IllegalArgumentException("Plugin descriptor ID does not match plugin ID: " + id);
+            }
+            if (descriptor.apiVersion() != EditorPluginApi.CURRENT_VERSION) {
+                throw new IllegalArgumentException("Plugin " + id + " requires editor plugin API "
+                        + descriptor.apiVersion() + ", but this editor provides API "
+                        + EditorPluginApi.CURRENT_VERSION);
             }
             descriptors.put(id, descriptor);
         }

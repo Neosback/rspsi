@@ -1,4 +1,4 @@
-package com.rspsi.ui.workspace;
+package com.rspsi.renderer.opengl;
 
 import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuSceneVertex;
@@ -21,17 +21,21 @@ import org.lwjgl.opengl.GLCapabilities;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.lwjgl.opengl.GL11.GL_BLEND;
 import static org.lwjgl.opengl.GL11.GL_BACK;
 import static org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT;
 import static org.lwjgl.opengl.GL11.GL_CULL_FACE;
-import static org.lwjgl.opengl.GL11.GL_CW;
 import static org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT;
 import static org.lwjgl.opengl.GL11.GL_DEPTH_TEST;
 import static org.lwjgl.opengl.GL11.GL_FILL;
@@ -54,7 +58,6 @@ import static org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE;
 import static org.lwjgl.opengl.GL11.GL_UNSIGNED_INT;
 import static org.lwjgl.opengl.GL11.glBindTexture;
 import static org.lwjgl.opengl.GL11.glBlendFunc;
-import static org.lwjgl.opengl.GL11.glCullFace;
 import static org.lwjgl.opengl.GL11.glClear;
 import static org.lwjgl.opengl.GL11.glClearColor;
 import static org.lwjgl.opengl.GL11.glDepthMask;
@@ -62,13 +65,19 @@ import static org.lwjgl.opengl.GL11.glDisable;
 import static org.lwjgl.opengl.GL11.glDrawElements;
 import static org.lwjgl.opengl.GL11.glEnable;
 import static org.lwjgl.opengl.GL11.glDepthFunc;
-import static org.lwjgl.opengl.GL11.glFrontFace;
 import static org.lwjgl.opengl.GL11.glGenTextures;
+import static org.lwjgl.opengl.GL11.glGetError;
+import static org.lwjgl.opengl.GL11.glGetString;
 import static org.lwjgl.opengl.GL11.glTexImage2D;
 import static org.lwjgl.opengl.GL11.glTexParameteri;
 import static org.lwjgl.opengl.GL11.glViewport;
 import static org.lwjgl.opengl.GL11.glPolygonMode;
+import static org.lwjgl.opengl.GL11.GL_NO_ERROR;
+import static org.lwjgl.opengl.GL11.GL_RENDERER;
+import static org.lwjgl.opengl.GL11.GL_VENDOR;
+import static org.lwjgl.opengl.GL11.GL_VERSION;
 import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
+import static org.lwjgl.opengl.GL12.GL_TEXTURE_WRAP_R;
 import static org.lwjgl.opengl.GL12.glTexImage3D;
 import static org.lwjgl.opengl.GL12.glTexSubImage3D;
 import static org.lwjgl.opengl.GL15.GL_ARRAY_BUFFER;
@@ -108,7 +117,8 @@ import static org.lwjgl.opengl.GL30.glDeleteVertexArrays;
 import static org.lwjgl.opengl.GL30.glGenVertexArrays;
 
 /** OpenGL 3.3 consumer of the immutable world-space upload plan. */
-final class OpenGlSceneRenderer implements AutoCloseable {
+public final class OpenGlSceneRenderer implements AutoCloseable {
+    private static final Logger LOGGER = LoggerFactory.getLogger(OpenGlSceneRenderer.class);
     // Position, UV, encoded light/color, alpha, render type, and native RGB.
     // The reference packet retains normals; this backend does not need them
     // after ModelPacketBuilder has produced its lit face values.
@@ -147,11 +157,15 @@ final class OpenGlSceneRenderer implements AutoCloseable {
     private int fogDepthLocation;
     private int fogColorLocation;
     private String uploadedFingerprint;
+    private String uploadedTextureFingerprint;
     private int textureArray;
     private final Map<Integer, Integer> textureLayers = new HashMap<>();
     private final Map<Integer, float[]> textureScales = new HashMap<>();
+    private int firstGlError = GL_NO_ERROR;
+    private Statistics statistics = Statistics.empty();
+    private boolean diagnosticsLogged;
 
-    void initialize() {
+    public void initialize() {
         GLCapabilities capabilities = GL.createCapabilities();
         if (!capabilities.OpenGL33) {
             throw new IllegalStateException("RSPSi requires an OpenGL 3.3 core context; detected "
@@ -216,31 +230,40 @@ final class OpenGlSceneRenderer implements AutoCloseable {
         glDisable(GL_BLEND);
         glDepthMask(true);
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        // Upload packets use the same RuneScape front winding as the
-        // software reference path. OpenGL's viewport has Y increasing up,
-        // so that winding is clockwise here.
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
-        glFrontFace(GL_CW);
+        // The CPU reference renderer does not cull triangles, and the
+        // winding contract is not yet parity-verified for every OSRS model
+        // and shaped-tile family. Keep both sides visible in the Phase 0
+        // native baseline; culling returns only with measured evidence.
+        glDisable(GL_CULL_FACE);
         glClearColor(0.063f, 0.094f, 0.153f, 1.0f);
+        captureGlError();
     }
 
-    void draw(GpuUploadPlan plan, CameraState camera, int width, int height) {
+    public void draw(GpuUploadPlan plan, CameraState camera, int width, int height) {
         draw(plan, camera, width, height, RenderPresentation.neutral());
     }
 
-    void draw(GpuUploadPlan plan, CameraState camera, int width, int height,
+    public void draw(GpuUploadPlan plan, CameraState camera, int width, int height,
               RenderPresentation presentation) {
         draw(plan, camera, width, height, presentation, clientCycle());
     }
 
-    void draw(GpuUploadPlan plan, CameraState camera, int width, int height,
+    public void draw(GpuUploadPlan plan, CameraState camera, int width, int height,
               RenderPresentation presentation, int clientCycle) {
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         final GpuUploadPlan renderPlan = plan == null ? null : OcclusionPlanFilter.filter(plan, camera);
-        if (renderPlan == null || renderPlan.vertices().isEmpty() || renderPlan.indices().isEmpty()) return;
-        if (!renderPlan.fingerprint().equals(uploadedFingerprint)) upload(renderPlan);
+        if (renderPlan == null || renderPlan.vertices().isEmpty() || renderPlan.indices().isEmpty()) {
+            statistics = statisticsFor(plan, renderPlan);
+            captureGlError();
+            return;
+        }
+        if (!renderPlan.fingerprint().equals(uploadedFingerprint)) uploadGeometry(renderPlan);
+        String textureFingerprint = textureFingerprint(renderPlan.textures());
+        if (!textureFingerprint.equals(uploadedTextureFingerprint)) {
+            uploadTextureArray(renderPlan.textures());
+            uploadedTextureFingerprint = textureFingerprint;
+        }
 
         glUseProgram(program);
         glUniform3f(cameraLocation, camera.x(), camera.y(), camera.z());
@@ -282,6 +305,76 @@ final class OpenGlSceneRenderer implements AutoCloseable {
         for (GpuDrawCommand command : alpha) drawCommand(renderPlan, command, camera, true, clientCycle);
         glBindVertexArray(0);
         glUseProgram(0);
+        statistics = statisticsFor(plan, renderPlan);
+        captureGlError();
+        if (!diagnosticsLogged) {
+            LOGGER.info("Native OpenGL {} / {} / {}; source={} vertices, rendered={} triangles, "
+                            + "textures decoded={} fallback={} unavailable={}, firstGLerror={}",
+                    statistics.vendor(), statistics.renderer(), statistics.version(),
+                    statistics.sourceVertices(), statistics.renderedTriangles(),
+                    statistics.decodedTextures(), statistics.fallbackTextures(),
+                    statistics.unavailableTextures(), statistics.firstGlError());
+            diagnosticsLogged = true;
+        }
+    }
+
+    public Statistics statistics() {
+        return statistics;
+    }
+
+    private Statistics statisticsFor(GpuUploadPlan source, GpuUploadPlan rendered) {
+        int sourceVertices = source == null ? 0 : source.vertices().size();
+        int sourceIndices = source == null ? 0 : source.indices().size();
+        int renderedIndices = rendered == null ? 0 : rendered.indices().size();
+        int terrainTriangles = 0;
+        int objectTriangles = 0;
+        if (rendered != null) {
+            for (GpuDrawCommand command : rendered.commands()) {
+                int triangles = command.indexCount() / 3;
+                if (command.layer() == SceneLayer.Kind.TERRAIN) terrainTriangles += triangles;
+                else objectTriangles += triangles;
+            }
+        }
+        int decoded = 0;
+        int fallback = 0;
+        int unavailable = 0;
+        if (source != null) {
+            for (RenderTextureResource resource : source.textures().values()) {
+                switch (resource.pixelStatus()) {
+                    case AVAILABLE -> decoded++;
+                    case AVERAGE_COLOR_FALLBACK -> fallback++;
+                    case UNAVAILABLE, INVALID -> unavailable++;
+                }
+            }
+        }
+        return new Statistics(sourceVertices, sourceIndices, renderedIndices,
+                terrainTriangles, objectTriangles, decoded, fallback, unavailable,
+                safeGlString(GL_VENDOR), safeGlString(GL_RENDERER), safeGlString(GL_VERSION),
+                firstGlError);
+    }
+
+    private void captureGlError() {
+        int error = glGetError();
+        if (firstGlError == GL_NO_ERROR && error != GL_NO_ERROR) firstGlError = error;
+    }
+
+    private static String safeGlString(int name) {
+        String value = glGetString(name);
+        return value == null ? "unknown" : value;
+    }
+
+    public record Statistics(int sourceVertices, int sourceIndices, int renderedIndices,
+                             int terrainTriangles, int objectTriangles,
+                             int decodedTextures, int fallbackTextures, int unavailableTextures,
+                             String vendor, String renderer, String version, int firstGlError) {
+        private static Statistics empty() {
+            return new Statistics(0, 0, 0, 0, 0, 0, 0, 0,
+                    "unknown", "unknown", "unknown", GL_NO_ERROR);
+        }
+
+        public int renderedTriangles() {
+            return renderedIndices / 3;
+        }
     }
 
     private void drawCommand(GpuUploadPlan plan, GpuDrawCommand command,
@@ -343,7 +436,7 @@ final class OpenGlSceneRenderer implements AutoCloseable {
         return count == 0 ? Float.NEGATIVE_INFINITY : total / count;
     }
 
-    private void upload(GpuUploadPlan plan) {
+    private void uploadGeometry(GpuUploadPlan plan) {
         FloatBuffer vertexData = BufferUtils.createFloatBuffer(plan.vertices().size() * FLOATS_PER_VERTEX);
         for (GpuSceneVertex vertex : plan.vertices()) {
             int rgb = packedColor(vertex);
@@ -365,8 +458,25 @@ final class OpenGlSceneRenderer implements AutoCloseable {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexData, GL_STATIC_DRAW);
         glBindVertexArray(0);
-        uploadTextureArray(plan.textures());
         uploadedFingerprint = plan.fingerprint();
+    }
+
+    private static String textureFingerprint(Map<Integer, RenderTextureResource> resources) {
+        StringBuilder value = new StringBuilder();
+        resources.values().stream().sorted(Comparator.comparingInt(RenderTextureResource::id))
+                .forEach(texture -> value.append(texture.id())
+                        .append(':').append(texture.pixelStatus())
+                        .append(':').append(texture.width()).append('x').append(texture.height())
+                        .append(':').append(java.util.Arrays.hashCode(texture.pixels())).append('|'));
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder(digest.length * 2);
+            for (byte item : digest) result.append(String.format("%02x", item & 0xFF));
+            return result.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new AssertionError(exception);
+        }
     }
 
     private void uploadTextureArray(Map<Integer, RenderTextureResource> resources) {
@@ -374,13 +484,9 @@ final class OpenGlSceneRenderer implements AutoCloseable {
         textureLayers.clear();
         textureScales.clear();
         List<RenderTextureResource> available = resources.values().stream()
-                .filter(RenderTextureResource::hasPixels)
+                .filter(RenderTextureResource::hasGpuPixels)
                 .sorted(Comparator.comparingInt(RenderTextureResource::id))
                 .toList();
-        if (available.isEmpty()) {
-            textureArray = 0;
-            return;
-        }
         int width = available.stream().mapToInt(RenderTextureResource::width).max().orElse(1);
         int height = available.stream().mapToInt(RenderTextureResource::height).max().orElse(1);
         textureArray = glGenTextures();
@@ -391,8 +497,25 @@ final class OpenGlSceneRenderer implements AutoCloseable {
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, width, height, available.size(),
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        // Keep a real sampler2DArray bound even when the cache provider only
+        // supplied texture metadata. macOS validates sampler targets at draw
+        // time, so binding texture 0 here makes every textured command emit
+        // the "texture unloadable" warning and can turn the whole textured
+        // path into undefined output. The shader still receives
+        // uTextureAvailable=0 for these commands and uses its explicit
+        // lightness fallback instead of sampling this diagnostic layer.
+        int depth = Math.max(1, available.size());
+        glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, width, height, depth,
                 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+        if (available.isEmpty()) {
+            ByteBuffer fallback = BufferUtils.createByteBuffer(4)
+                    .put((byte) 0xFF).put((byte) 0xFF).put((byte) 0xFF).put((byte) 0xFF);
+            fallback.flip();
+            glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, 1, 1, 1,
+                    GL_RGBA, GL_UNSIGNED_BYTE, fallback);
+            return;
+        }
         for (int layer = 0; layer < available.size(); layer++) {
             RenderTextureResource resource = available.get(layer);
             ByteBuffer pixels = BufferUtils.createByteBuffer(resource.width() * resource.height() * 4);
@@ -435,6 +558,8 @@ final class OpenGlSceneRenderer implements AutoCloseable {
         if (indexBuffer != 0) org.lwjgl.opengl.GL15.glDeleteBuffers(indexBuffer);
         vertexArray = vertexBuffer = indexBuffer = program = 0;
         uploadedFingerprint = null;
+        uploadedTextureFingerprint = null;
+        diagnosticsLogged = false;
     }
 
     private static int link(String vertexSource, String fragmentSource) {

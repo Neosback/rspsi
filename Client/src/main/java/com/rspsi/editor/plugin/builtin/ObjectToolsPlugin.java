@@ -15,7 +15,7 @@ import java.util.List;
 /** First-party vertical plugin for object editing tools. */
 public final class ObjectToolsPlugin implements EditorPlugin {
     public static final String ID = "rspsi.tools.objects";
-    private final ObjectToolSettings settings = new ObjectToolSettings();
+    private ObjectToolSettings settings;
 
     @Override public String id() { return ID; }
 
@@ -23,6 +23,7 @@ public final class ObjectToolsPlugin implements EditorPlugin {
 
     @Override
     public void initialize(EditorPluginContext context) {
+        settings = new ObjectToolSettings(context.settings());
         EditorPluginRegistry registry = context.registry();
         register(registry, "object.place", "Place object", () -> new PlaceObjectTool(0, 10, 0));
         register(registry, "object.move", "Move object", MoveObjectTool::new);

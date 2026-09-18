@@ -38,12 +38,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.nio.charset.StandardCharsets;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * OpenRune definition adapter. OpenRune objects are decoded once into maps,
  * then reduced to RSPSi-owned views before they reach editor code.
  */
 public final class OpenRuneDefinitionProvider implements DefinitionProvider {
+    private static final Logger LOGGER = LoggerFactory.getLogger(OpenRuneDefinitionProvider.class);
     private static final int OSRS_SEQUENCE_REVISION = 226;
     private final Cache cache;
     private final int revision;
@@ -76,7 +79,14 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         decodeEager("object", () -> new OsrsCacheProvider.ObjectDecoder(revision).load(cache, objects));
         decodeEager("underlay", () -> new OsrsCacheProvider.UnderlayDecoder().load(cache, underlays));
         decodeEager("overlay", () -> new OsrsCacheProvider.OverlayDecoder().load(cache, overlays));
-        decodeEager("texture", () -> new OsrsCacheProvider.TextureDecoder(revision).load(cache, textures));
+        OpenRuneTextureDefinitionDecoder.DecodeResult textureResult =
+                OpenRuneTextureDefinitionDecoder.decode(cache, revision);
+        textures.putAll(textureResult.definitions());
+        LOGGER.info("Texture definitions decoded: {} / {} (skipped {})",
+                textureResult.definitions().size(), textureResult.scanned(), textureResult.skipped());
+        if (!textureResult.failures().isEmpty()) {
+            LOGGER.warn("Texture definition diagnostics: {}", textureResult.failures());
+        }
         modelDecoder = new ModelDecoder(cache, java.util.Collections.emptyList());
         modelIds = archiveIds(cache, MODELS);
         mapScenes = loadMapScenes(cache);

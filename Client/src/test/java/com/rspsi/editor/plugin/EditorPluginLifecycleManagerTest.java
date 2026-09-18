@@ -143,6 +143,28 @@ class EditorPluginLifecycleManagerTest {
         assertNotSame(host, manager.host());
     }
 
+    @Test
+    void closeReleasesOwnedDiscoveryResourcesAfterTheHost() {
+        Path file = tempDir.resolve("plugins.json");
+        List<String> closeOrder = new ArrayList<>();
+        AutoCloseable owned = () -> closeOrder.add("discovery");
+        EditorPluginLifecycleManager manager = EditorPluginLifecycleManager.start(
+                List.of(new PlainPlugin()),
+                EditorPluginStateStore.load(file),
+                session(),
+                EmptyAssetRepository.INSTANCE,
+                null,
+                candidates -> EditorPluginHost.initialize(candidates, session(),
+                        EmptyAssetRepository.INSTANCE),
+                owned);
+
+        manager.close();
+        manager.close();
+
+        assertEquals(List.of("discovery"), closeOrder,
+                "owned discovery resources must be released exactly once");
+    }
+
     private EditorPluginLifecycleManager start(Path file) {
         EditorPluginStateStore store = EditorPluginStateStore.load(file);
         return EditorPluginLifecycleManager.start(

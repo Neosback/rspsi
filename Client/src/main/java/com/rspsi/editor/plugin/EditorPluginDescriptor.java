@@ -6,11 +6,17 @@ import java.util.Objects;
 
 /** Stable metadata used to order and identify one editor plugin. */
 public record EditorPluginDescriptor(String id, String name, String version,
-                                     List<String> dependencies) {
+                                     int apiVersion, List<String> dependencies) {
+    public EditorPluginDescriptor(String id, String name, String version,
+                                  List<String> dependencies) {
+        this(id, name, version, EditorPluginApi.CURRENT_VERSION, dependencies);
+    }
+
     public EditorPluginDescriptor {
         id = text(id, "plugin id");
         name = text(name, "plugin name");
         version = text(version, "plugin version");
+        if (apiVersion < 1) throw new IllegalArgumentException("Plugin API version must be positive");
         dependencies = (dependencies == null ? List.<String>of() : dependencies).stream()
                 .map(value -> Objects.requireNonNull(value, "plugin dependency").trim())
                 .toList();

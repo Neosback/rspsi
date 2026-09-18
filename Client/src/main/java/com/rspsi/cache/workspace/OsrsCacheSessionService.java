@@ -44,8 +44,19 @@ public final class OsrsCacheSessionService implements AutoCloseable {
         long request = requestSequence.incrementAndGet();
         LoadedOsrsCacheSession previous = status.currentSession().orElse(null);
         publish(new CacheSessionStatus(CacheSessionState.LOADING, normalized, previous,
-                "Loading OpenRune cache…", null));
-        return CompletableFuture.supplyAsync(() -> LoadedOsrsCacheSession.open(normalized), executor)
+                "Validating selected cache…", null, CacheLoadPhase.VALIDATING, 0.1));
+        return CompletableFuture.supplyAsync(() -> {
+                    publishIfCurrent(request, new CacheSessionStatus(
+                            CacheSessionState.LOADING, normalized, previous,
+                            "Opening cache filesystem…", null,
+                            CacheLoadPhase.OPENING_FILESYSTEM, 0.35));
+                    LoadedOsrsCacheSession loaded = LoadedOsrsCacheSession.open(normalized);
+                    publishIfCurrent(request, new CacheSessionStatus(
+                            CacheSessionState.LOADING, normalized, previous,
+                            "Preparing cache assets…", null,
+                            CacheLoadPhase.PREPARING_ASSETS, 0.8));
+                    return loaded;
+                }, executor)
                 .handle((loaded, failure) -> {
                     if (request != requestSequence.get()) {
                         if (loaded != null) loaded.close();
@@ -97,5 +108,9 @@ public final class OsrsCacheSessionService implements AutoCloseable {
         for (Consumer<CacheSessionStatus> listener : listeners) {
             listener.accept(next);
         }
+    }
+
+    private void publishIfCurrent(long request, CacheSessionStatus next) {
+        if (request == requestSequence.get()) publish(next);
     }
 }

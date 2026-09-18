@@ -87,6 +87,7 @@ def cacheBackendCompatibilityFiles = [
         'com/rspsi/cache/store/CacheStoreFactory.java',
         'com/rspsi/cache/store/LegacyDispleeCacheStore.java',
         'com/rspsi/cache/store/OpenRuneCacheStore.java',
+        'com/rspsi/cache/store/OpenRuneTextureDefinitionDecoder.java',
         'com/rspsi/cache/store/OpenRuneDefinitionProvider.java',
         'com/rspsi/cache/store/OpenRuneSymbolicNameProvider.java',
         'org/displee/util/GZIPUtils.java'
@@ -127,6 +128,26 @@ tasks.register('verifyRetiredLoaderBoundary') {
     }
 }
 
+tasks.register('verifyCanonicalSettingsBoundary') {
+    description = 'Rejects legacy settings access from neutral editor and first-party tool code.'
+    group = 'verification'
+    inputs.files(neutralCoreSources)
+    doLast {
+        def forbidden = [
+                'com.rspsi.options.Options',
+                'LegacyRenderSettingsAdapter',
+                'Options.'
+        ]
+        neutralCoreSources.files.each { source ->
+            source.eachLine { line, number ->
+                if (forbidden.any { token -> line.contains(token) }) {
+                    throw new GradleException("Legacy settings access escaped the compatibility boundary at ${source}:${number}: ${line.trim()}")
+                }
+            }
+        }
+    }
+}
+
 tasks.register('verifySettingsContract', JavaExec) {
     description = 'Verifies that every registered setting has a valid declared consumer.'
     group = 'verification'
@@ -139,5 +160,6 @@ tasks.named('check') {
     dependsOn(tasks.named('verifyUiNeutralCore'))
     dependsOn(tasks.named('verifyCacheBackendBoundary'))
     dependsOn(tasks.named('verifyRetiredLoaderBoundary'))
+    dependsOn(tasks.named('verifyCanonicalSettingsBoundary'))
     dependsOn(tasks.named('verifySettingsContract'))
 }

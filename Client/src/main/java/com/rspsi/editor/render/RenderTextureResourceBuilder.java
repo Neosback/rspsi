@@ -45,14 +45,14 @@ final class RenderTextureResourceBuilder {
             try {
                 pixels = definitions.texturePixels(id, lighting.textureGamma(), OSRS_TEXTURE_SIZE);
             } catch (RuntimeException exception) {
-                resources.put(id, RenderTextureResource.unavailable(id, definition.orElseThrow(),
-                        "Texture decode failed: " + exception.getMessage()));
+                resources.put(id, RenderTextureResource.averageColorFallback(id, definition.orElseThrow(),
+                        "Texture decode failed; using average RGB: " + exception.getMessage()));
                 continue;
             }
             resources.put(id, pixels.isPresent()
                     ? RenderTextureResource.from(id, definition.orElseThrow(), OSRS_TEXTURE_SIZE, pixels.orElseThrow())
-                    : RenderTextureResource.unavailable(id, definition.orElseThrow(),
-                    "Texture pixels were not available from the cache provider"));
+                    : RenderTextureResource.averageColorFallback(id, definition.orElseThrow(),
+                    "Texture pixels were not available from the cache provider; using average RGB"));
         }
         return Map.copyOf(resources);
     }

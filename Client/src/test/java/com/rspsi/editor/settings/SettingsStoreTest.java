@@ -6,15 +6,24 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SettingsStoreTest {
     @Test
     void renderSettingsHaveDeclaredConsumers() {
         SettingsContractValidator.validateOrThrow(
                 RenderSettingKeys.registry(), RenderSettingKeys.consumerCatalog());
+    }
+
+    @Test
+    void fullEditorRegistryHasDeclaredConsumers() {
+        SettingsContractValidator.validateOrThrow(
+                EditorSettingKeys.registry(), EditorSettingKeys.consumerCatalog());
     }
 
     @Test
@@ -77,5 +86,33 @@ class SettingsStoreTest {
         store.clear(SettingScope.TRANSIENT, RenderSettingKeys.PLANE_SELECTION);
         assertEquals(SceneVisibilityPolicy.PlaneSelection.AUTHORED_PLANE,
                 store.snapshot().get(RenderSettingKeys.PLANE_SELECTION));
+    }
+
+    @Test
+    void revisionChangesOnlyWhenTheEffectiveValueChanges() {
+        SettingsStore store = new SettingsStore(RenderSettingKeys.registry());
+        assertEquals(0L, store.revision());
+        store.set(RenderSettingKeys.BRIGHTNESS, 1.0);
+        assertEquals(0L, store.revision());
+        store.set(RenderSettingKeys.BRIGHTNESS, 1.5);
+        assertEquals(1L, store.revision());
+        store.set(RenderSettingKeys.BRIGHTNESS, 1.5);
+        assertEquals(1L, store.revision());
+    }
+
+    @Test
+    void jsonPersistenceRoundTripsTypedLayerValues() throws Exception {
+        Path file = Files.createTempFile("openrune-settings", ".json");
+        SettingsStore source = new SettingsStore(RenderSettingKeys.registry());
+        source.set(SettingScope.VIEWPORT, RenderSettingKeys.PLANE_SELECTION,
+                SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE);
+        SettingsJsonStore.save(file, source);
+
+        SettingsStore restored = new SettingsStore(RenderSettingKeys.registry());
+        assertTrue(SettingsJsonStore.load(file, restored).isEmpty());
+        assertEquals(0, restored.snapshot().get(RenderSettingKeys.MSAA_SAMPLES));
+        assertEquals(SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
+                restored.snapshot().get(RenderSettingKeys.PLANE_SELECTION));
+        Files.deleteIfExists(file);
     }
 }

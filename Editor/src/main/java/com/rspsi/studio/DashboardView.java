@@ -13,6 +13,7 @@ import java.util.function.Consumer;
 /** Dear ImGui dashboard for cache selection and workspace activation. */
 public final class DashboardView {
     private final ImString cachePath = new ImString(512);
+    private final ImString region = new ImString("50,50", 32);
 
     public DashboardView(String initialPath) {
         cachePath.set(initialPath == null ? "" : initialPath);
@@ -54,6 +55,9 @@ public final class DashboardView {
         }
         ImGui.endDisabled();
 
+        ImGui.inputTextWithHint("##region", "Region X,Y or region ID", region);
+        ImGui.textDisabled("Example: 50,50 opens the Lumbridge region.");
+
         renderStatus(status);
         ImGui.spacing();
         ImGui.separatorText("Workspaces");
@@ -73,8 +77,9 @@ public final class DashboardView {
         switch (status.state()) {
             case EMPTY -> ImGui.textDisabled("No cache selected.");
             case LOADING -> {
-                ImGui.text("Loading OpenRune cache...");
-                ImGui.progressBar(0.35f, -1, 0, "Validating cache and opening filesystem");
+                ImGui.text(status.message());
+                ImGui.progressBar((float) status.progress(), -1, 0,
+                        status.phase().name().replace('_', ' '));
             }
             case READY -> status.currentSession().ifPresent(session -> {
                 ImGui.text("READY  ·  " + session.backendName());
@@ -92,5 +97,9 @@ public final class DashboardView {
 
     public boolean pointsToDirectory() {
         return !cachePath.isEmpty() && Files.isDirectory(Path.of(cachePath.get()));
+    }
+
+    public String regionText() {
+        return region.get().trim();
     }
 }

@@ -168,6 +168,6 @@ public record RenderConfig(
         return new RenderConfig(RenderProfile.VANILLA_COMPATIBILITY,
                 true, true, true, true, true, true, true, true, false,
                 false, false, 0, SceneVisibilityPolicy.PlaneSelection.ALL,
-                1.0, 0.0, 4, 0, 0x101827);
+                1.0, 0.0, 0, 0, 0x101827);
     }
 }

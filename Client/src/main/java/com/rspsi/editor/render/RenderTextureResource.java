@@ -16,6 +16,7 @@ import java.util.Objects;
 public final class RenderTextureResource {
     public enum PixelStatus {
         AVAILABLE,
+        AVERAGE_COLOR_FALLBACK,
         UNAVAILABLE,
         INVALID
     }
@@ -45,11 +46,14 @@ public final class RenderTextureResource {
         if (width < 0 || height < 0) {
             throw new IllegalArgumentException("Texture dimensions cannot be negative");
         }
-        if (pixelStatus == PixelStatus.AVAILABLE
+        if ((pixelStatus == PixelStatus.AVAILABLE
+                || pixelStatus == PixelStatus.AVERAGE_COLOR_FALLBACK)
                 && (width <= 0 || height <= 0 || this.pixels.length != width * height)) {
-            throw new IllegalArgumentException("Available texture pixels must match their dimensions");
+            throw new IllegalArgumentException("Renderable texture pixels must match their dimensions");
         }
-        if (pixelStatus != PixelStatus.AVAILABLE && this.pixels.length != 0) {
+        if (pixelStatus != PixelStatus.AVAILABLE
+                && pixelStatus != PixelStatus.AVERAGE_COLOR_FALLBACK
+                && this.pixels.length != 0) {
             throw new IllegalArgumentException("Unavailable or invalid texture pixels must be empty");
         }
     }
@@ -79,6 +83,19 @@ public final class RenderTextureResource {
                 PixelStatus.UNAVAILABLE, diagnostic);
     }
 
+    /**
+     * Keeps a textured face material-colored when the cache exposes metadata
+     * but not its source sprite pixels. This is deliberately distinct from
+     * AVAILABLE so parity gates cannot count it as decoded texture coverage.
+     */
+    public static RenderTextureResource averageColorFallback(int id,
+                                                              TextureDefinitionView definition,
+                                                              String diagnostic) {
+        return new RenderTextureResource(id, definition, 1, 1,
+                new int[]{definition.averageRgb() & 0xFFFFFF},
+                PixelStatus.AVERAGE_COLOR_FALLBACK, diagnostic);
+    }
+
     public int id() { return id; }
 
     public TextureDefinitionView definition() { return definition; }
@@ -101,6 +118,12 @@ public final class RenderTextureResource {
     public String diagnostic() { return diagnostic; }
 
     public boolean hasPixels() { return pixelStatus == PixelStatus.AVAILABLE; }
+
+    /** True when the resource has a valid layer that can be uploaded to GL. */
+    public boolean hasGpuPixels() {
+        return pixelStatus == PixelStatus.AVAILABLE
+                || pixelStatus == PixelStatus.AVERAGE_COLOR_FALLBACK;
+    }
 
     @Override
     public boolean equals(Object other) {

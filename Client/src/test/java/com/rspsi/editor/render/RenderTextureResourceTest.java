@@ -68,4 +68,19 @@ class RenderTextureResourceTest {
         assertEquals(RenderTextureResource.PixelStatus.INVALID, invalid.pixelStatus());
         assertTrue(invalid.diagnostic().contains("square"));
     }
+
+    @Test
+    void averageColorFallbackIsGpuRenderableButNotDecodedCoverage() {
+        TextureDefinitionView definition = new TextureDefinitionView(6, false, 6,
+                0x345678, 0, 0, false);
+
+        RenderTextureResource fallback = RenderTextureResource.averageColorFallback(
+                6, definition, "missing sprite");
+
+        assertFalse(fallback.hasPixels());
+        assertTrue(fallback.hasGpuPixels());
+        assertEquals(RenderTextureResource.PixelStatus.AVERAGE_COLOR_FALLBACK,
+                fallback.pixelStatus());
+        assertArrayEquals(new int[]{0x345678}, fallback.pixels());
+    }
 }

@@ -1,0 +1,41 @@
+[
+  {
+    "id": "revision-240-plain-terrain",
+    "cache": "/absolute/path/to/revision-240/cache",
+    "fixture": "/absolute/path/to/revision-240/plain-terrain",
+    "regionX": 50,
+    "regionY": 50,
+    "revision": 240,
+    "coverage": "plain terrain, shaped overlays, water, region boundaries",
+    "source": "TSPS/RuneLite-derived export; provenance recorded beside external fixture",
+    "cacheFingerprint": "sha256:replace-with-cache-fingerprint",
+    "tolerance": 0,
+    "requireParity": true
+  },
+  {
+    "id": "revision-240-structures",
+    "cache": "/absolute/path/to/revision-240/cache",
+    "fixture": "/absolute/path/to/revision-240/structures",
+    "regionX": 51,
+    "regionY": 50,
+    "revision": 240,
+    "coverage": "bridges, effective planes, roofs, walls, occluders",
+    "source": "TSPS/RuneLite-derived export; provenance recorded beside external fixture",
+    "cacheFingerprint": "sha256:replace-with-cache-fingerprint",
+    "tolerance": 0,
+    "requireParity": true
+  },
+  {
+    "id": "revision-240-materials",
+    "cache": "/absolute/path/to/revision-240/cache",
+    "fixture": "/absolute/path/to/revision-240/materials",
+    "regionX": 50,
+    "regionY": 51,
+    "revision": 240,
+    "coverage": "textures, alpha models, animated-object metadata, render materials",
+    "source": "TSPS/RuneLite-derived export; provenance recorded beside external fixture",
+    "cacheFingerprint": "sha256:replace-with-cache-fingerprint",
+    "tolerance": 0,
+    "requireParity": true
+  }
+]

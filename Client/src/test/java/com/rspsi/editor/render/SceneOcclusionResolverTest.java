@@ -7,6 +7,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SceneOcclusionResolverTest {
     @Test
@@ -24,6 +25,16 @@ class SceneOcclusionResolverTest {
         assertFalse(SceneOcclusionResolver.occludesTriangle(command,
                 vertex(64, 32, 32), vertex(64, 32, 96), vertex(64, 96, 64),
                 camera, List.of(wall)));
+    }
+
+    @Test
+    void rejectsNonPlanarVerticalOccluderBounds() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new SceneOccluder(1, 0, 1, 0, 1, 0, 0,
+                        128, 256, 0, 128, 0, 128));
+        assertThrows(IllegalArgumentException.class,
+                () -> new SceneOccluder(2, 0, 1, 0, 1, 0, 0,
+                        0, 128, 128, 256, 0, 128));
     }
 
     private static GpuSceneVertex vertex(float x, float y, float z) {

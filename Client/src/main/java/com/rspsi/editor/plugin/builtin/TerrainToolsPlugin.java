@@ -17,7 +17,7 @@ import java.util.List;
 /** First-party vertical plugin for terrain editing tools. */
 public final class TerrainToolsPlugin implements EditorPlugin {
     public static final String ID = "rspsi.tools.terrain";
-    private final TerrainToolSettings settings = new TerrainToolSettings();
+    private TerrainToolSettings settings;
 
     @Override public String id() { return ID; }
 
@@ -25,6 +25,7 @@ public final class TerrainToolsPlugin implements EditorPlugin {
 
     @Override
     public void initialize(EditorPluginContext context) {
+        settings = new TerrainToolSettings(context.settings());
         EditorPluginRegistry registry = context.registry();
         register(registry, "terrain.paint-underlay", "Paint underlay", "Terrain");
         register(registry, "terrain.paint-overlay", "Paint overlay", "Terrain");

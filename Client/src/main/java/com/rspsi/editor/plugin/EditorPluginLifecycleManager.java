@@ -30,8 +30,10 @@ public final class EditorPluginLifecycleManager implements AutoCloseable {
     private final List<EditorPlugin> candidates;
     private final EditorPluginStateStore state;
     private final HostFactory hostFactory;
+    private final List<AutoCloseable> ownedResources;
     private EditorPluginHost host;
     private RebuildResult lastRebuild;
+    private boolean closed;
 
     /** Supplies a rebuilt host for one session/asset set. */
     public interface HostFactory {
@@ -50,10 +52,12 @@ public final class EditorPluginLifecycleManager implements AutoCloseable {
                                          EditorPluginStateStore state,
                                          HostFactory hostFactory,
                                          EditorPluginHost initialHost,
-                                         RebuildResult initialResult) {
+                                         RebuildResult initialResult,
+                                         List<? extends AutoCloseable> ownedResources) {
         this.candidates = new ArrayList<>(candidates);
         this.state = Objects.requireNonNull(state, "state");
         this.hostFactory = Objects.requireNonNull(hostFactory, "hostFactory");
+        this.ownedResources = List.copyOf(ownedResources);
         this.host = initialHost;
         this.lastRebuild = initialResult;
     }
@@ -70,16 +74,53 @@ public final class EditorPluginLifecycleManager implements AutoCloseable {
             AssetRepository assets,
             EditorSceneAccess scene,
             HostFactory hostFactory) {
+        return start(candidates, state, session, assets, scene, hostFactory,
+                new AutoCloseable[0]);
+    }
+
+    /**
+     * Creates a manager and transfers ownership of resources needed by the
+     * discovered candidates, such as an external plugin classloader.
+     * Resources are closed after the active host so plugin instances can
+     * release classes and files while their loader is still valid.
+     */
+    public static EditorPluginLifecycleManager start(
+            List<? extends EditorPlugin> candidates,
+            EditorPluginStateStore state,
+            EditorSession session,
+            AssetRepository assets,
+            EditorSceneAccess scene,
+            HostFactory hostFactory,
+            AutoCloseable... ownedResources) {
         Objects.requireNonNull(candidates, "candidates");
         Objects.requireNonNull(state, "state");
         Objects.requireNonNull(session, "session");
         Objects.requireNonNull(hostFactory, "hostFactory");
+        Objects.requireNonNull(ownedResources, "ownedResources");
+        List<AutoCloseable> resources = new ArrayList<>(ownedResources.length);
+        for (AutoCloseable resource : ownedResources) {
+            resources.add(Objects.requireNonNull(resource, "owned resource"));
+        }
         List<EditorPlugin> snapshot = List.copyOf(candidates);
-        EditorPluginHost host = hostFactory.create(resolveEnabled(snapshot, state, null).enabled());
-        RebuildResult result = new RebuildResult(
-                host.plugins().stream().map(EditorPlugin::id).toList(),
-                skippedIds(snapshot, host));
-        return new EditorPluginLifecycleManager(snapshot, state, hostFactory, host, result);
+        EditorPluginHost host = null;
+        try {
+            host = hostFactory.create(resolveEnabled(snapshot, state, null).enabled());
+            RebuildResult result = new RebuildResult(
+                    host.plugins().stream().map(EditorPlugin::id).toList(),
+                    skippedIds(snapshot, host));
+            return new EditorPluginLifecycleManager(
+                    snapshot, state, hostFactory, host, result, resources);
+        } catch (RuntimeException | Error failure) {
+            if (host != null) {
+                try {
+                    host.close();
+                } catch (Throwable closeFailure) {
+                    failure.addSuppressed(closeFailure);
+                }
+            }
+            closeResources(resources, failure);
+            throw failure;
+        }
     }
 
     /** All known candidates, enabled or not. */
@@ -147,12 +188,35 @@ public final class EditorPluginLifecycleManager implements AutoCloseable {
                 .toList();
     }
 
-    /** Closes the active host; the persisted state survives. */
+    /** Closes the active host and owned discovery resources; state survives. */
     @Override
     public void close() {
+        if (closed) return;
+        closed = true;
         EditorPluginHost mounted = host;
         host = null;
-        if (mounted != null) mounted.close();
+        Throwable failure = null;
+        if (mounted != null) {
+            try {
+                mounted.close();
+            } catch (Throwable closeFailure) {
+                failure = closeFailure;
+            }
+        }
+        for (int index = ownedResources.size() - 1; index >= 0; index--) {
+            try {
+                ownedResources.get(index).close();
+            } catch (Throwable closeFailure) {
+                if (failure == null) {
+                    failure = closeFailure;
+                } else {
+                    failure.addSuppressed(closeFailure);
+                }
+            }
+        }
+        if (failure instanceof Error error) throw error;
+        if (failure instanceof RuntimeException runtimeFailure) throw runtimeFailure;
+        if (failure != null) throw new IllegalStateException("Unable to close plugin lifecycle", failure);
     }
 
     private RebuildResult rebuild(Resolved resolved) {
@@ -183,6 +247,16 @@ public final class EditorPluginLifecycleManager implements AutoCloseable {
                 .map(EditorPlugin::id)
                 .filter(id -> !initialized.contains(id))
                 .toList();
+    }
+
+    private static void closeResources(List<? extends AutoCloseable> resources, Throwable failure) {
+        for (int index = resources.size() - 1; index >= 0; index--) {
+            try {
+                resources.get(index).close();
+            } catch (Throwable closeFailure) {
+                failure.addSuppressed(closeFailure);
+            }
+        }
     }
 
     private static Resolved resolveEnabled(List<EditorPlugin> candidates,

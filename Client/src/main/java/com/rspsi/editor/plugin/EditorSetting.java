@@ -1,5 +1,9 @@
 package com.rspsi.editor.plugin;
 
+import com.rspsi.editor.settings.SettingKey;
+import com.rspsi.editor.settings.SettingSpec;
+import com.rspsi.editor.settings.SettingsStore;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -70,6 +74,46 @@ public final class EditorSetting {
         Objects.requireNonNull(setter, "setting setter");
         return new EditorSetting(id, label, ValueType.ENUM, 0, Math.max(0, options.size() - 1),
                 options, getter, value -> setter.accept(coerceEnum(value, options)));
+    }
+
+    /** Compatibility UI projection backed by the canonical typed settings store. */
+    public static <T> EditorSetting from(SettingsStore store, SettingKey<T> key) {
+        Objects.requireNonNull(store, "settings store");
+        SettingSpec<T> specification = store.registry().specification(Objects.requireNonNull(key, "setting key"));
+        Class<T> type = key.valueType();
+        if (type == Integer.class) {
+            @SuppressWarnings("unchecked") SettingKey<Integer> integerKey =
+                    (SettingKey<Integer>) (SettingKey<?>) key;
+            return integer(specification.key().id(), specification.label(),
+                    specification.minimum().intValue(), specification.maximum().intValue(),
+                    () -> store.snapshot().get(integerKey), value -> store.set(integerKey, value));
+        }
+        if (type == Double.class) {
+            @SuppressWarnings("unchecked") SettingKey<Double> decimalKey =
+                    (SettingKey<Double>) (SettingKey<?>) key;
+            return decimal(specification.key().id(), specification.label(),
+                    specification.minimum(), specification.maximum(),
+                    () -> store.snapshot().get(decimalKey), value -> store.set(decimalKey, value));
+        }
+        if (type == Boolean.class) {
+            @SuppressWarnings("unchecked") SettingKey<Boolean> booleanKey =
+                    (SettingKey<Boolean>) (SettingKey<?>) key;
+            return bool(specification.key().id(), specification.label(),
+                    () -> store.snapshot().get(booleanKey), value -> store.set(booleanKey, value));
+        }
+        if (type.isEnum()) {
+            @SuppressWarnings("unchecked") Class<? extends Enum<?>> enumType =
+                    (Class<? extends Enum<?>>) type;
+            List<String> options = specification.options().stream()
+                    .map(value -> ((Enum<?>) value).name()).toList();
+            return enumeration(specification.key().id(), specification.label(), options,
+                    () -> ((Enum<?>) store.snapshot().get(key)).name(), value -> {
+                        @SuppressWarnings({"unchecked", "rawtypes"})
+                        T enumValue = (T) Enum.valueOf((Class) enumType, value);
+                        store.set(key, enumValue);
+                    });
+        }
+        throw new IllegalArgumentException("Unsupported editor setting type: " + type.getName());
     }
 
     public String id() { return id; }

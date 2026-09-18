@@ -21,6 +21,7 @@ public final class SettingsStore {
     private final EnumMap<SettingScope, Map<SettingKey<?>, Object>> layers =
             new EnumMap<>(SettingScope.class);
     private final CopyOnWriteArrayList<Consumer<SettingChange>> listeners = new CopyOnWriteArrayList<>();
+    private long revision;
 
     public SettingsStore(SettingsRegistry registry) {
         this.registry = Objects.requireNonNull(registry, "settings registry");
@@ -45,6 +46,7 @@ public final class SettingsStore {
         layer.put(key, value);
         Object current = snapshot().values().getOrDefault(key, specification.defaultValue());
         if (!Objects.equals(previous, current)) {
+            revision++;
             SettingChange change = new SettingChange(key, scope, previous, current,
                     specification.invalidations());
             listeners.forEach(listener -> listener.accept(change));
@@ -73,6 +75,17 @@ public final class SettingsStore {
         return new SettingsSnapshot(values);
     }
 
+    /** Returns a copy of one persisted layer, excluding registry defaults. */
+    public Map<SettingKey<?>, Object> values(SettingScope scope) {
+        Objects.requireNonNull(scope, "setting scope");
+        return Map.copyOf(layers.get(scope));
+    }
+
+    /** Monotonic revision for frontend caches of compiled settings projections. */
+    public long revision() {
+        return revision;
+    }
+
     public void addListener(Consumer<SettingChange> listener) {
         listeners.add(Objects.requireNonNull(listener, "setting listener"));
     }
@@ -85,6 +98,7 @@ public final class SettingsStore {
         Object previous = before.values().get(key);
         Object current = snapshot().values().get(key);
         if (!Objects.equals(previous, current)) {
+            revision++;
             SettingSpec<?> specification = registry.specification(key);
             SettingChange change = new SettingChange(key, scope, previous, current,
                     specification.invalidations());

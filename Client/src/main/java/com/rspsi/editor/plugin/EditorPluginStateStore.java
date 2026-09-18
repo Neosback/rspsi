@@ -23,7 +23,7 @@ import java.util.Set;
  * intent, so re-enabling a dependency does not silently re-enable plugins
  * the user disabled individually.</p>
  *
- * <p>State lives in {@code ~/.rspsi/plugins.json} by default and survives
+ * <p>State lives in {@code ~/.openrune-studio/plugins.json} by default and survives
  * restarts. A missing or malformed file is treated as "everything enabled"
  * and is overwritten on the next successful change.</p>
  */
@@ -59,9 +59,9 @@ public final class EditorPluginStateStore {
         return new EditorPluginStateStore(file, disabled);
     }
 
-    /** Returns the store backed by the user-level {@code ~/.rspsi/plugins.json}. */
+    /** Returns the store backed by the user-level {@code ~/.openrune-studio/plugins.json}. */
     public static EditorPluginStateStore defaultStore() {
-        return load(Paths.get(System.getProperty("user.home"), ".rspsi", "plugins.json"));
+        return load(Paths.get(System.getProperty("user.home"), ".openrune-studio", "plugins.json"));
     }
 
     /** True when the user has not disabled the plugin. */

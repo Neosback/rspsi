@@ -17,7 +17,7 @@ import java.util.List;
 /** First-party vertical plugin for selection and transform tools. */
 public final class SelectionToolsPlugin implements EditorPlugin {
     public static final String ID = "rspsi.tools.selection";
-    private final SelectionToolSettings settings = new SelectionToolSettings();
+    private SelectionToolSettings settings;
 
     @Override public String id() { return ID; }
 
@@ -25,6 +25,7 @@ public final class SelectionToolsPlugin implements EditorPlugin {
 
     @Override
     public void initialize(EditorPluginContext context) {
+        settings = new SelectionToolSettings(context.settings());
         EditorPluginRegistry registry = context.registry();
         register(registry, "selection.box", "Box select", BoxSelectTool::new);
         register(registry, "selection.lasso", "Lasso select", LassoSelectTool::new);

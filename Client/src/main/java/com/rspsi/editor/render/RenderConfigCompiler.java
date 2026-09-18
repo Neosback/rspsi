@@ -26,7 +26,7 @@ public final class RenderConfigCompiler {
                         SceneVisibilityPolicy.PlaneSelection.ALL),
                 settings.getOrDefault(RenderSettingKeys.BRIGHTNESS, 1.0),
                 settings.getOrDefault(RenderSettingKeys.EXPOSURE, 0.0),
-                settings.getOrDefault(RenderSettingKeys.MSAA_SAMPLES, 4),
+                settings.getOrDefault(RenderSettingKeys.MSAA_SAMPLES, 0),
                 settings.getOrDefault(RenderSettingKeys.FOG_DEPTH_TILES, 0),
                 settings.getOrDefault(RenderSettingKeys.FOG_COLOR, 0x101827));
     }

@@ -1,5 +1,7 @@
 package com.rspsi.ui.workspace;
 
+import com.rspsi.renderer.opengl.OpenGlSceneRenderer;
+
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.GpuSceneUploader;

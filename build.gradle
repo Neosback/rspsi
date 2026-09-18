@@ -114,8 +114,12 @@ tasks.register('verifyOsrsRevisionMatrix') {
     group = 'verification'
     dependsOn(':Client:check')
     doLast {
+        def strict = gradle.taskGraph.hasTask(':parityGate')
         def manifestPath = providers.environmentVariable('RSPSI_OSRS_PARITY_MANIFEST').orNull
         if (manifestPath == null || manifestPath.isBlank()) {
+            if (strict) {
+                throw new GradleException('Set RSPSI_OSRS_PARITY_MANIFEST to run the strict parity gate.')
+            }
             logger.lifecycle('OSRS revision matrix verification: pending; set RSPSI_OSRS_PARITY_MANIFEST to an explicit JSON manifest.')
             return
         }
@@ -127,16 +131,32 @@ tasks.register('verifyOsrsRevisionMatrix') {
         if (!(cases instanceof List) || cases.isEmpty()) {
             throw new GradleException('OSRS parity manifest must contain a non-empty JSON array.')
         }
+        def strictCoverage = []
         cases.eachWithIndex { entry, index ->
             if (!(entry instanceof Map)) {
                 throw new GradleException('OSRS parity manifest case ' + index + ' must be an object.')
             }
             def required = ['cache', 'fixture', 'regionX', 'regionY', 'revision']
+            if (strict) required += ['id', 'coverage', 'source', 'cacheFingerprint', 'tolerance']
             def missing = required.findAll { key -> entry[key] == null || entry[key].toString().isBlank() }
             if (!missing.isEmpty()) {
                 throw new GradleException('OSRS parity manifest case ' + index
                         + ' is missing: ' + missing.join(', '))
             }
+            if (strict && entry.requireParity != true) {
+                throw new GradleException('Strict parity manifest case ' + entry.id
+                        + ' must set requireParity=true.')
+            }
+            if (strict && entry.tolerance.toString() != '0') {
+                throw new GradleException('Strict Phase 0 parity requires zero tolerance: ' + entry.id)
+            }
+            if (strict && !file(entry.cache.toString()).isDirectory()) {
+                throw new GradleException('Strict parity cache does not exist for ' + entry.id + ': ' + entry.cache)
+            }
+            if (strict && !file(entry.fixture.toString()).isDirectory()) {
+                throw new GradleException('Strict parity fixture does not exist for ' + entry.id + ': ' + entry.fixture)
+            }
+            if (strict) strictCoverage << entry.coverage.toString().toLowerCase()
             def cachePath = entry.cache.toString()
             def fixturePath = entry.fixture.toString()
             def regionX = entry.regionX.toString()
@@ -155,6 +175,18 @@ tasks.register('verifyOsrsRevisionMatrix') {
                 environment 'RSPSI_OSRS_REQUIRE_PARITY',
                         entry.requireParity == null ? 'false' : entry.requireParity.toString()
                 args cachePath, regionX, regionY, revision
+            }
+        }
+        if (strict) {
+            def coverage = strictCoverage.join(' ')
+            def requiredCoverage = [
+                    'plain', 'shaped', 'water', 'bridge', 'effective', 'roof', 'wall',
+                    'alpha', 'animated', 'texture', 'occluder', 'boundar'
+            ]
+            def missingCoverage = requiredCoverage.findAll { token -> !coverage.contains(token) }
+            if (!missingCoverage.isEmpty()) {
+                throw new GradleException('Strict Phase 0 parity manifest is missing coverage: '
+                        + missingCoverage.join(', '))
             }
         }
     }
@@ -185,8 +217,91 @@ tasks.register('verifyOsrsInstance') {
     }
 }
 
-tasks.register('foundationGate') {
-    description = 'Runs the repository foundation checks; external parity is opt-in via environment variables.'
+def nativeStudioSources = fileTree(project(':Editor').file('src/main/java/com/rspsi/studio')) {
+    include '**/*.java'
+}
+
+tasks.register('verifyNativeBoundary') {
+    description = 'Rejects transitional JavaFX/AWT/settings imports from the native Studio shell.'
     group = 'verification'
-    dependsOn 'test', 'check', 'verifyOsrsRevision', 'verifyOsrsInstance'
+    inputs.files(nativeStudioSources)
+    doLast {
+        def forbidden = [
+                'javafx.',
+                'javax.swing.',
+                'java.awt.',
+                'org.lwjgl.opengl.awt.',
+                'com.rspsi.options.',
+                'com.rspsi.ui.',
+                'LegacyRenderSettingsAdapter',
+                'AWTGLCanvas',
+                'SwingNode',
+                'EmbeddedOpenGlViewport'
+        ]
+        nativeStudioSources.files.each { source ->
+            source.eachLine { line, number ->
+                if (forbidden.any { token -> line.contains(token) }) {
+                    throw new GradleException("Native Studio source crossed a transitional boundary at ${source}:${number}: ${line.trim()}")
+                }
+            }
+        }
+    }
+}
+
+def loadParityManifest = {
+    def manifestPath = providers.environmentVariable('RSPSI_OSRS_PARITY_MANIFEST').orNull
+    if (manifestPath == null || manifestPath.isBlank()) {
+        throw new GradleException('Set RSPSI_OSRS_PARITY_MANIFEST to the external Phase 0 parity manifest.')
+    }
+    def manifestFile = file(manifestPath)
+    if (!manifestFile.isFile()) {
+        throw new GradleException('OSRS parity manifest does not exist: ' + manifestFile)
+    }
+    def cases = new groovy.json.JsonSlurper().parse(manifestFile)
+    if (!(cases instanceof List) || cases.isEmpty()) {
+        throw new GradleException('OSRS parity manifest must contain a non-empty JSON array.')
+    }
+    def required = ['id', 'cache', 'fixture', 'regionX', 'regionY', 'revision',
+                    'coverage', 'source', 'cacheFingerprint', 'tolerance']
+    cases.eachWithIndex { entry, index ->
+        if (!(entry instanceof Map)) {
+            throw new GradleException('OSRS parity manifest case ' + index + ' must be an object.')
+        }
+        def missing = required.findAll { key ->
+            entry[key] == null || entry[key].toString().isBlank()
+        }
+        if (!missing.isEmpty()) {
+            throw new GradleException('Phase 0 parity manifest case ' + index
+                    + ' is missing: ' + missing.join(', '))
+        }
+        if (entry.requireParity != true) {
+            throw new GradleException('Phase 0 parity manifest case ' + entry.id
+                    + ' must set requireParity=true.')
+        }
+        def cache = file(entry.cache.toString())
+        def fixture = file(entry.fixture.toString())
+        if (!cache.isDirectory()) {
+            throw new GradleException('Phase 0 parity cache does not exist for ' + entry.id + ': ' + cache)
+        }
+        if (!fixture.isDirectory()) {
+            throw new GradleException('Phase 0 parity fixture does not exist for ' + entry.id + ': ' + fixture)
+        }
+        if (entry.tolerance.toString() != '0') {
+            throw new GradleException('Phase 0 parity cases require zero tolerance: ' + entry.id)
+        }
+    }
+    return [manifestFile: manifestFile, cases: cases]
+}
+
+tasks.register('parityGate') {
+    description = 'Runs strict Phase 0 external cache and semantic/render parity fixtures.'
+    group = 'verification'
+    dependsOn(':Client:check')
+    dependsOn('verifyOsrsRevisionMatrix')
+}
+
+tasks.register('foundationGate') {
+    description = 'Runs deterministic repository foundation checks without external cache dependencies.'
+    group = 'verification'
+    dependsOn 'test', 'check', ':Client:check', ':Editor:check', 'verifyNativeBoundary'
 }

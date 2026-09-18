@@ -22,5 +22,9 @@ public record SceneOccluder(
                 || minHeight > maxHeight) {
             throw new IllegalArgumentException("Invalid scene occluder bounds");
         }
+        if ((type == 1 && minWorldX != maxWorldX)
+                || (type == 2 && minWorldY != maxWorldY)) {
+            throw new IllegalArgumentException("Vertical occluders must have a fixed world axis");
+        }
     }
 }

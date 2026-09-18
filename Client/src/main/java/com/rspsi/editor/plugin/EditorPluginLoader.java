@@ -24,13 +24,10 @@ public final class EditorPluginLoader {
                 .toList();
     }
 
-    /**
-     * Discovers neutral plugins from an explicit jar directory. The caller
-     * owns the directory policy; the neutral plugin API does not.
-     */
-    public static List<EditorPlugin> discover(Path directory, ClassLoader parent) {
+    /** Discovers plugins and returns the classloader as an explicit owned resource. */
+    public static PluginDiscovery discoverOwned(Path directory, ClassLoader parent) {
         if (directory == null || parent == null || !Files.isDirectory(directory)) {
-            return List.of();
+            return new PluginDiscovery(List.of(), null);
         }
         List<URL> urls = new ArrayList<>();
         try (var paths = Files.list(directory)) {
@@ -47,12 +44,21 @@ public final class EditorPluginLoader {
             throw new IllegalStateException("Unable to inspect plugin directory " + directory, error);
         }
         if (urls.isEmpty()) {
-            return List.of();
+            return new PluginDiscovery(List.of(), null);
         }
         // Keep the loader reachable through the discovered plugin instances;
         // factories may load tool classes after initialization.
         URLClassLoader loader = URLClassLoader.newInstance(
                 urls.toArray(URL[]::new), parent);
-        return discover(loader);
+        try {
+            return new PluginDiscovery(discover(loader), loader);
+        } catch (RuntimeException | Error failure) {
+            try {
+                loader.close();
+            } catch (IOException closeFailure) {
+                failure.addSuppressed(closeFailure);
+            }
+            throw failure;
+        }
     }
 }

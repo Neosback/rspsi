@@ -12,6 +12,7 @@ import com.rspsi.editor.plugin.EditorPlugin;
 import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
 import com.rspsi.editor.plugin.EditorPluginLoader;
 import com.rspsi.editor.plugin.EditorPluginStateStore;
+import com.rspsi.editor.plugin.PluginDiscovery;
 import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
 import com.rspsi.editor.model.WorldWindow;
 import com.rspsi.editor.model.WorldRegionWindow;
@@ -214,9 +215,10 @@ public final class ControlledWorkspaceBridge {
                 tools.showCanonical(viewport.canonicalViewport());
                 List<EditorPlugin> pluginsToLoad = new ArrayList<>();
                 pluginsToLoad.addAll(CoreToolsPlugin.builtIns());
-                pluginsToLoad.addAll(EditorPluginLoader.discover(
-                        java.nio.file.Path.of("plugins", "active"),
-                        Thread.currentThread().getContextClassLoader()));
+                PluginDiscovery discovery = EditorPluginLoader.discoverOwned(
+                        java.nio.file.Path.of("plugins"),
+                        Thread.currentThread().getContextClassLoader());
+                pluginsToLoad.addAll(discovery.plugins());
                 EditorPluginLifecycleManager lifecycle = EditorPluginLifecycleManager.start(
                         pluginsToLoad,
                         pluginState == null
@@ -228,7 +230,8 @@ public final class ControlledWorkspaceBridge {
                                 candidates,
                                 session,
                                 assets == null ? EmptyAssetRepository.INSTANCE : assets,
-                                viewport.canonicalViewport()::sceneSnapshotView));
+                                viewport.canonicalViewport()::sceneSnapshotView),
+                        discovery);
                 EditorPluginHost plugins = lifecycle.host();
                 if (shell.panelNode("plugins") instanceof PluginsPanel pluginsPanel) {
                     pluginsPanel.bindPluginHost(lifecycle);

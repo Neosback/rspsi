@@ -236,24 +236,12 @@ public final class GpuScenePacketBuilder {
             List<ModelRenderPacket> objectModels = models.stream()
                     .filter(model -> model.objectId() == worldObject.object().object().id())
                     .toList();
-            if (worldObject.object().appearance().occludes() && !objectModels.isEmpty()) {
-                int minHeight = objectModels.stream()
-                        .mapToInt(model -> model.minY() + model.placementHeight()).min().orElse(0);
-                int maxHeight = objectModels.stream()
-                        .mapToInt(model -> model.maxY() + model.placementHeight()).max().orElse(minHeight);
-                result.add(new SceneOccluder(
-                        1,
-                        address.regionLocalX(),
-                        address.regionLocalX() + Math.max(1, worldObject.object().footprintWidth()) - 1,
-                        address.regionLocalY(),
-                        address.regionLocalY() + Math.max(1, worldObject.object().footprintLength()) - 1,
-                        address.plane(), address.plane(),
-                        address.worldX(),
-                        address.worldX() + Math.max(1, worldObject.object().footprintWidth()) * 128,
-                        address.worldY(),
-                        address.worldY() + Math.max(1, worldObject.object().footprintLength()) * 128,
-                        minHeight, maxHeight));
-            }
+            // An object's footprint is volume geometry, not a fixed type-1 or
+            // type-2 occlusion plane. Emitting it as one of those planes makes
+            // the resolver ignore one axis and can hide large areas of valid
+            // terrain behind multi-tile objects. Only model-clipped wall
+            // edges below become occluders until volumetric occlusion has a
+            // separately verified contract.
             if (worldObject.object().appearance().modelClipped()) {
                 for (WallOccluder wall : clippedWallOccluders(worldObject.object().object())) {
                     int height = edgeHeight(scene, address, wall);

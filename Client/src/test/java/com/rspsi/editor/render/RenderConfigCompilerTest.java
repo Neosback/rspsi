@@ -23,7 +23,7 @@ class RenderConfigCompilerTest {
         assertTrue(config.objectsVisible());
         assertTrue(config.roofsVisible());
         assertEquals(SceneVisibilityPolicy.PlaneSelection.ALL, config.planeSelection());
-        assertEquals(4, config.msaaSamples());
+        assertEquals(0, config.msaaSamples());
     }
 
     @Test
