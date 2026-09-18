@@ -7,6 +7,9 @@ that can be checked in code.
 The product scope and controlled layout are locked in
 [`PRODUCT_DESIGN.md`](PRODUCT_DESIGN.md).
 
+The JavaFX shell, theme, icon, controlled-docking, and workspace rules are
+recorded in [`UI_UX_FOUNDATION.md`](UI_UX_FOUNDATION.md).
+
 The feature/plugin ownership model is recorded in
 [`PLUGIN_ARCHITECTURE.md`](PLUGIN_ARCHITECTURE.md). In short, features own
 their state, tools, commands, inspectors, overlays, and other contributions;
@@ -91,6 +94,39 @@ Future source/build services must consume the existing neutral contracts:
 `WorldValidator`, and neutral asset repositories. They must not introduce a
 second map model, cache facade, command history, or revision-specific branch
 into editor code.
+
+## Future map transformation boundary
+
+Smart tools should sit above the canonical document and below the frontend:
+
+```text
+tool input: selection / stroke / spline / shape
+                       ↓
+              deterministic generator
+                       ↓
+              ProposedChangeSet
+                       ↓
+              constraints / validator
+                       ↓
+                 neutral preview
+                       ↓
+            EditorCommand / transaction
+                       ↓
+                 EditorSession
+```
+
+`ProposedChangeSet` is a future concept for terrain, shared-corner heights,
+flags, locations, derived collision invalidation, and project metadata. It is
+not a replacement for `WorldDocument` or `EditorCommand`; it lets a generator
+preview and validate a result before one grouped command commits it. The
+design and backlog live in [`SMART_MAP_TOOLS.md`](SMART_MAP_TOOLS.md).
+
+Smart tools may use adjacency masks, height fields, object footprints,
+coordinate transforms, definitions, bridge/plane semantics, and collision
+queries. They may not bypass the session, write cache bytes directly, invent
+frontend-specific state, or silently repair unsupported OSRS data. Seeded
+randomness must be reproducible and every multi-cell transformation must have
+semantic diff and exact undo evidence.
 
 ## Future workspace composition
 
@@ -477,29 +513,31 @@ packaging and capability boundary, not a second editor architecture.
 `DebugOverlayBuilder` turns a `WorldDocument`, its world origin, and an
 optional `CollisionMap` into a `DebugOverlaySnapshot`. The snapshot exposes
 tile inspector payloads, bridge/effective-plane information, collision
-directions, and semantic tile/chunk/region/world-window grid lines. A JavaFX
-viewport may render these values today, while a future OpenGL or Dear ImGui
-frontend can consume the same data. Overlay colors, labels, and drawing
-technology remain frontend concerns.
+directions, and semantic tile/chunk/region/world-window grid lines. The
+JavaFX compatibility viewport and embedded OpenGL viewport consume the same
+data today; Dear ImGui can consume the same projection later. Overlay colors,
+labels, and drawing technology remain frontend concerns.
 
 ## Frontends
 
 JavaFX is the current frontend and keeps the existing workflow working. Its
 event adapters translate to `PointerEvent`; JavaFX properties and controls do
 not enter tool or document classes. Dear ImGui remains a future frontend
-option, with GLFW/LWJGL integration deferred until the neutral contracts and
-legacy behavior are stable.
+option. LWJGL/OpenGL is already used by the embedded 3D viewport, while its
+native handles remain confined to the `Editor` frontend.
 
 `Editor/src/main/java/com/rspsi/ui/workspace/ControlledWorkspaceShell.java`
 is the first concrete JavaFX adapter for the neutral workspace contracts. It
-renders fixed side rails, a permanent center viewport, and controlled bottom
-tabs from `WorkspaceCatalog` data. It may host legacy panels while migration
-continues, but it must not become the owner of workspace, document, or
-renderer state. The existing `MainWindow` remains the compatibility entry
-point until the shell has equivalent launch/load/edit/save coverage.
+renders the tool rail, context toolbar, dominant viewport, outliner/inspector,
+controlled utility drawer, workspace tabs, and status row from
+`WorkspaceCatalog` data. It may host legacy panels while migration continues,
+but it must not become the owner of workspace, document, or renderer state.
+Layout persistence is UI-only and stored through `WorkspaceLayoutStore` in the
+user configuration directory.
 
-`ControlledWorkspaceBridge` is an opt-in adapter selected by the
-`controlledWorkspace` setting. It reparents the existing `main_test4.fxml`
+`ControlledWorkspaceBridge` is the default adapter, with the legacy shell
+remaining available through the `controlledWorkspace` setting. It reparents the
+existing `main_test4.fxml`
 tool rail, renderer viewport, asset pane, and menu bar into the shell while
 leaving the default legacy layout unchanged. The bridge uses session-backed
 inspector/history/validation panels, plus a placeholder console panel, while

@@ -161,7 +161,7 @@
                               <JFXButton fx:id="returnToLauncher" alignment="CENTER" contentDisplay="TEXT_ONLY" layoutX="400.0" layoutY="498.0" prefHeight="40.0" ripplerFill="#080606" style="-fx-font-size: 1.5em;" text="Return to launcher window" visible="false" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="5.0" AnchorPane.rightAnchor="5.0" />
                            </children>
                         </AnchorPane>
-                        <HBox alignment="CENTER" minWidth="-Infinity" prefHeight="43.0" style="-fx-background-color: #2b2b2b; -fx-border-width: 1 0 0 0;" VBox.vgrow="NEVER">
+                        <HBox fx:id="legacyViewportToolBar" alignment="CENTER" minWidth="-Infinity" prefHeight="43.0" style="-fx-background-color: #2b2b2b; -fx-border-width: 1 0 0 0;" VBox.vgrow="NEVER">
                            <children>
                             <HBox id="HBox" alignment="CENTER" spacing="4.0" HBox.hgrow="ALWAYS">
                               <children>
@@ -587,6 +587,5 @@
    </children>
    <stylesheets>
       <URL value="@../css/layout.css" />
-      <URL value="@../css/modena_dark.css" />
    </stylesheets>
 </StackPane>

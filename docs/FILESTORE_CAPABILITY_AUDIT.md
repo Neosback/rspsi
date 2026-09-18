@@ -12,11 +12,11 @@ Audited artifacts:
 
 | Artifact | Version | Evidence source |
 |---|---|---|
-| Published dependency in `Client/build.gradle` | `dev.or2:*:2.4.19` (pinned via root `gradle.properties`) | Gradle build; class-level inspection of the resolved jars |
+| Published dependency in `Client/build.gradle` | `dev.or2:*:3.0.2` (pinned via root `gradle.properties`) | Gradle build; class-level inspection of the resolved jars |
 | Research checkout | `../RSPSi-resources/OpenRune-FileStore` | Commit `4179fc4` (build metadata declares `3.0.2`; refreshed read-only from `236e392`) |
 | OpenRune-Server Neosback `or-cache` map codecs | `../RSPSi-resources/OpenRune-Server-Neosback` | Commit `bde85d0` (map semantics donor) |
 
-## 2.4.19 → 3.0.2 compatibility spike — 2026-09-17
+## Historical 2.4.19 → 3.0.2 compatibility spike — 2026-09-17
 
 The research checkout was refreshed (read-only) from commit `236e392`
 (build metadata `3.0.1`) to `4179fc4` (build metadata `3.0.2`). The published
@@ -45,7 +45,7 @@ transitive companion of `definition`; the hosting-repo review promotes it to
 first-class). The `tools` CS2-compiler exclusion is preserved.
 
 **Spike verdict: 3.0.2 is deterministic-level compatible.** The production
-pin remains `2.4.19` until the external parity matrix
+pin is `3.0.2`; the external parity matrix
 (`verifyOsrsRevisionMatrix` plus the writable round-trip tests) is re-run
 against 3.0.2 with the operator-supplied cache and fixtures, per the
 runbook below. After that evidence, flipping the pin is a one-line change.
@@ -57,23 +57,25 @@ the FileStore version.
 
 ## Version status and pin policy
 
-The published artifact line is `2.4.19`; the research checkout is one major
-step ahead at `3.0.1` build metadata. The repository `README.md` still
-advertises `2.1.1`, confirming the upstream documentation lag already recorded
-in the adoption contract.
+The published application line is `3.0.2`; the repository `README.md` still
+advertises an older FileStore version, confirming the upstream documentation
+lag already recorded in the adoption contract. `2.4.19` remains a historical
+comparison point, not the active dependency.
 
-**Decision: stay pinned at 2.4.19.** The audit found no capability in 3.0.1
-that the map editor needs and 2.4.19 cannot provide through the existing
+**Decision: pin the application to 3.0.2.** The upgrade is verified by the
+current compile/test gates; the historical 2.4.19 comparison below remains
+useful as the compatibility baseline.
+that the map editor needs and the historical 2.4.19 line could not provide through the existing
 adapters. The 3.0.x line reorganizes modules and publishes a new major version;
 adopting it now would invalidate the recorded compatibility evidence
 (`verifyOsrsRevisionMatrix`, definition audits, fingerprint tests) for zero
 functional gain. Known minor deltas observed during inspection:
 
 - `ObjectType` in 3.0.x exposes the same `objectModels`/`objectTypes` pairing
-  consumed by Stage 2 of the FileStore milestone; 2.4.19 exposes it identically
+  consumed by Stage 2 of the FileStore milestone; the historical 2.4.19 line exposes it identically
   (verified with `javap` against the resolved jar).
 - The 3.0.x `filesystem` module separates `ReadOnlyCache` from a writable
-  `Cache`; 2.4.19's `FileCache` is read-only and `CacheDelegate` (tools) is the
+  `Cache`; the historical 2.4.19 `FileCache` is read-only and `CacheDelegate` (tools) is the
   writable path. RSPSi's `READ_ONLY`/`DIRECT` capability split maps cleanly
   onto both; the adapter isolates us from the rename.
 
@@ -133,22 +135,22 @@ Rules confirmed with the hosting-repo review:
 
 ## Capability matrix
 
-| # | Editor need | Neutral contract | FileStore 2.4.19 evidence | Verdict |
+| # | Editor need | Neutral contract | FileStore 3.0.2 evidence | Verdict |
 |---|---|---|---|---|
 | 1 | Open DAT2 cache, enumerate indices/archives/files | `CacheStore`, `CacheIndexView`, `CacheArchiveView` | `filesystem` module (`Cache`, `FileCache`); used by every loader | **covered** |
 | 2 | XTEA-encrypted map reads | `CacheStore.read(index, archive, file)` | `Cache.data(..., xtea)`; map payloads for rev < 237 decrypt through the same call | **covered** |
-| 3 | Revision-aware terrain/location decode + encode | RSPSi-owned `OsrsRegionDecoder`/`OsrsRegionEncoder` | FileStore does **not** provide map codecs in 2.4.19; OpenRune-Server `or-cache` does. RSPSi owns these by design (adoption contract) | **covered by design** — not a FileStore gap |
+| 3 | Revision-aware terrain/location decode + encode | RSPSi-owned `OsrsRegionDecoder`/`OsrsRegionEncoder` | FileStore does **not** provide map codecs in 3.0.2; OpenRune-Server `or-cache` does. RSPSi owns these by design (adoption contract) | **covered by design** — not a FileStore gap |
 | 4 | Named (`mX_Y`) and packed numeric map groups | `MapIndexTable`, `OsrsMapService` | `Cache.archiveId(index, name)` + numeric enumeration; verified live on revision-6 named and build-240 numeric | **covered** |
 | 5 | Object definitions (incl. model-type pairing, collision, appearance) | `ObjectDefinitionView`, `ObjectCollisionView`, `ObjectAppearanceView` via `OpenRuneDefinitionProvider` | `osrs` module `ObjectCodec` decodes opcodes 1–249; `ObjectType.objectModels`/`objectTypes` pairing is available | **covered**; model-type pairing now surfaced to the editor (this milestone, Stage 2) |
 | 6 | Underlay/overlay definitions incl. blend inputs | `FloorDefinitionView` | `UnderlayType`/`OverlayType` expose raw + weighted hue, saturation, lightness, hue multiplier | **covered** |
 | 7 | Textures: definitions, pixels, animation metadata | `TextureDefinitionView`, `texturePixels(...)` | `TextureType.load(sprites)` at 128px/brightness 0.6 | **covered with a frozen contract** — brightness/size is pinned to 0.6/128 (see §Texture contract) |
 | 8 | Models: geometry, normals, texture triangles, render types | `ModelGeometryView` (lazy) | `ModelDecoder` + `ModelType.computeNormals()`; geometry verified live (model 0) and metadata for 60k+ IDs | **covered** |
 | 9 | Sprites and map-scene sprites | `MapSceneSpriteView` | `SpriteDecoder`; graphics-defaults + named `mapscene` fallback verified on build 240 (127 placed sprites resolved) | **covered** |
-| 10 | Sequences + map elements (lazy) | `SequenceDefinitionView`, `MapElementDefinitionView` | 2.4.19 exposes raw config bytes; RSPSi-owned lazy decoders cover rev-226+ skeletal opcodes | **covered**; decode failures now diagnosable (Stage 2) |
+| 10 | Sequences + map elements (lazy) | `SequenceDefinitionView`, `MapElementDefinitionView` | 3.0.2 exposes raw config bytes; RSPSi-owned lazy decoders cover rev-226+ skeletal opcodes | **covered**; decode failures now diagnosable (Stage 2) |
 | 11 | RSCM/GameVal symbolic names | `SymbolicNameProvider` | OpenRune RSCM tables adapted through `OpenRuneSymbolicNameProvider`; mapping-file lifecycle open | **covered (adapter-work)** — lifecycle tracking remains in ROADMAP |
 | 12 | Writable output cache | `CacheStore.write` + `CacheWriteMode.DIRECT` | `tools` module `CacheDelegate(write/update)`; verified by copied-cache round-trip tests | **covered** (Stage 4 of this milestone extends batch coverage) |
 | 13 | Cache identity/fingerprint for project binding | `CacheStore.metadata(revision)` | Canonical CRC fingerprint over index reference tables | **covered** |
-| 14 | Incremental packing / dirty-unit builds | *(future build pipeline)* | `tools.incremental` (`IncrementalBuild`, `PackUnit`, `RecordingCache`, fingerprint verification) exists in 2.4.19 and is used by `PackMaps`/`PackModels` | **upstream-candidate** — deliberately unused until Phase 6 (source-first build); RSPSi's own `DirtyRegion` owns editor-level invalidation |
+| 14 | Incremental packing / dirty-unit builds | *(future build pipeline)* | `tools.incremental` (`IncrementalBuild`, `PackUnit`, `RecordingCache`, fingerprint verification) is available in the pinned 3.0.2 tools artifact and is used by `PackMaps`/`PackModels` | **upstream-candidate** — deliberately unused until Phase 6 (source-first build); RSPSi's own `DirtyRegion` owns editor-level invalidation |
 | 15 | Item/NPC/interface/CS2/DB-table codecs | *(future content workspaces)* | `osrs` module ships `ItemCodec`, `NPCCodec`, `ComponentDecoder`, `DBRowCodec`, CS2 building blocks | **available, not needed for map editor** — recorded for the Studio content workspace phase; same `DefinitionProvider` facade will be extended |
 | 16 | World-map tooling | *(future World Map workspace)* | `tools.worldmap` + `PackWorldMap`/`DumpWorldMap` | **available, not needed for map editor** |
 | 17 | JS5 file serving | out of scope | `tools` JS5 server exists | **not-needed-for-map-editor** (Studio is offline; server integration is adapter-level) |
@@ -156,7 +158,7 @@ Rules confirmed with the hosting-repo review:
 
 ### Summary verdict
 
-**FileStore 2.4.19 has everything the map editor needs.** Zero rows require an
+**FileStore 3.0.2 has everything the map editor needs.** Zero rows require an
 upgrade to close. Row 3 (map codecs) is intentionally RSPSi-owned; rows 14–17
 are future-phase capabilities that already exist in the pinned artifact and
 require only adapter work when their phase begins. The one true adapter debt

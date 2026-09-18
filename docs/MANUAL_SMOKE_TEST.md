@@ -54,10 +54,12 @@ For the opt-in OSRS project workflow:
       separate prepared writable OSRS output cache.
 - [ ] Enter a valid starting region such as `50,50`.
 - [ ] Confirm the selected region appears in the controlled workspace and the
-      canonical top-down scene preview, inspector, history, assets, validation,
-      and status panels are populated.
-- [ ] Click a terrain tile in the canonical preview and confirm the neutral
-      selection and inspector update to the selected plane/tile.
+      embedded OpenGL 3D viewport, inspector, history, assets, validation, and
+      status panels are populated. A native-context failure must show the
+      actionable OpenGL-unavailable surface, never a JavaFX Canvas fallback.
+- [ ] Confirm the OpenGL viewport presents the loaded scene and that the
+      current selection/inspector path remains available through the active
+      editor controls.
 - [ ] Hover adjacent tiles and confirm the status row updates local, world,
       region, and chunk coordinates without changing the current selection.
 - [ ] In the canonical tool rail, enter valid local start/target coordinates,

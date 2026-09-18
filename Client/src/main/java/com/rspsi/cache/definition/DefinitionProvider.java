@@ -54,6 +54,16 @@ public interface DefinitionProvider {
         return Optional.empty();
     }
 
+    /** Optional decoded legacy frame transform data for animated models. */
+    default Optional<AnimationFrameView> animationFrame(int id) {
+        return Optional.empty();
+    }
+
+    /** Optional decoded skeleton transform groups for animated models. */
+    default Optional<SkeletonDefinitionView> skeleton(int id) {
+        return Optional.empty();
+    }
+
     /** Available sequence IDs when the backend exposes a sequence index. */
     default List<Integer> sequenceIds() {
         return List.of();

@@ -14,6 +14,14 @@ import com.rspsi.editor.plugin.EditorPluginLoader;
 import com.rspsi.editor.plugin.EditorPluginStateStore;
 import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
 import com.rspsi.editor.model.WorldWindow;
+import com.rspsi.editor.model.WorldRegionWindow;
+import com.rspsi.editor.render.CameraState;
+import com.rspsi.editor.render.GpuScenePacket;
+import com.rspsi.editor.render.GpuScenePacketBuilder;
+import com.rspsi.editor.render.GpuUploadPlanBuilder;
+import com.rspsi.editor.render.RenderConfig;
+import com.rspsi.editor.render.SceneWindow;
+import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.ui.StandardWorkspaceCatalog;
 import com.rspsi.editor.ui.WorkspaceCatalog;
 import javafx.scene.Node;
@@ -21,17 +29,20 @@ import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
+import javafx.application.Platform;
 
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Compatibility bridge that reuses the existing FXML regions in the new
- * constrained workspace shell. It is deliberately opt-in while launch/load,
- * edit, save, and autosave coverage is still being migrated.
+ * Compatibility bridge that reuses the existing FXML regions in the modern
+ * constrained workspace shell while the viewport and specialized panels are
+ * migrated incrementally.
  */
 public final class ControlledWorkspaceBridge {
     private ControlledWorkspaceBridge() {
@@ -55,24 +66,44 @@ public final class ControlledWorkspaceBridge {
 
         detach(controller.getLegacyToolRail());
         detach(controller.getLegacyViewport());
+        detach(controller.getLegacyViewportToolBar());
         detach(controller.getLegacyInspector());
         detach(controller.getGrabBar());
+
+        // The legacy viewport includes an empty title strip and a bottom
+        // toolbar. The toolbar is rehosted below the viewport; remove only
+        // the empty strip so the game canvas can use the available height.
+        if (controller.getLegacyViewport().getChildren().size() > 1
+                && controller.getLegacyViewport().getChildren().get(0) instanceof javafx.scene.layout.HBox) {
+            controller.getLegacyViewport().getChildren().remove(0);
+        }
+        detach(controller.getToolsTabPane());
 
         controller.getLegacyToolRail().setMaxWidth(Double.MAX_VALUE);
         controller.getLegacyToolRail().setMaxHeight(Double.MAX_VALUE);
         controller.getLegacyViewport().setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         controller.getLegacyInspector().setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
 
-        AdaptiveToolPanel tools = new AdaptiveToolPanel(controller.getLegacyToolRail());
+        CompactToolRail tools = new CompactToolRail(controller);
+        MapToolContextPanel toolContext = new MapToolContextPanel(
+                controller, controller.getLegacyViewportToolBar());
         AssetBrowserPanel browser = assets == null ? null : new AssetBrowserPanel(assets);
-        if (browser != null) {
-            browser.onAssetSelected(tools::setObjectAsset);
-        }
         Map<String, Node> panels = new LinkedHashMap<>();
         panels.put("tools", tools);
+        panels.put("context-toolbar", new ContextToolbar());
+        panels.put("tool-context", toolContext);
+        panels.put("selector-strip", new SelectorStrip(controller));
         panels.put("viewport", new ControlledViewportPanel(controller.getLegacyViewport()));
+        panels.put("outliner", new WorldOutlinerPanel());
         panels.put("assets", browser == null ? controller.getLegacyInspector() : browser);
+        panels.put("floor-palette", controller.getToolsTabPane());
         panels.put("inspector", new SessionInspectorPanel(new LegacyDefinitionProvider()));
+        RightToolRail rightToolRail = new RightToolRail();
+        RightSettingsPanel settingsPanel = new RightSettingsPanel(
+                panels.get("outliner"), panels.get("inspector"));
+        rightToolRail.onCategorySelected(settingsPanel::showCategory);
+        panels.put("right-tool-rail", rightToolRail);
+        panels.put("settings-panel", settingsPanel);
         panels.put("history", new SessionHistoryPanel());
         panels.put("validation", new ValidationPanel());
         panels.put("console", placeholder("Console", "Editor messages will appear here."));
@@ -82,7 +113,7 @@ public final class ControlledWorkspaceBridge {
         WorkspaceCatalog catalog = StandardWorkspaceCatalog.create();
         ControlledWorkspaceShell shell = new ControlledWorkspaceShell(
                 catalog, catalog.workspace("map"), panels);
-        shell.setTopBar(controller.getGrabBar());
+        shell.setTopBar(ModernMenuBarFactory.create(controller, shell), controller.getControlBox());
         shell.setStatusBar(new WorkspaceStatusBar());
         return shell;
     }
@@ -121,7 +152,8 @@ public final class ControlledWorkspaceBridge {
 
     /**
      * Binds an OSRS project opened through the cache/session composition
-     * layer. The legacy renderer remains a separate compatibility viewport.
+     * layer. The Map Editor uses the embedded OpenGL surface as its only
+     * production scene renderer.
      */
     public static void bindProject(ControlledWorkspaceShell shell,
                                    OsrsProjectSessionLoader.OpenedProject opened,
@@ -149,7 +181,35 @@ public final class ControlledWorkspaceBridge {
             browser.setRepository(assets);
         }
         if (shell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
-            viewport.showCanonical(session, window, definitions, assets);
+            try {
+                // Bind the canonical scene adapter only as the neutral source
+                // for packet construction and plugin queries. It is never
+                // mounted, so JavaFX Canvas cannot silently become the scene
+                // renderer again.
+                viewport.canonicalViewport().bind(session, window, definitions, assets);
+                SceneWindow gpuWindow = SceneWindow.from(new WorldRegionWindow(
+                        opened.region().regionX(), opened.region().regionY(), 1, 1,
+                        Map.of(opened.worldRegion().regionId(), opened.worldRegion())));
+                SettingsStore renderSettings = LegacyRenderSettingsAdapter.createStore();
+                LegacyRenderSettingsAdapter.LegacyBinding settingsBinding =
+                        LegacyRenderSettingsAdapter.bindOptions(renderSettings);
+                GpuScenePacket gpuPacket = new GpuScenePacketBuilder().build(
+                        gpuWindow, viewport.canonicalViewport().sceneSnapshot());
+                double centerX = window.originX() * 128.0 + window.width() * 64.0;
+                double centerZ = window.originY() * 128.0 + window.length() * 64.0;
+                viewport.openGlViewport().setCamera(new CameraState(
+                        (float) centerX, 2400.0f, (float) centerZ - 4200.0f,
+                        (float) -Math.toRadians(28.0), 0.0f));
+                viewport.showOpenGl(gpuPacket, renderSettings, settingsBinding);
+                installAnimationRefresh(viewport, gpuWindow, renderSettings);
+            } catch (RuntimeException nativeRendererFailure) {
+                // Do not change rendering semantics behind the user's back.
+                // A driver/context failure is actionable and must remain
+                // visible instead of becoming an unannounced Canvas preview.
+                System.err.println("Embedded OpenGL viewport unavailable: "
+                        + nativeRendererFailure.getMessage());
+                viewport.showOpenGlUnavailable(nativeRendererFailure);
+            }
             if (shell.panelNode("tools") instanceof AdaptiveToolPanel tools) {
                 tools.showCanonical(viewport.canonicalViewport());
                 List<EditorPlugin> pluginsToLoad = new ArrayList<>();
@@ -194,10 +254,44 @@ public final class ControlledWorkspaceBridge {
         }
     }
 
+    /** Connects the native client-cycle timer to derived animated scene packets. */
+    private static void installAnimationRefresh(ControlledViewportPanel viewport,
+                                                SceneWindow window,
+                                                SettingsStore settings) {
+        AtomicBoolean queued = new AtomicBoolean();
+        AtomicInteger lastCycle = new AtomicInteger(-1);
+        viewport.openGlViewport().setAnimationTick(cycle -> {
+            if (!queued.compareAndSet(false, true)) return;
+            Platform.runLater(() -> {
+                try {
+                    if (cycle == lastCycle.get()) return;
+                    CanonicalSceneViewport canonical = viewport.canonicalViewport();
+                    canonical.refreshAnimation(cycle);
+                    GpuScenePacket packet = new GpuScenePacketBuilder().build(
+                            window, canonical.sceneSnapshot());
+                    RenderConfig config = new com.rspsi.editor.render.RenderConfigCompiler()
+                            .compile(settings.snapshot());
+                    viewport.openGlViewport().upload(
+                            new GpuUploadPlanBuilder().build(config.apply(packet)));
+                    lastCycle.set(cycle);
+                } finally {
+                    queued.set(false);
+                }
+            });
+        });
+    }
+
     /** Returns the mounted status bar for frontend lifecycle management. */
     public static WorkspaceStatusBar statusBar(ControlledWorkspaceShell shell) {
         Objects.requireNonNull(shell, "shell");
         return shell.statusBar() instanceof WorkspaceStatusBar status ? status : null;
+    }
+
+    public static void installQuickLaunch(ControlledWorkspaceShell shell, QuickLaunchHandler handler) {
+        if (shell.panelNode("viewport") instanceof ControlledViewportPanel viewport) {
+            viewport.installQuickLaunch(handler);
+            viewport.setWaitingForInput(true);
+        }
     }
 
     private static Label placeholder(String title, String message) {

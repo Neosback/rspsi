@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import com.rspsi.util.FXUtils;
+import com.rspsi.util.FXDialogs;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.utils.Lists;
@@ -28,6 +29,7 @@ import javafx.scene.Scene;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
+import com.rspsi.ui.workspace.StudioDashboard;
 
 @Slf4j
 @Getter
@@ -40,9 +42,187 @@ public class LauncherWindow extends Application {
 	
 	private LauncherController controller;
 	private List<String> oldCachePaths;
+	private Parent legacySettingsContent;
+	private StudioDashboard dashboard;
 
 	@Override
 	public void start(Stage primaryStage) throws Exception {
+		Settings.loadSettings();
+		startDashboard(primaryStage);
+	}
+
+	private void startDashboard(Stage primaryStage) throws Exception {
+		java.nio.file.Files.createDirectories(Paths.get(System.getProperty("user.home"), ".rspsi"));
+		singleton = this;
+		this.primaryStage = primaryStage;
+		String savedCache = Settings.getSetting("cacheLocation", "");
+		if (savedCache == null || !new File(savedCache).isDirectory()) {
+			savedCache = Settings.getSetting("lastCacheLocation", "");
+		}
+		if (savedCache == null || !new File(savedCache).isDirectory()) savedCache = "";
+		oldCachePaths = Settings.getSetting("oldCache", Lists.newArrayList());
+
+		dashboard = new StudioDashboard(
+				(thisCache, region) -> launchEditor(thisCache, region),
+				this::showLegacySettings,
+				this::showStudioSettings,
+				this::chooseCache);
+		dashboard.setCachePath(savedCache);
+		Scene scene = new Scene(dashboard, 1320, 860);
+		primaryStage.setTitle("OpenRune Content Studio");
+		primaryStage.initStyle(StageStyle.DECORATED);
+		primaryStage.setScene(scene);
+		primaryStage.getIcons().add(ResourceLoader.getSingleton().getLogo64());
+		primaryStage.setMinWidth(980);
+		primaryStage.setMinHeight(680);
+		primaryStage.show();
+		FXUtils.centerStage(primaryStage);
+	}
+
+	private void loadLegacySettingsContent() throws IOException {
+		if (legacySettingsContent != null) return;
+		FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/loadscreen.fxml"));
+		controller = new LauncherController();
+		loader.setController(controller);
+		legacySettingsContent = loader.load();
+		String cacheLoc = Settings.getSetting("cacheLocation", Config.cacheLocation.get());
+		controller.getCacheLocation().getEditor().setText(cacheLoc == null ? "" : new File(cacheLoc).getAbsolutePath() + File.separator);
+		populatePlugins();
+		controller.getCancelButton().setOnAction(event -> showDashboard());
+		controller.getBrowseButton().setOnAction(event -> chooseCache());
+		controller.getLaunchButton().setOnAction(event -> launchEditor(
+				controller.getCacheLocation().getEditor().getText(), ""));
+		controller.getDisablePluginButton().setOnAction(event -> disableSelectedPlugin());
+		controller.getEnablePluginButton().setOnAction(event -> enableSelectedPlugin());
+	}
+
+	private void chooseCache() {
+		File selected = RetentionFileChooser.showOpenFolderDialog(primaryStage, null);
+		if (selected == null) return;
+		String path = selected.getAbsolutePath() + File.separator;
+		if (dashboard != null) dashboard.setCachePath(path);
+		if (controller != null) controller.getCacheLocation().getEditor().setText(path);
+		rememberCache(path);
+	}
+
+	/**
+	 * Persists a cache selected from either the dashboard or an already-open
+	 * editor. The launcher is deliberately the owner of this preference so a
+	 * cache chosen later is available on the next dashboard startup too.
+	 */
+	public void rememberCache(String value) {
+		if (value == null || value.isBlank()) return;
+		String path = new File(value).getAbsolutePath() + File.separator;
+		Config.cacheLocation.set(path);
+		Settings.properties.put("cacheLocation", path);
+		Settings.properties.put("lastCacheLocation", path);
+		Settings.saveSettings();
+		putOldPath(path);
+		if (dashboard != null) dashboard.setCachePath(path);
+		if (controller != null) controller.getCacheLocation().getEditor().setText(path);
+	}
+
+	private void showDashboard() {
+		if (dashboard == null) return;
+		String current = Config.cacheLocation.get();
+		if (current != null && new File(current).isDirectory()) dashboard.setCachePath(current);
+		primaryStage.getScene().setRoot(dashboard);
+		primaryStage.setTitle("OpenRune Content Studio");
+	}
+
+	private void showLegacySettings() {
+		try {
+			loadLegacySettingsContent();
+		} catch (IOException exception) {
+			FXDialogs.showException(primaryStage, "Cannot open legacy settings",
+					"The compatibility settings panel could not be loaded.", exception);
+			return;
+		}
+		controller.getCacheLocation().getEditor().setText(dashboard.cachePath());
+		populatePlugins();
+		primaryStage.getScene().setRoot(legacySettingsContent);
+		primaryStage.setTitle("OpenRune Content Studio Settings");
+	}
+
+	private void showStudioSettings() {
+		FXDialogs.showInformation(primaryStage, "RSPSi Studio settings",
+				"Workspace layout, renderer presentation, keybindings, autosave, and diagnostics are available from the Map Editor workspace.\n\n"
+						+ "The dashboard keeps cache selection here so opening a workspace does not ask for it again.");
+	}
+
+	private void launchEditor(String cachePath, String region) {
+		boolean cacheAvailable = cachePath != null && !cachePath.isBlank()
+				&& new File(cachePath).isDirectory();
+		String normalized = cacheAvailable
+				? new File(cachePath).getAbsolutePath() + File.separator : "";
+		Config.cacheLocation.set(normalized);
+		if (cacheAvailable) {
+			rememberCache(normalized);
+		}
+		MainWindow window = new MainWindow();
+		// A debug region only has meaning with a cache. Without one, preserve the
+		// empty Map Editor state instead of sending an unresolvable request into
+		// the legacy client loop.
+		window.setStartupRegion(cacheAvailable ? normalizeRegion(region) : "");
+		Stage editorStage = new Stage();
+		editorStage.setX(primaryStage.getX());
+		editorStage.setY(primaryStage.getY());
+		try {
+			window.start(editorStage);
+			primaryStage.hide();
+		} catch (Exception exception) {
+			FXDialogs.showException(primaryStage, "Cannot open Map Editor", "The editor could not be started.", exception);
+		}
+	}
+
+	/** Dashboard input is region-oriented; convert regionX,regionY to a region ID. */
+	private static String normalizeRegion(String value) {
+		if (value == null || value.isBlank()) return "";
+		String normalized = value.replace(" ", "").trim();
+		if (!normalized.contains(",")) return normalized;
+		String[] parts = normalized.split(",");
+		if (parts.length != 2) return normalized;
+		try {
+			int x = Integer.parseInt(parts[0]);
+			int y = Integer.parseInt(parts[1]);
+			if (x < 0 || x > 255 || y < 0 || y > 255) return normalized;
+			return String.valueOf((x << 8) | y);
+		} catch (NumberFormatException exception) {
+			return normalized;
+		}
+	}
+
+	private void disableSelectedPlugin() {
+		String pluginName = controller.getEnabledPlugins().getFocusModel().getFocusedItem();
+		if (pluginName == null) return;
+		movePlugin(pluginName, "active", "inactive");
+	}
+
+	private void enableSelectedPlugin() {
+		String pluginName = controller.getDisabledPlugins().getFocusModel().getFocusedItem();
+		if (pluginName == null) return;
+		File activeFolder = new File(PLUGINS_PATH + "active");
+		File inactiveFolder = new File(PLUGINS_PATH + "inactive");
+		activeFolder.mkdirs();
+		inactiveFolder.mkdirs();
+		File[] active = activeFolder.listFiles((dir, name) -> name.endsWith(".jar"));
+		if (active != null) for (File file : active) movePlugin(file.getName(), "active", "inactive");
+		movePlugin(pluginName, "inactive", "active");
+	}
+
+	private void movePlugin(String pluginName, String from, String to) {
+		File source = new File(PLUGINS_PATH + from + File.separator + pluginName + (pluginName.endsWith(".jar") ? "" : ".jar"));
+		File target = new File(PLUGINS_PATH + to + File.separator + source.getName());
+		target.getParentFile().mkdirs();
+		try {
+			Files.move(source, target);
+			populatePlugins();
+		} catch (IOException exception) {
+			log.warn("Could not move plugin {}", source, exception);
+		}
+	}
+
+	private void startLegacy(Stage primaryStage) throws Exception {
 
 		java.nio.file.Files.createDirectories(Paths.get(System.getProperty("user.home"), ".rspsi"));
 		File logFile = new File(Paths.get(System.getProperty("user.home"), ".rspsi").toFile(), "log.txt");

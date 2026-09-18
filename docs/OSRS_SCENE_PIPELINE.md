@@ -171,8 +171,8 @@ remain in the UI module and are not allowed into neutral contracts.
 | Bridge/effective plane | bridge-column tests and external authored/effective geometry comparison | implemented, broader parity open |
 | Collision | OpenRune differential vectors and live diagnostics | implemented, normalized external fixture open |
 | Minimap/map-scene presentation | shaped TSPS export and image comparison | verified for the covered no-sprite and sprite-bearing revision-240 captures; broader revision coverage remains |
-| 3D render packet inputs | TSPS `SceneTileModel`, `LocModelLoader`, `Model`, and `SceneBuffer` review | not-started: final terrain HSL/UVs, transformed model packets, layer ordering, alpha/priority, and backend-independent export remain |
-| Static 3D scene backend | canonical JavaFX preview plus legacy compatibility renderer | not-started: no production renderer consumes the complete neutral 3D packet |
+| 3D render packet inputs | TSPS `SceneTileModel`, `LocModelLoader`, `Model`, and `SceneBuffer` review plus `GpuUploadPlanBuilder` | implemented-unverified: final terrain HSL/UVs, transformed model packets, layer ordering, alpha/priority, and deterministic export are packetized; broader fixture coverage remains |
+| Static 3D scene backend | embedded `EmbeddedOpenGlViewport`/`OpenGlSceneRenderer` consumes the neutral packet; the canonical JavaFX adapter is reference/test-only | partial: native OpenGL consumes the neutral packet; face priorities, animation, shadows, picking, and native-vs-software parity remain |
 | Dear ImGui adapter | neutral contracts, shared `EditorFrontendFrame`, `DearImGuiFrontendAdapter`, and JavaFX reference adapter | native draw/input smoke open |
 | Interactive workflow | manual smoke checklist | blocked until desktop is unlocked and exercised |
 
@@ -239,7 +239,7 @@ The detailed source adjudication is split into:
 The neutral implementation now exposes `SceneWindow`,
 `TerrainRenderPacket`, `ModelRenderPacket`, `SceneTileSnapshot`,
 `GpuScenePacket`, and `GpuSceneUploader`. These are full-precision contracts;
-an eventual OpenGL backend may quantize them only at upload time. The existing
+the embedded OpenGL backend may quantize them only at upload time. The existing
 `WorldRegionWindow` remains the source-region implementation and
 `EditorSceneSnapshot` remains the plugin-facing immutable projection.
 

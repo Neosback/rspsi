@@ -56,6 +56,20 @@ public final class SessionSceneController implements AutoCloseable {
         session.drainDirtyRegions();
     }
 
+    /**
+     * Rebuilds the derived scene at a client-cycle position without mutating
+     * the document. This is the animation boundary: animated model geometry
+     * stays a derived snapshot, while commands and authored state remain
+     * owned by the session.
+     */
+    public void refreshAnimation(int clientCycle) {
+        ensureOpen();
+        if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
+        RenderScene next = scenes.build(session.world(), clientCycle);
+        renderer.update(next, RenderChanges.none());
+        scene = next;
+    }
+
     @Override
     public void close() {
         if (closed) return;

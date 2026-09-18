@@ -26,6 +26,9 @@ import java.util.Objects;
  */
 public final class OpenRuneCacheStore implements CacheStore {
 
+    /** Keep the runtime identity visible in diagnostics alongside the Gradle pin. */
+    public static final String FILESTORE_VERSION = "3.0.2";
+
     private final Cache cache;
     private final boolean writable;
 
@@ -138,7 +141,8 @@ public final class OpenRuneCacheStore implements CacheStore {
 
     @Override
     public String backendName() {
-        return "OpenRune FileStore" + (writable ? " (CacheDelegate output)" : " (read-only)");
+        return "OpenRune FileStore " + FILESTORE_VERSION
+                + (writable ? " (CacheDelegate output)" : " (read-only)");
     }
 
     @Override

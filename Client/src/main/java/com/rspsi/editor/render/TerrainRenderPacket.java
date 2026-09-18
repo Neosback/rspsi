@@ -19,14 +19,24 @@ public record TerrainRenderPacket(
         int underlayHsl,
         int overlayHsl,
         boolean flat,
-        boolean overlayHidden
+        boolean overlayHidden,
+        int overlayMinimapHsl
 ) {
+    /** Compatibility constructor before render and minimap overlay HSL were separated. */
+    public TerrainRenderPacket(TileCoordinate coordinate, List<TerrainRenderVertex> vertices,
+                               List<TerrainRenderFace> faces, int shape, int rotation,
+                               int textureId, int underlayHsl, int overlayHsl,
+                               boolean flat, boolean overlayHidden) {
+        this(coordinate, vertices, faces, shape, rotation, textureId, underlayHsl,
+                overlayHsl, flat, overlayHidden, overlayHsl);
+    }
+
     public TerrainRenderPacket {
         coordinate = Objects.requireNonNull(coordinate, "coordinate");
         vertices = List.copyOf(Objects.requireNonNull(vertices, "vertices"));
         faces = List.copyOf(Objects.requireNonNull(faces, "faces"));
         if (shape < 0 || rotation < 0 || rotation > 3 || textureId < -1
-                || underlayHsl < 0 || overlayHsl < -1) {
+                || underlayHsl < -1 || overlayHsl < -2 || overlayMinimapHsl < -2) {
             throw new IllegalArgumentException("Invalid terrain render metadata");
         }
         for (TerrainRenderFace face : faces) {

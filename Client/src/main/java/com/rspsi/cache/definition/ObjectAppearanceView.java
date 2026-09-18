@@ -16,10 +16,37 @@ public record ObjectAppearanceView(
         int offsetY,
         int offsetZ,
         Map<Integer, Integer> recolors,
-        Map<Integer, Integer> retextures
+        Map<Integer, Integer> retextures,
+        boolean castsShadow,
+        boolean occludes,
+        boolean mergeNormals,
+        boolean nonFlatShading,
+        int ambient,
+        int contrast,
+        int decorDisplacement,
+        int contourGroundType,
+        int contourGroundParameter,
+        boolean modelClipped,
+        boolean rotated,
+        boolean obstructsGround,
+        int clipMask
 ) {
+    /** Compatibility constructor for the original transform-only view. */
+    public ObjectAppearanceView(int animationId, boolean contouredGround,
+                                int scaleX, int scaleY, int scaleZ,
+                                int offsetX, int offsetY, int offsetZ,
+                                Map<Integer, Integer> recolors,
+                                Map<Integer, Integer> retextures) {
+        this(animationId, contouredGround, scaleX, scaleY, scaleZ,
+                offsetX, offsetY, offsetZ, recolors, retextures,
+                true, false, false, false, 0, 0, 16,
+                contouredGround ? 1 : -1, 0, false, false, false, 0);
+    }
+
     public ObjectAppearanceView {
-        if (animationId < -1 || scaleX <= 0 || scaleY <= 0 || scaleZ <= 0) {
+        if (animationId < -1 || scaleX <= 0 || scaleY <= 0 || scaleZ <= 0
+                || decorDisplacement < 0 || contourGroundType < -1
+                || clipMask < 0) {
             throw new IllegalArgumentException("Invalid object appearance values");
         }
         recolors = immutablePairs(recolors);
@@ -28,7 +55,8 @@ public record ObjectAppearanceView(
 
     public static ObjectAppearanceView empty() {
         return new ObjectAppearanceView(-1, false, 128, 128, 128,
-                0, 0, 0, Map.of(), Map.of());
+                0, 0, 0, Map.of(), Map.of(), true, false, false, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
     }
 
     /** Builds a stable mapping from parallel cache arrays, ignoring incomplete pairs. */

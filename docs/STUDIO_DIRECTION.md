@@ -202,6 +202,12 @@ The controlled layout remains intentionally constrained:
   world context;
 - no unrestricted docking system in the foundation phase.
 
+The current JavaFX implementation of this shell is tracked in
+[`UI_UX_FOUNDATION.md`](UI_UX_FOUNDATION.md). It adds a Map Editor workspace
+tab, context toolbar, outliner/inspector hosts, utility drawer, semantic
+Ikonli icons, and user-scoped layout persistence while keeping future
+Interface, Model, Cutscene, Asset, and Build workspaces on the same shell.
+
 JavaFX renders these contracts first. Dear ImGui remains a future frontend
 option because the core contracts contain no JavaFX, ImGui, LWJGL, or OpenGL
 types.
@@ -281,6 +287,7 @@ translation, and DevTools/overlay references. The implementation direction is
 packet-first: `WorldRegionWindow`/`SceneWindow` provide context,
 `RenderScene`/`EditorSceneSnapshot` provide immutable derived state, and
 `TerrainRenderPacket`/`ModelRenderPacket` provide complete renderer inputs.
-OpenGL 3.3 is the first backend target, but native GPU handles remain outside
-neutral editor contracts. JavaFX and Dear ImGui must consume the same packets
-and diagnostic annotations.
+OpenGL 3.3 is the selected embedded desktop backend, but native GPU handles
+remain outside neutral editor contracts. JavaFX hosts the surface, the
+software renderer remains the deterministic reference, and Dear ImGui must
+consume the same packets and diagnostic annotations when added.

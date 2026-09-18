@@ -11,6 +11,9 @@ import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.cache.definition.MapSceneSpriteView;
 import com.rspsi.cache.definition.MapElementDefinitionView;
 import com.rspsi.cache.definition.SequenceDefinitionView;
+import com.rspsi.cache.definition.AnimationFrameView;
+import com.rspsi.cache.definition.SkeletonDefinitionView;
+import com.rspsi.cache.OsrsCacheIndexLayout;
 import dev.openrune.cache.filestore.definition.ModelDecoder;
 import dev.openrune.cache.filestore.definition.SpriteDecoder;
 import static dev.openrune.cache.ArchiveIndexKt.MODELS;
@@ -60,6 +63,8 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     private final List<Integer> sequenceIds;
     private final List<Integer> mapElementIds;
     private final Map<Integer, Optional<SequenceDefinitionView>> sequences = new HashMap<>();
+    private final Map<Integer, Optional<AnimationFrameView>> animationFrames = new HashMap<>();
+    private final Map<Integer, Optional<SkeletonDefinitionView>> skeletons = new HashMap<>();
     private final Map<Integer, Optional<MapElementDefinitionView>> mapElements = new HashMap<>();
 
     private OpenRuneDefinitionProvider(Cache cache, int revision) {
@@ -205,7 +210,11 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                 ObjectAppearanceView.pairs(toArray(definition.getOriginalColours()),
                         toArray(definition.getModifiedColours())),
                 ObjectAppearanceView.pairs(toArray(definition.getOriginalTextureColours()),
-                        toArray(definition.getModifiedTextureColours()))));
+                        toArray(definition.getModifiedTextureColours())),
+                true, false, false, definition.getNonFlatShading(),
+                definition.getAmbient(), definition.getContrast(), definition.getDecorDisplacement(),
+                -1, 0, definition.getModelClipped(), definition.isRotated(),
+                definition.getObstructive(), Math.max(0, definition.getClipMask())));
     }
 
     private static int[] toArray(List<Integer> values) {
@@ -353,7 +362,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
 
     @Override
     public synchronized Optional<int[]> texturePixels(int id, double brightness, int textureSize) {
-        // The pinned 2.4.19 artifact exposes the client-compatible 128px,
+        // The pinned 3.0.2 artifact exposes the client-compatible 128px,
         // BRIGHTNESS_MAX texture path only. Do not pretend a requested
         // alternative gamma/size was honored at the neutral boundary.
         if (id < 0 || !Double.isFinite(brightness) || Math.abs(brightness - 0.6) > 0.0001
@@ -439,17 +448,32 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             }
             short[] colors = model.getTriangleColors();
             int[] alphas = model.getTriangleAlphas();
+            int[] triangleSkins = model.getTriangleSkins();
             int[] textures = model.getTriangleTextures();
             int[] renderTypes = model.getTriangleRenderTypes();
             int[] renderPriorities = model.getTriangleRenderPriorities();
+            int[] depthBias = unsignedBytes(model.getFaceZOffsets());
             int[] textureCoordinates = model.getTextureCoordinates();
             int[] textureTriangles = flattenTextureTriangles(model);
+            int[] textureRenderTypes = model.getTextureRenderTypes();
+            int[] textureScaleX = model.getTextureScaleX();
+            int[] textureScaleY = model.getTextureScaleY();
+            int[] textureScaleZ = model.getTextureScaleZ();
+            int[] textureRotations = model.getTextureRotation();
+            int[] textureDirections = model.getTextureDirection();
+            int[] textureSpeeds = model.getTextureSpeed();
+            int[] textureTranslationsU = model.getTextureTransU();
+            int[] textureTranslationsV = model.getTextureTransV();
+            int[] vertexSkins = model.getVertexSkins();
             model.computeNormals();
             int[] vertexNormals = flattenVertexNormals(model.getVertexNormals());
             int[] faceNormals = flattenFaceNormals(model.getFaceNormals());
             return Optional.of(new ModelGeometryView(model.getId(), vertices, triangles,
                     colors, alphas, textures, renderTypes, renderPriorities,
-                    textureCoordinates, textureTriangles, vertexNormals, faceNormals));
+                    textureCoordinates, textureTriangles, textureRenderTypes, textureScaleX,
+                    textureScaleY, textureScaleZ, textureRotations, textureDirections,
+                    textureSpeeds, textureTranslationsU, textureTranslationsV, vertexSkins,
+                    vertexNormals, faceNormals, triangleSkins, depthBias));
         } catch (RuntimeException ignored) {
             // A malformed or partially supported model remains browseable by
             // metadata but cannot be handed to a renderer as unsafe geometry.
@@ -460,6 +484,16 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     private static int[] required(int[] values) {
         if (values == null) throw new IllegalArgumentException("Missing model array");
         return values;
+    }
+
+    /** Preserves the raw cache byte used by RuneLite as Model.faceBias. */
+    private static int[] unsignedBytes(byte[] values) {
+        if (values == null || values.length == 0) return new int[0];
+        int[] result = new int[values.length];
+        for (int index = 0; index < values.length; index++) {
+            result[index] = values[index] & 0xFF;
+        }
+        return result;
     }
 
     private static int[] flattenTextureTriangles(ModelType model) {
@@ -618,6 +652,109 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         }
     }
 
+    @Override
+    public synchronized Optional<AnimationFrameView> animationFrame(int id) {
+        if (id < 0) return Optional.empty();
+        return animationFrames.computeIfAbsent(id, this::decodeAnimationFrame);
+    }
+
+    @Override
+    public synchronized Optional<SkeletonDefinitionView> skeleton(int id) {
+        if (id < 0) return Optional.empty();
+        return skeletons.computeIfAbsent(id, this::decodeSkeleton);
+    }
+
+    private Optional<SkeletonDefinitionView> decodeSkeleton(int id) {
+        byte[] data;
+        try {
+            data = cache.data(OsrsCacheIndexLayout.SKELETONS, id, 0, null);
+        } catch (RuntimeException failure) {
+            recordFailure("skeleton", id, failure);
+            return Optional.empty();
+        }
+        if (data == null) return Optional.empty();
+        try {
+            ByteCursor cursor = new ByteCursor(data);
+            int count = cursor.readUnsignedByte();
+            int[] types = new int[count];
+            for (int index = 0; index < count; index++) types[index] = cursor.readUnsignedByte();
+            int[][] labels = new int[count][];
+            for (int index = 0; index < count; index++) {
+                int length = cursor.readUnsignedByte();
+                labels[index] = new int[length];
+                for (int label = 0; label < length; label++) {
+                    labels[index][label] = cursor.readUnsignedByte();
+                }
+            }
+            return Optional.of(new SkeletonDefinitionView(id, types, labels));
+        } catch (RuntimeException failure) {
+            recordFailure("skeleton", id, failure);
+            return Optional.empty();
+        }
+    }
+
+    /** Decodes the legacy OSRS frame format used by index 0 animation archives. */
+    private Optional<AnimationFrameView> decodeAnimationFrame(int id) {
+        int archive = id >>> 16;
+        int file = id & 0xFFFF;
+        byte[] data;
+        try {
+            data = cache.data(OsrsCacheIndexLayout.ANIMATIONS, archive, file, null);
+        } catch (RuntimeException failure) {
+            recordFailure("animation frame", id, failure);
+            return Optional.empty();
+        }
+        if (data == null || data.length < 3) return Optional.empty();
+        try {
+            ByteCursor header = new ByteCursor(data);
+            int skeletonId = header.readUnsignedShort();
+            int count = header.readUnsignedByte();
+            if (count > header.remaining()) throw new IllegalArgumentException("Invalid frame opcode count");
+            byte[] opcodes = new byte[count];
+            for (int index = 0; index < count; index++) opcodes[index] = (byte) header.readUnsignedByte();
+            SkeletonDefinitionView skeleton = skeleton(skeletonId).orElseThrow(
+                    () -> new IllegalArgumentException("Missing skeleton " + skeletonId));
+            int[] types = skeleton.transformTypes();
+            int[][] labels = skeleton.labels();
+            if (types.length < count) throw new IllegalArgumentException("Frame exceeds skeleton transform count");
+
+            ByteCursor values = new ByteCursor(data, header.position());
+            java.util.ArrayList<Integer> indices = new java.util.ArrayList<>();
+            java.util.ArrayList<Integer> x = new java.util.ArrayList<>();
+            java.util.ArrayList<Integer> y = new java.util.ArrayList<>();
+            java.util.ArrayList<Integer> z = new java.util.ArrayList<>();
+            int last = -1;
+            boolean showing = false;
+            for (int index = 0; index < count; index++) {
+                int opcode = opcodes[index] & 0xFF;
+                if (opcode == 0) continue;
+                if (types[index] != 0) {
+                    for (int previous = index - 1; previous > last; previous--) {
+                        if (types[previous] == 0) {
+                            indices.add(previous); x.add(0); y.add(0); z.add(0);
+                        }
+                    }
+                }
+                int defaultValue = types[index] == 3 ? 128 : 0;
+                indices.add(index);
+                x.add((opcode & 1) != 0 ? values.readShortSmart() : defaultValue);
+                y.add((opcode & 2) != 0 ? values.readShortSmart() : defaultValue);
+                z.add((opcode & 4) != 0 ? values.readShortSmart() : defaultValue);
+                showing |= types[index] == 5;
+                last = index;
+            }
+            return Optional.of(new AnimationFrameView(id, skeletonId,
+                    toIntArray(indices), toIntArray(x), toIntArray(y), toIntArray(z), showing));
+        } catch (RuntimeException failure) {
+            recordFailure("animation frame", id, failure);
+            return Optional.empty();
+        }
+    }
+
+    private static int[] toIntArray(java.util.List<Integer> values) {
+        return values.stream().mapToInt(Integer::intValue).toArray();
+    }
+
     private void recordFailure(String family, int id, RuntimeException failure) {
         decodeFailures.add(new DecodeFailure(family, id,
                 failure.getClass().getSimpleName() + ": " + failure.getMessage()));
@@ -740,6 +877,16 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             this.data = data;
         }
 
+        private ByteCursor(byte[] data, int offset) {
+            this.data = data;
+            if (offset < 0 || offset > data.length) throw new IllegalArgumentException("Invalid cursor offset");
+            this.offset = offset;
+        }
+
+        private int position() {
+            return offset;
+        }
+
         private int remaining() {
             return data.length - offset;
         }
@@ -757,6 +904,11 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
 
         private int readUnsignedShort() {
             return (readUnsignedByte() << 8) | readUnsignedByte();
+        }
+
+        private int readShortSmart() {
+            require(1);
+            return data[offset] < 0 ? readUnsignedShort() - 49152 : readUnsignedByte() - 64;
         }
 
         private int readMedium() {

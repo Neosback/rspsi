@@ -14,6 +14,11 @@ The frontend-specific ImGui plan is recorded in
 [`IMGUI_ADAPTER.md`](IMGUI_ADAPTER.md). It does not introduce a second
 foundation or permit toolkit types to cross the plugin boundary.
 
+The concrete JavaFX host and its controlled layout rules are recorded in
+[`UI_UX_FOUNDATION.md`](UI_UX_FOUNDATION.md). Plugins contribute stable
+metadata and factories; they do not replace the application frame or persist
+workspace layout in project data.
+
 ## Decision
 
 Use a vertical feature/plugin architecture.

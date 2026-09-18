@@ -19,10 +19,14 @@ public record RenderWindowScene(
         Map<WorldTileAddress, TerrainMaterial> terrainMaterials,
         Map<WorldTileAddress, TerrainAppearance> terrainAppearances,
         Map<WorldTileAddress, TerrainLight> terrainLighting,
+        Map<WorldTileAddress, TerrainRenderPacket> terrainPackets,
+        Map<WorldTileAddress, List<ModelRenderPacket>> modelPackets,
+        Map<WorldTileAddress, Integer> tileFlags,
         LightingProfile lightingProfile,
         Map<WorldTileAddress, CollisionTileSnapshot> collision,
         List<WorldRenderObject> objects,
-        List<WorldBridgeLink> bridges
+        List<WorldBridgeLink> bridges,
+        Map<Integer, RenderTextureResource> textures
 ) {
     /** Source-compatible constructor for callers that do not publish collision yet. */
     public RenderWindowScene(WorldRegionWindow window,
@@ -32,7 +36,7 @@ public record RenderWindowScene(
                              List<WorldRenderObject> objects,
                              List<WorldBridgeLink> bridges) {
         this(window, terrainMeshes, terrainMaterials, Map.of(), terrainLighting,
-                LightingProfile.osrs(), Map.of(), objects, bridges);
+                Map.of(), Map.of(), Map.of(), LightingProfile.osrs(), Map.of(), objects, bridges, Map.of());
     }
 
     public RenderWindowScene {
@@ -41,14 +45,25 @@ public record RenderWindowScene(
         terrainMaterials = orderedImmutableMap(terrainMaterials, "terrainMaterials");
         terrainAppearances = orderedImmutableMap(terrainAppearances, "terrainAppearances");
         terrainLighting = orderedImmutableMap(terrainLighting, "terrainLighting");
+        terrainPackets = orderedImmutableMap(terrainPackets, "terrainPackets");
+        modelPackets = orderedImmutableListMap(modelPackets, "modelPackets");
+        tileFlags = orderedImmutableMap(tileFlags, "tileFlags");
         lightingProfile = Objects.requireNonNull(lightingProfile, "lightingProfile");
         collision = orderedImmutableMap(collision, "collision");
         objects = List.copyOf(Objects.requireNonNull(objects, "objects"));
         bridges = List.copyOf(Objects.requireNonNull(bridges, "bridges"));
+        textures = orderedImmutableMap(textures, "textures");
     }
 
     private static <K, V> Map<K, V> orderedImmutableMap(Map<K, V> values, String name) {
         return Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNull(values, name)));
+    }
+
+    private static <K, V> Map<K, List<V>> orderedImmutableListMap(Map<K, List<V>> values, String name) {
+        Map<K, List<V>> copy = new LinkedHashMap<>();
+        Objects.requireNonNull(values, name).forEach((key, value) ->
+                copy.put(key, List.copyOf(Objects.requireNonNull(value, name + " value"))));
+        return Collections.unmodifiableMap(copy);
     }
 
     public boolean hasTile(WorldTileAddress address) {

@@ -381,6 +381,9 @@ public class MainController {
 	private VBox legacyViewport;
 
 	@FXML
+	private HBox legacyViewportToolBar;
+
+	@FXML
 	private VBox legacyInspector;
 	
 
@@ -504,7 +507,12 @@ public class MainController {
 				Options.tileHeightLevel);
 
 		currentHeightSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 3, 0));
-		windowControls = WindowControls.addWindowControls(application.getStage(), grabBar, controlBox);
+        // The legacy FXML grab bar is rehosted by the controlled shell. Use
+        // the visible shell chrome for dragging so the transparent stage
+        // remains movable after the modern menu is installed.
+        javafx.scene.Node dragSurface = application.getControlledWorkspaceShell() == null
+                ? grabBar : application.getControlledWorkspaceShell().windowDragSurface();
+        windowControls = WindowControls.addWindowControls(application.getStage(), dragSurface, controlBox);
 
 		// windowControls.getResizeHelper().setMinWidth(1240);
 		objectSelectionType.getItems().add("ALL");

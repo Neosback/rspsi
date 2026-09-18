@@ -5,6 +5,8 @@ import com.rspsi.editor.tool.EditorTool;
 import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.editor.plugin.EditorSetting;
 import com.rspsi.editor.plugin.EditorToolRegistration;
+import com.rspsi.ui.StudioIcon;
+import com.rspsi.ui.StudioIconFactory;
 import com.rspsi.editor.debug.DebugOverlayMode;
 import com.rspsi.editor.debug.DebugOverlaySettings;
 import com.rspsi.editor.collision.RoutePreviewMode;
@@ -279,6 +281,8 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
     private void addTool(VBox section, String label, Supplier<EditorTool> factory,
                          boolean select, Runnable onSelected) {
         ToggleButton button = new ToggleButton(label);
+        StudioIcon icon = iconFor(label);
+        if (icon != null) button.setGraphic(StudioIconFactory.icon(icon));
         button.setMaxWidth(Double.MAX_VALUE);
         button.setMinHeight(30);
         button.setAccessibleText(label);
@@ -303,6 +307,17 @@ public final class CanonicalToolPanel extends VBox implements AutoCloseable {
             }
         });
         section.getChildren().add(button);
+    }
+
+    private static StudioIcon iconFor(String label) {
+        return switch (label.toLowerCase(java.util.Locale.ROOT)) {
+            case "select" -> StudioIcon.SELECT;
+            case "terrain", "paint", "terrain painter" -> StudioIcon.TERRAIN;
+            case "height", "height sculptor" -> StudioIcon.HEIGHT;
+            case "objects", "object placer" -> StudioIcon.OBJECT;
+            case "world fragment", "stamp" -> StudioIcon.FRAGMENT;
+            default -> null;
+        };
     }
 
     private void renderPluginContext(EditorPluginHost host, String toolId) {

@@ -72,6 +72,66 @@ public final class WorldRegionWindow {
                 regionHeight * WorldRegion.REGION_SIZE);
     }
 
+    /**
+     * Materializes one world-addressed document for derived scene work.
+     *
+     * <p>Loaded regions are copied into their world-relative positions. A
+     * missing region remains the document's neutral empty tile, which lets
+     * callers retain a sparse window without fabricating cache data. This is
+     * intentionally a derived document; it is never the editor's authored
+     * source of truth.</p>
+     */
+    public WorldDocument materializeWorldDocument() {
+        return materializePaddedWorldDocument(0);
+    }
+
+    /**
+     * Materializes a derived document with an explicit neutral border around
+     * the requested world window. Loaded neighboring regions are copied into
+     * the border when they are part of this window; absent data remains an
+     * empty tile instead of repeating the visible edge. This is used by
+     * radius-five blending and height-normal derivation.
+     */
+    public WorldDocument materializePaddedWorldDocument(int border) {
+        if (border < 0) throw new IllegalArgumentException("World context border cannot be negative");
+        int planes = regions.values().stream()
+                .mapToInt(region -> region.document().planes())
+                .max()
+                .orElse(WorldDocument.DEFAULT_PLANES);
+        WorldWindow world = worldWindow();
+        WorldDocument materialized = new WorldDocument(world.width() + border * 2,
+                world.length() + border * 2, planes);
+        for (WorldRegion region : regions.values()) {
+            int offsetX = border + (region.regionX() - minRegionX) * WorldRegion.REGION_SIZE;
+            int offsetY = border + (region.regionY() - minRegionY) * WorldRegion.REGION_SIZE;
+            int copiedPlanes = Math.min(planes, region.document().planes());
+            for (int plane = 0; plane < copiedPlanes; plane++) {
+                for (int x = 0; x < WorldRegion.REGION_SIZE; x++) {
+                    for (int y = 0; y < WorldRegion.REGION_SIZE; y++) {
+                        Tile source = region.document().tile(plane, x, y);
+                        Tile destination = materialized.tile(plane, offsetX + x, offsetY + y);
+                        TileSnapshot snapshot = source.snapshot();
+                        destination.restore(shiftObjects(snapshot, plane, offsetX, offsetY));
+                        destination.heightSource(source.heightSource());
+                    }
+                }
+            }
+        }
+        return materialized;
+    }
+
+    private static TileSnapshot shiftObjects(TileSnapshot source, int plane, int offsetX, int offsetY) {
+        List<WorldObject> objects = new ArrayList<>(source.objects().size());
+        for (WorldObject object : source.objects()) {
+            objects.add(new WorldObject(object.id(), object.type(), object.rotation(), plane,
+                    object.x() + offsetX, object.y() + offsetY));
+        }
+        return new TileSnapshot(source.southWestHeight(), source.southEastHeight(),
+                source.northEastHeight(), source.northWestHeight(), source.underlayId(),
+                source.overlayId(), source.overlayShape(), source.overlayRotation(),
+                source.flags(), objects);
+    }
+
     public Optional<WorldRegion> region(int regionX, int regionY) {
         return Optional.ofNullable(regions.get((regionX << 8) | regionY));
     }

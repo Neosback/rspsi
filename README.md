@@ -13,6 +13,7 @@ the JavaFX desktop application accidentally.
 
 - [Roadmap and progress ledger](docs/ROADMAP.md)
 - [Product design](docs/PRODUCT_DESIGN.md)
+- [UI/UX foundation](docs/UI_UX_FOUNDATION.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Resource catalog and provenance](docs/RESOURCE_CATALOG.md)
 - [OpenRune compatibility evidence](docs/OPENRUNE_COMPATIBILITY.md)

@@ -40,6 +40,7 @@ class RenderWindowSceneBuilderTest {
         assertEquals(1, scene.objects().size());
         assertEquals(objectAddress, scene.objects().get(0).address());
         assertEquals(64 * 64 * 4, scene.collision().size());
+        assertEquals(0, scene.terrainPackets().size());
         assertFalse(scene.hasTile(WorldTileAddress.of(11 * 64, 20 * 64, 0)));
     }
 
@@ -127,5 +128,53 @@ class RenderWindowSceneBuilderTest {
         assertEquals(scene.window().region(10, 20).orElseThrow().document()
                         .tile(0, 63, 4).snapshot().northEastHeight(),
                 eastDocument.tile(0, 0, 5).snapshot().southWestHeight());
+    }
+
+    @Test
+    void derivesAppearanceAcrossRegionBoundariesUsingWorldWindowContext() {
+        WorldDocument westDocument = filledRegion(1);
+        WorldDocument eastDocument = filledRegion(2);
+        WorldRegion west = new WorldRegion(10, 20, westDocument);
+        WorldRegion east = new WorldRegion(11, 20, eastDocument);
+        WorldRegionWindow window = new WorldRegionWindow(10, 20, 2, 1,
+                Map.of(west.regionId(), west, east.regionId(), east));
+
+        RenderWindowScene scene = new RenderWindowSceneBuilder(boundaryDefinitions()).build(window);
+
+        WorldTileAddress boundary = WorldTileAddress.of(10 * 64 + 63, 20 * 64 + 10, 0);
+        assertEquals(OsrsTerrainColorMath.packHsl(64, 128, 96),
+                scene.terrainAppearances().get(boundary).underlayHsl());
+        assertTrue(scene.terrainPackets().containsKey(boundary));
+    }
+
+    private static WorldDocument filledRegion(int underlayId) {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        for (int x = 0; x < 64; x++) {
+            for (int y = 0; y < 64; y++) {
+                document.tile(0, x, y).restore(new TileSnapshot(
+                        0, 0, 0, 0, underlayId, 0, 0, 0, 0, List.of()));
+            }
+        }
+        return document;
+    }
+
+    private static DefinitionProvider boundaryDefinitions() {
+        return new DefinitionProvider() {
+            @Override public Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) {
+                return Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> underlay(int id) {
+                if (id == 0) return Optional.of(new com.rspsi.cache.definition.FloorDefinitionView(
+                        id, -1, 0, 0, 128, 96, 0, 256));
+                if (id == 1) return Optional.of(new com.rspsi.cache.definition.FloorDefinitionView(
+                        id, -1, 0, 128, 128, 96, 128, 256));
+                return Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> overlay(int id) {
+                return Optional.empty();
+            }
+        };
     }
 }

@@ -5,7 +5,8 @@ public record TerrainRenderVertex(
         int x,
         int y,
         int height,
-        int packedColor,
+        /** OSRS packed HSL after the vertex light has been applied. */
+        int packedHsl,
         int u,
         int v
 ) {

@@ -160,6 +160,32 @@ Console, and a persistent project/revision/dirty/build status row. JavaFX is
 the first frontend; Dear ImGui remains possible because these contracts stay
 UI-neutral.
 
+Future deterministic smart-map tools are catalogued in
+[`SMART_MAP_TOOLS.md`](SMART_MAP_TOOLS.md). They are deliberately downstream
+of the foundation: autotiling, semantic selection, copy/rotate, smart walls,
+paths, terrain generators, collision-aware placement, prefabs, and seam fixing
+must all emit proposed canonical changes and commit through the existing
+command/session path. They are not pixel brushes, a second collision system,
+or a new procedural world format.
+
+The concrete first shell is documented in
+[`UI_UX_FOUNDATION.md`](UI_UX_FOUNDATION.md). It adds workspace tabs, a
+compact tool rail, a fixed Displee-style right category rail with one active
+settings panel, contextual tool options, a persistent selector strip, an
+Ikonli semantic icon registry, AtlantaFX Primer Dark styling, and versioned
+per-workspace layout persistence.
+The controlled JavaFX shell is now the default composition path; the legacy
+FXML shell remains available as a compatibility setting until interactive
+open/edit/save coverage passes.
+
+### Dashboard before workspaces
+
+OpenRune Studio should eventually open to a compact dashboard that exposes
+registered workspaces and separates OpenRune Content Studio settings from
+RSPSi Studio settings. The dashboard is a navigation surface, not another
+editor model; it hands the selected project/session to the chosen workspace.
+See [`STUDIO_DASHBOARD.md`](STUDIO_DASHBOARD.md).
+
 ## Editor layout
 
 Use controlled workspaces rather than unrestricted docking:
@@ -168,14 +194,15 @@ Use controlled workspaces rather than unrestricted docking:
 ┌──────────────────────────────────────────────────────────────┐
 │ File Edit View Map Tools Help                 Search / Cmd-P  │
 ├────────┬───────────────────────────────────────┬─────────────┤
-│ Tools  │              VIEWPORT                │ Inspector   │
+│ Tools  │ Context toolbar                     │ Outliner    │
+│        ├────────────── VIEWPORT ──────────────┤ Inspector   │
 │        │                                       │             │
 │ Select │                                       │ Selection   │
 │ Terrain│                                       │ Properties  │
 │ Object │                                       │             │
 │ Debug  │                                       │             │
 ├────────┴───────────────────────────────────────┴─────────────┤
-│ Assets | History | Validation | Console                      │
+│ Assets | History | Validation | Console | Build              │
 ├──────────────────────────────────────────────────────────────┤
 │ Region | Plane | World X/Y | Cache revision | Dirty | FPS    │
 └──────────────────────────────────────────────────────────────┘

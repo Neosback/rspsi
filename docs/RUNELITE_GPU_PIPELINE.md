@@ -44,10 +44,35 @@ change cache or scene semantics.
 RSPSi follows the same separation:
 
 - neutral scene contracts live under `com.rspsi.editor.render`;
-- OpenGL/LWJGL code will live in a future backend/frontend module;
+- the first production viewport consumer is the Editor module's embedded
+  `EmbeddedOpenGlViewport` and `OpenGlSceneRenderer`, backed by LWJGL 3.3;
 - the GPU adapter consumes packets and never opens FileStore;
 - JavaFX, ImGui, and OpenGL share `RenderScene`/`EditorSceneSnapshot` data;
 - a missing GPU backend cannot change decoding or scene fingerprints.
+
+Visibility is also resolved before upload through the neutral
+`SceneVisibilityPolicy`. The editor default submits all loaded planes and
+diagnostic geometry. A client-like projection can instead select an authored
+plane or bridge-resolved effective plane, hide bridge-upper geometry, and hide
+roof-related geometry. Both the software reference renderer and the embedded
+OpenGL renderer receive the same filtered `GpuScenePacket`; neither backend
+reinterprets bridge or roof flags in a shader.
+
+The embedded surface is now the only production scene viewport for opened OSRS
+projects. The old `rspsi.opengl.viewport=false` fallback switch is no longer
+part of the active workflow. If the native context cannot be created, the
+shell shows an actionable OpenGL-unavailable surface rather than silently
+switching to JavaFX Canvas. JavaFX remains the shell host, the canonical scene
+adapter remains useful for reference/test queries, and the software renderer
+remains the deterministic parity oracle.
+
+The native adapter converts packed Jagex HSL to RGB per vertex before the GPU
+interpolates colors, matching the software/client path. Textured faces retain
+their separate lightness scalar. Static texture sampling uses nearest filtering
+and clamp-to-edge; animated textures use the cache direction/speed metadata as
+client-cycle UV displacement with wraparound. Missing textures use an explicit
+grayscale fallback for diagnostics rather than silently changing scene
+interpretation.
 
 ## Upload units and order
 
@@ -82,10 +107,10 @@ texture IDs. Models are transformed from client model coordinates with the
 orientation sine/cosine tables, translated into scene space, and emitted with
 face color, transparency, priority, and texture mapping.
 
-RSPSi's neutral packets retain full precision and explicit meaning. A future
-OpenGL adapter may quantize to shorts or pack integers after it proves bounds
-and parity. Quantization must never happen in the authored model or neutral
-scene snapshot.
+RSPSi's neutral packets retain full precision and explicit meaning. The
+embedded OpenGL adapter may quantize to shorts or pack integers after it proves
+bounds and parity. Quantization must never happen in the authored model or
+neutral scene snapshot.
 
 ## Model texture mapping
 
@@ -169,8 +194,8 @@ snapshot.
 
 ## GPU acceptance gates
 
-Before implementing the OpenGL adapter, RSPSi must have deterministic tests
-for:
+The OpenGL adapter is now implemented as a first static-scene consumer. It
+must continue to be gated by deterministic tests for:
 
 - terrain packet vertices, colors, shapes, rotations, textures, and UVs;
 - object transformed vertices, face indices, normals, alpha, and priorities;
@@ -179,5 +204,10 @@ for:
 - lighting/exposure separation; and
 - identical packets from JavaFX and ImGui sessions.
 
-The GPU backend is then a consumer of verified packets, not a second place
-where OSRS scene interpretation is implemented.
+The current backend still has explicit parity work for RuneLite integer
+depth-bucket fixture validation, fog, shadows/occluders, picking, and advanced
+model channels. Those are renderer capabilities to add against the same plan;
+they are not reasons to move OSRS interpretation into the shader.
+
+The GPU backend is a consumer of verified packets, not a second place where
+OSRS scene interpretation is implemented.

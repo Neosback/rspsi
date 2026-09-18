@@ -20,7 +20,7 @@ allprojects {
     repositories {
         mavenCentral()
         // OpenRune publishes its dev.or2 modules to this Maven-compatible repo.
-        maven { url = uri('https://raw.githubusercontent.com/OpenRune/hosting/master') }
+        maven { url = uri('https://raw.githubusercontent.com/OpenRune/hosting/main') }
     }
 }
 

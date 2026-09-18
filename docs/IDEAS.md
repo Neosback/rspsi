@@ -5,6 +5,11 @@ distort the current map/editor foundation. An item here is a direction to
 evaluate, not approval to add a second world model, cache system, renderer, or
 server runtime dependency.
 
+The detailed future viewport, visibility, selection, locking, camera, renderer,
+performance, and workspace-settings catalog is maintained in
+[`VIEWPORT_SETTINGS.md`](VIEWPORT_SETTINGS.md). It is a design list; existing
+partial settings remain subject to the roadmap gates.
+
 ## Cache provenance and capability panel
 
 Add a small project/status surface that reports the active cache source as
@@ -192,6 +197,11 @@ features in the viewport:
 - a renderer comparison workspace that can inspect the same immutable scene
   snapshot through the JavaFX compatibility view, the eventual 3D backend,
   and exported packets without creating separate world state.
+- a native-backend adapter that consumes the now-defined `GpuUploadPlan`,
+  including world-space buffers, explicit HSL/lightness encodings, texture
+  resources, texture-triangle animation metadata, and ordered opaque/alpha
+  commands; the adapter must remain a frontend/backend layer and never become
+  a second scene model.
 
 The immediate implementation choice is to finish static revision-240 map
 scenes first. These ideas are valuable because they make visual mismatches
@@ -284,7 +294,7 @@ plugins or assume the server checkout is beside the Studio installation.
 The following ideas are now backed by the RuneLite review and neutral packet
 contracts rather than being loose renderer concepts:
 
-- OpenGL scene upload with zone-level invalidation;
+- embedded OpenGL scene upload with zone-level invalidation;
 - deterministic terrain/model packet export for CI and bug reports;
 - scene-layer, bridge, roof, occluder, alpha, priority, and UV diagnostics;
 - persisted tile-marker collections separate from temporary DevTools output;

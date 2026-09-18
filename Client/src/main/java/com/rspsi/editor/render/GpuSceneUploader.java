@@ -10,7 +10,13 @@ import java.util.Set;
  * interface.
  */
 public interface GpuSceneUploader extends AutoCloseable {
-    void upload(GpuScenePacket packet);
+    /** Uploads the already-derived, world-space plan; no cache access occurs here. */
+    void upload(GpuUploadPlan plan);
+
+    /** Compatibility bridge for callers that still hold the tile packet. */
+    default void upload(GpuScenePacket packet) {
+        upload(new GpuUploadPlanBuilder().build(packet));
+    }
 
     void invalidate(Set<TileCoordinate> tiles);
 

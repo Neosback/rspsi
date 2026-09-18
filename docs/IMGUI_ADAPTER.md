@@ -8,6 +8,13 @@ frontend adapter over the same session, scene, command, asset, and plugin
 contracts. Adding ImGui must not create a second world model, coordinate
 system, renderer scene graph, history stack, or plugin registry.
 
+The JavaFX reference host establishes the shell composition that ImGui must
+project rather than redefine: workspace tabs, tool rail, context toolbar,
+viewport host, outliner/inspector, utility drawer, and status row. JavaFX-only
+layout persistence is implemented by `WorkspaceLayoutStore`; an ImGui host may
+have different docking state, but it must persist that state outside project
+and world data and keep the same stable contribution IDs.
+
 The adapter also starts after OSRS bundle selection. `OsrsBundle` and its
 OpenRune FileStore adapter own cache opening and revision identity; ImGui only
 receives the cache-ready neutral project/session and feature contributions. A

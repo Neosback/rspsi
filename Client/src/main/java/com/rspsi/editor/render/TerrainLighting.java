@@ -20,12 +20,19 @@ public final class TerrainLighting {
 
     public static Map<TileCoordinate, TerrainLight> build(WorldDocument document,
                                                            LightingProfile profile) {
+        return build(document, profile, null);
+    }
+
+    /** Builds terrain light with optional client-style object shadow penalties. */
+    public static Map<TileCoordinate, TerrainLight> build(WorldDocument document,
+                                                           LightingProfile profile,
+                                                           TerrainShadowMap shadows) {
         Objects.requireNonNull(document, "document");
         Objects.requireNonNull(profile, "profile");
         Map<TileCoordinate, TerrainLight> result = new LinkedHashMap<>();
         for (int plane = 0; plane < document.planes(); plane++) {
             int[][] heights = cornerHeights(document, plane);
-            int[][] lights = lights(heights, document.width(), document.length(), profile);
+            int[][] lights = lights(heights, document.width(), document.length(), profile, shadows, plane);
             for (int x = 0; x < document.width(); x++) {
                 for (int y = 0; y < document.length(); y++) {
                     result.put(new TileCoordinate(plane, x, y), new TerrainLight(
@@ -51,7 +58,8 @@ public final class TerrainLighting {
         return heights;
     }
 
-    private static int[][] lights(int[][] heights, int width, int length, LightingProfile profile) {
+    private static int[][] lights(int[][] heights, int width, int length, LightingProfile profile,
+                                  TerrainShadowMap shadows, int plane) {
         int[][] lights = new int[width + 1][length + 1];
         for (int x = 1; x < width; x++) {
             for (int y = 1; y < length; y++) {
@@ -64,7 +72,14 @@ public final class TerrainLighting {
                 int normalZ = (heightDeltaY << 8) / normalLength;
                 int dot = normalX * profile.lightX() + normalY * profile.lightY()
                         + normalZ * profile.lightZ();
-                lights[x][y] = (int) ((double) dot / profile.lightIntensity()) + profile.ambient();
+                int baseLight = (int) ((double) dot / profile.lightIntensity()) + profile.ambient();
+                int shadowPenalty = shadows == null ? 0
+                        : (shadows.cornerStrength(plane, x - 1, y) >> 2)
+                        + (shadows.cornerStrength(plane, x + 1, y) >> 3)
+                        + (shadows.cornerStrength(plane, x, y - 1) >> 2)
+                        + (shadows.cornerStrength(plane, x, y + 1) >> 3)
+                        + (shadows.cornerStrength(plane, x, y) >> 1);
+                lights[x][y] = baseLight - shadowPenalty;
             }
         }
         // TSPS leaves the outer normal samples at their zero-initialized edge

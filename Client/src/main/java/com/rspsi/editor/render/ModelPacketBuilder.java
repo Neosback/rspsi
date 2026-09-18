@@ -1,0 +1,1216 @@
+package com.rspsi.editor.render;
+
+import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.cache.definition.ModelGeometryView;
+import com.rspsi.cache.definition.ObjectAppearanceView;
+import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.AnimationFrameView;
+import com.rspsi.cache.definition.SkeletonDefinitionView;
+import com.rspsi.cache.definition.SequenceDefinitionView;
+import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.model.OsrsTileFlags;
+import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldObject;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * Builds renderer-neutral model packets using the OSRS location-model order.
+ *
+ * <p>This deliberately stops at the packet boundary. It does not cache or
+ * mutate backend model objects, and it never asks a cache implementation to
+ * render. The order mirrors the client/TSPS path: select model parts, mirror,
+ * rotate, recolor/retexture, resize, translate, contour, then light.</p>
+ */
+public final class ModelPacketBuilder {
+    private static final int[] DECOR_DISPLACEMENT_X = {1, 0, -1, 0};
+    private static final int[] DECOR_DISPLACEMENT_Z = {0, -1, 0, 1};
+    private static final int[] DIAGONAL_DISPLACEMENT_X = {1, -1, -1, 1};
+    private static final int[] DIAGONAL_DISPLACEMENT_Z = {-1, -1, 1, 1};
+
+    private final DefinitionProvider definitions;
+    private final LightingProfile lighting;
+
+    public ModelPacketBuilder(DefinitionProvider definitions) {
+        this(definitions, LightingProfile.osrs());
+    }
+
+    public ModelPacketBuilder(DefinitionProvider definitions, LightingProfile lighting) {
+        this.definitions = Objects.requireNonNull(definitions, "definitions");
+        this.lighting = Objects.requireNonNull(lighting, "lighting");
+    }
+
+    /** Builds every available static model packet in document order. */
+    public List<ModelRenderPacket> build(WorldDocument document) {
+        return build(document, 0);
+    }
+
+    /** Builds animated model packets at an explicit client-cycle position. */
+    public List<ModelRenderPacket> build(WorldDocument document, int clientCycle) {
+        Objects.requireNonNull(document, "document");
+        if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
+        List<ModelRenderPacket> packets = new ArrayList<>();
+        for (int plane = 0; plane < document.planes(); plane++) {
+            for (int x = 0; x < document.width(); x++) {
+                for (int y = 0; y < document.length(); y++) {
+                    for (WorldObject object : document.tile(plane, x, y).objects()) {
+                        build(object, document, clientCycle).ifPresent(packets::add);
+                    }
+                }
+            }
+        }
+        return List.copyOf(mergeNormals(packets));
+    }
+
+    /** Builds one packet when its definition and at least one model are available. */
+    public Optional<ModelRenderPacket> build(WorldObject object, WorldDocument document) {
+        return build(object, document, 0);
+    }
+
+    /** Builds one model packet using the sequence frame active at clientCycle. */
+    public Optional<ModelRenderPacket> build(WorldObject object, WorldDocument document,
+                                             int clientCycle) {
+        Objects.requireNonNull(object, "object");
+        Objects.requireNonNull(document, "document");
+        if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
+        Optional<ObjectDefinitionView> definition = definitions.object(object.id());
+        if (definition.isEmpty()) return Optional.empty();
+        ObjectDefinitionView objectDefinition = definition.orElseThrow();
+        ObjectAppearanceView appearance = definitions.objectAppearance(object.id())
+                .orElseGet(ObjectAppearanceView::empty);
+        Optional<AnimationFrameView> animation = animationFrame(appearance.animationId(), clientCycle);
+        int decorDisplacement = wallDecorationDisplacement(object, appearance, document);
+        PacketParts parts = new PacketParts();
+        int footprintWidth = object.rotation() % 2 == 0
+                ? objectDefinition.width() : objectDefinition.length();
+        int footprintLength = object.rotation() % 2 == 0
+                ? objectDefinition.length() : objectDefinition.width();
+        for (ModelVariant variant : variantsFor(object, decorDisplacement)) {
+            for (int modelId : modelIdsFor(objectDefinition, variant.sourceType())) {
+                Optional<ModelGeometryView> geometry = definitions.modelGeometry(modelId);
+                if (geometry.isEmpty()) continue;
+                ModelGeometryView animatedGeometry = geometry.orElseThrow();
+                if (animation.isPresent()) {
+                    AnimationFrameView frame = animation.orElseThrow();
+                    Optional<SkeletonDefinitionView> skeleton = definitions.skeleton(frame.skeletonId());
+                    if (skeleton.isPresent()) {
+                        animatedGeometry = ModelAnimation.apply(animatedGeometry, frame, skeleton.orElseThrow());
+                    }
+                }
+                append(parts, object, appearance, animatedGeometry, document,
+                        variant, footprintWidth, footprintLength);
+            }
+        }
+        if (parts.vertices.isEmpty() || parts.triangles.isEmpty()) return Optional.empty();
+        int[] bounds = bounds(parts.vertices);
+        return Optional.of(new ModelRenderPacket(
+                new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
+                object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
+                appearance.animationId(), bounds[0], bounds[1], bounds[2],
+                bounds[3], bounds[4], bounds[5], animation.isPresent(), false,
+                objectCenterHeight(document, object, footprintWidth, footprintLength)));
+    }
+
+    private Optional<AnimationFrameView> animationFrame(int animationId, int clientCycle) {
+        if (animationId < 0) return Optional.empty();
+        Optional<SequenceDefinitionView> sequence = definitions.sequence(animationId);
+        if (sequence.isEmpty() || sequence.orElseThrow().frameIds().length == 0) return Optional.empty();
+        SequenceDefinitionView value = sequence.orElseThrow();
+        int[] frameIds = value.frameIds();
+        int[] lengths = value.frameLengths();
+        int selectedIndex = animationFrameIndex(frameIds.length, lengths, value.frameStep(), clientCycle);
+        Optional<AnimationFrameView> frame = definitions.animationFrame(frameIds[selectedIndex]);
+        if (frame.isPresent()) return frame;
+        for (int frameId : frameIds) {
+            Optional<AnimationFrameView> fallback = definitions.animationFrame(frameId);
+            if (fallback.isPresent()) return fallback;
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Selects the frame using the client sequence loop rule. A positive
+     * frameStep rewinds that many frames after the initial pass; it is not a
+     * simple modulo of the full sequence duration.
+     */
+    static int animationFrameIndex(int frameCount, int[] frameLengths,
+                                   int frameStep, int clientCycle) {
+        if (frameCount <= 0) return 0;
+        long[] durations = new long[frameCount];
+        long initialDuration = 0;
+        for (int index = 0; index < frameCount; index++) {
+            // RuneLite advances only when frameCycle > frameLength. The
+            // equality tick therefore belongs to the current frame.
+            durations[index] = Math.max(1L, frameLengths[Math.min(index, frameLengths.length - 1)]) + 1L;
+            initialDuration += durations[index];
+        }
+        long position = Math.max(0L, clientCycle);
+        int loopStart = frameStep > 0 && frameStep <= frameCount
+                ? frameCount - frameStep : frameCount;
+        if (loopStart < frameCount && position >= initialDuration) {
+            long loopDuration = 0;
+            for (int index = loopStart; index < frameCount; index++) {
+                loopDuration += durations[index];
+            }
+            if (loopDuration > 0) {
+                position = sum(durations, 0, loopStart)
+                        + (position - initialDuration) % loopDuration;
+            }
+        } else if (position >= initialDuration) {
+            return frameCount - 1;
+        }
+
+        long elapsed = 0;
+        for (int index = loopStart < frameCount && position >= initialDuration
+                ? loopStart : 0; index < frameCount; index++) {
+            if (position < elapsed + durations[index]) return index;
+            elapsed += durations[index];
+        }
+        return frameCount - 1;
+    }
+
+    private static long sum(long[] values, int from, int count) {
+        long total = 0;
+        for (int index = from; index < from + count; index++) total += values[index];
+        return total;
+    }
+
+    private static List<Integer> modelIdsFor(ObjectDefinitionView definition, int sourceType) {
+        int[] ids = definition.modelIds();
+        int[] types = definition.modelTypes();
+        List<Integer> selected = new ArrayList<>();
+        if (types.length == 0) {
+            if (sourceType == 10) {
+                for (int id : ids) selected.add(id);
+            }
+            return selected;
+        }
+        for (int index = 0; index < Math.min(ids.length, types.length); index++) {
+            if (types[index] == sourceType) selected.add(ids[index]);
+        }
+        return selected;
+    }
+
+    /**
+     * Expands one map location into the model variants the client creates for
+     * that location shape. Wall corners and the diagonal wall decorations are
+     * deliberately represented as multiple model parts; collapsing them into
+     * one quarter-turned model is a common source of visibly wrong scenes.
+     */
+    private static List<ModelVariant> variantsFor(WorldObject object, int decorDisplacement) {
+        int rotation = object.rotation();
+        int displacement = decorDisplacement;
+        return switch (object.type()) {
+            case 2 -> List.of(new ModelVariant(2, rotation + 4, 0, 0, false),
+                    new ModelVariant(2, (rotation + 1) & 3, 0, 0, false));
+            case 4 -> List.of(new ModelVariant(4, rotation, 0, 0, false));
+            case 5 -> List.of(new ModelVariant(4, rotation,
+                    DECOR_DISPLACEMENT_X[rotation] * displacement,
+                    DECOR_DISPLACEMENT_Z[rotation] * displacement, false));
+            case 6 -> List.of(new ModelVariant(4, rotation + 4,
+                    DIAGONAL_DISPLACEMENT_X[rotation] * (displacement / 2),
+                    DIAGONAL_DISPLACEMENT_Z[rotation] * (displacement / 2), false));
+            case 7 -> List.of(new ModelVariant(4, ((rotation + 2) & 3) + 4,
+                    0, 0, false));
+            case 8 -> List.of(new ModelVariant(4, rotation + 4,
+                    DIAGONAL_DISPLACEMENT_X[rotation] * (displacement / 2),
+                    DIAGONAL_DISPLACEMENT_Z[rotation] * (displacement / 2), false),
+                    new ModelVariant(4, ((rotation + 2) & 3) + 4,
+                            DIAGONAL_DISPLACEMENT_X[rotation] * (displacement / 2),
+                            DIAGONAL_DISPLACEMENT_Z[rotation] * (displacement / 2), false));
+            case 11 -> List.of(new ModelVariant(10, rotation + 4, 0, 0, true));
+            default -> List.of(new ModelVariant(object.type(), rotation, 0, 0, false));
+        };
+    }
+
+    /**
+     * OSRS wall decorations use the displacement stored by the wall they are
+     * attached to, not an arbitrary renderer default. Keep this lookup inside
+     * the definition adapter boundary and fall back to the decoration's own
+     * value for sparse/editing documents that have no wall yet.
+     */
+    private int wallDecorationDisplacement(WorldObject decoration,
+                                           ObjectAppearanceView ownAppearance,
+                                           WorldDocument document) {
+        if (decoration.type() < 5 || decoration.type() > 8) {
+            return ownAppearance.decorDisplacement();
+        }
+        for (WorldObject candidate : document.tile(decoration.plane(), decoration.x(), decoration.y())
+                .snapshot().objects()) {
+            if (candidate.type() >= 0 && candidate.type() <= 3) {
+                Optional<ObjectAppearanceView> wall = definitions.objectAppearance(candidate.id());
+                if (wall.isPresent()) return wall.orElseThrow().decorDisplacement();
+            }
+        }
+        return ownAppearance.decorDisplacement();
+    }
+
+    private void append(PacketParts parts, WorldObject object, ObjectAppearanceView appearance,
+                        ModelGeometryView geometry,
+        WorldDocument document, ModelVariant variant,
+                        int footprintWidth, int footprintLength) {
+        int vertexOffset = parts.vertices.size();
+        int[] positions = geometry.vertexPositions();
+        boolean mirror = appearance.rotated() || (variant.sourceType() == 2 && variant.rotation() > 3);
+        // TSPS/RuneLite place a location at the centre of its footprint, not
+        // at the south-west corner. The packet keeps x/z relative to the
+        // anchor tile, so the centre is footprint * halfTile.
+        int centerX = footprintWidth * 64;
+        int centerZ = footprintLength * 64;
+
+        List<RawVertex> transformed = new ArrayList<>(geometry.vertexCount());
+        for (int index = 0; index < geometry.vertexCount(); index++) {
+            int offset = index * 3;
+            int x = positions[offset];
+            int y = positions[offset + 1];
+            int z = positions[offset + 2];
+            if (mirror) {
+                z = -z;
+            }
+            if (variant.sourceType() == 4 && variant.rotation() > 3) {
+                int[] diagonal = rotateJagexAngle(x, z, 256);
+                x = diagonal[0] + 45;
+                z = diagonal[1] - 45;
+            }
+            int[] rotated = rotateQuarterTurn(x, z, variant.rotation());
+            x = rotated[0];
+            z = rotated[1];
+            x = x * appearance.scaleX() / 128;
+            y = y * appearance.scaleY() / 128;
+            z = z * appearance.scaleZ() / 128;
+            // LocModelLoader applies definition offsets in model-local space,
+            // then applies the NORMAL diagonal 256-angle rotation, and only
+            // then places the model at the footprint centre. Rotating after
+            // adding centerX/centerZ would rotate the world placement and
+            // definition offsets around the wrong origin.
+            x += appearance.offsetX();
+            y += appearance.offsetY();
+            z += appearance.offsetZ();
+            if (variant.rotateAfterScale()) {
+                int[] diagonal = rotateJagexAngle(x, z, 256);
+                x = diagonal[0];
+                z = diagonal[1];
+            }
+            x += centerX + variant.decorX();
+            z += centerZ + variant.decorZ();
+            transformed.add(new RawVertex(x, y, z));
+        }
+
+        if (appearance.contouredGround()) {
+            List<RawVertex> contoured = new ArrayList<>(transformed.size());
+            for (RawVertex vertex : transformed) {
+                int delta = contourDelta(document, object, footprintWidth, footprintLength,
+                        vertex.x, vertex.z, vertex.y, appearance.contourGroundType(),
+                        appearance.contourGroundParameter(), transformed);
+                contoured.add(new RawVertex(vertex.x, vertex.y + delta, vertex.z));
+            }
+            transformed = contoured;
+        }
+
+        List<Normal> normals = calculateNormals(transformed, geometry, mirror);
+        int[] colors = toUnsignedColors(geometry.triangleColors());
+        int[] alphas = geometry.triangleAlphas();
+        int[] textures = geometry.triangleTextures();
+        int[] renderTypes = geometry.triangleRenderTypes();
+        int[] priorities = geometry.triangleRenderPriorities();
+        int[] depthBias = geometry.triangleDepthBias();
+        int renderPriority = definitions.model(geometry.id()).map(view -> view.renderPriority()).orElse(0);
+        int[] indices = geometry.triangleIndices();
+        TextureProjection[] textureProjections = buildTextureProjections(geometry);
+        for (int vertex = 0; vertex < transformed.size(); vertex++) {
+            RawVertex value = transformed.get(vertex);
+            Normal normal = normals.get(vertex);
+            parts.vertices.add(new ModelVertex(value.x, value.y, value.z,
+                    normal.x, normal.y, normal.z, normal.magnitude,
+                    normalized(value.x, transformed, true),
+                    normalized(value.z, transformed, false)));
+        }
+        for (int face = 0; face < geometry.triangleCount(); face++) {
+            int index = face * 3;
+            int a = indices[index];
+            int b = indices[index + 1];
+            int c = indices[index + 2];
+            TextureUv uv = textureUv(geometry, face, a, b, c, textureProjections);
+            if (mirror) {
+                int swap = b;
+                b = c;
+                c = swap;
+                uv = new TextureUv(uv.u0, uv.v0, uv.u2, uv.v2, uv.u1, uv.v1);
+            }
+            int rawAlpha = valueAt(alphas, face, 0);
+            int renderType = valueAt(renderTypes, face, 0);
+            // The client encodes face render types 2 and 3 through alpha
+            // sentinels -1 and -2. Preserve those semantics before clamping
+            // ordinary 0..255 transparency values.
+            if (rawAlpha == -1) renderType = 2;
+            if (rawAlpha == -2) renderType = 3;
+            int texture = valueAt(textures, face, -1);
+            int color = valueAt(colors, face, 0);
+            color = recolor(color, appearance.recolors());
+            int alpha = clamp(rawAlpha, 0, 255);
+            int priority = clamp(valueAt(priorities, face, renderPriority), 0, 255);
+            int bias = clamp(valueAt(depthBias, face, 0), 0, 255);
+            Normal faceNormal = faceNormal(transformed.get(a), transformed.get(b), transformed.get(c));
+            int colorA;
+            int colorB;
+            int colorC;
+            if (texture >= 0) {
+                // Textured ModelData faces carry lightness scalars into the
+                // textured rasterizer; the texture itself supplies color.
+                // Applying HSL blendLight here would darken/shift textured
+                // models a second time.
+                if (renderType == 0) {
+                    colorA = clamp(lightness(normals.get(a), appearance), 2, 126);
+                    colorB = clamp(lightness(normals.get(b), appearance), 2, 126);
+                    colorC = clamp(lightness(normals.get(c), appearance), 2, 126);
+                } else if (renderType == 1) {
+                    int light = clamp(flatLightness(faceNormal, appearance), 2, 126);
+                    colorA = light;
+                    colorB = light;
+                    colorC = -1;
+                } else {
+                    colorA = 0;
+                    colorB = 0;
+                    colorC = -2;
+                }
+            } else if (renderType == 1) {
+                int light = flatLightness(faceNormal, appearance);
+                colorA = blendLight(color, light);
+                colorB = colorA;
+                colorC = -1;
+            } else if (renderType == 3) {
+                colorA = 128;
+                colorB = 128;
+                colorC = -1;
+            } else if (renderType == 2) {
+                colorA = 0;
+                colorB = 0;
+                colorC = -2;
+            } else {
+                colorA = blendLight(color, lightness(normals.get(a), appearance));
+                colorB = blendLight(color, lightness(normals.get(b), appearance));
+                colorC = blendLight(color, lightness(normals.get(c), appearance));
+            }
+            parts.triangles.add(new ModelTriangle(vertexOffset + a, vertexOffset + b,
+                    vertexOffset + c, colorA, colorB, colorC,
+                    texture < 0 ? -1 : retexture(texture, appearance.retextures()),
+                    alpha, priority, renderType, uv.u0, uv.v0, uv.u1, uv.v1, uv.u2, uv.v2,
+                    color, bias));
+        }
+        int[] textureIndices = geometry.textureTriangleIndices();
+        for (int index = 0; index + 2 < textureIndices.length; index += 3) {
+            int textureTriangle = index / 3;
+            parts.textureTriangles.add(new TextureTriangle(vertexOffset + textureIndices[index],
+                    vertexOffset + textureIndices[index + 1], vertexOffset + textureIndices[index + 2],
+                    valueAt(geometry.textureRenderTypes(), textureTriangle, 0),
+                    valueAt(geometry.textureScaleX(), textureTriangle, 0),
+                    valueAt(geometry.textureScaleY(), textureTriangle, 0),
+                    valueAt(geometry.textureScaleZ(), textureTriangle, 0),
+                    valueAt(geometry.textureRotations(), textureTriangle, 0),
+                    valueAt(geometry.textureDirections(), textureTriangle, 0),
+                    valueAt(geometry.textureSpeeds(), textureTriangle, 0),
+                    valueAt(geometry.textureTranslationsU(), textureTriangle, 0),
+                    valueAt(geometry.textureTranslationsV(), textureTriangle, 0)));
+        }
+    }
+
+    private static int[] rotateQuarterTurn(int x, int z, int rotation) {
+        return switch (rotation & 3) {
+            case 1 -> new int[]{z, -x};
+            case 2 -> new int[]{-x, -z};
+            case 3 -> new int[]{-z, x};
+            default -> new int[]{x, z};
+        };
+    }
+
+    /**
+     * Applies the client/TSPS shared-vertex normal merge after all objects
+     * have been placed in one document. Matching uses absolute plane-space
+     * coordinates, including the packet's placement elevation, rather than
+     * comparing object-local coordinates.
+     */
+    private List<ModelRenderPacket> mergeNormals(List<ModelRenderPacket> packets) {
+        if (packets.size() < 2) return packets;
+        Map<VertexKey, List<VertexReference>> references = new java.util.LinkedHashMap<>();
+        boolean[] mergeEnabled = new boolean[packets.size()];
+        for (int packetIndex = 0; packetIndex < packets.size(); packetIndex++) {
+            ModelRenderPacket packet = packets.get(packetIndex);
+            mergeEnabled[packetIndex] = definitions.objectAppearance(packet.objectId())
+                    .map(ObjectAppearanceView::mergeNormals).orElse(false);
+            for (int vertexIndex = 0; vertexIndex < packet.vertices().size(); vertexIndex++) {
+                ModelVertex vertex = packet.vertices().get(vertexIndex);
+                if (vertex.normalMagnitude() == 0) continue;
+                VertexKey key = new VertexKey(packet.anchor().plane(),
+                        packet.anchor().x() * 128 + vertex.x(),
+                        packet.placementHeight() + vertex.y(),
+                        packet.anchor().y() * 128 + vertex.z());
+                references.computeIfAbsent(key, ignored -> new ArrayList<>())
+                        .add(new VertexReference(packetIndex, vertexIndex, vertex));
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        List<ModelVertex>[] mergedVertices = new List[packets.size()];
+        boolean[] changed = new boolean[packets.size()];
+        for (int index = 0; index < packets.size(); index++) {
+            mergedVertices[index] = new ArrayList<>(packets.get(index).vertices());
+        }
+        for (List<VertexReference> group : references.values()) {
+            if (group.size() < 2 || group.stream().noneMatch(ref -> mergeEnabled[ref.packetIndex()])) {
+                continue;
+            }
+            for (VertexReference target : group) {
+                // RuneLite/TSPS leave only mergeNormals locations unlit until
+                // the scene-wide merge pass. A neighboring model that was
+                // already lit must remain untouched even if it shares a
+                // geometric vertex with a merge-enabled location.
+                if (!mergeEnabled[target.packetIndex()]) continue;
+                Normal accumulated = normal(target.vertex());
+                boolean foundOtherPacket = false;
+                for (VertexReference source : group) {
+                    if (source.packetIndex() == target.packetIndex()
+                            || !mergeEnabled[source.packetIndex()]
+                            || source.vertex().normalMagnitude() == 0) continue;
+                    Normal sourceNormal = normal(source.vertex());
+                    accumulated = new Normal(accumulated.x + sourceNormal.x,
+                            accumulated.y + sourceNormal.y,
+                            accumulated.z + sourceNormal.z,
+                            accumulated.magnitude + sourceNormal.magnitude);
+                    foundOtherPacket = true;
+                }
+                if (!foundOtherPacket) continue;
+                ModelVertex original = target.vertex();
+                mergedVertices[target.packetIndex()].set(target.vertexIndex(),
+                        new ModelVertex(original.x(), original.y(), original.z(),
+                                accumulated.x, accumulated.y, accumulated.z,
+                                accumulated.magnitude, original.u(), original.v()));
+                changed[target.packetIndex()] = true;
+            }
+        }
+
+        List<ModelRenderPacket> result = new ArrayList<>(packets.size());
+        for (int index = 0; index < packets.size(); index++) {
+            ModelRenderPacket packet = packets.get(index);
+            result.add(changed[index]
+                    ? relight(packet, List.copyOf(mergedVertices[index]))
+                    : packet);
+        }
+        return result;
+    }
+
+    private ModelRenderPacket relight(ModelRenderPacket packet, List<ModelVertex> vertices) {
+        ObjectAppearanceView appearance = definitions.objectAppearance(packet.objectId())
+                .orElseGet(ObjectAppearanceView::empty);
+        List<ModelTriangle> triangles = new ArrayList<>(packet.triangles().size());
+        for (ModelTriangle face : packet.triangles()) {
+            if (face.textureId() >= 0) {
+                if (face.renderType() == 0) {
+                    triangles.add(face.withColors(
+                            clamp(lightness(normal(vertices.get(face.a())), appearance), 2, 126),
+                            clamp(lightness(normal(vertices.get(face.b())), appearance), 2, 126),
+                            clamp(lightness(normal(vertices.get(face.c())), appearance), 2, 126)));
+                } else if (face.renderType() == 1) {
+                    int light = clamp(flatLightness(faceNormal(vertices.get(face.a()),
+                            vertices.get(face.b()), vertices.get(face.c())), appearance), 2, 126);
+                    triangles.add(face.withColors(light, light, -1));
+                } else {
+                    triangles.add(face.withColors(0, 0, -2));
+                }
+                continue;
+            }
+            if (face.renderType() == 2) {
+                triangles.add(face.withColors(0, 0, -2));
+                continue;
+            }
+            if (face.renderType() == 3) {
+                triangles.add(face.withColors(128, 128, -1));
+                continue;
+            }
+            ModelVertex first = vertices.get(face.a());
+            ModelVertex second = vertices.get(face.b());
+            ModelVertex third = vertices.get(face.c());
+            if (face.renderType() == 1) {
+                int light = flatLightness(faceNormal(first, second, third), appearance);
+                int color = blendLight(face.baseColor(), light);
+                triangles.add(face.withColors(color, color, -1));
+            } else {
+                triangles.add(face.withColors(
+                        blendLight(face.baseColor(), lightness(normal(first), appearance)),
+                        blendLight(face.baseColor(), lightness(normal(second), appearance)),
+                        blendLight(face.baseColor(), lightness(normal(third), appearance))));
+            }
+        }
+        return new ModelRenderPacket(packet.anchor(), packet.objectId(), packet.category(),
+                vertices, triangles, packet.textureTriangles(), packet.animationId(),
+                packet.minX(), packet.minY(), packet.minZ(), packet.maxX(), packet.maxY(),
+                packet.maxZ(), packet.supportsAnimation(), packet.supportsParticles(),
+                packet.placementHeight());
+    }
+
+    private static Normal normal(ModelVertex vertex) {
+        return new Normal(vertex.normalX(), vertex.normalY(), vertex.normalZ(),
+                vertex.normalMagnitude());
+    }
+
+    private static Normal faceNormal(ModelVertex first, ModelVertex second, ModelVertex third) {
+        return faceNormal(new RawVertex(first.x(), first.y(), first.z()),
+                new RawVertex(second.x(), second.y(), second.z()),
+                new RawVertex(third.x(), third.y(), third.z()));
+    }
+
+    private record VertexKey(int plane, int x, int y, int z) {
+    }
+
+    private record VertexReference(int packetIndex, int vertexIndex, ModelVertex vertex) {
+    }
+
+    /** Matches the client ModelData.rotate(angle) 2048-unit angle table. */
+    private static int[] rotateJagexAngle(int x, int z, int angle) {
+        int sine = (int) (65536.0 * Math.sin(angle * Math.PI * 2.0 / 2048.0));
+        int cosine = (int) (65536.0 * Math.cos(angle * Math.PI * 2.0 / 2048.0));
+        int rotatedX = (sine * z + cosine * x) >> 16;
+        int rotatedZ = (cosine * z - sine * x) >> 16;
+        return new int[]{rotatedX, rotatedZ};
+    }
+
+    /**
+     * Computes the client texture coordinates for all four OSRS model mapping
+     * types. The values are kept per face because adjacent faces may legitimately
+     * use different seams on the same model vertex.
+     */
+    private static TextureUv textureUv(ModelGeometryView geometry, int face, int a, int b, int c,
+                                        TextureProjection[] projections) {
+        int texture = valueAt(geometry.triangleTextures(), face, -1);
+        if (texture < 0) return TextureUv.EMPTY;
+        int coordinate = valueAt(geometry.textureCoordinates(), face, -1);
+        int mappingIndex = coordinate < 0 ? -1 : coordinate & 0xFF;
+        int type = mappingIndex >= 0 && mappingIndex < projections.length
+                ? projections[mappingIndex].type : 0;
+        if (type == 0) {
+            int p = a;
+            int m = b;
+            int n = c;
+            int[] mapping = geometry.textureTriangleIndices();
+            int offset = mappingIndex * 3;
+            if (mappingIndex >= 0 && offset + 2 < mapping.length) {
+                p = mapping[offset];
+                m = mapping[offset + 1];
+                n = mapping[offset + 2];
+            }
+            return simpleTextureUv(geometry.vertexPositions(), p, m, n, a, b, c);
+        }
+        TextureProjection projection = projections[mappingIndex];
+        if (projection == null) return TextureUv.EMPTY;
+        TextureUv uv = switch (type) {
+            case 1 -> projection.cylindrical(geometry.vertexPositions(), a, b, c);
+            case 2 -> projection.planar(geometry.vertexPositions(), a, b, c);
+            case 3 -> projection.spherical(geometry.vertexPositions(), a, b, c);
+            default -> TextureUv.EMPTY;
+        };
+        return fixSeams(uv, type, projection.direction, projection.scaleZ);
+    }
+
+    private static TextureProjection[] buildTextureProjections(ModelGeometryView geometry) {
+        int[] mapping = geometry.textureTriangleIndices();
+        int count = mapping.length / 3;
+        TextureProjection[] result = new TextureProjection[count];
+        int[] types = geometry.textureRenderTypes();
+        int[] textureCoordinates = geometry.textureCoordinates();
+        int[] positions = geometry.vertexPositions();
+        for (int coordinate = 0; coordinate < count; coordinate++) {
+            int type = valueAt(types, coordinate, 0);
+            if (type <= 0) {
+                result[coordinate] = new TextureProjection(0, 0.0, 0.0, 0.0, 0,
+                        0.0, 0.0, 0.0, 0.0, new float[9], 1.0, 1.0, 1.0);
+                continue;
+            }
+            int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+            for (int face = 0; face < geometry.triangleCount(); face++) {
+                int faceCoordinate = valueAt(textureCoordinates, face, -1);
+                if (faceCoordinate < 0 || (faceCoordinate & 0xFF) != coordinate) continue;
+                int index = face * 3;
+                for (int corner = 0; corner < 3; corner++) {
+                    int vertex = geometry.triangleIndices()[index + corner];
+                    int offset = vertex * 3;
+                    minX = Math.min(minX, positions[offset]);
+                    maxX = Math.max(maxX, positions[offset]);
+                    minY = Math.min(minY, positions[offset + 1]);
+                    maxY = Math.max(maxY, positions[offset + 1]);
+                    minZ = Math.min(minZ, positions[offset + 2]);
+                    maxZ = Math.max(maxZ, positions[offset + 2]);
+                }
+            }
+            if (minX == Integer.MAX_VALUE) {
+                minX = minY = minZ = maxX = maxY = maxZ = 0;
+            }
+            int scaleXValue = valueAt(geometry.textureScaleX(), coordinate, 0);
+            int scaleYValue = valueAt(geometry.textureScaleY(), coordinate, 0);
+            int scaleZValue = valueAt(geometry.textureScaleZ(), coordinate, 0);
+            double scaleX;
+            double scaleY;
+            double scaleZ;
+            if (type == 1) {
+                if (scaleXValue == 0) {
+                    scaleX = 1.0;
+                    scaleZ = 1.0;
+                } else if (scaleXValue < 0) {
+                    scaleX = -scaleXValue / 1024.0;
+                    scaleZ = 1.0;
+                } else {
+                    scaleX = 1.0;
+                    scaleZ = scaleXValue / 1024.0;
+                }
+                scaleY = reciprocalOrOne(scaleYValue / 64.0);
+            } else if (type == 2) {
+                scaleX = reciprocalOrOne(scaleXValue / 64.0);
+                scaleY = reciprocalOrOne(scaleYValue / 64.0);
+                scaleZ = reciprocalOrOne(scaleZValue / 64.0);
+            } else {
+                scaleX = scaleXValue / 1024.0;
+                scaleY = scaleYValue / 1024.0;
+                scaleZ = scaleZValue / 1024.0;
+            }
+            int mappingOffset = coordinate * 3;
+            float[] matrix = buildRotationScaleMatrix(mapping[mappingOffset], mapping[mappingOffset + 1],
+                    mapping[mappingOffset + 2], valueAt(geometry.textureRotations(), coordinate, 0),
+                    scaleX, scaleY, scaleZ);
+            result[coordinate] = new TextureProjection(type,
+                    (minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2,
+                    valueAt(geometry.textureDirections(), coordinate, 0),
+                    valueAt(geometry.textureSpeeds(), coordinate, 0) / 256.0,
+                    valueAt(geometry.textureTranslationsU(), coordinate, 0) / 256.0,
+                    valueAt(geometry.textureTranslationsV(), coordinate, 0) / 256.0,
+                    type == 1 ? valueAt(geometry.textureScaleZ(), coordinate, 0) / 1024.0 : 0,
+                    matrix, type == 2 ? scaleX : 1.0, type == 2 ? scaleY : 1.0,
+                    type == 2 ? scaleZ : 1.0);
+        }
+        return result;
+    }
+
+    private static double reciprocalOrOne(double value) {
+        return value == 0.0 ? 1.0 : 1.0 / value;
+    }
+
+    private static TextureUv simpleTextureUv(int[] positions, int p, int m, int n, int a, int b, int c) {
+        if (!validVertex(positions, p) || !validVertex(positions, m) || !validVertex(positions, n)
+                || !validVertex(positions, a) || !validVertex(positions, b) || !validVertex(positions, c)) {
+            return TextureUv.EMPTY;
+        }
+        double originX = positions[p * 3], originY = positions[p * 3 + 1], originZ = positions[p * 3 + 2];
+        double edgeU_X = positions[m * 3] - originX;
+        double edgeU_Y = positions[m * 3 + 1] - originY;
+        double edgeU_Z = positions[m * 3 + 2] - originZ;
+        double edgeV_X = positions[n * 3] - originX;
+        double edgeV_Y = positions[n * 3 + 1] - originY;
+        double edgeV_Z = positions[n * 3 + 2] - originZ;
+        double faceNormalX = edgeU_Y * edgeV_Z - edgeU_Z * edgeV_Y;
+        double faceNormalY = edgeU_Z * edgeV_X - edgeU_X * edgeV_Z;
+        double faceNormalZ = edgeU_X * edgeV_Y - edgeU_Y * edgeV_X;
+        double uBasisX = edgeV_Y * faceNormalZ - edgeV_Z * faceNormalY;
+        double uBasisY = edgeV_Z * faceNormalX - edgeV_X * faceNormalZ;
+        double uBasisZ = edgeV_X * faceNormalY - edgeV_Y * faceNormalX;
+        double denominator = uBasisX * edgeU_X + uBasisY * edgeU_Y + uBasisZ * edgeU_Z;
+        if (Math.abs(denominator) < 1.0e-9) return TextureUv.EMPTY;
+        double[] u = new double[3];
+        int[] corners = {a, b, c};
+        for (int index = 0; index < 3; index++) {
+            int vertex = corners[index] * 3;
+            u[index] = (uBasisX * (positions[vertex] - originX) + uBasisY * (positions[vertex + 1] - originY)
+                    + uBasisZ * (positions[vertex + 2] - originZ)) / denominator;
+        }
+        double vBasisX = edgeU_Y * faceNormalZ - edgeU_Z * faceNormalY;
+        double vBasisY = edgeU_Z * faceNormalX - edgeU_X * faceNormalZ;
+        double vBasisZ = edgeU_X * faceNormalY - edgeU_Y * faceNormalX;
+        denominator = vBasisX * edgeV_X + vBasisY * edgeV_Y + vBasisZ * edgeV_Z;
+        if (Math.abs(denominator) < 1.0e-9) return TextureUv.EMPTY;
+        double[] v = new double[3];
+        for (int index = 0; index < 3; index++) {
+            int vertex = corners[index] * 3;
+            v[index] = (vBasisX * (positions[vertex] - originX) + vBasisY * (positions[vertex + 1] - originY)
+                    + vBasisZ * (positions[vertex + 2] - originZ)) / denominator;
+        }
+        float u0 = (float) u[0], u1 = (float) u[1], u2 = (float) u[2];
+        float v0 = (float) v[0], v1 = (float) v[1], v2 = (float) v[2];
+        if (u1 - u0 > 0.99f && u1 - u0 < 1.1f) u1 = 1.0f;
+        if (u2 - u1 > 0.99f && u2 - u1 < 1.1f) u2 = 1.0f;
+        if (u0 - u2 > 0.99f && u0 - u2 < 1.1f) u0 = 1.0f;
+        if (u0 - u1 > 0.99f && u0 - u1 < 1.1f) u0 = 1.0f;
+        if (u1 - u2 > 0.99f && u1 - u2 < 1.1f) u1 = 1.0f;
+        if (u2 - u0 > 0.99f && u2 - u0 < 1.1f) u2 = 1.0f;
+        return new TextureUv(u0, v0, u1, v1, u2, v2);
+    }
+
+    private static boolean validVertex(int[] positions, int vertex) {
+        return vertex >= 0 && vertex * 3 + 2 < positions.length;
+    }
+
+    private static float[] buildRotationScaleMatrix(int mappingP, int mappingM, int mappingN, int rotation,
+                                                      double scaleX, double scaleY, double scaleZ) {
+        double axisX = 1.0;
+        double axisZ = 0.0;
+        double normalComponent = mappingM / 32767.0;
+        double normalSine = -Math.sqrt(Math.max(0.0, 1.0 - normalComponent * normalComponent));
+        double oneMinusNormalComponent = 1.0 - normalComponent;
+        double length = Math.sqrt((double) mappingP * mappingP + (double) mappingN * mappingN);
+        if (length != 0.0) {
+            axisX = -mappingN / length;
+            axisZ = mappingP / length;
+        }
+        float[] base = new float[]{
+                (float) (normalComponent + axisX * axisX * oneMinusNormalComponent),
+                (float) (axisZ * normalSine),
+                (float) (axisZ * axisX * oneMinusNormalComponent),
+                (float) (-axisZ * normalSine), (float) normalComponent,
+                (float) (axisX * normalSine),
+                (float) (axisX * axisZ * oneMinusNormalComponent),
+                (float) (-axisX * normalSine),
+                (float) (normalComponent + axisZ * axisZ * oneMinusNormalComponent)
+        };
+        double cosine = Math.cos(rotation * Math.PI / 128.0);
+        double sine = Math.sin(rotation * Math.PI / 128.0);
+        float[] rotated = new float[]{
+                (float) cosine, 0.0f, (float) sine,
+                0.0f, 1.0f, 0.0f,
+                (float) -sine, 0.0f, (float) cosine
+        };
+        float[] result = new float[9];
+        for (int row = 0; row < 3; row++) {
+            for (int column = 0; column < 3; column++) {
+                result[row * 3 + column] = rotated[row * 3] * base[column]
+                        + rotated[row * 3 + 1] * base[3 + column]
+                        + rotated[row * 3 + 2] * base[6 + column];
+            }
+        }
+        for (int column = 0; column < 3; column++) result[column] *= (float) scaleX;
+        for (int column = 0; column < 3; column++) result[3 + column] *= (float) scaleY;
+        for (int column = 0; column < 3; column++) result[6 + column] *= (float) scaleZ;
+        return result;
+    }
+
+    private static float[] applyMatrix(float[] matrix, double x, double y, double z) {
+        return new float[]{
+                (float) (x * matrix[0] + y * matrix[1] + z * matrix[2]),
+                (float) (x * matrix[3] + y * matrix[4] + z * matrix[5]),
+                (float) (x * matrix[6] + y * matrix[7] + z * matrix[8])
+        };
+    }
+
+    private static float[] position(int[] positions, int index) {
+        int offset = index * 3;
+        return new float[]{positions[offset], positions[offset + 1], positions[offset + 2]};
+    }
+
+    private static TextureUv fixSeams(TextureUv uv, int type, int direction, double scaleZ) {
+        float u0 = uv.u0, u1 = uv.u1, u2 = uv.u2;
+        float v0 = uv.v0, v1 = uv.v1, v2 = uv.v2;
+        if (type == 1) {
+            double half = scaleZ / 2.0;
+            if ((direction & 1) == 0) {
+                if (u1 - u0 > half) u1 -= (float) scaleZ; else if (u0 - u1 > half) u1 += (float) scaleZ;
+                if (u2 - u0 > half) u2 -= (float) scaleZ; else if (u0 - u2 > half) u2 += (float) scaleZ;
+            } else {
+                if (v1 - v0 > half) v1 -= (float) scaleZ; else if (v0 - v1 > half) v1 += (float) scaleZ;
+                if (v2 - v0 > half) v2 -= (float) scaleZ; else if (v0 - v2 > half) v2 += (float) scaleZ;
+            }
+        } else if (type == 3) {
+            if ((direction & 1) == 0) {
+                if (u1 - u0 > 0.5f) u1--; else if (u0 - u1 > 0.5f) u1++;
+                if (u2 - u0 > 0.5f) u2--; else if (u0 - u2 > 0.5f) u2++;
+            } else {
+                if (v1 - v0 > 0.5f) v1--; else if (v0 - v1 > 0.5f) v1++;
+                if (v2 - v0 > 0.5f) v2--; else if (v0 - v2 > 0.5f) v2++;
+            }
+        }
+        return new TextureUv(u0, v0, u1, v1, u2, v2);
+    }
+
+    private record TextureUv(float u0, float v0, float u1, float v1, float u2, float v2) {
+        private static final TextureUv EMPTY = new TextureUv(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    private static final class TextureProjection {
+        private final int type;
+        private final double centerX;
+        private final double centerY;
+        private final double centerZ;
+        private final int direction;
+        private final double speed;
+        private final double uOffset;
+        private final double vOffset;
+        private final double scaleZ;
+        private final float[] matrix;
+        private final double normalScaleX;
+        private final double normalScaleY;
+        private final double normalScaleZ;
+
+        private TextureProjection(int type, double centerX, double centerY, double centerZ,
+                                  int direction, double speed, double uOffset, double vOffset,
+                                  double scaleZ, float[] matrix,
+                                  double normalScaleX, double normalScaleY, double normalScaleZ) {
+            this.type = type;
+            this.centerX = centerX;
+            this.centerY = centerY;
+            this.centerZ = centerZ;
+            this.direction = direction;
+            this.speed = speed;
+            this.uOffset = uOffset;
+            this.vOffset = vOffset;
+            this.scaleZ = scaleZ;
+            this.matrix = matrix;
+            this.normalScaleX = normalScaleX;
+            this.normalScaleY = normalScaleY;
+            this.normalScaleZ = normalScaleZ;
+        }
+
+        private TextureUv cylindrical(int[] positions, int a, int b, int c) {
+            return mapThree(positions, a, b, c, this::cylindrical);
+        }
+
+        private float[] cylindrical(int[] positions, int index) {
+            float[] point = position(positions, index);
+            point[0] -= centerX;
+            point[1] -= centerY;
+            point[2] -= centerZ;
+            float[] mapped = applyMatrix(matrix, point[0], point[1], point[2]);
+            double u = Math.atan2(mapped[0], mapped[2]) / (Math.PI * 2.0) + 0.5;
+            if (scaleZ != 1.0) u *= scaleZ;
+            double v = mapped[1] + 0.5 + speed;
+            return rotateDirection(u, v, direction);
+        }
+
+        private TextureUv planar(int[] positions, int a, int b, int c) {
+            float[] first = position(positions, a);
+            float[] second = position(positions, b);
+            float[] third = position(positions, c);
+            double edge1X = second[0] - first[0];
+            double edge1Y = second[1] - first[1];
+            double edge1Z = second[2] - first[2];
+            double edge2X = third[0] - first[0];
+            double edge2Y = third[1] - first[1];
+            double edge2Z = third[2] - first[2];
+            float[] normal = applyMatrix(matrix,
+                    edge1Y * edge2Z - edge2Y * edge1Z,
+                    edge1Z * edge2X - edge2Z * edge1X,
+                    edge1X * edge2Y - edge2X * edge1Y);
+            int scaleType = dominantAxis(normal[0] / normalScaleX,
+                    normal[1] / normalScaleY, normal[2] / normalScaleZ);
+            return mapThree(positions, a, b, c, (points, index) -> planar(points, index, scaleType));
+        }
+
+        private float[] planar(int[] positions, int index, int scaleType) {
+            float[] point = position(positions, index);
+            point[0] -= centerX;
+            point[1] -= centerY;
+            point[2] -= centerZ;
+            float[] mapped = applyMatrix(matrix, point[0], point[1], point[2]);
+            double u;
+            double v;
+            if (scaleType == 0) {
+                u = mapped[0] + speed + 0.5;
+                v = -mapped[2] + vOffset + 0.5;
+            } else if (scaleType == 1) {
+                u = mapped[0] + speed + 0.5;
+                v = mapped[2] + vOffset + 0.5;
+            } else if (scaleType == 2) {
+                u = -mapped[0] + speed + 0.5;
+                v = -mapped[1] + uOffset + 0.5;
+            } else if (scaleType == 3) {
+                u = mapped[0] + speed + 0.5;
+                v = -mapped[1] + uOffset + 0.5;
+            } else if (scaleType == 4) {
+                u = mapped[2] + vOffset + 0.5;
+                v = -mapped[1] + uOffset + 0.5;
+            } else {
+                u = -mapped[2] + vOffset + 0.5;
+                v = -mapped[1] + uOffset + 0.5;
+            }
+            return rotateDirection(u, v, direction);
+        }
+
+        private TextureUv spherical(int[] positions, int a, int b, int c) {
+            return mapThree(positions, a, b, c, this::spherical);
+        }
+
+        private float[] spherical(int[] positions, int index) {
+            float[] point = position(positions, index);
+            point[0] -= centerX;
+            point[1] -= centerY;
+            point[2] -= centerZ;
+            float[] mapped = applyMatrix(matrix, point[0], point[1], point[2]);
+            double length = Math.sqrt((double) mapped[0] * mapped[0] + (double) mapped[1] * mapped[1]
+                    + (double) mapped[2] * mapped[2]);
+            if (length == 0.0) return new float[]{0.0f, 0.0f};
+            double u = Math.atan2(mapped[0], mapped[2]) / (Math.PI * 2.0) + 0.5;
+            double v = Math.asin(mapped[1] / length) / Math.PI + 0.5 + speed;
+            return rotateDirection(u, v, direction);
+        }
+
+        private static TextureUv mapThree(int[] positions, int a, int b, int c,
+                                           java.util.function.BiFunction<int[], Integer, float[]> mapper) {
+            float[] first = mapper.apply(positions, a);
+            float[] second = mapper.apply(positions, b);
+            float[] third = mapper.apply(positions, c);
+            return new TextureUv(first[0], first[1], second[0], second[1], third[0], third[1]);
+        }
+
+        private static float[] rotateDirection(double u, double v, int direction) {
+            return switch (direction) {
+                case 1 -> new float[]{(float) -v, (float) u};
+                case 2 -> new float[]{(float) -u, (float) -v};
+                case 3 -> new float[]{(float) v, (float) -u};
+                default -> new float[]{(float) u, (float) v};
+            };
+        }
+
+        private static int dominantAxis(double x, double y, double z) {
+            double ax = Math.abs(x);
+            double ay = Math.abs(y);
+            double az = Math.abs(z);
+            if (ay > ax && ay > az) return y > 0.0 ? 0 : 1;
+            if (az > ax && az > ay) return z > 0.0 ? 2 : 3;
+            return x > 0.0 ? 4 : 5;
+        }
+    }
+
+    private static int contourDelta(WorldDocument document, WorldObject object,
+                                    int footprintWidth, int footprintLength,
+                                    int x, int z, int vertexY, int type, int parameter,
+                                    List<RawVertex> transformed) {
+        if (type < 0) return 0;
+        // x/z already contain the footprint-centred model placement. Adding
+        // the footprint centre a second time shifts contoured models by half
+        // a tile (or more for multi-tile objects).
+        int localX = object.x() * 128 + x;
+        int localZ = object.y() * 128 + z;
+        int heightPlane = object.plane();
+        if (object.plane() == 0 && document.planes() > 1
+                && OsrsTileFlags.hasBridge(document.tile(1, object.x(), object.y())
+                .snapshot().flags())) {
+            heightPlane = 1;
+        }
+        int surface = sampleHeight(document, heightPlane, localX, localZ);
+        int center = sampleHeight(document, heightPlane,
+                object.x() * 128 + footprintWidth * 64,
+                object.y() * 128 + footprintLength * 64);
+        int delta = surface - center;
+        if (type == 2) {
+            // TSPS/RuneLite's partial contour uses the model's downward
+            // height ratio. Cache adapters that expose this mode provide the
+            // 0..65536 cutoff in parameter.
+            int modelHeight = transformed.stream().mapToInt(vertex -> -vertex.y).max().orElse(1);
+            int ratio = Math.max(0, Math.min(65536,
+                    (vertexY << 16) / Math.max(1, modelHeight)));
+            int cutoff = parameter > 0 ? parameter : 65536;
+            if (ratio >= cutoff) return 0;
+            return delta * (cutoff - ratio) / cutoff;
+        }
+        if (type == 3 && parameter != 0) {
+            int limit = Math.abs(parameter);
+            return Math.max(-limit, Math.min(limit, delta));
+        }
+        if ((type == 4 || type == 5) && document.planes() > heightPlane + 1) {
+            int abovePlane = heightPlane + 1;
+            int aboveSurface = sampleHeight(document, abovePlane, localX, localZ);
+            int modelMinY = transformed.stream().mapToInt(vertex -> vertex.y).min().orElse(0);
+            int modelMaxY = transformed.stream().mapToInt(vertex -> vertex.y).max().orElse(0);
+            int modelHeight = Math.max(1, modelMaxY - modelMinY);
+            if (type == 4) {
+                // TSPS type 4 uses the plane above and preserves the model's
+                // vertical span while attaching it to the upper surface.
+                return aboveSurface - center + modelHeight;
+            }
+            // TSPS type 5 blends the height difference between the current
+            // and upper surfaces through the model's vertical span.
+            int deltaHeight = surface - aboveSurface;
+            return ((vertexY * 256 / modelHeight) * deltaHeight >> 8)
+                    - (center - surface);
+        }
+        return delta;
+    }
+
+    private static int objectCenterHeight(WorldDocument document, WorldObject object,
+                                          int footprintWidth, int footprintLength) {
+        int plane = object.plane();
+        if (object.plane() == 0 && document.planes() > 1
+                && OsrsTileFlags.hasBridge(document.tile(1, object.x(), object.y())
+                .snapshot().flags())) {
+            plane = 1;
+        }
+        return sampleHeight(document, plane,
+                object.x() * 128 + footprintWidth * 64,
+                object.y() * 128 + footprintLength * 64);
+    }
+
+    /** Bilinearly samples the shared-corner height surface used by terrain. */
+    private static int sampleHeight(WorldDocument document, int plane, int worldX, int worldY) {
+        int safePlane = Math.max(0, Math.min(document.planes() - 1, plane));
+        int tileX = Math.max(0, Math.min(document.width() - 1, Math.floorDiv(worldX, 128)));
+        int tileY = Math.max(0, Math.min(document.length() - 1, Math.floorDiv(worldY, 128)));
+        int dx = Math.max(0, Math.min(128, worldX - tileX * 128));
+        int dy = Math.max(0, Math.min(128, worldY - tileY * 128));
+        // The tile owns the four shared-corner values used by the terrain
+        // packet. Resolving a corner again from absolute coordinates is
+        // ambiguous at x/y boundaries and can accidentally read the adjacent
+        // tile's south-west value instead of this tile's north edge.
+        TileSnapshot tile = document.tile(safePlane, tileX, tileY).snapshot();
+        int southWest = tile.southWestHeight();
+        int southEast = tile.southEastHeight();
+        int northWest = tile.northWestHeight();
+        int northEast = tile.northEastHeight();
+        int south = interpolate(southWest, southEast, dx);
+        int north = interpolate(northWest, northEast, dx);
+        return interpolate(south, north, dy);
+    }
+
+    private static int interpolate(int first, int second, int amount) {
+        return first + (second - first) * amount / 128;
+    }
+
+    private static List<Normal> calculateNormals(List<RawVertex> vertices,
+                                                   ModelGeometryView geometry, boolean mirror) {
+        List<Normal> normals = new ArrayList<>();
+        for (int index = 0; index < vertices.size(); index++) normals.add(new Normal(0, 0, 0, 0));
+        int[] indices = geometry.triangleIndices();
+        for (int face = 0; face < geometry.triangleCount(); face++) {
+            int index = face * 3;
+            int a = indices[index];
+            int b = indices[index + 1];
+            int c = indices[index + 2];
+            if (mirror) {
+                int swap = b;
+                b = c;
+                c = swap;
+            }
+            Normal normal = faceNormal(vertices.get(a), vertices.get(b), vertices.get(c));
+            addNormal(normals, a, normal);
+            addNormal(normals, b, normal);
+            addNormal(normals, c, normal);
+        }
+        // RuneLite/TSPS retain the accumulated components and the face-count
+        // magnitude. Lighting divides by that magnitude; normalizing the
+        // components here while retaining the count would double-attenuate
+        // smooth multi-face models.
+        return List.copyOf(normals);
+    }
+
+    private static void addNormal(List<Normal> normals, int index, Normal value) {
+        Normal current = normals.get(index);
+        normals.set(index, new Normal(current.x + value.x, current.y + value.y,
+                current.z + value.z, current.magnitude + 1));
+    }
+
+    private static Normal faceNormal(RawVertex first, RawVertex second, RawVertex third) {
+        int x1 = second.x - first.x;
+        int y1 = second.y - first.y;
+        int z1 = second.z - first.z;
+        int x2 = third.x - first.x;
+        int y2 = third.y - first.y;
+        int z2 = third.z - first.z;
+        int x = y1 * z2 - y2 * z1;
+        int y = z1 * x2 - z2 * x1;
+        int z = x1 * y2 - x2 * y1;
+        while (Math.abs(x) > 8192 || Math.abs(y) > 8192 || Math.abs(z) > 8192) {
+            x >>= 1;
+            y >>= 1;
+            z >>= 1;
+        }
+        int magnitude = Math.max(1, (int) Math.sqrt((long) x * x + (long) y * y + (long) z * z));
+        return new Normal(x * 256 / magnitude, y * 256 / magnitude, z * 256 / magnitude, 1);
+    }
+
+    private int lightness(Normal normal, ObjectAppearanceView appearance) {
+        int ambient = 64 + appearance.ambient();
+        int contrast = 768 + appearance.contrast();
+        int intensity = Math.max(1, (lighting.lightMagnitude() * contrast) >> 8);
+        return ambient + (lighting.lightX() * normal.x + lighting.lightY() * normal.y
+                + lighting.lightZ() * normal.z) / Math.max(1, intensity * Math.max(1, normal.magnitude));
+    }
+
+    /** Flat faces use the client face-normal denominator (1.5 × intensity). */
+    private int flatLightness(Normal normal, ObjectAppearanceView appearance) {
+        int ambient = 64 + appearance.ambient();
+        int contrast = 768 + appearance.contrast();
+        int intensity = Math.max(1, (lighting.lightMagnitude() * contrast) >> 8);
+        int denominator = Math.max(1, intensity + (intensity >> 1));
+        return ambient + (lighting.lightX() * normal.x + lighting.lightY() * normal.y
+                + lighting.lightZ() * normal.z) / denominator;
+    }
+
+    private static int blendLight(int hsl, int lightness) {
+        int light = (hsl & 127) * lightness >> 7;
+        return (hsl & 0xFF80) + clamp(light, 2, 126);
+    }
+
+    private static int recolor(int color, Map<Integer, Integer> replacements) {
+        return replacements.getOrDefault(color, color);
+    }
+
+    private static int retexture(int texture, Map<Integer, Integer> replacements) {
+        return replacements.getOrDefault(texture, texture);
+    }
+
+    private static int[] toUnsignedColors(short[] colors) {
+        int[] result = new int[colors.length];
+        for (int index = 0; index < colors.length; index++) result[index] = colors[index] & 0xFFFF;
+        return result;
+    }
+
+    private static int valueAt(int[] values, int index, int fallback) {
+        return index < values.length ? values[index] : fallback;
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static float normalized(int value, List<RawVertex> vertices, boolean xAxis) {
+        int min = Integer.MAX_VALUE;
+        int max = Integer.MIN_VALUE;
+        for (RawVertex vertex : vertices) {
+            int candidate = xAxis ? vertex.x : vertex.z;
+            min = Math.min(min, candidate);
+            max = Math.max(max, candidate);
+        }
+        return max == min ? 0.0f : (value - min) / (float) (max - min);
+    }
+
+    private static int[] bounds(List<ModelVertex> vertices) {
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (ModelVertex vertex : vertices) {
+            minX = Math.min(minX, vertex.x());
+            minY = Math.min(minY, vertex.y());
+            minZ = Math.min(minZ, vertex.z());
+            maxX = Math.max(maxX, vertex.x());
+            maxY = Math.max(maxY, vertex.y());
+            maxZ = Math.max(maxZ, vertex.z());
+        }
+        return new int[]{minX, minY, minZ, maxX, maxY, maxZ};
+    }
+
+    private static final class PacketParts {
+        private final List<ModelVertex> vertices = new ArrayList<>();
+        private final List<ModelTriangle> triangles = new ArrayList<>();
+        private final List<TextureTriangle> textureTriangles = new ArrayList<>();
+    }
+
+    private record RawVertex(int x, int y, int z) {
+    }
+
+    private record ModelVariant(int sourceType, int rotation, int decorX, int decorZ,
+                                boolean rotateAfterScale) {
+    }
+
+    private record Normal(int x, int y, int z, int magnitude) {
+    }
+}

@@ -53,7 +53,7 @@ The FileStore switch milestone added three verified capability slices. First,
 `docs/FILESTORE_CAPABILITY_AUDIT.md` records the 18-row capability matrix,
 the hosting-repo dependency policy, and the deterministic 2.4.19→3.0.2
 upgrade spike (full suite and boundary gates pass on both versions with zero
-source changes; the pin stays at 2.4.19 until external parity evidence is
+source changes; the application pin is now 3.0.2; external parity evidence is
 re-run). Second, the external `OSRSPlugin` service-loader plugin was retired:
 the ten renderer compatibility loaders moved inside the Client compatibility
 boundary as `com.rspsi.compat.osrs.OsrsCompatibilityLoaders`, they still read
@@ -111,8 +111,8 @@ history, asset facade, or plugin scene contracts.
 | Regions, chunks, world coordinates, holes, neighbors, instances | World/region/chunk contracts, 9-region window verification, 676-transform revision-240 instance fixture with zero terrain/object differences | PASS for covered fixtures; broader instance editing open |
 | Bridges and authored/effective planes | `WorldDocument.effectivePlane`, bridge links, bridge collision relinking, bridge-heavy `(50,50)` evidence | PASS for covered semantics |
 | Object categories, orientations, footprints, appearance/config data | Neutral object views, `RenderObject`, OpenRune definition adapter, wall-heavy and bridge-heavy location/geometry parity | PASS for covered semantics; broader definition corpus open |
-| Neutral 3D terrain render packet | `TerrainMeshBuilder` topology, terrain materials, and directional light baseline exist; RuneLite review shows the missing final corner/face colors, texture coordinates, flatness, overlay blending, and client-equivalent floor-light derivation | PARTIAL: topology is covered, render-ready terrain appearance is not |
-| Neutral model/material render packet | FileStore/OpenRune exposes model geometry, texture triangles, render types, priorities, normals, and object transform fields; RSPSi currently exports only a reduced geometry view and does not resolve shape/type-specific transformed models into the scene | PARTIAL: adapter data is available, neutral render projection is incomplete |
+| Neutral 3D terrain render packet | `TerrainMeshBuilder` topology, terrain materials, and directional light baseline exist; the 2026-09-17 audit ([`RENDER_PARITY_GAP_ANALYSIS_2026-09-17.md`](RENDER_PARITY_GAP_ANALYSIS_2026-09-17.md)) confirmed client-domain bugs in `TerrainAppearanceBuilder` blending (the verified `MinimapBuilder` implementation is the correct reference), missing per-corner light application, per-region blend windows, and unfilled render-packet contracts | PARTIAL: topology is covered, render-ready terrain appearance is not; P0–P2 of the gap analysis are the gate |
+| Neutral model/material render packet | FileStore/OpenRune exposes model geometry, texture triangles, render types, priorities, normals, and object transform fields; the gap analysis also recorded the missing definition inputs (castsShadow, occludes, mergeNormals, contour type/param) the TSPS-ordered transform pipeline needs | PARTIAL: adapter data is available, neutral render projection is incomplete |
 | Canonical 3D scene composition and visibility | `RenderScene` contains terrain/object/bridge foundations; RuneLite review identifies missing complete tile layers, camera/frustum visibility, occluders, roof policy, depth/priority ordering, and a real 3D backend | NOT VERIFIED: current canonical JavaFX surface is a top-down preview and legacy `SceneGraph` is compatibility-only |
 | TSPS scene/render-packet adjudication | Pinned TSPS review confirms the implementation details for radius-five underlay blending, final terrain HSL/UV/hidden faces, model-type selection, contouring, merged normals, bridge projection, and opaque/alpha packet fields; conflicts with mutable TSPS ownership and client collision semantics are resolved in [`TSPS_SCENE_REFERENCE.md`](TSPS_SCENE_REFERENCE.md) | PASS as a source review; implementation fixtures remain open |
 | Collision semantics | OpenRune route/movement vocabulary, bridge-aware/object-derived collision, deterministic direction/size vectors, live collision construction, explicit fixture semantics | PARTIAL: TSPS `collision.json` now declares `CLIENT_CLIP_TYPE`; an independent `OPENRUNE_ROUTE` fixture is still required |
@@ -164,6 +164,10 @@ The immediate code additions are intentionally small and foundation-safe:
 
 ## Next work, in order
 
+0. Execute the render-parity plan in
+   [`RENDER_PARITY_GAP_ANALYSIS_2026-09-17.md`](RENDER_PARITY_GAP_ANALYSIS_2026-09-17.md)
+   starting at P0 (terrain appearance domain fixes), before any GPU adapter
+   or renderer parity claim.
 1. Collect the manual JavaFX smoke evidence after the macOS desktop is
    unlocked, including open/edit/undo/save/reopen/recovery, controlled
    workspace focus behavior, and plugin toggle/restart persistence.

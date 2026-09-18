@@ -6,14 +6,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class StandardWorkspaceCatalogTest {
     @Test
-    void standardCatalogContainsTheFiveControlledWorkspaces() {
+    void standardCatalogContainsTheMapEditorWorkspace() {
         WorkspaceCatalog catalog = StandardWorkspaceCatalog.create();
 
-        assertEquals(java.util.List.of("map", "terrain", "objects", "collision", "validation-debug", "plugins"),
+        assertEquals(java.util.List.of("map"),
                 catalog.workspaces().stream().map(WorkspaceDefinition::id).toList());
         assertEquals(DockRegion.CENTER, catalog.panel("viewport").preferredRegion());
+        assertEquals(DockRegion.CENTER, catalog.panel("tool-context").preferredRegion());
+        assertEquals(DockRegion.CENTER, catalog.panel("selector-strip").preferredRegion());
         assertEquals(DockRegion.LEFT, catalog.panel("tools").preferredRegion());
+        assertEquals(DockRegion.BOTTOM, catalog.panel("floor-palette").preferredRegion());
         assertEquals(DockRegion.BOTTOM, catalog.panel("plugins").preferredRegion());
+        assertEquals(DockRegion.RIGHT, catalog.panel("outliner").preferredRegion());
+        assertEquals(DockRegion.RIGHT, catalog.panel("right-tool-rail").preferredRegion());
+        assertEquals(DockRegion.RIGHT, catalog.panel("settings-panel").preferredRegion());
     }
 
     @Test

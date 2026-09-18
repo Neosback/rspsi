@@ -2,7 +2,7 @@
 
 ## Target
 
-The spike is pinned to OpenRune FileStore `2.4.19` and uses the published
+The application is pinned to OpenRune FileStore `3.0.2` and uses the published
 Maven-compatible repository declared in the root Gradle build. The selected
 modules are `filesystem`, `filestore`, `osrs-fs`, `osrs`, and `definition`.
 

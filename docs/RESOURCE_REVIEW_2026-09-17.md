@@ -91,11 +91,14 @@ static loaders.
 `Choose Client Base.md` is useful for a future browser/web client decision. Its
 TypeScript, React/Tauri, WebGL/WebGPU, and xRSPS/Neosback recommendations do
 not replace the current JVM desktop editor foundation. The present product
-remains Java 21 with JavaFX as the reference frontend, a neutral scene and
-command contract, and a future ImGui adapter over those same contracts. There
-will be no Kotlin rewrite, LWJGL/OpenGL renderer replacement, WebGPU migration,
-or React/Tauri shell added as a foundation prerequisite. Each can be evaluated
-later as an isolated frontend or renderer after parity evidence exists.
+remains Java 21 with JavaFX as the shell, a neutral scene and command contract,
+and a future ImGui adapter over those same contracts. There will be no Kotlin
+rewrite, WebGPU migration, or React/Tauri shell added as a foundation
+prerequisite. The selected long-term desktop viewport is now an embedded
+LWJGL/OpenGL surface hosted by JavaFX. It is an isolated packet consumer, not
+a replacement for JavaFX, the neutral scene model, or the software parity
+renderer, and remains opt-in until interaction and client-parity acceptance
+passes.
 
 This keeps the repository coherent: one production cache boundary, one
 authored world/session/history model, one scene contract, one plugin registry,
@@ -135,7 +138,7 @@ FileStore's filesystem and definition implementations, but Studio sees
 FileStore model/render helper classes are not allowed to become Studio's
 canonical model or renderer.
 
-The current pinned application version is `2.4.19`. The research checkout has
+The current pinned application version is `3.0.2`. The research checkout has
 newer build metadata, so upgrades are compatibility events, not routine
 dependency bumps. Every upgrade must rerun cache, map, location, definition,
 output, and scene parity evidence.
@@ -371,3 +374,20 @@ implementation is translated into frontend-neutral marker/diagnostic models;
 its GPU path informs packet fields and invalidation but does not own RSPSi
 scene interpretation. OpenRune FileStore remains the only production cache and
 definition path.
+
+## JavaFX shell and visual foundation intake
+
+The first production frontend is now a controlled JavaFX shell rather than a
+collection of legacy FXML panels. AtlantaFX Primer Dark supplies the base CSS
+theme, Ikonli Material Design supplies semantic icon glyphs, and ControlsFX is
+retained only for utility controls. DockFX and MaterialFX are intentionally not
+added because a second docking/styling system would compete with the neutral
+workspace contracts.
+
+The implemented shell is described in
+[`UI_UX_FOUNDATION.md`](UI_UX_FOUNDATION.md). Its layout persistence,
+detachable utility panels, workspace tabs, context toolbar, outliner,
+inspector, and status row remain JavaFX-layer state. No theme or icon library
+may enter editor-core, and no panel layout may enter project/world data. The
+current legacy viewport remains a compatibility host until the independent
+scene and renderer acceptance gates pass.

@@ -58,10 +58,17 @@ public final class RenderSceneBuilder {
      * a renderer concern until dirty-region consumers are connected.
      */
     public RenderScene build(WorldDocument document) {
+        return build(document, 0);
+    }
+
+    /** Builds a scene snapshot at an explicit client-cycle position. */
+    public RenderScene build(WorldDocument document, int clientCycle) {
         Objects.requireNonNull(document, "document");
+        if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         Map<TileCoordinate, TerrainMesh> meshes = new LinkedHashMap<>();
         Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>();
         Map<TileCoordinate, TerrainAppearance> appearances = new LinkedHashMap<>();
+        Map<TileCoordinate, TerrainRenderPacket> packets = new LinkedHashMap<>();
         Map<TileCoordinate, TerrainAppearance> derivedAppearances = definitions == null
                 ? Map.of() : new TerrainAppearanceBuilder().build(document, definitions);
         Map<TileCoordinate, CollisionTileSnapshot> collision = collision(document);
@@ -84,9 +91,24 @@ public final class RenderSceneBuilder {
                 }
             }
         }
+        TerrainShadowMap shadows = definitions == null ? null : TerrainShadowMap.from(document, definitions);
+        Map<TileCoordinate, TerrainLight> lighting = TerrainLighting.build(document, lightingProfile, shadows);
+        List<ModelRenderPacket> modelPackets = definitions == null
+                ? List.of() : new ModelPacketBuilder(definitions, lightingProfile).build(document, clientCycle);
+        if (definitions != null) {
+            TerrainPacketBuilder packetBuilder = new TerrainPacketBuilder();
+            for (Map.Entry<TileCoordinate, TerrainMesh> entry : meshes.entrySet()) {
+                TileCoordinate coordinate = entry.getKey();
+                packets.put(coordinate, packetBuilder.build(coordinate,
+                        entry.getValue(), appearances.get(coordinate), lighting.get(coordinate)));
+            }
+        }
+        Map<Integer, RenderTextureResource> textures = definitions == null ? Map.of()
+                : RenderTextureResourceBuilder.build(definitions, lightingProfile,
+                packets.values(), modelPackets);
         return new RenderScene(document, meshes, materials, appearances,
-                TerrainLighting.build(document, lightingProfile), lightingProfile, collision,
-                objects, renderObjects, document.bridgeLinks());
+                lighting, packets, lightingProfile, collision,
+                objects, renderObjects, modelPackets, document.bridgeLinks(), textures);
     }
 
     /**
@@ -95,16 +117,24 @@ public final class RenderSceneBuilder {
      * floor blend or shared edge makes them part of the affected region.
      */
     public RenderScene update(RenderScene previous, RenderChanges changes) {
+        return update(previous, changes, 0);
+    }
+
+    /** Updates a scene while selecting model animation frames for clientCycle. */
+    public RenderScene update(RenderScene previous, RenderChanges changes, int clientCycle) {
         Objects.requireNonNull(previous, "previous");
         Objects.requireNonNull(changes, "changes");
+        if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         WorldDocument document = previous.document();
         Map<TileCoordinate, TerrainMesh> meshes = new LinkedHashMap<>(previous.terrainMeshes());
         Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>(previous.terrainMaterials());
         Map<TileCoordinate, TerrainAppearance> appearances = new LinkedHashMap<>(previous.terrainAppearances());
+        Map<TileCoordinate, TerrainRenderPacket> packets = new LinkedHashMap<>(previous.terrainPackets());
         Map<TileCoordinate, TerrainAppearance> derivedAppearances = definitions == null
                 ? Map.of() : new TerrainAppearanceBuilder().build(document, definitions);
+        TerrainShadowMap shadows = definitions == null ? null : TerrainShadowMap.from(document, definitions);
         Map<TileCoordinate, TerrainLight> lighting = new LinkedHashMap<>(
-                TerrainLighting.build(document, lightingProfile));
+                TerrainLighting.build(document, lightingProfile, shadows));
         Map<TileCoordinate, CollisionTileSnapshot> collision = collision(document);
         List<RenderObject> renderObjects = new ArrayList<>();
         Set<TileCoordinate> dirtyTiles = changes.dirtyTiles();
@@ -122,9 +152,21 @@ public final class RenderSceneBuilder {
         }
         List<WorldObject> objects = collectObjects(document);
         for (WorldObject object : objects) renderObjects.add(resolve(object));
-        return new RenderScene(document, meshes, materials, appearances, lighting, lightingProfile, collision,
-                objects, renderObjects,
-                document.bridgeLinks());
+        List<ModelRenderPacket> modelPackets = definitions == null
+                ? List.of() : new ModelPacketBuilder(definitions, lightingProfile).build(document, clientCycle);
+        if (definitions != null) {
+            TerrainPacketBuilder packetBuilder = new TerrainPacketBuilder();
+            for (TileCoordinate coordinate : dirtyTiles) {
+                packets.put(coordinate, packetBuilder.build(coordinate, meshes.get(coordinate),
+                        appearances.get(coordinate), lighting.get(coordinate)));
+            }
+        }
+        Map<Integer, RenderTextureResource> textures = definitions == null ? previous.textures()
+                : RenderTextureResourceBuilder.build(definitions, lightingProfile,
+                packets.values(), modelPackets);
+        return new RenderScene(document, meshes, materials, appearances, lighting, packets, lightingProfile, collision,
+                objects, renderObjects, modelPackets,
+                document.bridgeLinks(), textures);
     }
 
     /** Rebuilds the chunks drained from an editor session's invalidation queue. */

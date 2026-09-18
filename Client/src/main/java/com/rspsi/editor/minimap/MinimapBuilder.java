@@ -6,6 +6,7 @@ import com.rspsi.cache.definition.MapSceneSpriteView;
 import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.render.OsrsTerrainColorMath;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -407,25 +408,15 @@ public final class MinimapBuilder {
     }
 
     private static int packHsl(int hue, int saturation, int luminance) {
-        if (luminance > 179) saturation /= 2;
-        if (luminance > 192) saturation /= 2;
-        if (luminance > 217) saturation /= 2;
-        if (luminance > 243) saturation /= 2;
-        return (hue / 4 << 10) + (saturation / 32 << 7) + luminance / 2;
+        return OsrsTerrainColorMath.packHsl(hue, saturation, luminance);
     }
 
     private static int adjustUnderlayLight(int hsl, int light) {
-        light = (hsl & 127) * light >> 7;
-        return (hsl & 0xFF80) + clampLight(light);
+        return OsrsTerrainColorMath.adjustPackedHslLight(hsl, light);
     }
 
     private static int adjustOverlayLight(int hsl, int light) {
-        light = (hsl & 127) * light >> 7;
-        return (hsl & 0xFF80) + clampLight(light);
-    }
-
-    private static int clampLight(int light) {
-        return Math.max(2, Math.min(126, light));
+        return OsrsTerrainColorMath.adjustPackedHslLight(hsl, light);
     }
 
     private static int osrsPaletteColor(int hsl) {

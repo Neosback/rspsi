@@ -42,6 +42,10 @@ import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.RenderSceneBuilder;
 import com.rspsi.editor.render.SceneRenderer;
 import com.rspsi.editor.render.SessionSceneController;
+import com.rspsi.editor.render.OsrsTerrainColorMath;
+import com.rspsi.editor.render.TerrainRenderFace;
+import com.rspsi.editor.render.TerrainRenderPacket;
+import com.rspsi.editor.render.TerrainRenderVertex;
 import com.rspsi.editor.terrain.TerrainFace;
 import com.rspsi.editor.terrain.TerrainMesh;
 import com.rspsi.editor.terrain.TerrainVertex;
@@ -71,12 +75,15 @@ import java.util.function.Consumer;
 /**
  * Small JavaFX adapter for the canonical scene model.
  *
- * <p>This is a top-down semantic preview, not the replacement 3D renderer.
- * It gives the controlled OSRS project workflow a real neutral scene surface
- * while the faithful legacy/GPU renderer remains a separately gated task.</p>
+ * <p>This is a top-down semantic/reference adapter, not the production 3D
+ * renderer. The controlled OSRS project workflow uses it to assemble and
+ * query the neutral scene that feeds the embedded OpenGL surface. Its Canvas
+ * presentation is retained only for explicit reference/test use and is never
+ * mounted by the production viewport shell.</p>
  */
 public final class CanonicalSceneViewport extends StackPane implements SceneRenderer, Viewport, AutoCloseable {
     private static final double TILE_PIXELS = 10.0;
+    private static final double OSRS_PREVIEW_BRIGHTNESS_EXPONENT = 0.6;
 
     private final Canvas canvas = new Canvas();
     private final EditorToolController toolController = new EditorToolController();
@@ -184,6 +191,13 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
     /** Returns the immutable scene view used by neutral plugin consumers. */
     public EditorSceneSnapshot sceneSnapshotView() {
         return EditorSceneSnapshot.from(scene);
+    }
+
+    /** Rebuilds animated model geometry at a client-cycle position. */
+    public void refreshAnimation(int clientCycle) {
+        if (sceneController != null) {
+            sceneController.refreshAnimation(clientCycle);
+        }
     }
 
     public int plane() {
@@ -441,7 +455,9 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
             for (int y = 0; y < length; y++) {
                 TileCoordinate coordinate = new TileCoordinate(plane, x, y);
                 TerrainMesh mesh = scene.terrainMeshes().get(coordinate);
-                if (mesh != null) drawMesh(graphics, mesh, x, y,
+                TerrainRenderPacket packet = scene.terrainPackets().get(coordinate);
+                if (packet != null) drawPacket(graphics, packet, x, y);
+                else if (mesh != null) drawMesh(graphics, mesh, x, y,
                         scene.document().tile(coordinate).snapshot());
             }
         }
@@ -721,6 +737,39 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
                     new double[] {pixel(tileX, a.x()), pixel(tileX, b.x()), pixel(tileX, c.x())},
                     new double[] {pixel(tileY, a.y()), pixel(tileY, b.y()), pixel(tileY, c.y())}, 3);
         }
+    }
+
+    /** Draws the packet-derived terrain path used by neutral renderer backends. */
+    private static void drawPacket(GraphicsContext graphics, TerrainRenderPacket packet,
+                                   int tileX, int tileY) {
+        for (TerrainRenderFace face : packet.faces()) {
+            TerrainRenderVertex a = packet.vertices().get(face.a());
+            TerrainRenderVertex b = packet.vertices().get(face.b());
+            TerrainRenderVertex c = packet.vertices().get(face.c());
+            int colorA = vertexColor(packet, face, a);
+            int colorB = vertexColor(packet, face, b);
+            int colorC = vertexColor(packet, face, c);
+            graphics.setFill(Color.rgb(
+                    ((colorA >> 16 & 0xFF) + (colorB >> 16 & 0xFF) + (colorC >> 16 & 0xFF)) / 3,
+                    ((colorA >> 8 & 0xFF) + (colorB >> 8 & 0xFF) + (colorC >> 8 & 0xFF)) / 3,
+                    ((colorA & 0xFF) + (colorB & 0xFF) + (colorC & 0xFF)) / 3));
+            graphics.fillPolygon(
+                    new double[]{pixel(tileX, a.x()), pixel(tileX, b.x()), pixel(tileX, c.x())},
+                    new double[]{pixel(tileY, a.y()), pixel(tileY, b.y()), pixel(tileY, c.y())}, 3);
+        }
+    }
+
+    private static int vertexColor(TerrainRenderPacket packet, TerrainRenderFace face,
+                                   TerrainRenderVertex vertex) {
+        if (face.textureId() >= 0 && face.material() == 1
+                && packet.overlayMinimapHsl() >= 0) {
+            int light = Math.max(2, Math.min(126, vertex.packedHsl()));
+            return OsrsTerrainColorMath.packedHslToRgb(
+                    OsrsTerrainColorMath.adjustPackedHslLight(packet.overlayMinimapHsl(), light),
+                    OSRS_PREVIEW_BRIGHTNESS_EXPONENT);
+        }
+        return OsrsTerrainColorMath.packedHslToRgb(vertex.packedHsl(),
+                OSRS_PREVIEW_BRIGHTNESS_EXPONENT);
     }
 
     private static double pixel(int tile, int local) {

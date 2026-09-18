@@ -45,6 +45,8 @@ public final class RenderSceneParity {
                             expected.terrainAppearances().get(coordinate), actual.terrainAppearances().get(coordinate));
                     differenceCount += compareValue(differences, "lighting", coordinate,
                             expected.terrainLighting().get(coordinate), actual.terrainLighting().get(coordinate));
+                    differenceCount += compareValue(differences, "terrainPacket", coordinate,
+                            expected.terrainPackets().get(coordinate), actual.terrainPackets().get(coordinate));
                     differenceCount += compareValue(differences, "collision", coordinate,
                             expected.collision().get(coordinate), actual.collision().get(coordinate));
                 }
@@ -54,8 +56,12 @@ public final class RenderSceneParity {
                 expected.objects(), actual.objects());
         differenceCount += compareValue(differences, "renderObjects", null,
                 expected.renderObjects(), actual.renderObjects());
+        differenceCount += compareValue(differences, "modelPackets", null,
+                expected.modelPackets(), actual.modelPackets());
         differenceCount += compareValue(differences, "bridges", null,
                 expected.bridges(), actual.bridges());
+        differenceCount += compareValue(differences, "textures", null,
+                expected.textures(), actual.textures());
         return new Report(comparedTiles, differenceCount, differences);
     }
 

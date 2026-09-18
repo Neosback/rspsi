@@ -24,31 +24,34 @@ public record RenderScene(
         Map<TileCoordinate, TerrainMaterial> terrainMaterials,
         Map<TileCoordinate, TerrainAppearance> terrainAppearances,
         Map<TileCoordinate, TerrainLight> terrainLighting,
+        Map<TileCoordinate, TerrainRenderPacket> terrainPackets,
         LightingProfile lightingProfile,
         Map<TileCoordinate, CollisionTileSnapshot> collision,
         List<WorldObject> objects,
         List<RenderObject> renderObjects,
-        List<BridgeLink> bridges
-) {
+        List<ModelRenderPacket> modelPackets,
+        List<BridgeLink> bridges,
+        Map<Integer, RenderTextureResource> textures
+) implements ResolvedScene {
     /** Compatibility constructor for callers that only need the document. */
     public RenderScene(WorldDocument document) {
-        this(document, Map.of(), Map.of(), Map.of(), Map.of(), LightingProfile.osrs(),
-                Map.of(), List.of(), List.of(), List.of());
+        this(document, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), LightingProfile.osrs(),
+                Map.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
     }
 
     /** Compatibility constructor for callers without definition data. */
     public RenderScene(WorldDocument document, Map<TileCoordinate, TerrainMesh> terrainMeshes,
                        List<WorldObject> objects, List<BridgeLink> bridges) {
-        this(document, terrainMeshes, Map.of(), Map.of(), Map.of(), LightingProfile.osrs(),
-                Map.of(), objects, List.of(), bridges);
+        this(document, terrainMeshes, Map.of(), Map.of(), Map.of(), Map.of(), LightingProfile.osrs(),
+                Map.of(), objects, List.of(), List.of(), bridges, Map.of());
     }
 
     /** Compatibility constructor for scenes with materials but no lighting. */
     public RenderScene(WorldDocument document, Map<TileCoordinate, TerrainMesh> terrainMeshes,
                        Map<TileCoordinate, TerrainMaterial> terrainMaterials,
                        List<WorldObject> objects, List<BridgeLink> bridges) {
-        this(document, terrainMeshes, terrainMaterials, Map.of(), Map.of(), LightingProfile.osrs(),
-                Map.of(), objects, List.of(), bridges);
+        this(document, terrainMeshes, terrainMaterials, Map.of(), Map.of(), Map.of(), LightingProfile.osrs(),
+                Map.of(), objects, List.of(), List.of(), bridges, Map.of());
     }
 
     /** Compatibility constructor for scenes created before collision publication. */
@@ -57,8 +60,8 @@ public record RenderScene(
                        Map<TileCoordinate, TerrainLight> terrainLighting,
                        List<WorldObject> objects, List<RenderObject> renderObjects,
                        List<BridgeLink> bridges) {
-        this(document, terrainMeshes, terrainMaterials, Map.of(), terrainLighting, LightingProfile.osrs(), Map.of(),
-                objects, renderObjects, bridges);
+        this(document, terrainMeshes, terrainMaterials, Map.of(), terrainLighting, Map.of(), LightingProfile.osrs(), Map.of(),
+                objects, renderObjects, List.of(), bridges, Map.of());
     }
 
     public RenderScene {
@@ -67,20 +70,26 @@ public record RenderScene(
         Objects.requireNonNull(terrainMaterials, "terrainMaterials");
         Objects.requireNonNull(terrainAppearances, "terrainAppearances");
         Objects.requireNonNull(terrainLighting, "terrainLighting");
+        Objects.requireNonNull(terrainPackets, "terrainPackets");
         Objects.requireNonNull(lightingProfile, "lightingProfile");
         Objects.requireNonNull(collision, "collision");
         Objects.requireNonNull(objects, "objects");
         Objects.requireNonNull(renderObjects, "renderObjects");
+        Objects.requireNonNull(modelPackets, "modelPackets");
         Objects.requireNonNull(bridges, "bridges");
+        Objects.requireNonNull(textures, "textures");
         terrainMeshes = orderedImmutableMap(terrainMeshes);
         terrainMaterials = orderedImmutableMap(terrainMaterials);
         terrainAppearances = orderedImmutableMap(terrainAppearances);
         lightingProfile = Objects.requireNonNull(lightingProfile, "lightingProfile");
         terrainLighting = orderedImmutableMap(terrainLighting);
+        terrainPackets = orderedImmutableMap(terrainPackets);
         collision = orderedImmutableMap(collision);
         objects = List.copyOf(objects);
         renderObjects = List.copyOf(renderObjects);
+        modelPackets = List.copyOf(modelPackets);
         bridges = List.copyOf(bridges);
+        textures = orderedImmutableMap(textures);
     }
 
     private static <K, V> Map<K, V> orderedImmutableMap(Map<K, V> values) {

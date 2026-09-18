@@ -34,6 +34,8 @@ public final class RenderSceneFingerprint {
                     if (appearance != null) value.append("appearance=").append(appearance).append(';');
                     TerrainLight lighting = scene.terrainLighting().get(coordinate);
                     if (lighting != null) value.append("lighting=").append(lighting).append(';');
+                    TerrainRenderPacket packet = scene.terrainPackets().get(coordinate);
+                    if (packet != null) value.append("terrainPacket=").append(packet).append(';');
                     var collision = scene.collision().get(coordinate);
                     if (collision != null) value.append("collision=").append(collision.rawFlags()).append(';');
                 }
@@ -41,7 +43,15 @@ public final class RenderSceneFingerprint {
         }
         value.append("objects=").append(scene.objects()).append(';');
         value.append("renderObjects=").append(scene.renderObjects()).append(';');
+        value.append("modelPackets=").append(scene.modelPackets()).append(';');
         value.append("bridges=").append(scene.bridges()).append(';');
+        scene.textures().values().stream()
+                .sorted(java.util.Comparator.comparingInt(RenderTextureResource::id))
+                .forEach(texture -> value.append("texture=").append(texture.id())
+                        .append(':').append(texture.definition())
+                        .append(':').append(texture.pixelStatus())
+                        .append(':').append(texture.width()).append('x').append(texture.height())
+                        .append(':').append(java.util.Arrays.hashCode(texture.pixels())).append(';'));
         value.append("lightingProfile=").append(scene.lightingProfile());
         return sha256(value.toString());
     }

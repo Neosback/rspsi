@@ -183,6 +183,10 @@ reminder that compute shaders are optional, not a correctness requirement.
 RSPSi decision:
 
 - The neutral scene packet is backend-independent and complete before upload.
+- `GpuUploadPlanBuilder` is the CPU-side handoff that expands immutable tile
+  packets into world-space vertices, indices, texture references, explicit
+  HSL/lightness encodings, and ordered opaque/alpha draw commands. It owns no
+  native handles and never reopens FileStore.
 - A GPU backend owns buffers, textures, shaders, barriers, and native handles.
 - OpenGL 3.3/software compatibility is a correctness baseline; compute,
   WebGPU, and other acceleration paths are optimizations.

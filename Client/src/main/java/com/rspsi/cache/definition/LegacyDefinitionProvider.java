@@ -28,7 +28,8 @@ public final class LegacyDefinitionProvider implements DefinitionProvider {
                             : Arrays.stream(definition.getInteractions())
                             .filter(java.util.Objects::nonNull)
                             .toList(),
-                    definition.getModelIds()));
+                    definition.getModelIds(), definition.getModelTypes(), -1,
+                    definition.isInteractive()));
         } catch (RuntimeException ignored) {
             return Optional.empty();
         }
@@ -60,7 +61,11 @@ public final class LegacyDefinitionProvider implements DefinitionProvider {
                     Math.max(1, definition.getScaleZ()), definition.getTranslateX(),
                     definition.getTranslateY(), definition.getTranslateZ(),
                     ObjectAppearanceView.pairs(definition.getOriginalColours(), definition.getReplacementColours()),
-                    ObjectAppearanceView.pairs(definition.getRetextureToFind(), definition.getTextureToReplace())));
+                    ObjectAppearanceView.pairs(definition.getRetextureToFind(), definition.getTextureToReplace()),
+                    definition.isCastsShadow(), definition.occludes(), false, false,
+                    definition.getAmbientLighting(), definition.getLightDiffusion() * 25,
+                    definition.getDecorDisplacement(), definition.isContouredGround() ? 1 : -1, 0,
+                    false, definition.isInverted(), definition.obstructsGround(), 0));
         } catch (RuntimeException ignored) {
             return Optional.empty();
         }

@@ -135,6 +135,8 @@ class RenderSceneBuilderTest {
 
         assertEquals(new TerrainMaterial(2, 3, 17, 0x102030, 0xA0B0C0),
                 scene.terrainMaterials().get(new TileCoordinate(0, 0, 0)));
+        assertEquals(1, scene.terrainPackets().size());
+        assertEquals(2, scene.terrainPackets().get(new TileCoordinate(0, 0, 0)).faces().size());
         assertEquals(com.rspsi.editor.collision.CollisionFlag.LOC
                         | com.rspsi.editor.collision.CollisionFlag.LOC_PROJECTILE,
                 scene.collision().get(new TileCoordinate(0, 0, 0)).rawFlags());

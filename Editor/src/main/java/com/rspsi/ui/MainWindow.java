@@ -95,6 +95,7 @@ import com.rspsi.ui.workspace.ControlledViewportPanel;
 import com.rspsi.ui.workspace.SessionHistoryPanel;
 import com.rspsi.ui.workspace.SessionInspectorPanel;
 import com.rspsi.ui.workspace.ValidationPanel;
+import com.rspsi.ui.ThemeService;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -159,6 +160,8 @@ public class MainWindow extends Application {
 	private ScheduledFuture<?> osrsAutosaveTask;
 	private ProjectLayout osrsProjectLayout;
 	private boolean osrsProjectActive;
+	/** Optional direct region supplied by the startup dashboard/debug launcher. */
+	private String startupRegion;
 	private final Runnable controlledMapReadyListener = this::bindControlledWorkspaceSession;
 
 	private Scene scene;
@@ -269,11 +272,12 @@ public class MainWindow extends Application {
 			singleton = this;
 			stage = primaryStage;
 			Platform.setImplicitExit(true);
+			ThemeService.apply(ThemeService.Theme.PRIMER_DARK);
 			FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/main_test4.fxml"));
 			controller = new MainController();
 			loader.setController(controller);
 			Parent content = loader.load();
-			if (Settings.getSetting("controlledWorkspace", false)) {
+			if (Settings.getSetting("controlledWorkspace", true)) {
 				controlledWorkspaceShell = (ControlledWorkspaceShell)
 						ControlledWorkspaceBridge.adapt(content, controller);
 				content = controlledWorkspaceShell;
@@ -523,9 +527,28 @@ public class MainWindow extends Application {
 					controller.getGamePane().heightProperty().intValue());
 			if (controlledWorkspaceShell != null) {
 				clientInstance.addMapReadyListener(controlledMapReadyListener);
+				ControlledWorkspaceBridge.installQuickLaunch(controlledWorkspaceShell,
+						new com.rspsi.ui.workspace.QuickLaunchHandler() {
+							@Override public void openLocalCache() { openLocalCacheFromQuickLaunch(); }
+							@Override public void createBlankCanvas() { controller.getNewMapButton().fire(); }
+							@Override public void openProject() { controller.getOpenOsrsProjectButton().fire(); }
+							@Override public void openCoordinates(String value) { quickLoadLocation(value, false); }
+							@Override public void openRegionId(String value) { quickLoadLocation(value, true); }
+						});
 			}
 
-			clientInstance.loadCache(Paths.get(Config.cacheLocation.get()));
+			String configuredCache = Config.cacheLocation.get();
+			if (configuredCache != null && !configuredCache.isBlank()
+					&& Files.isDirectory(Paths.get(configuredCache))) {
+				clientInstance.loadCache(Paths.get(configuredCache));
+			} else {
+				log.info("No cache selected; opening Map Editor in its actionable empty state");
+			}
+			if (startupRegion != null && !startupRegion.isBlank()) {
+				String requestedRegion = startupRegion.trim();
+				Platform.runLater(() -> quickLoadLocation(requestedRegion,
+						!requestedRegion.contains(",")));
+			}
 
 			CanvasPane gamePane = new CanvasPane(clientInstance.getGameCanvas());
 
@@ -838,6 +861,11 @@ public class MainWindow extends Application {
 	private void dispatchControlledShortcut(KeyEvent event) {
 		if (controlledWorkspaceShell == null) return;
 		boolean textInputFocused = event.getTarget() instanceof TextInputControl;
+		if (!textInputFocused && event.isControlDown() && event.getCode() == javafx.scene.input.KeyCode.SPACE) {
+			controlledWorkspaceShell.toggleUtilityDrawer();
+			event.consume();
+			return;
+		}
 		EditorKeyEvent neutral = new EditorKeyEvent(
 				event.getCode().getName(), true, false,
 				event.isShiftDown(), event.isControlDown(), event.isAltDown(), event.isMetaDown());
@@ -868,6 +896,10 @@ public class MainWindow extends Application {
 				|| clientInstance.mapRegion == null || clientInstance.sceneGraph == null) {
 			return;
 		}
+		if (controlledWorkspaceShell.panelNode("viewport") instanceof com.rspsi.ui.workspace.ControlledViewportPanel viewport) {
+			viewport.setWaitingForInput(false);
+			viewport.recordRecent(clientInstance.getBaseX() + "," + clientInstance.getBaseY());
+		}
 		Platform.runLater(() -> {
 			if (controlledWorkspaceShell == null || clientInstance == null
 				|| clientInstance.mapRegion == null || clientInstance.sceneGraph == null) {
@@ -890,6 +922,50 @@ public class MainWindow extends Application {
 			log.info("Controlled workspace session bound to legacy map {}x{} at {},{}",
 					document.width(), document.length(), clientInstance.getBaseX(), clientInstance.getBaseY());
 		});
+	}
+
+	private void quickLoadLocation(String value, boolean regionId) {
+		try {
+			String normalized = value.replace(" ", "");
+			int x;
+			int y;
+			if (regionId) {
+				int id = Integer.parseInt(normalized);
+				x = (id >> 8) * 64;
+				y = (id & 0xff) * 64;
+			} else {
+				String[] parts = normalized.split(",");
+				if (parts.length != 2) throw new NumberFormatException();
+				x = Integer.parseInt(parts[0]);
+				y = Integer.parseInt(parts[1]);
+			}
+			Client.runLater.add(() -> clientInstance.loadCoordinates(x, y, 1, 1));
+		} catch (NumberFormatException exception) {
+			FXDialogs.showWarning(stage, "Invalid location", "Enter coordinates as x,y or a numeric region ID.");
+		}
+	}
+
+	/**
+	 * The empty-state "Open Local Cache" action selects a cache directory. It
+	 * must not forward to the legacy "open map files" command, which is a
+	 * different workflow and was the reason startup could appear to ask for the
+	 * same source twice.
+	 */
+	private void openLocalCacheFromQuickLaunch() {
+		DirectoryChooser chooser = new DirectoryChooser();
+		chooser.setTitle("Choose OSRS cache directory");
+		File selected = chooser.showDialog(stage);
+		if (selected == null || clientInstance == null) return;
+
+		String path = selected.getAbsolutePath() + File.separator;
+		Config.cacheLocation.set(path);
+		Settings.properties.put("cacheLocation", path);
+		Settings.properties.put("lastCacheLocation", path);
+		Settings.saveSettings();
+		if (LauncherWindow.getSingleton() != null) {
+			LauncherWindow.getSingleton().rememberCache(path);
+		}
+		clientInstance.loadCache(selected.toPath());
 	}
 
 	/**
@@ -1383,6 +1459,11 @@ public class MainWindow extends Application {
 
 	public static MainWindow getSingleton() {
 		return singleton;
+	}
+
+	/** Sets an optional dashboard/debug region before {@link #start(Stage)}. */
+	public void setStartupRegion(String startupRegion) {
+		this.startupRegion = startupRegion == null ? "" : startupRegion.trim();
 	}
 
 }
