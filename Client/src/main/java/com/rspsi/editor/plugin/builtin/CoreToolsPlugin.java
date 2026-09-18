@@ -11,6 +11,6 @@ public final class CoreToolsPlugin {
 
     public static List<EditorPlugin> builtIns() {
         return List.of(new TerrainToolsPlugin(), new ObjectToolsPlugin(),
-                new SelectionToolsPlugin());
+                new SelectionToolsPlugin(), new RendererDiagnosticsPlugin());
     }
 }

@@ -25,7 +25,14 @@ public final class OsrsRegionEncoder {
         return encodeTerrain(document, true);
     }
 
-    /** Encodes terrain using the selected revision's opcode width. */
+    /**
+     * Encodes terrain using the selected revision's opcode width.
+     *
+     * <p>Height byte {@code 1} is a poison value in the OSRS terrain format:
+     * the reference client decodes it as height 0, so emitting it would
+     * silently erase an 8-unit height step through any save/reopen cycle.
+     * Encoding fails fast instead, naming the offending tile.</p>
+     */
     public static byte[] encodeTerrain(WorldDocument document, boolean newTerrainFormat) {
         requireRegion(document);
         requireSharedHeights(document);
@@ -35,12 +42,17 @@ public final class OsrsRegionEncoder {
                 for (int y = 0; y < OsrsRegionDecoder.REGION_SIZE; y++) {
                     TileSnapshot tile = document.tile(plane, x, y).snapshot();
                     if (tile.overlayId() != 0) {
-                        requireRange(tile.overlayId(), 1, newTerrainFormat ? 65534 : 254, "overlay ID");
+                        requireRange(tile.overlayId(), 1, newTerrainFormat ? 32767 : 254, "overlay ID");
                         requireRange(tile.overlayShape(), 0, 11, "overlay shape");
                         writeTerrainValue(out, 2 + tile.overlayShape() * 4 + tile.overlayRotation(), newTerrainFormat);
                         writeTerrainValue(out, tile.overlayId(), newTerrainFormat);
                     } else if (tile.overlayShape() != 0 || tile.overlayRotation() != 0) {
-                        throw new IllegalArgumentException("Overlay shape/rotation requires an overlay ID");
+                        // Real caches contain shape/rotation markers with no
+                        // overlay ID. The decoder reproduces them exactly, so
+                        // re-encode them the same way instead of rejecting a
+                        // document the editor legitimately opened.
+                        writeTerrainValue(out, 2 + tile.overlayShape() * 4 + tile.overlayRotation(), newTerrainFormat);
+                        writeTerrainValue(out, 0, newTerrainFormat);
                     }
                     if (tile.flags() != 0) {
                         requireRange(tile.flags(), 1, 32, "tile flags");
@@ -51,6 +63,13 @@ public final class OsrsRegionEncoder {
                         writeTerrainValue(out, 81 + tile.underlayId(), newTerrainFormat);
                     }
                     int value = heightValue(document, plane, x, y, tile.southWestHeight());
+                    if (value == 1) {
+                        // Byte 1 is decoded as height 0 by every OSRS client;
+                        // no opcode can express this delta losslessly.
+                        throw new IllegalArgumentException("Tile " + plane + "," + x + "," + y
+                                + " requires terrain height byte 1, which the OSRS format decodes as 0."
+                                + " Adjust the height by one unit (8 world units) to save losslessly.");
+                    }
                     writeTerrainValue(out, 1, newTerrainFormat);
                     out.write(value);
                 }

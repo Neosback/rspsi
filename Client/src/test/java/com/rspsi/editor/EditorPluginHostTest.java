@@ -82,7 +82,8 @@ class EditorPluginHostTest {
         EditorPluginHost host = EditorPluginHost.initialize(
                 CoreToolsPlugin.builtIns(), session, new EmptyAssets());
 
-        assertEquals(List.of("rspsi.tools.terrain", "rspsi.tools.objects", "rspsi.tools.selection"),
+        assertEquals(List.of("rspsi.tools.terrain", "rspsi.tools.objects", "rspsi.tools.selection",
+                        "rspsi.tools.renderer-debug"),
                 host.plugins().stream().map(EditorPlugin::id).toList());
         assertEquals(20, host.registry().toolRegistrations().size());
         EditorToolRegistration registration = host.registry().toolRegistrations().get(0);

@@ -293,7 +293,7 @@ future intake can reproduce the inspected source set:
 
 | Resource | Commit | Role |
 |---|---|---|
-| [OpenRune FileStore](https://github.com/OpenRune/OpenRune-FileStore) | `236e3920aa077a5990f2915e74f1c7d7729db47e` | Production-candidate API and OSRS cache/definition reference |
+| [OpenRune FileStore](https://github.com/OpenRune/OpenRune-FileStore) | `236e3920aa077a5990f2915e74f1c7d7729db47e` (refreshed read-only to `4179fc4` / 3.0.2 on 2026-09-17) | Production-candidate API and OSRS cache/definition reference |
 | [OpenRune/OpenRune-Server](https://github.com/OpenRune/OpenRune-Server) | `72e8e1a1a05c54208f64c163cae4637301397d90` | Upstream baseline for focused Neosback server-fork comparison |
 | [RSPSApp/TSPS](https://github.com/RSPSApp/TSPS) | `83415f76589a360eacbd0e635fe0557d06a510f0` | Terrain, scene, model, bridge, and instance donor/oracle |
 | [RuneLite](https://github.com/runelite/runelite) | `ced4c4aba7a3cb7cace42e1f0c25a5f79b7faef` | Independent current-OSRS semantics and DevTools oracle |

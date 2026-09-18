@@ -13,6 +13,8 @@ import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.editor.plugin.EditorSceneAccess;
 import com.rspsi.project.ProjectMetadata;
 import com.rspsi.server.ServerAdapter;
+import com.rspsi.server.ServerConnection;
+import com.rspsi.server.ServerProjectInspection;
 
 import java.nio.file.Path;
 import java.io.IOException;
@@ -33,6 +35,7 @@ public final class OsrsBundle implements AutoCloseable {
     private final OsrsStudioProject project;
     private final OsrsRevisionProfile revisionProfile;
     private ServerAdapter serverAdapter;
+    private ServerProjectInspection serverInspection;
 
     private OsrsBundle(OsrsStudioProject project, OsrsRevisionProfile revisionProfile,
                        ServerAdapter serverAdapter) {
@@ -102,6 +105,21 @@ public final class OsrsBundle implements AutoCloseable {
     /** Attaches optional server/project integration without changing cache ownership. */
     public OsrsBundle withServerAdapter(ServerAdapter adapter) {
         this.serverAdapter = Objects.requireNonNull(adapter, "adapter");
+        this.serverInspection = null;
+        return this;
+    }
+
+    /** Inspects an explicitly selected server checkout through the attached adapter. */
+    public OsrsBundle withServerConnection(ServerConnection connection) {
+        if (serverAdapter == null) {
+            throw new IllegalStateException("Attach a server adapter before selecting a connection");
+        }
+        Objects.requireNonNull(connection, "connection");
+        if (!serverAdapter.id().equals(connection.adapterId())) {
+            throw new IllegalArgumentException("Connection adapter '" + connection.adapterId()
+                    + "' does not match '" + serverAdapter.id() + "'");
+        }
+        serverInspection = serverAdapter.inspect(connection);
         return this;
     }
 
@@ -120,6 +138,10 @@ public final class OsrsBundle implements AutoCloseable {
     public AssetRepository assets() { return project.assets(); }
 
     public Optional<ServerAdapter> serverAdapter() { return Optional.ofNullable(serverAdapter); }
+
+    public Optional<ServerProjectInspection> serverInspection() {
+        return Optional.ofNullable(serverInspection);
+    }
 
     public OsrsProjectSessionLoader.OpenedProject openRegion(int regionX, int regionY) {
         return project.openRegion(regionX, regionY);

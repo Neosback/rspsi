@@ -21,6 +21,7 @@ the JavaFX desktop application accidentally.
 - [Scene semantics and frontend/plugin contract](docs/SCENE_SEMANTICS.md)
 - [OSRS scene pipeline and plugin attachment points](docs/OSRS_SCENE_PIPELINE.md)
 - [RuneLite scene reference for Studio tooling](docs/RUNELITE_SCENE_REFERENCE.md)
+- [Scene rendering cross-reference: RuneLite, TSPS, and Environment Exporter](docs/SCENE_RENDERING_CROSS_REFERENCE.md)
 - [OSRS Environment Exporter scene/render reference](docs/OSRS_ENVIRONMENT_EXPORTER_REFERENCE.md)
 - [Vertical feature/plugin architecture](docs/PLUGIN_ARCHITECTURE.md)
 - [Dear ImGui adapter boundary](docs/IMGUI_ADAPTER.md)

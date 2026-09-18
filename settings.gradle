@@ -2,6 +2,3 @@ rootProject.name = 'RSPSiSuite'
 
 include ':Client'
 include ':Editor'
-include ':Plugins'
-
-include 'Plugins:OSRSPlugin'

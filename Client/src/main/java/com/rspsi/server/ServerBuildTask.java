@@ -11,7 +11,13 @@ public record ServerBuildTask(
         String label,
         List<String> command,
         Path workingDirectory,
-        Set<ServerCapability> capabilities) {
+        Set<ServerCapability> capabilities,
+        List<Path> outputPaths) {
+    public ServerBuildTask(String id, String label, List<String> command,
+                           Path workingDirectory, Set<ServerCapability> capabilities) {
+        this(id, label, command, workingDirectory, capabilities, List.of());
+    }
+
     public ServerBuildTask {
         id = requireText(id, "id");
         label = requireText(label, "label");
@@ -23,6 +29,9 @@ public record ServerBuildTask(
         if (capabilities.isEmpty()) {
             throw new IllegalArgumentException("at least one capability is required");
         }
+        outputPaths = List.copyOf(outputPaths == null ? List.of() : outputPaths.stream()
+                .map(path -> Objects.requireNonNull(path, "output path").toAbsolutePath().normalize())
+                .toList());
     }
 
     private static String requireText(String value, String name) {

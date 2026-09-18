@@ -9,6 +9,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OsrsRegionEncoderTest {
     @Test
@@ -108,5 +109,39 @@ class OsrsRegionEncoderTest {
                 List.of(new WorldObject(1, 23, 0, 0, 0, 0))));
 
         assertThrows(IllegalArgumentException.class, () -> OsrsRegionEncoder.encodeLocations(source));
+    }
+
+    @Test
+    void reencodesShapeMarkersWithoutOverlayIdsInsteadOfRejectingThem() {
+        WorldDocument source = new WorldDocument(64, 64, 4);
+        TileSnapshot plain = source.tile(0, 0, 0).snapshot();
+        source.tile(0, 0, 0).restore(new TileSnapshot(
+                plain.southWestHeight(), plain.southEastHeight(),
+                plain.northEastHeight(), plain.northWestHeight(),
+                0, 0, 4, 2, 0, List.of()));
+
+        byte[] terrain = OsrsRegionEncoder.encodeTerrain(source);
+        WorldDocument decoded = OsrsRegionDecoder.decodeTerrain(terrain, 0, 0, (x, y) -> 10);
+
+        TileSnapshot roundTrip = decoded.tile(0, 0, 0).snapshot();
+        assertEquals(4, roundTrip.overlayShape());
+        assertEquals(2, roundTrip.overlayRotation());
+        assertEquals(0, roundTrip.overlayId());
+    }
+
+    @Test
+    void refusesToEmitPoisonHeightByteOne() {
+        WorldDocument source = new WorldDocument(64, 64, 4);
+        // A whole plane eight world units below plane 0 encodes to delta byte 1,
+        // which every OSRS client decodes as height 0.
+        for (int x = 0; x < 64; x++) {
+            for (int y = 0; y < 64; y++) {
+                source.tile(1, x, y).restore(new TileSnapshot(-8, -8, -8, -8, 0, 0, 0, 0, 0, List.of()));
+            }
+        }
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> OsrsRegionEncoder.encodeTerrain(source));
+        assertTrue(error.getMessage().contains("height byte 1"), error.getMessage());
     }
 }

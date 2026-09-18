@@ -9,7 +9,9 @@ import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.assets.EmptyAssetRepository;
 import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.editor.plugin.EditorPlugin;
+import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
 import com.rspsi.editor.plugin.EditorPluginLoader;
+import com.rspsi.editor.plugin.EditorPluginStateStore;
 import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
 import com.rspsi.editor.model.WorldWindow;
 import com.rspsi.editor.ui.StandardWorkspaceCatalog;
@@ -74,6 +76,7 @@ public final class ControlledWorkspaceBridge {
         panels.put("history", new SessionHistoryPanel());
         panels.put("validation", new ValidationPanel());
         panels.put("console", placeholder("Console", "Editor messages will appear here."));
+        panels.put("plugins", new PluginsPanel());
         panels.put("command-palette", new PluginCommandPalettePanel());
 
         WorkspaceCatalog catalog = StandardWorkspaceCatalog.create();
@@ -123,6 +126,14 @@ public final class ControlledWorkspaceBridge {
     public static void bindProject(ControlledWorkspaceShell shell,
                                    OsrsProjectSessionLoader.OpenedProject opened,
                                    DefinitionProvider definitions, AssetRepository assets) {
+        bindProject(shell, opened, definitions, assets, EditorPluginStateStore.defaultStore());
+    }
+
+    /** Binds a project with an explicit plugin state store (tests pass a temp store). */
+    public static void bindProject(ControlledWorkspaceShell shell,
+                                   OsrsProjectSessionLoader.OpenedProject opened,
+                                   DefinitionProvider definitions, AssetRepository assets,
+                                   EditorPluginStateStore pluginState) {
         Objects.requireNonNull(opened, "opened");
         EditorSession session = opened.region().session();
         WorldWindow window = new WorldWindow(opened.region().regionX() * 64,
@@ -146,11 +157,23 @@ public final class ControlledWorkspaceBridge {
                 pluginsToLoad.addAll(EditorPluginLoader.discover(
                         java.nio.file.Path.of("plugins", "active"),
                         Thread.currentThread().getContextClassLoader()));
-                EditorPluginHost plugins = EditorPluginHost.initialize(
+                EditorPluginLifecycleManager lifecycle = EditorPluginLifecycleManager.start(
                         pluginsToLoad,
+                        pluginState == null
+                                ? EditorPluginStateStore.defaultStore() : pluginState,
                         session,
                         assets == null ? EmptyAssetRepository.INSTANCE : assets,
-                        viewport.canonicalViewport()::sceneSnapshotView);
+                        viewport.canonicalViewport()::sceneSnapshotView,
+                        candidates -> EditorPluginHost.initialize(
+                                candidates,
+                                session,
+                                assets == null ? EmptyAssetRepository.INSTANCE : assets,
+                                viewport.canonicalViewport()::sceneSnapshotView));
+                EditorPluginHost plugins = lifecycle.host();
+                if (shell.panelNode("plugins") instanceof PluginsPanel pluginsPanel) {
+                    pluginsPanel.bindPluginHost(lifecycle);
+                    pluginsPanel.onHostRebuilt(shell::bindPluginHost);
+                }
                 shell.bindPluginHost(plugins);
                 if (shell.panelNode("assets") instanceof AssetBrowserPanel browser) {
                     browser.selectedAsset().ifPresent(tools::setObjectAsset);

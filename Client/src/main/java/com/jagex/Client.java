@@ -30,7 +30,6 @@ import com.rspsi.core.misc.Vector2;
 import com.rspsi.game.DisplayCanvas;
 import com.rspsi.options.KeyboardState;
 import com.rspsi.options.Options;
-import com.rspsi.plugins.core.ClientPluginLoader;
 import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
@@ -466,15 +465,12 @@ public final class Client implements Runnable {
 		if (clientLoaded) {
 			gameAlreadyLoaded = true;
 			return;
-		}
+		}		clientLoaded = true;
 
-		clientLoaded = true;
-
-	
-		
-		ClientPluginLoader.loadPlugins();
+		// The OSRS renderer bridge is now compiled into this boundary and
+		// installed directly; the external OSRSPlugin jar is retired.
+		com.rspsi.compat.osrs.OsrsCompatibilityLoaders.install();
 		try {
-
 
 
 
@@ -496,17 +492,9 @@ public final class Client implements Runnable {
 				}
 			}
 
-			drawLoadingText(65, "Loading plugins...");
-			
-			ClientPluginLoader.forEach(plugin -> {
-				try {
-					plugin.onGameLoaded(this);
-				} catch (Exception e) {
-					e.printStackTrace();
-					error = true;
-					errorMessage = "The selected plugin was unable to load";
-				}
-			});
+			if (cache.isOsrs()) {
+				com.rspsi.compat.osrs.OsrsCompatibilityLoaders.onGameLoaded(this);
+			}
 			
 			if(!errorMessage.isEmpty())
 				throw new IllegalStateException(errorMessage);
@@ -1351,7 +1339,6 @@ public final class Client implements Runnable {
 			
 			//System.out.println("UNZIPPED " + type + ":" + file + " ATTEMPTING TO DELIVER");
 			lastDeliveredResource.set(response);
-			ClientPluginLoader.forEach(plugin -> plugin.onResourceDelivered(response));
 			
 			if (type == CacheFileType.ANIMATION) {//TODO Fix animations
 				if(Options.loadAnimations.get())

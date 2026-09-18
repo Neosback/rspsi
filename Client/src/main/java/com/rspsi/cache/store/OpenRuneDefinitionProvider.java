@@ -48,6 +48,8 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     private final Map<Integer, UnderlayType> underlays = new HashMap<>();
     private final Map<Integer, OverlayType> overlays = new HashMap<>();
     private final Map<Integer, TextureType> textures = new HashMap<>();
+    private final java.util.List<DecodeFailure> decodeFailures =
+            java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private volatile Map<Integer, SpriteType> textureSprites;
     private final ModelDecoder modelDecoder;
     private final List<Integer> modelIds;
@@ -66,10 +68,10 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             throw new IllegalArgumentException("OSRS cache revision must be positive");
         }
         this.revision = revision;
-        new OsrsCacheProvider.ObjectDecoder(revision).load(cache, objects);
-        new OsrsCacheProvider.UnderlayDecoder().load(cache, underlays);
-        new OsrsCacheProvider.OverlayDecoder().load(cache, overlays);
-        new OsrsCacheProvider.TextureDecoder(revision).load(cache, textures);
+        decodeEager("object", () -> new OsrsCacheProvider.ObjectDecoder(revision).load(cache, objects));
+        decodeEager("underlay", () -> new OsrsCacheProvider.UnderlayDecoder().load(cache, underlays));
+        decodeEager("overlay", () -> new OsrsCacheProvider.OverlayDecoder().load(cache, overlays));
+        decodeEager("texture", () -> new OsrsCacheProvider.TextureDecoder(revision).load(cache, textures));
         modelDecoder = new ModelDecoder(cache, java.util.Collections.emptyList());
         modelIds = archiveIds(cache, MODELS);
         mapScenes = loadMapScenes(cache);
@@ -79,6 +81,16 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
 
     public static OpenRuneDefinitionProvider load(Cache cache, int revision) {
         return new OpenRuneDefinitionProvider(cache, revision);
+    }
+
+    /** Records one eager-decode family failure instead of losing it silently. */
+    private void decodeEager(String family, Runnable decode) {
+        try {
+            decode.run();
+        } catch (RuntimeException failure) {
+            decodeFailures.add(new DecodeFailure(family, -1,
+                    failure.getClass().getSimpleName() + ": " + failure.getMessage()));
+        }
     }
 
     @Override
@@ -95,6 +107,9 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         int[] modelIds = definition.getObjectModels() == null
                 ? new int[0]
                 : definition.getObjectModels().stream().mapToInt(Integer::intValue).toArray();
+        int[] modelTypes = definition.getObjectTypes() == null
+                ? new int[0]
+                : definition.getObjectTypes().stream().mapToInt(Integer::intValue).toArray();
         boolean interactive = definition.getInteractive() > 0;
         if (definition.getInteractive() == -1) {
             java.util.List<Integer> objectTypes = definition.getObjectTypes();
@@ -105,7 +120,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         }
         return Optional.of(new ObjectDefinitionView(definition.getId(), definition.getName(),
                 Math.max(1, definition.getSizeX()), Math.max(1, definition.getSizeY()),
-                interactions, modelIds, definition.getMapSceneID(), interactive));
+                interactions, modelIds, modelTypes, definition.getMapSceneID(), interactive));
     }
 
     @Override
@@ -514,7 +529,8 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         byte[] data;
         try {
             data = cache.data(CONFIGS, SEQUENCE, id, null);
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException failure) {
+            recordFailure("sequence", id, failure);
             return Optional.empty();
         }
         if (data == null) return Optional.empty();
@@ -596,16 +612,23 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                     normalizeSentinel(rightHandItem), maxLoops,
                     normalizeSentinel(precedenceAnimating), normalizeSentinel(priority),
                     replyMode, skeletalId));
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException failure) {
+            recordFailure("sequence", id, failure);
             return Optional.empty();
         }
+    }
+
+    private void recordFailure(String family, int id, RuntimeException failure) {
+        decodeFailures.add(new DecodeFailure(family, id,
+                failure.getClass().getSimpleName() + ": " + failure.getMessage()));
     }
 
     private Optional<MapElementDefinitionView> decodeMapElement(int id) {
         byte[] data;
         try {
             data = cache.data(CONFIGS, MAP_ELEMENT, id, null);
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException failure) {
+            recordFailure("map element", id, failure);
             return Optional.empty();
         }
         if (data == null) return Optional.empty();
@@ -658,7 +681,8 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             return Optional.of(new MapElementDefinitionView(id, spriteId, hoverSpriteId, name,
                     textColor, hoverTextColor, textSize, worldMapVisible,
                     minimapVisible, randomizePosition, actions));
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException failure) {
+            recordFailure("map element", id, failure);
             return Optional.empty();
         }
     }
@@ -689,6 +713,13 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         int secondaryCount = cursor.readUnsignedByte();
         cursor.skip(secondaryCount * 4);
         cursor.skip(count);
+    }
+
+    @Override
+    public List<DecodeFailure> decodeFailures() {
+        synchronized (decodeFailures) {
+            return List.copyOf(decodeFailures);
+        }
     }
 
     private static void skipParams(ByteCursor cursor) {

@@ -65,7 +65,6 @@ import com.rspsi.core.misc.StatusUpdate;
 import com.rspsi.core.misc.ToolType;
 import com.rspsi.options.Config;
 import com.rspsi.options.Options;
-import com.rspsi.plugins.ui.ApplicationPluginLoader;
 import com.rspsi.resources.ResourceLoader;
 import com.rspsi.swatches.BaseSwatch;
 import com.rspsi.swatches.OverlaySwatch;
@@ -675,6 +674,9 @@ public class MainWindow extends Application {
 					if (controlledWorkspaceShell.statusBar() instanceof com.rspsi.ui.workspace.WorkspaceStatusBar status) {
 						status.close();
 					}
+					if (controlledWorkspaceShell.panelNode("plugins") instanceof com.rspsi.ui.workspace.PluginsPanel plugins) {
+						plugins.close();
+					}
 				}
 				if(singleton != null) {
 					Platform.exit();
@@ -770,7 +772,6 @@ public class MainWindow extends Application {
 
 
 
-			ApplicationPluginLoader.loadPlugins(this);
 			ChangeListenerUtil.addListener(() -> {
 				if(Client.gameLoaded.get()) {
 					underlaySwatch.clear();

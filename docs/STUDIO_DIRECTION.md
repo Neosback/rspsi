@@ -268,3 +268,19 @@ OpenRune FileStore is the OSRS cache/definition layer; the OSRS bundle adapts
 it into neutral project and asset contracts; workspaces own feature behavior
 and UI contributions. This keeps a future interface, item, or model editor
 from introducing a second cache loader, history model, or renderer scene graph.
+
+OpenRune Server is connected as a project integration, not as a required
+co-located dependency. The user selects the server root, Studio resolves and
+saves path/command overrides, and a fingerprint reports Git, cache, and source
+changes. Studio defaults to its own staged project/output state; applying
+changes to the server checkout is an explicit later operation with backup,
+diff, and validation.
+
+The RuneLite rendering review is split into scene semantics, GPU packet
+translation, and DevTools/overlay references. The implementation direction is
+packet-first: `WorldRegionWindow`/`SceneWindow` provide context,
+`RenderScene`/`EditorSceneSnapshot` provide immutable derived state, and
+`TerrainRenderPacket`/`ModelRenderPacket` provide complete renderer inputs.
+OpenGL 3.3 is the first backend target, but native GPU handles remain outside
+neutral editor contracts. JavaFX and Dear ImGui must consume the same packets
+and diagnostic annotations.

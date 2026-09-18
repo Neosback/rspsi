@@ -83,4 +83,23 @@ public interface DefinitionProvider {
     default Optional<ObjectAppearanceView> objectAppearance(int id) {
         return Optional.empty();
     }
+
+    /**
+     * Immutable decode-failure diagnostics for definitions that were indexed
+     * but could not be decoded. Providers that decode eagerly report failures
+     * during load; lazy providers report failures when a decode was attempted
+     * and threw. A corrupt definition must never be indistinguishable from an
+     * absent one in verifier output.
+     */
+    default List<DecodeFailure> decodeFailures() {
+        return List.of();
+    }
+
+    /** Describes one definition that was indexed but failed to decode. */
+    record DecodeFailure(String family, int id, String message) {
+        public DecodeFailure {
+            family = family == null ? "unknown" : family;
+            message = message == null ? "decode failed" : message;
+        }
+    }
 }

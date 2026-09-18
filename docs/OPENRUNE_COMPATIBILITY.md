@@ -66,10 +66,13 @@ FileStore supplies bytes and cache identity, while the bundle supplies
 revision-240 interpretation and editor lifecycle.
 
 The optional `OpenRuneServerAdapter` is separate from that read path. It
-detects an OpenRune-Server checkout and describes the `or-cache` Gradle
-actions and LIVE/SERVER layout, but does not import server classes or require
-the checkout for cache-only editing. Runtime bridging and server-side route
-execution remain deferred capabilities.
+detects an OpenRune-Server checkout, resolves overrideable paths, inventories
+pack modules and external plugin manifests without loading code, fingerprints
+the project, and exposes only build tasks that are declared by the checkout
+or explicitly overridden. `ServerBuildRunner` executes those declared tasks
+from the server root with streamed output; it does not import server classes
+or require the checkout for cache-only editing. Runtime bridging and
+server-side route execution remain deferred capabilities.
 
 ## Neutral OSRS map path
 
@@ -309,3 +312,27 @@ The selected OSRS asset facade currently covers objects, floors, textures,
 models, map-scene sprites, sequences, and map elements. Interfaces, items,
 NPCs, CS2, GameVals, and DB tables remain planned extension categories using
 the same session-scoped repository.
+
+## OpenRune Server project integration
+
+`OpenRuneServerAdapter` is a separate project/build integration. It detects a
+server root, resolves stock or overridden LIVE/SERVER/raw-cache/GameVal/content
+paths, inventories built-in pack resources and external plugin manifests, and
+records a project/cache fingerprint. It does not open caches itself; selected
+LIVE or SERVER paths continue through `CacheStoreFactory.openOsrs` and
+`OsrsBundle`.
+
+The server checkout remains untouched by default. Build tasks run as an
+external Gradle process from the selected root and are exposed only when the
+wrapper or an explicit command override is available. Forks are supported by
+capability diagnostics and overrides, not by silently falling back to a 317
+decoder. Runtime bridging and source-file application remain deferred.
+
+## Scene rendering reference boundary
+
+RuneLite's scene and GPU behavior is used as a semantic comparison source, not
+as a compatibility dependency. FileStore/OSRS decoders produce the
+revision-aware authored data; RSPSi derives scene packets and lighting; the
+optional OpenRune-Server adapter supplies project/build context. This prevents
+server or client runtime classes from leaking into renderer contracts and
+preserves the no-modern-to-317-fallback rule.

@@ -1,5 +1,16 @@
 # RuneLite Scene Reference for OpenRune Studio
 
+This reference is the historical scene-semantic overview. The detailed
+adjudication is split into [`RUNELITE_SCENE_RENDERING_REFERENCE.md`](RUNELITE_SCENE_RENDERING_REFERENCE.md),
+[`RUNELITE_GPU_PIPELINE.md`](RUNELITE_GPU_PIPELINE.md), and
+[`RUNELITE_DEVTOOLS_OVERLAYS.md`](RUNELITE_DEVTOOLS_OVERLAYS.md).
+
+The combined TSPS and OSRS Environment Exporter cross-reference is recorded in
+[`SCENE_RENDERING_CROSS_REFERENCE.md`](SCENE_RENDERING_CROSS_REFERENCE.md).
+It covers multi-region windows, border data, streaming generations, GPU
+packet metadata, independent lighting checks, and headless export details that
+are less explicit in RuneLite alone.
+
 This document records the concrete scene model observed in the pinned
 `melxin/runelite` checkout. It is a behavior and vocabulary reference for
 RSPSi's neutral scene contracts, renderers, inspectors, and plugins. It is not

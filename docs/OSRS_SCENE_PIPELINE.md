@@ -18,6 +18,12 @@ selection/transforms, normal merging, bridge projection, and WebGL packet
 fields. RuneLite remains the client-semantic oracle; RSPSi owns the neutral
 contracts and authored/editor state.
 
+The combined TSPS/Environment Exporter review is in
+[`SCENE_RENDERING_CROSS_REFERENCE.md`](SCENE_RENDERING_CROSS_REFERENCE.md).
+It adds explicit requirements for multi-region scene windows, border heights,
+streaming generations, GPU instance metadata, independent lighting checks, and
+headless scene export.
+
 ## Scene assembly
 
 ```text
@@ -218,3 +224,26 @@ radius-five underlay blending, overlay texture/sentinel handling, model
 normal/ambient/contrast handling, and deterministic lighting fingerprints.
 Frontend exposure is separate and must not affect authored data or packet
 identity.
+
+## RuneLite rendering and GPU contract
+
+The detailed source adjudication is split into:
+
+- [`RUNELITE_SCENE_RENDERING_REFERENCE.md`](RUNELITE_SCENE_RENDERING_REFERENCE.md)
+  for scene semantics and lighting;
+- [`RUNELITE_GPU_PIPELINE.md`](RUNELITE_GPU_PIPELINE.md) for backend packet and
+  OpenGL behavior; and
+- [`RUNELITE_DEVTOOLS_OVERLAYS.md`](RUNELITE_DEVTOOLS_OVERLAYS.md) for markers
+  and diagnostics.
+
+The neutral implementation now exposes `SceneWindow`,
+`TerrainRenderPacket`, `ModelRenderPacket`, `SceneTileSnapshot`,
+`GpuScenePacket`, and `GpuSceneUploader`. These are full-precision contracts;
+an eventual OpenGL backend may quantize them only at upload time. The existing
+`WorldRegionWindow` remains the source-region implementation and
+`EditorSceneSnapshot` remains the plugin-facing immutable projection.
+
+RuneLite's GPU path does not pre-render the map. The CPU prepares reusable
+geometry/material packets, static data is uploaded to GPU buffers, and the GPU
+transforms/rasterizes it each frame. Camera and exposure changes therefore do
+not alter authored scene data or fingerprints.

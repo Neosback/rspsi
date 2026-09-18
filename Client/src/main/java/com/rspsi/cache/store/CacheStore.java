@@ -52,6 +52,15 @@ public interface CacheStore extends AutoCloseable {
         return Optional.empty();
     }
 
+    /**
+     * Stable backend name for audit and status surfaces. This identifies the
+     * adapter/backend pair (for example {@code OpenRune FileStore 2.4.19}); it
+     * is deliberately a display/audit value and never an API selector.
+     */
+    default String backendName() {
+        return "unknown cache backend";
+    }
+
     @Override
     default void close() {
         flush();

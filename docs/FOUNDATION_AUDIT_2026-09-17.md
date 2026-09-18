@@ -49,6 +49,31 @@ runtime or cache-reader dependency. The frontend test confirms that the ImGui
 adapter sees the same immutable scene snapshot and contribution IDs as the
 neutral plugin host.
 
+The FileStore switch milestone added three verified capability slices. First,
+`docs/FILESTORE_CAPABILITY_AUDIT.md` records the 18-row capability matrix,
+the hosting-repo dependency policy, and the deterministic 2.4.19→3.0.2
+upgrade spike (full suite and boundary gates pass on both versions with zero
+source changes; the pin stays at 2.4.19 until external parity evidence is
+re-run). Second, the external `OSRSPlugin` service-loader plugin was retired:
+the ten renderer compatibility loaders moved inside the Client compatibility
+boundary as `com.rspsi.compat.osrs.OsrsCompatibilityLoaders`, they still read
+only through the neutral `CacheIndexView`/`CacheArchiveView` seam, and a build
+gate blocks renderer imports of the retired plugin package. Third, native
+OpenRune write parity is closed for three encoder/decoder asymmetries with
+fail-fast diagnostics (height delta byte 1 poison value, shape-without-id
+tiles, legacy/modern overlay caps) and a deterministic fresh-cache
+`CacheDelegate` write→flush→reopen round trip asserting byte-level and
+semantic equality through the production `OpenRuneCacheStore`.
+
+Plugin enable/disable is now implemented end to end: the persisted
+`EditorPluginStateStore` (`~/.rspsi/plugins.json`) keeps only user intent,
+the dependency-aware `EditorPluginLifecycleManager` resolves user-disabled
+and cascade-disabled candidates before host initialization, every toggle
+rebuilds and rebinds the live `EditorPluginHost`, and the controlled JavaFX
+shell exposes a Plugins panel plus workspace preset driven entirely by the
+neutral manager. Eight focused tests cover persistence, cascade behavior,
+re-enable evaluation, enable-all, and close semantics.
+
 The local live build-240 cache was then verified read-only through the modern
 FileStore path at region `(50,50)`: revision 240 and the numeric/short profile
 passed, 2,937 map groups and 141,363 neutral assets were exposed, all 9
@@ -92,9 +117,9 @@ history, asset facade, or plugin scene contracts.
 | TSPS scene/render-packet adjudication | Pinned TSPS review confirms the implementation details for radius-five underlay blending, final terrain HSL/UV/hidden faces, model-type selection, contouring, merged normals, bridge projection, and opaque/alpha packet fields; conflicts with mutable TSPS ownership and client collision semantics are resolved in [`TSPS_SCENE_REFERENCE.md`](TSPS_SCENE_REFERENCE.md) | PASS as a source review; implementation fixtures remain open |
 | Collision semantics | OpenRune route/movement vocabulary, bridge-aware/object-derived collision, deterministic direction/size vectors, live collision construction, explicit fixture semantics | PARTIAL: TSPS `collision.json` now declares `CLIENT_CLIP_TYPE`; an independent `OPENRUNE_ROUTE` fixture is still required |
 | Unified asset access for tools/plugins | `AssetRepository` searchable catalog plus typed lazy access for objects, floors, textures, models, map scenes, sequences, map elements, appearance, and collision | PASS for API; broader real-cache parity and mapping lifecycle open |
-| Plugin ownership and lifecycle | Descriptor/dependency validation, stable dependency-aware discovery, owned contribution cleanup, reverse shutdown, host-owned LIFO resource cleanup, closed-registry protection, command/tool/panel/inspector/validator/overlay/shortcut/context/settings/asset-provider/status/menu registry, immutable `EditorSceneSnapshot` and per-tile `EditorSceneTileProjection`, shell-owned lifecycle, JavaFX tool/inspector/asset/status/menu/command-palette mounting, and terrain/object/selection-owned shared setting state | PASS for current API and JavaFX host surfaces; Dear ImGui and larger editor contributions remain next |
+| Plugin ownership and lifecycle | Descriptor/dependency validation, stable dependency-aware discovery, owned contribution cleanup, reverse shutdown, host-owned LIFO resource cleanup, closed-registry protection, command/tool/panel/inspector/validator/overlay/shortcut/context/settings/asset-provider/status/menu registry, immutable `EditorSceneSnapshot` and per-tile `EditorSceneTileProjection`, shell-owned lifecycle, JavaFX tool/inspector/asset/status/menu/command-palette mounting, terrain/object/selection-owned shared setting state, and persisted user-owned enable/disable with dependency-cascade rebuild through `EditorPluginStateStore` + `EditorPluginLifecycleManager` + the shell Plugins panel | PASS for current API and JavaFX host surfaces; Dear ImGui and larger editor contributions remain next |
 | JavaFX and Dear ImGui independence | UI-neutral import gate, renderer-neutral scene contracts, shared `EditorFrontendFrame`, `DearImGuiFrontendAdapter`, and common input router | PASS for neutral projection/input; native ImGui interactive host not built |
-| Optional OpenRune-Server integration | `ServerAdapter`, `ServerProject`, `ServerBuildProvider`, and `OpenRuneServerAdapter` tests; no server dependency in the cache reader | PASS for declarative build/layout seam; runtime bridge deferred |
+| Optional OpenRune-Server integration | `ServerConnection`, `ServerProjectInspection`, `OpenRuneServerAdapter`, TOML persistence, metadata-only plugin inventory, fork/stale fingerprint diagnostics, and `ServerBuildRunner` tests; no server dependency in the cache reader | PASS for read-only inspection and declared build execution; source application and runtime bridge deferred |
 | External representative parity | Pinned TSPS revision-240 fixtures for plain/water, wall-heavy, generated-height, bridge-heavy; zero terrain/location/geometry differences and zero shaped-minimap pixel differences | PASS for covered evidence |
 | Manual interactive acceptance | [`MANUAL_SMOKE_TEST.md`](MANUAL_SMOKE_TEST.md) exists; full run requires an unlocked macOS desktop | NOT VERIFIED |
 | Sprite-bearing map-scene and full 3D renderer parity | Pinned TSPS revision-240 sprite-bearing `(50,50)` fixture now matches all four 256×256 shaped minimap planes with 0 differing pixels; compatibility renderer now contains missing-texture sentinels; no independent full 3D renderer fingerprint fixture | PARTIAL: minimap PASS and fallback containment; full renderer parity open |
@@ -140,8 +165,8 @@ The immediate code additions are intentionally small and foundation-safe:
 ## Next work, in order
 
 1. Collect the manual JavaFX smoke evidence after the macOS desktop is
-   unlocked, including open/edit/undo/save/reopen/recovery and controlled
-   workspace focus behavior.
+   unlocked, including open/edit/undo/save/reopen/recovery, controlled
+   workspace focus behavior, and plugin toggle/restart persistence.
 2. Produce a provenance-controlled collision fixture using the same canonical
    OpenRune route/movement semantics as `OsrsCollisionBuilder`, or explicitly
    keep client collision and editor/server collision as separate named layers.
@@ -170,8 +195,8 @@ The immediate code additions are intentionally small and foundation-safe:
    final rendering boundary.
 7. Continue extracting the existing catalog into vertical `Paint`, `Height`,
    `Collision`, and `Validation/Debug` feature packages; terrain, object, and
-   selection registrations are now separate built-in plugins. Do not create a
-   Gradle module for each feature.
+   selection registrations are now separate built-in plugins with persisted
+   enable/disable state. Do not create a Gradle module for each feature.
 8. Complete the current JavaFX shell integration, then implement Dear ImGui as
    a second consumer of the same state, commands, scene snapshots, asset
    facade, and contribution IDs.

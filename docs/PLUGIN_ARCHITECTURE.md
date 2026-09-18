@@ -142,7 +142,10 @@ OpenRune-Server integration is optional and capability-based. The neutral
 `ServerAdapter`/`ServerBuildProvider` contracts describe project layout and
 declarative build actions; `OpenRuneServerAdapter` contributes the current
 `or-cache` tasks without importing OpenRune-Server or making it a cache-reader
-dependency. Cache-only OSRS projects remain valid without a server checkout.
+dependency. `ServerBuildRunner` can execute those declared tasks from the
+selected server root with streamed output and bounded timeout/cancellation
+handling. Cache-only OSRS projects remain valid without a server checkout;
+source application and a runtime bridge remain deferred.
 
 ## Contribution ownership
 
@@ -337,3 +340,29 @@ the same session, command history, selection, asset repository, diagnostics,
 and renderer contracts. A workspace may contribute tools, panels, inspectors,
 and overlays, but it may not open caches, own a second world model, or create a
 second history/plugin registry.
+
+## Server integration is not server-plugin loading
+
+The built-in `OpenRuneServerAdapter` integrates a user-selected OpenRune
+checkout through inspection and declared build tasks. OpenRune's built-in
+`PluginPack` modules and external `plugins/` entries are inventoried for
+provenance and diagnostics, but Studio never executes their classes or loads
+their Guice/server runtime. This preserves the neutral Studio plugin boundary
+while still allowing a future server-side runtime bridge to negotiate explicit
+capabilities.
+
+## Renderer diagnostics contribution
+
+RuneLite DevTools is represented as one grouped first-party contribution,
+`rspsi.tools.renderer-debug`. It consumes the immutable `EditorSceneSnapshot`
+and may expose IDs, shapes, rotations, bridges, flags, collision, route, LOS,
+camera, occluder, and layer-order diagnostics.
+
+Persisted `UserTileMarker` values are project data. Temporary IDs, hover
+labels, collision previews, and scene warnings are
+`DiagnosticTileAnnotation` values and are regenerated from the current scene.
+Neither class opens a cache or mutates the authored world.
+
+The contribution uses the same lifecycle cleanup as every other built-in
+plugin. Unloading it removes its overlay registration and any tracked
+resources without touching the session, renderer scene, or history.

@@ -105,6 +105,11 @@ public final class LayeredCacheStore implements CacheStore {
     }
 
     @Override
+    public String backendName() {
+        return "staged layer over " + base.backendName() + " -> " + output.backendName();
+    }
+
+    @Override
     public void close() {
         flush();
         if (base == output) {

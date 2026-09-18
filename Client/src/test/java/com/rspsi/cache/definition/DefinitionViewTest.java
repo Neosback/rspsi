@@ -4,8 +4,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -49,5 +51,22 @@ class DefinitionViewTest {
 
         assertTrue(interactive.interactive());
         assertNotEquals(interactive, passive);
+    }
+
+    @Test
+    void objectViewModelTypePairingIsPreservedAndValidated() {
+        ObjectDefinitionView paired = new ObjectDefinitionView(
+                1, "Wall", 1, 1, List.of(), new int[]{10, 11}, new int[]{0, 4}, -1, true);
+
+        // Source-compatible constructor leaves the pairing empty (type 10 default).
+        ObjectDefinitionView unpaired = new ObjectDefinitionView(
+                1, "Wall", 1, 1, List.of(), new int[]{10}, -1, true);
+
+        assertArrayEquals(new int[]{0, 4}, paired.modelTypes());
+        assertEquals(0, unpaired.modelTypes().length);
+        assertNotEquals(paired, unpaired);
+
+        assertThrows(IllegalArgumentException.class, () -> new ObjectDefinitionView(
+                1, "Broken", 1, 1, List.of(), new int[]{10, 11}, new int[]{0}, -1, true));
     }
 }

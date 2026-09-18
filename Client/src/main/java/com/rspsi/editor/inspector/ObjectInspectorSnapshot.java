@@ -66,8 +66,9 @@ public record ObjectInspectorSnapshot(
 
     private static ObjectDefinitionSummary summary(ObjectDefinitionView definition) {
         List<Integer> models = Arrays.stream(definition.modelIds()).boxed().toList();
+        List<Integer> modelTypes = Arrays.stream(definition.modelTypes()).boxed().toList();
         return new ObjectDefinitionSummary(definition.id(), definition.name(),
                 Math.max(1, definition.width()), Math.max(1, definition.length()),
-                models, definition.interactions());
+                models, modelTypes, definition.interactions());
     }
 }

@@ -5,6 +5,9 @@ This document records the review of
 for OpenRune Studio. It is a focused scene/render/export reference, not a
 proposal to adopt the repository as a dependency or application base.
 
+Its findings are compared with RuneLite and TSPS in
+[`SCENE_RENDERING_CROSS_REFERENCE.md`](SCENE_RENDERING_CROSS_REFERENCE.md).
+
 ## Captured source
 
 - Local checkout: `../RSPSi-resources/OSRS-Environment-Exporter`

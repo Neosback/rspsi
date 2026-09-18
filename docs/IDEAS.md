@@ -262,3 +262,35 @@ adapters, not separate cache systems.
 Lighting remains a first-class renderer foundation item: faithful OSRS/TSPS
 lighting is the default, while frontend exposure is an editor-only display
 control.
+
+## OpenRune Server integration possibilities
+
+- server project connection wizard with recent roots and editable overrides;
+- LIVE/SERVER cache comparison and source-versus-built status;
+- pack-module and GameVal provenance in the asset browser;
+- staged semantic patch export back into OpenRune content sources;
+- build-cache, fresh-cache, GameVal merge, and server launch actions;
+- structured build reports and post-build cache reinspection;
+- optional local bridge for teleport, region reload, collision checks, and
+  development-client inspection;
+- fork capability reports that disable only unsupported integration features.
+
+The current implementation intentionally stops at read-only inspection and
+declared external build tasks. Studio must never execute arbitrary server
+plugins or assume the server checkout is beside the Studio installation.
+
+## RuneLite-derived rendering possibilities
+
+The following ideas are now backed by the RuneLite review and neutral packet
+contracts rather than being loose renderer concepts:
+
+- OpenGL scene upload with zone-level invalidation;
+- deterministic terrain/model packet export for CI and bug reports;
+- scene-layer, bridge, roof, occluder, alpha, priority, and UV diagnostics;
+- persisted tile-marker collections separate from temporary DevTools output;
+- headless scene export for Blender/glTF or external renderer comparison; and
+- frontend-independent lighting profiles with presentation-only exposure.
+
+These remain downstream of complete revision-240 packet fixtures. RuneLite
+source, generated client assets, and Java2D/OpenGL implementation classes are
+not copied into Studio.

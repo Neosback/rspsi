@@ -5,6 +5,9 @@ and renderer work. TSPS is a behavior donor and comparison source, not a
 production dependency. Its TypeScript runtime, browser/WebGL shell, mutable
 scene graph, cache loaders, and server are not imported into Studio.
 
+The cross-source adjudication with RuneLite and the OSRS Environment Exporter
+is maintained in [`SCENE_RENDERING_CROSS_REFERENCE.md`](SCENE_RENDERING_CROSS_REFERENCE.md).
+
 Reference checkout:
 
 - local path: `../RSPSi-resources/TSPS`
@@ -192,4 +195,3 @@ Before calling the 3D foundation complete, add fixtures for:
 The authoritative acceptance artifact should be a deterministic neutral
 render-packet fingerprint/export, not a byte-identical TSPS buffer or a
 browser screenshot.
-

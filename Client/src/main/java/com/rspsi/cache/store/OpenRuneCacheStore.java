@@ -137,6 +137,11 @@ public final class OpenRuneCacheStore implements CacheStore {
     }
 
     @Override
+    public String backendName() {
+        return "OpenRune FileStore" + (writable ? " (CacheDelegate output)" : " (read-only)");
+    }
+
+    @Override
     public void close() {
         if (writable) {
             cache.update();

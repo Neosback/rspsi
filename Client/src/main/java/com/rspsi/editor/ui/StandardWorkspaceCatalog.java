@@ -16,6 +16,7 @@ public final class StandardWorkspaceCatalog {
                 panel("history", DockRegion.BOTTOM, 280, 180),
                 panel("validation", DockRegion.BOTTOM, 320, 180),
                 panel("console", DockRegion.BOTTOM, 320, 140),
+                panel("plugins", DockRegion.BOTTOM, 300, 160),
                 new PanelDescriptor("command-palette", DockRegion.OVERLAY,
                         EnumSet.of(DockRegion.OVERLAY), 360, 240));
         List<WorkspaceDefinition> workspaces = List.of(
@@ -23,7 +24,8 @@ public final class StandardWorkspaceCatalog {
                 workspace("terrain", "tools", "viewport", "inspector", "assets", "history"),
                 workspace("objects", "tools", "viewport", "inspector", "assets", "history"),
                 workspace("collision", "tools", "viewport", "inspector", "validation", "console"),
-                workspace("validation-debug", "tools", "viewport", "inspector", "validation", "console"));
+                workspace("validation-debug", "tools", "viewport", "inspector", "validation", "console"),
+                workspace("plugins", "tools", "viewport", "inspector", "plugins"));
         return new WorkspaceCatalog(panels, workspaces);
     }
 

@@ -23,6 +23,9 @@ public final class RevisionAudit {
         if (requestedRevision <= 0) throw new IllegalArgumentException("Revision must be positive");
         OsrsRevisionProfile profile = OsrsRevisionProfile.forRevision(requestedRevision);
         List<VerificationCheck> checks = new ArrayList<>();
+        checks.add(new VerificationCheck("cache.backend",
+                VerificationCheck.Status.PASS,
+                store.backendName() == null ? "unknown cache backend" : store.backendName()));
         checks.add(metadataCheck(store.metadata(requestedRevision).orElse(null), requestedRevision));
         checks.add(layoutCheck(index, profile));
         checks.add(new VerificationCheck("revision.codec",
@@ -43,24 +46,41 @@ public final class RevisionAudit {
     /**
      * Audits the neutral definition surface without assuming a particular
      * cache library or archive layout. Empty sets remain warnings because a
-     * deliberately partial provider is valid for focused tools.
+     * deliberately partial provider is valid for focused tools. Decode
+     * failures are surfaced so a corrupt definition is never mistaken for an
+     * absent family.
      */
     public static List<VerificationCheck> auditDefinitions(DefinitionProvider definitions) {
         Objects.requireNonNull(definitions, "definitions");
-        return List.of(
-                definitionCheck("revision.definitions.objects", "objects", definitions.objectIds().size()),
-                definitionCheck("revision.definitions.underlays", "underlays", definitions.underlayIds().size()),
-                definitionCheck("revision.definitions.overlays", "overlays", definitions.overlayIds().size()),
-                definitionCheck("revision.definitions.textures", "textures", definitions.textureIds().size()),
-                definitionCheck("revision.definitions.models", "models", definitions.modelIds().size()),
-                definitionCheck("revision.definitions.mapScenes", "map-scene sprites", definitions.mapSceneIds().size()),
-                definitionCheck("revision.definitions.sequences", "sequences", definitions.sequenceIds().size()),
-                definitionCheck("revision.definitions.mapElements", "map elements", definitions.mapElementIds().size()),
-                sampleCheck("revision.definitions.sequenceDecode", "sequence",
-                        definitions.sequenceIds(), definitions::sequence),
-                sampleCheck("revision.definitions.mapElementDecode", "map element",
-                        definitions.mapElementIds(), definitions::mapElement),
-                modelGeometryCheck(definitions));
+        List<VerificationCheck> checks = new ArrayList<>();
+        checks.add(definitionCheck("revision.definitions.objects", "objects", definitions.objectIds().size()));
+        checks.add(definitionCheck("revision.definitions.underlays", "underlays", definitions.underlayIds().size()));
+        checks.add(definitionCheck("revision.definitions.overlays", "overlays", definitions.overlayIds().size()));
+        checks.add(definitionCheck("revision.definitions.textures", "textures", definitions.textureIds().size()));
+        checks.add(definitionCheck("revision.definitions.models", "models", definitions.modelIds().size()));
+        checks.add(definitionCheck("revision.definitions.mapScenes", "map-scene sprites", definitions.mapSceneIds().size()));
+        checks.add(definitionCheck("revision.definitions.sequences", "sequences", definitions.sequenceIds().size()));
+        checks.add(definitionCheck("revision.definitions.mapElements", "map elements", definitions.mapElementIds().size()));
+        checks.add(sampleCheck("revision.definitions.sequenceDecode", "sequence",
+                definitions.sequenceIds(), definitions::sequence));
+        checks.add(sampleCheck("revision.definitions.mapElementDecode", "map element",
+                definitions.mapElementIds(), definitions::mapElement));
+        checks.add(modelGeometryCheck(definitions));
+        checks.add(decodeFailureCheck(definitions.decodeFailures()));
+        return List.copyOf(checks);
+    }
+
+    private static VerificationCheck decodeFailureCheck(List<DefinitionProvider.DecodeFailure> failures) {
+        if (failures.isEmpty()) {
+            return new VerificationCheck("revision.definitions.decodeFailures",
+                    VerificationCheck.Status.PASS, "no definition decode failures recorded");
+        }
+        DefinitionProvider.DecodeFailure first = failures.get(0);
+        return new VerificationCheck("revision.definitions.decodeFailures",
+                VerificationCheck.Status.WARN,
+                failures.size() + " indexed definitions failed to decode; first: "
+                        + first.family() + " " + (first.id() < 0 ? "(load)" : first.id())
+                        + " " + first.message());
     }
 
     private static VerificationCheck modelGeometryCheck(DefinitionProvider definitions) {

@@ -338,3 +338,36 @@ The source checkout also has a portability issue: the publishing build
 defaults to a hard-coded Windows path, while its README advertises an older
 published version. Studio pins published artifacts and treats any upstream
 fix as a separately tracked compatibility change.
+
+## OpenRune Server integration review
+
+The OpenRune-Server checkout is useful to Studio in three separate ways:
+
+1. `or-cache` documents and implements the server's cache build, map,
+   GameVal, CS2, interface, DB-table, model, sprite, and incremental packing
+   workflow.
+2. `content/**/pack` provides source-resource provenance for server content.
+3. `plugins/` demonstrates external runtime plugin metadata and lifecycle,
+   but its server classes must not be loaded into Studio.
+
+Studio now has a read-only adapter for arbitrary server roots, path overrides,
+fork diagnostics, fingerprints, content inventory, and external Gradle task
+descriptions. FileStore remains the only cache reader. Source application and
+the optional local runtime bridge are later milestones.
+
+## RuneLite scene/rendering intake
+
+The full RuneLite checkout is retained as the OSRS client-semantic and GPU
+reference. Its scene construction, shaped-tile tables, terrain lighting,
+bridge/effective-plane handling, `SceneUploader`, GLSL inputs, and DevTools
+overlay conventions are documented in:
+
+- [`RUNELITE_SCENE_RENDERING_REFERENCE.md`](RUNELITE_SCENE_RENDERING_REFERENCE.md)
+- [`RUNELITE_GPU_PIPELINE.md`](RUNELITE_GPU_PIPELINE.md)
+- [`RUNELITE_DEVTOOLS_OVERLAYS.md`](RUNELITE_DEVTOOLS_OVERLAYS.md)
+
+RuneLite is not a production cache or renderer dependency. Its Java2D overlay
+implementation is translated into frontend-neutral marker/diagnostic models;
+its GPU path informs packet fields and invalidation but does not own RSPSi
+scene interpretation. OpenRune FileStore remains the only production cache and
+definition path.

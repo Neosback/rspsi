@@ -9,10 +9,11 @@ class StandardWorkspaceCatalogTest {
     void standardCatalogContainsTheFiveControlledWorkspaces() {
         WorkspaceCatalog catalog = StandardWorkspaceCatalog.create();
 
-        assertEquals(java.util.List.of("map", "terrain", "objects", "collision", "validation-debug"),
+        assertEquals(java.util.List.of("map", "terrain", "objects", "collision", "validation-debug", "plugins"),
                 catalog.workspaces().stream().map(WorkspaceDefinition::id).toList());
         assertEquals(DockRegion.CENTER, catalog.panel("viewport").preferredRegion());
         assertEquals(DockRegion.LEFT, catalog.panel("tools").preferredRegion());
+        assertEquals(DockRegion.BOTTOM, catalog.panel("plugins").preferredRegion());
     }
 
     @Test

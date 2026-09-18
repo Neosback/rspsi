@@ -9,15 +9,18 @@ dependencies {
     implementation 'com.displee:disio:2.3'
 
     // Isolated compatibility spike; OpenRune types must not leak into editor APIs.
-    implementation 'dev.or2:filesystem:2.4.19'
-    implementation 'dev.or2:filestore:2.4.19'
-    implementation 'dev.or2:osrs-fs:2.4.19'
-    implementation 'dev.or2:osrs:2.4.19'
-    implementation 'dev.or2:definition:2.4.19'
+    // The version is pinned in the root gradle.properties; overriding it is a
+    // parity event governed by docs/FILESTORE_CAPABILITY_AUDIT.md.
+    implementation "dev.or2:filesystem:${openruneFileStoreVersion}"
+    implementation "dev.or2:filestore:${openruneFileStoreVersion}"
+    implementation "dev.or2:osrs-fs:${openruneFileStoreVersion}"
+    implementation "dev.or2:osrs:${openruneFileStoreVersion}"
+    implementation "dev.or2:definition:${openruneFileStoreVersion}"
+    implementation "dev.or2:opcode:${openruneFileStoreVersion}"
     // Explicit opt-in writable adapter. The normal FileStore filesystem
     // remains read-only; this module exposes OpenRune's CacheDelegate for a
     // separately selected output cache.
-    implementation('dev.or2:tools:2.4.19') {
+    implementation("dev.or2:tools:${openruneFileStoreVersion}") {
         // The tools aggregate also pulls the later CS2 compiler, whose
         // optional 4koma dependency is not published in the OpenRune host.
         // CacheDelegate does not use that compiler.
@@ -108,7 +111,24 @@ tasks.register('verifyCacheBackendBoundary') {
     }
 }
 
+tasks.register('verifyRetiredLoaderBoundary') {
+    description = 'The old OSRSPlugin service-loader path is retired; renderer loaders live in com.rspsi.compat.osrs.'
+    group = 'verification'
+    inputs.files(cacheBackendSources)
+    doLast {
+        cacheBackendSources.files.each { source ->
+            source.eachLine { line, number ->
+                if (line.contains('com.rspsi.plugin.loader') || line.contains('ClientPluginLoader')) {
+                    throw new GradleException("Retired OSRSPlugin loader reference at ${source}:${number}: ${line.trim()}"
+                            + ' Use com.rspsi.compat.osrs.OsrsCompatibilityLoaders instead.')
+                }
+            }
+        }
+    }
+}
+
 tasks.named('check') {
     dependsOn(tasks.named('verifyUiNeutralCore'))
     dependsOn(tasks.named('verifyCacheBackendBoundary'))
+    dependsOn(tasks.named('verifyRetiredLoaderBoundary'))
 }

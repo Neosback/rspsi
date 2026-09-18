@@ -87,6 +87,11 @@ public final class LegacyDispleeCacheStore implements CacheStore {
     }
 
     @Override
+    public String backendName() {
+        return "Displee cache library (legacy compatibility)";
+    }
+
+    @Override
     public void close() {
         if (closed) {
             return;
