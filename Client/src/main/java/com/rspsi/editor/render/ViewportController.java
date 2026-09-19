@@ -18,6 +18,40 @@ public final class ViewportController {
         camera = Objects.requireNonNull(next, "camera");
     }
 
+    /**
+     * Drives the camera forward along the direction it faces, in the ground
+     * plane. The renderer's forward axis is {@code (sin(yaw), cos(yaw))} in
+     * world x/z (see the vertex shader's
+     * {@code forward = d.x * sin(yaw) + d.z * cos(yaw)}), so walking the
+     * camera along that vector moves it toward whatever is on screen ahead.
+     *
+     * <p>Pitch is deliberately ignored: a map editor camera that is angled
+     * down should travel across the map at a steady height rather than fly
+     * into the terrain, so this is a heading-only move, not a free-fly along
+     * the view vector.</p>
+     *
+     * @param distance world units to advance; negative moves backward
+     */
+    public void moveForward(float distance) {
+        if (distance == 0.0f) return;
+        float sinYaw = (float) Math.sin(camera.yaw());
+        float cosYaw = (float) Math.cos(camera.yaw());
+        camera = new CameraState(camera.x() + distance * sinYaw, camera.y(),
+                camera.z() + distance * cosYaw, camera.pitch(), camera.yaw());
+    }
+
+    /**
+     * Turns the camera in place. This is a heading change, not a sideways
+     * slide: the camera position is untouched and only {@code yaw} moves.
+     *
+     * @param radians positive turns the view to the right
+     */
+    public void rotateYaw(float radians) {
+        if (radians == 0.0f) return;
+        camera = new CameraState(camera.x(), camera.y(), camera.z(),
+                camera.pitch(), camera.yaw() + radians);
+    }
+
     /** Applies one frame of input; deltas are pixels and wheel is ImGui-style. */
     public void update(float deltaX, float deltaY,
                        boolean pan, boolean orbit, float wheel) {

@@ -24,7 +24,9 @@ import java.util.Optional;
  * <p>This deliberately stops at the packet boundary. It does not cache or
  * mutate backend model objects, and it never asks a cache implementation to
  * render. The order mirrors the client/TSPS path: select model parts, mirror,
- * rotate, recolor/retexture, resize, translate, contour, then light.</p>
+ * rotate, recolor/retexture, resize, translate, light, then contour (the
+ * client bakes lighting from pre-contour normals and warps the lit model's
+ * vertex heights afterwards).</p>
  */
 public final class ModelPacketBuilder {
     private static final int[] DECOR_DISPLACEMENT_X = {1, 0, -1, 0};
@@ -123,7 +125,15 @@ public final class ModelPacketBuilder {
                 objectCenterHeight(document, object, footprintWidth, footprintLength),
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
                 GpuDrawCommand.RenderMode.DEFAULT);
-        return Optional.of(mergeWallVariantNormals(packet, parts.wallVariantRanges));
+        // The client only reaches the shape-2 corner-wall normal merge for
+        // objects whose definition set opcode 22 (mergeNormals /
+        // nonFlatShading) - see Scene's shape-2 merge, gated the same way as
+        // the cross-packet mergeNormals() below via
+        // ObjectAppearanceView.mergeNormals(). Without this gate, corner
+        // walls that never opted into merging get their lighting seams
+        // over-smoothed.
+        return Optional.of(appearance.mergeNormals()
+                ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }
 
     private Optional<AnimationFrameView> animationFrame(int animationId, int clientCycle) {
@@ -227,12 +237,22 @@ public final class ModelPacketBuilder {
                     DIAGONAL_DISPLACEMENT_Z[rotation] * (displacement / 2), false));
             case 7 -> List.of(new ModelVariant(4, ((rotation + 2) & 3) + 4,
                     0, 0, false));
+            // Shape 8 builds the client's two-renderable wall decoration.
+            // Only renderable1 is placed with the diagonal displacement
+            // (drawn at x*4096 + xOffset, y*64 + zOffset); renderable2 is
+            // drawn at the bare tile position with NO offset. Giving both
+            // the same displacement stacks two near-coplanar decoration
+            // models on one another, which z-fights.
+            //
+            // NOTE: the client also draws exactly ONE of these two per
+            // frame, choosing by which side of the decoration the camera is
+            // on (Scene: orientation == 256 -> compare transformed dx/dz,
+            // then renderable1 else renderable2). That camera-dependent
+            // selection is not implemented here yet, so both still render.
             case 8 -> List.of(new ModelVariant(4, rotation + 4,
                     DIAGONAL_DISPLACEMENT_X[rotation] * (displacement / 2),
                     DIAGONAL_DISPLACEMENT_Z[rotation] * (displacement / 2), false),
-                    new ModelVariant(4, ((rotation + 2) & 3) + 4,
-                            DIAGONAL_DISPLACEMENT_X[rotation] * (displacement / 2),
-                            DIAGONAL_DISPLACEMENT_Z[rotation] * (displacement / 2), false));
+                    new ModelVariant(4, ((rotation + 2) & 3) + 4, 0, 0, false));
             case 11 -> List.of(new ModelVariant(10, rotation + 4, 0, 0, true));
             default -> List.of(new ModelVariant(object.type(), rotation, 0, 0, false));
         };
@@ -240,9 +260,14 @@ public final class ModelPacketBuilder {
 
     /**
      * OSRS wall decorations use the displacement stored by the wall they are
-     * attached to, not an arbitrary renderer default. Keep this lookup inside
-     * the definition adapter boundary and fall back to the decoration's own
-     * value for sparse/editing documents that have no wall yet.
+     * attached to, not an arbitrary renderer default. When no supporting
+     * wall is found (a sparse/editing document, or a decoration placed
+     * before its wall), the client falls back to a hardcoded literal - 16,
+     * used unhalved by variantsFor's shape-5 case - rather than the
+     * decoration's own definition value. variantsFor already halves this
+     * shared displacement for the diagonal shapes 6/8, so returning 16 here
+     * also reproduces the client's separate "8" diagonal default without a
+     * second case.
      */
     private int wallDecorationDisplacement(WorldObject decoration,
                                            ObjectAppearanceView ownAppearance,
@@ -257,7 +282,7 @@ public final class ModelPacketBuilder {
                 if (wall.isPresent()) return wall.orElseThrow().decorDisplacement();
             }
         }
-        return ownAppearance.decorDisplacement();
+        return 16;
     }
 
     private void append(PacketParts parts, WorldObject object, ObjectAppearanceView appearance,
@@ -266,7 +291,17 @@ public final class ModelPacketBuilder {
                         int footprintWidth, int footprintLength) {
         int vertexOffset = parts.vertices.size();
         int[] positions = geometry.vertexPositions();
-        boolean mirror = appearance.rotated() || (variant.sourceType() == 2 && variant.rotation() > 3);
+        // The client's getModelData mirrors via isRotated XOR (rotationParam
+        // > 3), applied uniformly for every shape through the rotation value
+        // passed to it - not an OR gated to sourceType==2. The ">3" case
+        // covers shape 2's first wall piece (rot+4) and every diagonal
+        // wall-decoration variant (shapes 6/7/8/11, which also use a "+4"
+        // rotation); those must mirror only when isRotated is false, and a
+        // straight variant (rotation always <=3) must mirror only when
+        // isRotated is true - an unconditional OR mirrors straight-shape-2
+        // pieces and never mirrors diagonal decorations at all when
+        // isRotated is false, which is the common case.
+        boolean mirror = appearance.rotated() ^ (variant.rotation() > 3);
         // TSPS/RuneLite place a location at the centre of its footprint, not
         // at the south-west corner. The packet keeps x/z relative to the
         // anchor tile, so the centre is footprint * halfTile.
@@ -311,17 +346,10 @@ public final class ModelPacketBuilder {
             transformed.add(new RawVertex(x, y, z));
         }
 
-        if (appearance.contouredGround()) {
-            List<RawVertex> contoured = new ArrayList<>(transformed.size());
-            for (RawVertex vertex : transformed) {
-                int delta = contourDelta(document, object, footprintWidth, footprintLength,
-                        vertex.x, vertex.z, vertex.y, appearance.contourGroundType(),
-                        appearance.contourGroundParameter(), transformed);
-                contoured.add(new RawVertex(vertex.x, vertex.y + delta, vertex.z));
-            }
-            transformed = contoured;
-        }
-
+        // The client bakes lighting from pre-contour normals: LocModelLoader
+        // lights the placed model and SceneBuilder applies contourGround to
+        // the already-lit result. Contouring first would feed the light pass
+        // slope-shifted normals and visibly tilt shading on hills.
         List<Normal> normals = calculateNormals(transformed, geometry, mirror);
         int[] colors = toUnsignedColors(geometry.triangleColors());
         int[] alphas = geometry.triangleAlphas();
@@ -332,14 +360,6 @@ public final class ModelPacketBuilder {
         int renderPriority = definitions.model(geometry.id()).map(view -> view.renderPriority()).orElse(0);
         int[] indices = geometry.triangleIndices();
         TextureProjection[] textureProjections = buildTextureProjections(geometry);
-        for (int vertex = 0; vertex < transformed.size(); vertex++) {
-            RawVertex value = transformed.get(vertex);
-            Normal normal = normals.get(vertex);
-            parts.vertices.add(new ModelVertex(value.x, value.y, value.z,
-                    normal.x, normal.y, normal.z, normal.magnitude,
-                    normalized(value.x, transformed, true),
-                    normalized(value.z, transformed, false)));
-        }
         for (int face = 0; face < geometry.triangleCount(); face++) {
             int index = face * 3;
             int a = indices[index];
@@ -411,6 +431,23 @@ public final class ModelPacketBuilder {
                     texture < 0 ? -1 : retexture(texture, appearance.retextures()),
                     alpha, priority, renderType, uv.u0, uv.v0, uv.u1, uv.v1, uv.u2, uv.v2,
                     color, bias));
+        }
+        // Lighting and face colors are locked in above from pre-contour
+        // geometry; the client warps vertex Y afterwards (SceneBuilder applies
+        // contourGround to the already-lit model). The client gates on
+        // clipType >= 0, not on the legacy boolean.
+        if (appearance.contourGroundType() >= 0) {
+            List<RawVertex> contoured = applyContour(document, object, footprintWidth,
+                    footprintLength, transformed, appearance);
+            if (contoured != null) transformed = contoured;
+        }
+        for (int vertex = 0; vertex < transformed.size(); vertex++) {
+            RawVertex value = transformed.get(vertex);
+            Normal normal = normals.get(vertex);
+            parts.vertices.add(new ModelVertex(value.x, value.y, value.z,
+                    normal.x, normal.y, normal.z, normal.magnitude,
+                    normalized(value.x, transformed, true),
+                    normalized(value.z, transformed, false)));
         }
         int[] textureIndices = geometry.textureTriangleIndices();
         for (int index = 0; index + 2 < textureIndices.length; index += 3) {
@@ -1041,87 +1078,188 @@ public final class ModelPacketBuilder {
         }
     }
 
-    private static int contourDelta(WorldDocument document, WorldObject object,
-                                    int footprintWidth, int footprintLength,
-                                    int x, int z, int vertexY, int type, int parameter,
-                                    List<RawVertex> transformed) {
-        if (type < 0) return 0;
-        // x/z already contain the footprint-centred model placement. Adding
-        // the footprint centre a second time shifts contoured models by half
-        // a tile (or more for multi-tile objects).
-        int localX = object.x() * 128 + x;
-        int localZ = object.y() * 128 + z;
-        int heightPlane = object.plane();
-        int surface = sampleHeight(document, heightPlane, localX, localZ);
-        int center = sampleHeight(document, heightPlane,
-                object.x() * 128 + footprintWidth * 64,
-                object.y() * 128 + footprintLength * 64);
-        int delta = surface - center;
-        if (type == 2) {
-            // TSPS/RuneLite's partial contour uses the model's downward
-            // height ratio. Cache adapters that expose this mode provide the
-            // 0..65536 cutoff in parameter.
-            int modelHeight = transformed.stream().mapToInt(vertex -> -vertex.y).max().orElse(1);
-            int ratio = Math.max(0, Math.min(65536,
-                    (vertexY << 16) / Math.max(1, modelHeight)));
-            int cutoff = parameter > 0 ? parameter : 65536;
-            if (ratio >= cutoff) return 0;
-            return delta * (cutoff - ratio) / cutoff;
+    /**
+     * Applies the client contourGround pass to an already-lit model, mirroring
+     * melxin {@code Model.contourGround}: per-vertex bilinear height minus the
+     * placement height, guarded by the client's radius-box bounds and
+     * fully-flat-footprint skips. The partial mode (clipType &gt; 0) warps
+     * vertices by {@code (-y << 16) / max(-y)} against the clip-type
+     * parameter so only the model's upper span conforms to the terrain; the
+     * full mode (clipType == 0) attaches every vertex. Types 3-5 mirror TSPS's
+     * generalized {@code ModelData.contourGround} for completeness.
+     *
+     * @return the warped vertices, or {@code null} when the client would leave
+     *         the model unchanged
+     */
+    private List<RawVertex> applyContour(WorldDocument document, WorldObject object,
+                                         int footprintWidth, int footprintLength,
+                                         List<RawVertex> transformed,
+                                         ObjectAppearanceView appearance) {
+        int type = appearance.contourGroundType();
+        int parameter = appearance.contourGroundParameter();
+        if (type < 0) return null;
+        boolean usesAbovePlane = type == 4 || type == 5;
+        if (usesAbovePlane && document.planes() <= object.plane() + 1) return null;
+
+        // Client bounds cylinder (calculateBoundsCylinder): height = max(-y)
+        // drives the partial ratio, xzRadius = max(sqrt(x^2+z^2)) grown by
+        // +0.99 bounds the footprint box used for the skip checks.
+        int downwardHeight = 0;
+        long radiusSquared = 0L;
+        int modelMinY = Integer.MAX_VALUE;
+        int modelMaxY = Integer.MIN_VALUE;
+        for (RawVertex vertex : transformed) {
+            if (-vertex.y() > downwardHeight) downwardHeight = -vertex.y();
+            long squared = (long) vertex.x() * vertex.x() + (long) vertex.z() * vertex.z();
+            if (squared > radiusSquared) radiusSquared = squared;
+            modelMinY = Math.min(modelMinY, vertex.y());
+            modelMaxY = Math.max(modelMaxY, vertex.y());
         }
-        if (type == 3 && parameter != 0) {
-            int limit = Math.abs(parameter);
-            return Math.max(-limit, Math.min(limit, delta));
+        downwardHeight = Math.max(1, downwardHeight);
+        int xzRadius = (int) (Math.sqrt((double) radiusSquared) + 0.99D);
+        int verticalSpan = Math.max(1, modelMaxY - modelMinY);
+
+        int anchorX = object.x() * 128;
+        int anchorZ = object.y() * 128;
+        int plane = object.plane();
+        int minWorldX = anchorX - xzRadius;
+        int maxWorldX = anchorX + xzRadius;
+        int minWorldZ = anchorZ - xzRadius;
+        int maxWorldZ = anchorZ + xzRadius;
+        // Out-of-scene footprints are left untouched (client bounds guard:
+        // every vertex satisfies tx+1 < width because xzRadius bounds them).
+        if (minWorldX < 0 || (maxWorldX + 128) >> 7 >= document.width()
+                || minWorldZ < 0 || (maxWorldZ + 128) >> 7 >= document.length()) {
+            return null;
         }
-        if ((type == 4 || type == 5) && document.planes() > heightPlane + 1) {
-            int abovePlane = heightPlane + 1;
-            int aboveSurface = sampleHeight(document, abovePlane, localX, localZ);
-            int modelMinY = transformed.stream().mapToInt(vertex -> vertex.y).min().orElse(0);
-            int modelMaxY = transformed.stream().mapToInt(vertex -> vertex.y).max().orElse(0);
-            int modelHeight = Math.max(1, modelMaxY - modelMinY);
-            if (type == 4) {
-                // TSPS type 4 uses the plane above and preserves the model's
-                // vertical span while attaching it to the upper surface.
-                return aboveSurface - center + modelHeight;
+        int sceneHeight = objectCenterHeight(document, object, footprintWidth, footprintLength);
+        int startTileX = minWorldX >> 7;
+        int endTileX = (maxWorldX + 127) >> 7;
+        int startTileZ = minWorldZ >> 7;
+        int endTileZ = (maxWorldZ + 127) >> 7;
+        // Fully flat footprints skip the warp: the client compares the radius
+        // box's corner tile heights against the placement height (the client
+        // flat-skips both modes; types 4/5 always warp).
+        if (!usesAbovePlane
+                && sampleGrid(document, plane, startTileX, startTileZ) == sceneHeight
+                && sampleGrid(document, plane, endTileX, startTileZ) == sceneHeight
+                && sampleGrid(document, plane, startTileX, endTileZ) == sceneHeight
+                && sampleGrid(document, plane, endTileX, endTileZ) == sceneHeight) {
+            return null;
+        }
+
+        List<RawVertex> result = new ArrayList<>(transformed.size());
+        for (RawVertex vertex : transformed) {
+            int worldX = anchorX + vertex.x();
+            int worldZ = anchorZ + vertex.z();
+            int fractionX = worldX & 127;
+            int fractionZ = worldZ & 127;
+            int tileX = worldX >> 7;
+            int tileZ = worldZ >> 7;            // Client-exact bilinear: shifted, not divided, so negative scene
+            // heights (the OSRS convention) floor toward negative infinity
+            // exactly as the client's arithmetic shift does.
+            int south = contourBlend(sampleGrid(document, plane, tileX, tileZ),
+                    sampleGrid(document, plane, tileX + 1, tileZ), fractionX);
+            int north = contourBlend(sampleGrid(document, plane, tileX, tileZ + 1),
+                    sampleGrid(document, plane, tileX + 1, tileZ + 1), fractionX);
+            int height = contourBlend(south, north, fractionZ);
+            int newY;
+            // Client dispatch (ObjectComposition.getModel*): clipType == 0
+            // warps every vertex (param 0); clipType > 0 warps only the model
+            // span above the partial threshold (param = clipType * 65536).
+            // TSPS generalizes the partial path as contourGroundType 2.
+            if ((type == 1 || type == 2) && parameter > 0) {
+                // Client partial contour: ratio = (-y << 16) / max(-y) runs
+                // 0 at the model top toward 65536 at the bottom; only
+                // vertices above the parameter threshold warp, scaled by
+                // (param - ratio) / param.
+                int yRatio = ((-vertex.y()) << 16) / downwardHeight;
+                if (yRatio < parameter) {
+                    newY = vertex.y() + (parameter - yRatio) * (height - sceneHeight) / parameter;
+                } else {
+                    newY = vertex.y();
+                }
+            } else if (type == 3) {
+                int delta = height - sceneHeight;
+                if (parameter != 0) {
+                    int limit = Math.abs(parameter);
+                    delta = Math.max(-limit, Math.min(limit, delta));
+                }
+                newY = vertex.y() + delta;
+            } else if (type == 4) {
+                int aboveHeight = contourSampleAbove(document, plane, worldX, worldZ,
+                        fractionX, fractionZ);
+                newY = vertex.y() + aboveHeight - sceneHeight + verticalSpan;
+            } else if (type == 5) {
+                int aboveHeight = contourSampleAbove(document, plane, worldX, worldZ,
+                        fractionX, fractionZ);
+                int deltaHeight = height - aboveHeight;
+                newY = (((vertex.y() << 8) / verticalSpan) * deltaHeight >> 8)
+                        - (sceneHeight - height);
+            } else {
+                // Type 1 with parameter 0 (client clipType 0) and any
+                // unmodelled type: full ground attachment.
+                newY = vertex.y() + height - sceneHeight;
             }
-            // TSPS type 5 blends the height difference between the current
-            // and upper surfaces through the model's vertical span.
-            int deltaHeight = surface - aboveSurface;
-            return ((vertexY * 256 / modelHeight) * deltaHeight >> 8)
-                    - (center - surface);
+            result.add(new RawVertex(vertex.x(), newY, vertex.z()));
         }
-        return delta;
+        return result;
     }
 
-    private static int objectCenterHeight(WorldDocument document, WorldObject object,
-                                          int footprintWidth, int footprintLength) {
-        return sampleHeight(document, object.plane(),
-                object.x() * 128 + footprintWidth * 64,
-                object.y() * 128 + footprintLength * 64);
+    /** Client bilinear step: {@code (first * (128 - amount) + second * amount) >> 7}. */
+    private static int contourBlend(int first, int second, int amount) {
+        return (first * (128 - amount) + second * amount) >> 7;
     }
 
-    /** Bilinearly samples the shared-corner height surface used by terrain. */
-    private static int sampleHeight(WorldDocument document, int plane, int worldX, int worldY) {
-        int safePlane = Math.max(0, Math.min(document.planes() - 1, plane));
-        int tileX = Math.max(0, Math.min(document.width() - 1, Math.floorDiv(worldX, 128)));
-        int tileY = Math.max(0, Math.min(document.length() - 1, Math.floorDiv(worldY, 128)));
-        int dx = Math.max(0, Math.min(128, worldX - tileX * 128));
-        int dy = Math.max(0, Math.min(128, worldY - tileY * 128));
-        // The tile owns the four shared-corner values used by the terrain
-        // packet. Resolving a corner again from absolute coordinates is
-        // ambiguous at x/y boundaries and can accidentally read the adjacent
-        // tile's south-west value instead of this tile's north edge.
-        TileSnapshot tile = document.tile(safePlane, tileX, tileY).snapshot();
-        int southWest = tile.southWestHeight();
-        int southEast = tile.southEastHeight();
-        int northWest = tile.northWestHeight();
-        int northEast = tile.northEastHeight();
-        int south = interpolate(southWest, southEast, dx);
-        int north = interpolate(northWest, northEast, dx);
-        return interpolate(south, north, dy);
+    /** Bilinearly samples the plane above at contour time for TSPS types 4/5. */
+    private static int contourSampleAbove(WorldDocument document, int plane, int worldX,
+                                          int worldZ, int fractionX, int fractionZ) {
+        int tileX = worldX >> 7;
+        int tileZ = worldZ >> 7;
+        int south = contourBlend(sampleGrid(document, plane + 1, tileX, tileZ),
+                sampleGrid(document, plane + 1, tileX + 1, tileZ), fractionX);
+        int north = contourBlend(sampleGrid(document, plane + 1, tileX, tileZ + 1),
+                sampleGrid(document, plane + 1, tileX + 1, tileZ + 1), fractionX);
+        return contourBlend(south, north, fractionZ);
     }
 
-    private static int interpolate(int first, int second, int amount) {
-        return first + (second - first) * amount / 128;
+    /**
+     * Resolves a shared corner-grid point the way the client's scene height
+     * grid does: each grid point is written once per adjacent tile and the
+     * east/south tile's write wins, so a point on a tile boundary reads the
+     * containing tile's south-west corner. Edge points fall back to the
+     * clamped edge tile's far corner.
+     */
+    private static int sampleGrid(WorldDocument document, int plane, int gridX, int gridZ) {
+        boolean eastEdge = gridX >= document.width();
+        boolean northEdge = gridZ >= document.length();
+        int tileX = Math.max(0, eastEdge ? document.width() - 1 : gridX);
+        int tileZ = Math.max(0, northEdge ? document.length() - 1 : gridZ);
+        TileSnapshot tile = document.tile(plane, tileX, tileZ).snapshot();
+        if (eastEdge && northEdge) return tile.northEastHeight();
+        if (eastEdge) return tile.southEastHeight();
+        if (northEdge) return tile.northWestHeight();
+        return tile.southWestHeight();
+    }
+
+    /**
+     * Client centerLocHeightWithSize placement height: the mean of the four
+     * corner grid heights of the footprint's central block (TSPS SceneBuilder).
+     */
+    private int objectCenterHeight(WorldDocument document, WorldObject object,
+                                   int footprintWidth, int footprintLength) {
+        int anchorX = object.x() * 128;
+        int anchorZ = object.y() * 128;
+        int startX = anchorX + (footprintWidth >> 1) * 128;
+        int startZ = anchorZ + (footprintLength >> 1) * 128;
+        int endX = anchorX + (footprintWidth - (footprintWidth >> 1)) * 128;
+        int endZ = anchorZ + (footprintLength - (footprintLength >> 1)) * 128;
+        int plane = object.plane();
+        long sum = (long) sampleGrid(document, plane, startX >> 7, startZ >> 7)
+                + sampleGrid(document, plane, startX >> 7, endZ >> 7)
+                + sampleGrid(document, plane, endX >> 7, startZ >> 7)
+                + sampleGrid(document, plane, endX >> 7, endZ >> 7);
+        return (int) (sum >> 2);
     }
 
     private static List<Normal> calculateNormals(List<RawVertex> vertices,

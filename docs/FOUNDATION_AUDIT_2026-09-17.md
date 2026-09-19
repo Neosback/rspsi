@@ -167,7 +167,11 @@ The immediate code additions are intentionally small and foundation-safe:
 0. Execute the render-parity plan in
    [`RENDER_PARITY_GAP_ANALYSIS_2026-09-17.md`](RENDER_PARITY_GAP_ANALYSIS_2026-09-17.md)
    starting at P0 (terrain appearance domain fixes), before any GPU adapter
-   or renderer parity claim.
+   or renderer parity claim. Round-2 corrections (2026-09-18) are landed:
+   animation skin-label indirection and rotation order, client-exact contour
+   ground (clipType parameter path, radius-box skips, `>> 7` bilinear), and
+   the OpenRune clipType mapping now follow the pinned references exactly —
+   see the gap analysis "Round-2 corrections" section.
 1. Collect the manual JavaFX smoke evidence after the macOS desktop is
    unlocked, including open/edit/undo/save/reopen/recovery, controlled
    workspace focus behavior, and plugin toggle/restart persistence.

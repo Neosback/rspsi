@@ -223,8 +223,26 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                         toArray(definition.getModifiedTextureColours())),
                 true, false, false, definition.getNonFlatShading(),
                 definition.getAmbient(), definition.getContrast(), definition.getDecorDisplacement(),
-                -1, 0, definition.getModelClipped(), definition.isRotated(),
+                contourGroundType(definition.getClipType()),
+                contourGroundParameter(definition.getClipType()),
+                definition.getModelClipped(), definition.isRotated(),
                 definition.getObstructive(), Math.max(0, definition.getClipMask())));
+    }
+
+    /**
+     * Maps the cache clipType to the neutral contour mode, mirroring the
+     * client render gate {@code clipType * 65536 >= 0}: the sentinel -1 (and
+     * any value whose scaled parameter overflows negative) leaves the model
+     * un-contoured, 0 requests full ground attachment, and positive values
+     * request the partial contour with parameter clipType * 65536.
+     */
+    static int contourGroundType(int clipType) {
+        return clipType * 65536 >= 0 && clipType != -1 ? 1 : -1;
+    }
+
+    /** Scaled partial-contour parameter, matching the client's int overflow. */
+    static int contourGroundParameter(int clipType) {
+        return contourGroundType(clipType) < 0 ? 0 : clipType * 65536;
     }
 
     private static int[] toArray(List<Integer> values) {

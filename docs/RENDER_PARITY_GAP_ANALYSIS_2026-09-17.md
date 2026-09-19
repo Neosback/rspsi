@@ -227,6 +227,49 @@ as gaps rather than being implied by the top-down preview.
 - Bridge authored/effective-plane separation and collision-before-promotion
   order: implemented and tested.
 
+## Round-2 corrections (2026-09-18, verified against the pinned checkouts)
+
+Two families of client-exactness bugs were found by re-diffing the live
+decode/render path against melxin `Model.contourGround`,
+`Model.calculateBoundsCylinder`, `ObjectComposition.getModel*`, and TSPS
+`ModelData.contourGround` — both families are now fixed and pinned by tests.
+
+### R1. Animation transforms resolved skeleton labels as raw vertex indices
+
+`Model.transform` resolves each skeleton label through the model's per-vertex
+skin map (`vertexSkins[v] == labelId` defines membership); the old code
+iterated label ids as if they were vertex indices, silently working only for
+dense humanoid skins. The rewrite builds the two-level indirection (labels →
+vertex/triangle lists, then transforms), applies the type-5 face alpha via the
+same face-label indirection, and uses the client rotation order Z → X → Y with
+the natural angle-source mapping (melxin `Model.animate`, confirmed by TSPS
+`Model.animate`). Pinned by `ModelAnimationTest`.
+
+### R2. Contour ground used TSPS's generalized types instead of the client path
+
+The live OSRS client only ever calls contourGround with
+`param = clipType * 65536`: `-1` skips, `0` fully warps every vertex, and
+positive values warp only the span where `(-y << 16) / max(-y) < param` —
+note the ratio is **positive top-to-bottom**; deriving the denominator as
+`-max(-y)` (TSPS `this.height` re-signed) inverts which vertices conform.
+The rewrite implements the client path exactly: radius-box bounds and
+flat-footprint skip from `calculateBoundsCylinder` (xzRadius =
+`max(sqrt(x²+z²)) + 0.99`), `>> 7` bilinear sampling so negative scene
+heights floor identically, reference height = the footprint central-block
+corner mean, light baked pre-contour (client order), and TSPS types 3–5 kept
+as generalized fallbacks. The OpenRune provider now maps clipType through the
+client's `clipType * 65536 >= 0` gate (including the int-overflow skip), and
+the builder gate moved off the legacy `contouredGround()` boolean.
+Pinned by `ModelPacketBuilderTest` contour cases and
+`OpenRuneDefinitionProviderContourGroundTest`.
+
+### Depth-bias sign note (comment-only fix)
+
+`GpuPriority.biasedDepth` carries a stale "native path is conventional-Z"
+comment; the embedded renderer actually runs reversed-Z (`glClearDepth(0.0)`
++ `GL_GEQUAL`, matching RuneLite's vert.glsl bias direction). The code was
+already correct for both backends; only the comment lied.
+
 ## Prioritized plan
 
 1. **P0 — Complete B1/B2/B3**: padded/window-level appearance derivation and

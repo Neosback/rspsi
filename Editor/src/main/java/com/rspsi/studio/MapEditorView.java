@@ -101,6 +101,15 @@ public final class MapEditorView {
 
     private static final float TOOL_RAIL_MIN_WIDTH = 64.0f;
 
+    /**
+     * Panels are fixed furniture, not floating tools. NoMove keeps a docked
+     * panel from being dragged out by its tab, so the layout the user learns
+     * is the layout that stays - there is no workflow here that benefits
+     * from tearing the inspector off into its own window.
+     */
+    private static final int DOCKED_PANEL_FLAGS = ImGuiWindowFlags.NoCollapse
+            | ImGuiWindowFlags.NoMove;
+
     private static final String ICON_SELECT = StudioIcons.SELECT;
     private static final String ICON_TERRAIN = StudioIcons.TERRAIN;
     private static final String ICON_OBJECT = StudioIcons.OBJECT;
@@ -161,7 +170,7 @@ public final class MapEditorView {
         renderDockHost();
         renderToolRail(pluginLifecycle, viewport);
         renderViewport(cache, plan, viewport, sceneStatus, settings);
-        renderRightPanel(settings, pluginLifecycle);
+        renderRightPanel(cache, settings, pluginLifecycle);
         renderBottomDrawer(pluginLifecycle);
         renderStatusBar(cache, plan, viewport, dirty, settings, pluginLifecycle);
         renderCommandPalette(pluginLifecycle);
@@ -568,11 +577,13 @@ public final class MapEditorView {
     // Right panel: real tool settings + live selection
     // ------------------------------------------------------------------
 
-    private void renderRightPanel(SettingsStore settings,
+    private void renderRightPanel(LoadedOsrsCacheSession cache, SettingsStore settings,
                                   EditorPluginLifecycleManager pluginLifecycle) {
-        ImGui.begin(RIGHT_PANEL_WINDOW, ImGuiWindowFlags.NoCollapse);
+        ImGui.begin(RIGHT_PANEL_WINDOW, DOCKED_PANEL_FLAGS);
         ImGui.beginChild("tool-options", 0.0f, 0.0f, false);
 
+        renderPickInspector(cache, pluginLifecycle);
+        ImGui.separator();
         renderActiveTool(pluginLifecycle);
         ImGui.separator();
         renderToolSettings(pluginLifecycle);
@@ -655,6 +666,69 @@ public final class MapEditorView {
         }
     }
 
+    /**
+     * Reports what the last viewport click actually hit, including the
+     * submission metadata of the draw command that was rendered. Layer,
+     * priority and depth bias are the values that decide how a surface
+     * resolves against a coplanar neighbour, so a wall or decoration that
+     * renders wrong can be reported precisely rather than described.
+     */
+    private void renderPickInspector(LoadedOsrsCacheSession cache,
+                                     EditorPluginLifecycleManager pluginLifecycle) {
+        StudioWidgets.section("Inspector");
+        if (viewport == null) {
+            ImGui.textDisabled("No viewport.");
+            return;
+        }
+        var picked = viewport.selection();
+        if (picked.isEmpty()) {
+            ImGui.textDisabled("Click a tile or object in the viewport to inspect it.");
+            return;
+        }
+        var hit = picked.get();
+        ImGui.pushFont(StudioFonts.mono(), 1.0f);
+        ImGui.text("tile   " + hit.tile().x() + ", " + hit.tile().y() + "   plane " + hit.plane());
+        if (hit.hasSubmissionMetadata()) {
+            ImGui.text("layer  " + hit.layer());
+            ImGui.text("prio   " + hit.priority() + "    bias " + hit.depthBias());
+            ImGui.text("tex    " + (hit.textureId() < 0 ? "none" : String.valueOf(hit.textureId())));
+        }
+        if (hit.objectHit()) {
+            ImGui.text("objId  " + hit.objectId());
+            cache.bundle().definitions().object(hit.objectId())
+                    .ifPresent(definition -> ImGui.text("name   " + definition.name()));
+            describePickedObject(hit, pluginLifecycle);
+        } else {
+            ImGui.textDisabled("terrain (no object)");
+        }
+        ImGui.popFont();
+        if (ImGui.button("Clear##pick-clear")) viewport.clearSelection();
+    }
+
+    /**
+     * Resolves the picked object back to its authored location so the shape
+     * and rotation are visible. The pick reports a world tile while the
+     * document is a single 64x64 region, so local coordinates are the world
+     * ones reduced modulo the region size.
+     */
+    private void describePickedObject(com.rspsi.editor.render.PickResult hit,
+                                      EditorPluginLifecycleManager pluginLifecycle) {
+        EditorSession session = session(pluginLifecycle);
+        if (session == null) return;
+        var world = session.world();
+        int localX = Math.floorMod(hit.tile().x(), Math.max(1, world.width()));
+        int localY = Math.floorMod(hit.tile().y(), Math.max(1, world.length()));
+        if (hit.plane() < 0 || hit.plane() >= world.planes()) return;
+        for (var object : world.tile(hit.plane(), localX, localY).snapshot().objects()) {
+            if (object.id() != hit.objectId()) continue;
+            String shape = object.shape().map(value -> " (" + value + ")").orElse("");
+            ImGui.text("shape  " + object.type() + shape);
+            ImGui.text("rot    " + object.rotation());
+            return;
+        }
+        ImGui.textDisabled("not found at " + localX + "," + localY);
+    }
+
     private void renderSelectionPanel(EditorPluginLifecycleManager pluginLifecycle) {
         StudioWidgets.section("Selection");
         EditorSession session = session(pluginLifecycle);
@@ -698,7 +772,7 @@ public final class MapEditorView {
 
     private void renderBottomDrawer(EditorPluginLifecycleManager pluginLifecycle) {
         if (!bottomDrawerVisible) return;
-        ImGui.begin(BOTTOM_WINDOW, ImGuiWindowFlags.NoCollapse);
+        ImGui.begin(BOTTOM_WINDOW, DOCKED_PANEL_FLAGS);
         String[] tabs = {"History", "Tasks", "Messages", "Diagnostics"};
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 8.0f, 6.0f);
         for (int index = 0; index < tabs.length; index++) {

@@ -224,8 +224,13 @@ public final class GpuScenePacketBuilder {
      */
     private static boolean hasTransparentGeometry(ModelRenderPacket model,
                                                   java.util.Map<Integer, RenderTextureResource> textures) {
-        return model.triangles().stream()
-                .anyMatch(face -> face.alpha() != 255 && isTransparentFace(face, textures));
+        // isTransparentFace already fully decides transparency (alpha != 0,
+        // OR render type 3, OR a transparent-pixel texture). An extra
+        // `alpha() != 255` guard here would wrongly treat an opaque-alpha
+        // (255) face as opaque even when it's render-type-3 or textured with
+        // transparent pixels - opaque alpha is the client default of 0, not
+        // 255 (see ModelPacketBuilder's valueAt(alphas, face, 0)).
+        return model.triangles().stream().anyMatch(face -> isTransparentFace(face, textures));
     }
 
     /** TSPS marks a face transparent when either its face alpha or material requires it. */

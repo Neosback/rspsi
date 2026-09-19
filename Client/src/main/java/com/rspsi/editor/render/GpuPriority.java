@@ -23,27 +23,36 @@ public final class GpuPriority {
         return biasedDepth(depth, nearPlane, farPlane, priority, 0);
     }
 
+    /** The client's per-face bias step, in world units of view-space depth. */
+    public static final int FACE_BIAS_SCALE = 2;
+
     /**
-     * Applies the true client per-face depth bias (a raw 0..255 value scaled
-     * by 1/128), matching RuneLite's real vertex shader
-     * ({@code screenPos.z += float(bias) / 128.0;}). RuneLite's priority
-     * value affects draw order only, never depth - a face's {@code priority}
-     * no longer synthesizes any depth offset here. The parameter is retained
-     * for API/call-site stability, not because it still contributes to the
-     * result.
+     * Applies the true client per-face depth bias. The real client subtracts
+     * {@code faceBias * 2} from the vertex's view-space depth, in world
+     * units, before converting it to a depth-buffer value
+     * ({@code Model.java}: {@code faceBias[face] * 2}, then
+     * {@code field3037[v] - bias} where {@code field3037} is the raw
+     * perspective divisor). The offset is therefore CONSTANT in world space
+     * at every distance.
+     *
+     * <p>This deliberately replaces an earlier clip-space
+     * {@code z += bias / 128} formulation copied from RuneLite's GPU shader.
+     * That form is distance-scaled: expressed as a world-space separation it
+     * shrinks in proportion to depth, so it collapses to nearly nothing when
+     * the camera is close to a surface - exactly where coplanar wall
+     * decorations need it most. RuneLite can afford it because its own
+     * projection differs; against this renderer's projection it produced a
+     * pull toward the camera roughly 16x weaker than the client's when
+     * zoomed in, leaving flush decals to z-fight with the wall behind them.
+     *
+     * <p>{@code priority} affects draw order only, never depth. The
+     * parameter is retained for call-site stability.</p>
      */
     public static float biasedDepth(float depth, float nearPlane, float farPlane,
                                     int priority, int faceBias) {
-        // The native renderer uses the conventional OpenGL depth direction
-        // (smaller NDC depth is nearer), while RuneLite's GPU shader uses a
-        // reversed-Z convention. Its positive face bias therefore maps to a
-        // negative NDC offset here.
-        float bias = Math.max(0, Math.min(255, faceBias)) / 128.0f;
-        if (bias == 0.0f) return depth;
-        float a = (farPlane + nearPlane) / (farPlane - nearPlane);
-        float b = -2.0f * farPlane * nearPlane / (farPlane - nearPlane);
-        float biasedNdc = a + b / depth - bias;
-        float result = b / (biasedNdc - a);
-        return Float.isFinite(result) && result > nearPlane ? result : depth;
+        int bias = Math.max(0, Math.min(255, faceBias));
+        if (bias == 0) return depth;
+        float biased = depth - (float) bias * FACE_BIAS_SCALE;
+        return biased > nearPlane ? biased : depth;
     }
 }

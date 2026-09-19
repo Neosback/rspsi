@@ -166,3 +166,205 @@ The parity transport change is covered by the GPU upload-plan test asserting
 that `SORTED_NO_DEPTH` survives from `ModelRenderPacket` to
 `GpuDrawCommand`. The existing alpha, texture, bridge, roof, wall-orientation,
 and occluder tests remain required.
+
+## Update 2026-09-18 (later same day) — wall/loc shape and ground-blend audit
+
+Line-by-line comparison of `ModelPacketBuilder.java`, `TerrainAppearanceBuilder.java`,
+`TerrainMeshBuilder.java`, `TerrainLighting.java`, and `GpuScenePacketBuilder.java`
+against the deobfuscated client (`RSPSi-resources/RuneLite-melxin/runescape-client`,
+primary oracle), `RSPSi-resources/OSRS-Environment-Exporter` (independent
+second oracle), and `RSPSi-resources/TSPS` (checked; its renderer consumes
+already-built RuneLite-style scene packets and does not independently derive
+shape/displacement/blend math, so it is not a useful oracle for this audit).
+
+**Confirmed correct, unchanged:** the shape 0-11 loc→model mapping and every
+displacement table (`DECOR_DISPLACEMENT_X/Z`, `DIAGONAL_DISPLACEMENT_X/Z`)
+against `Tiles.java`'s `field800/802/798/803/805` and the real shape switch in
+`FriendSystem.java:446-682`/`class150.java:289-419`; the tile SHAPE_POINTS/
+ELEMENTS triangulation tables against `SceneTileModel.java`; the chroma-
+weighted-hue underlay average and the blend-radius-5 window bounds against
+`class470.java`'s box-blur; the magenta `0xFF00FF` hidden-overlay sentinel;
+the terrain slope-lighting normal/dot-product formula against
+`class470.java:893-905`.
+
+**Confirmed divergent, fixed this pass:**
+
+1. **Ground color blended per corner instead of per tile** (highest visual
+   impact of this audit). `TerrainAppearanceBuilder` computed four
+   independent hue/saturation/lightness box-blurs, one per tile corner, each
+   re-centered at a shifted position. The real client (`class470.java:1035-1073`)
+   blends **once per tile**; the four corners then vary only in **lightness**
+   via a separate per-vertex slope/AO term (`method2086`, hue/saturation bits
+   untouched) — already correctly implemented on the RSPSi side via
+   `TerrainLighting`'s bilinear corner light and
+   `OsrsTerrainColorMath.adjustPackedHslLight`. Fixed by blending once and
+   reusing that single value for all four corners
+   ([`TerrainAppearanceBuilder.java`](TerrainAppearanceBuilder.java)) —
+   `TerrainPacketBuilder`'s corner/midpoint selection becomes a no-op on
+   equal inputs, so it needed no change. Previously this produced a visibly
+   soft/wrong-hue "watercolor" blend at every underlay-type boundary (grass↔
+   dirt, dirt↔sand, etc.) instead of the client's lightness-only gradient.
+2. **Wall/loc mirror rule used OR gated to shape 2 instead of the client's
+   XOR applied via the rotation parameter to every shape.** The real rule
+   (`ObjectComposition.java:826-856`) is `isRotated XOR (rotationParam > 3)`,
+   applied uniformly through the rotation value passed to `getModelData` —
+   `rotationParam > 3` is true for shape 2's first wall piece (`rot+4`) *and*
+   every diagonal wall-decoration variant (shapes 6/7/8/11, which also use a
+   "+4" rotation). RSPSi's old `appearance.rotated() || (sourceType==2 &&
+   rotation>3)` unconditionally mirrored shape-2's first piece regardless of
+   `isRotated`, and never special-cased diagonal wall decorations at all —
+   so with the common `isRotated=false` cache value, diagonal-wall torches,
+   banners, and windows never mirrored when the client always does. Fixed in
+   [`ModelPacketBuilder.java`](ModelPacketBuilder.java)'s `append()`.
+3. **Same-tile shape-2 corner-wall normal merge (`mergeWallVariantNormals`)
+   had no gate on the object definition's `mergeNormals` flag**, unlike the
+   sibling cross-packet `mergeNormals()` method which correctly checks it.
+   The client only reaches `Scene`'s shape-2 merge for objects whose
+   definition set opcode 22 (`nonFlatShading`); RSPSi merged unconditionally,
+   over-smoothing lighting seams on corner walls that never opted in. Fixed
+   by gating the call on `appearance.mergeNormals()` in `ModelPacketBuilder`;
+   regression test added (`mergeWallVariantNormalsIsSkippedWithoutTheMergeNormalsFlag`).
+4. **Wall-decoration displacement fallback used the decoration's own cache
+   `int2` instead of the client's hardcoded literal defaults** (16 for the
+   straight case, 8 for diagonal) when no supporting wall is found on the
+   tile — an editor-specific case (decoration placed before its wall).
+   `FriendSystem.java:627,641,664`. Fixed by returning the literal `16`;
+   `variantsFor`'s existing `/2` for the diagonal shapes reproduces the
+   client's separate 8 default without a second literal.
+5. **Translucent-face detection bug in `GpuScenePacketBuilder`** (found
+   independent of the reference repos, from the method's own contradictory
+   logic): `hasTransparentGeometry`'s `face.alpha() != 255` guard
+   short-circuited `isTransparentFace()`'s own render-type-3/transparent-
+   texture checks whenever a face's alpha happened to equal 255 — even
+   though the client's (and this codebase's) opaque-alpha default is `0`,
+   not `255`. Objects using render-type-3 faces or transparent-pixel
+   textures with `alpha==255` (glass, spirit trees, some window/lattice
+   decorations) were bucketed as opaque, causing depth-sort artifacts
+   against genuinely translucent neighbors. Fixed by removing the redundant
+   outer guard.
+
+**Not fixed — unresolved, flagged for a future targeted check:**
+
+- **`DIAGONAL_INTERACTABLE` (loc type 11) rotation.** RuneLite's
+  deobfuscated `FriendSystem.java:684-691` treats types 10 and 11 identically
+  (plain `rot`, no extra rotation). `OSRS-Environment-Exporter`'s
+  `SceneRegionBuilder.kt:367-370` applies an extra 0x100 (45°-class)
+  rotation for type 11 specifically. RSPSi's `ModelPacketBuilder` follows the
+  exporter's version. The two reference repos disagree and this audit could
+  not determine which is authoritative — needs a targeted decompile check
+  before either side is trusted. Narrow scope (this loc type only).
+- **Terrain AO/shadow source.** `TerrainLighting`'s slope-lighting formula
+  matches the client's `class470.java:893-905` structurally, but the audit
+  did not have budget to trace what populates `TerrainShadowMap`'s
+  `cornerStrength` against the client's specific wall-adjacency `underlays2`
+  mechanism (a byte array set to 50 wherever a `clipped=true` wall was
+  placed, weighted `>>3,>>2,>>2,>>3,>>1` — `TerrainLighting` currently uses
+  `>>2,>>3,>>2,>>3,>>1`). If `TerrainShadowMap` isn't driven the same way,
+  this is a divergence in shadow-darkening magnitude near walls only (not
+  hue or shape) — unverified either way.
+
+All five fixes verified via `./gradlew :Client:test :Editor:test` and
+`./gradlew foundationGate` (green); no visual/screenshot verification was
+performed — that remains the user's own confirmation step.
+
+## Update 2026-09-18 (third pass) — depth-bias semantics and the wall/decoration draw contract
+
+Traced directly against the deobfuscated client
+(`RSPSi-resources/RuneLite-melxin/runescape-client`), prompted by persisting
+reports of odd walls and z-fighting on flush wall decorations.
+
+### The load-bearing discovery: the scene renderer has no depth buffer
+
+`Scene.java:1863-1960` draws each tile in a fixed sequence — tile
+underlay/overlay, then `boundaryObject` (wall), then `wallDecoration`, then
+`floorDecoration`, then `itemLayer`, then game objects. There is no depth
+test in that path; **paint order alone** guarantees a decoration wins
+against the wall it is mounted on. Every depth mechanism below exists to let
+a z-buffered renderer reproduce that guarantee, and several of our bugs come
+from having copied RuneLite's GPU *approximations* rather than the client's
+own rule.
+
+### Confirmed divergent, fixed this pass
+
+1. **Face bias was distance-scaled; the client's is constant in world space.**
+   `Model.java:1855` / `:2012`: `int var5 = faceBias[face] * 2;` then
+   `method6970(field3037[v] - (float)var5)`. `field3037[v]` is the raw
+   perspective divisor — view-space depth in world units
+   (`Model.java:1300-1301`: `modelViewportXs = x + vx * zoom / var22;
+   field3037[v] = var22`). So the client pulls a biased face **`faceBias * 2`
+   world units** toward the camera, identically at every distance, and
+   applies it **only to the depth value** — screen x/y still divide by the
+   unbiased depth.
+
+   Ours (both `GpuPriority.biasedDepth` and the GL vertex shader) instead did
+   RuneLite's `screenPos.z += bias / 128.0` in clip space. Against this
+   renderer's projection (`z_ndc = A + B/d`, `B ≈ 32`) that is equivalent to
+   a world-space offset of `bias * d / 4097` — i.e. it *shrinks as the camera
+   gets closer*. At d≈500 it is ~16x weaker than the client's, which is
+   precisely the zoomed-in case where a flush decal most needs it. Fixed in
+   both renderers to `depth - faceBias * 2`, with the GL path rewriting
+   `z_clip = uDepthA*depth + uDepthB*(depth/biasedDepth)` so `w` stays at the
+   true depth and screen position is untouched. Pinned by new
+   `GpuPriorityTest` cases asserting the offset is distance-invariant.
+
+2. **Shape 8 stacked two coplanar decoration models.** `FriendSystem.java:663-680`
+   builds a shape-8 wall decoration as `newWallDecoration(..., renderable1 =
+   getEntity(4, rot+4), renderable2 = getEntity(4, ((rot+2)&3)+4), 256, rot,
+   xOffset, zOffset, ...)`. At draw time (`Scene.java:1918-1940`)
+   `renderable1` is drawn **with** the displacement (`x*4096 + xOffset`,
+   `y*64 + zOffset`) and `renderable2` **without any offset** (`x*4096`,
+   `y*64`). We gave both pieces the same diagonal displacement, placing two
+   near-coplanar models on top of each other — a guaranteed z-fight on every
+   double-diagonal wall decoration. Fixed: the second variant now carries no
+   displacement.
+
+3. **Wall decorations get a minimum depth bias.** Because the client relies on
+   paint order rather than depth, a shape-4 decoration (placed with *no*
+   displacement at all) is exactly coplanar with its wall, and its cache face
+   bias is frequently 0. Under a depth buffer the two surfaces then differ
+   only by float rounding, which resolves per pixel as speckle. `GpuUploadPlanBuilder`
+   now applies `Math.max(1, faceBias)` to `WALL_DECORATION` commands —
+   stating explicitly what the client got implicitly, mirroring the existing
+   `terrainDepthBias` overlay-over-underlay pattern in the same file.
+
+### Confirmed divergent, NOT fixed — camera-dependent visibility
+
+The client masks walls and wall decorations by which side of the tile the
+camera is on. `Scene.java:1867-1881` computes a quadrant index from the
+camera's tile vs the drawn tile:
+
+```java
+var21 = 0;
+if (tileX == cameraXTile) ++var21; else if (cameraXTile < tileX) var21 += 2;
+if (tileY == cameraYTile) var21 += 3; else if (cameraYTile > tileY) var21 += 6;
+var12 = field2845[var21];            // Scene.java:277
+```
+
+with `field2845 = {19, 55, 38, 155, 255, 110, 137, 205, 76}` (and the
+companion tables `field2912`, `field2847`, `field2878/2842/2932/2935` at
+`:278-283`). A wall segment is drawn only if `(orientationA & var12) != 0`,
+and likewise `orientationB`. Wall decorations use the same mask, and the
+`orientation == 256` family (shapes 6, 7, 8) takes a separate branch that
+picks **exactly one** renderable by a half-plane test on the camera offset:
+
+```java
+var18 = (orientation2 != 1 && orientation2 != 2) ?  dx : -dx;
+var19 = (orientation2 != 2 && orientation2 != 3) ?  dz : -dz;
+if (var19 < var18) draw(renderable1, x + xOffset, ...);
+else if (renderable2 != null) draw(renderable2, x, ...);   // no offset
+```
+
+For shapes 6 and 7 `renderable2` is null, so those decorations are simply
+**not drawn at all** from one side. We draw everything from every angle.
+
+Two caveats before implementing this: (a) much of the wall mask is painter's-
+algorithm *ordering* machinery for a renderer with no depth buffer, so it
+should not be copied wholesale into a z-buffered path without deciding, per
+case, whether it is hiding geometry or merely sequencing it; (b) the draw
+calls use asymmetric units (`x * 4096` against `y * 64` for boundary objects
+and wall decorations, versus `x * 64`/`y * 64` for floor decorations), so the
+half-plane test's operands must be derived from the deob rather than assumed.
+
+The natural home for this is `GpuCommandVisibility`, which already computes a
+per-frame bitset keyed on `(plan, camera)`; it would need commands to carry
+the decoration's orientation and which alternative they are.

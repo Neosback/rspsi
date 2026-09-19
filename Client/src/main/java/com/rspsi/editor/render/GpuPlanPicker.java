@@ -69,7 +69,9 @@ public final class GpuPlanPicker {
         } else {
             tile = new TileCoordinate(address.plane(), address.worldX(), address.worldY());
         }
-        return Optional.of(new PickResult(tile, address.plane(), best.command.objectId(), best.distance));
+        return Optional.of(new PickResult(tile, address.plane(), best.command.objectId(),
+                best.distance, best.command.layer(), best.command.priority(),
+                best.command.depthBias(), best.command.textureId()));
     }
 
     private static Ray ray(CameraState camera, int width, int height,

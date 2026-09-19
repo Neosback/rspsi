@@ -169,15 +169,53 @@ class ModelPacketBuilderTest {
 
     @Test
     void contoursModelVerticesAgainstTheirWorldPositionWithoutDoubleCentering() {
-        WorldDocument document = new WorldDocument(2, 2, 1);
-        document.tile(0, 0, 0).restore(new TileSnapshot(0, 128, 128, 0,
-                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 0, 0))));
-        document.tile(0, 1, 0).restore(new TileSnapshot(0, 0, 0, 0,
+        // Sloped terrain with shared-corner-consistent neighbours: tile (2,2)
+        // rises from sw=0 to se/ne=128. The anchor sits at (2,2) of a 6x6
+        // document so the radius box plus one bilinear grid point stay
+        // in-scene (the client bounds guard).
+        WorldDocument document = new WorldDocument(6, 6, 1);
+        document.tile(0, 2, 2).restore(new TileSnapshot(0, 128, 128, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 2, 2))));
+        document.tile(0, 3, 2).restore(new TileSnapshot(128, 128, 128, 128,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 2, 3).restore(new TileSnapshot(0, 128, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 3, 3).restore(new TileSnapshot(128, 0, 0, 0,
                 0, 0, 0, 0, 0, List.of()));
         ObjectAppearanceView appearance = new ObjectAppearanceView(
                 -1, true, 128, 128, 128, 0, 0, 0, Map.of(), Map.of(),
                 true, false, false, false, 0, 0, 16, 1, 0,
                 false, false, false, 0);
+        // Vertical triangle; after footprint centring the vertices sit at
+        // world (192,192), (256,192) and (224,240).
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{0, 0, 0, 64, -128, 0, 32, -64, 48},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions(appearance, geometry))
+                .build(document).get(0);
+
+        // The reference height is the placement height (tile (1,1)'s four
+        // corner mean = 64). Vertex heights: 64, 128, 96. Double-centring
+        // would sample the anchor corner (height 0) and produce -64 for the
+        // first vertex instead of 0.
+        assertEquals(0, packet.vertices().get(0).y());
+        assertEquals(-64, packet.vertices().get(1).y());
+        assertEquals(-32, packet.vertices().get(2).y());
+    }
+
+    /** The client leaves models whose radius box leaves the scene un-contoured. */
+    @Test
+    void leavesModelsExtendingPastTheSceneEdgeUncontoured() {
+        WorldDocument document = new WorldDocument(2, 2, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 128, 128, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 0, 0))));
+        ObjectAppearanceView appearance = new ObjectAppearanceView(
+                -1, true, 128, 128, 128, 0, 0, 0, Map.of(), Map.of(),
+                true, false, false, false, 0, 0, 16, 1, 0,
+                false, false, false, 0);
+        // The radius box around the anchor reaches world x=-64, past the
+        // scene edge.
         ModelGeometryView geometry = new ModelGeometryView(7,
                 new int[]{-64, 0, 0, 64, 0, 0, 0, 0, 64},
                 new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
@@ -185,10 +223,77 @@ class ModelPacketBuilderTest {
         ModelRenderPacket packet = new ModelPacketBuilder(definitions(appearance, geometry))
                 .build(document).get(0);
 
-        // The west vertex is at world x=0, while the object centre is at x=64.
-        // Its contour delta is therefore 0-64=-64, not zero from sampling the
-        // already-centred position a second time.
-        assertEquals(-64, packet.vertices().get(0).y());
+        assertEquals(0, packet.vertices().get(0).y());
+    }
+
+    /**
+     * Client clipType &gt; 0 partial contour: the ratio {@code (-y << 16) /
+     * max(-y)} runs from 0 at the model top to 65536 at the bottom, and only
+     * vertices above the clip-type parameter warp.
+     */
+    @Test
+    void partialContourOnlyWarpsTheSpanAboveTheClipTypeParameter() {
+        WorldDocument document = new WorldDocument(6, 6, 1);
+        document.tile(0, 2, 2).restore(new TileSnapshot(0, 128, 128, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 2, 2))));
+        document.tile(0, 3, 2).restore(new TileSnapshot(128, 128, 128, 128,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 2, 3).restore(new TileSnapshot(0, 128, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 3, 3).restore(new TileSnapshot(128, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+        ObjectAppearanceView appearance = new ObjectAppearanceView(
+                -1, false, 128, 128, 128, 0, 0, 0, Map.of(), Map.of(),
+                true, false, false, false, 0, 0, 16, 2, 65536,
+                false, false, false, 0);
+        // Vertical triangle: y=0 (top) to y=-128 (bottom); after centring the
+        // vertices sit at world (192,192), (256,192) and (224,240).
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{0, 0, 0, 64, -128, 0, 32, -64, 48},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions(appearance, geometry))
+                .build(document).get(0);
+
+        // Reference height 64; vertex ground heights 64, 128, 96.
+        // Top vertex: ratio 0 < 65536, full conform delta (64 - 64 = 0).
+        assertEquals(0, packet.vertices().get(0).y());
+        // Bottom vertex: ratio 65536 is not below the parameter, so it keeps
+        // its model-space height (the full contour would give -64).
+        assertEquals(-128, packet.vertices().get(1).y());
+        // Middle vertex: ratio 32768, warp scaled by (65536-32768)/65536:
+        // -64 + 32768 * 32 / 65536 = -48.
+        assertEquals(-48, packet.vertices().get(2).y());
+    }
+
+    /** clipType 0 (full contour) attaches every vertex regardless of height. */
+    @Test
+    void fullContourAttachesEveryVertexToTheGround() {
+        WorldDocument document = new WorldDocument(6, 6, 1);
+        document.tile(0, 2, 2).restore(new TileSnapshot(0, 128, 128, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 2, 2))));
+        document.tile(0, 3, 2).restore(new TileSnapshot(128, 128, 128, 128,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 2, 3).restore(new TileSnapshot(0, 128, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 3, 3).restore(new TileSnapshot(128, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+        ObjectAppearanceView appearance = new ObjectAppearanceView(
+                -1, false, 128, 128, 128, 0, 0, 0, Map.of(), Map.of(),
+                true, false, false, false, 0, 0, 16, 1, 0,
+                false, false, false, 0);
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{0, 0, 0, 64, -128, 0, 32, -64, 48},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions(appearance, geometry))
+                .build(document).get(0);
+
+        // Every vertex conforms fully to its ground height minus the 64
+        // reference: 0 + 0, -128 + 64, -64 + 32.
+        assertEquals(0, packet.vertices().get(0).y());
+        assertEquals(-64, packet.vertices().get(1).y());
+        assertEquals(-32, packet.vertices().get(2).y());
     }
 
     @Test
@@ -281,7 +386,11 @@ class ModelPacketBuilderTest {
         WorldDocument document = new WorldDocument(1, 1, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
                 0, 0, 0, 0, 0, List.of(new WorldObject(42, 2, 0, 0, 0, 0))));
-        DefinitionProvider definitions = typedDefinitions(2, 7, triangle(7, 100));
+        // The client only reaches the shape-2 corner-wall normal merge for
+        // objects whose definition set opcode 22 (mergeNormals). A fixture
+        // without that flag (typedDefinitions' ObjectAppearanceView.empty())
+        // must NOT be merged - see mergeWallVariantNormalsIsSkippedWithoutTheMergeNormalsFlag.
+        DefinitionProvider definitions = typedDefinitionsWithMergeNormals(2, 7, triangle(7, 100));
 
         ModelRenderPacket packet = new ModelPacketBuilder(definitions).build(document).get(0);
 
@@ -290,6 +399,22 @@ class ModelPacketBuilderTest {
         // retain the two-face normal contribution at both copies.
         assertEquals(2, packet.vertices().get(0).normalMagnitude());
         assertEquals(2, packet.vertices().get(3).normalMagnitude());
+    }
+
+    @Test
+    void mergeWallVariantNormalsIsSkippedWithoutTheMergeNormalsFlag() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 2, 0, 0, 0, 0))));
+        // The client only reaches Scene's shape-2 corner-wall merge for
+        // objects whose definition sets opcode 22 (mergeNormals). Without
+        // it, each wall piece keeps its own unmerged per-face normal.
+        DefinitionProvider definitions = typedDefinitions(2, 7, triangle(7, 100));
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions).build(document).get(0);
+
+        assertEquals(1, packet.vertices().get(0).normalMagnitude());
+        assertEquals(1, packet.vertices().get(3).normalMagnitude());
     }
 
     @Test
@@ -369,6 +494,28 @@ class ModelPacketBuilderTest {
             @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
             @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
                 return Optional.of(ObjectAppearanceView.empty());
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(geometry);
+            }
+        };
+    }
+
+    /** Like {@link #typedDefinitions}, but with opcode 22 (mergeNormals) set. */
+    private static DefinitionProvider typedDefinitionsWithMergeNormals(int type, int modelId,
+                                                                       ModelGeometryView geometry) {
+        ObjectAppearanceView merging = new ObjectAppearanceView(-1, false, 128, 128, 128,
+                0, 0, 0, Map.of(), Map.of(), true, false, true, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
+        return new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return Optional.of(new ObjectDefinitionView(id, "test", 1, 1,
+                        List.of(), new int[]{modelId}, new int[]{type}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(merging);
             }
             @Override public Optional<ModelGeometryView> modelGeometry(int id) {
                 return Optional.of(geometry);

@@ -34,15 +34,16 @@ public final class TerrainAppearanceBuilder {
 
     private TerrainAppearance appearance(WorldDocument document, DefinitionProvider definitions,
                                          int plane, int x, int y, TileSnapshot tile) {
+        // The client blends underlay color once per TILE (class470's var36),
+        // not once per corner. All four corners of a tile share that single
+        // hue/saturation; only lightness varies per corner, via the separate
+        // slope/AO shading term (TerrainLighting -> adjustPackedHslLight).
+        // Blending independently per corner (as this used to do, sampling a
+        // shifted window for each of the four corners) re-derives hue and
+        // saturation per corner instead of reusing one tile-wide color,
+        // producing a softer/off-color blend at underlay-type boundaries
+        // that the real client never produces.
         int underlayHsl = blendedUnderlay(document, definitions, plane, x, y);
-        int southWest = blendedUnderlay(document, definitions, plane, x, y);
-        int southEast = blendedUnderlay(document, definitions, plane, x + 1, y);
-        int northEast = blendedUnderlay(document, definitions, plane, x + 1, y + 1);
-        int northWest = blendedUnderlay(document, definitions, plane, x, y + 1);
-        southWest = fallbackCorner(southWest, underlayHsl);
-        southEast = fallbackCorner(southEast, underlayHsl);
-        northEast = fallbackCorner(northEast, underlayHsl);
-        northWest = fallbackCorner(northWest, underlayHsl);
         FloorDefinitionView overlay = tile.overlayId() <= 0
                 ? null : definitions.overlay(tile.overlayId() - 1).orElse(null);
         int overlayHsl = overlay == null ? -1
@@ -75,13 +76,11 @@ public final class TerrainAppearanceBuilder {
             overlayMinimapHsl = secondaryHsl;
         }
         boolean hidden = overlayHsl == -2;
-        return new TerrainAppearance(underlayHsl, southWest, southEast, northEast, northWest,
+        // All four corners share this tile's single blended hue/saturation;
+        // TerrainPacketBuilder varies only lightness per corner.
+        return new TerrainAppearance(underlayHsl, underlayHsl, underlayHsl, underlayHsl, underlayHsl,
                 overlayHsl, secondaryHsl, textureId, textureHsl,
                 tile.overlayShape(), tile.overlayRotation() & 3, hidden, overlayMinimapHsl);
-    }
-
-    private static int fallbackCorner(int corner, int center) {
-        return corner < 0 ? center : corner;
     }
 
     private int blendedUnderlay(WorldDocument document, DefinitionProvider definitions,

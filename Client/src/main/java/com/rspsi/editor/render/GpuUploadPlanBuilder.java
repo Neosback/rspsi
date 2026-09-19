@@ -133,7 +133,7 @@ public final class GpuUploadPlanBuilder {
                 indices.add(base + 2);
                 appendCommand(commands, tile.worldAddress(), layer.kind(), pass,
                         first, face.textureId(), submissionPriority(layer.kind(), face.priority()),
-                        face.depthBias(), model.objectId(),
+                        submissionDepthBias(layer.kind(), face.depthBias()), model.objectId(),
                         model.renderMode());
             }
         }
@@ -150,6 +150,26 @@ public final class GpuUploadPlanBuilder {
     private static int submissionPriority(SceneLayer.Kind layer, int facePriority) {
         return layer == SceneLayer.Kind.WALL_DECORATION
                 ? Math.max(10, facePriority) : facePriority;
+    }
+
+    /**
+     * The client draws a tile as underlay/overlay, then the boundary object
+     * (wall), then the wall decoration - and its scene renderer has no depth
+     * buffer at all, so that paint order alone guarantees a decoration wins
+     * against the wall it is mounted on (Scene's per-tile draw sequence).
+     *
+     * <p>A depth-buffered renderer gets no such guarantee. A decoration
+     * authored flush against its wall (shape 4 places it with no
+     * displacement whatsoever) is geometrically coplanar, and when its cache
+     * face bias is 0 the two surfaces differ only by float rounding - which
+     * resolves per pixel, producing the speckled z-fighting the painter's
+     * algorithm never had. Give wall decorations the client's smallest
+     * nonzero bias step so the ordering the client got implicitly is stated
+     * explicitly here, exactly as terrainDepthBias above does for a coplanar
+     * overlay over its underlay.</p>
+     */
+    private static int submissionDepthBias(SceneLayer.Kind layer, int faceBias) {
+        return layer == SceneLayer.Kind.WALL_DECORATION ? Math.max(1, faceBias) : faceBias;
     }
 
     private static boolean hasTransparentTexturePixels(int textureId,

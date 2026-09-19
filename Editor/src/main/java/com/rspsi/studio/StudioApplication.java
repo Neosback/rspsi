@@ -31,6 +31,8 @@ import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.settings.SettingsJsonStore;
 import com.rspsi.editor.settings.EditorSettingKeys;
 import imgui.ImGui;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -43,6 +45,7 @@ import java.util.concurrent.Executors;
 
 /** Initial native application shell; services and workspaces attach here. */
 public final class StudioApplication implements AutoCloseable {
+    private static final Logger LOGGER = LoggerFactory.getLogger(StudioApplication.class);
     private final NativeWindow window;
     private final ImGuiHost imgui = new ImGuiHost();
     private final OsrsCacheSessionService cacheSessions = new OsrsCacheSessionService();
@@ -183,6 +186,10 @@ public final class StudioApplication implements AutoCloseable {
             sceneStatus = "Region " + loadedScene.opened().region().regionX()
                     + "," + loadedScene.opened().region().regionY() + " ready.";
         } catch (RuntimeException failure) {
+            // The status bar only has room for a short message; without this
+            // the actual cause (and its stack trace) was silently dropped,
+            // making "Unable to load region" undiagnosable from the log.
+            LOGGER.error("Region load failed", failure);
             sceneStatus = "Unable to load region: " + rootMessage(failure);
         } finally {
             pendingScene = null;

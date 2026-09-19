@@ -578,7 +578,22 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 result.add(index);
             }
         }
-        result.sort(Comparator.comparingInt((Integer index) -> commands.get(index).priority()).reversed()
+        // Opposite tie-break polarity from SoftwareSceneRenderer, on purpose.
+        // The CPU renderer's depth test skips a fragment when
+        // pixelDepth >= depth[offset], so the FIRST face drawn at a given
+        // depth claims it and wins - it therefore sorts priority
+        // descending (highest first) so higher priority wins coplanar ties.
+        // This reversed-Z GPU path uses GL_GEQUAL, where an incoming
+        // fragment at an EQUAL depth PASSES and overwrites - the LAST face
+        // drawn at a given depth wins. To reach the same "higher priority
+        // wins" visual result (verified by
+        // SoftwareSceneRendererTest.higherPriorityCoplanarFaceWinsWithStableDepthBias
+        // and required for wall decorations, which submissionPriority()
+        // deliberately bumps to >=10 specifically so they beat their wall),
+        // this path must sort priority ASCENDING so the higher-priority
+        // face is drawn last and wins the GL_GEQUAL tie, not first and
+        // loses it to the wall drawn after it.
+        result.sort(Comparator.comparingInt((Integer index) -> commands.get(index).priority())
                 .thenComparingLong(index -> drawStateKey(commands.get(index), false)));
         if (!visibility.occlusionApplied()) {
             orderedPlanFingerprint = plan.fingerprint();
@@ -914,16 +929,20 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 float up = -d.y;
                 float y = up * cp - forward * sp;
                 float depth = up * sp + forward * cp;
+                // The real client subtracts faceBias * 2 from the vertex's
+                // VIEW-SPACE depth, in world units, and applies it to the
+                // depth value only - screen x/y come from the unbiased
+                // divisor (Model.java: field3037[v] - faceBias * 2, while
+                // modelViewportXs/Ys divide by the raw field3037). So keep w
+                // at the true depth and rewrite z so that, after the
+                // perspective divide, z_ndc equals uDepthA + uDepthB /
+                // biasedDepth. A clip-space "z += bias / 128" instead makes
+                // the offset shrink with proximity, which is why flush wall
+                // decorations z-fought their wall when zoomed in.
+                float biasedDepth = max(depth - uFaceBias * 2.0, 1.0);
                 vec4 projected = vec4(uFocal / uAspect * x, uFocal * y,
-                                      uDepthA * depth + uDepthB, depth);
-                // With Reversed-Z (glDepthFunc(GL_GEQUAL)), larger values in
-                // projected.z are nearer to the camera. Adding the RuneScape
-                // per-face depth bias brings the face towards the camera,
-                // matching RuneLite's real vert.glsl (screenPos.z += float(bias) / 128.0).
-                // RuneLite adds the raw face bias directly in clip space.
-                // Multiplying by w makes the offset grow with distance and
-                // causes distant decals/model faces to win depth tests.
-                projected.z += uFaceBias / 128.0;
+                                      uDepthA * depth + uDepthB * (depth / biasedDepth),
+                                      depth);
                 gl_Position = projected;
                 vUv = aUv;
                 vEncodedColor = aEncodedColor;
@@ -1022,12 +1041,18 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                         color = vec3(clamp(vEncodedColor / 64.0, 0.0, 1.0));
                     }
                 } else {
-                    // Decode packed HSL at the vertex upload boundary and
-                    // interpolate RGB here. Interpolating the packed HSL
-                    // integer itself crosses hue/saturation bit fields and
-                    // produces the bright contour bands seen on terrain.
-                    // This matches the TSPS/RuneLite GPU vertex contract.
-                    color = vColor;
+                    // RuneLite's frag.glsl picks between two HSL
+                    // interpolation strategies via a "smooth banding" mix,
+                    // not a single fixed one: interpolating pre-decoded RGB
+                    // (vColor, decoded once per vertex at upload) is the
+                    // client's classic/default look and can band across
+                    // large faces; interpolating the packed HSL integer
+                    // itself and decoding it per pixel (packedHslToRgb of
+                    // the noperspective-interpolated vEncodedColor) removes
+                    // that banding, matching RuneLite's smoothBanding=on
+                    // path exactly (uSmoothBanding was previously declared
+                    // but never read here, so the setting did nothing).
+                    color = mix(vColor, packedHslToRgb(vEncodedColor), float(uSmoothBanding));
                 }
                 float alpha = uTerrain != 0 ? clamp(vAlpha / 255.0, 0.0, 1.0)
                         : (vRenderType > 2.5 ? 0.5 : 1.0 - clamp(vAlpha / 255.0, 0.0, 1.0));
