@@ -34,6 +34,7 @@ import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImGui;
 import imgui.ImVec2;
+import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiInputTextFlags;
 import imgui.flag.ImGuiKey;
@@ -55,10 +56,27 @@ import imgui.flag.ImGuiTreeNodeFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import imgui.type.ImString;
+import com.rspsi.editor.knowledge.Evidence;
+import com.rspsi.editor.knowledge.KnowledgeFact;
+import com.rspsi.editor.knowledge.KnowledgeSnapshot;
+import com.rspsi.editor.knowledge.MetricKey;
+import com.rspsi.editor.knowledge.RegionProfile;
+import com.rspsi.editor.knowledge.SemanticTag;
+import com.rspsi.editor.knowledge.WorldKnowledgeService;
+import com.rspsi.osrs.rules.RuleTrace;
+import com.rspsi.editor.integration.npc.NpcSpawn;
+import com.rspsi.editor.integration.npc.NpcSpawnService;
+import com.rspsi.editor.integration.reference.ContentReference;
+import com.rspsi.editor.integration.reference.ReferenceService;
+import com.rspsi.editor.integration.ServerIntegrationService;
+import com.rspsi.editor.simulation.SimulationEngine;
+import com.rspsi.editor.symbols.SymbolNamespace;
+import com.rspsi.editor.symbols.SymbolService;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Viewport-first native Map Editor shell over the neutral editor contracts.
@@ -126,13 +144,35 @@ public final class MapEditorView {
             new RailTool("select", ICON_SELECT, "Select & transform", "1",
                     new String[]{"selection.box", "selection.lasso", "selection.move",
                             "selection.rotate", "selection.duplicate", "selection.replace"}),
-            new RailTool("terrain", ICON_TERRAIN, "Terrain", "2",
-                    new String[]{"terrain.paint-underlay", "terrain.paint-overlay",
-                            "terrain.raise", "terrain.lower", "terrain.flatten",
-                            "terrain.smooth", "terrain.ramp", "terrain.flags"}),
+            new RailTool("terrain", StudioIcons.TILE, "Tile Painter", "2",
+                    new String[]{"terrain.paint-overlay", "terrain.paint-underlay",
+                            "terrain.flags"}),
             new RailTool("objects", ICON_OBJECT, "Objects", "3",
                     new String[]{"object.place", "object.move", "object.rotate",
                             "object.duplicate", "object.delete"}),
+            new RailTool("height", StudioIcons.HEIGHT, "Height Painter", "4",
+                    new String[]{"terrain.raise", "terrain.lower", "terrain.flatten",
+                            "terrain.smooth", "terrain.ramp"}),
+            new RailTool("water", StudioIcons.WATER, "Water & Rivers", "5",
+                    new String[]{"terrain.paint-overlay", "terrain.paint-underlay"}),
+    };
+
+    private static final String[] OSRS_SHAPE_NAMES = {
+            "Full (0)", "Diagonal (1)", "Left (2)", "Right (3)",
+            "Corner TL (4)", "Corner TR (5)", "Corner BR (6)", "Corner BL (7)",
+            "Inv TL (8)", "Inv TR (9)", "Inv BR (10)", "Inv BL (11)"
+    };
+
+    private record Swatch(String name, boolean overlay, int id, float r, float g, float b) {}
+    private static final Swatch[] RECENT_SWATCHES = {
+            new Swatch("Grass Light", false, 42, 0.35f, 0.58f, 0.24f),
+            new Swatch("Grass Dark", false, 28, 0.22f, 0.44f, 0.16f),
+            new Swatch("Stone Path", true, 11, 0.55f, 0.53f, 0.50f),
+            new Swatch("Cobble", true, 15, 0.45f, 0.44f, 0.48f),
+            new Swatch("Sand", false, 25, 0.76f, 0.70f, 0.45f),
+            new Swatch("Dirt", false, 8, 0.48f, 0.35f, 0.22f),
+            new Swatch("Water", false, 32, 0.20f, 0.45f, 0.75f),
+            new Swatch("Wood Planks", true, 18, 0.58f, 0.38f, 0.20f)
     };
 
     private String activeRailId = "select";
@@ -150,8 +190,63 @@ public final class MapEditorView {
     private boolean bottomDrawerVisible = true;
     private boolean commandPaletteOpen;
     private final ImString commandQuery = new ImString(128);
+    private final PreferencesWindow preferencesWindow = new PreferencesWindow();
+    private final PluginManagerWindow pluginManagerWindow = new PluginManagerWindow();
     private int drawerTab;
     private int rightPanelTab;
+
+    // Tile Painter drawer state
+    private boolean tilePainterIsOverlay = true;
+    private int tilePainterMaterialId = 11;
+    private int tilePainterBrushSize = 3;
+    private float tilePainterFalloff = 0.0f;
+    private boolean tilePainterBlendEdges = true;
+    private boolean tilePainterAutoSmooth = false;
+    private int tilePainterShape = 0;
+    private int tilePainterRotation = 0;
+    private boolean tilePainterRandomizeRot = false;
+    private boolean tilePainterMatchHeight = false;
+    private boolean tilePainterApplyAllPlanes = false;
+
+    // Asset Browser state
+    private final ImString assetSearchQuery = new ImString(64);
+    private int assetFilterCategory = 0;
+    private final ImString customTagInput = new ImString(32);
+
+    // Shared studio runtime services & sibling workspace callbacks
+    private Runnable openInterfaceStudio;
+    private Runnable openObjectStudio;
+    private Runnable openIntegrationCenter;
+    private SimulationEngine simulation;
+    private SymbolService symbols;
+    private ReferenceService references;
+    private NpcSpawnService spawns;
+    private ServerIntegrationService integrations;
+    private boolean showServerSpawns = true;
+
+    public void render(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
+                       NativeSceneViewport viewport, String sceneStatus,
+                       Runnable openDashboard, SettingsStore settings,
+                       EditorPluginLifecycleManager pluginLifecycle,
+                       boolean dirty,
+                       Runnable openInterfaceStudio,
+                       Runnable openObjectStudio,
+                       Runnable openIntegrationCenter,
+                       SimulationEngine simulation,
+                       SymbolService symbols,
+                       ReferenceService references,
+                       NpcSpawnService spawns,
+                       ServerIntegrationService integrations) {
+        this.openInterfaceStudio = openInterfaceStudio;
+        this.openObjectStudio = openObjectStudio;
+        this.openIntegrationCenter = openIntegrationCenter;
+        this.simulation = simulation;
+        this.symbols = symbols;
+        this.references = references;
+        this.spawns = spawns;
+        this.integrations = integrations;
+        render(cache, plan, viewport, sceneStatus, openDashboard, settings, pluginLifecycle, dirty);
+    }
 
     public void render(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
                        NativeSceneViewport viewport, String sceneStatus,
@@ -167,16 +262,28 @@ public final class MapEditorView {
         restoreLayout();
         bindInputRouter(pluginLifecycle);
         openCommandPaletteShortcut();
+        handleGlobalShortcuts();
         routeRailShortcuts(pluginLifecycle);
         routeSessionShortcuts(pluginLifecycle);
         renderMainMenu(cache, openDashboard, settings, pluginLifecycle);
         layout = Layout.compute(bottomDrawerVisible);
         renderToolRail(pluginLifecycle, viewport);
-        renderViewport(cache, plan, viewport, sceneStatus, settings);
+        renderViewport(cache, plan, viewport, sceneStatus, settings, pluginLifecycle);
         renderRightPanel(cache, settings, pluginLifecycle);
-        renderBottomDrawer(pluginLifecycle);
+        renderBottomDrawer(cache, pluginLifecycle);
         renderStatusBar(cache, plan, viewport, dirty, settings, pluginLifecycle);
         renderCommandPalette(pluginLifecycle);
+        preferencesWindow.render(settings, pluginLifecycle != null && pluginLifecycle.host() != null
+                ? pluginLifecycle.host().context().settingsService() : null);
+        pluginManagerWindow.render(pluginLifecycle);
+    }
+
+    private void handleGlobalShortcuts() {
+        var io = ImGui.getIO();
+        if (!io.getWantTextInput() && (io.getKeyCtrl() || io.getKeySuper())
+                && ImGui.isKeyPressed(ImGuiKey.Comma, false)) {
+            preferencesWindow.toggle();
+        }
     }
 
     // ------------------------------------------------------------------
@@ -201,6 +308,10 @@ public final class MapEditorView {
             if (ImGui.menuItem("Reset layout")) resetLayout();
             if (ImGui.menuItem("Utility drawer", "Ctrl+Space", bottomDrawerVisible)) {
                 bottomDrawerVisible = !bottomDrawerVisible;
+            }
+            ImGui.separator();
+            if (ImGui.menuItem("Preferences...", "Ctrl+,", preferencesWindow.isOpen())) {
+                preferencesWindow.toggle();
             }
             ImGui.endMenu();
         }
@@ -241,19 +352,83 @@ public final class MapEditorView {
             }
             ImGui.endMenu();
         }
+        if (ImGui.beginMenu("Server")) {
+            if (openIntegrationCenter != null) {
+                if (ImGui.menuItem("Integration Center...")) openIntegrationCenter.run();
+            }
+            if (integrations != null && integrations.isConnected()) {
+                var session = integrations.activeSession().get();
+                ImGui.textDisabled("Connected: " + session.provider().name());
+                if (ImGui.menuItem("Disconnect Server Project")) {
+                    integrations.disconnect();
+                }
+            } else {
+                ImGui.textDisabled("No server project connected");
+            }
+            ImGui.separator();
+            if (ImGui.menuItem("Show Server NPC Spawns", null, showServerSpawns)) {
+                showServerSpawns = !showServerSpawns;
+            }
+            ImGui.endMenu();
+        }
         if (ImGui.beginMenu("Help")) {
             ImGui.menuItem("OpenRune Studio · Map Editor", null, true, false);
+            ImGui.separator();
+            if (ImGui.menuItem("Plugins...", null, pluginManagerWindow.isOpen())) {
+                pluginManagerWindow.toggle();
+            }
             ImGui.endMenu();
         }
 
-        ImGui.sameLine(0.0f, 18.0f);
+        ImGui.sameLine(0.0f, 16.0f);
+        renderWorkspaceTabs(openDashboard);
+
+        ImGui.sameLine(0.0f, 14.0f);
         if (ImGui.button("Search  Ctrl+P##global-search")) {
             commandPaletteOpen = true;
             commandQuery.clear();
         }
-        ImGui.sameLine();
-        StudioWidgets.badge("REV " + cache.identity().revision(), 0.39f, 0.33f, 0.20f);
+
+        float rightMargin = 260.0f;
+        float avail = ImGui.getWindowWidth();
+        ImGui.setCursorPosX(Math.max(ImGui.getCursorPosX(), avail - rightMargin));
+        StudioWidgets.badge("OpenGL 3.3", 0.18f, 0.26f, 0.38f);
+        ImGui.sameLine(0.0f, 6.0f);
+        StudioWidgets.badge("Cache: OSRS (" + cache.identity().revision() + ")", 0.39f, 0.33f, 0.20f);
+
         ImGui.endMainMenuBar();
+    }
+
+    private void renderWorkspaceTabs(Runnable openDashboard) {
+        String[] workspaces = {"Dashboard", "Map Editor", "Object Studio", "Interface Studio"};
+        int activeIndex = 1; // Map Editor is active
+        ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 4.0f, 0.0f);
+        ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 10.0f, 3.0f);
+        for (int i = 0; i < workspaces.length; i++) {
+            boolean isActive = (i == activeIndex);
+            if (isActive) {
+                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.18f, 0.38f, 0.65f, 1.0f));
+                ImGui.pushStyleColor(ImGuiCol.Text, ImGui.getColorU32(1.0f, 1.0f, 1.0f, 1.0f));
+            } else {
+                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.13f, 0.15f, 0.18f, 0.85f));
+                ImGui.pushStyleColor(ImGuiCol.Text, ImGui.getColorU32(0.65f, 0.68f, 0.75f, 1.0f));
+            }
+            if (ImGui.button(workspaces[i] + "##ws-" + i)) {
+                if (i == 0 && openDashboard != null) {
+                    openDashboard.run();
+                } else if (i == 2 && openObjectStudio != null) {
+                    openObjectStudio.run();
+                } else if (i == 3 && openInterfaceStudio != null) {
+                    openInterfaceStudio.run();
+                }
+            }
+            if (i > 1 && ImGui.isItemHovered()) {
+                ImGui.setTooltip("Switch workspace: " + workspaces[i]);
+            }
+            ImGui.popStyleColor(2);
+            ImGui.sameLine();
+        }
+        ImGui.popStyleVar(2);
     }
 
     private void visibilityToggle(SettingsStore settings, SettingKey<Boolean> key, String label) {
@@ -390,6 +565,8 @@ public final class MapEditorView {
         if (ImGui.isKeyPressed(ImGuiKey._1, false)) activateRail(pluginLifecycle, "select");
         else if (ImGui.isKeyPressed(ImGuiKey._2, false)) activateRail(pluginLifecycle, "terrain");
         else if (ImGui.isKeyPressed(ImGuiKey._3, false)) activateRail(pluginLifecycle, "objects");
+        else if (ImGui.isKeyPressed(ImGuiKey._4, false)) activateRail(pluginLifecycle, "height");
+        else if (ImGui.isKeyPressed(ImGuiKey._5, false)) activateRail(pluginLifecycle, "water");
     }
 
     private static String firstAvailableTool(EditorPluginLifecycleManager pluginLifecycle,
@@ -464,6 +641,14 @@ public final class MapEditorView {
                 ImGui.endDisabled();
             }
         }
+        float availY = ImGui.getContentRegionAvailY();
+        if (availY > 44.0f) {
+            ImGui.dummy(0.0f, availY - 44.0f);
+            if (StudioWidgets.railButton("rail-settings", StudioIcons.SETTINGS, "Preferences",
+                    preferencesWindow.isOpen(), "Ctrl+,")) {
+                preferencesWindow.toggle();
+            }
+        }
         ImGui.end();
     }
 
@@ -473,7 +658,8 @@ public final class MapEditorView {
 
     private void renderViewport(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
                                 NativeSceneViewport viewport, String sceneStatus,
-                                SettingsStore settings) {
+                                SettingsStore settings,
+                                EditorPluginLifecycleManager pluginLifecycle) {
         placeWindow(layout.centerX(), layout.viewportY(),
                 layout.centerWidth(), layout.viewportHeight());
         ImGui.begin(VIEWPORT_WINDOW, FIXED_VIEWPORT_FLAGS);
@@ -492,8 +678,31 @@ public final class MapEditorView {
                     Math.max(160.0f, ImGui.getContentRegionAvailY()),
                     settings.snapshot().get(RenderSettingKeys.MSAA_SAMPLES),
                     new RenderConfigCompiler().compile(settings.snapshot()).presentation());
+            viewport.renderOverlays(toolController.activeTool(), pluginLifecycle);
+            if (spawns != null && showServerSpawns) {
+                renderServerSpawnOverlays(viewport, settings);
+            }
+            renderViewportHudCards(cache, viewport, pluginLifecycle, settings);
         }
         ImGui.end();
+    }
+
+    private void renderServerSpawnOverlays(NativeSceneViewport viewport, SettingsStore settings) {
+        if (spawns == null || viewport == null) return;
+        ViewportOverlayDraw draw = viewport.createOverlayDraw();
+        int activePlane = settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
+        int camTileX = Math.max(0, (int) (viewport.navigation().camera().x() / 128.0f));
+        int camTileY = Math.max(0, (int) (viewport.navigation().camera().z() / 128.0f));
+        List<NpcSpawn> visibleSpawns = spawns.spawns(activePlane, camTileX - 32, camTileY - 32, camTileX + 32, camTileY + 32);
+        for (NpcSpawn spawn : visibleSpawns) {
+            draw.tileOutline(spawn.coordinate(), 0x3388FFFF);
+            float wx = spawn.coordinate().x() * 128.0f + 64.0f;
+            float wz = spawn.coordinate().y() * 128.0f + 64.0f;
+            if (spawn.wanderRadius() > 0) {
+                draw.circle(wx, 0.0f, wz, spawn.wanderRadius() * 128.0f, 0x3388FF55, 1.0f);
+            }
+            draw.worldLabel(spawn.symbolicName(), wx, -80.0f, wz, 0xFFFFFFFF, 0x1A3A6BEE);
+        }
     }
 
     /** Plane selector + scene-visibility toggles — every one a real setting. */
@@ -590,6 +799,212 @@ public final class MapEditorView {
         ImGui.popStyleColor();
     }
 
+    private void renderViewportHudCards(LoadedOsrsCacheSession cache,
+                                        NativeSceneViewport viewport,
+                                        EditorPluginLifecycleManager pluginLifecycle,
+                                        SettingsStore settings) {
+        float windowW = ImGui.getWindowWidth();
+        float windowH = ImGui.getWindowHeight();
+        float margin = 14.0f;
+
+        // Top-Right Floating HUD: Simulation Debugger
+        if (simulation != null) {
+            float simW = 340.0f;
+            float simH = 92.0f;
+            if (windowW > simW + margin * 2.0f) {
+                ImGui.setCursorPos(windowW - simW - margin, margin + 28.0f);
+                ImGui.pushStyleColor(ImGuiCol.ChildBg, ImGui.getColorU32(0.08f, 0.10f, 0.13f, 0.88f));
+                ImGui.pushStyleColor(ImGuiCol.Border, ImGui.getColorU32(0.24f, 0.28f, 0.36f, 0.75f));
+                ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 6.0f);
+                ImGui.pushStyleVar(ImGuiStyleVar.ChildBorderSize, 1.0f);
+                ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 8.0f, 6.0f);
+                if (ImGui.beginChild("hud-simulation", simW, simH, true, ImGuiWindowFlags.NoScrollbar)) {
+                    renderSimulationHudContent();
+                }
+                ImGui.endChild();
+                ImGui.popStyleVar(3);
+                ImGui.popStyleColor(2);
+            }
+        }
+
+        // Bottom-Left Floating HUD: Tile inspection & coordinates
+        float blW = 240.0f;
+        float blH = 135.0f;
+        if (windowH > blH + 60.0f && windowW > blW * 2.0f) {
+            ImGui.setCursorPos(margin, windowH - blH - margin);
+            ImGui.pushStyleColor(ImGuiCol.ChildBg, ImGui.getColorU32(0.08f, 0.10f, 0.13f, 0.88f));
+            ImGui.pushStyleColor(ImGuiCol.Border, ImGui.getColorU32(0.24f, 0.28f, 0.36f, 0.75f));
+            ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 6.0f);
+            ImGui.pushStyleVar(ImGuiStyleVar.ChildBorderSize, 1.0f);
+            ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 10.0f, 8.0f);
+            if (ImGui.beginChild("hud-bottom-left", blW, blH, true, ImGuiWindowFlags.NoScrollbar)) {
+                renderHudBottomLeftContent(cache, viewport, pluginLifecycle, settings);
+            }
+            ImGui.endChild();
+            ImGui.popStyleVar(3);
+            ImGui.popStyleColor(2);
+        }
+
+        // Bottom-Right Floating HUD: Contextual tool controls & hints
+        float brW = 220.0f;
+        float brH = 135.0f;
+        if (windowH > brH + 60.0f && windowW > blW + brW + margin * 3.0f) {
+            ImGui.setCursorPos(windowW - brW - margin, windowH - brH - margin);
+            ImGui.pushStyleColor(ImGuiCol.ChildBg, ImGui.getColorU32(0.08f, 0.10f, 0.13f, 0.88f));
+            ImGui.pushStyleColor(ImGuiCol.Border, ImGui.getColorU32(0.24f, 0.28f, 0.36f, 0.75f));
+            ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 6.0f);
+            ImGui.pushStyleVar(ImGuiStyleVar.ChildBorderSize, 1.0f);
+            ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 10.0f, 8.0f);
+            if (ImGui.beginChild("hud-bottom-right", brW, brH, true, ImGuiWindowFlags.NoScrollbar)) {
+                renderHudBottomRightContent();
+            }
+            ImGui.endChild();
+            ImGui.popStyleVar(3);
+            ImGui.popStyleColor(2);
+        }
+    }
+
+    private void renderSimulationHudContent() {
+        var clock = simulation.clock();
+        ImGui.pushFont(StudioFonts.mono(), 0.0f);
+        ImGui.textColored(ImGui.getColorU32(0.40f, 0.70f, 1.0f, 1.0f), "SIMULATION CLOCK");
+        ImGui.sameLine(220.0f);
+        ImGui.textDisabled(clock.isPaused() ? "[PAUSED]" : "[RUNNING]");
+        ImGui.popFont();
+
+        if (ImGui.button(clock.isPaused() ? "Play##sim-play" : "Pause##sim-pause", 54, 22)) {
+            clock.togglePause();
+        }
+        ImGui.sameLine();
+        ImGui.beginDisabled(!clock.isPaused());
+        if (ImGui.button("Step Cycle##sim-sc", 76, 22)) {
+            simulation.stepClientCycle();
+        }
+        ImGui.sameLine();
+        if (ImGui.button("Step Tick##sim-st", 70, 22)) {
+            simulation.stepServerTick();
+        }
+        ImGui.endDisabled();
+
+        ImGui.sameLine();
+        float[] speeds = {0.25f, 0.5f, 1.0f, 2.0f, 4.0f};
+        String[] speedLabels = {"0.25x", "0.5x", "1x", "2x", "4x"};
+        for (int i = 0; i < speeds.length; i++) {
+            if (i > 0) ImGui.sameLine();
+            boolean isCur = Math.abs(clock.speed() - speeds[i]) < 0.01f;
+            if (isCur) {
+                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.24f, 0.56f, 0.90f, 1.0f));
+            }
+            if (ImGui.button(speedLabels[i] + "##sim-spd-" + i, 40, 20)) {
+                clock.setSpeed(speeds[i]);
+            }
+            if (isCur) {
+                ImGui.popStyleColor();
+            }
+        }
+
+        ImGui.pushFont(StudioFonts.mono(), 0.0f);
+        ImGui.textDisabled("Cycle: " + clock.clientCycles() + " (50Hz)  ·  Tick: " + clock.serverTicks() + " (600ms)");
+        ImGui.popFont();
+    }
+
+    private void renderHudBottomLeftContent(LoadedOsrsCacheSession cache,
+                                            NativeSceneViewport viewport,
+                                            EditorPluginLifecycleManager pluginLifecycle,
+                                            SettingsStore settings) {
+        EditorSession session = session(pluginLifecycle);
+        WorldDocument world = session != null ? session.world() : null;
+        var picked = viewport != null ? viewport.selection() : java.util.Optional.<PickResult>empty();
+
+        int tileX = 0, tileY = 0, plane = settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
+        if (picked.isPresent()) {
+            var hit = picked.get();
+            tileX = hit.tile().x();
+            tileY = hit.tile().y();
+            plane = hit.plane();
+        } else if (viewport != null) {
+            tileX = Math.max(0, (int) (viewport.navigation().camera().x() / 128.0f));
+            tileY = Math.max(0, (int) (viewport.navigation().camera().z() / 128.0f));
+        }
+
+        int localX = world != null ? Math.floorMod(tileX, Math.max(1, world.width())) : tileX & 63;
+        int localY = world != null ? Math.floorMod(tileY, Math.max(1, world.length())) : tileY & 63;
+        int regionX = tileX >> 6;
+        int regionY = tileY >> 6;
+        int regionId = (regionX << 8) | regionY;
+
+        int height = 0;
+        String underlay = "None";
+        String overlay = "None";
+        String flags = "None";
+
+        if (world != null && plane >= 0 && plane < world.planes()) {
+            var snapshot = world.tile(plane, localX, localY).snapshot();
+            height = (snapshot.southWestHeight() + snapshot.southEastHeight()
+                    + snapshot.northEastHeight() + snapshot.northWestHeight()) >> 2;
+
+            if (snapshot.underlayId() > 0) {
+                var uDef = cache.bundle().definitions().underlay(snapshot.underlayId());
+                String color = uDef.map(u -> String.format("#%06X", u.rgb())).orElse("?");
+                underlay = "#" + snapshot.underlayId() + " (" + color + ")";
+            }
+
+            if (snapshot.overlayId() > 0) {
+                var oDef = cache.bundle().definitions().overlay(snapshot.overlayId());
+                String color = oDef.map(o -> String.format("#%06X", o.rgb())).orElse("?");
+                overlay = "#" + snapshot.overlayId() + " (" + color + ", s:" + snapshot.overlayShape() + ")";
+            }
+
+            int f = snapshot.flags();
+            if (f != 0) {
+                flags = "0x" + Integer.toHexString(f);
+                if (OsrsTileFlags.hasBridge(f)) flags += " (Bridge)";
+            }
+        }
+
+        ImGui.pushFont(StudioFonts.mono(), 0.0f);
+        ImGui.textColored(ImGui.getColorU32(0.40f, 0.70f, 1.0f, 1.0f), "TILE INSPECTION");
+        ImGui.text("Tile:     " + tileX + ", " + tileY + " (P:" + plane + ")");
+        ImGui.text("Region:   " + regionX + ", " + regionY + " [" + regionId + "]");
+        ImGui.text("Height:   " + height);
+        ImGui.text("Underlay: " + underlay);
+        ImGui.text("Overlay:  " + overlay);
+        ImGui.text("Flags:    " + flags);
+        ImGui.popFont();
+    }
+
+    private void renderHudBottomRightContent() {
+        ImGui.pushFont(StudioFonts.mono(), 0.0f);
+        ImGui.textColored(ImGui.getColorU32(0.40f, 0.70f, 1.0f, 1.0f), "CONTROLS: " + activeRailId.toUpperCase());
+        if ("terrain".equals(activeRailId) || "water".equals(activeRailId)) {
+            ImGui.text("LMB: Paint tiles");
+            ImGui.text("RMB: Pick material");
+            ImGui.text("Shift+LMB: Fill area");
+            ImGui.text("Ctrl+Z: Undo edit");
+            ImGui.text("Alt+Drag: Rotate shape");
+            ImGui.text("[ / ]: Brush size (" + tilePainterBrushSize + "x" + tilePainterBrushSize + ")");
+        } else if ("objects".equals(activeRailId)) {
+            ImGui.text("LMB: Place object");
+            ImGui.text("RMB: Rotate object");
+            ImGui.text("Shift+LMB: Duplicate");
+            ImGui.text("Delete: Remove object");
+            ImGui.text("Ctrl+Z: Undo edit");
+        } else if ("height".equals(activeRailId)) {
+            ImGui.text("LMB: Raise height");
+            ImGui.text("RMB: Lower height");
+            ImGui.text("Shift+LMB: Flatten");
+            ImGui.text("Ctrl+LMB: Smooth");
+            ImGui.text("Ctrl+Z: Undo edit");
+        } else {
+            ImGui.text("LMB Drag: Select box");
+            ImGui.text("Shift+LMB: Add to select");
+            ImGui.text("Ctrl+A: Select all");
+            ImGui.text("Delete: Clear selection");
+            ImGui.text("F: Frame selection");
+        }
+        ImGui.popFont();
+    }
+
     // ------------------------------------------------------------------
     // Right panel: real tool settings + live selection
     // ------------------------------------------------------------------
@@ -605,7 +1020,7 @@ public final class MapEditorView {
         // the setting captions in a fixed-width column.
         ImGui.pushTextWrapPos(0.0f);
 
-        String[] tabs = {"Inspector", "Outliner", "Tools"};
+        String[] tabs = {"Properties", "Knowledge", "Asset Browser", "Outliner", "Tools"};
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 8.0f, 6.0f);
         for (int index = 0; index < tabs.length; index++) {
             if (index > 0) ImGui.sameLine();
@@ -620,7 +1035,9 @@ public final class MapEditorView {
                 ImGui.separator();
                 renderSelectionPanel(pluginLifecycle);
             }
-            case 1 -> renderOutlinerTab(cache, settings, pluginLifecycle);
+            case 1 -> renderKnowledgeTab(cache, pluginLifecycle);
+            case 2 -> renderAssetBrowserTab(cache, pluginLifecycle);
+            case 3 -> renderOutlinerTab(cache, settings, pluginLifecycle);
             default -> {
                 renderActiveTool(pluginLifecycle);
                 ImGui.separator();
@@ -734,7 +1151,7 @@ public final class MapEditorView {
      */
     private void renderPickInspector(LoadedOsrsCacheSession cache,
                                      EditorPluginLifecycleManager pluginLifecycle) {
-        StudioWidgets.section("Inspector");
+        StudioWidgets.section("Properties");
         if (viewport == null) {
             ImGui.textDisabled("No viewport.");
             return;
@@ -756,82 +1173,382 @@ public final class MapEditorView {
                 ? world.effectivePlane(hit.plane(), localX, localY)
                 : hit.plane();
 
-        ImGui.pushFont(StudioFonts.mono(), 0.0f);
-        ImGui.text("tile     " + hit.tile().x() + ", " + hit.tile().y() + " (plane " + hit.plane() + ")");
-        ImGui.text("region   " + regionId + " (" + regionX + "," + regionY + ") local " + localX + "," + localY);
-        ImGui.text("plane    authored " + hit.plane() + "  effective " + effectivePlane);
+        var snapshotOpt = (world != null && hit.plane() >= 0 && hit.plane() < world.planes())
+                ? java.util.Optional.of(world.tile(hit.plane(), localX, localY).snapshot())
+                : java.util.Optional.<com.rspsi.editor.model.TileSnapshot>empty();
 
-        if (world != null && hit.plane() >= 0 && hit.plane() < world.planes()) {
-            var snapshot = world.tile(hit.plane(), localX, localY).snapshot();
-            int sw = snapshot.southWestHeight();
-            int se = snapshot.southEastHeight();
-            int ne = snapshot.northEastHeight();
-            int nw = snapshot.northWestHeight();
-            ImGui.text("height   sw " + sw + "  se " + se);
-            ImGui.text("         nw " + nw + "  ne " + ne);
-            int anchor = (sw + se + ne + nw) >> 2;
-            ImGui.text("anchor   " + anchor + "   slope " + (maxOf(sw, se, ne, nw) - minOf(sw, se, ne, nw)));
+        int height = snapshotOpt.map(s -> (s.southWestHeight() + s.southEastHeight()
+                + s.northEastHeight() + s.northWestHeight()) >> 2).orElse(0);
 
-            int underlayId = snapshot.underlayId();
-            if (underlayId > 0) {
-                var uDef = cache.bundle().definitions().underlay(underlayId);
-                String uColor = uDef.map(u -> String.format("#%06X", u.rgb())).orElse("?");
-                ImGui.text("underlay " + underlayId + " (" + uColor + ")");
-            } else {
-                ImGui.textDisabled("underlay none");
-            }
-
-            int overlayId = snapshot.overlayId();
-            if (overlayId > 0) {
-                var oDef = cache.bundle().definitions().overlay(overlayId);
-                String oColor = oDef.map(o -> String.format("#%06X", o.rgb())).orElse("?");
-                int tex = oDef.map(FloorDefinitionView::texture).orElse(-1);
-                String texStr = tex >= 0 ? " tex " + tex : "";
-                ImGui.text("overlay  " + overlayId + " (" + oColor + texStr + ")");
-                ImGui.text("overlay  shape " + snapshot.overlayShape() + "  rot " + snapshot.overlayRotation());
-            } else {
-                ImGui.textDisabled("overlay  none");
-            }
-
-            int flags = snapshot.flags();
-            StringBuilder flagNames = new StringBuilder();
-            if ((flags & OsrsTileFlags.BLOCK_MAP_SQUARE) != 0) flagNames.append("clipped ");
-            if ((flags & OsrsTileFlags.BRIDGE) != 0) flagNames.append("bridge ");
-            if ((flags & OsrsTileFlags.REMOVE_ROOFS) != 0) flagNames.append("roofs ");
-            if ((flags & OsrsTileFlags.MINIMAP_BRIDGE) != 0) flagNames.append("minimap_bridge ");
-            if ((flags & OsrsTileFlags.MINIMAP_HIDDEN) != 0) flagNames.append("hidden ");
-            String flagsText = flagNames.length() > 0 ? flagNames.toString().trim() : "none";
-            ImGui.text("flags    0x" + Integer.toHexString(flags) + " (" + flagsText + ")");
+        // Section 1: Selection
+        if (ImGui.collapsingHeader("Selection", ImGuiTreeNodeFlags.DefaultOpen)) {
+            ImGui.pushFont(StudioFonts.mono(), 0.0f);
+            ImGui.text("Tile:        " + hit.tile().x() + ", " + hit.tile().y());
+            ImGui.text("Plane:       Authored " + hit.plane() + " (Effective " + effectivePlane + ")");
+            ImGui.text("Region:      " + regionId + " (" + regionX + ", " + regionY + ")");
+            ImGui.text("Local:       " + localX + ", " + localY);
+            ImGui.text("Type:        " + (hit.objectHit() ? "World Object" : "Terrain Tile"));
+            ImGui.popFont();
         }
 
-        if (hit.hasSubmissionMetadata()) {
-            ImGui.text("layer    " + hit.layer());
-            ImGui.text("prio     " + hit.priority() + "    bias " + hit.depthBias());
-            ImGui.text("tex      " + (hit.textureId() < 0 ? "none" : String.valueOf(hit.textureId())));
+        // Section 2: Object Properties
+        if (ImGui.collapsingHeader("Object Properties", ImGuiTreeNodeFlags.DefaultOpen)) {
+            ImGui.pushFont(StudioFonts.mono(), 0.0f);
+            if (hit.objectHit()) {
+                ImGui.text("ID:          " + hit.objectId());
+                if (symbols != null) {
+                    symbols.primaryName(SymbolNamespace.LOC, hit.objectId()).ifPresent(sym -> {
+                        ImGui.text("Symbol:      " + SymbolNamespace.LOC.qualify(sym));
+                    });
+                }
+                cache.bundle().definitions().object(hit.objectId()).ifPresent(def -> {
+                    ImGui.text("Name:        " + (def.name().isEmpty() ? "(unnamed)" : def.name()));
+                    ImGui.text("Size:        " + def.width() + "x" + def.length());
+                    ImGui.text("Interactive: " + def.interactive());
+                });
+                cache.bundle().definitions().objectAppearance(hit.objectId()).ifPresent(app -> {
+                    ImGui.text("Shadow:      " + (app.castsShadow() ? "Casts Shadow" : "No Shadow"));
+                    ImGui.text("Occlusion:   " + (app.occludes() ? "Occludes" : "Non-occluding"));
+                });
+            } else {
+                snapshotOpt.ifPresent(snap -> {
+                    ImGui.text("Underlay ID: " + (snap.underlayId() > 0 ? snap.underlayId() : "None"));
+                    ImGui.text("Overlay ID:  " + (snap.overlayId() > 0 ? snap.overlayId() : "None"));
+                    ImGui.text("Anchor H:    " + height);
+                });
+            }
+            ImGui.popFont();
         }
 
-        if (hit.objectHit()) {
-            ImGui.text("objId    " + hit.objectId());
-            cache.bundle().definitions().object(hit.objectId())
-                    .ifPresent(definition -> {
-                        ImGui.text("name     " + definition.name());
-                        ImGui.text("size     " + definition.width() + "x" + definition.length());
+        // Section 3: Model & Textures
+        if (ImGui.collapsingHeader("Model & Textures", ImGuiTreeNodeFlags.DefaultOpen)) {
+            ImGui.pushFont(StudioFonts.mono(), 0.0f);
+            if (hit.objectHit()) {
+                cache.bundle().definitions().object(hit.objectId()).ifPresent(def -> {
+                    int[] models = def.modelIds();
+                    String mStr = models.length > 4
+                            ? models[0] + ", " + models[1] + "... (" + models.length + ")"
+                            : java.util.Arrays.toString(models);
+                    ImGui.text("Models:      " + mStr);
+                });
+                cache.bundle().definitions().objectAppearance(hit.objectId()).ifPresent(app -> {
+                    ImGui.text("Normals:     " + (app.mergeNormals() ? "Merge" : "Separate"));
+                    ImGui.text("Contrast:    " + app.contrast());
+                });
+                if (hit.hasSubmissionMetadata()) {
+                    ImGui.text("Texture ID:  " + (hit.textureId() < 0 ? "None" : hit.textureId()));
+                }
+            } else {
+                snapshotOpt.ifPresent(snap -> {
+                    if (snap.overlayId() > 0) {
+                        cache.bundle().definitions().overlay(snap.overlayId()).ifPresent(o -> {
+                            ImGui.text("Color:       " + String.format("#%06X", o.rgb()));
+                            ImGui.text("Texture:     " + (o.texture() >= 0 ? o.texture() : "None"));
+                        });
+                    }
+                    if (snap.underlayId() > 0) {
+                        cache.bundle().definitions().underlay(snap.underlayId()).ifPresent(u -> {
+                            ImGui.text("Underlay:    " + String.format("#%06X", u.rgb()));
+                        });
+                    }
+                });
+            }
+            ImGui.popFont();
+        }
+
+        // Section 4: Offsets & Transform
+        if (ImGui.collapsingHeader("Offsets & Transform", ImGuiTreeNodeFlags.DefaultOpen)) {
+            ImGui.pushFont(StudioFonts.mono(), 0.0f);
+            ImGui.text("X:           " + localX);
+            ImGui.text("Y:           " + localY);
+            ImGui.text("Z (Height):  " + height);
+            if (hit.objectHit()) {
+                describePickedObject(hit, pluginLifecycle);
+            } else {
+                snapshotOpt.ifPresent(snap -> {
+                    ImGui.text("Shape:       " + snap.overlayShape() + " (" + OSRS_SHAPE_NAMES[Math.min(11, snap.overlayShape())] + ")");
+                    ImGui.text("Rotation:    " + (snap.overlayRotation() * 90) + "° (" + snap.overlayRotation() + ")");
+                });
+            }
+            ImGui.popFont();
+        }
+
+        // Section 5: Interaction & Collision
+        if (ImGui.collapsingHeader("Interaction & Collision", ImGuiTreeNodeFlags.DefaultOpen)) {
+            ImGui.pushFont(StudioFonts.mono(), 0.0f);
+            if (hit.objectHit()) {
+                cache.bundle().definitions().object(hit.objectId()).ifPresent(def -> {
+                    List<String> actions = def.interactions().stream().filter(a -> !a.isBlank()).toList();
+                    ImGui.text("Actions:     " + (actions.isEmpty() ? "None" : String.join(", ", actions)));
+                });
+                cache.bundle().definitions().objectCollision(hit.objectId()).ifPresent(col -> {
+                    ImGui.text("Walkable:    " + (col.blockWalk() == 0));
+                    ImGui.text("Projectile:  " + (!col.blockProjectile()));
+                    ImGui.text("Clip Type:   " + col.clipType());
+                });
+            } else {
+                snapshotOpt.ifPresent(snap -> {
+                    int flags = snap.flags();
+                    ImGui.text("Walkable:    " + ((flags & OsrsTileFlags.BLOCK_MAP_SQUARE) == 0));
+                    ImGui.text("Bridge:      " + OsrsTileFlags.hasBridge(flags));
+                    ImGui.text("Remove Roof: " + OsrsTileFlags.removesRoofs(flags));
+                    ImGui.text("Raw Flags:   0x" + Integer.toHexString(flags));
+                });
+            }
+            ImGui.popFont();
+        }
+
+        // Section 6: Server References
+        if (hit.objectHit() && references != null) {
+            String symName = symbols != null ? symbols.primaryName(SymbolNamespace.LOC, hit.objectId()).orElse(null) : null;
+            List<ContentReference> refs = references.referencesFor(SymbolNamespace.LOC, hit.objectId(), symName);
+            if (!refs.isEmpty()) {
+                if (ImGui.collapsingHeader("Server References (" + refs.size() + ")", ImGuiTreeNodeFlags.DefaultOpen)) {
+                    ImGui.pushFont(StudioFonts.mono(), 0.0f);
+                    for (ContentReference ref : refs) {
+                        ImGui.bulletText(ref.displayLocation());
+                        if (ref.snippet() != null && !ref.snippet().isBlank()) {
+                            ImGui.textDisabled("  " + ref.snippet());
+                        }
+                    }
+                    ImGui.popFont();
+                }
+            }
+        }
+
+        if (ImGui.button("Clear Selection##pick-clear")) viewport.clearSelection();
+    }
+
+    private void renderKnowledgeTab(LoadedOsrsCacheSession cache, EditorPluginLifecycleManager pluginLifecycle) {
+        StudioWidgets.section("World Knowledge");
+        if (pluginLifecycle == null || pluginLifecycle.host() == null) {
+            ImGui.textDisabled("Knowledge service unavailable.");
+            return;
+        }
+
+        WorldKnowledgeService knowledge = pluginLifecycle.host().context().knowledge();
+        if (knowledge == null) {
+            ImGui.textDisabled("Knowledge service uninitialized.");
+            return;
+        }
+
+        KnowledgeSnapshot snapshot = knowledge.snapshot();
+
+        // 1. World & Region Profile Summary
+        if (ImGui.collapsingHeader("Region & World Intelligence", ImGuiTreeNodeFlags.DefaultOpen)) {
+            RegionProfile worldProfile = snapshot.worldProfile();
+            ImGui.pushFont(StudioFonts.mono(), 0.0f);
+            ImGui.text("Total Tiles:     " + worldProfile.tileCount() + " (" + worldProfile.planes() + " planes)");
+            ImGui.text("Dominant Floor:  Underlay #" + worldProfile.dominantUnderlay().orElse(-1)
+                    + " | Overlay #" + worldProfile.dominantOverlay().orElse(-1));
+            ImGui.text("Elevation:       Min " + worldProfile.minHeight() + " | Max " + worldProfile.maxHeight()
+                    + " | Avg " + String.format("%.1f", worldProfile.averageHeight()));
+
+            worldProfile.metric(MetricKey.MAX_SLOPE).ifPresent(maxSlope ->
+                    ImGui.text("Steepest Slope:  " + String.format("%.1f", maxSlope) + "°"));
+            worldProfile.metric(MetricKey.WALKABLE_RATIO).ifPresent(walkable ->
+                    ImGui.text("Walkable Space:  " + String.format("%.1f%%", walkable * 100)));
+            ImGui.popFont();
+        }
+
+        // 2. Selection Semantics & Explain Classification
+        var picked = viewport != null ? viewport.selection() : java.util.Optional.<PickResult>empty();
+        if (picked.isPresent()) {
+            PickResult hit = picked.get();
+            TileCoordinate coord = hit.tile();
+            StudioWidgets.section("Selection Semantics");
+            ImGui.text("Selected Tile: (" + coord.plane() + ", " + coord.x() + ", " + coord.y() + ")");
+
+            WorldDocument world = pluginLifecycle.host().context().world();
+            WorldObject pickedObject = null;
+            if (hit.objectHit() && world != null && coord.plane() >= 0 && coord.plane() < world.planes()) {
+                int lx = Math.floorMod(coord.x(), Math.max(1, world.width()));
+                int ly = Math.floorMod(coord.y(), Math.max(1, world.length()));
+                for (WorldObject obj : world.tile(coord.plane(), lx, ly).snapshot().objects()) {
+                    if (obj.id() == hit.objectId()) {
+                        pickedObject = obj;
+                        break;
+                    }
+                }
+            }
+
+            // Derived Topology
+            snapshot.topologyAt(coord).ifPresent(topo -> {
+                ImGui.pushFont(StudioFonts.mono(), 0.0f);
+                ImGui.text("Topology: Slope " + String.format("%.1f", topo.slopeMagnitude())
+                        + " | Aspect " + topo.aspect() + " | Curvature " + topo.curvature());
+                if (topo.isCliff()) ImGui.textColored(0xFF6666FF, "⚠ Terrain marked as CLIFF");
+                ImGui.popFont();
+            });
+
+            // Semantic Tags
+            Set<SemanticTag> tags = snapshot.tagsAt(coord);
+            if (tags.isEmpty()) {
+                ImGui.textDisabled("No semantic tags active on this tile.");
+            } else {
+                ImGui.text("Semantic Tags:");
+                for (SemanticTag tag : tags) {
+                    ImGui.bulletText(tag.qualifiedName());
+                }
+            }
+
+            // Explain Classification breakdown
+            if (ImGui.collapsingHeader("Explain Classification", ImGuiTreeNodeFlags.DefaultOpen)) {
+                List<KnowledgeFact<SemanticTag>> facts = snapshot.factsAt(coord);
+                boolean hasObjFacts = pickedObject != null && !knowledge.classifyObject(pickedObject).isEmpty();
+                if (facts.isEmpty() && !hasObjFacts) {
+                    ImGui.textDisabled("No inferred classifications active.");
+                } else {
+                    for (KnowledgeFact<SemanticTag> fact : facts) {
+                        String header = fact.value().qualifiedName() + String.format(" [%.0f%%]", fact.confidence() * 100)
+                                + " (" + fact.source() + ")";
+                        ImGui.text(header);
+                        if (!fact.evidence().isEmpty()) {
+                            ImGui.indent();
+                            ImGui.pushFont(StudioFonts.mono(), 0.0f);
+                            for (Evidence ev : fact.evidence()) {
+                                ImGui.text("• " + ev.description() + " (signal: " + String.format("%.2f", ev.weight()) + ")");
+                            }
+                            ImGui.popFont();
+                            ImGui.unindent();
+                        }
+                    }
+
+                    if (pickedObject != null) {
+                        List<KnowledgeFact<SemanticTag>> objFacts = knowledge.classifyObject(pickedObject);
+                        for (KnowledgeFact<SemanticTag> fact : objFacts) {
+                            String header = fact.value().qualifiedName() + String.format(" [%.0f%%]", fact.confidence() * 100)
+                                    + " (" + fact.source() + ")";
+                            ImGui.text(header);
+                            if (!fact.evidence().isEmpty()) {
+                                ImGui.indent();
+                                ImGui.pushFont(StudioFonts.mono(), 0.0f);
+                                for (Evidence ev : fact.evidence()) {
+                                    ImGui.text("• " + ev.description() + " (signal: " + String.format("%.2f", ev.weight()) + ")");
+                                }
+                                ImGui.popFont();
+                                ImGui.unindent();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Explain Rendering (Rule Trace)
+            if (ImGui.collapsingHeader("Explain Rendering (Rule Trace)", ImGuiTreeNodeFlags.DefaultOpen)) {
+                RuleTrace.TileRuleTrace tileTrace =
+                        RuleTrace.traceTile(pluginLifecycle.host().context().world(), coord);
+                ImGui.pushFont(StudioFonts.mono(), 0.0f);
+                ImGui.text("Tile Elevation:   " + tileTrace.elevation());
+                ImGui.text("Effective Plane:  " + tileTrace.effectivePlane());
+                ImGui.text("Tile Flags:       Blocked=" + tileTrace.flags().blocked()
+                        + " Bridge=" + tileTrace.flags().bridge() + " Roof=" + tileTrace.flags().underRoof());
+
+                if (pickedObject != null) {
+                    final WorldObject objRef = pickedObject;
+                    RuleTrace.traceObject(pickedObject, pluginLifecycle.host().context().world(),
+                            cache != null ? cache.bundle().definitions() : null).ifPresent(trace -> {
+                        ImGui.separator();
+                        ImGui.text("Object Shape:     " + (trace.shapeDescriptor() != null ? trace.shapeDescriptor().name() : "Shape " + objRef.type()));
+                        ImGui.text("Loc Variants:     " + trace.variantCount() + " (Mirror: " + trace.mirrorApplied() + ")");
+                        ImGui.text("Displacement:     " + trace.displacementUsed());
+                        ImGui.text("Merge Normals:    " + (trace.mergeNormalsEligible() ? "Yes (Opcode 22)" : "No"));
+                        ImGui.text("Ground Contour:   " + (trace.contourGroundApplied() ? "Type " + trace.contourGroundType() : "Disabled"));
                     });
-            cache.bundle().definitions().objectAppearance(hit.objectId())
-                    .ifPresent(app -> {
-                        ImGui.text("shadow   " + app.castsShadow() + "  occlude " + app.occludes());
-                        ImGui.text("mergeN   " + app.mergeNormals() + "  contrast " + app.contrast());
-                    });
-            cache.bundle().definitions().objectCollision(hit.objectId())
-                    .ifPresent(col -> {
-                        ImGui.text("clip     walk " + col.blockWalk() + "  proj " + col.blockProjectile() + "  type " + col.clipType());
-                    });
-            describePickedObject(hit, pluginLifecycle);
+                }
+                ImGui.popFont();
+            }
+
+            // User Overrides
+            if (ImGui.collapsingHeader("User Metadata Overrides")) {
+                ImGui.inputTextWithHint("##custom-tag", "New tag (e.g. core:SPAWN)", customTagInput);
+                ImGui.sameLine();
+                if (ImGui.button("Add Tag##add-user-tag") && !customTagInput.get().isBlank()) {
+                    knowledge.userOverrides().addTileTag(coord, SemanticTag.of(customTagInput.get()));
+                    knowledge.invalidate();
+                    customTagInput.set("");
+                }
+            }
         } else {
-            ImGui.textDisabled("terrain (no object)");
+            ImGui.textDisabled("Select or pick a tile in the viewport to inspect semantic knowledge and rule traces.");
         }
-        ImGui.popFont();
-        if (ImGui.button("Clear##pick-clear")) viewport.clearSelection();
+    }
+
+    private void renderAssetBrowserTab(LoadedOsrsCacheSession cache, EditorPluginLifecycleManager pluginLifecycle) {
+        StudioWidgets.section("Asset Browser");
+        ImGui.inputTextWithHint("##asset-search", "Search assets...", assetSearchQuery);
+        String filter = assetSearchQuery.get().toLowerCase().trim();
+
+        String[] categories = {"All", "Objects", "Underlays", "Overlays"};
+        for (int i = 0; i < categories.length; i++) {
+            if (i > 0) ImGui.sameLine();
+            if (modeButton(categories[i], assetFilterCategory == i)) assetFilterCategory = i;
+        }
+        ImGui.separator();
+
+        ImGui.beginChild("asset-browser-list", 0.0f, 0.0f, false);
+        int shown = 0;
+        if (assetFilterCategory == 0 || assetFilterCategory == 1) {
+            ImGui.textDisabled("--- OBJECTS ---");
+            for (int id = 0; id < 2000 && shown < 64; id++) {
+                var defOpt = cache.bundle().definitions().object(id);
+                if (defOpt.isPresent()) {
+                    var def = defOpt.get();
+                    String name = def.name();
+                    if (filter.isEmpty() || name.toLowerCase().contains(filter) || String.valueOf(id).contains(filter)) {
+                        shown++;
+                        if (ImGui.selectable(String.format("#%04d  %s", id, name.isEmpty() ? "(unnamed)" : name))) {
+                            activeRailId = "objects";
+                            activateRail(pluginLifecycle, "objects");
+                        }
+                        if (ImGui.isItemHovered()) {
+                            ImGui.setTooltip("Object #" + id + " (" + def.width() + "x" + def.length() + ")");
+                        }
+                    }
+                }
+            }
+        }
+
+        if ((assetFilterCategory == 0 || assetFilterCategory == 3) && shown < 64) {
+            ImGui.textDisabled("--- OVERLAYS ---");
+            for (int id = 1; id < 128 && shown < 64; id++) {
+                var defOpt = cache.bundle().definitions().overlay(id);
+                if (defOpt.isPresent()) {
+                    var def = defOpt.get();
+                    String hex = String.format("#%06X", def.rgb());
+                    if (filter.isEmpty() || hex.toLowerCase().contains(filter) || String.valueOf(id).contains(filter)) {
+                        shown++;
+                        if (ImGui.selectable(String.format("#%03d  Overlay (%s)", id, hex))) {
+                            tilePainterIsOverlay = true;
+                            tilePainterMaterialId = id;
+                            activeRailId = "terrain";
+                            activateRail(pluginLifecycle, "terrain");
+                        }
+                    }
+                }
+            }
+        }
+
+        if ((assetFilterCategory == 0 || assetFilterCategory == 2) && shown < 64) {
+            ImGui.textDisabled("--- UNDERLAYS ---");
+            for (int id = 1; id < 128 && shown < 64; id++) {
+                var defOpt = cache.bundle().definitions().underlay(id);
+                if (defOpt.isPresent()) {
+                    var def = defOpt.get();
+                    String hex = String.format("#%06X", def.rgb());
+                    if (filter.isEmpty() || hex.toLowerCase().contains(filter) || String.valueOf(id).contains(filter)) {
+                        shown++;
+                        if (ImGui.selectable(String.format("#%03d  Underlay (%s)", id, hex))) {
+                            tilePainterIsOverlay = false;
+                            tilePainterMaterialId = id;
+                            activeRailId = "terrain";
+                            activateRail(pluginLifecycle, "terrain");
+                        }
+                    }
+                }
+            }
+        }
+        ImGui.endChild();
     }
 
     /**
@@ -898,8 +1615,32 @@ public final class MapEditorView {
                     renderOutlinerCategory(world, plane, ObjectCategory.WALL_DECOR, cache);
                     renderOutlinerCategory(world, plane, ObjectCategory.GROUND, cache);
                     renderOutlinerCategory(world, plane, ObjectCategory.GROUND_DECOR, cache);
+                    renderOutlinerServerContent(world, plane);
 
                     ImGui.treePop();
+                }
+            }
+            ImGui.treePop();
+        }
+    }
+
+    private void renderOutlinerServerContent(WorldDocument world, int plane) {
+        if (spawns == null) return;
+        List<NpcSpawn> planeSpawns = spawns.spawns(plane, 0, 0, world.width() * 64, world.length() * 64);
+        if (planeSpawns.isEmpty()) return;
+        String title = "Server NPC Spawns (" + planeSpawns.size() + ")##p" + plane + "-server-npcs";
+        if (ImGui.treeNode(title)) {
+            for (int i = 0; i < planeSpawns.size(); i++) {
+                NpcSpawn spawn = planeSpawns.get(i);
+                String label = String.format("[%02d,%02d] %s (id:%d)##spawn-%d-%d",
+                        spawn.coordinate().x() & 63, spawn.coordinate().y() & 63,
+                        spawn.symbolicName(), spawn.id(), plane, i);
+                if (ImGui.selectable(label)) {
+                    if (viewport != null) {
+                        float cx = (spawn.coordinate().x() & 63) * 128.0f + 64.0f;
+                        float cz = (spawn.coordinate().y() & 63) * 128.0f + 64.0f;
+                        viewport.navigation().frameSelection(cx, 0.0f, cz);
+                    }
                 }
             }
             ImGui.treePop();
@@ -1003,12 +1744,12 @@ public final class MapEditorView {
     // Bottom drawer: History / Tasks / Messages / Diagnostics — all live
     // ------------------------------------------------------------------
 
-    private void renderBottomDrawer(EditorPluginLifecycleManager pluginLifecycle) {
+    private void renderBottomDrawer(LoadedOsrsCacheSession cache, EditorPluginLifecycleManager pluginLifecycle) {
         if (!bottomDrawerVisible) return;
         placeWindow(layout.centerX(), layout.drawerY(),
                 layout.centerWidth(), layout.drawerHeight());
         ImGui.begin(BOTTOM_WINDOW, FIXED_PANEL_FLAGS);
-        String[] tabs = {"History", "Tasks", "Messages", "Diagnostics"};
+        String[] tabs = {"Tile Painter", "History", "Tasks", "Messages", "Diagnostics"};
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 8.0f, 6.0f);
         for (int index = 0; index < tabs.length; index++) {
             if (index > 0) ImGui.sameLine();
@@ -1018,13 +1759,116 @@ public final class MapEditorView {
         ImGui.separator();
         ImGui.beginChild("drawer-content", 0.0f, 0.0f, false);
         switch (drawerTab) {
-            case 0 -> renderHistoryTab(pluginLifecycle);
-            case 1 -> renderTasksTab(pluginLifecycle);
-            case 2 -> renderMessagesTab(pluginLifecycle);
+            case 0 -> renderTilePainterTab(cache, pluginLifecycle);
+            case 1 -> renderHistoryTab(pluginLifecycle);
+            case 2 -> renderTasksTab(pluginLifecycle);
+            case 3 -> renderMessagesTab(pluginLifecycle);
             default -> renderDiagnosticsTab(pluginLifecycle);
         }
         ImGui.endChild();
         ImGui.end();
+    }
+
+    private void renderTilePainterTab(LoadedOsrsCacheSession cache, EditorPluginLifecycleManager pluginLifecycle) {
+        if (ImGui.beginTable("tile-painter-columns", 3, ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingStretchProp)) {
+            ImGui.tableSetupColumn("Material & Brush");
+            ImGui.tableSetupColumn("Tile Shapes (OSRS 0–11)");
+            ImGui.tableSetupColumn("Rotation & Swatches");
+            ImGui.tableHeadersRow();
+
+            // Column 1: Material & Brush
+            ImGui.tableNextRow();
+            ImGui.tableNextColumn();
+            ImGui.textDisabled("MATERIAL TYPE");
+            if (ImGui.radioButton("Underlay", !tilePainterIsOverlay)) tilePainterIsOverlay = false;
+            ImGui.sameLine(0.0f, 16.0f);
+            if (ImGui.radioButton("Overlay", tilePainterIsOverlay)) tilePainterIsOverlay = true;
+
+            int[] matId = {tilePainterMaterialId};
+            if (ImGui.sliderInt("ID##mat-id", matId, 0, 255)) {
+                tilePainterMaterialId = matId[0];
+            }
+            if (tilePainterIsOverlay) {
+                var def = cache.bundle().definitions().overlay(tilePainterMaterialId);
+                String name = def.map(o -> String.format("#%06X (Tex %d)", o.rgb(), o.texture())).orElse("None");
+                ImGui.textDisabled("Def: " + name);
+            } else {
+                var def = cache.bundle().definitions().underlay(tilePainterMaterialId);
+                String name = def.map(u -> String.format("#%06X", u.rgb())).orElse("None");
+                ImGui.textDisabled("Def: " + name);
+            }
+
+            int[] bSize = {tilePainterBrushSize};
+            if (ImGui.sliderInt("Brush Size", bSize, 1, 16)) tilePainterBrushSize = bSize[0];
+            float[] falloff = {tilePainterFalloff};
+            if (ImGui.sliderFloat("Falloff", falloff, 0.0f, 1.0f)) tilePainterFalloff = falloff[0];
+
+            ImBoolean blend = new ImBoolean(tilePainterBlendEdges);
+            if (ImGui.checkbox("Blend Edges", blend)) tilePainterBlendEdges = blend.get();
+            ImGui.sameLine();
+            ImBoolean smooth = new ImBoolean(tilePainterAutoSmooth);
+            if (ImGui.checkbox("Auto Smooth", smooth)) tilePainterAutoSmooth = smooth.get();
+
+            // Column 2: 12 OSRS Tile Shapes
+            ImGui.tableNextColumn();
+            ImGui.textDisabled("SELECT SHAPE (0–11)");
+            for (int i = 0; i < 12; i++) {
+                boolean isSelected = (tilePainterShape == i);
+                if (isSelected) {
+                    ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
+                }
+                if (ImGui.button(OSRS_SHAPE_NAMES[i] + "##shape-" + i, 88.0f, 24.0f)) {
+                    tilePainterShape = i;
+                }
+                if (isSelected) {
+                    ImGui.popStyleColor();
+                }
+                if ((i + 1) % 4 != 0) {
+                    ImGui.sameLine();
+                }
+            }
+
+            // Column 3: Rotation & Swatches
+            ImGui.tableNextColumn();
+            ImGui.textDisabled("QUICK ROTATE");
+            if (ImGui.button("↺ CCW##rot-ccw", 54.0f, 24.0f)) {
+                tilePainterRotation = (tilePainterRotation + 3) & 3;
+            }
+            ImGui.sameLine();
+            if (ImGui.button("↻ CW##rot-cw", 54.0f, 24.0f)) {
+                tilePainterRotation = (tilePainterRotation + 1) & 3;
+            }
+            ImGui.sameLine();
+            if (ImGui.button("↕ 180°##rot-180", 54.0f, 24.0f)) {
+                tilePainterRotation = (tilePainterRotation + 2) & 3;
+            }
+            ImGui.sameLine();
+            ImGui.textDisabled("Rot: " + (tilePainterRotation * 90) + "°");
+
+            ImBoolean randRot = new ImBoolean(tilePainterRandomizeRot);
+            if (ImGui.checkbox("Randomize rotation", randRot)) tilePainterRandomizeRot = randRot.get();
+            ImBoolean matchH = new ImBoolean(tilePainterMatchHeight);
+            if (ImGui.checkbox("Match height", matchH)) tilePainterMatchHeight = matchH.get();
+            ImBoolean allPlanes = new ImBoolean(tilePainterApplyAllPlanes);
+            if (ImGui.checkbox("Apply to all levels", allPlanes)) tilePainterApplyAllPlanes = allPlanes.get();
+
+            ImGui.textDisabled("RECENT SWATCHES");
+            for (int s = 0; s < RECENT_SWATCHES.length; s++) {
+                Swatch sw = RECENT_SWATCHES[s];
+                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(sw.r, sw.g, sw.b, 1.0f));
+                if (ImGui.button("##swatch-" + s, 22.0f, 22.0f)) {
+                    tilePainterIsOverlay = sw.overlay;
+                    tilePainterMaterialId = sw.id;
+                }
+                ImGui.popStyleColor();
+                if (ImGui.isItemHovered()) {
+                    ImGui.setTooltip(sw.name + " (" + (sw.overlay ? "Overlay" : "Underlay") + " #" + sw.id + ")");
+                }
+                if (s < RECENT_SWATCHES.length - 1) ImGui.sameLine();
+            }
+
+            ImGui.endTable();
+        }
     }
 
     private void renderHistoryTab(EditorPluginLifecycleManager pluginLifecycle) {
@@ -1170,24 +2014,83 @@ public final class MapEditorView {
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 12.0f, 4.0f);
         ImGui.begin("StudioStatusBar", flags);
         ImGui.pushFont(StudioFonts.mono(), 0.0f);
-        int plane = settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
-        ImGui.text("REV " + cache.identity().revision()
-                + "  ·  PLANE " + plane
-                + "  ·  " + (dirty ? "UNSAVED" : "SAVED")
-                + "  ·  " + (plan == null ? "loading scene" : "scene ready"));
-        ImGui.sameLine();
-        var stats = viewport.statistics();
-        ImGui.textDisabled("  " + stats.renderedTriangles() + " tris  ·  " + stats.drawCalls()
-                + " draws  ·  GL " + stats.firstGlError()
-                + (stats.missingTextures() == 0 ? "" : "  ·  missing tex " + stats.missingTextures()));
-        ImGui.popFont();
-        if (pluginLifecycle != null && pluginLifecycle.host() != null) {
-            var statuses = pluginLifecycle.host().registry().statusRegistrations();
-            if (!statuses.isEmpty()) {
-                ImGui.sameLine();
-                ImGui.textDisabled("· plugins " + statuses.size());
+
+        var picked = viewport != null ? viewport.selection() : java.util.Optional.<PickResult>empty();
+        int tileX = 0, tileY = 0, plane = settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
+        int regId = 0, regX = 0, regY = 0;
+        String selectedDesc = "None";
+
+        if (picked.isPresent()) {
+            var hit = picked.get();
+            tileX = hit.tile().x();
+            tileY = hit.tile().y();
+            plane = hit.plane();
+            regX = tileX >> 6;
+            regY = tileY >> 6;
+            regId = (regX << 8) | regY;
+            if (hit.objectHit()) {
+                String name = cache.bundle().definitions().object(hit.objectId())
+                        .map(ObjectDefinitionView::name).filter(n -> !n.isBlank()).orElse("Object");
+                selectedDesc = "#" + hit.objectId() + " (" + name + ")";
+            } else {
+                selectedDesc = "Tile [" + tileX + "," + tileY + "]";
             }
+        } else if (viewport != null) {
+            tileX = Math.max(0, (int) (viewport.navigation().camera().x() / 128.0f));
+            tileY = Math.max(0, (int) (viewport.navigation().camera().z() / 128.0f));
+            regX = tileX >> 6;
+            regY = tileY >> 6;
+            regId = (regX << 8) | regY;
         }
+
+        ImGui.textColored(ImGui.getColorU32(0.35f, 0.75f, 0.45f, 1.0f), "Ready");
+        ImGui.sameLine(0.0f, 12.0f);
+        ImGui.textDisabled("|");
+        ImGui.sameLine(0.0f, 12.0f);
+        ImGui.text("Region: " + regX + ", " + regY + " (" + regId + ")");
+        ImGui.sameLine(0.0f, 12.0f);
+        ImGui.textDisabled("|");
+        ImGui.sameLine(0.0f, 12.0f);
+        ImGui.text("Tile: " + tileX + ", " + tileY + " (P:" + plane + ")");
+        ImGui.sameLine(0.0f, 12.0f);
+        ImGui.textDisabled("|");
+        ImGui.sameLine(0.0f, 12.0f);
+        ImGui.text("Selected: " + selectedDesc);
+
+        var stats = viewport != null ? viewport.statistics() : null;
+        float fps = ImGui.getIO().getFramerate();
+        Runtime rt = Runtime.getRuntime();
+        long usedMb = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
+        long maxMb = rt.maxMemory() / (1024 * 1024);
+
+        float rightAreaWidth = 540.0f;
+        float startRightX = Math.max(ImGui.getCursorPosX(), main.getSizeX() - rightAreaWidth);
+        ImGui.setCursorPosX(startRightX);
+
+        if (stats != null) {
+            ImGui.text("Objects: " + (stats.objectTriangles() / 2));
+            ImGui.sameLine(0.0f, 10.0f);
+            ImGui.textDisabled("|");
+            ImGui.sameLine(0.0f, 10.0f);
+            ImGui.text("Meshes: " + stats.renderedTriangles());
+            ImGui.sameLine(0.0f, 10.0f);
+            ImGui.textDisabled("|");
+        }
+        ImGui.text(String.format("FPS: %.0f", fps));
+        ImGui.sameLine(0.0f, 10.0f);
+        ImGui.textDisabled("|");
+        ImGui.sameLine(0.0f, 10.0f);
+        ImGui.text("RAM: " + usedMb + " MB / " + maxMb + " MB");
+        ImGui.sameLine(0.0f, 10.0f);
+        ImGui.textDisabled("|");
+        ImGui.sameLine(0.0f, 10.0f);
+        if (dirty) {
+            ImGui.textColored(ImGui.getColorU32(0.9f, 0.6f, 0.2f, 1.0f), "● Unsaved");
+        } else {
+            ImGui.textColored(ImGui.getColorU32(0.35f, 0.75f, 0.45f, 1.0f), "● Project saved");
+        }
+
+        ImGui.popFont();
         ImGui.end();
         ImGui.popStyleVar();
     }

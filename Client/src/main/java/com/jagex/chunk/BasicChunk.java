@@ -103,7 +103,7 @@ public class BasicChunk {
 				}
 			}
 			//mapRegion.decodeRegionMapData(landscapeBytes, 0, 0, regionX, regionY);
-			//mapRegion.method171(sceneGraph);
+			//mapRegion.buildTerrain(sceneGraph);
 
 
 		} catch (Exception exception) {

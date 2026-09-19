@@ -160,38 +160,8 @@ public final class ModelPacketBuilder {
      */
     static int animationFrameIndex(int frameCount, int[] frameLengths,
                                    int frameStep, int clientCycle) {
-        if (frameCount <= 0) return 0;
-        long[] durations = new long[frameCount];
-        long initialDuration = 0;
-        for (int index = 0; index < frameCount; index++) {
-            // RuneLite advances only when frameCycle > frameLength. The
-            // equality tick therefore belongs to the current frame.
-            durations[index] = Math.max(1L, frameLengths[Math.min(index, frameLengths.length - 1)]) + 1L;
-            initialDuration += durations[index];
-        }
-        long position = Math.max(0L, clientCycle);
-        int loopStart = frameStep > 0 && frameStep <= frameCount
-                ? frameCount - frameStep : frameCount;
-        if (loopStart < frameCount && position >= initialDuration) {
-            long loopDuration = 0;
-            for (int index = loopStart; index < frameCount; index++) {
-                loopDuration += durations[index];
-            }
-            if (loopDuration > 0) {
-                position = sum(durations, 0, loopStart)
-                        + (position - initialDuration) % loopDuration;
-            }
-        } else if (position >= initialDuration) {
-            return frameCount - 1;
-        }
-
-        long elapsed = 0;
-        for (int index = loopStart < frameCount && position >= initialDuration
-                ? loopStart : 0; index < frameCount; index++) {
-            if (position < elapsed + durations[index]) return index;
-            elapsed += durations[index];
-        }
-        return frameCount - 1;
+        return com.rspsi.osrs.rules.model.AnimationResolver.animationFrameIndex(
+                frameCount, frameLengths, frameStep, clientCycle);
     }
 
     private static long sum(long[] values, int from, int count) {
@@ -272,17 +242,7 @@ public final class ModelPacketBuilder {
     private int wallDecorationDisplacement(WorldObject decoration,
                                            ObjectAppearanceView ownAppearance,
                                            WorldDocument document) {
-        if (decoration.type() < 5 || decoration.type() > 8) {
-            return ownAppearance.decorDisplacement();
-        }
-        for (WorldObject candidate : document.tile(decoration.plane(), decoration.x(), decoration.y())
-                .snapshot().objects()) {
-            if (candidate.type() >= 0 && candidate.type() <= 3) {
-                Optional<ObjectAppearanceView> wall = definitions.objectAppearance(candidate.id());
-                if (wall.isPresent()) return wall.orElseThrow().decorDisplacement();
-            }
-        }
-        return 16;
+        return com.rspsi.osrs.rules.loc.WallDecorationRules.resolveDisplacement(decoration, ownAppearance, document, definitions);
     }
 
     private void append(PacketParts parts, WorldObject object, ObjectAppearanceView appearance,

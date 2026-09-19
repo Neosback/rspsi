@@ -107,7 +107,12 @@ public final class Buffer {
 		}
 	}
 
-	public int readIMEInt() { // V2
+	@Deprecated
+	public int readIMEInt() {
+		return readInverseMiddleEndianInt();
+	}
+
+	public int readInverseMiddleEndianInt() { // V2
 		position += 4;
 		return ((payload[position - 3] & 0xff) << 24) + ((payload[position - 4] & 0xff) << 16)
 				+ ((payload[position - 1] & 0xff) << 8) + (payload[position - 2] & 0xff);
@@ -153,7 +158,12 @@ public final class Buffer {
 		return (msi << 32) + lsi;
 	}
 
-	public int readMEInt() { // V1
+	@Deprecated
+	public int readMEInt() {
+		return readMiddleEndianInt();
+	}
+
+	public int readMiddleEndianInt() { // V1
 		position += 4;
 		return ((payload[position - 2] & 0xff) << 24) + ((payload[position - 1] & 0xff) << 16)
 				+ ((payload[position - 4] & 0xff) << 8) + (payload[position - 3] & 0xff);
@@ -187,7 +197,12 @@ public final class Buffer {
 		return value;
 	}
 
+	@Deprecated
 	public int readShort2() {
+		return readSignedShort();
+	}
+
+	public int readSignedShort() {
 		position += 2;
 		int value = ((payload[position - 2] & 0xff) << 8) + (payload[position - 1] & 0xff);
 		if (value > 60000) {
@@ -287,7 +302,12 @@ public final class Buffer {
 		return payload[position++] & 0xff;
 	}
 
+	@Deprecated
 	public final int getULEShort() {
+		return readUnsignedLittleEndianShort();
+	}
+
+	public final int readUnsignedLittleEndianShort() {
 		this.position += 2;
 		return (this.payload[-2 + this.position] << 8 & 65280) - -(this.payload[-1 + this.position] & 255);
 	}

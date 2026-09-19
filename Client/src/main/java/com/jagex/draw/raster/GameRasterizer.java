@@ -21,7 +21,6 @@ public class GameRasterizer extends GameRaster {
 		instance = rasterizer;
 	}
 
-	public boolean[] aBooleanArray1663 = new boolean[6500];
 	 public boolean[] cullFaces = new boolean[6500];
 	 public boolean[] cullFacesOther = new boolean[6500];
 	 public int[] vertexScreenX = new int[6500];
@@ -42,15 +41,12 @@ public class GameRasterizer extends GameRaster {
 	 public int[][] anIntArrayArray1674 = new int[12][2000];
 
 	public boolean restrictEdges;
-	public int anInt1481;
-	public int[] anIntArray1480 = new int[50];
 	public int[] colourPalette = new int[0x10000];
 	public boolean approximateAlphaBlending = true;
 	public int currentAlpha;
 	public Point2D viewCenter;
 	public int[] scanOffsets;
 	boolean currentTextureTransparent;
-	int anInt1477;
 
 	public int getFuchsia(){
 		return colourPalette[MapRegion.light(ColourUtils.toHsl(128, 255, 127), 96)];//colourPalette[MapRegion.light(0xFF0000, 96)];
@@ -79,7 +75,6 @@ public class GameRasterizer extends GameRaster {
 
 	public void dispose() {
 		scanOffsets = null;
-		anIntArray1480 = null;
 		colourPalette = null;
 	}
 
@@ -624,13 +619,13 @@ public class GameRasterizer extends GameRaster {
 					k -= j;
 					j -= i;
 					for (i = scanOffsets[i]; --j >= 0; i += this.width) {
-						method377(this.raster, i, k1, 0, j1 >> 16, l >> 16);
+						fillScanline(this.raster, i, k1, 0, j1 >> 16, l >> 16);
 						j1 += j2;
 						l += l1;
 					}
 
 					while (--k >= 0) {
-						method377(this.raster, i, k1, 0, j1 >> 16, i1 >> 16);
+						fillScanline(this.raster, i, k1, 0, j1 >> 16, i1 >> 16);
 						j1 += j2;
 						i1 += i2;
 						i += this.width;
@@ -640,13 +635,13 @@ public class GameRasterizer extends GameRaster {
 				k -= j;
 				j -= i;
 				for (i = scanOffsets[i]; --j >= 0; i += this.width) {
-					method377(this.raster, i, k1, 0, l >> 16, j1 >> 16);
+					fillScanline(this.raster, i, k1, 0, l >> 16, j1 >> 16);
 					j1 += j2;
 					l += l1;
 				}
 
 				while (--k >= 0) {
-					method377(this.raster, i, k1, 0, i1 >> 16, j1 >> 16);
+					fillScanline(this.raster, i, k1, 0, i1 >> 16, j1 >> 16);
 					j1 += j2;
 					i1 += i2;
 					i += this.width;
@@ -668,13 +663,13 @@ public class GameRasterizer extends GameRaster {
 				j -= k;
 				k -= i;
 				for (i = scanOffsets[i]; --k >= 0; i += this.width) {
-					method377(this.raster, i, k1, 0, i1 >> 16, l >> 16);
+					fillScanline(this.raster, i, k1, 0, i1 >> 16, l >> 16);
 					i1 += j2;
 					l += l1;
 				}
 
 				while (--j >= 0) {
-					method377(this.raster, i, k1, 0, j1 >> 16, l >> 16);
+					fillScanline(this.raster, i, k1, 0, j1 >> 16, l >> 16);
 					j1 += i2;
 					l += l1;
 					i += this.width;
@@ -684,13 +679,13 @@ public class GameRasterizer extends GameRaster {
 			j -= k;
 			k -= i;
 			for (i = scanOffsets[i]; --k >= 0; i += this.width) {
-				method377(this.raster, i, k1, 0, l >> 16, i1 >> 16);
+				fillScanline(this.raster, i, k1, 0, l >> 16, i1 >> 16);
 				i1 += j2;
 				l += l1;
 			}
 
 			while (--j >= 0) {
-				method377(this.raster, i, k1, 0, l >> 16, j1 >> 16);
+				fillScanline(this.raster, i, k1, 0, l >> 16, j1 >> 16);
 				j1 += i2;
 				l += l1;
 				i += this.width;
@@ -722,13 +717,13 @@ public class GameRasterizer extends GameRaster {
 					i -= k;
 					k -= j;
 					for (j = scanOffsets[j]; --k >= 0; j += this.width) {
-						method377(this.raster, j, k1, 0, l >> 16, i1 >> 16);
+						fillScanline(this.raster, j, k1, 0, l >> 16, i1 >> 16);
 						l += l1;
 						i1 += i2;
 					}
 
 					while (--i >= 0) {
-						method377(this.raster, j, k1, 0, l >> 16, j1 >> 16);
+						fillScanline(this.raster, j, k1, 0, l >> 16, j1 >> 16);
 						l += l1;
 						j1 += j2;
 						j += this.width;
@@ -738,13 +733,13 @@ public class GameRasterizer extends GameRaster {
 				i -= k;
 				k -= j;
 				for (j = scanOffsets[j]; --k >= 0; j += this.width) {
-					method377(this.raster, j, k1, 0, i1 >> 16, l >> 16);
+					fillScanline(this.raster, j, k1, 0, i1 >> 16, l >> 16);
 					l += l1;
 					i1 += i2;
 				}
 
 				while (--i >= 0) {
-					method377(this.raster, j, k1, 0, j1 >> 16, l >> 16);
+					fillScanline(this.raster, j, k1, 0, j1 >> 16, l >> 16);
 					l += l1;
 					j1 += j2;
 					j += this.width;
@@ -766,13 +761,13 @@ public class GameRasterizer extends GameRaster {
 				k -= i;
 				i -= j;
 				for (j = scanOffsets[j]; --i >= 0; j += this.width) {
-					method377(this.raster, j, k1, 0, j1 >> 16, i1 >> 16);
+					fillScanline(this.raster, j, k1, 0, j1 >> 16, i1 >> 16);
 					j1 += l1;
 					i1 += i2;
 				}
 
 				while (--k >= 0) {
-					method377(this.raster, j, k1, 0, l >> 16, i1 >> 16);
+					fillScanline(this.raster, j, k1, 0, l >> 16, i1 >> 16);
 					l += j2;
 					i1 += i2;
 					j += this.width;
@@ -782,13 +777,13 @@ public class GameRasterizer extends GameRaster {
 			k -= i;
 			i -= j;
 			for (j = scanOffsets[j]; --i >= 0; j += this.width) {
-				method377(this.raster, j, k1, 0, i1 >> 16, j1 >> 16);
+				fillScanline(this.raster, j, k1, 0, i1 >> 16, j1 >> 16);
 				j1 += l1;
 				i1 += i2;
 			}
 
 			while (--k >= 0) {
-				method377(this.raster, j, k1, 0, i1 >> 16, l >> 16);
+				fillScanline(this.raster, j, k1, 0, i1 >> 16, l >> 16);
 				l += j2;
 				i1 += i2;
 				j += this.width;
@@ -819,13 +814,13 @@ public class GameRasterizer extends GameRaster {
 				j -= i;
 				i -= k;
 				for (k = scanOffsets[k]; --i >= 0; k += this.width) {
-					method377(this.raster, k, k1, 0, i1 >> 16, j1 >> 16);
+					fillScanline(this.raster, k, k1, 0, i1 >> 16, j1 >> 16);
 					i1 += i2;
 					j1 += j2;
 				}
 
 				while (--j >= 0) {
-					method377(this.raster, k, k1, 0, i1 >> 16, l >> 16);
+					fillScanline(this.raster, k, k1, 0, i1 >> 16, l >> 16);
 					i1 += i2;
 					l += l1;
 					k += this.width;
@@ -835,13 +830,13 @@ public class GameRasterizer extends GameRaster {
 			j -= i;
 			i -= k;
 			for (k = scanOffsets[k]; --i >= 0; k += this.width) {
-				method377(this.raster, k, k1, 0, j1 >> 16, i1 >> 16);
+				fillScanline(this.raster, k, k1, 0, j1 >> 16, i1 >> 16);
 				i1 += i2;
 				j1 += j2;
 			}
 
 			while (--j >= 0) {
-				method377(this.raster, k, k1, 0, l >> 16, i1 >> 16);
+				fillScanline(this.raster, k, k1, 0, l >> 16, i1 >> 16);
 				i1 += i2;
 				l += l1;
 				k += this.width;
@@ -863,13 +858,13 @@ public class GameRasterizer extends GameRaster {
 			i -= j;
 			j -= k;
 			for (k = scanOffsets[k]; --j >= 0; k += this.width) {
-				method377(this.raster, k, k1, 0, l >> 16, j1 >> 16);
+				fillScanline(this.raster, k, k1, 0, l >> 16, j1 >> 16);
 				l += i2;
 				j1 += j2;
 			}
 
 			while (--i >= 0) {
-				method377(this.raster, k, k1, 0, i1 >> 16, j1 >> 16);
+				fillScanline(this.raster, k, k1, 0, i1 >> 16, j1 >> 16);
 				i1 += l1;
 				j1 += j2;
 				k += this.width;
@@ -879,13 +874,13 @@ public class GameRasterizer extends GameRaster {
 		i -= j;
 		j -= k;
 		for (k = scanOffsets[k]; --j >= 0; k += this.width) {
-			method377(this.raster, k, k1, 0, j1 >> 16, l >> 16);
+			fillScanline(this.raster, k, k1, 0, j1 >> 16, l >> 16);
 			l += i2;
 			j1 += j2;
 		}
 
 		while (--i >= 0) {
-			method377(this.raster, k, k1, 0, j1 >> 16, i1 >> 16);
+			fillScanline(this.raster, k, k1, 0, j1 >> 16, i1 >> 16);
 			i1 += l1;
 			j1 += j2;
 			k += this.width;
@@ -2791,7 +2786,12 @@ public class GameRasterizer extends GameRaster {
 		}
 	}
 
-	public void method377(int[] ai, int i, int j, int k, int l, int i1) {
+	@Deprecated
+	public void method377(int[] pixels, int offset, int color, int dummy, int startX, int endX) {
+		fillScanline(pixels, offset, color, dummy, startX, endX);
+	}
+
+	public void fillScanline(int[] ai, int i, int j, int k, int l, int i1) {
 		if (restrictEdges) {
 			if (i1 > this.maxRight) {
 				i1 = this.maxRight;

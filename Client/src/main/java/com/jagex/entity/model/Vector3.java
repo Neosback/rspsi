@@ -8,8 +8,6 @@ import lombok.Setter;
 @Data
 public class Vector3 {
 
-	// Class33
-
 	public int x;
 	public int y;
 	public int z;

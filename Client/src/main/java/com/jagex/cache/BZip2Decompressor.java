@@ -5,8 +5,6 @@ package com.jagex.cache;
  */
 public final class BZip2Decompressor {
 
-	// Class13
-
 	private static BZip2DecompressionState state = new BZip2DecompressionState();
 
 	/*

@@ -2,8 +2,6 @@ package com.jagex.link;
 
 public class Linkable {
 
-	// Class30
-
 	private long key;
 	private Linkable next;
 	private Linkable previous;

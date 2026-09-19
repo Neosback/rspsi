@@ -80,17 +80,17 @@ import javafx.collections.ObservableList;
 public class SceneGraph {
 
 	public final static int PLANE_COUNT = 4;
-	static final int[] anIntArray463 = {53, -53, -53, 53};
-	static final int[] anIntArray464 = {-53, -53, 53, 53};
-	static final int[] anIntArray465 = {-45, 45, 45, -45};
-	static final int[] anIntArray466 = {45, 45, -45, -45};
-	static final int[] anIntArray478 = {19, 55, 38, 155, 255, 110, 137, 205, 76};
-	static final int[] anIntArray479 = {160, 192, 80, 96, 0, 144, 80, 48, 160};
-	static final int[] anIntArray480 = {76, 8, 137, 4, 0, 1, 38, 2, 19};
-	static final int[] anIntArray481 = {0, 0, 2, 0, 0, 2, 1, 1, 0};
-	static final int[] anIntArray482 = {2, 0, 0, 2, 0, 0, 0, 4, 4};
-	static final int[] anIntArray483 = {0, 4, 4, 8, 0, 0, 8, 0, 0};
-	static final int[] anIntArray484 = {1, 1, 0, 0, 0, 8, 0, 0, 8};
+	static final int[] WALL_DECORATION_INSET_X = {53, -53, -53, 53};
+	static final int[] WALL_DECORATION_INSET_Y = {-53, -53, 53, 53};
+	static final int[] WALL_DECORATION_OUTSET_X = {-45, 45, 45, -45};
+	static final int[] WALL_DECORATION_OUTSET_Y = {45, 45, -45, -45};
+	static final int[] WALL_DRAW_FLAGS = {19, 55, 38, 155, 255, 110, 137, 205, 76};
+	static final int[] WALL_CULL_FLAGS = {160, 192, 80, 96, 0, 144, 80, 48, 160};
+	static final int[] CAMERA_ANGLE_MASKS = {76, 8, 137, 4, 0, 1, 38, 2, 19};
+	static final int[] DIAGONAL_WALL_MASKS_1 = {0, 0, 2, 0, 0, 2, 1, 1, 0};
+	static final int[] DIAGONAL_WALL_MASKS_2 = {2, 0, 0, 2, 0, 0, 0, 4, 4};
+	static final int[] DIAGONAL_WALL_MASKS_3 = {0, 4, 4, 8, 0, 0, 8, 0, 0};
+	static final int[] DIAGONAL_WALL_MASKS_4 = {1, 1, 0, 0, 0, 8, 0, 0, 8};
 	static final int[] TEXTURE_COLOURS = {41, 39248, 41, 4643, 41, 41, 41, 41, 41, 41, 41, 41, 41, 41, 41, 43086, 41,
 			41, 41, 41, 41, 41, 41, 8602, 41, 28992, 41, 41, 41, 41, 41, 5056, 41, 41, 41, 7079, 41, 41, 41, 41, 41, 41,
 			41, 41, 41, 41, 3131, 41, 41, 41};
@@ -103,7 +103,7 @@ public class SceneGraph {
 	public static int hoveredTileX = -1;
 	public static int hoveredTileY = -1;
 	public static int hoveredTileZ = -1;
-	public static int anInt475;
+	public static int activeOccluderCount;
 	public static boolean lowMemory = true;
 	public static int clickStartX = -1;
 	public static int activePlane;
@@ -112,7 +112,7 @@ public class SceneGraph {
 	public static boolean mouseWasDown;
 	public static boolean altDown;
 	static boolean mouseIsDown;
-	static int anInt446;
+	static int visibleTileCount;
 	static int currentCameraPlane;
 	static int currentRenderCycle;
 	static int clickX;
@@ -139,9 +139,9 @@ public class SceneGraph {
 	public Chunk chunk;
 	public int offsetX, offsetY;
 	public List<DefaultWorldObject> selectedObjects;
-	boolean[][] aBooleanArrayArray492;
-	boolean[][][][] aBooleanArrayArrayArrayArray491;
-	SceneCluster[] aClass47Array476;
+	boolean[][] visibleTiles;
+	boolean[][][][] visibilityMap;
+	SceneCluster[] activeOccluders;
 	int minViewX;
 	int maxViewX;
 	int minViewY;
@@ -168,7 +168,7 @@ public class SceneGraph {
 	int[] anIntArray486;
 	int[] anIntArray487;
 	// int getMapRegion().tileHeights[][][];
-	int[][][] anIntArrayArrayArray445;
+	int[][][] tileOcclusionCycles;
 	int planeCount;
 	private List<SceneTile> lastHighightedTiles = Lists.newArrayList();
 	private List<SceneTile> absoluteLast = Lists.newArrayList();
@@ -188,13 +188,13 @@ public class SceneGraph {
 				}
 			}
 		}
-		anIntArrayArrayArray445 = new int[planes][width + 1][length + 1];
+		tileOcclusionCycles = new int[planes][width + 1][length + 1];
 		selectedObjects = Lists.newArrayList();
 		interactables = new GameObject[100];
 		clusters = new SceneCluster[PLANE_COUNT][500];
 		clusterCounts = new int[PLANE_COUNT];
-		aBooleanArrayArrayArrayArray491 = new boolean[24][32][(Options.renderDistance.get() * 2) + 1][(Options.renderDistance.get() * 2) + 1];
-		aClass47Array476 = new SceneCluster[500];
+		visibilityMap = new boolean[24][32][(Options.renderDistance.get() * 2) + 1][(Options.renderDistance.get() * 2) + 1];
+		activeOccluders = new SceneCluster[500];
 		interactables = new GameObject[100];
 		tileQueue = new ArrayDeque<SceneTile>();
 		reset();
@@ -354,7 +354,7 @@ public class SceneGraph {
 	}
 
 	public void setRenderDistance() {
-		aBooleanArrayArrayArrayArray491 = new boolean[24][32][(Options.renderDistance.get() * 2) + 1][(Options.renderDistance.get() * 2) + 1];
+		visibilityMap = new boolean[24][32][(Options.renderDistance.get() * 2) + 1][(Options.renderDistance.get() * 2) + 1];
 	}
 
 	public boolean currentStateCorrect() {
@@ -2412,7 +2412,7 @@ public class SceneGraph {
 		}
 	}
 
-	public void method276(int x, int y) {
+	public void setLinkBelow(int x, int y) {
 		SceneTile tile = tiles[0][x][y];
 		for (int z = 0; z < 3; z++) {
 			SceneTile above = tiles[z][x][y] = tiles[z + 1][x][y];
@@ -2437,20 +2437,30 @@ public class SceneGraph {
 		tiles[3][x][y] = null;
 	}
 
-	public void method277(int plane, int j, int k, int l, int i1, int j1, int l1, int i2) {
+	@Deprecated
+	public void method276(int x, int y) {
+		setLinkBelow(x, y);
+	}
+
+	public void addOccluder(int plane, int minX, int maxX, int minZ, int maxZ, int minY, int maxY, int type) {
 		SceneCluster cluster = new SceneCluster();
-		cluster.minTileX = j / 128;
-		cluster.maxTileX = l / 128;
-		cluster.minTileZ = l1 / 128;
-		cluster.maxTileZ = i1 / 128;
-		cluster.type = i2;
-		cluster.minX = j;
-		cluster.maxX = l;
-		cluster.minZ = l1;
-		cluster.maxZ = i1;
-		cluster.minY = j1;
-		cluster.maxY = k;
+		cluster.minTileX = minX / 128;
+		cluster.maxTileX = maxX / 128;
+		cluster.minTileZ = minZ / 128;
+		cluster.maxTileZ = maxZ / 128;
+		cluster.type = type;
+		cluster.minX = minX;
+		cluster.maxX = maxX;
+		cluster.minZ = minZ;
+		cluster.maxZ = maxZ;
+		cluster.minY = minY;
+		cluster.maxY = maxY;
 		clusters[plane][clusterCounts[plane]++] = cluster;
+	}
+
+	@Deprecated
+	public void method277(int plane, int j, int k, int l, int i1, int j1, int l1, int i2) {
+		addOccluder(plane, j, l, l1, i1, j1, k, i2);
 	}
 
 	public void cleanUpShortLivedObjects() {
@@ -2463,7 +2473,7 @@ public class SceneGraph {
 		shortLivedObjectCount = 0;
 	}
 
-	private void method306(Mesh model, int x, int y, int z) {
+	private void mergeGroundDecorationNormals(Mesh model, int x, int y, int z) {
 		if (x < width - 1) {
 			SceneTile tile = tiles[z][x + 1][y];
 			if (tile != null && tile.groundDecoration != null && tile.groundDecoration.primaryHasNormals()) {
@@ -2493,7 +2503,12 @@ public class SceneGraph {
 		}
 	}
 
-	private void method307(int plane, int sizeX, int sizeY, int startX, int startY, Mesh model) {
+	@Deprecated
+	private void method306(Mesh model, int x, int y, int z) {
+		mergeGroundDecorationNormals(model, x, y, z);
+	}
+
+	private void mergeAdjacentNormals(int plane, int sizeX, int sizeY, int startX, int startY, Mesh model) {
 		boolean flag = true;
 		int initialX = startX;
 		int finalX = startX + sizeX;
@@ -2553,13 +2568,18 @@ public class SceneGraph {
 		}
 	}
 
-	public void method310(int i, int j, int k, int l, int[] ai) {
+	@Deprecated
+	private void method307(int plane, int sizeX, int sizeY, int startX, int startY, Mesh model) {
+		mergeAdjacentNormals(plane, sizeX, sizeY, startX, startY, model);
+	}
+
+	public void buildVisibilityMap(int minDepth, int maxDepth, int viewWidth, int viewHeight, int[] pitchOffsets) {
 		anInt495 = 0;
 		anInt496 = 0;
-		anInt497 = k;
-		anInt498 = l;
-		anInt493 = k / 2;
-		anInt494 = l / 2;
+		anInt497 = viewWidth;
+		anInt498 = viewHeight;
+		anInt493 = viewWidth / 2;
+		anInt494 = viewHeight / 2;
 		boolean[][][][] aflag = new boolean[13][32][(Options.renderDistance.get() * 2) + 3][(Options.renderDistance.get() * 2) + 3];
 
 		for (int i1 = 0; i1 <= 384; i1 += 32) {
@@ -2575,8 +2595,8 @@ public class SceneGraph {
 						int k3 = l2 * 128;
 						int i4 = j3 * 128;
 						boolean flag2 = false;
-						for (int k4 = -i; k4 <= j; k4 += 128) {
-							if (!method311(ai[l1] + k4, i4, k3)) {
+						for (int k4 = -minDepth; k4 <= maxDepth; k4 += 128) {
+							if (!isPointInViewport(pitchOffsets[l1] + k4, i4, k3)) {
 								continue;
 							}
 							flag2 = true;
@@ -2611,23 +2631,33 @@ public class SceneGraph {
 								break label0;
 							}
 						}
-						aBooleanArrayArrayArrayArray491[k1][i2][k2 + Options.renderDistance.get()][i3 + Options.renderDistance.get()] = flag1;
+						visibilityMap[k1][i2][k2 + Options.renderDistance.get()][i3 + Options.renderDistance.get()] = flag1;
 					}
 				}
 			}
 		}
 	}
 
-	public boolean method311(int i, int j, int k) {
-		int l = j * xSine + k * xCosine >> 16;
-		int i1 = j * xCosine - k * xSine >> 16;
-		int j1 = i * ySine + i1 * yCosine >> 16;
-		int k1 = i * yCosine - i1 * ySine >> 16;
+	@Deprecated
+	public void method310(int i, int j, int k, int l, int[] ai) {
+		buildVisibilityMap(i, j, k, l, ai);
+	}
+
+	public boolean isPointInViewport(int worldY, int worldX, int worldZ) {
+		int l = worldX * xSine + worldZ * xCosine >> 16;
+		int i1 = worldX * xCosine - worldZ * xSine >> 16;
+		int j1 = worldY * ySine + i1 * yCosine >> 16;
+		int k1 = worldY * yCosine - i1 * ySine >> 16;
 		if (j1 < 50 || j1 > 3500)
 			return false;
 		int l1 = anInt493 + (l << 9) / j1;
 		int i2 = anInt494 + (k1 << 9) / j1;
 		return l1 >= anInt495 && l1 <= anInt497 && i2 >= anInt496 && i2 <= anInt498;
+	}
+
+	@Deprecated
+	public boolean method311(int i, int j, int k) {
+		return isPointInViewport(i, j, k);
 	}
 
 	public void resetUpdates() {
@@ -2680,7 +2710,7 @@ public class SceneGraph {
 		xSine = Constants.SINE[k];
 		xCosine = Constants.COSINE[k];
 
-		aBooleanArrayArray492 = aBooleanArrayArrayArrayArray491[j1 / 32][k / 64];
+		visibleTiles = visibilityMap[j1 / 32][k / 64];
 
 
 		currentCameraPlane = cameraPlane;
@@ -2694,8 +2724,8 @@ public class SceneGraph {
 		 * (maxViewY > 64) { maxViewY = 64; }
 		 */
 
-		method319();
-		anInt446 = 0;
+		updateActiveOccluders();
+		visibleTileCount = 0;
 
 		for (int z = activePlane; z < planeCount; z++) {
 			SceneTile[][] tiles = this.tiles[z];
@@ -2705,7 +2735,7 @@ public class SceneGraph {
 					if (inChunk(x, y)) {
 						SceneTile tile = tiles[x][y];
 						if (tile != null) {
-							if (tile.collisionPlane > cameraPlane || !aBooleanArrayArray492[x - minViewX][y - minViewY]
+							if (tile.collisionPlane > cameraPlane || !visibleTiles[x - minViewX][y - minViewY]
 									&& chunk.mapRegion.tileHeights[z][x][y] - cameraTileZ < 50) {
 								tile.needsRendering = false;
 								tile.drawSecondary = false;
@@ -2714,7 +2744,7 @@ public class SceneGraph {
 								tile.needsRendering = true;
 								tile.drawSecondary = true;
 								tile.hasObjects = tile.getTemporaryObject().isPresent() || tile.objectCount > 0;
-								anInt446++;
+								visibleTileCount++;
 							}
 						}
 					}
@@ -2873,10 +2903,10 @@ public class SceneGraph {
 		return x >= 0 && x < width && y >= 0 && y < length;
 	}
 
-	private void method319() {
+	private void updateActiveOccluders() {
 		int j = clusterCounts[currentCameraPlane];
 		SceneCluster[] clusters = this.clusters[currentCameraPlane];
-		anInt475 = 0;
+		activeOccluderCount = 0;
 		for (int k = 0; k < j; k++) {
 			SceneCluster cluster = clusters[k];
 			if (cluster.type == 1) {
@@ -2894,7 +2924,7 @@ public class SceneGraph {
 				}
 				boolean flag = false;
 				while (k1 <= j2) {
-					if (aBooleanArrayArray492[l][k1++]) {
+					if (visibleTiles[l][k1++]) {
 						flag = true;
 						break;
 					}
@@ -2916,7 +2946,7 @@ public class SceneGraph {
 				cluster.maxNormalZ = (cluster.maxZ - yCameraTile << 8) / j3;
 				cluster.minNormalY = (cluster.minY - zCameraTile << 8) / j3;
 				cluster.maxNormalY = (cluster.maxY - zCameraTile << 8) / j3;
-				aClass47Array476[anInt475++] = cluster;
+				activeOccluders[activeOccluderCount++] = cluster;
 				continue;
 			}
 			if (cluster.type == 2) {
@@ -2934,7 +2964,7 @@ public class SceneGraph {
 				}
 				boolean flag1 = false;
 				while (l1 <= k2) {
-					if (aBooleanArrayArray492[l1++][i1]) {
+					if (visibleTiles[l1++][i1]) {
 						flag1 = true;
 						break;
 					}
@@ -2956,7 +2986,7 @@ public class SceneGraph {
 				cluster.maxNormalX = (cluster.maxX - xCameraTile << 8) / k3;
 				cluster.minNormalY = (cluster.minY - zCameraTile << 8) / k3;
 				cluster.maxNormalY = (cluster.maxY - zCameraTile << 8) / k3;
-				aClass47Array476[anInt475++] = cluster;
+				activeOccluders[activeOccluderCount++] = cluster;
 			} else if (cluster.type == 4) {
 				int j1 = cluster.minY - zCameraTile;
 				if (j1 > 128) {
@@ -2981,7 +3011,7 @@ public class SceneGraph {
 						label0:
 						for (int i4 = i3; i4 <= l3; i4++) {
 							for (int j4 = i2; j4 <= l2; j4++) {
-								if (!aBooleanArrayArray492[i4][j4]) {
+								if (!visibleTiles[i4][j4]) {
 									continue;
 								}
 								flag2 = true;
@@ -2996,7 +3026,7 @@ public class SceneGraph {
 							cluster.maxNormalX = (cluster.maxX - xCameraTile << 8) / j1;
 							cluster.minNormalZ = (cluster.minZ - yCameraTile << 8) / j1;
 							cluster.maxNormalZ = (cluster.maxZ - yCameraTile << 8) / j1;
-							aClass47Array476[anInt475++] = cluster;
+							activeOccluders[activeOccluderCount++] = cluster;
 						}
 					}
 				}
@@ -3004,8 +3034,18 @@ public class SceneGraph {
 		}
 	}
 
+	@Deprecated
+	private void method319() {
+		updateActiveOccluders();
+	}
+
+	@Deprecated
 	private boolean method320(int x, int y, int z) {
-		int l = anIntArrayArrayArray445[z][x][y];
+		return isTileOccluded(x, y, z);
+	}
+
+	private boolean isTileOccluded(int x, int y, int z) {
+		int l = tileOcclusionCycles[z][x][y];
 		if (l == -currentRenderCycle)
 			return false;
 		else if (l == currentRenderCycle)
@@ -3014,20 +3054,25 @@ public class SceneGraph {
 		int worldX = x << 7;
 		int worldY = y << 7;
 
-		if (method324(worldX + 1, worldY + 1, getMapRegion().tileHeights[z][x][y])
-				&& method324(worldX + 128 - 1, worldY + 1, getMapRegion().tileHeights[z][x + 1][y])
-				&& method324(worldX + 128 - 1, worldY + 128 - 1, getMapRegion().tileHeights[z][x + 1][y + 1])
-				&& method324(worldX + 1, worldY + 128 - 1, getMapRegion().tileHeights[z][x][y + 1])) {
-			anIntArrayArrayArray445[z][x][y] = currentRenderCycle;
+		if (isPointOccluded(worldX + 1, worldY + 1, getMapRegion().tileHeights[z][x][y])
+				&& isPointOccluded(worldX + 128 - 1, worldY + 1, getMapRegion().tileHeights[z][x + 1][y])
+				&& isPointOccluded(worldX + 128 - 1, worldY + 128 - 1, getMapRegion().tileHeights[z][x + 1][y + 1])
+				&& isPointOccluded(worldX + 1, worldY + 128 - 1, getMapRegion().tileHeights[z][x][y + 1])) {
+			tileOcclusionCycles[z][x][y] = currentRenderCycle;
 			return true;
 		}
 
-		anIntArrayArrayArray445[z][x][y] = -currentRenderCycle;
+		tileOcclusionCycles[z][x][y] = -currentRenderCycle;
 		return false;
 	}
 
-	private boolean method321(int x, int y, int z, int l) {
-		if (!method320(x, y, z))
+	@Deprecated
+	private boolean method321(int x, int y, int z, int orientation) {
+		return isWallOccluded(x, y, z, orientation);
+	}
+
+	private boolean isWallOccluded(int x, int y, int z, int orientation) {
+		if (!isTileOccluded(x, y, z))
 			return false;
 
 		int worldX = x << 7;
@@ -3037,151 +3082,166 @@ public class SceneGraph {
 		int i2 = k1 - 230;
 		int j2 = k1 - 238;
 
-		if (l < 16) {
-			if (l == 1) {
+		if (orientation < 16) {
+			if (orientation == 1) {
 				if (worldX > xCameraTile) {
-					if (!method324(worldX, worldY, k1))
+					if (!isPointOccluded(worldX, worldY, k1))
 						return false;
-					else if (!method324(worldX, worldY + 128, k1))
+					else if (!isPointOccluded(worldX, worldY + 128, k1))
 						return false;
 				}
 
 				if (z > 0) {
-					if (!method324(worldX, worldY, l1))
+					if (!isPointOccluded(worldX, worldY, l1))
 						return false;
-					else if (!method324(worldX, worldY + 128, l1))
+					else if (!isPointOccluded(worldX, worldY + 128, l1))
 						return false;
 				}
-				if (!method324(worldX, worldY, i2))
+				if (!isPointOccluded(worldX, worldY, i2))
 					return false;
-				return method324(worldX, worldY + 128, i2);
+				return isPointOccluded(worldX, worldY + 128, i2);
 			}
-			if (l == 2) {
+			if (orientation == 2) {
 				if (worldY < yCameraTile) {
-					if (!method324(worldX, worldY + 128, k1))
+					if (!isPointOccluded(worldX, worldY + 128, k1))
 						return false;
-					else if (!method324(worldX + 128, worldY + 128, k1))
+					else if (!isPointOccluded(worldX + 128, worldY + 128, k1))
 						return false;
 				}
 
 				if (z > 0) {
-					if (!method324(worldX, worldY + 128, l1))
+					if (!isPointOccluded(worldX, worldY + 128, l1))
 						return false;
-					else if (!method324(worldX + 128, worldY + 128, l1))
+					else if (!isPointOccluded(worldX + 128, worldY + 128, l1))
 						return false;
 				}
-				if (!method324(worldX, worldY + 128, i2))
+				if (!isPointOccluded(worldX, worldY + 128, i2))
 					return false;
-				return method324(worldX + 128, worldY + 128, i2);
+				return isPointOccluded(worldX + 128, worldY + 128, i2);
 			}
-			if (l == 4) {
+			if (orientation == 4) {
 				if (worldX < xCameraTile) {
-					if (!method324(worldX + 128, worldY, k1))
+					if (!isPointOccluded(worldX + 128, worldY, k1))
 						return false;
-					else if (!method324(worldX + 128, worldY + 128, k1))
+					else if (!isPointOccluded(worldX + 128, worldY + 128, k1))
 						return false;
 				}
 
 				if (z > 0) {
-					if (!method324(worldX + 128, worldY, l1))
+					if (!isPointOccluded(worldX + 128, worldY, l1))
 						return false;
-					else if (!method324(worldX + 128, worldY + 128, l1))
+					else if (!isPointOccluded(worldX + 128, worldY + 128, l1))
 						return false;
 				}
-				if (!method324(worldX + 128, worldY, i2))
+				if (!isPointOccluded(worldX + 128, worldY, i2))
 					return false;
-				return method324(worldX + 128, worldY + 128, i2);
+				return isPointOccluded(worldX + 128, worldY + 128, i2);
 			}
-			if (l == 8) {
+			if (orientation == 8) {
 				if (worldY > yCameraTile) {
-					if (!method324(worldX, worldY, k1))
+					if (!isPointOccluded(worldX, worldY, k1))
 						return false;
-					else if (!method324(worldX + 128, worldY, k1))
+					else if (!isPointOccluded(worldX + 128, worldY, k1))
 						return false;
 				}
 
 				if (z > 0) {
-					if (!method324(worldX, worldY, l1))
+					if (!isPointOccluded(worldX, worldY, l1))
 						return false;
-					else if (!method324(worldX + 128, worldY, l1))
+					else if (!isPointOccluded(worldX + 128, worldY, l1))
 						return false;
 				}
-				if (!method324(worldX, worldY, i2))
+				if (!isPointOccluded(worldX, worldY, i2))
 					return false;
 
-				return method324(worldX + 128, worldY, i2);
+				return isPointOccluded(worldX + 128, worldY, i2);
 			}
 		}
 
-		if (!method324(worldX + 64, worldY + 64, j2))
+		if (!isPointOccluded(worldX + 64, worldY + 64, j2))
 			return false;
-		else if (l == 16)
-			return method324(worldX, worldY + 128, i2);
-		else if (l == 32)
-			return method324(worldX + 128, worldY + 128, i2);
-		else if (l == 64)
-			return method324(worldX + 128, worldY, i2);
-		else if (l == 128)
-			return method324(worldX, worldY, i2);
+		else if (orientation == 16)
+			return isPointOccluded(worldX, worldY + 128, i2);
+		else if (orientation == 32)
+			return isPointOccluded(worldX + 128, worldY + 128, i2);
+		else if (orientation == 64)
+			return isPointOccluded(worldX + 128, worldY, i2);
+		else if (orientation == 128)
+			return isPointOccluded(worldX, worldY, i2);
 		System.out.println("Warning unsupported wall type");
 		return true;
 	}
 
-	private boolean method322(int plane, int x, int y, int l) {
-		if (!method320(x, y, plane))
+	@Deprecated
+	private boolean method322(int plane, int x, int y, int height) {
+		return isDecorationOccluded(plane, x, y, height);
+	}
+
+	private boolean isDecorationOccluded(int plane, int x, int y, int height) {
+		if (!isTileOccluded(x, y, plane))
 			return false;
 
 		int absoluteX = x << 7;
 		int absoluteY = y << 7;
-		return method324(absoluteX + 1, absoluteY + 1, getMapRegion().tileHeights[plane][x][y] - l)
-				&& method324(absoluteX + 128 - 1, absoluteY + 1, getMapRegion().tileHeights[plane][x + 1][y] - l)
-				&& method324(absoluteX + 128 - 1, absoluteY + 128 - 1,
-				getMapRegion().tileHeights[plane][x + 1][y + 1] - l)
-				&& method324(absoluteX + 1, absoluteY + 128 - 1, getMapRegion().tileHeights[plane][x][y + 1] - l);
+		return isPointOccluded(absoluteX + 1, absoluteY + 1, getMapRegion().tileHeights[plane][x][y] - height)
+				&& isPointOccluded(absoluteX + 128 - 1, absoluteY + 1, getMapRegion().tileHeights[plane][x + 1][y] - height)
+				&& isPointOccluded(absoluteX + 128 - 1, absoluteY + 128 - 1,
+				getMapRegion().tileHeights[plane][x + 1][y + 1] - height)
+				&& isPointOccluded(absoluteX + 1, absoluteY + 128 - 1, getMapRegion().tileHeights[plane][x][y + 1] - height);
 	}
 
-	private boolean method323(int plane, int minX, int maxX, int minY, int maxY, int j1) {
+	@Deprecated
+	private boolean method323(int plane, int minX, int maxX, int minY, int maxY, int height) {
+		return isObjectOccluded(plane, minX, maxX, minY, maxY, height);
+	}
+
+	private boolean isObjectOccluded(int plane, int minX, int maxX, int minY, int maxY, int height) {
 		if (minX == maxX && minY == maxY) {
-			if (!method320(minX, minY, plane))
+			if (!isTileOccluded(minX, minY, plane))
 				return false;
 
 			int worldX = minX << 7;
 			int worldY = minY << 7;
 
-			return method324(worldX + 1, worldY + 1, getMapRegion().tileHeights[plane][minX][minY] - j1)
-					&& method324(worldX + 128 - 1, worldY + 1, getMapRegion().tileHeights[plane][minX + 1][minY] - j1)
-					&& method324(worldX + 128 - 1, worldY + 128 - 1,
-					getMapRegion().tileHeights[plane][minX + 1][minY + 1] - j1)
-					&& method324(worldX + 1, worldY + 128 - 1, getMapRegion().tileHeights[plane][minX][minY + 1] - j1);
+			return isPointOccluded(worldX + 1, worldY + 1, getMapRegion().tileHeights[plane][minX][minY] - height)
+					&& isPointOccluded(worldX + 128 - 1, worldY + 1, getMapRegion().tileHeights[plane][minX + 1][minY] - height)
+					&& isPointOccluded(worldX + 128 - 1, worldY + 128 - 1,
+					getMapRegion().tileHeights[plane][minX + 1][minY + 1] - height)
+					&& isPointOccluded(worldX + 1, worldY + 128 - 1, getMapRegion().tileHeights[plane][minX][minY + 1] - height);
 		}
 
 		for (int x = minX; x <= maxX; x++) {
 			for (int y = minY; y <= maxY; y++) {
-				if (anIntArrayArrayArray445[plane][x][y] == -currentRenderCycle)
+				if (tileOcclusionCycles[plane][x][y] == -currentRenderCycle)
 					return false;
 			}
 		}
 
 		int minWorldX = (minX << 7) + 1;
 		int minWorldY = (minY << 7) + 2;
-		int i3 = getMapRegion().tileHeights[plane][minX][minY] - j1;
-		if (!method324(minWorldX, minWorldY, i3))
+		int i3 = getMapRegion().tileHeights[plane][minX][minY] - height;
+		if (!isPointOccluded(minWorldX, minWorldY, i3))
 			return false;
 
 		int maxWorldX = (maxX << 7) - 1;
-		if (!method324(maxWorldX, minWorldY, i3))
+		if (!isPointOccluded(maxWorldX, minWorldY, i3))
 			return false;
 
 		int maxWorldY = (maxY << 7) - 1;
-		if (!method324(minWorldX, maxWorldY, i3))
+		if (!isPointOccluded(minWorldX, maxWorldY, i3))
 			return false;
 
-		return method324(maxWorldX, maxWorldY, i3);
+		return isPointOccluded(maxWorldX, maxWorldY, i3);
 	}
 
-	private boolean method324(int worldX, int worldY, int j) {
-		for (int l = 0; l < anInt475; l++) {
-			SceneCluster cluster = aClass47Array476[l];
+	@Deprecated
+	private boolean method324(int worldX, int worldY, int height) {
+		return isPointOccluded(worldX, worldY, height);
+	}
+
+	private boolean isPointOccluded(int worldX, int worldY, int height) {
+		for (int l = 0; l < activeOccluderCount; l++) {
+			SceneCluster cluster = activeOccluders[l];
 
 			if (cluster.cullDirection == 1) {
 				int dx = cluster.minX - worldX;
@@ -3192,7 +3252,7 @@ public class SceneGraph {
 					int l4 = cluster.minY + (cluster.minNormalY * dx >> 8);
 					int i6 = cluster.maxY + (cluster.maxNormalY * dx >> 8);
 
-					if (worldY >= j2 && worldY <= k3 && j >= l4 && j <= i6)
+					if (worldY >= j2 && worldY <= k3 && height >= l4 && height <= i6)
 						return true;
 				}
 			} else if (cluster.cullDirection == 2) {
@@ -3204,7 +3264,7 @@ public class SceneGraph {
 					int i5 = cluster.minY + (cluster.minNormalY * dx >> 8);
 					int j6 = cluster.maxY + (cluster.maxNormalY * dx >> 8);
 
-					if (worldY >= k2 && worldY <= l3 && j >= i5 && j <= j6)
+					if (worldY >= k2 && worldY <= l3 && height >= i5 && height <= j6)
 						return true;
 				}
 			} else if (cluster.cullDirection == 3) {
@@ -3216,7 +3276,7 @@ public class SceneGraph {
 					int j5 = cluster.minY + (cluster.minNormalY * dy >> 8);
 					int k6 = cluster.maxY + (cluster.maxNormalY * dy >> 8);
 
-					if (worldX >= l2 && worldX <= i4 && j >= j5 && j <= k6)
+					if (worldX >= l2 && worldX <= i4 && height >= j5 && height <= k6)
 						return true;
 				}
 			} else if (cluster.cullDirection == 4) {
@@ -3227,11 +3287,11 @@ public class SceneGraph {
 					int k5 = cluster.minY + (cluster.minNormalY * dy >> 8);
 					int l6 = cluster.maxY + (cluster.maxNormalY * dy >> 8);
 
-					if (worldX >= i3 && worldX <= j4 && j >= k5 && j <= l6)
+					if (worldX >= i3 && worldX <= j4 && height >= k5 && height <= l6)
 						return true;
 				}
 			} else if (cluster.cullDirection == 5) {
-				int i2 = j - cluster.minY;
+				int i2 = height - cluster.minY;
 				if (i2 > 0) {
 					int j3 = cluster.minX + (cluster.minNormalX * i2 >> 8);
 					int k4 = cluster.maxX + (cluster.maxNormalX * i2 >> 8);
@@ -3924,21 +3984,21 @@ public class SceneGraph {
 
 					SceneTile tileBelow = activeTile.tileBelow;
 					if (tileBelow.temporarySimpleTile.isPresent()) {
-						if (!method320(x, y, 0)) {
+						if (!isTileOccluded(x, y, 0)) {
 							GameRasterizer.getInstance().currentAlpha = 0;
 							renderPlainTile(tileBelow.temporarySimpleTile.get(), 0, ySine, yCosine, xSine, xCosine, x, y, false,
 									false, false, false, (byte) 0);
 						}
-					} else if (tileBelow.temporaryShapedTile.isPresent() && !method320(x, y, 0)) {
+					} else if (tileBelow.temporaryShapedTile.isPresent() && !isTileOccluded(x, y, 0)) {
 						renderShapedTile(x, ySine, xSine, tileBelow.temporaryShapedTile.get(), yCosine, y, xCosine, 0,
 								false, false, false, (byte) 0);
 					} else if (tileBelow.simple != null) {
-						if (!method320(x, y, 0)) {
+						if (!isTileOccluded(x, y, 0)) {
 							GameRasterizer.getInstance().currentAlpha = 0;
 							renderPlainTile(tileBelow.simple, 0, ySine, yCosine, xSine, xCosine, x, y, false,
 									tileBelow.tileHighlighted, tileBelow.tileSelected, tileBelow.tileBeingSelected, tileBelow.tileFlags);
 						}
-					} else if (tileBelow.shape != null && !method320(x, y, 0)) {
+					} else if (tileBelow.shape != null && !isTileOccluded(x, y, 0)) {
 						renderShapedTile(x, ySine, xSine, tileBelow.shape, yCosine, y, xCosine, 0,
 								tileBelow.simple == null && tileBelow.tileHighlighted, tileBelow.tileSelected, tileBelow.tileBeingSelected, tileBelow.tileFlags);
 					}
@@ -3980,22 +4040,22 @@ public class SceneGraph {
 
 				boolean flag1 = Options.showHiddenTiles.get();
 				if (activeTile.temporarySimpleTile.isPresent()) {
-					if (!method320(x, y, l)) {
+					if (!isTileOccluded(x, y, l)) {
 						flag1 = true;
 						GameRasterizer.getInstance().currentAlpha = 0;
 						renderPlainTile(activeTile.temporarySimpleTile.get(), l, ySine, yCosine, xSine, xCosine, x, y, false, false, false, false, (byte) 0);
 					}
-				} else if (activeTile.temporaryShapedTile.isPresent() && !method320(x, y, l)) {
+				} else if (activeTile.temporaryShapedTile.isPresent() && !isTileOccluded(x, y, l)) {
 					flag1 = true;
 					renderShapedTile(x, ySine, xSine, activeTile.temporaryShapedTile.get(), yCosine, y, xCosine, l, false, false, false, (byte) 0);
 				} else if (activeTile.simple != null) {
-					if (!method320(x, y, l)) {
+					if (!isTileOccluded(x, y, l)) {
 						flag1 = true;
 						GameRasterizer.getInstance().currentAlpha = 0;
 						renderPlainTile(activeTile.simple, l, ySine, yCosine, xSine, xCosine, x, y, false,
 								activeTile.tileHighlighted, activeTile.tileSelected, activeTile.tileBeingSelected, activeTile.tileFlags);
 					}
-				} else if (activeTile.shape != null && !method320(x, y, l)) {
+				} else if (activeTile.shape != null && !isTileOccluded(x, y, l)) {
 					flag1 = true;
 					renderShapedTile(x, ySine, xSine, activeTile.shape, yCosine, y, xCosine, l,
 							activeTile.simple == null && activeTile.tileHighlighted, activeTile.tileSelected, activeTile.tileBeingSelected, activeTile.tileFlags);
@@ -4025,39 +4085,39 @@ public class SceneGraph {
 						} else if (absoluteCameraY > y) {
 							j1 += 6;
 						}
-						j2 = anIntArray478[j1];
-						activeTile.cameraAngleMask = anIntArray480[j1];
+						j2 = WALL_DRAW_FLAGS[j1];
+						activeTile.cameraAngleMask = CAMERA_ANGLE_MASKS[j1];
 					}
 
 					if (wall != null) {
-						if ((wall.orientationA & anIntArray479[j1]) != 0) {
+						if ((wall.orientationA & WALL_CULL_FLAGS[j1]) != 0) {
 							if (wall.orientationA == 16) {
 								activeTile.drawGameObjectEdges = 3;
-								activeTile.wallUncullDirection = anIntArray481[j1];
+								activeTile.wallUncullDirection = DIAGONAL_WALL_MASKS_1[j1];
 								activeTile.wallCullOppositeDirection = 3 - activeTile.wallUncullDirection;
 							} else if (wall.orientationA == 32) {
 								activeTile.drawGameObjectEdges = 6;
-								activeTile.wallUncullDirection = anIntArray482[j1];
+								activeTile.wallUncullDirection = DIAGONAL_WALL_MASKS_2[j1];
 								activeTile.wallCullOppositeDirection = 6 - activeTile.wallUncullDirection;
 							} else if (wall.orientationA == 64) {
 								activeTile.drawGameObjectEdges = 12;
-								activeTile.wallUncullDirection = anIntArray483[j1];
+								activeTile.wallUncullDirection = DIAGONAL_WALL_MASKS_3[j1];
 								activeTile.wallCullOppositeDirection = 12 - activeTile.wallUncullDirection;
 							} else {
 								activeTile.drawGameObjectEdges = 9;
-								activeTile.wallUncullDirection = anIntArray484[j1];
+								activeTile.wallUncullDirection = DIAGONAL_WALL_MASKS_4[j1];
 								activeTile.wallCullOppositeDirection = 9 - activeTile.wallUncullDirection;
 							}
 						} else {
 							activeTile.drawGameObjectEdges = 0;
 						}
-						if ((wall.orientationA & j2) != 0 && !method321(x, y, l, wall.orientationA)
+						if ((wall.orientationA & j2) != 0 && !isWallOccluded(x, y, l, wall.orientationA)
 								&& wall.getPrimary() != null) {
 							wall.getPrimary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
 									ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
 									wall.getKey(), plane);
 						}
-						if ((wall.orientationB & j2) != 0 && !method321(x, y, l, wall.orientationB)
+						if ((wall.orientationB & j2) != 0 && !isWallOccluded(x, y, l, wall.orientationB)
 								&& wall.getSecondary() != null) {
 							wall.getSecondary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
 									ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
@@ -4066,7 +4126,7 @@ public class SceneGraph {
 					}
 
 					if (decoration != null && decoration.getPrimary() != null
-							&& !method322(l, x, y, decoration.getPrimary().getModelHeight())) {
+							&& !isDecorationOccluded(l, x, y, decoration.getPrimary().getModelHeight())) {
 						if ((decoration.getAttributes() & j2) != 0) {
 							decoration.getPrimary().render(GameRasterizer.getInstance(), decoration.getX() - xCameraTile,
 									decoration.getY() - yCameraTile, decoration.getOrientation(), ySine, yCosine,
@@ -4098,16 +4158,16 @@ public class SceneGraph {
 
 							if ((decoration.getAttributes() & 0b1_0000_0000) != 0 && length < width) { // type
 								// 6
-								int renderX = dx + anIntArray463[orientation];
-								int renderY = dy + anIntArray464[orientation];
+								int renderX = dx + WALL_DECORATION_INSET_X[orientation];
+								int renderY = dy + WALL_DECORATION_INSET_Y[orientation];
 								decoration.getPrimary().render(GameRasterizer.getInstance(), renderX, renderY, orientation * 512 + 256, ySine,
 										yCosine, xSine, xCosine, height, decoration.getKey(), plane);
 							}
 
 							if ((decoration.getAttributes() & 0b10_0000_0000) != 0 && length > width) { // type
 								// 7
-								int renderX = dx + anIntArray465[orientation];
-								int renderY = dy + anIntArray466[orientation];
+								int renderX = dx + WALL_DECORATION_OUTSET_X[orientation];
+								int renderY = dy + WALL_DECORATION_OUTSET_Y[orientation];
 								decoration.getPrimary().render(GameRasterizer.getInstance(), renderX, renderY, orientation * 512 + 1280 & 0x7ff,
 										ySine, yCosine, xSine, xCosine, height, decoration.getKey(), plane);
 							}
@@ -4194,12 +4254,12 @@ public class SceneGraph {
 				if (flag2) {
 					Wall wall = (Wall) SceneGraph.getTemporaryOrDefault(activeTile, WorldObjectType.WALL);
 					if (wall != null) {
-						if (wall.getPrimary() != null && !method321(x, y, l, wall.orientationA)) {
+						if (wall.getPrimary() != null && !isWallOccluded(x, y, l, wall.orientationA)) {
 							wall.getPrimary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
 									ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
 									wall.getKey(), plane);
 						}
-						if (wall.getSecondary() != null && !method321(x, y, l, wall.orientationB)) {
+						if (wall.getSecondary() != null && !isWallOccluded(x, y, l, wall.orientationB)) {
 							wall.getSecondary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
 									ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
 									wall.getKey(), plane);
@@ -4315,7 +4375,7 @@ public class SceneGraph {
 						GameObject object = interactables[l3];
 
 						object.lastRenderCycle = currentRenderCycle;
-						if (!method323(l, object.getX(), object.maxX, object.getY(), object.maxY,
+						if (!isObjectOccluded(l, object.getX(), object.maxX, object.getY(), object.maxY,
 								object.getPrimary().getModelHeight())) {
 							object.getPrimary().render(GameRasterizer.getInstance(), object.centreX - xCameraTile,
 									object.centreY - yCameraTile, object.yaw, ySine, yCosine, xSine, xCosine,
@@ -4377,13 +4437,13 @@ public class SceneGraph {
 			}
 
 			activeTile.drawSecondary = false;
-			anInt446--;
+			visibleTileCount--;
 
 			if (activeTile.cameraAngleMask != 0) {
 				WallDecoration decor = (WallDecoration) SceneGraph.getTemporaryOrDefault(activeTile,
 						WorldObjectType.WALL_DECORATION);
 				if (decor != null && decor.getPrimary() != null
-						&& !method322(l, x, y, decor.getPrimary().getModelHeight())) {
+						&& !isDecorationOccluded(l, x, y, decor.getPrimary().getModelHeight())) {
 					if ((decor.getAttributes() & activeTile.cameraAngleMask) != 0) {
 						decor.getPrimary().render(GameRasterizer.getInstance(), decor.getX() - xCameraTile, decor.getY() - yCameraTile,
 								decor.getOrientation(), ySine, yCosine, xSine, xCosine,
@@ -4406,14 +4466,14 @@ public class SceneGraph {
 							l7 = i4;
 						}
 						if ((decor.getAttributes() & 0x100) != 0 && l7 >= j6) {
-							int i9 = l2 + anIntArray463[orientation];
-							int i10 = i4 + anIntArray464[orientation];
+							int i9 = l2 + WALL_DECORATION_INSET_X[orientation];
+							int i10 = i4 + WALL_DECORATION_INSET_Y[orientation];
 							decor.getPrimary().render(GameRasterizer.getInstance(), i9, i10, orientation * 512 + 256, ySine, yCosine, xSine,
 									xCosine, j3, decor.getKey(), plane);
 						}
 						if ((decor.getAttributes() & 0x200) != 0 && l7 <= j6) {
-							int j9 = l2 + anIntArray465[orientation];
-							int j10 = i4 + anIntArray466[orientation];
+							int j9 = l2 + WALL_DECORATION_OUTSET_X[orientation];
+							int j10 = i4 + WALL_DECORATION_OUTSET_Y[orientation];
 							decor.getPrimary().render(GameRasterizer.getInstance(), j9, j10, orientation * 512 + 1280 & 0x7ff, ySine, yCosine,
 									xSine, xCosine, j3, decor.getKey(), plane);
 						}
@@ -4421,13 +4481,13 @@ public class SceneGraph {
 				}
 				Wall wall = (Wall) SceneGraph.getTemporaryOrDefault(activeTile, WorldObjectType.WALL);
 				if (wall != null) {
-					if ((wall.orientationB & activeTile.cameraAngleMask) != 0 && !method321(x, y, l, wall.orientationB)
+					if ((wall.orientationB & activeTile.cameraAngleMask) != 0 && !isWallOccluded(x, y, l, wall.orientationB)
 							&& wall.getSecondary() != null) {
 						wall.getSecondary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
 								ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
 								wall.getKey(), plane);
 					}
-					if ((wall.orientationA & activeTile.cameraAngleMask) != 0 && !method321(x, y, l, wall.orientationA)
+					if ((wall.orientationA & activeTile.cameraAngleMask) != 0 && !isWallOccluded(x, y, l, wall.orientationA)
 							&& wall.getPrimary() != null) {
 						wall.getPrimary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
 								ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
@@ -4713,11 +4773,11 @@ public class SceneGraph {
 
 						if (wall != null && wall.getPrimary() != null && wall.getPrimary().hasNormals()) {
 							Mesh primary = wall.getPrimary().asMesh();
-							method307(z, 1, 1, x, y, primary);
+							mergeAdjacentNormals(z, 1, 1, x, y, primary);
 
 							if (wall.getSecondary() != null && wall.getSecondary().hasNormals()) {
 								Mesh secondary = wall.getSecondary().asMesh();
-								method307(z, 1, 1, x, y, secondary);
+								mergeAdjacentNormals(z, 1, 1, x, y, secondary);
 								mergeNormals(primary, secondary, 0, 0, 0, false);
 								secondary.shade(lighting, k1, drawX, drawY, drawZ);
 							}
@@ -4730,7 +4790,7 @@ public class SceneGraph {
 							if (object != null && object.getPrimary() != null
 									&& object.getPrimary().hasNormals()) {
 								Mesh primary = object.getPrimary().asMesh();
-								method307(z, object.maxX - object.getX() + 1, object.maxY - object.getY() + 1, x, y, primary);
+								mergeAdjacentNormals(z, object.maxX - object.getX() + 1, object.maxY - object.getY() + 1, x, y, primary);
 								primary.shade(lighting, k1, drawX, drawY, drawZ);
 							}
 						}
@@ -4738,7 +4798,7 @@ public class SceneGraph {
 						GroundDecoration decoration = tile.groundDecoration;
 						if (decoration != null && decoration.getPrimary() != null && decoration.getPrimary().hasNormals()) {
 							Mesh primary = decoration.getPrimary().asMesh();
-							method306(primary, x, y, z);
+							mergeGroundDecorationNormals(primary, x, y, z);
 							primary.shade(lighting, k1, drawX, drawY, drawZ);
 						}
 					}
@@ -4758,11 +4818,11 @@ public class SceneGraph {
 
 			if (wall != null && wall.getPrimary() != null && wall.getPrimary().hasNormals()) {
 				Mesh primary = wall.getPrimary().asMesh();
-				method307(z, 1, 1, x, y, primary);
+				mergeAdjacentNormals(z, 1, 1, x, y, primary);
 
 				if (wall.getSecondary() != null && wall.getSecondary().hasNormals()) {
 					Mesh secondary = wall.getSecondary().asMesh();
-					method307(z, 1, 1, x, y, secondary);
+					mergeAdjacentNormals(z, 1, 1, x, y, secondary);
 					mergeNormals(primary, secondary, 0, 0, 0, false);
 					secondary.shade(lighting, k1, drawX, drawY, drawZ);
 				}
@@ -4775,7 +4835,7 @@ public class SceneGraph {
 				if (object != null && object.getPrimary() != null
 						&& object.getPrimary().hasNormals()) {
 					Mesh primary = object.getPrimary().asMesh();
-					method307(z, object.maxX - object.getX() + 1, object.maxY - object.getY() + 1, x, y, primary);
+					mergeAdjacentNormals(z, object.maxX - object.getX() + 1, object.maxY - object.getY() + 1, x, y, primary);
 					primary.shade(lighting, k1, drawX, drawY, drawZ);
 				}
 			}
@@ -4783,7 +4843,7 @@ public class SceneGraph {
 			GroundDecoration decoration = tile.groundDecoration;
 			if (decoration != null && decoration.getPrimary() != null && decoration.getPrimary().hasNormals()) {
 				Mesh primary = decoration.getPrimary().asMesh();
-				method306(primary, x, y, z);
+				mergeGroundDecorationNormals(primary, x, y, z);
 				primary.shade(lighting, k1, drawX, drawY, drawZ);
 			}
 		}

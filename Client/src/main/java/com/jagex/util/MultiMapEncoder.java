@@ -16,7 +16,7 @@ public class MultiMapEncoder {
 		for(Chunk chunk : chunks) {
 			if(chunk.hasLoaded()) {
 				byte[] objectMap = chunk.scenegraph.saveObjects(chunk);
-				byte[] tileMap = chunk.mapRegion.save_terrain_block(chunk);
+				byte[] tileMap = chunk.mapRegion.saveTerrainBlock(chunk);
 				
 				
 				buffer.putInt(chunk.objectMapId);

@@ -85,38 +85,6 @@ public final class TerrainAppearanceBuilder {
 
     private int blendedUnderlay(WorldDocument document, DefinitionProvider definitions,
                                 int plane, int x, int y) {
-        int localX = Math.max(0, Math.min(document.width() - 1, x));
-        int localY = Math.max(0, Math.min(document.length() - 1, y));
-        if (document.tile(plane, localX, localY).snapshot().underlayId() <= 0) {
-            return -1;
-        }
-        long saturation = 0;
-        long luminance = 0;
-        long weightedHue = 0;
-        long chroma = 0;
-        int count = 0;
-        for (int sampleX = Math.max(0, x - UNDERLAY_BLEND_RADIUS + 1);
-             sampleX <= Math.min(document.width() - 1, x + UNDERLAY_BLEND_RADIUS); sampleX++) {
-            for (int sampleY = Math.max(0, y - UNDERLAY_BLEND_RADIUS + 1);
-                 sampleY <= Math.min(document.length() - 1, y + UNDERLAY_BLEND_RADIUS); sampleY++) {
-                if (sampleX < 0 || sampleX >= document.width()
-                        || sampleY < 0 || sampleY >= document.length()) continue;
-                int id = document.tile(plane, sampleX, sampleY).snapshot().underlayId();
-                if (id <= 0) continue;
-                FloorDefinitionView floor = definitions.underlay(id - 1).orElse(null);
-                if (floor == null || floor.chroma() <= 0) continue;
-                saturation += floor.saturation();
-                luminance += floor.luminance();
-                weightedHue += floor.weightedHue();
-                chroma += floor.chroma();
-                count++;
-            }
-        }
-        if (chroma == 0) return -1;
-        int averageHue = (int) (weightedHue * 256 / chroma);
-        int averageSaturation = (int) (saturation / Math.max(1, count));
-        int averageLuminance = (int) (luminance / Math.max(1, count));
-        return OsrsTerrainColorMath.packHsl(averageHue, averageSaturation, averageLuminance);
+        return com.rspsi.osrs.rules.terrain.FloorBlendRules.blendUnderlay(document, definitions, plane, x, y);
     }
-
 }

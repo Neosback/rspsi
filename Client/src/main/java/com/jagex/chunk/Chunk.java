@@ -180,10 +180,10 @@ public class Chunk {
 			for (int y = 0; y < 64; y++) {
 				for (int x = 0; x < 64; x++) {
 					if ((mapRegion.tileFlags[plane][offsetX + x][offsetY + y] & 0x18) == 0) {
-						method50(x, y, plane, j1, l1);
+						drawMinimapWalls(x, y, plane, j1, l1);
 					}
 					if (plane < 3 && (mapRegion.tileFlags[plane + 1][offsetX + x][offsetY + y] & 8) != 0) {
-						method50(x, y, plane + 1, j1, l1);
+						drawMinimapWalls(x, y, plane + 1, j1, l1);
 					}
 				}
 			}
@@ -234,7 +234,12 @@ public class Chunk {
 		}
 	}
 
+	@Deprecated
 	public final void method115() {
+		tickTemporarySpawns();
+	}
+
+	public final void tickTemporarySpawns() {
 		spawns.forEach(spawn -> {
 			if (spawn.getLongevity() > 0) {
 				spawn.setLongevity(spawn.getLongevity() - 1);
@@ -294,20 +299,25 @@ public class Chunk {
 				mapRegion.unpackTiles(tileMapData, offsetX, offsetY, regionX, regionY);
 
 			} /*else if (regionY < 700) {//XXX Figure out why this exists
-				mapRegion.method174(0, 0, 64, 64);
+				mapRegion.smoothBorderHeights(0, 0, 64, 64);
 			}*/
 			if (objectMapData != null) {
 				System.out.println("object data not null");
 				mapRegion.unpackObjects(scenegraph, objectMapData, offsetX, offsetY);
 			}
 
-			method63();
+			applyPermanentSpawns();
 			this.loaded = true;
 
 			updated = true;
 	}
 
+	@Deprecated
 	public final void method50(int x, int y, int z, int nullColour, int defaultColour) {
+		drawMinimapWalls(x, y, z, nullColour, defaultColour);
+	}
+
+	public final void drawMinimapWalls(int x, int y, int z, int nullColour, int defaultColour) {
 		ObjectKey key = scenegraph.getWallKey(offsetX + x, offsetY + y, z);
 
 		if (key != null) {
@@ -443,7 +453,12 @@ public class Chunk {
 		}
 	}
 
+	@Deprecated
 	private final void method63() {
+		applyPermanentSpawns();
+	}
+
+	private final void applyPermanentSpawns() {
 		spawns.forEach(spawn -> {
 			if (spawn.getLongevity() == -1) {
 				spawn.setDelay(0);

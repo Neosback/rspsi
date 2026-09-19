@@ -115,6 +115,34 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         updateCameraFromKeyboard();
     }
 
+    public ViewportOverlayDraw createOverlayDraw() {
+        return new ViewportOverlayDraw(ImGui.getWindowDrawList(), imageOriginX, imageOriginY,
+                lastWidth, lastHeight, navigation.camera());
+    }
+
+    public void renderOverlays(com.rspsi.editor.tool.EditorTool activeTool,
+                               com.rspsi.editor.plugin.EditorPluginLifecycleManager pluginLifecycle) {
+        if (lastPlan == null || lastWidth <= 0 || lastHeight <= 0) return;
+        ViewportOverlayDraw draw = createOverlayDraw();
+        if (activeTool != null) {
+            try {
+                activeTool.renderOverlay(draw);
+            } catch (Exception ignored) {
+            }
+        }
+        if (pluginLifecycle != null && pluginLifecycle.host() != null) {
+            var context = pluginLifecycle.host().context();
+            var sceneSnapshot = context.scene().map(com.rspsi.editor.plugin.EditorSceneAccess::snapshot).orElse(null);
+            for (var reg : pluginLifecycle.host().registry().overlayRegistrations()) {
+                try {
+                    var overlay = pluginLifecycle.host().registry().createOverlay(reg.id());
+                    overlay.render(sceneSnapshot, draw);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
     /**
      * A plain left click inside the scene image selects whatever is under
      * the cursor. Dragging is excluded so orbiting or panning never changes

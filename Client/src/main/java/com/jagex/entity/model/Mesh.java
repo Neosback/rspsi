@@ -22,9 +22,9 @@ import java.util.Objects;
 @Slf4j
 public class Mesh extends Renderable {
 
-    // Class30_Sub2_Sub4_Sub6
-
     public byte[] textureMap;
+    public static boolean pickingEnabled;
+    @Deprecated
     public static boolean aBoolean1684;
     public static int resourceCount;
     public static ObjectKey[] resourceIDTag = new ObjectKey[1000];
@@ -32,10 +32,10 @@ public class Mesh extends Renderable {
     public static int mouseX;
     public static int mouseY;
 
-    private static int[] anIntArray1622 = new int[2000];
-    private static int[] anIntArray1623 = new int[2000];
-    private static int[] anIntArray1624 = new int[2000];
-    private static int[] anIntArray1625 = new int[2000];
+    private static int[] sharedVertexX = new int[2000];
+    private static int[] sharedVertexY = new int[2000];
+    private static int[] sharedVertexZ = new int[2000];
+    private static int[] sharedFaceAlpha = new int[2000];
     static int centroidX;
     static int centroidY;
     static int centroidZ;
@@ -501,9 +501,9 @@ public class Mesh extends Renderable {
             int var9 = Constants.SINE[orientation];
 
             for (int var10 = 0; var10 < this.vertexCount; ++var10) {
-                int var11 = method3027(this.vertexX[var10], this.vertexZ[var10], var8, var9);
+                int var11 = rotateX(this.vertexX[var10], this.vertexZ[var10], var8, var9);
                 int var12 = this.vertexY[var10];
-                int var13 = method3028(this.vertexX[var10], this.vertexZ[var10], var8, var9);
+                int var13 = rotateZ(this.vertexX[var10], this.vertexZ[var10], var8, var9);
                 if (var11 < var2) {
                     var2 = var11;
                 }
@@ -552,12 +552,22 @@ public class Mesh extends Renderable {
         }
     }
 
+    @Deprecated
     private static final int method3027(int var0, int var1, int var2, int var3) {
-        return var0 * var2 + var3 * var1 >> 16;
+        return rotateX(var0, var1, var2, var3);
     }
 
+    private static final int rotateX(int x, int z, int cos, int sin) {
+        return x * cos + sin * z >> 16;
+    }
+
+    @Deprecated
     private static final int method3028(int var0, int var1, int var2, int var3) {
-        return var2 * var1 - var3 * var0 >> 16;
+        return rotateZ(var0, var1, var2, var3);
+    }
+
+    private static final int rotateZ(int x, int z, int cos, int sin) {
+        return cos * z - sin * x >> 16;
     }
 
     public void computeBounds() {
@@ -794,20 +804,25 @@ public class Mesh extends Renderable {
         }
     }
 
+    @Deprecated
     public void method464(Mesh model, boolean shareAlphas) {
+        shareVertices(model, shareAlphas);
+    }
+
+    public void shareVertices(Mesh model, boolean shareAlphas) {
         vertexCount = model.vertexCount;
         triangleCount = model.triangleCount;
         numTextureFaces = model.numTextureFaces;
 
-        if (anIntArray1622.length < vertexCount) {
-            anIntArray1622 = new int[vertexCount + 100];
-            anIntArray1623 = new int[vertexCount + 100];
-            anIntArray1624 = new int[vertexCount + 100];
+        if (sharedVertexX.length < vertexCount) {
+            sharedVertexX = new int[vertexCount + 100];
+            sharedVertexY = new int[vertexCount + 100];
+            sharedVertexZ = new int[vertexCount + 100];
         }
 
-        vertexX = anIntArray1622;
-        vertexY = anIntArray1623;
-        vertexZ = anIntArray1624;
+        vertexX = sharedVertexX;
+        vertexY = sharedVertexY;
+        vertexZ = sharedVertexZ;
         for (int vertex = 0; vertex < vertexCount; vertex++) {
             vertexX[vertex] = model.vertexX[vertex];
             vertexY[vertex] = model.vertexY[vertex];
@@ -817,10 +832,10 @@ public class Mesh extends Renderable {
         if (shareAlphas) {
             faceTransparencies = model.faceTransparencies;
         } else {
-            if (anIntArray1625.length < triangleCount) {
-                anIntArray1625 = new int[triangleCount + 100];
+            if (sharedFaceAlpha.length < triangleCount) {
+                sharedFaceAlpha = new int[triangleCount + 100];
             }
-            faceTransparencies = anIntArray1625;
+            faceTransparencies = sharedFaceAlpha;
 
             if (model.faceTransparencies == null) {
                 for (int index = 0; index < triangleCount; index++) {
@@ -1059,7 +1074,7 @@ public class Mesh extends Renderable {
 
     private void renderFace(GameRasterizer rasterizer, int index) {
         if (rasterizer.cullFacesOther[index]) {
-            method485(rasterizer, index);
+            drawClippedFace(rasterizer, index);
             return;
         }
         int faceX = faceIndices1[index];
@@ -1152,7 +1167,12 @@ public class Mesh extends Renderable {
         }
     }
 
+    @Deprecated
     private void method485(GameRasterizer rasterizer, int index) {
+        drawClippedFace(rasterizer, index);
+    }
+
+    private void drawClippedFace(GameRasterizer rasterizer, int index) {
 
         boolean ignoreTextures = translucent || selected;
 
@@ -1557,7 +1577,7 @@ public class Mesh extends Renderable {
         }
 
         boolean flag1 = false;
-        if (key != null && aBoolean1684 || true) {
+        if (key != null && (pickingEnabled || aBoolean1684) || true) {
             int k5 = k2 - l2;
             if (k5 <= 50) {
                 k5 = 50;

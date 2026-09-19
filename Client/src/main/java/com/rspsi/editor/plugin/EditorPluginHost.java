@@ -76,7 +76,28 @@ public final class EditorPluginHost implements AutoCloseable {
             EditorTaskService tasks,
             EditorNotificationService notifications) {
         return initialize(plugins, session, assets, Optional.ofNullable(scene),
-                settings, tasks, notifications);
+                settings, tasks, notifications, null, null, null, null, null, null, null);
+    }
+
+    /** Initializes plugins with full studio runtime services. */
+    public static EditorPluginHost initialize(
+            Iterable<? extends EditorPlugin> plugins,
+            EditorSession session,
+            AssetRepository assets,
+            EditorSceneAccess scene,
+            SettingsStore settings,
+            EditorTaskService tasks,
+            EditorNotificationService notifications,
+            com.rspsi.editor.knowledge.WorldKnowledgeService knowledge,
+            com.rspsi.editor.generation.GeneratorService generators,
+            com.rspsi.editor.symbols.SymbolService symbols,
+            com.rspsi.editor.integration.reference.ReferenceService references,
+            com.rspsi.editor.integration.npc.NpcSpawnService spawns,
+            com.rspsi.editor.simulation.SimulationEngine simulation,
+            com.rspsi.editor.integration.ServerIntegrationService integrations) {
+        return initialize(plugins, session, assets, Optional.ofNullable(scene),
+                settings, tasks, notifications, knowledge, generators,
+                symbols, references, spawns, simulation, integrations);
     }
 
     private static EditorPluginHost initialize(
@@ -86,7 +107,8 @@ public final class EditorPluginHost implements AutoCloseable {
             Optional<EditorSceneAccess> scene) {
         return initialize(plugins, session, assets, scene,
                 new SettingsStore(EditorSettingKeys.registry()),
-                new EditorTaskService(), new EditorNotificationService());
+                new EditorTaskService(), new EditorNotificationService(),
+                null, null, null, null, null, null, null);
     }
 
     private static EditorPluginHost initialize(
@@ -96,12 +118,22 @@ public final class EditorPluginHost implements AutoCloseable {
             Optional<EditorSceneAccess> scene,
             SettingsStore settings,
             EditorTaskService tasks,
-            EditorNotificationService notifications) {
+            EditorNotificationService notifications,
+            com.rspsi.editor.knowledge.WorldKnowledgeService knowledge,
+            com.rspsi.editor.generation.GeneratorService generators,
+            com.rspsi.editor.symbols.SymbolService symbols,
+            com.rspsi.editor.integration.reference.ReferenceService references,
+            com.rspsi.editor.integration.npc.NpcSpawnService spawns,
+            com.rspsi.editor.simulation.SimulationEngine simulation,
+            com.rspsi.editor.integration.ServerIntegrationService integrations) {
         Objects.requireNonNull(plugins, "plugins");
         EditorPluginRegistry registry = new EditorPluginRegistry();
         EditorPluginResources resources = new EditorPluginResources();
+        com.rspsi.editor.settings.SettingsService settingsService = settings != null
+                ? new com.rspsi.editor.settings.SettingsService(settings) : null;
         EditorPluginContext context = new EditorPluginContext(session, assets, registry, scene,
-                settings, tasks, notifications, resources);
+                settings, settingsService, tasks, notifications, resources,
+                knowledge, generators, symbols, references, spawns, simulation, integrations);
         List<LoadedPlugin> initialized = new ArrayList<>();
         Set<String> pluginIds = new HashSet<>();
         try {
@@ -149,6 +181,9 @@ public final class EditorPluginHost implements AutoCloseable {
             } catch (RuntimeException | Error error) {
                 failure = appendFailure(failure, error);
             } finally {
+                ContributionOwner owner = ContributionOwner.plugin(loaded.plugin().id());
+                context.knowledge().unregisterAll(owner);
+                context.generators().unregisterAll(owner);
                 removeContributions(registry, loaded.contributions());
             }
         }
@@ -172,6 +207,9 @@ public final class EditorPluginHost implements AutoCloseable {
             } catch (RuntimeException | Error error) {
                 originalFailure.addSuppressed(error);
             } finally {
+                ContributionOwner owner = ContributionOwner.plugin(loaded.plugin().id());
+                context.knowledge().unregisterAll(owner);
+                context.generators().unregisterAll(owner);
                 removeContributions(registry, loaded.contributions());
             }
         }

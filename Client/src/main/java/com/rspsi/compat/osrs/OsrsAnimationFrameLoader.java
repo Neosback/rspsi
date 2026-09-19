@@ -84,9 +84,9 @@ public class OsrsAnimationFrameLoader extends FrameLoader {
 					translationIndices[transformation] = index;
 					int standard = base.getTransformationType(index) == FrameConstants.SCALE_TRANSFORMATION ? 128 : 0;
 
-					transformX[transformation] = (attribute & FrameConstants.TRANSFORM_X) != 0 ? buffer.readShort2() : standard;
-					transformY[transformation] = (attribute & FrameConstants.TRANSFORM_Y) != 0 ? buffer.readShort2() : standard;
-					transformZ[transformation] = (attribute & FrameConstants.TRANSFORM_Z) != 0 ? buffer.readShort2() : standard;
+					transformX[transformation] = (attribute & FrameConstants.TRANSFORM_X) != 0 ? buffer.readSignedShort() : standard;
+					transformY[transformation] = (attribute & FrameConstants.TRANSFORM_Y) != 0 ? buffer.readSignedShort() : standard;
+					transformZ[transformation] = (attribute & FrameConstants.TRANSFORM_Z) != 0 ? buffer.readSignedShort() : standard;
 
 					lastIndex = index;
 					transformation++;

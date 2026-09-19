@@ -65,21 +65,15 @@ public final class TerrainLighting {
             for (int y = 1; y < length; y++) {
                 int heightDeltaX = heights[x + 1][y] - heights[x - 1][y];
                 int heightDeltaY = heights[x][y + 1] - heights[x][y - 1];
-                int normalLength = (int) Math.sqrt((long) heightDeltaY * heightDeltaY
-                        + (long) heightDeltaX * heightDeltaX + profile.heightScale());
-                int normalX = (heightDeltaX << 8) / normalLength;
-                int normalY = profile.heightScale() / normalLength;
-                int normalZ = (heightDeltaY << 8) / normalLength;
-                int dot = normalX * profile.lightX() + normalY * profile.lightY()
-                        + normalZ * profile.lightZ();
-                int baseLight = (int) ((double) dot / profile.lightIntensity()) + profile.ambient();
                 int shadowPenalty = shadows == null ? 0
-                        : (shadows.cornerStrength(plane, x - 1, y) >> 2)
-                        + (shadows.cornerStrength(plane, x + 1, y) >> 3)
-                        + (shadows.cornerStrength(plane, x, y - 1) >> 2)
-                        + (shadows.cornerStrength(plane, x, y + 1) >> 3)
-                        + (shadows.cornerStrength(plane, x, y) >> 1);
-                lights[x][y] = baseLight - shadowPenalty;
+                        : com.rspsi.osrs.rules.terrain.TerrainLightRules.calculateShadowPenalty(
+                                shadows.cornerStrength(plane, x, y),
+                                shadows.cornerStrength(plane, x - 1, y),
+                                shadows.cornerStrength(plane, x + 1, y),
+                                shadows.cornerStrength(plane, x, y - 1),
+                                shadows.cornerStrength(plane, x, y + 1));
+                lights[x][y] = com.rspsi.osrs.rules.terrain.TerrainLightRules.calculateCornerLight(
+                        heightDeltaX, heightDeltaY, profile, shadowPenalty);
             }
         }
         // TSPS leaves the outer normal samples at their zero-initialized edge

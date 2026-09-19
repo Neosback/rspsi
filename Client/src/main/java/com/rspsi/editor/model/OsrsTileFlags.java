@@ -16,4 +16,12 @@ public final class OsrsTileFlags {
     public static boolean hasBridge(int flags) {
         return (flags & BRIDGE) != 0;
     }
+
+    public static boolean removesRoofs(int flags) {
+        return (flags & REMOVE_ROOFS) != 0;
+    }
+
+    public static boolean isBlocked(int flags) {
+        return (flags & BLOCK_MAP_SQUARE) != 0;
+    }
 }

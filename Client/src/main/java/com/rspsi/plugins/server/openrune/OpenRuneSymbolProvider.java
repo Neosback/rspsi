@@ -1,0 +1,155 @@
+package com.rspsi.plugins.server.openrune;
+
+import com.rspsi.editor.symbols.Symbol;
+import com.rspsi.editor.symbols.SymbolNamespace;
+import com.rspsi.editor.symbols.SymbolProvider;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * SymbolProvider that parses OpenRune RSCM mapping files and gamevals (.data/gamevals/*.rscm, gamevals.toml).
+ */
+public final class OpenRuneSymbolProvider implements SymbolProvider {
+    private final Path projectRoot;
+    private final Map<SymbolNamespace, Map<String, Symbol>> symbolsByName = new HashMap<>();
+    private final Map<SymbolNamespace, Map<Integer, List<Symbol>>> symbolsById = new HashMap<>();
+
+    public OpenRuneSymbolProvider(Path projectRoot) {
+        this.projectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
+        for (SymbolNamespace ns : SymbolNamespace.values()) {
+            symbolsByName.put(ns, new HashMap<>());
+            symbolsById.put(ns, new HashMap<>());
+        }
+        indexProject();
+    }
+
+    private void indexProject() {
+        Path gamevalsDir = projectRoot.resolve(".data").resolve("gamevals");
+        if (Files.isDirectory(gamevalsDir)) {
+            indexRscmFile(gamevalsDir.resolve("loc.rscm"), SymbolNamespace.LOC);
+            indexRscmFile(gamevalsDir.resolve("npc.rscm"), SymbolNamespace.NPC);
+            indexRscmFile(gamevalsDir.resolve("item.rscm"), SymbolNamespace.ITEM);
+            indexRscmFile(gamevalsDir.resolve("varbit.rscm"), SymbolNamespace.VARBIT);
+            indexRscmFile(gamevalsDir.resolve("varp.rscm"), SymbolNamespace.VARP);
+            indexRscmFile(gamevalsDir.resolve("interface.rscm"), SymbolNamespace.INTERFACE);
+            indexRscmFile(gamevalsDir.resolve("clientscript.rscm"), SymbolNamespace.CLIENTSCRIPT);
+        }
+
+        Path tomlFile = projectRoot.resolve("gamevals.toml");
+        if (Files.isRegularFile(tomlFile)) {
+            indexTomlFile(tomlFile);
+        }
+    }
+
+    private void indexRscmFile(Path file, SymbolNamespace namespace) {
+        if (!Files.isRegularFile(file)) return;
+        try (BufferedReader reader = Files.newBufferedReader(file)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                parseAndAdd(line, namespace, file.toString());
+            }
+        } catch (IOException ignored) {
+        }
+    }
+
+    private void indexTomlFile(Path file) {
+        try (BufferedReader reader = Files.newBufferedReader(file)) {
+            String line;
+            SymbolNamespace currentNs = SymbolNamespace.LOC;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                    String section = trimmed.substring(1, trimmed.length() - 1).toLowerCase(Locale.ROOT);
+                    if (section.contains("loc")) currentNs = SymbolNamespace.LOC;
+                    else if (section.contains("npc")) currentNs = SymbolNamespace.NPC;
+                    else if (section.contains("item")) currentNs = SymbolNamespace.ITEM;
+                    else if (section.contains("varbit")) currentNs = SymbolNamespace.VARBIT;
+                    else if (section.contains("interface")) currentNs = SymbolNamespace.INTERFACE;
+                } else if (trimmed.contains("=")) {
+                    parseAndAdd(trimmed, currentNs, file.toString());
+                }
+            }
+        } catch (IOException ignored) {
+        }
+    }
+
+    private void parseAndAdd(String line, SymbolNamespace namespace, String sourceFile) {
+        String clean = line.trim();
+        if (clean.isEmpty() || clean.startsWith("#") || clean.startsWith("//")) return;
+
+        int eq = clean.indexOf('=');
+        if (eq == -1) eq = clean.indexOf(':');
+        if (eq == -1) return;
+
+        String key = clean.substring(0, eq).trim();
+        String valStr = clean.substring(eq + 1).trim();
+
+        try {
+            int id = Integer.parseInt(valStr);
+            Symbol symbol = Symbol.of(namespace, key, id, "OpenRune Project", sourceFile);
+            symbolsByName.get(namespace).put(key.toLowerCase(Locale.ROOT), symbol);
+            symbolsById.get(namespace).computeIfAbsent(id, k -> new ArrayList<>()).add(symbol);
+        } catch (NumberFormatException ignored) {
+        }
+    }
+
+    /** Manually registers a symbol in this provider (useful for testing or dynamic addition). */
+    public void addSymbol(Symbol symbol) {
+        Objects.requireNonNull(symbol, "symbol");
+        symbolsByName.get(symbol.namespace()).put(symbol.bareName().toLowerCase(Locale.ROOT), symbol);
+        symbolsById.get(symbol.namespace()).computeIfAbsent(symbol.id(), k -> new ArrayList<>()).add(symbol);
+    }
+
+    @Override
+    public String id() {
+        return "openrune.symbols";
+    }
+
+    @Override
+    public String name() {
+        return "OpenRune GameVals & RSCM";
+    }
+
+    @Override
+    public Optional<Symbol> resolve(SymbolNamespace namespace, String name) {
+        Objects.requireNonNull(namespace, "namespace");
+        Objects.requireNonNull(name, "name");
+        return Optional.ofNullable(symbolsByName.get(namespace).get(name.toLowerCase(Locale.ROOT)));
+    }
+
+    @Override
+    public List<Symbol> reverse(SymbolNamespace namespace, int id) {
+        Objects.requireNonNull(namespace, "namespace");
+        return symbolsById.get(namespace).getOrDefault(id, List.of());
+    }
+
+    @Override
+    public List<Symbol> search(SymbolNamespace namespace, String query) {
+        Objects.requireNonNull(namespace, "namespace");
+        String lower = query.toLowerCase(Locale.ROOT);
+        List<Symbol> results = new ArrayList<>();
+        for (Symbol s : symbolsByName.get(namespace).values()) {
+            if (s.bareName().contains(lower)) {
+                results.add(s);
+            }
+        }
+        return Collections.unmodifiableList(results);
+    }
+
+    @Override
+    public List<Symbol> all(SymbolNamespace namespace) {
+        Objects.requireNonNull(namespace, "namespace");
+        return List.copyOf(symbolsByName.get(namespace).values());
+    }
+}

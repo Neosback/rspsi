@@ -1,0 +1,482 @@
+package com.rspsi.editor.plugin;
+
+import com.rspsi.editor.EditorCommand;
+import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.assets.AssetRepository;
+import com.rspsi.editor.generation.GenerationSchema;
+import com.rspsi.editor.generation.Generator;
+import com.rspsi.editor.generation.GeneratorService;
+import com.rspsi.editor.knowledge.KnowledgeAnalyzer;
+import com.rspsi.editor.knowledge.WorldKnowledgeService;
+import com.rspsi.editor.render.OverlayDraw;
+import com.rspsi.editor.settings.SettingHandle;
+import com.rspsi.editor.settings.SettingKey;
+import com.rspsi.editor.settings.SettingScope;
+import com.rspsi.editor.settings.SettingSpec;
+import com.rspsi.editor.settings.SettingsService;
+import com.rspsi.editor.settings.SettingsStore;
+import com.rspsi.editor.tool.EditorTool;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
+/**
+ * Fluent, user-friendly, and powerful API front door for first-party and community editor plugins.
+ *
+ * <p>All contributions registered through {@code PluginApi} are automatically bound to
+ * {@link ContributionOwner#plugin(String)}, and any closable resources or dynamic settings
+ * are registered with {@link EditorPluginContext#track(AutoCloseable)} so that unload/reload
+ * cleans them up automatically without leaving stale state behind.</p>
+ */
+public final class PluginApi {
+    private final EditorPluginContext context;
+    private final EditorPlugin plugin;
+    private final ContributionOwner owner;
+
+    public PluginApi(EditorPluginContext context, EditorPlugin plugin) {
+        this.context = Objects.requireNonNull(context, "context");
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.owner = ContributionOwner.plugin(plugin.id());
+    }
+
+    public EditorPluginContext context() {
+        return context;
+    }
+
+    public EditorPlugin plugin() {
+        return plugin;
+    }
+
+    public ContributionOwner owner() {
+        return owner;
+    }
+
+    public EditorSession session() {
+        return context.session();
+    }
+
+    public AssetRepository assets() {
+        return context.assets();
+    }
+
+    public Optional<EditorSceneAccess> scene() {
+        return context.scene();
+    }
+
+    public SettingsStore settingsStore() {
+        return context.settings();
+    }
+
+    public SettingsService settings() {
+        return context.settingsService();
+    }
+
+    public EditorTaskService tasks() {
+        return context.tasks();
+    }
+
+    public EditorNotificationService notifications() {
+        return context.notifications();
+    }
+
+    public WorldKnowledgeService knowledge() {
+        return context.knowledge();
+    }
+
+    public GeneratorService generators() {
+        return context.generators();
+    }
+
+    public void knowledgeAnalyzer(KnowledgeAnalyzer analyzer) {
+        Objects.requireNonNull(analyzer, "analyzer");
+        AutoCloseable handle = context.knowledge().registerAnalyzer(owner, analyzer);
+        track(handle);
+    }
+
+    public void generator(String id, GenerationSchema schema, String displayName,
+                          String description, Generator generator) {
+        AutoCloseable handle = context.generators().registerGenerator(
+                owner, id, schema, displayName, description, generator);
+        track(handle);
+    }
+
+    public <T extends AutoCloseable> T track(T resource) {
+        return context.track(resource);
+    }
+
+    // --- Fluent Setting Builder ---
+
+    public <T> SettingBuilder<T> setting(String keyId, Class<T> type, T defaultValue) {
+        return new SettingBuilder<>(this, keyId, type, defaultValue);
+    }
+
+    public SettingBuilder<Boolean> setting(String keyId, boolean defaultValue) {
+        return setting(keyId, Boolean.class, defaultValue);
+    }
+
+    public SettingBuilder<Integer> setting(String keyId, int defaultValue) {
+        return setting(keyId, Integer.class, defaultValue);
+    }
+
+    public SettingBuilder<Float> setting(String keyId, float defaultValue) {
+        return setting(keyId, Float.class, defaultValue);
+    }
+
+    public SettingBuilder<String> setting(String keyId, String defaultValue) {
+        return setting(keyId, String.class, defaultValue);
+    }
+
+    public static final class SettingBuilder<T> {
+        private final PluginApi api;
+        private final String id;
+        private final Class<T> type;
+        private final T defaultValue;
+        private String category = "Plugins";
+        private int order = 0;
+        private String label;
+        private String description = "";
+        private SettingScope scope = SettingScope.GLOBAL;
+        private List<T> options = List.of();
+        private Comparable<?> min;
+        private Comparable<?> max;
+
+        SettingBuilder(PluginApi api, String id, Class<T> type, T defaultValue) {
+            this.api = api;
+            this.id = id;
+            this.type = type;
+            this.defaultValue = defaultValue;
+            this.label = id;
+        }
+
+        public SettingBuilder<T> category(String category) {
+            this.category = category;
+            return this;
+        }
+
+        public SettingBuilder<T> order(int order) {
+            this.order = order;
+            return this;
+        }
+
+        public SettingBuilder<T> label(String label) {
+            this.label = label;
+            return this;
+        }
+
+        public SettingBuilder<T> description(String description) {
+            this.description = description;
+            return this;
+        }
+
+        public SettingBuilder<T> scope(SettingScope scope) {
+            this.scope = scope;
+            return this;
+        }
+
+        public SettingBuilder<T> options(List<T> options) {
+            this.options = List.copyOf(options);
+            return this;
+        }
+
+        @SafeVarargs
+        public final SettingBuilder<T> options(T... options) {
+            return options(Arrays.asList(options));
+        }
+
+        public SettingBuilder<T> range(Comparable<?> min, Comparable<?> max) {
+            this.min = min;
+            this.max = max;
+            return this;
+        }
+
+        public BoundSetting<T> register() {
+            SettingKey<T> key = new SettingKey<>(id, type);
+            Double minDouble = min instanceof Number n ? n.doubleValue() : null;
+            Double maxDouble = max instanceof Number n ? n.doubleValue() : null;
+            SettingSpec<T> spec = new SettingSpec<>(
+                    key, defaultValue, scope, label, description, java.util.Set.of(),
+                    minDouble, maxDouble, options, category, order);
+            SettingHandle handle = api.settings().register(api.owner(), spec);
+            api.track(handle);
+            return new BoundSetting<>(api.settings(), spec, handle);
+        }
+    }
+
+    // --- Fluent Tool Registration ---
+
+    public ToolBuilder tool(String id) {
+        return new ToolBuilder(this, id);
+    }
+
+    public void tool(String id, Supplier<? extends EditorTool> factory) {
+        tool(id).factory(factory).register();
+    }
+
+    public static final class ToolBuilder {
+        private final PluginApi api;
+        private final String id;
+        private String label;
+        private String category = "Plugin";
+        private Supplier<? extends EditorTool> factory;
+
+        ToolBuilder(PluginApi api, String id) {
+            this.api = api;
+            this.id = id;
+            this.label = id;
+        }
+
+        public ToolBuilder label(String label) {
+            this.label = label;
+            return this;
+        }
+
+        public ToolBuilder category(String category) {
+            this.category = category;
+            return this;
+        }
+
+        public ToolBuilder factory(Supplier<? extends EditorTool> factory) {
+            this.factory = factory;
+            return this;
+        }
+
+        public void register() {
+            Objects.requireNonNull(factory, "tool factory");
+            api.context.registry().registerTool(id, label, category, factory);
+        }
+    }
+
+    // --- Fluent Scene Overlay ---
+
+    public void sceneOverlay(String id, String label, String category, Supplier<? extends EditorSceneOverlay> factory) {
+        context.registry().registerOverlay(new EditorOverlayRegistration(id, label, category, factory));
+    }
+
+    public void sceneOverlay(String id, String label, Supplier<? extends EditorSceneOverlay> factory) {
+        sceneOverlay(id, label, "General", factory);
+    }
+
+    public void sceneOverlay(String id, Supplier<? extends EditorSceneOverlay> factory) {
+        sceneOverlay(id, id, "General", factory);
+    }
+
+    public void sceneOverlay(String id, BiConsumer<EditorSceneSnapshot, OverlayDraw> drawAction) {
+        Objects.requireNonNull(drawAction, "drawAction");
+        sceneOverlay(id, id, "General", () -> drawAction::accept);
+    }
+
+    // --- Fluent Menu and Command Builder ---
+
+    public MenuBuilder menu(String id) {
+        return new MenuBuilder(this, id);
+    }
+
+    public static final class MenuBuilder {
+        private final PluginApi api;
+        private final String id;
+        private final List<String> path = new ArrayList<>();
+        private String label;
+        private String commandId;
+        private int order = 0;
+        private Consumer<EditorSession> action;
+
+        MenuBuilder(PluginApi api, String id) {
+            this.api = api;
+            this.id = id;
+            this.label = id;
+        }
+
+        public MenuBuilder path(String... pathSegments) {
+            this.path.clear();
+            this.path.addAll(Arrays.asList(pathSegments));
+            return this;
+        }
+
+        public MenuBuilder path(List<String> pathSegments) {
+            this.path.clear();
+            this.path.addAll(pathSegments);
+            return this;
+        }
+
+        public MenuBuilder label(String label) {
+            this.label = label;
+            return this;
+        }
+
+        public MenuBuilder order(int order) {
+            this.order = order;
+            return this;
+        }
+
+        public MenuBuilder command(String commandId) {
+            this.commandId = commandId;
+            return this;
+        }
+
+        public MenuBuilder action(Runnable action) {
+            Objects.requireNonNull(action, "action");
+            this.action = session -> action.run();
+            return this;
+        }
+
+        public MenuBuilder action(Consumer<EditorSession> action) {
+            this.action = Objects.requireNonNull(action, "action");
+            return this;
+        }
+
+        public void register() {
+            if (path.isEmpty()) {
+                path.add("Plugins");
+            }
+            if (commandId == null && action != null) {
+                String generatedCommandId = id + ".command";
+                api.context.registry().registerCommand(new EditorCommandRegistration(
+                        generatedCommandId, label, path.get(0), () -> new EditorCommand() {
+                            @Override
+                            public void apply(EditorSession session) {
+                                action.accept(session);
+                            }
+
+                            @Override
+                            public void undo(EditorSession session) {
+                            }
+
+                            @Override
+                            public String description() {
+                                return label;
+                            }
+                        }));
+                this.commandId = generatedCommandId;
+            }
+            Objects.requireNonNull(commandId, "commandId or action must be provided");
+            api.context.registry().registerMenu(new EditorMenuRegistration(id, path, label, commandId, order));
+        }
+    }
+
+    // --- Fluent Keyboard Shortcuts ---
+
+    public ShortcutBuilder shortcut(String id) {
+        return new ShortcutBuilder(this, id);
+    }
+
+    public void shortcut(String id, String key, boolean ctrl, boolean shift, boolean alt, Runnable action) {
+        shortcut(id).key(key).ctrl(ctrl).shift(shift).alt(alt).action(action).register();
+    }
+
+    public static final class ShortcutBuilder {
+        private final PluginApi api;
+        private final String id;
+        private String label;
+        private String key;
+        private boolean shift;
+        private boolean ctrl;
+        private boolean alt;
+        private boolean meta;
+        private Consumer<EditorPluginContext> action;
+
+        ShortcutBuilder(PluginApi api, String id) {
+            this.api = api;
+            this.id = id;
+            this.label = id;
+        }
+
+        public ShortcutBuilder label(String label) {
+            this.label = label;
+            return this;
+        }
+
+        public ShortcutBuilder key(String key) {
+            this.key = key;
+            return this;
+        }
+
+        public ShortcutBuilder ctrl() {
+            this.ctrl = true;
+            return this;
+        }
+
+        public ShortcutBuilder ctrl(boolean ctrl) {
+            this.ctrl = ctrl;
+            return this;
+        }
+
+        public ShortcutBuilder shift() {
+            this.shift = true;
+            return this;
+        }
+
+        public ShortcutBuilder shift(boolean shift) {
+            this.shift = shift;
+            return this;
+        }
+
+        public ShortcutBuilder alt() {
+            this.alt = true;
+            return this;
+        }
+
+        public ShortcutBuilder alt(boolean alt) {
+            this.alt = alt;
+            return this;
+        }
+
+        public ShortcutBuilder meta() {
+            this.meta = true;
+            return this;
+        }
+
+        public ShortcutBuilder meta(boolean meta) {
+            this.meta = meta;
+            return this;
+        }
+
+        public ShortcutBuilder action(Runnable action) {
+            Objects.requireNonNull(action, "action");
+            this.action = ctx -> action.run();
+            return this;
+        }
+
+        public ShortcutBuilder action(Consumer<EditorPluginContext> action) {
+            this.action = Objects.requireNonNull(action, "action");
+            return this;
+        }
+
+        public void register() {
+            Objects.requireNonNull(key, "shortcut key");
+            Objects.requireNonNull(action, "shortcut action");
+            api.context.registry().registerShortcut(new EditorShortcutRegistration(
+                    id, label != null ? label : id, key, shift, ctrl, alt, meta,
+                    () -> (ctx, event) -> {
+                        action.accept(ctx);
+                        return true;
+                    }));
+        }
+    }
+
+    // --- Status Items ---
+
+    public void statusItem(String id, String label, int order, Supplier<String> textSupplier) {
+        Objects.requireNonNull(textSupplier, "textSupplier");
+        context.registry().registerStatus(new EditorStatusRegistration(
+                id, label, order, () -> ctx -> List.of(new EditorStatusItem(id, label, textSupplier.get()))));
+    }
+
+    public void statusItem(String id, Supplier<String> textSupplier) {
+        statusItem(id, id, 0, textSupplier);
+    }
+
+    // --- Inspectors ---
+
+    public void inspector(String id, String label, String category, Function<EditorPluginContext, List<EditorInspectorField>> supplier) {
+        Objects.requireNonNull(supplier, "supplier");
+        context.registry().registerInspector(new EditorInspectorRegistration(
+                id, label, category, () -> supplier::apply));
+    }
+}

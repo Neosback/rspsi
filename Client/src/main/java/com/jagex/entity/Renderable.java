@@ -9,8 +9,6 @@ import lombok.Setter;
 
 public class Renderable {
 
-	// Class30_Sub2_Sub4
-
 	protected int modelHeight = 1000;
 	protected VertexNormal[] normals;
 	public boolean selected;

@@ -6,8 +6,6 @@ import lombok.Data;
 @Data
 public class VertexNormal {
 
-	// Class33
-
 	public int magnitude;
 
 	public int x;

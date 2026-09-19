@@ -18,7 +18,9 @@ class NeutralArchitectureBoundaryTest {
         List<Path> roots = List.of(
                 Path.of("src/main/java/com/rspsi/editor"),
                 Path.of("src/main/java/com/rspsi/cache"),
-                Path.of("src/main/java/com/rspsi/project"));
+                Path.of("src/main/java/com/rspsi/project"),
+                Path.of("src/main/java/com/rspsi/osrs"),
+                Path.of("src/main/java/com/rspsi/plugins"));
         roots.forEach(root -> {
             try (Stream<Path> files = Files.walk(root)) {
                 files.filter(path -> path.toString().endsWith(".java"))

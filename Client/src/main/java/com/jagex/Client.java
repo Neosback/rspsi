@@ -163,14 +163,24 @@ public final class Client implements Runnable {
 		return cache;
 	}
 
+	@Deprecated
 	public static int method120() {
+		return getMaxVisiblePlane();
+	}
+
+	public static int getMaxVisiblePlane() {
 		if (!Options.allHeightsVisible.get())
 			return Options.currentHeight.get();
 		else
 			return 3;
 	}
 
+	@Deprecated
 	public static int method121() {
+		return getVisiblePlane();
+	}
+
+	public static int getVisiblePlane() {
 		if (Options.allHeightsVisible.get())
 			return 3;
 		return Options.currentHeight.get();
@@ -197,31 +207,31 @@ public final class Client implements Runnable {
 
 	public boolean loggedIn;
 	public int[] settings = new int[10000];
-	long aLong1220;
+	long lastClickTimestamp;
 	int lastMouseX;
 	int lastMouseY;
 	boolean wasFocused = true;
 	private boolean gameImageBufferNeedsInit;
 	private boolean gameScreenReinitialized;
-	private volatile boolean aBoolean831;
-	private volatile boolean aBoolean962;
+	private volatile boolean regionWorkerRunning;
+	private volatile boolean regionWorkerActive;
 	public ImageGraphicsBuffer gameImageBuffer;
-	private int anInt1014;
-	private int anInt1015;
-	private int anInt1131;
+	private int cameraFollowX;
+	private int cameraFollowY;
+	private int targetCameraY;
 	public int cameraRotationX;
 	public int cameraRotationZ;
-	private int anInt1278;
+	private int targetCameraX;
 	public int xCameraPos = 32 * 128;
 	public int yCameraPos = 32 * 128;
 	public int xCameraCurve = (int) (Math.random() * 20D) - 10 & 0x7ff;
 	public int zCameraPos = -540;
 	public int yCameraCurve = 128;
-	private int anInt896;
-	private int anInt916;
-	private int anInt917;
-	private int anInt984;
-	private int anInt985 = -1;
+	private int cameraYawOffset;
+	private int mouseCrossTimer;
+	private int mouseCrossType;
+	private int cameraHeightInterpolated;
+	private int lastCameraPlane = -1;
 	public int cameraRoll = 128;
 	public int cameraYaw;
 	private boolean error;
@@ -286,7 +296,7 @@ public final class Client implements Runnable {
 		resetTimeDelta();
 
 		if (error) {
-			aBoolean831 = false;
+			regionWorkerRunning = false;
 			context.setFont(javafx.scene.text.Font.font("JetBrains Mono", 16));
 			context.setFill(Color.YELLOW);
 			context.setTextAlign(TextAlignment.CENTER);
@@ -300,7 +310,7 @@ public final class Client implements Runnable {
 		}
 
 		if (unableToLoad) {
-			aBoolean831 = false;
+			regionWorkerRunning = false;
 			context.setFont(javafx.scene.text.Font.font("JetBrains Mono", 20));
 			context.setFill(Color.WHITE);
 			context.setTextAlign(TextAlignment.CENTER);
@@ -444,7 +454,7 @@ public final class Client implements Runnable {
 		gameImageBuffer.getGraphics().setFont(jetBrainsMono);
 		
 		if(sceneGraph != null)
-			sceneGraph.method310(500, 800, w, h, ai);
+			sceneGraph.buildVisibilityMap(500, 800, w, h, ai);
 
 	}
 
@@ -555,7 +565,7 @@ public final class Client implements Runnable {
 		for (int chunkX = 0; chunkX < chunkXLength; chunkX++) {
 			for (int chunkY = 0; chunkY < chunkYLength; chunkY++) {
 			//	try {
-					anInt984 = 0;
+					cameraHeightInterpolated = 0;
 					int cX = (wX + (64 * chunkX)) / 64;
 					int cY = (wY + (64 * chunkY)) / 64;
 					int hash = (cX << 8) + cY;
@@ -603,7 +613,7 @@ public final class Client implements Runnable {
 			int i9 = Constants.SINE[theta];
 			ai[i8] = l8 * i9 >> 16;
 		}
-		sceneGraph.method310(500, 800, width, height, ai);
+		sceneGraph.buildVisibilityMap(500, 800, width, height, ai);
 		loadState = LoadState.LOADING_MAP;
 		loadingStartTime = System.currentTimeMillis();
 	}
@@ -635,7 +645,7 @@ public final class Client implements Runnable {
 		int fileId = 0;
 		for (int chunkX = 0; chunkX < chunkXLength; chunkX++) {
 			for (int chunkY = 0; chunkY < chunkYLength; chunkY++) {
-					anInt984 = 0;
+					cameraHeightInterpolated = 0;
 					int cX = 1000;
 					int cY = 1000;
 					int hash = (cX << 8) + cY;
@@ -662,7 +672,7 @@ public final class Client implements Runnable {
 			int i9 = Constants.SINE[theta];
 			ai[i8] = l8 * i9 >> 16;
 		}
-		sceneGraph.method310(500, 800, width, height, ai);
+		sceneGraph.buildVisibilityMap(500, 800, width, height, ai);
 		loadState = LoadState.LOADING_MAP;
 		loadingStartTime = System.currentTimeMillis();
 	}
@@ -715,7 +725,7 @@ public final class Client implements Runnable {
 			int i9 = Constants.SINE[theta];
 			ai[i8] = l8 * i9 >> 16;
 		}
-		sceneGraph.method310(500, 800, width, height, ai);
+		sceneGraph.buildVisibilityMap(500, 800, width, height, ai);
 		loadState = LoadState.LOADING_MAP;
 		loadingStartTime = System.currentTimeMillis();
 	}
@@ -740,7 +750,7 @@ public final class Client implements Runnable {
 		fullMapCanvas = new DisplayCanvas(Options.mapRegionSize.get(), Options.mapRegionSize.get(), false);
 		for (int chunkX = 0; chunkX < 1; chunkX++) {
 			for (int chunkY = 0; chunkY < 1; chunkY++) {
-					anInt984 = 0;
+					cameraHeightInterpolated = 0;
 					int cX = (64 * chunkX) / 64;
 					int cY = (64 * chunkY) / 64;
 
@@ -774,7 +784,7 @@ public final class Client implements Runnable {
 			int i9 = Constants.SINE[theta];
 			ai[i8] = l8 * i9 >> 16;
 		}
-		sceneGraph.method310(500, 800, width, height, ai);
+		sceneGraph.buildVisibilityMap(500, 800, width, height, ai);
 		loadState = LoadState.LOADING_MAP;
 		loadingStartTime = System.currentTimeMillis();
 	}
@@ -782,7 +792,7 @@ public final class Client implements Runnable {
 	public void loadNextRegion() {
 		try { 
 		if (loadState == LoadState.LOADING_MAP) {
-			boolean j = method54();
+			boolean j = checkChunksLoaded();
 			if (!j && System.currentTimeMillis() - loadingStartTime > 0x57e40) {
 				//TODO throw error
 				loadingStartTime = System.currentTimeMillis();
@@ -795,9 +805,9 @@ public final class Client implements Runnable {
 			loadState = LoadState.ERROR;
 		
 		}
-		if (loadState == LoadState.ACTIVE && plane != anInt985) {
+		if (loadState == LoadState.ACTIVE && plane != lastCameraPlane) {
 			
-			anInt985 = plane;
+			lastCameraPlane = plane;
 			gameImageBuffer.initializeRasterizer();
 		}
 	}
@@ -823,20 +833,20 @@ public final class Client implements Runnable {
 	
 	public void handleKeyInputs(int speedMultiplier) {
 		try {
-			int j = anInt1278;
-			int k = anInt1131;
+			int j = targetCameraX;
+			int k = targetCameraY;
 
-			if (anInt1014 - j < -500 || anInt1014 - j > 500 || anInt1015 - k < -500 || anInt1015 - k > 500) {
-				anInt1014 = j;
-				anInt1015 = k;
+			if (cameraFollowX - j < -500 || cameraFollowX - j > 500 || cameraFollowY - k < -500 || cameraFollowY - k > 500) {
+				cameraFollowX = j;
+				cameraFollowY = k;
 			}
 
-			if (anInt1014 != j) {
-				anInt1014 += (j - anInt1014) / 16;
+			if (cameraFollowX != j) {
+				cameraFollowX += (j - cameraFollowX) / 16;
 			}
 
-			if (anInt1015 != k) {
-				anInt1015 += (k - anInt1015) / 16;
+			if (cameraFollowY != k) {
+				cameraFollowY += (k - cameraFollowY) / 16;
 			}
 			
 
@@ -925,12 +935,12 @@ public final class Client implements Runnable {
 			if (j2 < 32768) {
 				j2 = 32768;
 			}
-			if (j2 > anInt984) {
-				anInt984 += (j2 - anInt984) / 24;
+			if (j2 > cameraHeightInterpolated) {
+				cameraHeightInterpolated += (j2 - cameraHeightInterpolated) / 24;
 				return;
 			}
-			if (j2 < anInt984) {
-				anInt984 += (j2 - anInt984) / 80;
+			if (j2 < cameraHeightInterpolated) {
+				cameraHeightInterpolated += (j2 - cameraHeightInterpolated) / 80;
             }
 		} catch (Exception _ex) {
 			_ex.printStackTrace();
@@ -1020,10 +1030,15 @@ public final class Client implements Runnable {
 		}
 	}
 
+	@Deprecated
 	public void method118() {
-		aBoolean831 = false;
-		while (aBoolean962) {
-			aBoolean831 = false;
+		stopRegionWorker();
+	}
+
+	public void stopRegionWorker() {
+		regionWorkerRunning = false;
+		while (regionWorkerActive) {
+			regionWorkerRunning = false;
 			try {
 				Thread.sleep(50L);
 			} catch (Exception ex) {
@@ -1031,12 +1046,17 @@ public final class Client implements Runnable {
 		}
 	}
 
-	public void method144(int j, int k, int j1) {
-		int l1 = 2048 - k & 0x7ff;
-		int i2 = 2048 - j1 & 0x7ff;
+	@Deprecated
+	public void method144(int distance, int pitch, int yaw) {
+		updateCameraAngle(distance, pitch, yaw);
+	}
+
+	public void updateCameraAngle(int distance, int pitch, int yaw) {
+		int l1 = 2048 - pitch & 0x7ff;
+		int i2 = 2048 - yaw & 0x7ff;
 		int j2 = 0;
 		int k2 = 0;
-		int l2 = j;
+		int l2 = distance;
 
 		if (l1 != 0) {
 			int sin = Constants.SINE[l1];
@@ -1057,8 +1077,8 @@ public final class Client implements Runnable {
 		// xCameraPos = l - j2;
 		// zCameraPos = i1 - k2;
 		// yCameraPos = k1 - l2;
-		yCameraCurve = k;
-		xCameraCurve = j1;
+		yCameraCurve = pitch;
+		xCameraCurve = yaw;
 	}
 
 	public void renderView() {
@@ -1068,16 +1088,16 @@ public final class Client implements Runnable {
 
 			int i = cameraRoll;
 			/*
-			 * if (anInt984 / 256 > i) { i = anInt984 / 256; }
+			 * if (cameraHeightInterpolated / 256 > i) { i = cameraHeightInterpolated / 256; }
 			 */
 			/*if (aBooleanArray876[4] && anIntArray1203[4] > i) {
 				i = anIntArray1203[4];
 			}*/
-			int k = cameraYaw + anInt896 & 0x7ff;
-			method144(600 + i * 3, i, k);
+			int k = cameraYaw + cameraYawOffset & 0x7ff;
+			updateCameraAngle(600 + i * 3, i, k);
 		
 
-		int currentPlane = method120();
+		int currentPlane = getMaxVisiblePlane();
 	
 
 /*		int l = xCameraPos;
@@ -1086,6 +1106,7 @@ public final class Client implements Runnable {
 		int k1 = yCameraCurve;
 		int l1 = xCameraCurve;*/
 
+			Mesh.pickingEnabled = true;
 			Mesh.aBoolean1684 = true;
 			Mesh.mouseX = mouseEventX;
 			Mesh.mouseY = mouseEventY;
@@ -1242,7 +1263,7 @@ public final class Client implements Runnable {
 	}
 
 	public void loadChunks() {
-		anInt985 = -1;
+		lastCameraPlane = -1;
 		unlinkCaches();
 		
 		SceneGraph.clearStates();
@@ -1257,7 +1278,7 @@ public final class Client implements Runnable {
 				chunks.clear();
 			}
 		}
-		mapRegion.method171(sceneGraph);
+		mapRegion.buildTerrain(sceneGraph);
 
 		for(int z = 0;z<4;z++)
 			sceneGraph.fill(z);
@@ -1268,14 +1289,23 @@ public final class Client implements Runnable {
 
 	}
 	
+	@Deprecated
 	public void method51() {
+		resumeRegionWorker();
+	}
 
-		if (!aBoolean831) {
-			aBoolean831 = true;
+	public void resumeRegionWorker() {
+		if (!regionWorkerRunning) {
+			regionWorkerRunning = true;
 		}
 	}
 
+	@Deprecated
 	public boolean method54() {
+		return checkChunksLoaded();
+	}
+
+	public boolean checkChunksLoaded() {
 		boolean ready = true;
 
 		for (Chunk chunk : chunks) {
@@ -1318,7 +1348,7 @@ public final class Client implements Runnable {
 	public void prepareGameScreen() {
 		if (gameImageBuffer != null)
 			return;
-		method118();
+		stopRegionWorker();
 		gameImageBuffer = new ImageGraphicsBuffer((int) gameCanvas.getWidth(), (int) gameCanvas.getHeight(), GameRasterizer.getInstance());
 
 		gameScreenReinitialized = true;
@@ -1424,12 +1454,12 @@ public final class Client implements Runnable {
 			return;
 
 		if (lastMetaModifier != 0) {
-			int time = (int) ((lastMouseClick - aLong1220) / 50);
+			int time = (int) ((lastMouseClick - lastClickTimestamp) / 50);
 			if (time > 4095) {
 				time = 4095;
 			}
 
-			aLong1220 = lastMouseClick;
+			lastClickTimestamp = lastMouseClick;
 			int y = lastClickY;
 			if (y < 0) {
 				y = 0;
@@ -1455,16 +1485,16 @@ public final class Client implements Runnable {
 		}
 		loadNextRegion();
 		for (Chunk chunk : chunks) {
-			chunk.method115();
+			chunk.tickTemporarySpawns();
 		}
 		
 	
 
 		tickDelta++;
-		if (anInt917 != 0) {
-			anInt916 += 20;
-			if (anInt916 >= 400) {
-				anInt917 = 0;
+		if (mouseCrossType != 0) {
+			mouseCrossTimer += 20;
+			if (mouseCrossTimer >= 400) {
+				mouseCrossType = 0;
 			}
 		}
 
@@ -1499,7 +1529,7 @@ public final class Client implements Runnable {
 			hoveredUID = null;
 			gameLoaded.set(false);
 			runLater.clear();
-			method118();
+			stopRegionWorker();
 			MeshLoader.getSingleton().dispose();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block

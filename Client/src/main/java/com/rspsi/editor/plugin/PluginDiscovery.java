@@ -9,23 +9,33 @@ import java.util.Objects;
 public final class PluginDiscovery implements AutoCloseable {
     private final List<EditorPlugin> plugins;
     private final List<PluginArtifact> artifacts;
+    private final List<PluginLoadFailure> failures;
     private final URLClassLoader classLoader;
     private boolean closed;
 
     public PluginDiscovery(List<? extends EditorPlugin> plugins, URLClassLoader classLoader) {
-        this(plugins, List.of(), classLoader);
+        this(plugins, List.of(), List.of(), classLoader);
     }
 
     public PluginDiscovery(List<? extends EditorPlugin> plugins, List<PluginArtifact> artifacts,
                            URLClassLoader classLoader) {
+        this(plugins, artifacts, List.of(), classLoader);
+    }
+
+    public PluginDiscovery(List<? extends EditorPlugin> plugins, List<PluginArtifact> artifacts,
+                           List<PluginLoadFailure> failures, URLClassLoader classLoader) {
         this.plugins = List.copyOf(Objects.requireNonNull(plugins, "plugins"));
         this.artifacts = List.copyOf(Objects.requireNonNull(artifacts, "artifacts"));
+        this.failures = List.copyOf(Objects.requireNonNull(failures, "failures"));
         this.classLoader = classLoader;
     }
 
     public List<EditorPlugin> plugins() { return plugins; }
 
     public List<PluginArtifact> artifacts() { return artifacts; }
+
+    /** Candidate JARs that failed to load; discovery isolates these instead of aborting. */
+    public List<PluginLoadFailure> failures() { return failures; }
 
     public URLClassLoader classLoader() { return classLoader; }
 

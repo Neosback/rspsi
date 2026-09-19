@@ -18,7 +18,7 @@ public class ObjectState extends TileState {
 	/**
 	 * The previous shading on this tile
 	 */
-	private byte shading = -1;//XXX UNUSED
+	private byte shading = -1;
 	
 	
 	public ObjectState(int x, int y, int z) {

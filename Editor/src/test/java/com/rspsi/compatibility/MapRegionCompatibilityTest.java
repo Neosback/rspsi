@@ -63,7 +63,8 @@ class MapRegionCompatibilityTest {
                 original.tileFlags[0][2][3] = 8;
 
                 Chunk chunk = new Chunk(0);
-                byte[] encoded = original.save_terrain_block(chunk);
+                byte[] encoded = original.saveTerrainBlock(chunk);
+                assertArrayEquals(encoded, original.save_terrain_block(chunk));
                 MapRegion decoded = new MapRegion(null, 64, 64);
                 decoded.unpackTiles(encoded, 0, 0, 0, 0);
 

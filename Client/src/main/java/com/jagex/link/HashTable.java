@@ -5,8 +5,6 @@ package com.jagex.link;
  */
 public final class HashTable {
 
-	// Class1
-
 	/**
 	 * The amount of buckets in this HashTable.
 	 */

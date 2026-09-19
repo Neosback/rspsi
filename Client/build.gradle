@@ -43,6 +43,7 @@ dependencies {
 
 def neutralCoreSources = files(
         fileTree('src/main/java/com/rspsi/editor') { include '**/*.java' },
+        fileTree('src/main/java/com/rspsi/osrs') { include '**/*.java' },
         fileTree('src/main/java/com/rspsi/cache') {
             include '**/*.java'
             exclude 'store/**', 'workspace/**', 'verify/**'

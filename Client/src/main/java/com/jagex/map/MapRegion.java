@@ -241,9 +241,9 @@ public final class MapRegion {
 	private final int hueOffset = -8;
 	private final int luminanceOffset = -16;
 
-	private final int[] anIntArray128;
+	private final int[] underlaySampleCounts;
 	private final int[][] tileLighting;
-	private final int[][][] anIntArrayArrayArray135;
+	private final int[][][] tileRenderFlags;
 	private final int[] chromas;
 	private final int[] hues;
 	private final int length;
@@ -273,14 +273,14 @@ public final class MapRegion {
 		manualTileHeight = new byte[4][width][length];
 		overlayShapes = new byte[4][width][length];
 		overlayOrientations = new byte[4][width][length];
-		anIntArrayArrayArray135 = new int[4][width + 1][length + 1];
+		tileRenderFlags = new int[4][width + 1][length + 1];
 		shading = new byte[4][width + 1][length + 1];
 		tileLighting = new int[width + 1][length + 1];
 		hues = new int[length];
 		saturations = new int[length];
 		luminances = new int[length];
 		chromas = new int[length];
-		anIntArray128 = new int[length];
+		underlaySampleCounts = new int[length];
 
 	}
 
@@ -593,10 +593,15 @@ public final class MapRegion {
 		return z;
 	}
 
-	private int underlay_floor_map_color;
-	private int underlay_floor_texture;
+	private int underlayFloorMapColor;
+	private int underlayFloorTexture;
 
+	@Deprecated
 	public void method171(SceneGraph scene) {
+		buildTerrain(scene);
+	}
+
+	public void buildTerrain(SceneGraph scene) {
 
 		for (int z = 0; z < 4; z++) {
 			byte[][] shading = this.shading[z];
@@ -628,7 +633,7 @@ public final class MapRegion {
 				saturations[index] = 0;
 				luminances[index] = 0;
 				chromas[index] = 0;
-				anIntArray128[index] = 0;
+				underlaySampleCounts[index] = 0;
 			}
 
 			for (int centreX = -5; centreX < width + 5; centreX++) {
@@ -645,7 +650,7 @@ public final class MapRegion {
 							saturations[y] += floor.getSaturation();
 							luminances[y] += floor.getLuminance();
 							chromas[y] += floor.getChroma();
-							anIntArray128[y]++;
+							underlaySampleCounts[y]++;
 						}
 					}
 
@@ -661,7 +666,7 @@ public final class MapRegion {
 							saturations[y] -= floor.getSaturation();
 							luminances[y] -= floor.getLuminance();
 							chromas[y] -= floor.getChroma();
-							anIntArray128[y]--;
+							underlaySampleCounts[y]--;
 						}
 					}
 				}
@@ -680,7 +685,7 @@ public final class MapRegion {
 							blended_anIntArray125 += saturations[j18];
 							blended_anIntArray126 += luminances[j18];
 							blended_anIntArray124_divisor += chromas[j18];
-							blend_direction_tracker += anIntArray128[j18];
+							blend_direction_tracker += underlaySampleCounts[j18];
 						}
 
 						int k18 = centreY - 5;
@@ -689,7 +694,7 @@ public final class MapRegion {
 							blended_anIntArray125 -= saturations[k18];
 							blended_anIntArray126 -= luminances[k18];
 							blended_anIntArray124_divisor -= chromas[k18];
-							blend_direction_tracker -= anIntArray128[k18];
+							blend_direction_tracker -= underlaySampleCounts[k18];
 						}
 
 						if (centreY >= 0
@@ -784,7 +789,7 @@ public final class MapRegion {
 
 									if (flag && centreHeight == eastHeight && centreHeight == northEastHeight
 											&& centreHeight == northHeight) {
-										anIntArrayArrayArray135[z][centreX][centreY] |= 0x924;
+										tileRenderFlags[z][centreX][centreY] |= 0x924;
 									}
 								}
 
@@ -812,8 +817,8 @@ public final class MapRegion {
 										if (underlay_texture_id != -1) {
 											underlay_texture_id = 154; // 632, 154
 										}
-										underlay_floor_texture = underlay_texture_id;
-										underlay_floor_map_color = ColourUtils.checkedLight(hsl_bitset_unmodified, 96);
+										underlayFloorTexture = underlay_texture_id;
+										underlayFloorMapColor = ColourUtils.checkedLight(hsl_bitset_unmodified, 96);
 										int tile_opcode = overlayShapes[z][centreX][centreY] + 1;
 										if (tile_opcode == 1) {
 											tile_opcode = 434;
@@ -836,8 +841,8 @@ public final class MapRegion {
 												getOverlayShadow(overlay_hsl, eastLight),
 												getOverlayShadow(overlay_hsl, northEastLight),
 												getOverlayShadow(overlay_hsl, northLight), rgb_bitset_randomized,
-												rgb_bitset_randomized, underlay_floor_map_color, underlay_floor_texture,
-												underlay_floor_map_color, false, flag, underlay - 1, overlayFloorId - 1);
+												rgb_bitset_randomized, underlayFloorMapColor, underlayFloorTexture,
+												underlayFloorMapColor, false, flag, underlay - 1, overlayFloorId - 1);
 									} else {
 										byte flag = tileFlags[z][centreX][centreY];
 										scene.addTile(z, centreX, centreY, 0, 0, -1, centreHeight, eastHeight,
@@ -955,7 +960,7 @@ public final class MapRegion {
 													overlayRgbColour = overlayFloor.getAnotherRgb();
 												}
 												overlayHslColour = -2;
-												underlay_floor_map_color = -1;
+												underlayFloorMapColor = -1;
 												overlayTextureColour = -1;
 											}
 										} else if (overlayFloor.getRgb() == -1) {
@@ -965,7 +970,7 @@ public final class MapRegion {
 											overlayHslColour = -2;
 											// ?
 											if (z > 0) {
-												underlay_floor_texture = -1;
+												underlayFloorTexture = -1;
 											}
 
 											overlayTextureId = -1;
@@ -991,8 +996,8 @@ public final class MapRegion {
 												getOverlayShadow(overlayHslColour, eastLight),
 												getOverlayShadow(overlayHslColour, northEastLight),
 												getOverlayShadow(overlayHslColour, northLight), rgb_bitset_randomized,
-												overlayRgbColour, overlayTextureColour, underlay_floor_texture,
-												underlay_floor_map_color, false, flag, underlay - 1, overlayFloorId - 1);
+												overlayRgbColour, overlayTextureColour, underlayFloorTexture,
+												underlayFloorMapColor, false, flag, underlay - 1, overlayFloorId - 1);
 									} else {
 										byte flag = tileFlags[z][centreX][centreY];
 										scene.addTile(z, centreX, centreY, tileType, orientation, overlayTextureId,
@@ -1033,25 +1038,25 @@ public final class MapRegion {
 		 * <<= 3; k2 <<= 3; }
 		 * 
 		 * for (int z = 0; z <= plane; z++) { for (int y = 0; y <= length; y++) { for
-		 * (int x = 0; x <= width; x++) { if ((anIntArrayArrayArray135[z][x][y] & flag)
+		 * (int x = 0; x <= width; x++) { if ((tileRenderFlags[z][x][y] & flag)
 		 * != 0) { int currentY = y; int l5 = y; int i7 = z; int k8 = z;
 		 * 
-		 * for (; currentY > 0 && (anIntArrayArrayArray135[z][x][currentY - 1] & flag)
+		 * for (; currentY > 0 && (tileRenderFlags[z][x][currentY - 1] & flag)
 		 * != 0; currentY--) {
 		 * 
 		 * }
 		 * 
-		 * for (; l5 < length && (anIntArrayArrayArray135[z][x][l5 + 1] & flag) != 0;
+		 * for (; l5 < length && (tileRenderFlags[z][x][l5 + 1] & flag) != 0;
 		 * l5++) {
 		 * 
 		 * }
 		 * 
 		 * label0: for (; i7 > 0; i7--) { for (int j10 = currentY; j10 <= l5; j10++) {
-		 * if ((anIntArrayArrayArray135[i7 - 1][x][j10] & flag) == 0) { break label0; }
+		 * if ((tileRenderFlags[i7 - 1][x][j10] & flag) == 0) { break label0; }
 		 * } }
 		 * 
 		 * label1: for (; k8 < plane; k8++) { for (int k10 = currentY; k10 <= l5; k10++)
-		 * { if ((anIntArrayArrayArray135[k8 + 1][x][k10] & flag) == 0) { break label1;
+		 * { if ((tileRenderFlags[k8 + 1][x][k10] & flag) == 0) { break label1;
 		 * } } }
 		 * 
 		 * int l10 = (k8 + 1 - i7) * (l5 - currentY + 1); if (l10 >= 8) { char c1 =
@@ -1059,50 +1064,55 @@ public final class MapRegion {
 		 * tileHeights[i7][x][currentY]; chunk.sceneGraph.method277(plane, x * 128, l15,
 		 * x * 128, l5 * 128 + 128, k14, currentY * 128, 1); for (int l16 = i7; l16 <=
 		 * k8; l16++) { for (int l17 = currentY; l17 <= l5; l17++) {
-		 * anIntArrayArrayArray135[l16][x][l17] &= ~flag; } } } }
+		 * tileRenderFlags[l16][x][l17] &= ~flag; } } } }
 		 * 
-		 * if ((anIntArrayArrayArray135[z][x][y] & j2) != 0) { int l4 = x; int i6 = x;
-		 * int j7 = z; int l8 = z; for (; l4 > 0 && (anIntArrayArrayArray135[z][l4 -
+		 * if ((tileRenderFlags[z][x][y] & j2) != 0) { int l4 = x; int i6 = x;
+		 * int j7 = z; int l8 = z; for (; l4 > 0 && (tileRenderFlags[z][l4 -
 		 * 1][y] & j2) != 0; l4--) {
 		 * 
-		 * } for (; i6 < width && (anIntArrayArrayArray135[z][i6 + 1][y] & j2) != 0;
+		 * } for (; i6 < width && (tileRenderFlags[z][i6 + 1][y] & j2) != 0;
 		 * i6++) {
 		 * 
 		 * } label2: for (; j7 > 0; j7--) { for (int i11 = l4; i11 <= i6; i11++) { if
-		 * ((anIntArrayArrayArray135[j7 - 1][i11][y] & j2) == 0) { break label2; } } }
+		 * ((tileRenderFlags[j7 - 1][i11][y] & j2) == 0) { break label2; } } }
 		 * 
 		 * label3: for (; l8 < plane; l8++) { for (int j11 = l4; j11 <= i6; j11++) { if
-		 * ((anIntArrayArrayArray135[l8 + 1][j11][y] & j2) == 0) { break label3; } } }
+		 * ((tileRenderFlags[l8 + 1][j11][y] & j2) == 0) { break label3; } } }
 		 * 
 		 * int k11 = (l8 + 1 - j7) * (i6 - l4 + 1); if (k11 >= 8) { char c2 = '\360';
 		 * int l14 = tileHeights[l8][l4][y] - c2; int i16 = tileHeights[j7][l4][y];
 		 * chunk.sceneGraph.method277(plane, l4 * 128, i16, i6 * 128 + 128, y * 128,
 		 * l14, y * 128, 2); for (int i17 = j7; i17 <= l8; i17++) { for (int i18 = l4;
-		 * i18 <= i6; i18++) { anIntArrayArrayArray135[i17][i18][y] &= ~j2; } } } }
+		 * i18 <= i6; i18++) { tileRenderFlags[i17][i18][y] &= ~j2; } } } }
 		 * 
-		 * if ((anIntArrayArrayArray135[z][x][y] & k2) != 0) { int i5 = x; int j6 = x;
-		 * int k7 = y; int i9 = y; for (; k7 > 0 && (anIntArrayArrayArray135[z][x][k7 -
+		 * if ((tileRenderFlags[z][x][y] & k2) != 0) { int i5 = x; int j6 = x;
+		 * int k7 = y; int i9 = y; for (; k7 > 0 && (tileRenderFlags[z][x][k7 -
 		 * 1] & k2) != 0; k7--) {
 		 * 
-		 * } for (; i9 < length && (anIntArrayArrayArray135[z][x][i9 + 1] & k2) != 0;
+		 * } for (; i9 < length && (tileRenderFlags[z][x][i9 + 1] & k2) != 0;
 		 * i9++) {
 		 * 
 		 * } label4: for (; i5 > 0; i5--) { for (int l11 = k7; l11 <= i9; l11++) { if
-		 * ((anIntArrayArrayArray135[z][i5 - 1][l11] & k2) == 0) { break label4; } } }
+		 * ((tileRenderFlags[z][i5 - 1][l11] & k2) == 0) { break label4; } } }
 		 * 
 		 * label5: for (; j6 < width; j6++) { for (int i12 = k7; i12 <= i9; i12++) { if
-		 * ((anIntArrayArrayArray135[z][j6 + 1][i12] & k2) == 0) { break label5; } } }
+		 * ((tileRenderFlags[z][j6 + 1][i12] & k2) == 0) { break label5; } } }
 		 * 
 		 * if ((j6 - i5 + 1) * (i9 - k7 + 1) >= 4) { int j12 = tileHeights[z][i5][k7];
 		 * chunk.sceneGraph.method277(plane, i5 * 128, j12, j6 * 128 + 128, i9 * 128 +
 		 * 128, j12, k7 * 128, 4); for (int k13 = i5; k13 <= j6; k13++) { for (int i15 =
-		 * k7; i15 <= i9; i15++) { anIntArrayArrayArray135[z][k13][i15] &= ~k2; } } } }
+		 * k7; i15 <= i9; i15++) { tileRenderFlags[z][k13][i15] &= ~k2; } } } }
 		 * } } } }
 		 */
 		SceneGraph.minimapUpdate = true;
 	}
 
+	@Deprecated
 	public void method174(int startX, int startY, int xLen, int yLen) {
+		smoothBorderHeights(startX, startY, xLen, yLen);
+	}
+
+	public void smoothBorderHeights(int startX, int startY, int xLen, int yLen) {
 		for (int y = startY; y <= startY + yLen; y++) {
 			for (int x = startX; x <= startX + xLen; x++) {
 				if (x > 0 && x < width && y > 0 && y < length) {
@@ -1128,12 +1138,17 @@ public final class MapRegion {
 		}
 	}
 
+	@Deprecated
 	public byte[] save_terrain_block(Chunk chunk) {
+		return saveTerrainBlock(chunk);
+	}
+
+	public byte[] saveTerrainBlock(Chunk chunk) {
 		Buffer buffer = new Buffer(new byte[131072]);
 		for (int level = 0; level < 4; level++) {
 			for (int x = chunk.offsetX; x < chunk.offsetX + 64; x++) {
 				for (int y = chunk.offsetY; y < chunk.offsetY + 64; y++) {
-					save_terrain_tile(level, x, y, buffer);
+					saveTerrainTile(level, x, y, buffer);
 				}
 
 			}
@@ -1144,7 +1159,12 @@ public final class MapRegion {
 		return data;
 	}
 
+	@Deprecated
 	private void save_terrain_tile(int level, int x, int y, Buffer buffer) {
+		saveTerrainTile(level, x, y, buffer);
+	}
+
+	private void saveTerrainTile(int level, int x, int y, Buffer buffer) {
 		if (overlays[level][x][y] != 0) {
 			buffer.writeShort(overlayShapes[level][x][y] * 4 + (overlayOrientations[level][x][y] & 3) + 2);
 			buffer.writeShort(overlays[level][x][y] & 0x7FFF);
@@ -1283,7 +1303,7 @@ public final class MapRegion {
 
 			scene.addObject(x, y, z, 1, 1, object, objectKey, 0, mean, temporary);
 			if (!temporary && type >= 12 && type <= 17 && type != 13 && z > 0) {
-				anIntArrayArrayArray135[z][x][y] |= 0x924;
+				tileRenderFlags[z][x][y] |= 0x924;
 			}
 
 		} else if (type == 0) {
@@ -1303,7 +1323,7 @@ public final class MapRegion {
 					}
 
 					if (definition.occludes()) {
-						anIntArrayArrayArray135[z][x][y] |= 0x249;
+						tileRenderFlags[z][x][y] |= 0x249;
 					}
 				} else if (orientation == 1) {
 					if (definition.isCastsShadow()) {
@@ -1312,7 +1332,7 @@ public final class MapRegion {
 					}
 
 					if (definition.occludes()) {
-						anIntArrayArrayArray135[z][x][y + 1] |= 0x492;
+						tileRenderFlags[z][x][y + 1] |= 0x492;
 					}
 				} else if (orientation == 2) {
 					if (definition.isCastsShadow()) {
@@ -1321,7 +1341,7 @@ public final class MapRegion {
 					}
 
 					if (definition.occludes()) {
-						anIntArrayArrayArray135[z][x + 1][y] |= 0x249;
+						tileRenderFlags[z][x + 1][y] |= 0x249;
 					}
 				} else if (orientation == 3) {
 					if (definition.isCastsShadow()) {
@@ -1330,7 +1350,7 @@ public final class MapRegion {
 					}
 
 					if (definition.occludes()) {
-						anIntArrayArrayArray135[z][x][y] |= 0x492;
+						tileRenderFlags[z][x][y] |= 0x492;
 					}
 				}
 
@@ -1376,17 +1396,17 @@ public final class MapRegion {
 					STRAIGHT_WALL_MASKS[oppositeOrientation], temporary);
 			if (!temporary && definition.occludes()) {
 				if (orientation == 0) {
-					anIntArrayArrayArray135[z][x][y] |= 0x249;
-					anIntArrayArrayArray135[z][x][y + 1] |= 0x492;
+					tileRenderFlags[z][x][y] |= 0x249;
+					tileRenderFlags[z][x][y + 1] |= 0x492;
 				} else if (orientation == 1) {
-					anIntArrayArrayArray135[z][x][y + 1] |= 0x492;
-					anIntArrayArrayArray135[z][x + 1][y] |= 0x249;
+					tileRenderFlags[z][x][y + 1] |= 0x492;
+					tileRenderFlags[z][x + 1][y] |= 0x249;
 				} else if (orientation == 2) {
-					anIntArrayArrayArray135[z][x + 1][y] |= 0x249;
-					anIntArrayArrayArray135[z][x][y] |= 0x492;
+					tileRenderFlags[z][x + 1][y] |= 0x249;
+					tileRenderFlags[z][x][y] |= 0x492;
 				} else if (orientation == 3) {
-					anIntArrayArrayArray135[z][x][y] |= 0x492;
-					anIntArrayArrayArray135[z][x][y] |= 0x249;
+					tileRenderFlags[z][x][y] |= 0x492;
+					tileRenderFlags[z][x][y] |= 0x249;
 				}
 			}
 
@@ -1575,7 +1595,7 @@ public final class MapRegion {
 					saturations[index] = 0;
 					luminances[index] = 0;
 					chromas[index] = 0;
-					anIntArray128[index] = 0;
+					underlaySampleCounts[index] = 0;
 				}
 
 				for (int centreX = -5; centreX < width + 5; centreX++) {
@@ -1592,7 +1612,7 @@ public final class MapRegion {
 								saturations[y] += floor.getSaturation();
 								luminances[y] += floor.getLuminance();
 								chromas[y] += floor.getChroma();
-								anIntArray128[y]++;
+								underlaySampleCounts[y]++;
 							}
 						}
 
@@ -1608,7 +1628,7 @@ public final class MapRegion {
 								saturations[y] -= floor.getSaturation();
 								luminances[y] -= floor.getLuminance();
 								chromas[y] -= floor.getChroma();
-								anIntArray128[y]--;
+								underlaySampleCounts[y]--;
 							}
 						}
 					}
@@ -1627,7 +1647,7 @@ public final class MapRegion {
 								blended_anIntArray125 += saturations[j18];
 								blended_anIntArray126 += luminances[j18];
 								blended_anIntArray124_divisor += chromas[j18];
-								blend_direction_tracker += anIntArray128[j18];
+								blend_direction_tracker += underlaySampleCounts[j18];
 							}
 
 							int k18 = centreY - 5;
@@ -1636,7 +1656,7 @@ public final class MapRegion {
 								blended_anIntArray125 -= saturations[k18];
 								blended_anIntArray126 -= luminances[k18];
 								blended_anIntArray124_divisor -= chromas[k18];
-								blend_direction_tracker -= anIntArray128[k18];
+								blend_direction_tracker -= underlaySampleCounts[k18];
 							}
 
 							if (centreY >= 0
@@ -1770,7 +1790,7 @@ public final class MapRegion {
 
 										if (/* hiddenHL || */flag && centreHeight == eastHeight
 												&& centreHeight == northEastHeight && centreHeight == northHeight) {
-											anIntArrayArrayArray135[z][centreX][centreY] |= 0x924;
+											tileRenderFlags[z][centreX][centreY] |= 0x924;
 										}
 									}
 
@@ -1800,8 +1820,8 @@ public final class MapRegion {
 											if (underlay_texture_id != -1) {
 												underlay_texture_id = 154; // 632, 154
 											}
-											underlay_floor_texture = underlay_texture_id;
-											underlay_floor_map_color = ColourUtils.checkedLight(hsl_bitset_unmodified,
+											underlayFloorTexture = underlay_texture_id;
+											underlayFloorMapColor = ColourUtils.checkedLight(hsl_bitset_unmodified,
 													96);
 											int tile_opcode = overlayShapes[z][centreX][centreY] + 1;
 
@@ -1822,8 +1842,8 @@ public final class MapRegion {
 													getOverlayShadow(overlay_hsl, eastLight),
 													getOverlayShadow(overlay_hsl, northEastLight),
 													getOverlayShadow(overlay_hsl, northLight), rgb_bitset_randomized,
-													rgb_bitset_randomized, underlay_floor_map_color,
-													underlay_floor_texture, underlay_floor_map_color, false, flag, underlay - 1, overlayFloorId - 1);
+													rgb_bitset_randomized, underlayFloorMapColor,
+													underlayFloorTexture, underlayFloorMapColor, false, flag, underlay - 1, overlayFloorId - 1);
 										} else {
 											scene.addTile(z, centreX, centreY, 0, 0, -1, centreHeight, eastHeight,
 													northEastHeight, northHeight,
@@ -1912,7 +1932,7 @@ public final class MapRegion {
 														overlayRgbColour = overlayFloor.getAnotherRgb();
 													}
 													overlayHslColour = -2;
-													underlay_floor_map_color = -1;
+													underlayFloorMapColor = -1;
 													overlayTextureColour = -1;
 												}
 											} else if (overlayFloor.getRgb() == -1) {
@@ -1922,7 +1942,7 @@ public final class MapRegion {
 												overlayHslColour = -2;
 												// ?
 												if (z > 0) {
-													underlay_floor_texture = -1;
+													underlayFloorTexture = -1;
 												}
 
 												overlayTextureId = -1;
@@ -1949,7 +1969,7 @@ public final class MapRegion {
 													getOverlayShadow(overlayHslColour, northEastLight),
 													getOverlayShadow(overlayHslColour, northLight),
 													rgb_bitset_randomized, overlayRgbColour, overlayTextureColour,
-													underlay_floor_texture, underlay_floor_map_color, false, flag, underlay - 1, overlayFloorId - 1);
+													underlayFloorTexture, underlayFloorMapColor, false, flag, underlay - 1, overlayFloorId - 1);
 										} else {
 											byte flag = tileFlags[z][centreX][centreY];
 											scene.addTile(z, centreX, centreY, tileType, orientation, overlayTextureId,
@@ -2024,7 +2044,7 @@ public final class MapRegion {
 					saturations[index] = 0;
 					luminances[index] = 0;
 					chromas[index] = 0;
-					anIntArray128[index] = 0;
+					underlaySampleCounts[index] = 0;
 				}
 
 				for (int centreX = chunk.offsetX -5; centreX < width + 5; centreX++) {
@@ -2039,7 +2059,7 @@ public final class MapRegion {
 								saturations[y] += floor.getSaturation();
 								luminances[y] += floor.getLuminance();
 								chromas[y] += floor.getChroma();
-								anIntArray128[y]++;
+								underlaySampleCounts[y]++;
 							}
 						}
 
@@ -2053,7 +2073,7 @@ public final class MapRegion {
 								saturations[y] -= floor.getSaturation();
 								luminances[y] -= floor.getLuminance();
 								chromas[y] -= floor.getChroma();
-								anIntArray128[y]--;
+								underlaySampleCounts[y]--;
 							}
 						}
 					}
@@ -2072,7 +2092,7 @@ public final class MapRegion {
 								blended_anIntArray125 += saturations[j18];
 								blended_anIntArray126 += luminances[j18];
 								blended_anIntArray124_divisor += chromas[j18];
-								blend_direction_tracker += anIntArray128[j18];
+								blend_direction_tracker += underlaySampleCounts[j18];
 							}
 
 							int k18 = centreY - 5;
@@ -2081,7 +2101,7 @@ public final class MapRegion {
 								blended_anIntArray125 -= saturations[k18];
 								blended_anIntArray126 -= luminances[k18];
 								blended_anIntArray124_divisor -= chromas[k18];
-								blend_direction_tracker -= anIntArray128[k18];
+								blend_direction_tracker -= underlaySampleCounts[k18];
 							}
 
 							if (centreY >= 0 && centreY < length) {
@@ -2173,7 +2193,7 @@ public final class MapRegion {
 
 										if (/* hiddenHL || */flag && centreHeight == eastHeight
 												&& centreHeight == northEastHeight && centreHeight == northHeight) {
-											anIntArrayArrayArray135[z][centreX][centreY] |= 0x924;
+											tileRenderFlags[z][centreX][centreY] |= 0x924;
 										}
 									}
 
@@ -2203,8 +2223,8 @@ public final class MapRegion {
 											if (underlay_texture_id != -1) {
 												underlay_texture_id = 154; // 632, 154
 											}
-											underlay_floor_texture = underlay_texture_id;
-											underlay_floor_map_color = ColourUtils.checkedLight(hsl_bitset_unmodified,
+											underlayFloorTexture = underlay_texture_id;
+											underlayFloorMapColor = ColourUtils.checkedLight(hsl_bitset_unmodified,
 													96);
 											int tile_opcode = overlayShapes[z][centreX][centreY] + 1;
 
@@ -2225,8 +2245,8 @@ public final class MapRegion {
 													getOverlayShadow(overlay_hsl, eastLight),
 													getOverlayShadow(overlay_hsl, northEastLight),
 													getOverlayShadow(overlay_hsl, northLight), rgb_bitset_randomized,
-													rgb_bitset_randomized, underlay_floor_map_color,
-													underlay_floor_texture, underlay_floor_map_color, false, flag, underlay - 1, overlayFloorId - 1);
+													rgb_bitset_randomized, underlayFloorMapColor,
+													underlayFloorTexture, underlayFloorMapColor, false, flag, underlay - 1, overlayFloorId - 1);
 										} else {
 											scene.addTile(z, centreX, centreY, 0, 0, -1, centreHeight, eastHeight,
 													northEastHeight, northHeight,
@@ -2304,7 +2324,7 @@ public final class MapRegion {
 														overlayRgbColour = overlayFloor.getAnotherRgb();
 													}
 													overlayHslColour = -2;
-													underlay_floor_map_color = -1;
+													underlayFloorMapColor = -1;
 													overlayTextureColour = -1;
 												}
 											} else if (overlayFloor.getRgb() == -1) {
@@ -2314,7 +2334,7 @@ public final class MapRegion {
 												overlayHslColour = -2;
 												// ?
 												if (z > 0) {
-													underlay_floor_texture = -1;
+													underlayFloorTexture = -1;
 												}
 
 												overlayTextureId = -1;
@@ -2341,7 +2361,7 @@ public final class MapRegion {
 													getOverlayShadow(overlayHslColour, northEastLight),
 													getOverlayShadow(overlayHslColour, northLight),
 													rgb_bitset_randomized, overlayRgbColour, overlayTextureColour,
-													underlay_floor_texture, underlay_floor_map_color, false, flag, underlay - 1, overlayFloorId - 1);
+													underlayFloorTexture, underlayFloorMapColor, false, flag, underlay - 1, overlayFloorId - 1);
 										} else {
 											byte flag = tileFlags[z][centreX][centreY];
 											scene.addTile(z, centreX, centreY, tileType, orientation, overlayTextureId,

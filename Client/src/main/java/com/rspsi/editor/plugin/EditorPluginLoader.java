@@ -1,5 +1,8 @@
 package com.rspsi.editor.plugin;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,6 +16,8 @@ import java.util.ServiceLoader;
 
 /** Discovers neutral editor plugins without knowing the active frontend. */
 public final class EditorPluginLoader {
+    private static final Logger log = LoggerFactory.getLogger(EditorPluginLoader.class);
+
     private EditorPluginLoader() {
     }
 
@@ -31,7 +36,7 @@ public final class EditorPluginLoader {
      */
     public static PluginDiscovery discoverOwned(Path directory, ClassLoader parent) {
         if (directory == null || parent == null || !Files.isDirectory(directory)) {
-            return new PluginDiscovery(List.of(), List.of(), null);
+            return new PluginDiscovery(List.of(), List.of(), List.of(), null);
         }
         List<Path> jarPaths = new ArrayList<>();
         try (var stream = Files.list(directory)) {
@@ -42,17 +47,21 @@ public final class EditorPluginLoader {
             throw new IllegalStateException("Unable to inspect plugin directory " + directory, error);
         }
         if (jarPaths.isEmpty()) {
-            return new PluginDiscovery(List.of(), List.of(), null);
+            return new PluginDiscovery(List.of(), List.of(), List.of(), null);
         }
 
         List<PluginArtifact> artifacts = new ArrayList<>();
         List<EditorPlugin> discovered = new ArrayList<>();
+        List<PluginLoadFailure> failures = new ArrayList<>();
 
         for (Path jarPath : jarPaths) {
             URL url;
             try {
                 url = jarPath.toUri().toURL();
             } catch (IOException error) {
+                log.warn("Skipping plugin candidate {}: cannot resolve JAR URL", jarPath, error);
+                failures.add(new PluginLoadFailure(jarPath,
+                        "Cannot resolve JAR URL: " + error.getMessage(), error));
                 continue;
             }
             URLClassLoader loader = URLClassLoader.newInstance(new URL[]{url}, parent);
@@ -67,7 +76,11 @@ public final class EditorPluginLoader {
                     loader.close();
                 }
             } catch (Throwable failure) {
-                // Fault isolation: one failing plugin does not block others
+                // Fault isolation: one failing plugin does not block others, but the
+                // failure itself must stay visible instead of being discarded.
+                log.warn("Failed to load plugin candidate {}: {}", jarPath, failure.getMessage(), failure);
+                failures.add(new PluginLoadFailure(jarPath,
+                        failure.getMessage() != null ? failure.getMessage() : failure.toString(), failure));
                 try {
                     loader.close();
                 } catch (IOException closeFailure) {
@@ -75,7 +88,7 @@ public final class EditorPluginLoader {
                 }
             }
         }
-        return new PluginDiscovery(discovered, artifacts, null);
+        return new PluginDiscovery(discovered, artifacts, failures, null);
     }
 
     private static String sha256(Path path) {

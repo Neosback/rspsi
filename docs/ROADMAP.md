@@ -219,7 +219,7 @@ named, fixture-backed, and explicitly accepted as deferred.
 
 ## Phase 2 — Native application vertical slice
 
-**Status: active**
+**Status: queued**
 
 Build the smallest complete OpenRune Studio: boot, load, switch workspace,
 render one map, and return home without creating a second window or context.
@@ -261,7 +261,7 @@ No second Stage, Swing/AWT viewport, or duplicate cache prompt is involved.
 
 ## Phase 3 — FBO renderer and incremental GPU resources
 
-**Status: active**
+**Status: queued**
 
 Make the renderer a proper viewport backend before adding the full editor shell.
 
@@ -314,7 +314,7 @@ software-vs-native fixture comparisons remain within the defined tolerance.
 
 ## Phase 4 — Map Editor shell and input migration
 
-**Status: active**
+**Status: queued**
 
 Port the concepts of the existing controlled shell to ImGui. Do not copy the
 JavaFX implementation or recreate every old button.

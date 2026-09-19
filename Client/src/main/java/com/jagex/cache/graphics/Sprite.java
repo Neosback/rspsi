@@ -138,7 +138,7 @@ public final class Sprite extends GameRaster {
 		}
 	}
 
-	private static void method347(int destIndex, int width, int height, int sourceStep, int sourceIndex, int destStep,
+	private static void blitBlock(int destIndex, int width, int height, int sourceStep, int sourceIndex, int destStep,
 			int[] source, int[] raster) {
 		int minX = -(width >> 2);
 		width = -(width & 3);
@@ -797,11 +797,21 @@ public final class Sprite extends GameRaster {
 	}
 	
 
+	@Deprecated
 	public void method346(int x, int y) {
-		method346(GameRasterizer.getInstance(), x, y);
+		drawClipped(x, y);
 	}
 
+	public void drawClipped(int x, int y) {
+		drawClipped(GameRasterizer.getInstance(), x, y);
+	}
+
+	@Deprecated
 	public void method346(GameRasterizer rasterizer, int x, int y) {
+		drawClipped(rasterizer, x, y);
+	}
+
+	public void drawClipped(GameRasterizer rasterizer, int x, int y) {
 		x += horizontalOffset;
 		y += verticalOffset;
 
@@ -842,16 +852,28 @@ public final class Sprite extends GameRaster {
 		}
 
 		if (width > 0 && height > 0) {
-			method347(destIndex, width, height, sourceStep, sourceIndex, destStep, raster, rasterizer.getRaster());
+			blitBlock(destIndex, width, height, sourceStep, sourceIndex, destStep, raster, rasterizer.getRaster());
 		}
 	}
 	
+	@Deprecated
 	public void method352(int height, int theta, int[] ai, int k, int[] destOffsets, int i1, int y, int x, int width,
 			int i2) {
-		method352(GameRasterizer.getInstance(), height, theta, ai, k, destOffsets, i1, y, x, width, i2);
+		drawRotatedMasked(height, theta, ai, k, destOffsets, i1, y, x, width, i2);
 	}
 
+	public void drawRotatedMasked(int height, int theta, int[] ai, int k, int[] destOffsets, int i1, int y, int x, int width,
+			int i2) {
+		drawRotatedMasked(GameRasterizer.getInstance(), height, theta, ai, k, destOffsets, i1, y, x, width, i2);
+	}
+
+	@Deprecated
 	public void method352(GameRasterizer rasterizer, int height, int theta, int[] ai, int k, int[] destOffsets, int i1, int y, int x, int width,
+			int i2) {
+		drawRotatedMasked(rasterizer, height, theta, ai, k, destOffsets, i1, y, x, width, i2);
+	}
+
+	public void drawRotatedMasked(GameRasterizer rasterizer, int height, int theta, int[] ai, int k, int[] destOffsets, int i1, int y, int x, int width,
 			int i2) {
 		try {
 			int midX = -width / 2;
@@ -886,11 +908,21 @@ public final class Sprite extends GameRaster {
 	}
 	
 
+	@Deprecated
 	public void method353(int x, int y, int width, int height, double theta, int j, int l, int j1) {
-		method353(GameRasterizer.getInstance(), x, y, width, height, theta, j, l, j1);
+		drawRotatedScaled(x, y, width, height, theta, j, l, j1);
 	}
 
+	public void drawRotatedScaled(int x, int y, int width, int height, double theta, int j, int l, int j1) {
+		drawRotatedScaled(GameRasterizer.getInstance(), x, y, width, height, theta, j, l, j1);
+	}
+
+	@Deprecated
 	public void method353(GameRasterizer rasterizer, int x, int y, int width, int height, double theta, int j, int l, int j1) {
+		drawRotatedScaled(rasterizer, x, y, width, height, theta, j, l, j1);
+	}
+
+	public void drawRotatedScaled(GameRasterizer rasterizer, int x, int y, int width, int height, double theta, int j, int l, int j1) {
 		try {
 			int midX = -width / 2;
 			int midY = -height / 2;

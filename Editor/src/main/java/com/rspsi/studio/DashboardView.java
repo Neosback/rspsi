@@ -30,9 +30,13 @@ public final class DashboardView {
         cachePath.set(initialPath == null ? "" : initialPath);
     }
 
-    public void render(CacheSessionStatus status,
-                       Consumer<Path> loadCache,
-                       Runnable openMapEditor) {
+    private void renderInternal(CacheSessionStatus status,
+                                Consumer<Path> loadCache,
+                                Runnable openMapEditor,
+                                Runnable openInterfaceStudio,
+                                Runnable openObjectStudio,
+                                com.rspsi.editor.integration.ServerIntegrationService integrations,
+                                Runnable openIntegrationCenter) {
         Objects.requireNonNull(status, "cache status");
         Objects.requireNonNull(loadCache, "load cache callback");
         Objects.requireNonNull(openMapEditor, "open workspace callback");
@@ -81,6 +85,9 @@ public final class DashboardView {
         // Status / Loading / Ready panels
         renderStatus(status);
 
+        // Server Integration Section
+        renderServerIntegrationSection(integrations, openIntegrationCenter);
+
         ImGui.dummy(1.0f, 12.0f);
         ImGui.separatorText("Workspaces");
         ImGui.textWrapped("Open a workspace after the cache has been validated and indexed.");
@@ -89,16 +96,57 @@ public final class DashboardView {
 
         ImGui.spacing();
         ImGui.beginDisabled(status.state() != CacheSessionState.READY);
-        if (ImGui.button("Map Editor", 140, 32)) openMapEditor.run();
-        ImGui.endDisabled();
+        if (ImGui.button("Map Editor", 130, 32)) openMapEditor.run();
         ImGui.sameLine();
-        ImGui.beginDisabled();
-        ImGui.button("Interface Studio  ·  Coming soon", 200, 32);
+        if (ImGui.button("Interface Studio", 140, 32) && openInterfaceStudio != null) {
+            openInterfaceStudio.run();
+        }
+        ImGui.sameLine();
+        if (ImGui.button("Object Studio", 130, 32) && openObjectStudio != null) {
+            openObjectStudio.run();
+        }
         ImGui.endDisabled();
 
         ImGui.dummy(1.0f, 24.0f);
         ImGui.unindent(margin);
         ImGui.end();
+    }
+
+    public void render(CacheSessionStatus status,
+                       Consumer<Path> loadCache,
+                       Runnable openMapEditor) {
+        render(status, loadCache, openMapEditor, null, null, null, null);
+    }
+
+    public void render(CacheSessionStatus status,
+                       Consumer<Path> loadCache,
+                       Runnable openMapEditor,
+                       Runnable openInterfaceStudio,
+                       Runnable openObjectStudio,
+                       com.rspsi.editor.integration.ServerIntegrationService integrations,
+                       Runnable openIntegrationCenter) {
+        renderInternal(status, loadCache, openMapEditor, openInterfaceStudio, openObjectStudio, integrations, openIntegrationCenter);
+    }
+
+    private void renderServerIntegrationSection(com.rspsi.editor.integration.ServerIntegrationService integrations,
+                                                Runnable openIntegrationCenter) {
+        ImGui.dummy(1.0f, 8.0f);
+        ImGui.separatorText("Server Integration");
+        if (integrations != null && integrations.isConnected()) {
+            var session = integrations.activeSession().get();
+            ImGui.textColored(0xFF66FF66, "● Connected: " + session.provider().name());
+            ImGui.textDisabled("Root: " + session.projectRoot() + " (" + session.activeCapabilities().size() + " capabilities active)");
+            if (openIntegrationCenter != null) {
+                if (ImGui.button("Configure Integration")) openIntegrationCenter.run();
+                ImGui.sameLine();
+                if (ImGui.button("Disconnect")) integrations.disconnect();
+            }
+        } else {
+            ImGui.textDisabled("No server project connected. Connect an OpenRune or custom server repository for symbols and spawns.");
+            if (openIntegrationCenter != null) {
+                if (ImGui.button("Connect Project...")) openIntegrationCenter.run();
+            }
+        }
     }
 
     private void renderPathWarnings(CacheSessionStatus status) {

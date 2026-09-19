@@ -1320,7 +1320,7 @@ public class MainWindow extends Application {
 					return;
 
 				byte[] objectMap = clientInstance.sceneGraph.saveObjects(chunk);
-				byte[] tileMap = chunk.mapRegion.save_terrain_block(chunk);
+				byte[] tileMap = chunk.mapRegion.saveTerrainBlock(chunk);
 
 				if (landscapeFile.getName().endsWith(".gz")) {
 					try {

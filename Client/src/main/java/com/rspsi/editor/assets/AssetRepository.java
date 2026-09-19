@@ -26,6 +26,21 @@ import java.util.Optional;
  * may leave any category unavailable by using the default empty result.</p>
  */
 public interface AssetRepository {
+    /** Returns an empty asset repository with no definitions. */
+    static AssetRepository empty() {
+        return new AssetRepository() {
+            @Override
+            public List<AssetDescriptor> search(String query) {
+                return List.of();
+            }
+
+            @Override
+            public Optional<AssetDescriptor> get(int id, String type) {
+                return Optional.empty();
+            }
+        };
+    }
+
     /** Reports the asset families available without exposing a cache backend. */
     default AssetRepositoryCapabilities capabilities() {
         return AssetRepositoryCapabilities.none();

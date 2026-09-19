@@ -35,7 +35,19 @@ import com.rspsi.editor.render.RenderSettingKeys;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.settings.SettingsJsonStore;
 import com.rspsi.editor.settings.EditorSettingKeys;
+import com.rspsi.editor.integration.ServerIntegrationService;
+import com.rspsi.editor.integration.npc.NpcSpawnService;
+import com.rspsi.editor.integration.reference.ReferenceService;
+import com.rspsi.editor.simulation.SimulationEngine;
+import com.rspsi.editor.symbols.CacheGamevalProvider;
+import com.rspsi.editor.symbols.SymbolService;
+import com.rspsi.plugins.server.openrune.OpenRuneServerPlugin;
+import com.rspsi.plugins.server.openrune.OpenRuneServerProvider;
+import com.rspsi.studio.integration.IntegrationCenterWindow;
+import com.rspsi.studio.workspace.InterfaceStudioView;
+import com.rspsi.studio.workspace.ObjectStudioView;
 import imgui.ImGui;
+import imgui.type.ImBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +70,17 @@ public final class StudioApplication implements AutoCloseable {
     private final WorkspaceManager workspaces = new WorkspaceManager();
     private final DashboardView dashboard;
     private final MapEditorView mapEditor = new MapEditorView();
+    private final InterfaceStudioView interfaceStudio = new InterfaceStudioView();
+    private final ObjectStudioView objectStudio = new ObjectStudioView();
+    private final IntegrationCenterWindow integrationCenter = new IntegrationCenterWindow();
+    private final ImBoolean integrationCenterOpen = new ImBoolean(false);
+
+    // Shared Studio platform runtime services
+    private final SymbolService symbols = new SymbolService();
+    private final ReferenceService references = new ReferenceService();
+    private final NpcSpawnService spawns = new NpcSpawnService();
+    private final SimulationEngine simulation = new SimulationEngine();
+    private final ServerIntegrationService integrations;
     private final NativeSceneViewport sceneViewport = new NativeSceneViewport();
     private final SettingsStore renderSettings = new SettingsStore(EditorSettingKeys.registry());
     private final EditorTaskService tasks = new EditorTaskService();
@@ -81,6 +104,8 @@ public final class StudioApplication implements AutoCloseable {
 
     public StudioApplication() {
         window = new NativeWindow(1320, 860, "OpenRune Studio");
+        integrations = new ServerIntegrationService(symbols, references, spawns);
+        integrations.registerProvider(new OpenRuneServerProvider());
         SettingsJsonStore.load(settingsFile, renderSettings);
         imgui.initialize(window);
         sceneViewport.initialize();
@@ -95,7 +120,13 @@ public final class StudioApplication implements AutoCloseable {
 
     public void run() {
         try {
+            long lastFrameTime = System.nanoTime();
             while (!window.shouldClose()) {
+                long now = System.nanoTime();
+                long deltaNanos = Math.min(now - lastFrameTime, 100_000_000L);
+                lastFrameTime = now;
+                simulation.update(deltaNanos);
+
                 window.pollEvents();
                 imgui.beginFrame();
                 window.clearFrame();
@@ -111,8 +142,13 @@ public final class StudioApplication implements AutoCloseable {
     private void drawApplication() {
         if (workspaces.active() == WorkspaceManager.Workspace.DASHBOARD) {
             dashboard.render(cacheSessions.status(), this::loadCache,
-                    () -> openMapEditor());
+                    this::openMapEditor,
+                    this::openInterfaceStudio,
+                    this::openObjectStudio,
+                    integrations,
+                    () -> integrationCenterOpen.set(true));
             rememberReadyCache();
+            integrationCenter.render(integrations, integrationCenterOpen);
             return;
         }
         LoadedOsrsCacheSession cache = cacheSessions.current().orElse(null);
@@ -120,6 +156,21 @@ public final class StudioApplication implements AutoCloseable {
             openDashboard();
             return;
         }
+
+        if (workspaces.active() == WorkspaceManager.Workspace.INTERFACE_STUDIO) {
+            interfaceStudio.render(cache, renderSettings, pluginLifecycle,
+                    this::requestDashboard, this::openMapEditor, this::openObjectStudio);
+            integrationCenter.render(integrations, integrationCenterOpen);
+            return;
+        }
+
+        if (workspaces.active() == WorkspaceManager.Workspace.OBJECT_STUDIO) {
+            objectStudio.render(cache, renderSettings, pluginLifecycle,
+                    this::requestDashboard, this::openMapEditor, this::openInterfaceStudio);
+            integrationCenter.render(integrations, integrationCenterOpen);
+            return;
+        }
+
         pollSceneLoad();
         if (loadedScene != null && renderedSettingsRevision != renderSettings.revision()) {
             RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
@@ -128,8 +179,20 @@ public final class StudioApplication implements AutoCloseable {
         }
         mapEditor.render(cache, currentPlan, sceneViewport, sceneStatus,
                 this::requestDashboard, renderSettings, pluginLifecycle,
-                loadedScene != null && loadedScene.opened().region().session().isDirty());
+                loadedScene != null && loadedScene.opened().region().session().isDirty(),
+                this::openInterfaceStudio, this::openObjectStudio,
+                () -> integrationCenterOpen.set(true),
+                simulation, symbols, references, spawns, integrations);
         renderClosePrompt();
+        integrationCenter.render(integrations, integrationCenterOpen);
+    }
+
+    private void openInterfaceStudio() {
+        workspaces.openInterfaceStudio(cacheSessions.status().state());
+    }
+
+    private void openObjectStudio() {
+        workspaces.openObjectStudio(cacheSessions.status().state());
     }
 
     private void loadCache(Path path) {
@@ -234,11 +297,14 @@ public final class StudioApplication implements AutoCloseable {
             if (session.path().equals(lastReadyCache)) return;
             lastReadyCache = session.path();
             preferences.rememberCache(session.path());
+            symbols.unregisterProvider("osrs.cache.gamevals");
+            symbols.registerProvider(new CacheGamevalProvider(session.bundle().definitions()));
         });
     }
 
     private void initializePlugins(LoadedMapScene scene) {
         List<EditorPlugin> candidates = new ArrayList<>(CoreToolsPlugin.builtIns());
+        candidates.add(new OpenRuneServerPlugin());
         PluginDiscovery discovery = EditorPluginLoader.discoverOwned(
                 Path.of("plugins"), Thread.currentThread().getContextClassLoader());
         candidates.addAll(discovery.plugins());
@@ -255,7 +321,8 @@ public final class StudioApplication implements AutoCloseable {
                 assets,
                 sceneAccess,
                 enabled -> EditorPluginHost.initialize(enabled, session,
-                        assets, sceneAccess, renderSettings, tasks, notifications),
+                        assets, sceneAccess, renderSettings, tasks, notifications,
+                        null, null, symbols, references, spawns, simulation, integrations),
                 discovery);
         pluginLifecycle = next;
     }

@@ -8,8 +8,6 @@ package com.jagex.cache;
  */
 class BZip2DecompressionState {
 
-	// Class32
-
 	/* for undoing the Burrows-Wheeler transform (FAST) */
 	public static int[] tt;
 	int[][] base;
