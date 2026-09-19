@@ -38,6 +38,16 @@ Client semantics (verified against melxin `MapRegion` lines ~620–800,
   branch; RSPSi must not enable that branch without a revision fixture. The
   active path applies per-corner `adjustUnderlayLight`/`adjustOverlayLight`
   with tile light before palette lookup.
+- precision note (2026-09-18, verified against the 317 rename client and
+  melxin): the randomized offsets are not dead legacy code — real clients
+  actively randomize per session. melxin `Tiles.rndHue`/`rndLightness` init
+  to `random()*17-8` / `random()*33-16` and random-walk ±2 per region load,
+  clamped to ±8 / ±16, and `class470` applies them (`hue + rndHue & 255`,
+  `lightness += rndLightness`) exactly as the 317 `MapRegion` does. The
+  317 port merely commented them out. RSPSi keeps them pinned at 0 for
+  deterministic editor output — correct for fixtures — but zero-pixel
+  comparisons against a live client capture will only match if the offsets
+  are pinned (or captured) on both sides.
 
 `TerrainAppearanceBuilder` previously computed `sum(weighted)/sum(multiplier)`
 (a 0..1 fraction) clamped to 0..63 — so every blended underlay hue collapses

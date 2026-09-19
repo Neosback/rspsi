@@ -200,6 +200,12 @@ public final class OpenRuneCacheStore implements CacheStore {
     }
 
     @Override
+    public com.rspsi.cache.workspace.CacheDecoderSummary decoderSummary(int revision,
+                                                                         DefinitionProvider definitions) {
+        return OpenRuneCacheInspector.inspect(cache, revision, backendName(), definitions);
+    }
+
+    @Override
     public void close() {
         if (writable) {
             cache.update();

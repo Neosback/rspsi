@@ -29,8 +29,32 @@ public record ObjectAppearanceView(
         boolean modelClipped,
         boolean rotated,
         boolean obstructsGround,
-        int clipMask
+        int clipMask,
+        boolean randomizeAnimStart,
+        boolean delayAnimationUpdate
 ) {
+    /** Compatibility constructor for the 23-argument appearance view. */
+    public ObjectAppearanceView(
+            int animationId, boolean contouredGround,
+            int scaleX, int scaleY, int scaleZ,
+            int offsetX, int offsetY, int offsetZ,
+            Map<Integer, Integer> recolors,
+            Map<Integer, Integer> retextures,
+            boolean castsShadow, boolean occludes,
+            boolean mergeNormals, boolean nonFlatShading,
+            int ambient, int contrast, int decorDisplacement,
+            int contourGroundType, int contourGroundParameter,
+            boolean modelClipped, boolean rotated,
+            boolean obstructsGround, int clipMask) {
+        this(animationId, contouredGround, scaleX, scaleY, scaleZ,
+                offsetX, offsetY, offsetZ, recolors, retextures,
+                castsShadow, occludes, mergeNormals, nonFlatShading,
+                ambient, contrast, decorDisplacement,
+                contourGroundType, contourGroundParameter,
+                modelClipped, rotated, obstructsGround, clipMask,
+                true, false);
+    }
+
     /** Compatibility constructor for the original transform-only view. */
     public ObjectAppearanceView(int animationId, boolean contouredGround,
                                 int scaleX, int scaleY, int scaleZ,
@@ -40,7 +64,8 @@ public record ObjectAppearanceView(
         this(animationId, contouredGround, scaleX, scaleY, scaleZ,
                 offsetX, offsetY, offsetZ, recolors, retextures,
                 true, false, false, false, 0, 0, 16,
-                contouredGround ? 1 : -1, 0, false, false, false, 0);
+                contouredGround ? 1 : -1, 0, false, false, false, 0,
+                true, false);
     }
 
     public ObjectAppearanceView {
@@ -56,7 +81,7 @@ public record ObjectAppearanceView(
     public static ObjectAppearanceView empty() {
         return new ObjectAppearanceView(-1, false, 128, 128, 128,
                 0, 0, 0, Map.of(), Map.of(), true, false, false, false,
-                0, 0, 16, -1, 0, false, false, false, 0);
+                0, 0, 16, -1, 0, false, false, false, 0, true, false);
     }
 
     /** Builds a stable mapping from parallel cache arrays, ignoring incomplete pairs. */

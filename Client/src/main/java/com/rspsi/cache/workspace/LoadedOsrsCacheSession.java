@@ -48,6 +48,8 @@ public final class LoadedOsrsCacheSession implements AutoCloseable {
 
     public int mapCount() { return mapCount; }
 
+    public CacheDecoderSummary decoderSummary() { return bundle.decoderSummary(); }
+
     public OsrsProjectSessionLoader.OpenedProject openRegion(int regionX, int regionY) {
         return bundle.openRegion(regionX, regionY);
     }

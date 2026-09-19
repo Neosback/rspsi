@@ -111,9 +111,10 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     @Override
     public Optional<ObjectDefinitionView> object(int id) {
         ObjectType definition = objects.get(id);
-        if (definition == null) {
-            return Optional.empty();
-        }
+        return definition == null ? Optional.empty() : Optional.of(toView(definition));
+    }
+
+    static ObjectDefinitionView toView(ObjectType definition) {
         List<String> interactions = java.util.stream.IntStream.range(0, 5)
                 .mapToObj(index -> definition.getActions() == null
                         ? null : definition.getActions().getOpOrNull(index))
@@ -133,9 +134,17 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                     || (!objectTypes.isEmpty() && objectTypes.get(0) == 10));
             interactive = modelDefaultsToInteractive || !interactions.isEmpty();
         }
-        return Optional.of(new ObjectDefinitionView(definition.getId(), definition.getName(),
+        int varbit = definition.getMultiVarBit();
+        int varp = definition.getMultiVarp();
+        int defaultTransform = definition.getMultiDefault();
+        int[] transforms = definition.getTransforms() == null
+                ? new int[0]
+                : definition.getTransforms().stream().mapToInt(Integer::intValue).toArray();
+
+        return new ObjectDefinitionView(definition.getId(), definition.getName(),
                 Math.max(1, definition.getSizeX()), Math.max(1, definition.getSizeY()),
-                interactions, modelIds, modelTypes, definition.getMapSceneID(), interactive));
+                interactions, modelIds, modelTypes, definition.getMapSceneID(), interactive,
+                varbit, varp, transforms, defaultTransform);
     }
 
     @Override
@@ -211,8 +220,11 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     @Override
     public Optional<ObjectAppearanceView> objectAppearance(int id) {
         ObjectType definition = objects.get(id);
-        if (definition == null) return Optional.empty();
-        return Optional.of(new ObjectAppearanceView(
+        return definition == null ? Optional.empty() : Optional.of(toAppearanceView(definition));
+    }
+
+    static ObjectAppearanceView toAppearanceView(ObjectType definition) {
+        return new ObjectAppearanceView(
                 definition.getAnimationId(), false,
                 Math.max(1, definition.getModelSizeX()), Math.max(1, definition.getModelSizeY()),
                 Math.max(1, definition.getModelSizeZ()), definition.getOffsetX(),
@@ -221,12 +233,21 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                         toArray(definition.getModifiedColours())),
                 ObjectAppearanceView.pairs(toArray(definition.getOriginalTextureColours()),
                         toArray(definition.getModifiedTextureColours())),
-                true, false, false, definition.getNonFlatShading(),
-                definition.getAmbient(), definition.getContrast(), definition.getDecorDisplacement(),
+                // Opcode 64 clears clipped, meaning no shadow (default true).
+                definition.getClipped(),
+                // Opcode 23 sets modelClipped, meaning occludes (default false).
+                definition.getModelClipped(),
+                // Opcode 22 is nonFlatShading, which is also the opt-in for mergeNormals (default false).
+                definition.getNonFlatShading(), definition.getNonFlatShading(),
+                definition.getAmbient(),
+                // FileStore decodes raw opcode 39 byte; client scale is raw * 25.
+                definition.getContrast() * 25,
+                definition.getDecorDisplacement(),
                 contourGroundType(definition.getClipType()),
                 contourGroundParameter(definition.getClipType()),
                 definition.getModelClipped(), definition.isRotated(),
-                definition.getObstructive(), Math.max(0, definition.getClipMask())));
+                definition.getObstructive(), Math.max(0, definition.getClipMask()),
+                definition.getRandomizeAnimStart(), definition.getDelayAnimationUpdate());
     }
 
     /**
@@ -399,7 +420,11 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         }
         TextureType definition = textures.get(id);
         if (definition == null) return Optional.empty();
-        int[] pixels = definition.load(textureSprites());
+        // Do not use TextureType.load(sprites): that compatibility overload
+        // defaults to brightness 0 and the library's default texture size.
+        // The native renderer's contract is the client-compatible 0.6/128
+        // decode used by the revision-240 texture path.
+        int[] pixels = definition.load(textureSprites(), brightness, textureSize);
         return pixels == null ? Optional.empty() : Optional.of(pixels.clone());
     }
 

@@ -7,6 +7,7 @@ import com.rspsi.cache.map.OsrsProjectSessionLoader;
 import com.rspsi.editor.model.WorldRegion;
 import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.assets.EmptyAssetRepository;
 import com.rspsi.editor.plugin.EditorPlugin;
 import com.rspsi.editor.plugin.EditorPluginHost;
@@ -14,6 +15,8 @@ import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
 import com.rspsi.editor.plugin.EditorPluginLoader;
 import com.rspsi.editor.plugin.EditorPluginStateStore;
 import com.rspsi.editor.plugin.EditorNotificationService;
+import com.rspsi.editor.plugin.EditorSceneAccess;
+import com.rspsi.editor.plugin.EditorSceneSnapshot;
 import com.rspsi.editor.plugin.EditorTaskService;
 import com.rspsi.editor.plugin.PluginDiscovery;
 import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
@@ -23,6 +26,8 @@ import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.GpuUploadPlanBuilder;
 import com.rspsi.editor.render.RenderConfig;
 import com.rspsi.editor.render.RenderConfigCompiler;
+import com.rspsi.editor.render.RenderScene;
+import com.rspsi.editor.render.RenderSceneBuilder;
 import com.rspsi.editor.render.RenderWindowScene;
 import com.rspsi.editor.render.RenderWindowSceneBuilder;
 import com.rspsi.editor.render.SceneWindow;
@@ -169,7 +174,8 @@ public final class StudioApplication implements AutoCloseable {
         GpuUploadPlan plan = new GpuUploadPlanBuilder().build(config.apply(packet));
         double centerX = sceneWindow.sceneBaseX() * 128.0 + window.worldWindow().width() * 64.0;
         double centerZ = sceneWindow.sceneBaseY() * 128.0 + window.worldWindow().length() * 64.0;
-        return new LoadedMapScene(opened, packet, plan, settingsRevision,
+        RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).build(region.document());
+        return new LoadedMapScene(opened, renderScene, packet, plan, settingsRevision,
                 new com.rspsi.editor.render.CameraState(
                 (float) centerX, -2400.0f, (float) centerZ - 4200.0f,
                 (float) -Math.toRadians(28.0), 0.0f));
@@ -237,14 +243,19 @@ public final class StudioApplication implements AutoCloseable {
                 Path.of("plugins"), Thread.currentThread().getContextClassLoader());
         candidates.addAll(discovery.plugins());
         EditorSession session = scene.opened().region().session();
+        AssetRepository assets = cacheSessions.current()
+                .map(LoadedOsrsCacheSession::bundle)
+                .map(com.rspsi.cache.workspace.OsrsBundle::assets)
+                .orElse(EmptyAssetRepository.INSTANCE);
+        EditorSceneAccess sceneAccess = () -> EditorSceneSnapshot.from(scene.renderScene());
         EditorPluginLifecycleManager next = EditorPluginLifecycleManager.start(
                 candidates,
                 EditorPluginStateStore.defaultStore(),
                 session,
-                EmptyAssetRepository.INSTANCE,
-                null,
+                assets,
+                sceneAccess,
                 enabled -> EditorPluginHost.initialize(enabled, session,
-                        EmptyAssetRepository.INSTANCE, null, renderSettings, tasks, notifications),
+                        assets, sceneAccess, renderSettings, tasks, notifications),
                 discovery);
         pluginLifecycle = next;
     }
@@ -322,6 +333,7 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private record LoadedMapScene(OsrsProjectSessionLoader.OpenedProject opened,
+                                  RenderScene renderScene,
                                   GpuScenePacket packet,
                                   GpuUploadPlan plan,
                                   long settingsRevision,

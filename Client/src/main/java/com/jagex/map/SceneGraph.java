@@ -773,8 +773,8 @@ public class SceneGraph {
 		wall.setPrimary(primary);
 		wall.setSecondary(secondary);
 		wall.setPlane(plane);
-		wall.anInt276 = i;
-		wall.anInt277 = j1;
+		wall.orientationA = i;
+		wall.orientationB = j1;
 
 		for (int z = plane; z >= 0; z--) {
 			if (tiles[z][x][y] == null) {
@@ -2439,17 +2439,17 @@ public class SceneGraph {
 
 	public void method277(int plane, int j, int k, int l, int i1, int j1, int l1, int i2) {
 		SceneCluster cluster = new SceneCluster();
-		cluster.anInt787 = j / 128;
-		cluster.anInt788 = l / 128;
-		cluster.anInt789 = l1 / 128;
-		cluster.anInt790 = i1 / 128;
-		cluster.anInt791 = i2;
-		cluster.anInt792 = j;
-		cluster.anInt793 = l;
-		cluster.anInt794 = l1;
-		cluster.anInt795 = i1;
-		cluster.anInt796 = j1;
-		cluster.anInt797 = k;
+		cluster.minTileX = j / 128;
+		cluster.maxTileX = l / 128;
+		cluster.minTileZ = l1 / 128;
+		cluster.maxTileZ = i1 / 128;
+		cluster.type = i2;
+		cluster.minX = j;
+		cluster.maxX = l;
+		cluster.minZ = l1;
+		cluster.maxZ = i1;
+		cluster.minY = j1;
+		cluster.maxY = k;
 		clusters[plane][clusterCounts[plane]++] = cluster;
 	}
 
@@ -2708,11 +2708,11 @@ public class SceneGraph {
 							if (tile.collisionPlane > cameraPlane || !aBooleanArrayArray492[x - minViewX][y - minViewY]
 									&& chunk.mapRegion.tileHeights[z][x][y] - cameraTileZ < 50) {
 								tile.needsRendering = false;
-								tile.aBoolean1323 = false;
-								tile.anInt1325 = 0;
+								tile.drawSecondary = false;
+								tile.drawGameObjectEdges = 0;
 							} else {
 								tile.needsRendering = true;
-								tile.aBoolean1323 = true;
+								tile.drawSecondary = true;
 								tile.hasObjects = tile.getTemporaryObject().isPresent() || tile.objectCount > 0;
 								anInt446++;
 							}
@@ -2879,16 +2879,16 @@ public class SceneGraph {
 		anInt475 = 0;
 		for (int k = 0; k < j; k++) {
 			SceneCluster cluster = clusters[k];
-			if (cluster.anInt791 == 1) {
-				int l = cluster.anInt787 - absoluteCameraX + Options.renderDistance.get();
+			if (cluster.type == 1) {
+				int l = cluster.minTileX - absoluteCameraX + Options.renderDistance.get();
 				if (l < 0 || l > 50) {
 					continue;
 				}
-				int k1 = cluster.anInt789 - absoluteCameraY + Options.renderDistance.get();
+				int k1 = cluster.minTileZ - absoluteCameraY + Options.renderDistance.get();
 				if (k1 < 0) {
 					k1 = 0;
 				}
-				int j2 = cluster.anInt790 - absoluteCameraY + Options.renderDistance.get();
+				int j2 = cluster.maxTileZ - absoluteCameraY + Options.renderDistance.get();
 				if (j2 > 50) {
 					j2 = 50;
 				}
@@ -2902,33 +2902,33 @@ public class SceneGraph {
 				if (!flag) {
 					continue;
 				}
-				int j3 = xCameraTile - cluster.anInt792;
+				int j3 = xCameraTile - cluster.minX;
 				if (j3 > 32) {
-					cluster.anInt798 = 1;
+					cluster.cullDirection = 1;
 				} else {
 					if (j3 >= -32) {
 						continue;
 					}
-					cluster.anInt798 = 2;
+					cluster.cullDirection = 2;
 					j3 = -j3;
 				}
-				cluster.anInt801 = (cluster.anInt794 - yCameraTile << 8) / j3;
-				cluster.anInt802 = (cluster.anInt795 - yCameraTile << 8) / j3;
-				cluster.anInt803 = (cluster.anInt796 - zCameraTile << 8) / j3;
-				cluster.anInt804 = (cluster.anInt797 - zCameraTile << 8) / j3;
+				cluster.minNormalZ = (cluster.minZ - yCameraTile << 8) / j3;
+				cluster.maxNormalZ = (cluster.maxZ - yCameraTile << 8) / j3;
+				cluster.minNormalY = (cluster.minY - zCameraTile << 8) / j3;
+				cluster.maxNormalY = (cluster.maxY - zCameraTile << 8) / j3;
 				aClass47Array476[anInt475++] = cluster;
 				continue;
 			}
-			if (cluster.anInt791 == 2) {
-				int i1 = cluster.anInt789 - absoluteCameraY + Options.renderDistance.get();
+			if (cluster.type == 2) {
+				int i1 = cluster.minTileZ - absoluteCameraY + Options.renderDistance.get();
 				if (i1 < 0 || i1 > 50) {
 					continue;
 				}
-				int l1 = cluster.anInt787 - absoluteCameraX + Options.renderDistance.get();
+				int l1 = cluster.minTileX - absoluteCameraX + Options.renderDistance.get();
 				if (l1 < 0) {
 					l1 = 0;
 				}
-				int k2 = cluster.anInt788 - absoluteCameraX + Options.renderDistance.get();
+				int k2 = cluster.maxTileX - absoluteCameraX + Options.renderDistance.get();
 				if (k2 > 50) {
 					k2 = 50;
 				}
@@ -2942,38 +2942,38 @@ public class SceneGraph {
 				if (!flag1) {
 					continue;
 				}
-				int k3 = yCameraTile - cluster.anInt794;
+				int k3 = yCameraTile - cluster.minZ;
 				if (k3 > 32) {
-					cluster.anInt798 = 3;
+					cluster.cullDirection = 3;
 				} else {
 					if (k3 >= -32) {
 						continue;
 					}
-					cluster.anInt798 = 4;
+					cluster.cullDirection = 4;
 					k3 = -k3;
 				}
-				cluster.anInt799 = (cluster.anInt792 - xCameraTile << 8) / k3;
-				cluster.anInt800 = (cluster.anInt793 - xCameraTile << 8) / k3;
-				cluster.anInt803 = (cluster.anInt796 - zCameraTile << 8) / k3;
-				cluster.anInt804 = (cluster.anInt797 - zCameraTile << 8) / k3;
+				cluster.minNormalX = (cluster.minX - xCameraTile << 8) / k3;
+				cluster.maxNormalX = (cluster.maxX - xCameraTile << 8) / k3;
+				cluster.minNormalY = (cluster.minY - zCameraTile << 8) / k3;
+				cluster.maxNormalY = (cluster.maxY - zCameraTile << 8) / k3;
 				aClass47Array476[anInt475++] = cluster;
-			} else if (cluster.anInt791 == 4) {
-				int j1 = cluster.anInt796 - zCameraTile;
+			} else if (cluster.type == 4) {
+				int j1 = cluster.minY - zCameraTile;
 				if (j1 > 128) {
-					int i2 = cluster.anInt789 - absoluteCameraY + Options.renderDistance.get();
+					int i2 = cluster.minTileZ - absoluteCameraY + Options.renderDistance.get();
 					if (i2 < 0) {
 						i2 = 0;
 					}
-					int l2 = cluster.anInt790 - absoluteCameraY + Options.renderDistance.get();
+					int l2 = cluster.maxTileZ - absoluteCameraY + Options.renderDistance.get();
 					if (l2 > 50) {
 						l2 = 50;
 					}
 					if (i2 <= l2) {
-						int i3 = cluster.anInt787 - absoluteCameraX + Options.renderDistance.get();
+						int i3 = cluster.minTileX - absoluteCameraX + Options.renderDistance.get();
 						if (i3 < 0) {
 							i3 = 0;
 						}
-						int l3 = cluster.anInt788 - absoluteCameraX + Options.renderDistance.get();
+						int l3 = cluster.maxTileX - absoluteCameraX + Options.renderDistance.get();
 						if (l3 > 50) {
 							l3 = 50;
 						}
@@ -2991,11 +2991,11 @@ public class SceneGraph {
 						}
 
 						if (flag2) {
-							cluster.anInt798 = 5;
-							cluster.anInt799 = (cluster.anInt792 - xCameraTile << 8) / j1;
-							cluster.anInt800 = (cluster.anInt793 - xCameraTile << 8) / j1;
-							cluster.anInt801 = (cluster.anInt794 - yCameraTile << 8) / j1;
-							cluster.anInt802 = (cluster.anInt795 - yCameraTile << 8) / j1;
+							cluster.cullDirection = 5;
+							cluster.minNormalX = (cluster.minX - xCameraTile << 8) / j1;
+							cluster.maxNormalX = (cluster.maxX - xCameraTile << 8) / j1;
+							cluster.minNormalZ = (cluster.minZ - yCameraTile << 8) / j1;
+							cluster.maxNormalZ = (cluster.maxZ - yCameraTile << 8) / j1;
 							aClass47Array476[anInt475++] = cluster;
 						}
 					}
@@ -3183,60 +3183,60 @@ public class SceneGraph {
 		for (int l = 0; l < anInt475; l++) {
 			SceneCluster cluster = aClass47Array476[l];
 
-			if (cluster.anInt798 == 1) {
-				int dx = cluster.anInt792 - worldX;
+			if (cluster.cullDirection == 1) {
+				int dx = cluster.minX - worldX;
 
 				if (dx > 0) {
-					int j2 = cluster.anInt794 + (cluster.anInt801 * dx >> 8);
-					int k3 = cluster.anInt795 + (cluster.anInt802 * dx >> 8);
-					int l4 = cluster.anInt796 + (cluster.anInt803 * dx >> 8);
-					int i6 = cluster.anInt797 + (cluster.anInt804 * dx >> 8);
+					int j2 = cluster.minZ + (cluster.minNormalZ * dx >> 8);
+					int k3 = cluster.maxZ + (cluster.maxNormalZ * dx >> 8);
+					int l4 = cluster.minY + (cluster.minNormalY * dx >> 8);
+					int i6 = cluster.maxY + (cluster.maxNormalY * dx >> 8);
 
 					if (worldY >= j2 && worldY <= k3 && j >= l4 && j <= i6)
 						return true;
 				}
-			} else if (cluster.anInt798 == 2) {
-				int dx = worldX - cluster.anInt792;
+			} else if (cluster.cullDirection == 2) {
+				int dx = worldX - cluster.minX;
 
 				if (dx > 0) {
-					int k2 = cluster.anInt794 + (cluster.anInt801 * dx >> 8);
-					int l3 = cluster.anInt795 + (cluster.anInt802 * dx >> 8);
-					int i5 = cluster.anInt796 + (cluster.anInt803 * dx >> 8);
-					int j6 = cluster.anInt797 + (cluster.anInt804 * dx >> 8);
+					int k2 = cluster.minZ + (cluster.minNormalZ * dx >> 8);
+					int l3 = cluster.maxZ + (cluster.maxNormalZ * dx >> 8);
+					int i5 = cluster.minY + (cluster.minNormalY * dx >> 8);
+					int j6 = cluster.maxY + (cluster.maxNormalY * dx >> 8);
 
 					if (worldY >= k2 && worldY <= l3 && j >= i5 && j <= j6)
 						return true;
 				}
-			} else if (cluster.anInt798 == 3) {
-				int dy = cluster.anInt794 - worldY;
+			} else if (cluster.cullDirection == 3) {
+				int dy = cluster.minZ - worldY;
 
 				if (dy > 0) {
-					int l2 = cluster.anInt792 + (cluster.anInt799 * dy >> 8);
-					int i4 = cluster.anInt793 + (cluster.anInt800 * dy >> 8);
-					int j5 = cluster.anInt796 + (cluster.anInt803 * dy >> 8);
-					int k6 = cluster.anInt797 + (cluster.anInt804 * dy >> 8);
+					int l2 = cluster.minX + (cluster.minNormalX * dy >> 8);
+					int i4 = cluster.maxX + (cluster.maxNormalX * dy >> 8);
+					int j5 = cluster.minY + (cluster.minNormalY * dy >> 8);
+					int k6 = cluster.maxY + (cluster.maxNormalY * dy >> 8);
 
 					if (worldX >= l2 && worldX <= i4 && j >= j5 && j <= k6)
 						return true;
 				}
-			} else if (cluster.anInt798 == 4) {
-				int dy = worldY - cluster.anInt794;
+			} else if (cluster.cullDirection == 4) {
+				int dy = worldY - cluster.minZ;
 				if (dy > 0) {
-					int i3 = cluster.anInt792 + (cluster.anInt799 * dy >> 8);
-					int j4 = cluster.anInt793 + (cluster.anInt800 * dy >> 8);
-					int k5 = cluster.anInt796 + (cluster.anInt803 * dy >> 8);
-					int l6 = cluster.anInt797 + (cluster.anInt804 * dy >> 8);
+					int i3 = cluster.minX + (cluster.minNormalX * dy >> 8);
+					int j4 = cluster.maxX + (cluster.maxNormalX * dy >> 8);
+					int k5 = cluster.minY + (cluster.minNormalY * dy >> 8);
+					int l6 = cluster.maxY + (cluster.maxNormalY * dy >> 8);
 
 					if (worldX >= i3 && worldX <= j4 && j >= k5 && j <= l6)
 						return true;
 				}
-			} else if (cluster.anInt798 == 5) {
-				int i2 = j - cluster.anInt796;
+			} else if (cluster.cullDirection == 5) {
+				int i2 = j - cluster.minY;
 				if (i2 > 0) {
-					int j3 = cluster.anInt792 + (cluster.anInt799 * i2 >> 8);
-					int k4 = cluster.anInt793 + (cluster.anInt800 * i2 >> 8);
-					int l5 = cluster.anInt794 + (cluster.anInt801 * i2 >> 8);
-					int i7 = cluster.anInt795 + (cluster.anInt802 * i2 >> 8);
+					int j3 = cluster.minX + (cluster.minNormalX * i2 >> 8);
+					int k4 = cluster.maxX + (cluster.maxNormalX * i2 >> 8);
+					int l5 = cluster.minZ + (cluster.minNormalZ * i2 >> 8);
+					int i7 = cluster.maxZ + (cluster.maxNormalZ * i2 >> 8);
 
 					if (worldX >= j3 && worldX <= k4 && worldY >= l5 && worldY <= i7)
 						return true;
@@ -3861,14 +3861,14 @@ public class SceneGraph {
 				activeTile = tileQueue.poll();
 				if (activeTile == null)
 					return;
-			} while (!activeTile.aBoolean1323);
+			} while (!activeTile.drawSecondary);
 
 			int x = activeTile.positionX;
 			int y = activeTile.positionY;
 			int wX = x;
 			int wY = y;
 			int plane = activeTile.plane;
-			int l = activeTile.anInt1310;
+			int l = activeTile.minPlane;
 			if (plane > 3) {
 				continue;
 			}
@@ -3879,14 +3879,14 @@ public class SceneGraph {
 				if (flag) {
 					if (plane > 0) {
 						SceneTile tile = tiles[plane - 1][x][y];
-						if (tile != null && tile.aBoolean1323) {
+						if (tile != null && tile.drawSecondary) {
 							continue;
 						}
 					}
 
 					if (wX <= absoluteCameraX && wX > minViewX && x > 0) {
 						SceneTile tile = planeTiles[x - 1][y];
-						if (tile != null && tile.aBoolean1323 && (tile.needsRendering
+						if (tile != null && tile.drawSecondary && (tile.needsRendering
 								|| (activeTile.attributes() & TileAttributes.RENDER_TILE_WEST) == 0)) {
 							continue;
 						}
@@ -3894,7 +3894,7 @@ public class SceneGraph {
 
 					if (wX >= absoluteCameraX && wX < maxViewX - 1 && x < width - 1) {
 						SceneTile tile = planeTiles[x + 1][y];
-						if (tile != null && tile.aBoolean1323 && (tile.needsRendering
+						if (tile != null && tile.drawSecondary && (tile.needsRendering
 								|| (activeTile.attributes() & TileAttributes.RENDER_TILE_EAST) == 0)) {
 							continue;
 						}
@@ -3902,7 +3902,7 @@ public class SceneGraph {
 
 					if (wY <= absoluteCameraY && wY > minViewY && y > 0) {
 						SceneTile tile = planeTiles[x][y - 1];
-						if (tile != null && tile.aBoolean1323 && (tile.needsRendering
+						if (tile != null && tile.drawSecondary && (tile.needsRendering
 								|| (activeTile.attributes() & TileAttributes.RENDER_TILE_NORTH) == 0)) {
 							continue;
 						}
@@ -3910,7 +3910,7 @@ public class SceneGraph {
 
 					if (wY >= absoluteCameraY && wY < maxViewY - 1 && y < length - 1) {
 						SceneTile tile = planeTiles[x][y + 1];
-						if (tile != null && tile.aBoolean1323 && (tile.needsRendering
+						if (tile != null && tile.drawSecondary && (tile.needsRendering
 								|| (activeTile.attributes() & TileAttributes.RENDER_TILE_SOUTH) == 0)) {
 							continue;
 						}
@@ -3946,9 +3946,16 @@ public class SceneGraph {
 					if (Options.showObjects.get()) {
 						Wall wall = (Wall) SceneGraph.getTemporaryOrDefault(tileBelow, WorldObjectType.WALL);
 						if (wall != null) {
-							wall.getPrimary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
-									ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
-									wall.getKey(), plane);
+							if (wall.getPrimary() != null) {
+								wall.getPrimary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
+										ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
+										wall.getKey(), plane);
+							}
+							if (wall.getSecondary() != null) {
+								wall.getSecondary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
+										ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
+										wall.getKey(), plane);
+							}
 						}
 
 						for (int index = 0; index < tileBelow.objectCount; index++) {
@@ -4019,38 +4026,38 @@ public class SceneGraph {
 							j1 += 6;
 						}
 						j2 = anIntArray478[j1];
-						activeTile.anInt1328 = anIntArray480[j1];
+						activeTile.cameraAngleMask = anIntArray480[j1];
 					}
 
 					if (wall != null) {
-						if ((wall.anInt276 & anIntArray479[j1]) != 0) {
-							if (wall.anInt276 == 16) {
-								activeTile.anInt1325 = 3;
-								activeTile.anInt1326 = anIntArray481[j1];
-								activeTile.anInt1327 = 3 - activeTile.anInt1326;
-							} else if (wall.anInt276 == 32) {
-								activeTile.anInt1325 = 6;
-								activeTile.anInt1326 = anIntArray482[j1];
-								activeTile.anInt1327 = 6 - activeTile.anInt1326;
-							} else if (wall.anInt276 == 64) {
-								activeTile.anInt1325 = 12;
-								activeTile.anInt1326 = anIntArray483[j1];
-								activeTile.anInt1327 = 12 - activeTile.anInt1326;
+						if ((wall.orientationA & anIntArray479[j1]) != 0) {
+							if (wall.orientationA == 16) {
+								activeTile.drawGameObjectEdges = 3;
+								activeTile.wallUncullDirection = anIntArray481[j1];
+								activeTile.wallCullOppositeDirection = 3 - activeTile.wallUncullDirection;
+							} else if (wall.orientationA == 32) {
+								activeTile.drawGameObjectEdges = 6;
+								activeTile.wallUncullDirection = anIntArray482[j1];
+								activeTile.wallCullOppositeDirection = 6 - activeTile.wallUncullDirection;
+							} else if (wall.orientationA == 64) {
+								activeTile.drawGameObjectEdges = 12;
+								activeTile.wallUncullDirection = anIntArray483[j1];
+								activeTile.wallCullOppositeDirection = 12 - activeTile.wallUncullDirection;
 							} else {
-								activeTile.anInt1325 = 9;
-								activeTile.anInt1326 = anIntArray484[j1];
-								activeTile.anInt1327 = 9 - activeTile.anInt1326;
+								activeTile.drawGameObjectEdges = 9;
+								activeTile.wallUncullDirection = anIntArray484[j1];
+								activeTile.wallCullOppositeDirection = 9 - activeTile.wallUncullDirection;
 							}
 						} else {
-							activeTile.anInt1325 = 0;
+							activeTile.drawGameObjectEdges = 0;
 						}
-						if ((wall.anInt276 & j2) != 0 && !method321(x, y, l, wall.anInt276)
+						if ((wall.orientationA & j2) != 0 && !method321(x, y, l, wall.orientationA)
 								&& wall.getPrimary() != null) {
 							wall.getPrimary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
 									ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
 									wall.getKey(), plane);
 						}
-						if ((wall.anInt277 & j2) != 0 && !method321(x, y, l, wall.anInt277)
+						if ((wall.orientationB & j2) != 0 && !method321(x, y, l, wall.orientationB)
 								&& wall.getSecondary() != null) {
 							wall.getSecondary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
 									ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
@@ -4130,28 +4137,28 @@ public class SceneGraph {
 					if (attributes != 0) {
 						if (wX < absoluteCameraX && (attributes & TileAttributes.RENDER_TILE_EAST) != 0) {
 							SceneTile tile = planeTiles[x + 1][y];
-							if (tile != null && tile.aBoolean1323) {
+							if (tile != null && tile.drawSecondary) {
 								tileQueue.addLast(tile);
 							}
 						}
 
 						if (wY < absoluteCameraY && (attributes & TileAttributes.RENDER_TILE_SOUTH) != 0) {
 							SceneTile tile = planeTiles[x][y + 1];
-							if (tile != null && tile.aBoolean1323) {
+							if (tile != null && tile.drawSecondary) {
 								tileQueue.addLast(tile);
 							}
 						}
 
 						if (wX > absoluteCameraX && (attributes & TileAttributes.RENDER_TILE_WEST) != 0) {
 							SceneTile tile = planeTiles[x - 1][y];
-							if (tile != null && tile.aBoolean1323) {
+							if (tile != null && tile.drawSecondary) {
 								tileQueue.addLast(tile);
 							}
 						}
 
 						if (wY > absoluteCameraY && (attributes & TileAttributes.RENDER_TILE_NORTH) != 0) {
 							SceneTile tile = planeTiles[x][y - 1];
-							if (tile != null && tile.aBoolean1323) {
+							if (tile != null && tile.drawSecondary) {
 								tileQueue.addLast(tile);
 							}
 						}
@@ -4165,7 +4172,7 @@ public class SceneGraph {
 			}
 
 
-			if (activeTile.anInt1325 != 0) {
+			if (activeTile.drawGameObjectEdges != 0) {
 				boolean flag2 = true;
 
 				GameObject tempObj = (GameObject) getTemporaryOrDefault(activeTile, WorldObjectType.GAME_OBJECT);
@@ -4175,7 +4182,7 @@ public class SceneGraph {
 				for (int index = 0; index < count; index++) {
 					GameObject obj = index == activeTile.objectCount ? tempObj : activeTile.gameObjects[index];
 					int objAttrib = index == activeTile.objectCount ? activeTile.temporaryObjectAttributes.get() : activeTile.objectAttributes[index];
-					if (obj.lastRenderCycle == currentRenderCycle || (objAttrib & activeTile.anInt1325) != activeTile.anInt1326) {
+					if (obj.lastRenderCycle == currentRenderCycle || (objAttrib & activeTile.drawGameObjectEdges) != activeTile.wallUncullDirection) {
 						continue;
 					}
 
@@ -4186,13 +4193,20 @@ public class SceneGraph {
 
 				if (flag2) {
 					Wall wall = (Wall) SceneGraph.getTemporaryOrDefault(activeTile, WorldObjectType.WALL);
-					if (wall != null && !method321(x, y, l, wall.anInt276)) {
-						wall.getPrimary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
-								ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
-								wall.getKey(), plane);
+					if (wall != null) {
+						if (wall.getPrimary() != null && !method321(x, y, l, wall.orientationA)) {
+							wall.getPrimary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
+									ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
+									wall.getKey(), plane);
+						}
+						if (wall.getSecondary() != null && !method321(x, y, l, wall.orientationB)) {
+							wall.getSecondary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
+									ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
+									wall.getKey(), plane);
+						}
 					}
 
-					activeTile.anInt1325 = 0;
+					activeTile.drawGameObjectEdges = 0;
 				}
 			}
 
@@ -4222,7 +4236,7 @@ public class SceneGraph {
 								if (objectTile.needsRendering) {
 									activeTile.hasObjects = true;
 								} else {
-									if (objectTile.anInt1325 == 0) {
+									if (objectTile.drawGameObjectEdges == 0) {
 										continue;
 									}
 									int l6 = 0;
@@ -4238,7 +4252,7 @@ public class SceneGraph {
 									if (objectY < object.maxY) {
 										l6 += 2;
 									}
-									if ((l6 & objectTile.anInt1325) != activeTile.anInt1327) {
+									if ((l6 & objectTile.drawGameObjectEdges) != activeTile.wallCullOppositeDirection) {
 										continue;
 									}
 
@@ -4267,9 +4281,9 @@ public class SceneGraph {
 						int i7 = absoluteCameraY - object.getY();
 						int j8 = object.maxY - absoluteCameraY;
 						if (j8 > i7) {
-							object.anInt527 = distanceFromStartX + j8;
+							object.sortDistance = distanceFromStartX + j8;
 						} else {
-							object.anInt527 = distanceFromStartX + i7;
+							object.sortDistance = distanceFromStartX + i7;
 						}
 					}
 
@@ -4279,10 +4293,10 @@ public class SceneGraph {
 						for (int j5 = 0; j5 < objectsOnTile; j5++) {
 							GameObject object = interactables[j5];
 							if (object.lastRenderCycle != currentRenderCycle) {
-								if (object.anInt527 > i3) {
-									i3 = object.anInt527;
+								if (object.sortDistance > i3) {
+									i3 = object.sortDistance;
 									l3 = j5;
-								} else if (object.anInt527 == i3) {
+								} else if (object.sortDistance == i3) {
 									int j7 = object.centreX - xCameraTile;
 									int k8 = object.centreY - yCameraTile;
 									int l9 = interactables[l3].centreX - xCameraTile;
@@ -4312,9 +4326,9 @@ public class SceneGraph {
 							for (int l8 = object.getY(); l8 <= object.maxY; l8++) {
 								SceneTile class30_sub3_22 = planeTiles[k7][l8];
 
-								if (class30_sub3_22.anInt1325 != 0) {
+								if (class30_sub3_22.drawGameObjectEdges != 0) {
 									tileQueue.addLast(class30_sub3_22);
-								} else if ((k7 != x || l8 != y) && class30_sub3_22.aBoolean1323) {
+								} else if ((k7 != x || l8 != y) && class30_sub3_22.drawSecondary) {
 									tileQueue.addLast(class30_sub3_22);
 								}
 							}
@@ -4330,47 +4344,47 @@ public class SceneGraph {
 				}
 			}
 
-			if (!activeTile.aBoolean1323 || activeTile.anInt1325 != 0) {
+			if (!activeTile.drawSecondary || activeTile.drawGameObjectEdges != 0) {
 				continue;
 			}
 
 			if (wX <= absoluteCameraX && wX > minViewX && x > 0) {
 				SceneTile class30_sub3_8 = planeTiles[x - 1][y];
-				if (class30_sub3_8 != null && class30_sub3_8.aBoolean1323) {
+				if (class30_sub3_8 != null && class30_sub3_8.drawSecondary) {
 					continue;
 				}
 			}
 
 			if (wX >= absoluteCameraX && wX < maxViewX - 1 && x < width - 1) {
 				SceneTile class30_sub3_9 = planeTiles[x + 1][y];
-				if (class30_sub3_9 != null && class30_sub3_9.aBoolean1323) {
+				if (class30_sub3_9 != null && class30_sub3_9.drawSecondary) {
 					continue;
 				}
 			}
 
 			if (wY <= absoluteCameraY && wY > minViewY && y > 0) {
 				SceneTile class30_sub3_10 = planeTiles[x][y - 1];
-				if (class30_sub3_10 != null && class30_sub3_10.aBoolean1323) {
+				if (class30_sub3_10 != null && class30_sub3_10.drawSecondary) {
 					continue;
 				}
 			}
 
 			if (wY >= absoluteCameraY && wY < maxViewY - 1 && y < length - 1) {
 				SceneTile class30_sub3_11 = planeTiles[x][y + 1];
-				if (class30_sub3_11 != null && class30_sub3_11.aBoolean1323) {
+				if (class30_sub3_11 != null && class30_sub3_11.drawSecondary) {
 					continue;
 				}
 			}
 
-			activeTile.aBoolean1323 = false;
+			activeTile.drawSecondary = false;
 			anInt446--;
 
-			if (activeTile.anInt1328 != 0) {
+			if (activeTile.cameraAngleMask != 0) {
 				WallDecoration decor = (WallDecoration) SceneGraph.getTemporaryOrDefault(activeTile,
 						WorldObjectType.WALL_DECORATION);
 				if (decor != null && decor.getPrimary() != null
 						&& !method322(l, x, y, decor.getPrimary().getModelHeight())) {
-					if ((decor.getAttributes() & activeTile.anInt1328) != 0) {
+					if ((decor.getAttributes() & activeTile.cameraAngleMask) != 0) {
 						decor.getPrimary().render(GameRasterizer.getInstance(), decor.getX() - xCameraTile, decor.getY() - yCameraTile,
 								decor.getOrientation(), ySine, yCosine, xSine, xCosine,
 								decor.getRenderHeight() - zCameraTile, decor.getKey(), plane);
@@ -4407,13 +4421,13 @@ public class SceneGraph {
 				}
 				Wall wall = (Wall) SceneGraph.getTemporaryOrDefault(activeTile, WorldObjectType.WALL);
 				if (wall != null) {
-					if ((wall.anInt277 & activeTile.anInt1328) != 0 && !method321(x, y, l, wall.anInt277)
+					if ((wall.orientationB & activeTile.cameraAngleMask) != 0 && !method321(x, y, l, wall.orientationB)
 							&& wall.getSecondary() != null) {
 						wall.getSecondary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
 								ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
 								wall.getKey(), plane);
 					}
-					if ((wall.anInt276 & activeTile.anInt1328) != 0 && !method321(x, y, l, wall.anInt276)
+					if ((wall.orientationA & activeTile.cameraAngleMask) != 0 && !method321(x, y, l, wall.orientationA)
 							&& wall.getPrimary() != null) {
 						wall.getPrimary().render(GameRasterizer.getInstance(), wall.getX() - xCameraTile, wall.getY() - yCameraTile, 0,
 								ySine, yCosine, xSine, xCosine, wall.getRenderHeight() - zCameraTile,
@@ -4423,31 +4437,31 @@ public class SceneGraph {
 			}
 			if (plane < planeCount - 1) {
 				SceneTile above = tiles[plane + 1][x][y];
-				if (above != null && above.aBoolean1323) {
+				if (above != null && above.drawSecondary) {
 					tileQueue.addLast(above);
 				}
 			}
 			if (wX < absoluteCameraX && x < width - 1) {
 				SceneTile east = planeTiles[x + 1][y];
-				if (east != null && east.aBoolean1323) {
+				if (east != null && east.drawSecondary) {
 					tileQueue.addLast(east);
 				}
 			}
 			if (wY < absoluteCameraY && y < length - 1) {
 				SceneTile north = planeTiles[x][y + 1];
-				if (north != null && north.aBoolean1323) {
+				if (north != null && north.drawSecondary) {
 					tileQueue.addLast(north);
 				}
 			}
 			if (wX > absoluteCameraX && x > 0) {
 				SceneTile west = planeTiles[x - 1][y];
-				if (west != null && west.aBoolean1323) {
+				if (west != null && west.drawSecondary) {
 					tileQueue.addLast(west);
 				}
 			}
 			if (wY > absoluteCameraY && y > 0) {
 				SceneTile south = planeTiles[x][y - 1];
-				if (south != null && south.aBoolean1323) {
+				if (south != null && south.drawSecondary) {
 					tileQueue.addLast(south);
 				}
 			}

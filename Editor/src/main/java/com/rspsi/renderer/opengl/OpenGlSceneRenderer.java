@@ -39,6 +39,10 @@ import static org.lwjgl.opengl.GL11.GL_BLEND;
 import static org.lwjgl.opengl.GL11.GL_BACK;
 import static org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT;
 import static org.lwjgl.opengl.GL11.GL_CULL_FACE;
+import static org.lwjgl.opengl.GL11.GL_CW;
+import static org.lwjgl.opengl.GL11.GL_CCW;
+import static org.lwjgl.opengl.GL11.glCullFace;
+import static org.lwjgl.opengl.GL11.glFrontFace;
 import static org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT;
 import static org.lwjgl.opengl.GL11.GL_DEPTH_TEST;
 import static org.lwjgl.opengl.GL11.GL_FILL;
@@ -136,11 +140,18 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private static final float NEAR = 16.0f;
     private static final float FAR = 65536.0f;
 
+    /** Back-face culling is unresolved, so it is exposed rather than assumed. */
+    public static final int CULL_OFF = 0;
+    public static final int CULL_FRONT_CCW = 1;
+    public static final int CULL_FRONT_CW = 2;
+
     private int lastAlpha = -1;
     private int lastTextured = -1;
     private int lastTextureAvailable = -1;
     private int lastTextureMissing = -1;
     private int lastTerrain = -1;
+    private int lastCull = -1;
+    private int cullMode = CULL_OFF;
     private int lastNoDepth = -1;
     private int lastFaceBias = -1;
     private float lastTextureOffsetU = Float.NaN;
@@ -155,6 +166,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         lastTextureAvailable = -1;
         lastTextureMissing = -1;
         lastTerrain = -1;
+        lastCull = -1;
         lastNoDepth = -1;
         lastFaceBias = -1;
         lastTextureOffsetU = Float.NaN;
@@ -303,6 +315,22 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glDepthFunc(GL_GEQUAL);
         glDepthMask(true);
         glDisable(GL_BLEND);
+        if (cullMode != CULL_OFF) {
+            glFrontFace(cullMode == CULL_FRONT_CW ? GL_CW : GL_CCW);
+            glCullFace(GL_BACK);
+        }
+        // Two-sided by default.
+        //
+        // Culling model back faces (GL_CW front, per
+        // BackfacePolicy.nativeWinding) was tried and reverted: it made
+        // walls see-through from some angles, hid roofs, darkened the scene,
+        // and broke bridges - all symptoms of the scene being drawn from its
+        // back faces, i.e. the documented winding does not match what this
+        // projection actually produces. It also did NOT stop a flat banner
+        // from z-fighting itself, which means that decoration's coincident
+        // faces share a winding and culling could never have separated them.
+        // Do not re-enable this without first verifying winding against a
+        // known asymmetric model.
         glDisable(GL_CULL_FACE);
         glPolygonMode(GL_FRONT_AND_BACK, presentation.wireframe() ? GL_LINE : GL_FILL);
         glClearDepth(0.0);
@@ -397,6 +425,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_GEQUAL);
         glDisable(GL_BLEND);
+        glDisable(GL_CULL_FACE);
         glPolygonMode(GL_FRONT_AND_BACK, presentation.wireframe() ? GL_LINE : GL_FILL);
         lastFrameDepthWrites = true;
         lastFramePolygonMode = presentation.wireframe() ? GL_LINE : GL_FILL;
@@ -418,6 +447,28 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                     statistics.occlusionApplied(), statistics.firstGlError());
             diagnosticsLogged = true;
         }
+    }
+
+    /**
+     * Selects back-face culling for model geometry.
+     *
+     * <p>The scene's true front-face winding has never been verified against
+     * a known asymmetric model. {@code BackfacePolicy} documents clockwise,
+     * but enabling that produced see-through walls, missing roofs and a
+     * darker scene - the signature of drawing back faces - so the documented
+     * value is suspect. Culling matters because thin decorations (a hanging
+     * banner's cloth and its backing sit about 1.4 units apart) draw both
+     * skins without it and shimmer where they nearly touch.</p>
+     *
+     * <p>Terrain is never culled here: shaped-tile winding is a separate
+     * unverified question and getting it wrong drops whole tiles.</p>
+     */
+    public void setCullMode(int mode) {
+        cullMode = mode < CULL_OFF || mode > CULL_FRONT_CW ? CULL_OFF : mode;
+    }
+
+    public int cullMode() {
+        return cullMode;
     }
 
     public Statistics statistics() {
@@ -585,14 +636,14 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // descending (highest first) so higher priority wins coplanar ties.
         // This reversed-Z GPU path uses GL_GEQUAL, where an incoming
         // fragment at an EQUAL depth PASSES and overwrites - the LAST face
-        // drawn at a given depth wins. To reach the same "higher priority
-        // wins" visual result (verified by
+        // drawn at a given depth wins.
+        // To reach the same "higher priority wins" visual result (verified by
         // SoftwareSceneRendererTest.higherPriorityCoplanarFaceWinsWithStableDepthBias
-        // and required for wall decorations, which submissionPriority()
-        // deliberately bumps to >=10 specifically so they beat their wall),
-        // this path must sort priority ASCENDING so the higher-priority
-        // face is drawn last and wins the GL_GEQUAL tie, not first and
-        // loses it to the wall drawn after it.
+        // and essential for layered models such as banners where cloth is priority 0
+        // and embroidery/crests are priorities 1..3), this path sorts priority
+        // ASCENDING so higher-priority coplanar faces are drawn last and win the
+        // GL_GEQUAL tie. Wall decorations separately beat their mounting wall via
+        // submissionDepthBias in view-space depth.
         result.sort(Comparator.comparingInt((Integer index) -> commands.get(index).priority())
                 .thenComparingLong(index -> drawStateKey(commands.get(index), false)));
         if (!visibility.occlusionApplied()) {
@@ -655,6 +706,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             lastTextureMissing = textureMissing;
         }
         int isTerrain = command.layer() == SceneLayer.Kind.TERRAIN ? 1 : 0;
+        int cull = cullMode != CULL_OFF && isTerrain == 0 ? 1 : 0;
+        if (cull != lastCull) {
+            if (cull == 1) glEnable(GL_CULL_FACE);
+            else glDisable(GL_CULL_FACE);
+            lastCull = cull;
+        }
         if (isTerrain != lastTerrain) {
             glUniform1i(terrainLocation, isTerrain);
             lastTerrain = isTerrain;
@@ -782,6 +839,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
         // GL_TEXTURE_2D_ARRAY, glTexImage3D, and nearest/clamp sampling are
         // all available in the OpenGL 3.3 baseline; no GL 4.x path is needed.
+        // REPEAT was tried here to close the seams between wall segments
+        // and reverted with the culling change above; it has not been
+        // isolated yet, so it stays at the clamped baseline.
         // Match the client baseline first. Mipmapping can be added after
         // parity is proven; it is not safe while fallback layers can have a
         // different source dimension.

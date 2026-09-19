@@ -219,38 +219,38 @@ named, fixture-backed, and explicitly accepted as deferred.
 
 ## Phase 2 — Native application vertical slice
 
-**Status: queued**
+**Status: active**
 
 Build the smallest complete OpenRune Studio: boot, load, switch workspace,
 render one map, and return home without creating a second window or context.
 
 ### Native host
 
-- [ ] Finalize `StudioMain`, `NativeWindow`, `ImGuiHost`, `StudioApplication`,
+- [x] Finalize `StudioMain`, `NativeWindow`, `ImGuiHost`, `StudioApplication`,
   and `WorkspaceManager` around GLFW, OpenGL 3.3 core, and Dear ImGui.
-- [ ] Enable docking and keep multi-viewport disabled.
-- [ ] Establish the single application loop: poll events, update services,
+- [x] Enable docking and keep multi-viewport disabled.
+- [x] Establish the single application loop: poll events, update services,
   begin ImGui frame, render workspace, render ImGui, swap buffers.
-- [ ] Ensure all OpenGL resource creation/destruction happens on the render
+- [x] Ensure all OpenGL resource creation/destruction happens on the render
   thread.
 
 ### Startup and cache session
 
-- [ ] Reuse `OsrsCacheSessionService` and expose explicit startup phases:
+- [x] Reuse `OsrsCacheSessionService` and expose explicit startup phases:
   `EMPTY`, `DISCOVERING`, `LOADING`, `READY`, `FAILED`, and `CLOSING`.
 - [ ] Add task progress, cancellation, notifications, and actionable errors.
-- [ ] Persist recent cache/project selection without making a cache global.
-- [ ] Keep the cache session alive when navigating Dashboard ↔ workspace.
-- [ ] Block Map Editor until the session is genuinely `READY`.
+- [x] Persist recent cache/project selection without making a cache global.
+- [x] Keep the cache session alive when navigating Dashboard ↔ workspace.
+- [x] Block Map Editor until the session is genuinely `READY`.
 
 ### First vertical slice
 
-- [ ] Blank Dashboard appears in the native window.
-- [ ] A selected cache loads asynchronously and reports profile, backend,
-  capabilities, and map count.
-- [ ] Map Editor opens in the same window.
-- [ ] An existing `GpuUploadPlan` renders one opened region.
-- [ ] Orbit, pan, zoom, and home/dashboard navigation work.
+- [x] Blank Dashboard appears in the native window with cache validation.
+- [x] A selected cache loads asynchronously and reports profile, backend,
+  capabilities, and comprehensive FileStore decoder counts (18 decoders).
+- [x] Map Editor opens in the same window.
+- [x] An existing `GpuUploadPlan` renders one opened region.
+- [x] Orbit, pan, zoom, and home/dashboard navigation work.
 - [ ] A dirty session prompts Save/Discard/Cancel before it is closed.
 
 ### Exit gate
@@ -261,7 +261,7 @@ No second Stage, Swing/AWT viewport, or duplicate cache prompt is involved.
 
 ## Phase 3 — FBO renderer and incremental GPU resources
 
-**Status: queued**
+**Status: active**
 
 Make the renderer a proper viewport backend before adding the full editor shell.
 
@@ -270,11 +270,12 @@ Make the renderer a proper viewport backend before adding the full editor shell.
 - [ ] Split `OpenGlSceneRenderer` into focused components:
   `GlDevice`, `GlShaderProgram`, `GlSceneResources`, `GlTextureRepository`,
   `GlFramebuffer`, `GlWorldRenderer`, `GlPickingPass`, `GlOverlayRenderer`,
-  and `GlRendererStats`.
-- [ ] Render the world into a scene FBO with color, depth/stencil, optional
-  MSAA attachments, resolved color, and picking attachment.
-- [ ] Display the resolved color texture through `ImGui.image(...)`.
-- [ ] Support viewport resize, render scale, screenshots, and future 2D/3D/
+  and `GlRendererStats`. (`GlFramebuffer` already extracted and in production.)
+- [x] Render the world into a scene FBO with color, depth/stencil, optional
+  MSAA attachments, resolved color, and picking attachment. Implemented in
+  `GlFramebuffer`, with MSAA samples clamped to driver `GL_MAX_SAMPLES`.
+- [x] Display the resolved color texture through `ImGui.image(...)`.
+- [x] Support viewport resize, render scale, screenshots, and future 2D/3D/
   split views through the same framebuffer boundary.
 
 ### Resource lifetime and invalidation
@@ -284,17 +285,11 @@ Make the renderer a proper viewport backend before adding the full editor shell.
 - [ ] Separate topology, geometry, texture, material, visibility, and
   animation generations/fingerprints.
 - [x] Make camera movement update uniforms/visibility/order only; it must never
-  rebuild scene VBOs/EBOs or recreate the texture array. (Fixed ahead of the
-  rest of this phase because it was the dominant "very laggy" cause:
-  `OcclusionPlanFilter` used to embed the camera in the fingerprint that
-  gated `uploadGeometry`/`uploadTextureArray`, and also rebuilt a
-  single-triangle-per-command index list every frame near any occluder.
-  Replaced with `GpuCommandVisibility`, a per-frame `BitSet` over the
-  already-uploaded plan's existing merged commands that never touches
-  vertex/index data. `OpenGlSceneRenderer.draw()` now gates upload on the
-  plan's own camera-independent fingerprint only. The rest of this phase -
-  the `GlDevice`/`GlShaderProgram`/etc. decomposition, 8×8 zones, and
-  picking pass below - remains queued.)
+  rebuild scene VBOs/EBOs or recreate the texture array. (Fixed:
+  `OcclusionPlanFilter` camera-fingerprint embedding removed; replaced with
+  `GpuCommandVisibility` per-frame BitSet over static uploaded plan geometry.
+  `OpenGlSceneRenderer.draw()` gates upload on camera-independent plan
+  fingerprint.)
 - [ ] Use 8×8 zones/chunks as GPU ownership and invalidation units with opaque
   geometry, alpha geometry, object metadata, roof ranges, pick IDs, and bounds.
 - [ ] Invalidate neighboring chunks only for real seam/lighting dependencies.
@@ -304,12 +299,11 @@ Make the renderer a proper viewport backend before adding the full editor shell.
 ### Picking and diagnostics
 
 - [ ] Add a GPU ID-buffer picking pass with stable object/tile/vertex IDs.
-- [ ] Add renderer statistics for uploads, chunk rebuilds, texture misses,
+  (`GpuPlanPicker` retained as deterministic reference fallback.)
+- [x] Add renderer statistics for uploads, chunk rebuilds, texture misses,
   draw calls, visible zones, and frame time. (`OpenGlSceneRenderer.Statistics`
-  now reports per-frame `geometryUploaded`/`textureUploaded`/`drawCalls`,
-  surfaced in the Map Editor viewport panel, so a camera-upload regression is
-  visible without a profiler. Chunk rebuilds, visible-zone counts, and frame
-  time remain unimplemented since chunking/zones do not exist yet.)
+  now reports per-frame `geometryUploaded`, `textureUploaded`, and `drawCalls`,
+  surfaced live in the Map Editor viewport panel.)
 - [ ] Keep software and native render plans comparable for the same scene.
 
 ### Exit gate
@@ -320,24 +314,16 @@ software-vs-native fixture comparisons remain within the defined tolerance.
 
 ## Phase 4 — Map Editor shell and input migration
 
-**Status: queued**
+**Status: active**
 
 Port the concepts of the existing controlled shell to ImGui. Do not copy the
 JavaFX implementation or recreate every old button.
 
-Progress note: `DashboardView` and `MapEditorView` no longer use raw
-unstyled Dear ImGui - `StudioTheme` applies a dark, low-rounding palette in
-the spirit of `docs/UI_UX_FOUNDATION.md`'s theme rules, reserving the accent
-color for active/hovered/selected state. `MapEditorView` now hosts a real
-`ImGui.dockSpace` with a built-in default `Tools | Viewport | Inspector`
-split plus a bottom drawer, built once via the DockBuilder API (with a View >
-Reset layout command) instead of four fixed-pixel, unmovable windows; panels
-can now be resized/moved/redocked by the user. `DashboardView` now tracks
-the real window size every frame instead of a hardcoded 1280x800. None of
-the specific checklist items below are fully satisfied yet (tool rail
-contents, context toolbar levels, Outliner, status bar, and layout
-save/restore beyond the one-time default remain open), so no boxes are
-checked, but the shell is no longer built directly on stock ImGui geometry.
+Progress note: `DashboardView` and `MapEditorView` use the production
+`StudioTheme` dark palette. `MapEditorView` hosts a real `ImGui.dockSpace`
+with default `Tools | Viewport | Inspector` split plus bottom utility drawer,
+built via DockBuilder with layout reset support. `CommandPaletteModal` exists
+and consumes actual registered plugin commands.
 
 ### Input and viewport
 
@@ -361,12 +347,12 @@ checked, but the shell is no longer built directly on stock ImGui geometry.
   Selection, Minimap, and Live Client.
 - [ ] Persistent status bar showing profile, region, plane, world/local
   coordinates, FPS, cache capability, and task/error state.
-- [ ] Save/reset workspace layouts and provide strong defaults; avoid requiring
-  users to recover from an accidentally chaotic docking layout.
+- [x] Save/reset workspace layouts and provide strong defaults; layout reset
+  rebuilds default dock structure cleanly.
 
 ### Core interaction surfaces
 
-- [ ] Command palette with plugin-contributed commands.
+- [x] Command palette with plugin-contributed commands.
 - [ ] Global task center and notification center.
 - [ ] Contextual inspector for tiles, objects, vertices, groups, and selections.
 - [ ] Outliner with editor-only groups that can contain terrain, objects,

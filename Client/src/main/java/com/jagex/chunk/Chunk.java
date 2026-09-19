@@ -236,11 +236,11 @@ public class Chunk {
 
 	public final void method115() {
 		spawns.forEach(spawn -> {
-			if (spawn.getLongetivity() > 0) {
-				spawn.setLongetivity(spawn.getLongetivity() - 1);
+			if (spawn.getLongevity() > 0) {
+				spawn.setLongevity(spawn.getLongevity() - 1);
 			}
 
-			if (spawn.getLongetivity() == 0) {
+			if (spawn.getLongevity() == 0) {
 				if (spawn.getPreviousId() < 0
 						|| MapRegion.objectReady(spawn.getPreviousId(), spawn.getPreviousType())) {
 					removeObject(spawn.getX(), spawn.getY(), spawn.getZ(), spawn.getGroup(),
@@ -445,7 +445,7 @@ public class Chunk {
 
 	private final void method63() {
 		spawns.forEach(spawn -> {
-			if (spawn.getLongetivity() == -1) {
+			if (spawn.getLongevity() == -1) {
 				spawn.setDelay(0);
 				setPreviousObject(spawn);
 			} else {

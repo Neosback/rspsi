@@ -38,6 +38,7 @@ public final class OsrsStudioProject implements AutoCloseable {
     private final OsrsProjectSessionLoader sessions;
     private final DefinitionProvider definitions;
     private final AssetRepository assets;
+    private final CacheDecoderSummary decoderSummary;
     private boolean closed;
 
     /**
@@ -105,6 +106,9 @@ public final class OsrsStudioProject implements AutoCloseable {
         this.project = Objects.requireNonNull(project, "project");
         this.maps = Objects.requireNonNull(maps, "maps");
         this.sessions = new OsrsProjectSessionLoader(store, identityStore, maps, project);
+        this.decoderSummary = definitionStore instanceof CacheStore defStore
+                ? defStore.decoderSummary(project.cacheRevision(), definitions)
+                : store.decoderSummary(project.cacheRevision(), definitions);
     }
 
     private OsrsStudioProject(CacheStore store, AutoCloseable definitionStore,
@@ -238,6 +242,10 @@ public final class OsrsStudioProject implements AutoCloseable {
 
     public OsrsMapService maps() {
         return maps;
+    }
+
+    public CacheDecoderSummary decoderSummary() {
+        return decoderSummary;
     }
 
     /** Opens one 64x64 OSRS region into a canonical editor session. */

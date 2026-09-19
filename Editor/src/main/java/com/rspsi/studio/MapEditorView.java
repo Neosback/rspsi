@@ -35,14 +35,23 @@ import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.flag.ImGuiCond;
-import imgui.flag.ImGuiDir;
-import imgui.flag.ImGuiDockNodeFlags;
 import imgui.flag.ImGuiInputTextFlags;
 import imgui.flag.ImGuiKey;
 import imgui.flag.ImGuiSliderFlags;
 import imgui.flag.ImGuiTableFlags;
 import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiWindowFlags;
+import com.rspsi.cache.definition.FloorDefinitionView;
+import com.rspsi.cache.definition.ObjectAppearanceView;
+import com.rspsi.cache.definition.ObjectCollisionView;
+import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.editor.model.ObjectCategory;
+import com.rspsi.editor.model.OsrsTileFlags;
+import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.render.PickResult;
+import imgui.flag.ImGuiMouseButton;
+import imgui.flag.ImGuiTreeNodeFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import imgui.type.ImString;
@@ -62,7 +71,6 @@ import java.util.Objects;
  * deliberately absent — no disabled buttons, no placeholder panels.</p>
  */
 public final class MapEditorView {
-    private static final String DOCKSPACE_NAME = "MapEditorDockspace";
     private static final String TOOL_RAIL_WINDOW = "Tool Rail";
     private static final String VIEWPORT_WINDOW = "Viewport";
     private static final String RIGHT_PANEL_WINDOW = "Tool Options";
@@ -70,45 +78,36 @@ public final class MapEditorView {
     private static final float STATUS_BAR_HEIGHT = 26.0f;
 
     /**
-     * Rails are application chrome, not user-created dock panels. Keep the
-     * buttons usable while removing the resize/move affordances that make a
-     * narrow layout feel unstable.
+     * Shared flags for every panel in the fixed frame. Nothing here moves,
+     * resizes, docks, or persists itself: the frame owns geometry, so a
+     * panel that remembered its own would only be able to disagree with it.
      */
-    private static final int LOCKED_RAIL_FLAGS = ImGuiWindowFlags.NoResize
-            | ImGuiWindowFlags.NoMove
-            | ImGuiWindowFlags.NoScrollbar
-            | ImGuiWindowFlags.NoCollapse;
-
-    /** The map canvas owns the center and has no titled panel frame. */
-    private static final int FIXED_VIEWPORT_FLAGS = ImGuiWindowFlags.NoTitleBar
+    private static final int FIXED_PANEL_FLAGS = ImGuiWindowFlags.NoTitleBar
             | ImGuiWindowFlags.NoResize
             | ImGuiWindowFlags.NoMove
-            | ImGuiWindowFlags.NoScrollbar
             | ImGuiWindowFlags.NoCollapse
+            | ImGuiWindowFlags.NoDocking
+            | ImGuiWindowFlags.NoBringToFrontOnFocus
+            | ImGuiWindowFlags.NoSavedSettings;
+
+    /** Rails are icon strips; they never scroll. */
+    private static final int LOCKED_RAIL_FLAGS = FIXED_PANEL_FLAGS | ImGuiWindowFlags.NoScrollbar;
+
+    /** The map canvas owns the centre and paints no panel background. */
+    private static final int FIXED_VIEWPORT_FLAGS = FIXED_PANEL_FLAGS
+            | ImGuiWindowFlags.NoScrollbar
             | ImGuiWindowFlags.NoBackground;
 
-    private static final int NO_RAIL_DOCK_CHROME = imgui.internal.flag.ImGuiDockNodeFlags.NoTabBar
-            | imgui.internal.flag.ImGuiDockNodeFlags.NoWindowMenuButton
-            | imgui.internal.flag.ImGuiDockNodeFlags.NoCloseButton
-            | imgui.internal.flag.ImGuiDockNodeFlags.NoDocking;
+    // Panel sizes are in logical points so the shell stays readable at any
+    // window size rather than scaling every panel with the display.
+    private static final float TOOL_RAIL_WIDTH = 78.0f;
+    private static final float RIGHT_PANEL_WIDTH = 340.0f;
+    private static final float DRAWER_HEIGHT = 200.0f;
+    private static final float MIN_VIEWPORT_WIDTH = 160.0f;
+    private static final float MIN_VIEWPORT_HEIGHT = 120.0f;
 
-    private static final int LOCKED_RAIL_DOCK_NODE_FLAGS = ImGuiDockNodeFlags.NoResize
-            | ImGuiDockNodeFlags.NoSplit
-            | NO_RAIL_DOCK_CHROME;
-
-    private static final int FIXED_VIEWPORT_DOCK_NODE_FLAGS = ImGuiDockNodeFlags.NoSplit
-            | NO_RAIL_DOCK_CHROME;
-
-    private static final float TOOL_RAIL_MIN_WIDTH = 64.0f;
-
-    /**
-     * Panels are fixed furniture, not floating tools. NoMove keeps a docked
-     * panel from being dragged out by its tab, so the layout the user learns
-     * is the layout that stays - there is no workflow here that benefits
-     * from tearing the inspector off into its own window.
-     */
-    private static final int DOCKED_PANEL_FLAGS = ImGuiWindowFlags.NoCollapse
-            | ImGuiWindowFlags.NoMove;
+    /** Dear ImGui asserts that integer slider bounds stay inside +/- INT_MAX/2. */
+    private static final long SLIDER_BOUND = Integer.MAX_VALUE / 2;
 
     private static final String ICON_SELECT = StudioIcons.SELECT;
     private static final String ICON_TERRAIN = StudioIcons.TERRAIN;
@@ -139,7 +138,10 @@ public final class MapEditorView {
     private String activeRailId = "select";
     private String activeToolId = "selection.box";
     private NativeSceneViewport viewport;
-    private boolean dockLayoutBuilt;
+    // Assigned at the top of every render pass. It cannot be initialised
+    // here: this view is constructed before ImGui has a context, and
+    // Layout.compute reads the main viewport.
+    private Layout layout;
     private boolean layoutRestored;
     private final NativeWorkspaceLayoutStore layoutStore = new NativeWorkspaceLayoutStore();
     private final EditorToolController toolController = new EditorToolController();
@@ -149,6 +151,7 @@ public final class MapEditorView {
     private boolean commandPaletteOpen;
     private final ImString commandQuery = new ImString(128);
     private int drawerTab;
+    private int rightPanelTab;
 
     public void render(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
                        NativeSceneViewport viewport, String sceneStatus,
@@ -167,7 +170,7 @@ public final class MapEditorView {
         routeRailShortcuts(pluginLifecycle);
         routeSessionShortcuts(pluginLifecycle);
         renderMainMenu(cache, openDashboard, settings, pluginLifecycle);
-        renderDockHost();
+        layout = Layout.compute(bottomDrawerVisible);
         renderToolRail(pluginLifecycle, viewport);
         renderViewport(cache, plan, viewport, sceneStatus, settings);
         renderRightPanel(cache, settings, pluginLifecycle);
@@ -239,7 +242,7 @@ public final class MapEditorView {
             ImGui.endMenu();
         }
         if (ImGui.beginMenu("Help")) {
-            ImGui.menuItem("OpenRune Studio — Map Editor", null, true, false);
+            ImGui.menuItem("OpenRune Studio · Map Editor", null, true, false);
             ImGui.endMenu();
         }
 
@@ -262,97 +265,79 @@ public final class MapEditorView {
     // Docking scaffold
     // ------------------------------------------------------------------
 
-    private void renderDockHost() {
-        imgui.ImGuiViewport viewport = ImGui.getMainViewport();
-        float menuBarHeight = ImGui.getFrameHeight();
-        float dockHeight = Math.max(1.0f, viewport.getSizeY() - menuBarHeight - STATUS_BAR_HEIGHT);
-        ImGui.setNextWindowPos(viewport.getPosX(), viewport.getPosY() + menuBarHeight);
-        ImGui.setNextWindowSize(viewport.getSizeX(), dockHeight);
-        ImGui.setNextWindowViewport(viewport.getID());
-        int hostFlags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoCollapse
-                | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove
-                | ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoNavFocus
-                | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoDocking;
-        ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 0.0f, 0.0f);
-        ImGui.pushStyleVar(ImGuiStyleVar.WindowRounding, 0.0f);
-        ImGui.pushStyleVar(ImGuiStyleVar.WindowBorderSize, 0.0f);
-        ImGui.begin("MapEditorDockHost", hostFlags);
-        ImGui.popStyleVar(3);
+    /**
+     * The shell is a fixed frame, not a dockspace.
+     *
+     * <p>This deliberately replaces an ImGui dockspace whose node tree was
+     * persisted to disk. That arrangement could not survive the shell
+     * changing: a saved layout pinned windows by name, so when panels were
+     * renamed or removed the restored tree still referenced dead windows
+     * ("Activity Rail", "Inspector / Palette") while the live ones had no
+     * node at all - and because a non-blank saved ini also suppressed
+     * rebuilding the default layout, the broken arrangement was reloaded on
+     * every launch and never healed.</p>
+     *
+     * <p>Every panel here is permanent furniture, so there is nothing to
+     * persist and nothing to tear off. Rectangles are recomputed from the
+     * main viewport each frame, which makes the layout correct by
+     * construction at any window size and after any change to the panel
+     * set.</p>
+     */
+    private record Layout(float x, float y, float width, float height,
+                          float railX, float railWidth,
+                          float rightX, float rightWidth,
+                          float centerX, float centerWidth,
+                          float viewportY, float viewportHeight,
+                          float drawerY, float drawerHeight) {
 
-        int dockspaceId = ImGui.getID(DOCKSPACE_NAME);
-        if (!dockLayoutBuilt) {
-            buildDefaultLayout(dockspaceId, viewport.getSizeX(), dockHeight);
-            dockLayoutBuilt = true;
+        private static Layout compute(boolean drawerVisible) {
+            imgui.ImGuiViewport main = ImGui.getMainViewport();
+            float menuBar = ImGui.getFrameHeight();
+            float x = main.getPosX();
+            float y = main.getPosY() + menuBar;
+            float width = Math.max(1.0f, main.getSizeX());
+            float height = Math.max(1.0f, main.getSizeY() - menuBar - STATUS_BAR_HEIGHT);
+
+            // Rails and the inspector are sized in points, not ratios, so
+            // they stay legible on a small window and do not eat the canvas
+            // on a large one. The viewport takes whatever is left.
+            float railWidth = TOOL_RAIL_WIDTH;
+            float rightWidth = Math.min(RIGHT_PANEL_WIDTH, Math.max(0.0f, width * 0.4f));
+            float centerWidth = Math.max(MIN_VIEWPORT_WIDTH, width - railWidth - rightWidth);
+            float drawerHeight = drawerVisible
+                    ? Math.min(DRAWER_HEIGHT, Math.max(0.0f, height * 0.5f)) : 0.0f;
+            float viewportHeight = Math.max(MIN_VIEWPORT_HEIGHT, height - drawerHeight);
+
+            return new Layout(x, y, width, height,
+                    x, railWidth,
+                    x + railWidth + centerWidth, rightWidth,
+                    x + railWidth, centerWidth,
+                    y, viewportHeight,
+                    y + viewportHeight, drawerHeight);
         }
-        ImGui.dockSpace(dockspaceId, 0.0f, 0.0f, ImGuiDockNodeFlags.PassthruCentralNode);
-        ImGui.end();
+    }
+
+    /** Places the next window at an exact rectangle of the fixed frame. */
+    private static void placeWindow(float x, float y, float width, float height) {
+        ImGui.setNextWindowPos(x, y, ImGuiCond.Always);
+        ImGui.setNextWindowSize(width, height, ImGuiCond.Always);
+        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
     }
 
     private void restoreLayout() {
         if (layoutRestored) return;
         layoutRestored = true;
         NativeWorkspaceLayoutStore.State saved = layoutStore.load();
-        if (saved == null) return;
-        if (!saved.nativeIni().isBlank()) ImGui.loadIniSettingsFromMemory(saved.nativeIni());
-        bottomDrawerVisible = saved.bottomDrawerVisible();
-        dockLayoutBuilt = !saved.nativeIni().isBlank();
+        // Only the drawer toggle is restored. The window arrangement itself
+        // is derived, never loaded, so a stale file cannot deform the shell.
+        if (saved != null) bottomDrawerVisible = saved.bottomDrawerVisible();
     }
 
     private void resetLayout() {
         layoutStore.reset();
-        ImGui.getIO().setIniFilename(null);
-        dockLayoutBuilt = false;
         bottomDrawerVisible = true;
     }
 
-    private void buildDefaultLayout(int dockspaceId, float width, float height) {
-        imgui.internal.ImGui.dockBuilderRemoveNode(dockspaceId);
-        imgui.internal.ImGui.dockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags.PassthruCentralNode);
-        imgui.internal.ImGui.dockBuilderSetNodeSize(dockspaceId, width, height);
-
-        ImInt leftId = new ImInt();
-        ImInt remainingId = new ImInt();
-        float toolRailRatio = minimumWidthRatio(width, TOOL_RAIL_MIN_WIDTH, 0.05f, 0.08f);
-        imgui.internal.ImGui.dockBuilderSplitNode(dockspaceId, ImGuiDir.Left, toolRailRatio,
-                leftId, remainingId);
-        ImInt rightId = new ImInt();
-        ImInt centerId = new ImInt();
-        imgui.internal.ImGui.dockBuilderSplitNode(remainingId.get(), ImGuiDir.Right, 0.24f,
-                rightId, centerId);
-        ImInt bottomId = new ImInt();
-        ImInt viewportId = new ImInt();
-        imgui.internal.ImGui.dockBuilderSplitNode(centerId.get(), ImGuiDir.Down, 0.18f,
-                bottomId, viewportId);
-
-        imgui.internal.ImGui.dockBuilderDockWindow(TOOL_RAIL_WINDOW, leftId.get());
-        imgui.internal.ImGui.dockBuilderDockWindow(VIEWPORT_WINDOW, viewportId.get());
-        imgui.internal.ImGui.dockBuilderDockWindow(RIGHT_PANEL_WINDOW, rightId.get());
-        imgui.internal.ImGui.dockBuilderDockWindow(BOTTOM_WINDOW, bottomId.get());
-        imgui.internal.ImGui.dockBuilderFinish(dockspaceId);
-
-        lockDockNode(leftId.get(), LOCKED_RAIL_DOCK_NODE_FLAGS);
-        lockDockNode(viewportId.get(), FIXED_VIEWPORT_DOCK_NODE_FLAGS);
-    }
-
-    private static void lockDockNode(int nodeId, int flags) {
-        if (nodeId == 0) return;
-        var node = imgui.internal.ImGui.dockBuilderGetNode(nodeId);
-        if (node != null) node.addLocalFlags(flags);
-    }
-
-    private static void lockCurrentDockNode() {
-        lockDockNode(ImGui.getWindowDockID(), LOCKED_RAIL_DOCK_NODE_FLAGS);
-    }
-
-    private static void lockCurrentViewportDockNode() {
-        lockDockNode(ImGui.getWindowDockID(), FIXED_VIEWPORT_DOCK_NODE_FLAGS);
-    }
-
-    private static float minimumWidthRatio(float parentWidth, float minimumWidth,
-                                           float minimumRatio, float maximumRatio) {
-        float ratio = minimumWidth / Math.max(1.0f, parentWidth);
-        return Math.min(maximumRatio, Math.max(minimumRatio, ratio));
-    }
 
     // ------------------------------------------------------------------
     // Session plumbing
@@ -445,10 +430,15 @@ public final class MapEditorView {
                         pluginLifecycle.host().context().assets(), viewport));
     }
 
-    /** Command-palette activation without a viewport hand-off. */
+    /**
+     * Activation from the rail or the command palette. These call sites have
+     * no viewport argument of their own, so they hand over the one this view
+     * is currently rendering - ToolContext requires a real viewport, and
+     * passing null here made every rail click throw.
+     */
     private void activateTool(EditorPluginLifecycleManager pluginLifecycle,
                               String registrationId) {
-        activateTool(pluginLifecycle, null, registrationId);
+        activateTool(pluginLifecycle, viewport, registrationId);
     }
 
     // ------------------------------------------------------------------
@@ -457,8 +447,9 @@ public final class MapEditorView {
 
     private void renderToolRail(EditorPluginLifecycleManager pluginLifecycle,
                                 NativeSceneViewport viewport) {
+        placeWindow(layout.railX(), layout.viewportY(), layout.railWidth(),
+                layout.viewportHeight() + layout.drawerHeight());
         ImGui.begin(TOOL_RAIL_WINDOW, LOCKED_RAIL_FLAGS);
-        lockCurrentDockNode();
         ImGui.dummy(0.0f, 4.0f);
         for (RailTool tool : RAIL_TOOLS) {
             boolean available = firstAvailableTool(pluginLifecycle, tool) != null;
@@ -483,15 +474,16 @@ public final class MapEditorView {
     private void renderViewport(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
                                 NativeSceneViewport viewport, String sceneStatus,
                                 SettingsStore settings) {
+        placeWindow(layout.centerX(), layout.viewportY(),
+                layout.centerWidth(), layout.viewportHeight());
         ImGui.begin(VIEWPORT_WINDOW, FIXED_VIEWPORT_FLAGS);
-        lockCurrentViewportDockNode();
         renderViewportToolbar(settings);
         ImGui.separator();
         if (plan == null) {
             ImGui.text(sceneStatus == null ? "Preparing scene..." : sceneStatus);
         } else {
             var stats = viewport.statistics();
-            ImGui.pushFont(StudioFonts.mono(), 1.0f);
+            ImGui.pushFont(StudioFonts.mono(), 0.0f);
             ImGui.textDisabled(stats.renderedTriangles() + " tris  ·  " + stats.drawCalls()
                     + " draws  ·  GL " + stats.firstGlError()
                     + (stats.missingTextures() == 0 ? "" : "  ·  missing tex " + stats.missingTextures()));
@@ -549,6 +541,31 @@ public final class MapEditorView {
         compactToggle(settings, RenderSettingKeys.COLLISION_VISIBLE, "Collision");
         ImGui.sameLine(0.0f, 14.0f);
         compactToggle(settings, RenderSettingKeys.WIREFRAME, "Wireframe");
+        renderCullControl();
+    }
+
+    /**
+     * Live back-face culling selector.
+     *
+     * <p>Thin decorations draw both of their skins with culling off, which
+     * is what makes a hanging banner shimmer where its cloth and backing
+     * nearly meet. Culling fixes that only with the correct front-face
+     * winding, and the winding this projection produces has never been
+     * verified - the value BackfacePolicy documents turned the scene inside
+     * out. Rather than keep guessing, both windings are selectable here so
+     * the right one can be identified by looking at the scene.</p>
+     */
+    private void renderCullControl() {
+        if (viewport == null) return;
+        ImGui.sameLine(0.0f, 14.0f);
+        ImGui.textDisabled("BACKFACES");
+        String[] labels = {"Off", "Cull CCW", "Cull CW"};
+        for (int mode = 0; mode < labels.length; mode++) {
+            ImGui.sameLine();
+            if (modeButton(labels[mode], viewport.cullMode() == mode)) {
+                viewport.setCullMode(mode);
+            }
+        }
     }
 
     private boolean modeButton(String label, boolean selected) {
@@ -579,17 +596,39 @@ public final class MapEditorView {
 
     private void renderRightPanel(LoadedOsrsCacheSession cache, SettingsStore settings,
                                   EditorPluginLifecycleManager pluginLifecycle) {
-        ImGui.begin(RIGHT_PANEL_WINDOW, DOCKED_PANEL_FLAGS);
-        ImGui.beginChild("tool-options", 0.0f, 0.0f, false);
+        placeWindow(layout.rightX(), layout.viewportY(), layout.rightWidth(),
+                layout.viewportHeight() + layout.drawerHeight());
+        ImGui.begin(RIGHT_PANEL_WINDOW, FIXED_PANEL_FLAGS);
+        ImGui.beginChild("right-panel-content", 0.0f, 0.0f, false);
+        // Wrap at the panel edge rather than letting hint text and long
+        // values run past it, which is what clipped the selection hint and
+        // the setting captions in a fixed-width column.
+        ImGui.pushTextWrapPos(0.0f);
 
-        renderPickInspector(cache, pluginLifecycle);
+        String[] tabs = {"Inspector", "Outliner", "Tools"};
+        ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 8.0f, 6.0f);
+        for (int index = 0; index < tabs.length; index++) {
+            if (index > 0) ImGui.sameLine();
+            if (modeButton(tabs[index], rightPanelTab == index)) rightPanelTab = index;
+        }
+        ImGui.popStyleVar();
         ImGui.separator();
-        renderActiveTool(pluginLifecycle);
-        ImGui.separator();
-        renderToolSettings(pluginLifecycle);
-        ImGui.separator();
-        renderSelectionPanel(pluginLifecycle);
 
+        switch (rightPanelTab) {
+            case 0 -> {
+                renderPickInspector(cache, pluginLifecycle);
+                ImGui.separator();
+                renderSelectionPanel(pluginLifecycle);
+            }
+            case 1 -> renderOutlinerTab(cache, settings, pluginLifecycle);
+            default -> {
+                renderActiveTool(pluginLifecycle);
+                ImGui.separator();
+                renderToolSettings(pluginLifecycle);
+            }
+        }
+
+        ImGui.popTextWrapPos();
         ImGui.endChild();
         ImGui.end();
     }
@@ -631,26 +670,48 @@ public final class MapEditorView {
         }
     }
 
+    /**
+     * Renders one tool setting as a named field: caption on its own line,
+     * control spanning the panel. Every control is bound straight to the
+     * EditorSetting, so what is shown is the live value.
+     */
     private static void renderEditorSetting(EditorSetting setting) {
+        String id = "##" + setting.id();
         switch (setting.type()) {
             case INTEGER -> {
                 int[] value = {((Number) setting.value()).intValue()};
-                if (ImGui.sliderInt(setting.label() + "##" + setting.id(), value,
-                        (int) setting.minimum(), (int) setting.maximum())) {
+                long minimum = (long) setting.minimum();
+                long maximum = (long) setting.maximum();
+                StudioWidgets.fieldLabel(setting.label());
+                // Dear ImGui's integer slider asserts that both bounds sit
+                // inside +/- INT_MAX/2 (imgui_widgets.cpp), and a setting
+                // declared over the full int range trips it and kills the
+                // frame. Such a range makes a useless slider anyway, so fall
+                // back to a drag field for it.
+                if (minimum < -SLIDER_BOUND || maximum > SLIDER_BOUND) {
+                    if (ImGui.dragInt(id, value)) setting.setValue(value[0]);
+                } else if (ImGui.sliderInt(id, value, (int) minimum, (int) maximum)) {
                     setting.setValue(value[0]);
                 }
             }
             case DECIMAL -> {
                 float[] value = {((Number) setting.value()).floatValue()};
-                if (ImGui.sliderFloat(setting.label() + "##" + setting.id(), value,
-                        (float) setting.minimum(), (float) setting.maximum(),
+                float minimum = (float) setting.minimum();
+                float maximum = (float) setting.maximum();
+                StudioWidgets.fieldLabel(setting.label());
+                // A finite double can still overflow to infinity as a float,
+                // which the slider cannot represent either.
+                if (!Float.isFinite(minimum) || !Float.isFinite(maximum)) {
+                    if (ImGui.dragFloat(id, value)) setting.setValue(value[0]);
+                } else if (ImGui.sliderFloat(id, value, minimum, maximum,
                         "%.2f", ImGuiSliderFlags.None)) {
                     setting.setValue(value[0]);
                 }
             }
             case BOOLEAN -> {
+                // A checkbox reads better with its label beside it.
                 ImBoolean value = new ImBoolean(Boolean.TRUE.equals(setting.value()));
-                if (ImGui.checkbox(setting.label() + "##" + setting.id(), value)) {
+                if (ImGui.checkbox(setting.label() + id, value)) {
                     setting.setValue(value.get());
                 }
             }
@@ -658,8 +719,8 @@ public final class MapEditorView {
                 List<String> options = setting.options();
                 int index = Math.max(0, options.indexOf(String.valueOf(setting.value())));
                 ImInt selected = new ImInt(index);
-                if (ImGui.combo(setting.label() + "##" + setting.id(), selected,
-                        options.toArray(new String[0]))) {
+                StudioWidgets.fieldLabel(setting.label());
+                if (ImGui.combo(id, selected, options.toArray(new String[0]))) {
                     setting.setValue(options.get(selected.get()));
                 }
             }
@@ -668,10 +729,8 @@ public final class MapEditorView {
 
     /**
      * Reports what the last viewport click actually hit, including the
-     * submission metadata of the draw command that was rendered. Layer,
-     * priority and depth bias are the values that decide how a surface
-     * resolves against a coplanar neighbour, so a wall or decoration that
-     * renders wrong can be reported precisely rather than described.
+     * submission metadata of the draw command that was rendered, coordinates,
+     * heights, underlay/overlay definitions, flags, appearance, and collision.
      */
     private void renderPickInspector(LoadedOsrsCacheSession cache,
                                      EditorPluginLifecycleManager pluginLifecycle) {
@@ -686,17 +745,87 @@ public final class MapEditorView {
             return;
         }
         var hit = picked.get();
-        ImGui.pushFont(StudioFonts.mono(), 1.0f);
-        ImGui.text("tile   " + hit.tile().x() + ", " + hit.tile().y() + "   plane " + hit.plane());
-        if (hit.hasSubmissionMetadata()) {
-            ImGui.text("layer  " + hit.layer());
-            ImGui.text("prio   " + hit.priority() + "    bias " + hit.depthBias());
-            ImGui.text("tex    " + (hit.textureId() < 0 ? "none" : String.valueOf(hit.textureId())));
+        EditorSession session = session(pluginLifecycle);
+        WorldDocument world = session != null ? session.world() : null;
+        int localX = world != null ? Math.floorMod(hit.tile().x(), Math.max(1, world.width())) : hit.tile().x() & 63;
+        int localY = world != null ? Math.floorMod(hit.tile().y(), Math.max(1, world.length())) : hit.tile().y() & 63;
+        int regionX = hit.tile().x() >> 6;
+        int regionY = hit.tile().y() >> 6;
+        int regionId = (regionX << 8) | regionY;
+        int effectivePlane = (world != null && hit.plane() >= 0 && hit.plane() < world.planes())
+                ? world.effectivePlane(hit.plane(), localX, localY)
+                : hit.plane();
+
+        ImGui.pushFont(StudioFonts.mono(), 0.0f);
+        ImGui.text("tile     " + hit.tile().x() + ", " + hit.tile().y() + " (plane " + hit.plane() + ")");
+        ImGui.text("region   " + regionId + " (" + regionX + "," + regionY + ") local " + localX + "," + localY);
+        ImGui.text("plane    authored " + hit.plane() + "  effective " + effectivePlane);
+
+        if (world != null && hit.plane() >= 0 && hit.plane() < world.planes()) {
+            var snapshot = world.tile(hit.plane(), localX, localY).snapshot();
+            int sw = snapshot.southWestHeight();
+            int se = snapshot.southEastHeight();
+            int ne = snapshot.northEastHeight();
+            int nw = snapshot.northWestHeight();
+            ImGui.text("height   sw " + sw + "  se " + se);
+            ImGui.text("         nw " + nw + "  ne " + ne);
+            int anchor = (sw + se + ne + nw) >> 2;
+            ImGui.text("anchor   " + anchor + "   slope " + (maxOf(sw, se, ne, nw) - minOf(sw, se, ne, nw)));
+
+            int underlayId = snapshot.underlayId();
+            if (underlayId > 0) {
+                var uDef = cache.bundle().definitions().underlay(underlayId);
+                String uColor = uDef.map(u -> String.format("#%06X", u.rgb())).orElse("?");
+                ImGui.text("underlay " + underlayId + " (" + uColor + ")");
+            } else {
+                ImGui.textDisabled("underlay none");
+            }
+
+            int overlayId = snapshot.overlayId();
+            if (overlayId > 0) {
+                var oDef = cache.bundle().definitions().overlay(overlayId);
+                String oColor = oDef.map(o -> String.format("#%06X", o.rgb())).orElse("?");
+                int tex = oDef.map(FloorDefinitionView::texture).orElse(-1);
+                String texStr = tex >= 0 ? " tex " + tex : "";
+                ImGui.text("overlay  " + overlayId + " (" + oColor + texStr + ")");
+                ImGui.text("overlay  shape " + snapshot.overlayShape() + "  rot " + snapshot.overlayRotation());
+            } else {
+                ImGui.textDisabled("overlay  none");
+            }
+
+            int flags = snapshot.flags();
+            StringBuilder flagNames = new StringBuilder();
+            if ((flags & OsrsTileFlags.BLOCK_MAP_SQUARE) != 0) flagNames.append("clipped ");
+            if ((flags & OsrsTileFlags.BRIDGE) != 0) flagNames.append("bridge ");
+            if ((flags & OsrsTileFlags.REMOVE_ROOFS) != 0) flagNames.append("roofs ");
+            if ((flags & OsrsTileFlags.MINIMAP_BRIDGE) != 0) flagNames.append("minimap_bridge ");
+            if ((flags & OsrsTileFlags.MINIMAP_HIDDEN) != 0) flagNames.append("hidden ");
+            String flagsText = flagNames.length() > 0 ? flagNames.toString().trim() : "none";
+            ImGui.text("flags    0x" + Integer.toHexString(flags) + " (" + flagsText + ")");
         }
+
+        if (hit.hasSubmissionMetadata()) {
+            ImGui.text("layer    " + hit.layer());
+            ImGui.text("prio     " + hit.priority() + "    bias " + hit.depthBias());
+            ImGui.text("tex      " + (hit.textureId() < 0 ? "none" : String.valueOf(hit.textureId())));
+        }
+
         if (hit.objectHit()) {
-            ImGui.text("objId  " + hit.objectId());
+            ImGui.text("objId    " + hit.objectId());
             cache.bundle().definitions().object(hit.objectId())
-                    .ifPresent(definition -> ImGui.text("name   " + definition.name()));
+                    .ifPresent(definition -> {
+                        ImGui.text("name     " + definition.name());
+                        ImGui.text("size     " + definition.width() + "x" + definition.length());
+                    });
+            cache.bundle().definitions().objectAppearance(hit.objectId())
+                    .ifPresent(app -> {
+                        ImGui.text("shadow   " + app.castsShadow() + "  occlude " + app.occludes());
+                        ImGui.text("mergeN   " + app.mergeNormals() + "  contrast " + app.contrast());
+                    });
+            cache.bundle().definitions().objectCollision(hit.objectId())
+                    .ifPresent(col -> {
+                        ImGui.text("clip     walk " + col.blockWalk() + "  proj " + col.blockProjectile() + "  type " + col.clipType());
+                    });
             describePickedObject(hit, pluginLifecycle);
         } else {
             ImGui.textDisabled("terrain (no object)");
@@ -707,11 +836,9 @@ public final class MapEditorView {
 
     /**
      * Resolves the picked object back to its authored location so the shape
-     * and rotation are visible. The pick reports a world tile while the
-     * document is a single 64x64 region, so local coordinates are the world
-     * ones reduced modulo the region size.
+     * and rotation are visible.
      */
-    private void describePickedObject(com.rspsi.editor.render.PickResult hit,
+    private void describePickedObject(PickResult hit,
                                       EditorPluginLifecycleManager pluginLifecycle) {
         EditorSession session = session(pluginLifecycle);
         if (session == null) return;
@@ -719,14 +846,120 @@ public final class MapEditorView {
         int localX = Math.floorMod(hit.tile().x(), Math.max(1, world.width()));
         int localY = Math.floorMod(hit.tile().y(), Math.max(1, world.length()));
         if (hit.plane() < 0 || hit.plane() >= world.planes()) return;
-        for (var object : world.tile(hit.plane(), localX, localY).snapshot().objects()) {
+        var snapshot = world.tile(hit.plane(), localX, localY).snapshot();
+        for (var object : snapshot.objects()) {
             if (object.id() != hit.objectId()) continue;
             String shape = object.shape().map(value -> " (" + value + ")").orElse("");
-            ImGui.text("shape  " + object.type() + shape);
-            ImGui.text("rot    " + object.rotation());
+            ImGui.text("shape    " + object.type() + shape);
+            ImGui.text("rot      " + object.rotation());
             return;
         }
         ImGui.textDisabled("not found at " + localX + "," + localY);
+    }
+
+    private void renderOutlinerTab(LoadedOsrsCacheSession cache, SettingsStore settings,
+                                   EditorPluginLifecycleManager pluginLifecycle) {
+        StudioWidgets.section("Outliner");
+        EditorSession session = session(pluginLifecycle);
+        if (session == null) {
+            ImGui.textDisabled("No active session.");
+            return;
+        }
+        WorldDocument world = session.world();
+        int activePlane = settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
+
+        int regionId = 0;
+        if (viewport != null) {
+            int camTileX = Math.max(0, (int) (viewport.navigation().camera().x() / 128.0f));
+            int camTileY = Math.max(0, (int) (viewport.navigation().camera().z() / 128.0f));
+            regionId = ((camTileX >> 6) << 8) | (camTileY >> 6);
+        }
+
+        String regionTitle = "Region " + (regionId > 0 ? regionId : "") + " (" + world.width() + "x" + world.length() + ")";
+        if (ImGui.treeNodeEx(regionTitle, ImGuiTreeNodeFlags.DefaultOpen)) {
+            for (int plane = 0; plane < world.planes(); plane++) {
+                boolean isActive = plane == activePlane;
+                int flags = isActive ? ImGuiTreeNodeFlags.DefaultOpen : 0;
+                String planeTitle = "Plane " + plane + (isActive ? " (Active)" : "");
+                if (ImGui.treeNodeEx(planeTitle + "##p-" + plane, flags)) {
+                    if (ImGui.treeNode("Terrain##p" + plane)) {
+                        ImGui.textDisabled(world.width() + "x" + world.length() + " tiles");
+                        if (ImGui.smallButton("Frame Center##center-" + plane)) {
+                            if (viewport != null) {
+                                float cx = world.width() * 64.0f;
+                                float cz = world.length() * 64.0f;
+                                viewport.navigation().frameSelection(cx, 0.0f, cz);
+                            }
+                        }
+                        ImGui.treePop();
+                    }
+
+                    renderOutlinerCategory(world, plane, ObjectCategory.WALL, cache);
+                    renderOutlinerCategory(world, plane, ObjectCategory.WALL_DECOR, cache);
+                    renderOutlinerCategory(world, plane, ObjectCategory.GROUND, cache);
+                    renderOutlinerCategory(world, plane, ObjectCategory.GROUND_DECOR, cache);
+
+                    ImGui.treePop();
+                }
+            }
+            ImGui.treePop();
+        }
+    }
+
+    private void renderOutlinerCategory(WorldDocument world, int plane,
+                                        ObjectCategory category,
+                                        LoadedOsrsCacheSession cache) {
+        List<WorldObject> matching = new ArrayList<>();
+        for (int x = 0; x < world.width(); x++) {
+            for (int y = 0; y < world.length(); y++) {
+                for (WorldObject obj : world.tile(plane, x, y).snapshot().objects()) {
+                    if (obj.category() == category) {
+                        matching.add(obj);
+                    }
+                }
+            }
+        }
+        if (matching.isEmpty()) {
+            ImGui.textDisabled("  " + category.displayName() + " (0)");
+            return;
+        }
+        String nodeTitle = category.displayName() + " (" + matching.size() + ")##p" + plane + "-" + category.name();
+        if (ImGui.treeNode(nodeTitle)) {
+            for (int i = 0; i < matching.size(); i++) {
+                WorldObject obj = matching.get(i);
+                String name = cache.bundle().definitions().object(obj.id())
+                        .map(ObjectDefinitionView::name)
+                        .filter(n -> !n.isBlank())
+                        .orElse("Object " + obj.id());
+                String itemLabel = String.format("[%02d,%02d] %s##obj-%d-%d", obj.x(), obj.y(), name, plane, i);
+                if (ImGui.selectable(itemLabel)) {
+                    if (viewport != null) {
+                        viewport.setSelection(new PickResult(
+                                new TileCoordinate(plane, obj.x(), obj.y()),
+                                plane, obj.id(), 0.0f));
+                    }
+                }
+                if (ImGui.isItemHovered() && ImGui.isMouseDoubleClicked(ImGuiMouseButton.Left)) {
+                    if (viewport != null) {
+                        float tx = obj.x() * 128.0f + 64.0f;
+                        float tz = obj.y() * 128.0f + 64.0f;
+                        var snap = world.tile(plane, obj.x(), obj.y()).snapshot();
+                        float ty = (snap.southWestHeight() + snap.southEastHeight()
+                                + snap.northEastHeight() + snap.northWestHeight()) >> 2;
+                        viewport.navigation().frameSelection(tx, ty, tz);
+                    }
+                }
+            }
+            ImGui.treePop();
+        }
+    }
+
+    private static int maxOf(int a, int b, int c, int d) {
+        return Math.max(Math.max(a, b), Math.max(c, d));
+    }
+
+    private static int minOf(int a, int b, int c, int d) {
+        return Math.min(Math.min(a, b), Math.min(c, d));
     }
 
     private void renderSelectionPanel(EditorPluginLifecycleManager pluginLifecycle) {
@@ -772,7 +1005,9 @@ public final class MapEditorView {
 
     private void renderBottomDrawer(EditorPluginLifecycleManager pluginLifecycle) {
         if (!bottomDrawerVisible) return;
-        ImGui.begin(BOTTOM_WINDOW, DOCKED_PANEL_FLAGS);
+        placeWindow(layout.centerX(), layout.drawerY(),
+                layout.centerWidth(), layout.drawerHeight());
+        ImGui.begin(BOTTOM_WINDOW, FIXED_PANEL_FLAGS);
         String[] tabs = {"History", "Tasks", "Messages", "Diagnostics"};
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 8.0f, 6.0f);
         for (int index = 0; index < tabs.length; index++) {
@@ -804,7 +1039,7 @@ public final class MapEditorView {
         ImGui.textDisabled("History " + cursor + "/" + commands.size()
                 + "  ·  undoable " + history.canUndo() + "  ·  redoable " + history.canRedo());
         if (commands.isEmpty()) {
-            ImGui.textDisabled("No edits yet — terrain and object tools will appear here.");
+            ImGui.textDisabled("No edits yet. Terrain and object tools will appear here.");
             return;
         }
         ImGui.beginChild("history-list", 0.0f, 0.0f, false);
@@ -887,6 +1122,22 @@ public final class MapEditorView {
     }
 
     private void renderDiagnosticsTab(EditorPluginLifecycleManager pluginLifecycle) {
+        if (viewport != null) {
+            var stats = viewport.statistics();
+            float fps = ImGui.getIO().getFramerate();
+            float frameMs = 1000.0f / Math.max(1.0f, fps);
+            ImGui.text(String.format("Performance: %.2f ms/frame (%.1f FPS)", frameMs, fps));
+            int vboKb = (stats.sourceVertices() * 32) / 1024;
+            int iboKb = (stats.sourceIndices() * 4) / 1024;
+            ImGui.text("Buffer memory: VBO " + vboKb + " KB  ·  IBO " + iboKb + " KB  (total " + (vboKb + iboKb) + " KB)");
+            ImGui.text("Triangles: " + stats.renderedTriangles() + " (Terrain: " + stats.terrainTriangles() + ", Objects: " + stats.objectTriangles() + ")");
+            ImGui.text("Draw calls: " + stats.drawCalls() + "  ·  GL Error: " + stats.firstGlError());
+            ImGui.text("Uploads: geometry " + stats.geometryUploaded() + "  ·  texture " + stats.textureUploaded() + "  ·  occlusion " + stats.occlusionApplied());
+            ImGui.text("Textures: decoded " + stats.decodedTextures() + "  ·  fallback " + stats.fallbackTextures()
+                    + "  ·  missing " + stats.missingTextures() + "  ·  unavailable " + stats.unavailableTextures());
+            ImGui.textDisabled("GL: " + stats.vendor() + " · " + stats.renderer() + " · " + stats.version());
+            ImGui.separator();
+        }
         if (pluginLifecycle != null && pluginLifecycle.host() != null) {
             var overlays = pluginLifecycle.host().registry().overlayRegistrations();
             if (!overlays.isEmpty()) {
@@ -900,7 +1151,6 @@ public final class MapEditorView {
                     + "  ·  validators: " + pluginLifecycle.host().registry()
                     .validatorRegistrations().size());
         }
-        ImGui.textDisabled("Renderer diagnostics stream into the viewport header.");
     }
 
     // ------------------------------------------------------------------
@@ -919,7 +1169,7 @@ public final class MapEditorView {
                 | ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoSavedSettings;
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 12.0f, 4.0f);
         ImGui.begin("StudioStatusBar", flags);
-        ImGui.pushFont(StudioFonts.mono(), 1.0f);
+        ImGui.pushFont(StudioFonts.mono(), 0.0f);
         int plane = settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
         ImGui.text("REV " + cache.identity().revision()
                 + "  ·  PLANE " + plane
@@ -1014,8 +1264,10 @@ public final class MapEditorView {
     /** Saves only native frontend layout state; world/project data is untouched. */
     public void close() {
         if (!layoutRestored) return;
+        // Only the drawer toggle survives a restart. The arrangement is
+        // derived every frame, so persisting it could only reintroduce the
+        // stale-layout failure this shell was rebuilt to remove.
         layoutStore.save(new NativeWorkspaceLayoutStore.State(
-                NativeWorkspaceLayoutStore.CURRENT_VERSION,
-                ImGui.saveIniSettingsToMemory(), bottomDrawerVisible));
+                NativeWorkspaceLayoutStore.CURRENT_VERSION, "", bottomDrawerVisible));
     }
 }

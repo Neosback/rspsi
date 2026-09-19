@@ -16,9 +16,7 @@ public final class ShapedTile {
 	public static int[] viewSpaceX = new int[6];
 	public static int[] viewSpaceY = new int[6];
 	public static int[] viewSpaceZ = new int[6];
-	public static int[] anIntArray693 = { 1, 0 };
-	public static int[] anIntArray694 = { 2, 1 };
-	public static int[] anIntArray695 = { 3, 3 };
+
 
 	public static final int[][] tileShapePoints = { { 1, 3, 5, 7 }, { 1, 3, 5, 7 }, { 1, 3, 5, 7 }, { 1, 3, 5, 7, 6 },
 			{ 1, 3, 5, 7, 6 }, { 1, 3, 5, 7, 6 }, { 1, 3, 5, 7, 6 }, { 1, 3, 5, 7, 2, 6 }, { 1, 3, 5, 7, 2, 8 },

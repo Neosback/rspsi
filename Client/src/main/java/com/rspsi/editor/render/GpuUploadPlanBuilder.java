@@ -110,8 +110,12 @@ public final class GpuUploadPlanBuilder {
                 // opaque and 255 is fully invisible. Terrain alpha is a
                 // separate opacity convention and is handled above.
                 if (face.renderType() == 2 || face.alpha() == 255) continue;
-                boolean transparent = face.alpha() != 0 || face.renderType() == 3
-                        || hasTransparentTexturePixels(face.textureId(), textures);
+                // Match RuneLite's GPU uploader: texture cutouts stay in the
+                // opaque/depth-writing stream and the fragment shader
+                // discards transparent texels. Moving the entire triangle to
+                // the alpha pass disables depth writes and makes banners and
+                // foliage fight with their own coplanar/backing faces.
+                boolean transparent = face.alpha() != 0 || face.renderType() == 3;
                 if ((pass == GpuDrawCommand.SubmissionPass.ALPHA) != transparent) continue;
                 ModelVertex a = model.vertices().get(face.a());
                 ModelVertex b = model.vertices().get(face.b());
@@ -140,16 +144,15 @@ public final class GpuUploadPlanBuilder {
     }
 
     /**
-     * SceneLocs gives wall decorations a scene priority of 10.  Model face
-     * priorities are still retained when they are higher, but using the
-     * model's raw default (normally zero) makes coplanar castle trim compete
-     * with the wall it decorates.  Carry that category priority into both the
-     * native and software submission plans so depth/order behavior stays
-     * backend-independent.
+     * Model face priorities (0..11) determine the render order of coplanar
+     * faces within and between models.  Wall decorations do not clamp priority
+     * to beat their wall; separation from the mounting wall is handled by
+     * {@link #submissionDepthBias} in view-space depth, leaving authored face
+     * priorities intact so layered models (e.g. banners with cloth, trim,
+     * patterns, and crests) render in proper ascending order without self-z-fighting.
      */
     private static int submissionPriority(SceneLayer.Kind layer, int facePriority) {
-        return layer == SceneLayer.Kind.WALL_DECORATION
-                ? Math.max(10, facePriority) : facePriority;
+        return facePriority;
     }
 
     /**
@@ -170,12 +173,6 @@ public final class GpuUploadPlanBuilder {
      */
     private static int submissionDepthBias(SceneLayer.Kind layer, int faceBias) {
         return layer == SceneLayer.Kind.WALL_DECORATION ? Math.max(1, faceBias) : faceBias;
-    }
-
-    private static boolean hasTransparentTexturePixels(int textureId,
-                                                       java.util.Map<Integer, RenderTextureResource> textures) {
-        RenderTextureResource texture = textures.get(textureId);
-        return texture != null && texture.hasTransparentPixels();
     }
 
     private static void appendCommand(List<GpuDrawCommand> commands, WorldTileAddress tile,

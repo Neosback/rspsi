@@ -16,16 +16,106 @@ public class RSArea {
 	private final int id;
 
 	private int spriteId = -1;
-	private int anInt1967 = -1;
+	private int sprite2Id = -1;
 	private String name;
-	private int anInt1959;
-	private int anInt1968 = 0;
-	private int[] anIntArray1982;
-	private String aString1970;
-	private int[] anIntArray1981;
-	private int anInt1980;
-	private byte[] aByteArray1979;
-	private String[] aStringArray1969 = new String[5];
+	private int fontColor;
+	private int textSize = 0;
+	private int[] coordinateOffsets;
+	private String menuTargetName;
+	private int[] compositeElementIds;
+	private int category;
+	private byte[] planeBytes;
+	private String[] menuActions = new String[5];
+
+	@Deprecated
+	public int getAnInt1967() {
+		return sprite2Id;
+	}
+
+	@Deprecated
+	public void setAnInt1967(int value) {
+		this.sprite2Id = value;
+	}
+
+	@Deprecated
+	public int getAnInt1959() {
+		return fontColor;
+	}
+
+	@Deprecated
+	public void setAnInt1959(int value) {
+		this.fontColor = value;
+	}
+
+	@Deprecated
+	public int getAnInt1968() {
+		return textSize;
+	}
+
+	@Deprecated
+	public void setAnInt1968(int value) {
+		this.textSize = value;
+	}
+
+	@Deprecated
+	public int[] getAnIntArray1982() {
+		return coordinateOffsets;
+	}
+
+	@Deprecated
+	public void setAnIntArray1982(int[] value) {
+		this.coordinateOffsets = value;
+	}
+
+	@Deprecated
+	public String getAString1970() {
+		return menuTargetName;
+	}
+
+	@Deprecated
+	public void setAString1970(String value) {
+		this.menuTargetName = value;
+	}
+
+	@Deprecated
+	public int[] getAnIntArray1981() {
+		return compositeElementIds;
+	}
+
+	@Deprecated
+	public void setAnIntArray1981(int[] value) {
+		this.compositeElementIds = value;
+	}
+
+	@Deprecated
+	public int getAnInt1980() {
+		return category;
+	}
+
+	@Deprecated
+	public void setAnInt1980(int value) {
+		this.category = value;
+	}
+
+	@Deprecated
+	public byte[] getAByteArray1979() {
+		return planeBytes;
+	}
+
+	@Deprecated
+	public void setAByteArray1979(byte[] value) {
+		this.planeBytes = value;
+	}
+
+	@Deprecated
+	public String[] getAStringArray1969() {
+		return menuActions;
+	}
+
+	@Deprecated
+	public void setAStringArray1969(String[] value) {
+		this.menuActions = value;
+	}
 
 	
 

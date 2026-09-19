@@ -157,8 +157,8 @@
       "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/jagex/map/SceneGraph.java"],
       "tsps": ["rs/scene/Scene.ts", "rs/model/ModelData.ts"],
       "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java", "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
-      "reason": "Per-packet merge exists, but TSPS/SceneGraph neighbor traversal, L-wall pair merging, and occluded-face hiding are not equivalent.",
-      "nextAction": "Implement a shared scene normal-merge pass with exact neighbor traversal and add wall-join fixtures."
+      "reason": "Pairwise packet normal merge and occluded-face hiding (tagging internal cross-section faces with renderType 2) are verified in ModelPacketBuilder; full extended multi-region neighbor traversal remains partial.",
+      "nextAction": "Implement extended multi-region neighbor traversal for world-chunk boundary wall joins."
     },
     {
       "id": "objects.decorations",
@@ -246,8 +246,8 @@
       "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java", "Client/src/main/java/com/rspsi/editor/render/RenderTextureResource.java"],
       "tsps": ["render/SceneBuffer.ts", "render/render/textures/TextureLoader.ts"],
       "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"],
-      "reason": "TSPS treats transparent texture resources as alpha geometry; RSPSi currently classifies primarily from face alpha/render type.",
-      "nextAction": "Propagate texture transparency metadata into draw-command classification."
+      "reason": "TSPS and OSRS shader conventions keep transparent-pixel textures in the opaque pass with alpha discard for depth testing; blended face alpha is routed to the alpha pass with sorted draw commands.",
+      "nextAction": "Add golden test cases for animated texture UV offset handling."
     },
     {
       "id": "models.renderModes",

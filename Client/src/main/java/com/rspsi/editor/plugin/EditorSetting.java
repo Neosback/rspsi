@@ -26,6 +26,11 @@ public final class EditorSetting {
     private final Supplier<?> getter;
     private final Consumer<Object> setter;
 
+    /**
+     * @deprecated Production settings must be registered as {@link SettingKey} and {@link SettingSpec}
+     * in {@link com.rspsi.editor.settings.SettingsRegistry} and projected via {@link #from(SettingsStore, SettingKey)}.
+     */
+    @Deprecated
     public EditorSetting(String id, String label, ValueType type,
                          double minimum, double maximum, List<String> options,
                          Supplier<?> getter, Consumer<Object> setter) {
@@ -48,6 +53,10 @@ public final class EditorSetting {
         this.setter = Objects.requireNonNull(setter, "setting setter");
     }
 
+    /**
+     * @deprecated Production settings must use {@link #from(SettingsStore, SettingKey)}.
+     */
+    @Deprecated
     public static EditorSetting integer(String id, String label, int minimum, int maximum,
                                         Supplier<Integer> getter, Consumer<Integer> setter) {
         Objects.requireNonNull(setter, "setting setter");
@@ -55,6 +64,10 @@ public final class EditorSetting {
                 getter, value -> setter.accept(coerceInteger(value)));
     }
 
+    /**
+     * @deprecated Production settings must use {@link #from(SettingsStore, SettingKey)}.
+     */
+    @Deprecated
     public static EditorSetting decimal(String id, String label, double minimum, double maximum,
                                         Supplier<Double> getter, Consumer<Double> setter) {
         Objects.requireNonNull(setter, "setting setter");
@@ -62,6 +75,10 @@ public final class EditorSetting {
                 getter, value -> setter.accept(coerceDecimal(value)));
     }
 
+    /**
+     * @deprecated Production settings must use {@link #from(SettingsStore, SettingKey)}.
+     */
+    @Deprecated
     public static EditorSetting bool(String id, String label,
                                     Supplier<Boolean> getter, Consumer<Boolean> setter) {
         Objects.requireNonNull(setter, "setting setter");
@@ -69,6 +86,10 @@ public final class EditorSetting {
                 getter, value -> setter.accept(coerceBoolean(value)));
     }
 
+    /**
+     * @deprecated Production settings must use {@link #from(SettingsStore, SettingKey)}.
+     */
+    @Deprecated
     public static EditorSetting enumeration(String id, String label, List<String> options,
                                             Supplier<String> getter, Consumer<String> setter) {
         Objects.requireNonNull(setter, "setting setter");

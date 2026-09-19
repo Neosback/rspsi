@@ -522,4 +522,44 @@ class ModelPacketBuilderTest {
             }
         };
     }
+
+    @Test
+    void adjacentWallsWithMergeNormalsHideInternalSeamFaces() {
+        WorldDocument document = new WorldDocument(4, 4, 1);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 0, 0, 0, 1, 1))));
+        document.tile(0, 2, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(43, 0, 0, 0, 2, 1))));
+
+        ModelGeometryView geom1 = new ModelGeometryView(7,
+                new int[]{128, 0, 0, 128, 50, 0, 128, 0, 50},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+        ModelGeometryView geom2 = new ModelGeometryView(8,
+                new int[]{0, 0, 0, 0, 50, 0, 0, 0, 50},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+
+        ObjectAppearanceView merging = new ObjectAppearanceView(-1, false, 128, 128, 128,
+                0, 0, 0, Map.of(), Map.of(), true, false, true, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
+
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return Optional.of(new ObjectDefinitionView(id, "wall", 1, 1,
+                        List.of(), new int[]{id == 42 ? 7 : 8}, new int[]{0}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(merging);
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(id == 7 ? geom1 : geom2);
+            }
+        };
+
+        List<ModelRenderPacket> packets = new ModelPacketBuilder(definitions).build(document);
+        assertEquals(2, packets.size());
+        assertEquals(2, packets.get(0).triangles().get(0).renderType());
+        assertEquals(2, packets.get(1).triangles().get(0).renderType());
+    }
 }

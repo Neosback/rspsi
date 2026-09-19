@@ -16,10 +16,6 @@ import java.util.Objects;
 
 /** Owns the native scene renderer and presents its resolved FBO texture to ImGui. */
 public final class NativeSceneViewport implements AutoCloseable, Viewport {
-    /** One OSRS tile is 128 world units, so this crosses ~12 tiles a second. */
-    private static final float MOVE_UNITS_PER_SECOND = 1536.0f;
-    private static final float TURN_RADIANS_PER_SECOND = 1.8f;
-
     private final OpenGlSceneRenderer renderer = new OpenGlSceneRenderer();
     private final GlFramebuffer framebuffer = new GlFramebuffer();
     private final GpuPlanPicker picker = new GpuPlanPicker();
@@ -45,6 +41,19 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
 
     public void setCamera(CameraState camera) {
         navigation.setCamera(Objects.requireNonNull(camera, "camera"));
+    }
+
+    public ViewportController navigation() {
+        return navigation;
+    }
+
+    /** Back-face culling mode for model geometry; see the renderer. */
+    public void setCullMode(int mode) {
+        renderer.setCullMode(mode);
+    }
+
+    public int cullMode() {
+        return renderer.cullMode();
     }
 
     public OpenGlSceneRenderer.Statistics statistics() {
@@ -73,6 +82,10 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
 
     public void clearSelection() {
         selection = null;
+    }
+
+    public void setSelection(PickResult selection) {
+        this.selection = selection;
     }
 
     public void render(GpuUploadPlan plan, float availableWidth, float availableHeight, int samples) {
@@ -145,13 +158,21 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         if (io.getWantTextInput() || io.getWantCaptureKeyboard()) return;
         float seconds = Math.min(0.1f, Math.max(0.0f, io.getDeltaTime()));
         if (seconds <= 0.0f) return;
-        boolean fast = io.getKeyShift();
-        float move = MOVE_UNITS_PER_SECOND * seconds * (fast ? 3.0f : 1.0f);
-        float turn = TURN_RADIANS_PER_SECOND * seconds;
-        if (ImGui.isKeyDown(ImGuiKey.UpArrow)) navigation.moveForward(move);
-        if (ImGui.isKeyDown(ImGuiKey.DownArrow)) navigation.moveForward(-move);
-        if (ImGui.isKeyDown(ImGuiKey.LeftArrow)) navigation.rotateYaw(-turn);
-        if (ImGui.isKeyDown(ImGuiKey.RightArrow)) navigation.rotateYaw(turn);
+        boolean shift = io.getKeyShift();
+        boolean ctrl = io.getKeyCtrl();
+        boolean alt = io.getKeyAlt();
+        if (ImGui.isKeyDown(ImGuiKey.UpArrow)) {
+            navigation.handleKeyEvent(new com.rspsi.editor.input.EditorKeyEvent("ArrowUp", true, false, shift, ctrl, alt, false), seconds);
+        }
+        if (ImGui.isKeyDown(ImGuiKey.DownArrow)) {
+            navigation.handleKeyEvent(new com.rspsi.editor.input.EditorKeyEvent("ArrowDown", true, false, shift, ctrl, alt, false), seconds);
+        }
+        if (ImGui.isKeyDown(ImGuiKey.LeftArrow)) {
+            navigation.handleKeyEvent(new com.rspsi.editor.input.EditorKeyEvent("ArrowLeft", true, false, shift, ctrl, alt, false), seconds);
+        }
+        if (ImGui.isKeyDown(ImGuiKey.RightArrow)) {
+            navigation.handleKeyEvent(new com.rspsi.editor.input.EditorKeyEvent("ArrowRight", true, false, shift, ctrl, alt, false), seconds);
+        }
     }
 
     /** Applies navigation only while the FBO image owns the mouse. */

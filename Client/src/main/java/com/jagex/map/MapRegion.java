@@ -29,14 +29,13 @@ import java.util.Map;
 @Slf4j
 public final class MapRegion {
 
-	private static final int[] anIntArray140 = { 16, 32, 64, 128 };
-	private static final int[] anIntArray152 = { 1, 2, 4, 8 }; // orientation ->
-	// ??
+	private static final int[] DIAGONAL_WALL_MASKS = { 16, 32, 64, 128 };
+	private static final int[] STRAIGHT_WALL_MASKS = { 1, 2, 4, 8 };
 	private static final int[] COSINE_VERTICES = { 1, 0, -1, 0 };
 
 	public static boolean lowMemory = false;
 	public static int maximumPlane = 99;
-	private static final int[] SINE_VERTICIES = { 0, -1, 0, 1 };
+	private static final int[] SINE_VERTICES = { 0, -1, 0, 1 };
 
 	public static int calculateHeight(int x, int y) {
 		int height = interpolatedNoise(x + 45365, y + 0x16713, 4) - 128
@@ -1295,7 +1294,7 @@ public final class MapRegion {
 				object = new RenderableObject(id, orientation, 0, centre, east, northEast, north,
 						definition.getAnimation(), true);
 			}
-			scene.addWall(objectKey, x, y, z, anIntArray152[orientation], object, null, mean, 0, temporary);
+			scene.addWall(objectKey, x, y, z, STRAIGHT_WALL_MASKS[orientation], object, null, mean, 0, temporary);
 			if (!temporary)
 				if (orientation == 0) {
 					if (definition.isCastsShadow()) {
@@ -1347,7 +1346,7 @@ public final class MapRegion {
 						definition.getAnimation(), true);
 			}
 
-			scene.addWall(objectKey, x, y, z, anIntArray140[orientation], object, null, mean, 0, temporary);
+			scene.addWall(objectKey, x, y, z, DIAGONAL_WALL_MASKS[orientation], object, null, mean, 0, temporary);
 			if (definition.isCastsShadow() && !temporary) {
 				if (orientation == 0) {
 					shading[z][x][y + 1] = 50;
@@ -1373,8 +1372,8 @@ public final class MapRegion {
 				obj12 = new RenderableObject(id, oppositeOrientation, 2, centre, east, northEast, north,
 						definition.getAnimation(), true);
 			}
-			scene.addWall(objectKey, x, y, z, anIntArray152[orientation], obj11, obj12, mean,
-					anIntArray152[oppositeOrientation], temporary);
+			scene.addWall(objectKey, x, y, z, STRAIGHT_WALL_MASKS[orientation], obj11, obj12, mean,
+					STRAIGHT_WALL_MASKS[oppositeOrientation], temporary);
 			if (!temporary && definition.occludes()) {
 				if (orientation == 0) {
 					anIntArrayArrayArray135[z][x][y] |= 0x249;
@@ -1391,6 +1390,26 @@ public final class MapRegion {
 				}
 			}
 
+			if (!temporary && definition.isCastsShadow()) {
+				if (orientation == 0) {
+					shading[z][x][y] = 50;
+					shading[z][x][y + 1] = 50;
+					shading[z][x + 1][y + 1] = 50;
+				} else if (orientation == 1) {
+					shading[z][x][y + 1] = 50;
+					shading[z][x + 1][y + 1] = 50;
+					shading[z][x + 1][y] = 50;
+				} else if (orientation == 2) {
+					shading[z][x + 1][y] = 50;
+					shading[z][x + 1][y + 1] = 50;
+					shading[z][x][y] = 50;
+				} else if (orientation == 3) {
+					shading[z][x][y] = 50;
+					shading[z][x + 1][y] = 50;
+					shading[z][x][y + 1] = 50;
+				}
+			}
+
 			if (!temporary && definition.getDecorDisplacement() != 16) {// TODO
 				scene.displaceWallDecor(x, y, z, definition.getDecorDisplacement());
 			}
@@ -1403,7 +1422,7 @@ public final class MapRegion {
 						definition.getAnimation(), true);
 			}
 
-			scene.addWall(objectKey, x, y, z, anIntArray140[orientation], object, null, mean, 0, temporary);
+			scene.addWall(objectKey, x, y, z, DIAGONAL_WALL_MASKS[orientation], object, null, mean, 0, temporary);
 			if (!temporary && definition.isCastsShadow()) {
 				if (orientation == 0) {
 					shading[z][x][y + 1] = 50;
@@ -1459,7 +1478,7 @@ public final class MapRegion {
 					object = new RenderableObject(id, 0, 4, centre, east, northEast, north, definition.getAnimation(),
 							true);
 				}
-				scene.addWallDecoration(objectKey, y, orientation * 512, z, 0, mean, object, x, 0, anIntArray152[orientation],
+				scene.addWallDecoration(objectKey, y, orientation * 512, z, 0, mean, object, x, 0, STRAIGHT_WALL_MASKS[orientation],
 						temporary);
 			} else if (type == 5) {
 				int displacement = 16;
@@ -1478,7 +1497,7 @@ public final class MapRegion {
 				}
 
 				scene.addWallDecoration(objectKey, y, orientation * 512, z, COSINE_VERTICES[orientation] * displacement, mean,
-						object, x, SINE_VERTICIES[orientation] * displacement, anIntArray152[orientation], temporary);
+						object, x, SINE_VERTICES[orientation] * displacement, STRAIGHT_WALL_MASKS[orientation], temporary);
 			} else if (type == 6) {
 				Renderable object;
 				if (definition.getAnimation() == -1 && definition.getMorphisms() == null) {

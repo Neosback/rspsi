@@ -503,9 +503,12 @@ public final class ModelPacketBuilder {
 
         @SuppressWarnings("unchecked")
         List<ModelVertex>[] mergedVertices = new List[packets.size()];
+        @SuppressWarnings("unchecked")
+        List<ModelTriangle>[] packetTriangles = new List[packets.size()];
         boolean[] changed = new boolean[packets.size()];
         for (int index = 0; index < packets.size(); index++) {
             mergedVertices[index] = new ArrayList<>(packets.get(index).vertices());
+            packetTriangles[index] = new ArrayList<>(packets.get(index).triangles());
         }
         for (List<VertexReference> group : references.values()) {
             if (group.size() < 2 || group.stream().noneMatch(ref -> mergeEnabled[ref.packetIndex()])) {
@@ -540,21 +543,66 @@ public final class ModelPacketBuilder {
             }
         }
 
+        // OSRS/TSPS hideOccludedFaces contract: when two merge-enabled models
+        // meet at a seam, coplanar duplicate faces sharing all 3 vertex positions
+        // are marked as hidden (renderType = 2) to eliminate internal z-fighting.
+        Map<FaceKey, List<FaceReference>> faces = new java.util.LinkedHashMap<>();
+        for (int packetIndex = 0; packetIndex < packets.size(); packetIndex++) {
+            if (!mergeEnabled[packetIndex]) continue;
+            ModelRenderPacket packet = packets.get(packetIndex);
+            List<ModelVertex> vertices = packet.vertices();
+            int plane = packet.anchor().plane();
+            int anchorX = packet.anchor().x() * 128;
+            int height = packet.placementHeight();
+            int anchorZ = packet.anchor().y() * 128;
+            for (int faceIndex = 0; faceIndex < packet.triangles().size(); faceIndex++) {
+                ModelTriangle face = packet.triangles().get(faceIndex);
+                if (face.renderType() == 2) continue;
+                ModelVertex vA = vertices.get(face.a());
+                ModelVertex vB = vertices.get(face.b());
+                ModelVertex vC = vertices.get(face.c());
+                VertexKey kA = new VertexKey(plane, anchorX + vA.x(), height + vA.y(), anchorZ + vA.z());
+                VertexKey kB = new VertexKey(plane, anchorX + vB.x(), height + vB.y(), anchorZ + vB.z());
+                VertexKey kC = new VertexKey(plane, anchorX + vC.x(), height + vC.y(), anchorZ + vC.z());
+                FaceKey faceKey = FaceKey.canonical(kA, kB, kC);
+                faces.computeIfAbsent(faceKey, ignored -> new ArrayList<>())
+                        .add(new FaceReference(packetIndex, faceIndex));
+            }
+        }
+
+        for (List<FaceReference> group : faces.values()) {
+            if (group.size() < 2 || group.stream().map(FaceReference::packetIndex).distinct().count() < 2) {
+                continue;
+            }
+            for (FaceReference ref : group) {
+                ModelTriangle original = packetTriangles[ref.packetIndex()].get(ref.faceIndex());
+                if (original.renderType() != 2) {
+                    packetTriangles[ref.packetIndex()].set(ref.faceIndex(), original.withRenderType(2));
+                    changed[ref.packetIndex()] = true;
+                }
+            }
+        }
+
         List<ModelRenderPacket> result = new ArrayList<>(packets.size());
         for (int index = 0; index < packets.size(); index++) {
             ModelRenderPacket packet = packets.get(index);
             result.add(changed[index]
-                    ? relight(packet, List.copyOf(mergedVertices[index]))
+                    ? relight(packet, List.copyOf(mergedVertices[index]), List.copyOf(packetTriangles[index]))
                     : packet);
         }
         return result;
     }
 
     private ModelRenderPacket relight(ModelRenderPacket packet, List<ModelVertex> vertices) {
+        return relight(packet, vertices, packet.triangles());
+    }
+
+    private ModelRenderPacket relight(ModelRenderPacket packet, List<ModelVertex> vertices,
+                                      List<ModelTriangle> sourceTriangles) {
         ObjectAppearanceView appearance = definitions.objectAppearance(packet.objectId())
                 .orElseGet(ObjectAppearanceView::empty);
-        List<ModelTriangle> triangles = new ArrayList<>(packet.triangles().size());
-        for (ModelTriangle face : packet.triangles()) {
+        List<ModelTriangle> triangles = new ArrayList<>(sourceTriangles.size());
+        for (ModelTriangle face : sourceTriangles) {
             if (face.textureId() >= 0) {
                 if (face.renderType() == 0) {
                     triangles.add(face.withColors(
@@ -660,7 +708,32 @@ public final class ModelPacketBuilder {
                 new RawVertex(third.x(), third.y(), third.z()));
     }
 
-    private record VertexKey(int plane, int x, int y, int z) {
+    private record VertexKey(int plane, int x, int y, int z) implements Comparable<VertexKey> {
+        @Override
+        public int compareTo(VertexKey other) {
+            int cmp = Integer.compare(plane, other.plane);
+            if (cmp != 0) return cmp;
+            cmp = Integer.compare(x, other.x);
+            if (cmp != 0) return cmp;
+            cmp = Integer.compare(y, other.y);
+            if (cmp != 0) return cmp;
+            return Integer.compare(z, other.z);
+        }
+    }
+
+    private record FaceKey(VertexKey v1, VertexKey v2, VertexKey v3) {
+        static FaceKey canonical(VertexKey a, VertexKey b, VertexKey c) {
+            VertexKey x = a;
+            VertexKey y = b;
+            VertexKey z = c;
+            if (x.compareTo(y) > 0) { VertexKey t = x; x = y; y = t; }
+            if (y.compareTo(z) > 0) { VertexKey t = y; y = z; z = t; }
+            if (x.compareTo(y) > 0) { VertexKey t = x; x = y; y = t; }
+            return new FaceKey(x, y, z);
+        }
+    }
+
+    private record FaceReference(int packetIndex, int faceIndex) {
     }
 
     private record PositionKey(int x, int y, int z) {
@@ -778,7 +851,7 @@ public final class ModelPacketBuilder {
             }
             int mappingOffset = coordinate * 3;
             float[] matrix = buildRotationScaleMatrix(mapping[mappingOffset], mapping[mappingOffset + 1],
-                    mapping[mappingOffset + 2], valueAt(geometry.textureRotations(), coordinate, 0),
+                    mapping[mappingOffset + 2], valueAt(geometry.textureRotations(), coordinate, 0) & 0xFF,
                     scaleX, scaleY, scaleZ);
             result[coordinate] = new TextureProjection(type,
                     (minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2,

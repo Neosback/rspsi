@@ -4,7 +4,7 @@ import com.jagex.util.ObjectKey;
 
 public final class GameObject extends DefaultWorldObject {
 
-	public int anInt527;
+	public int sortDistance;
 
 	public int lastRenderCycle;
 	public int centreX;

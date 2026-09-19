@@ -58,15 +58,15 @@ public class OsrsAreaLoader extends RSAreaLoader {
 			if (opcode == 1) {
 				area.setSpriteId(ByteBufferUtils.getSmartInt(buffer));
 			} else if (opcode == 2) {
-				area.setAnInt1967(ByteBufferUtils.getSmartInt(buffer));
+				area.setSprite2Id(ByteBufferUtils.getSmartInt(buffer));
 			} else if (opcode == 3) {
 				area.setName(ByteBufferUtils.getOSRSString(buffer));
 			} else if (opcode == 4) {
-				area.setAnInt1959(ByteBufferUtils.getMedium(buffer));
+				area.setFontColor(ByteBufferUtils.getMedium(buffer));
 			} else if (opcode == 5) {
 				ByteBufferUtils.getMedium(buffer);
 			} else if (opcode == 6) {
-				area.setAnInt1968(buffer.get() & 0xFF);
+				area.setTextSize(buffer.get() & 0xFF);
 			} else if (opcode == 7) {
 				int flags = buffer.get() & 0xFF;
 				if ((flags & 0x1) == 0) {
@@ -76,37 +76,37 @@ public class OsrsAreaLoader extends RSAreaLoader {
 			} else if (opcode == 8) {
 				buffer.get();
 			} else if (opcode >= 10 && opcode <= 14) {
-				area.getAStringArray1969()[opcode - 10] = ByteBufferUtils.getOSRSString(buffer);
+				area.getMenuActions()[opcode - 10] = ByteBufferUtils.getOSRSString(buffer);
 			} else if (opcode == 15) {
 				int size = buffer.get() & 0xFF;
-				int[] anIntArray1982 = new int[size * 2];
+				int[] coordinateOffsets = new int[size * 2];
 
 				for (int i = 0; i < size * 2; ++i) {
-					anIntArray1982[i] = buffer.getShort();
+					coordinateOffsets[i] = buffer.getShort();
 				}
 
 				buffer.getInt();
 				int size2 = buffer.get() & 0xFF;
-				int[] anIntArray1981 = new int[size2];
+				int[] compositeElementIds = new int[size2];
 
-				for (int i = 0; i < anIntArray1981.length; ++i) {
-					anIntArray1981[i] = buffer.getInt();
+				for (int i = 0; i < compositeElementIds.length; ++i) {
+					compositeElementIds[i] = buffer.getInt();
 				}
 
-				byte[] aByteArray1979 = new byte[size];
+				byte[] planeBytes = new byte[size];
 
 				for (int i = 0; i < size; ++i) {
-					aByteArray1979[i] = buffer.get();
+					planeBytes[i] = buffer.get();
 				}
-				area.setAnIntArray1982(anIntArray1982);
-				area.setAnIntArray1981(anIntArray1981);
-				area.setAByteArray1979(aByteArray1979);
+				area.setCoordinateOffsets(coordinateOffsets);
+				area.setCompositeElementIds(compositeElementIds);
+				area.setPlaneBytes(planeBytes);
 			} else if (opcode == 17) {
-				area.setAString1970(ByteBufferUtils.getOSRSString(buffer));
+				area.setMenuTargetName(ByteBufferUtils.getOSRSString(buffer));
 			} else if (opcode == 18) {
 				ByteBufferUtils.getSmartInt(buffer);
 			} else if (opcode == 19) {
-				area.setAnInt1980(buffer.getShort() & 0xFFFF);
+				area.setCategory(buffer.getShort() & 0xFFFF);
 			} else if (opcode == 21) {
 				buffer.getInt();
 			} else if (opcode == 22) {

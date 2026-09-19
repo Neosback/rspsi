@@ -61,6 +61,14 @@ public interface CacheStore extends AutoCloseable {
         return "unknown cache backend";
     }
 
+    /**
+     * Inspects and summarizes decoded cache contents across all decoders.
+     */
+    default com.rspsi.cache.workspace.CacheDecoderSummary decoderSummary(int revision,
+                                                                         com.rspsi.cache.definition.DefinitionProvider definitions) {
+        return com.rspsi.cache.workspace.CacheDecoderSummary.empty();
+    }
+
     @Override
     default void close() {
         flush();

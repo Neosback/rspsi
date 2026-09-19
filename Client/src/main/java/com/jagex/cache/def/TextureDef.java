@@ -21,124 +21,130 @@ public final class TextureDef
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aBoolean1223 = buffer.readUByte() == 1;
+				textures[i].isTransparent = buffer.readUByte() == 1;
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aBoolean1204 = buffer.readUByte() == 1;
+				textures[i].isLoaded = buffer.readUByte() == 1;
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aBoolean1205 = buffer.readUByte() == 1;
+				textures[i].isBrightnessAdjusted = buffer.readUByte() == 1;
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aByte1217 = buffer.readByte();
+				textures[i].textureType = buffer.readByte();
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aByte1225 = buffer.readByte();
+				textures[i].blendType = buffer.readByte();
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aByte1214 = buffer.readByte();
+				textures[i].blendParam1 = buffer.readByte();
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aByte1213 = buffer.readByte();
+				textures[i].blendParam2 = buffer.readByte();
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aShort1221 = (short) buffer.readUShort();
+				textures[i].averageHsl = (short) buffer.readUShort();
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aByte1211 = buffer.readByte();
+				textures[i].animationSpeed = buffer.readByte();
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aByte1203 = buffer.readByte();
+				textures[i].animationDirection = buffer.readByte();
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aBoolean1222 = buffer.readUByte() == 1;
+				textures[i].clampS = buffer.readUByte() == 1;
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aBoolean1216 = buffer.readUByte() == 1;
+				textures[i].clampT = buffer.readUByte() == 1;
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aByte1207 = buffer.readByte();
+				textures[i].mipmapping = buffer.readByte();
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aBoolean1212 = buffer.readUByte() == 1;
+				textures[i].useAlpha = buffer.readUByte() == 1;
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aBoolean1210 = buffer.readUByte() == 1;
+				textures[i].isAlphaMask = buffer.readUByte() == 1;
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].aBoolean1215 = buffer.readUByte() == 1;
+				textures[i].isHd = buffer.readUByte() == 1;
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].anInt1202 = buffer.readUByte();
+				textures[i].spriteCount = buffer.readUByte();
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].anInt1206 = buffer.readInt();
+				textures[i].materialId = buffer.readInt();
 
 
 		for (int i = 0; i != count; ++i)
 			if (textures[i] != null)
-				textures[i].anInt1226 = buffer.readUByte();
+				textures[i].combineMode = buffer.readUByte();
 
 
 	}
 
-	public static void nullLoader()
+	public static void clearCache()
 	{
 		textures = null;
 	}
 
-	public boolean aBoolean1223;
-	public boolean aBoolean1204;
-	public boolean aBoolean1205;
-	public byte aByte1217;
-	public byte aByte1225;
-	public byte aByte1214;
-	public byte aByte1213;
-	public short aShort1221;
-	public byte aByte1211;
-	public byte aByte1203;
-	public boolean aBoolean1222;
-	public boolean aBoolean1216;
-	public byte aByte1207;
-	public boolean aBoolean1212;
-	public boolean aBoolean1210;
-	public boolean aBoolean1215;
-	public int anInt1202;
-	public int anInt1206;
-	public int anInt1226;
+	@Deprecated
+	public static void nullLoader()
+	{
+		clearCache();
+	}
+
+	public boolean isTransparent;
+	public boolean isLoaded;
+	public boolean isBrightnessAdjusted;
+	public byte textureType;
+	public byte blendType;
+	public byte blendParam1;
+	public byte blendParam2;
+	public short averageHsl;
+	public byte animationSpeed;
+	public byte animationDirection;
+	public boolean clampS;
+	public boolean clampT;
+	public byte mipmapping;
+	public boolean useAlpha;
+	public boolean isAlphaMask;
+	public boolean isHd;
+	public int spriteCount;
+	public int materialId;
+	public int combineMode;
 	public static TextureDef[] textures;
 }

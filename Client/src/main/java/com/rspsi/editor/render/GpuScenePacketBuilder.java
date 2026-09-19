@@ -210,7 +210,7 @@ public final class GpuScenePacketBuilder {
         List<Integer> opaque = new ArrayList<>();
         List<Integer> transparent = new ArrayList<>();
         for (int index : indices) {
-            if (hasTransparentGeometry(models.get(index), textures)) transparent.add(index);
+            if (hasTransparentGeometry(models.get(index))) transparent.add(index);
             else opaque.add(index);
         }
         layers.add(new SceneLayer(kind, indices, opaque, transparent));
@@ -222,23 +222,18 @@ public final class GpuScenePacketBuilder {
      * as a non-opaque face because it is an alpha/visibility-controlled
      * material in the client model path.
      */
-    private static boolean hasTransparentGeometry(ModelRenderPacket model,
-                                                  java.util.Map<Integer, RenderTextureResource> textures) {
-        // isTransparentFace already fully decides transparency (alpha != 0,
-        // OR render type 3, OR a transparent-pixel texture). An extra
-        // `alpha() != 255` guard here would wrongly treat an opaque-alpha
-        // (255) face as opaque even when it's render-type-3 or textured with
-        // transparent pixels - opaque alpha is the client default of 0, not
-        // 255 (see ModelPacketBuilder's valueAt(alphas, face, 0)).
-        return model.triangles().stream().anyMatch(face -> isTransparentFace(face, textures));
+    private static boolean hasTransparentGeometry(ModelRenderPacket model) {
+        // isTransparentFace already fully decides model transparency. An
+        // extra texture-pixel test would move cutout banners/foliage into the
+        // no-depth-write alpha stream. RuneLite keeps those triangles in the
+        // opaque stream and discards transparent texels in the fragment
+        // shader, preserving depth ownership for the visible texels.
+        return model.triangles().stream().anyMatch(GpuScenePacketBuilder::isTransparentFace);
     }
 
-    /** TSPS marks a face transparent when either its face alpha or material requires it. */
-    private static boolean isTransparentFace(ModelTriangle face,
-                                             java.util.Map<Integer, RenderTextureResource> textures) {
-        return face.alpha() != 0 || face.renderType() == 3
-                || (face.textureId() >= 0 && textures.get(face.textureId()) != null
-                && textures.get(face.textureId()).hasTransparentPixels());
+    /** Model alpha/render type select the alpha stream; texture cutouts stay opaque. */
+    private static boolean isTransparentFace(ModelTriangle face) {
+        return face.alpha() != 0 || face.renderType() == 3;
     }
 
     /** Emits only explicit definition-backed occluders; movement blocking alone is not visual occlusion. */

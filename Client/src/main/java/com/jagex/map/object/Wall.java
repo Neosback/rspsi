@@ -4,9 +4,9 @@ import com.jagex.util.ObjectKey;
 
 public final class Wall extends DefaultWorldObject {
 
-	public int anInt276;
+	public int orientationA;
 
-	public int anInt277;
+	public int orientationB;
 
 	public Wall(ObjectKey id, int x, int y, int z) {
 		super(id, x, y, z);

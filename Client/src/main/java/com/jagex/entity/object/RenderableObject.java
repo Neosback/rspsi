@@ -14,10 +14,10 @@ public class RenderableObject extends Renderable {
 
 	public static Client client;
 	private Animation animation;
-	private int anInt1603;
-	private int anInt1605;
-	private int anInt1606;
-	private int centre;
+	private int heightSW;
+	private int heightSE;
+	private int heightNE;
+	private int heightNW;
 	private int currentFrameId;
 	private int id;
 	private int animId;
@@ -26,15 +26,15 @@ public class RenderableObject extends Renderable {
 	private int type;
 	private boolean randomFrame;
 
-	public RenderableObject(int id, int orientation, int type, int aY, int bY, int cY, int dY, int animationId,
+	public RenderableObject(int id, int orientation, int type, int heightSW, int heightSE, int heightNE, int heightNW, int animationId,
 			boolean randomFrame) {
 		this.id = id;
 		this.type = type;
 		this.orientation = orientation;
-		anInt1603 = aY;
-		centre = bY;
-		anInt1605 = cY;
-		anInt1606 = dY;
+		this.heightSW = heightSW;
+		this.heightSE = heightSE;
+		this.heightNE = heightNE;
+		this.heightNW = heightNW;
 		this.animId = animationId;
 		this.randomFrame = randomFrame;
 		if (animationId != -1) {
@@ -82,7 +82,7 @@ public class RenderableObject extends Renderable {
 		if(definition.getMorphisms() != null)
 			definition = morph();
 		Mesh model = definition == null ? null
-				: definition.modelAt(type, orientation, anInt1603, centre, anInt1605, anInt1606, lastFrame);
+				: definition.modelAt(type, orientation, heightSW, heightSE, heightNE, heightNW, lastFrame);
 		if(model != null && this.selected) {
 			model = model.copy();
 			model.selected = true;

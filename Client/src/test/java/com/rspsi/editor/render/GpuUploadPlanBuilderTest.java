@@ -60,8 +60,8 @@ class GpuUploadPlanBuilderTest {
         assertEquals(3, plan.commands().get(0).indexCount());
         assertEquals(3, plan.commands().get(1).firstIndex());
         assertEquals(23, plan.commands().get(1).depthBias());
-        assertEquals(10, plan.commands().get(1).priority(),
-                "wall decorations inherit the RuneLite/TSPS scene priority");
+        assertEquals(2, plan.commands().get(1).priority(),
+                "wall decorations preserve authored model face priority");
         assertEquals(GpuDrawCommand.RenderMode.SORTED_NO_DEPTH,
                 plan.commands().get(1).renderMode());
         assertFalse(plan.fingerprint().isBlank());
@@ -128,7 +128,7 @@ class GpuUploadPlanBuilderTest {
     }
 
     @Test
-    void transparentTexturePixelsMoveAnOpaqueFaceIntoTheAlphaPass() {
+    void transparentTexturePixelsRemainOpaqueForDepthOwnership() {
         TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
         WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
         ModelRenderPacket model = new ModelRenderPacket(coordinate, 9, ObjectCategory.GROUND,
@@ -151,7 +151,7 @@ class GpuUploadPlanBuilderTest {
 
         GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
 
-        assertEquals(GpuDrawCommand.SubmissionPass.ALPHA, plan.commands().get(0).pass());
+        assertEquals(GpuDrawCommand.SubmissionPass.OPAQUE, plan.commands().get(0).pass());
     }
 
     @Test
@@ -233,5 +233,59 @@ class GpuUploadPlanBuilderTest {
         // Both tiles merged into exactly ONE draw command
         assertEquals(1, plan.commands().size());
         assertEquals(6, plan.commands().get(0).indexCount());
+    }
+
+    @Test
+    void wallDecorationPreservesMultiPriorityFaceHierarchy() {
+        TileCoordinate coordinate = new TileCoordinate(0, 3213, 3218);
+        WorldTileAddress address = WorldTileAddress.of(3213, 3218, 0);
+
+        List<ModelVertex> vertices = List.of(
+                new ModelVertex(-64, 0, 0, 1, 0, 0, 1, 0, 0),
+                new ModelVertex(-64, 32, 0, 1, 0, 0, 1, 1, 0),
+                new ModelVertex(-64, 0, 32, 1, 0, 0, 1, 0, 1));
+
+        // Three coplanar faces mimicking Object 899 (hanging banner):
+        // cloth (priority 0, textured), trim (priority 1), crest (priority 3)
+        List<ModelTriangle> faces = List.of(
+                new ModelTriangle(0, 1, 2, 1, 1, 1, 16, 0, 0, 0),
+                new ModelTriangle(0, 1, 2, 1, 1, 1, -1, 0, 1, 0),
+                new ModelTriangle(0, 1, 2, 1, 1, 1, -1, 0, 3, 0));
+
+        ModelRenderPacket banner = new ModelRenderPacket(coordinate, 899,
+                ObjectCategory.WALL_DECOR, vertices, faces, List.of(), -1,
+                0, 0, 0, 128, 128, 128, false, false);
+
+        SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
+                Optional.empty(), Optional.empty(), List.of(banner),
+                List.of(new SceneLayer(SceneLayer.Kind.WALL_DECORATION, List.of(0))),
+                List.of(), false, false);
+
+        RenderTextureResource bannerTexture = new RenderTextureResource(16,
+                new TextureDefinitionView(16, false, 16, 0x880000, 0, 0, false),
+                1, 1, new int[]{0x880000}, RenderTextureResource.PixelStatus.AVAILABLE, "");
+
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
+                        Map.of()), 3213, 3218, 1, 0, java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "banner-prio-test", Map.of(16, bannerTexture));
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        // Three distinct commands corresponding to the three priority bands
+        assertEquals(3, plan.commands().size());
+
+        // Priorities must match the authored face priorities 0, 1, 3, not clamped to 10
+        assertEquals(0, plan.commands().get(0).priority(), "cloth retains priority 0");
+        assertEquals(16, plan.commands().get(0).textureId());
+        assertEquals(1, plan.commands().get(0).depthBias(), "wall decoration retains minimum depth bias 1");
+
+        assertEquals(1, plan.commands().get(1).priority(), "trim retains priority 1");
+        assertEquals(-1, plan.commands().get(1).textureId());
+        assertEquals(1, plan.commands().get(1).depthBias());
+
+        assertEquals(3, plan.commands().get(2).priority(), "crest retains priority 3");
+        assertEquals(-1, plan.commands().get(2).textureId());
+        assertEquals(1, plan.commands().get(2).depthBias());
     }
 }

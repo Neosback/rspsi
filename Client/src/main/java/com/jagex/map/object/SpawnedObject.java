@@ -6,7 +6,7 @@ public final class SpawnedObject extends LinkableWorldObject {
 
 	private int group;
 	private int id;
-	private int longetivity = -1;
+	private int longevity = -1;
 	private int orientation;
 	private int previousId;
 	private int previousOrientation;
@@ -31,8 +31,13 @@ public final class SpawnedObject extends LinkableWorldObject {
 		return id;
 	}
 
+	public int getLongevity() {
+		return longevity;
+	}
+
+	@Deprecated
 	public int getLongetivity() {
-		return longetivity;
+		return getLongevity();
 	}
 
 	public int getOrientation() {
@@ -67,8 +72,13 @@ public final class SpawnedObject extends LinkableWorldObject {
 		this.id = id;
 	}
 
+	public void setLongevity(int longevity) {
+		this.longevity = longevity;
+	}
+
+	@Deprecated
 	public void setLongetivity(int longetivity) {
-		this.longetivity = longetivity;
+		setLongevity(longetivity);
 	}
 
 	public void setOrientation(int orientation) {

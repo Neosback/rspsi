@@ -1,13 +1,33 @@
 package com.rspsi.editor.render;
 
+import com.rspsi.editor.input.EditorKeyEvent;
+
 import java.util.Objects;
 
-/** Renderer-neutral orbit, pan, and zoom controller for a scene viewport. */
+/**
+ * Renderer-neutral orbit, pan, zoom, and projection controller for a scene viewport.
+ */
 public final class ViewportController {
+    public enum ProjectionMode {
+        PERSPECTIVE,
+        OSRS_CLIENT,
+        ORTHOGRAPHIC,
+        TOP_DOWN
+    }
+
+    private static final float MOVE_UNITS_PER_SECOND = 1400.0f;
+    private static final float TURN_RADIANS_PER_SECOND = 2.4f;
+
     private CameraState camera;
+    private ProjectionMode projectionMode = ProjectionMode.PERSPECTIVE;
 
     public ViewportController(CameraState initialCamera) {
-        camera = Objects.requireNonNull(initialCamera, "initial camera");
+        this(initialCamera, ProjectionMode.PERSPECTIVE);
+    }
+
+    public ViewportController(CameraState initialCamera, ProjectionMode initialMode) {
+        this.camera = Objects.requireNonNull(initialCamera, "initial camera");
+        this.projectionMode = Objects.requireNonNull(initialMode, "initial mode");
     }
 
     public CameraState camera() {
@@ -16,6 +36,46 @@ public final class ViewportController {
 
     public void setCamera(CameraState next) {
         camera = Objects.requireNonNull(next, "camera");
+    }
+
+    public ProjectionMode projectionMode() {
+        return projectionMode;
+    }
+
+    public void setProjectionMode(ProjectionMode mode) {
+        this.projectionMode = Objects.requireNonNull(mode, "projectionMode");
+    }
+
+    /** Centers the camera to look down directly on the terrain. */
+    public void top() {
+        camera = new CameraState(camera.x(), camera.y(), camera.z(),
+                (float) -Math.PI / 2.0f + 0.05f, 0.0f);
+    }
+
+    /** Aligns camera facing directly North (yaw = 0). */
+    public void north() {
+        camera = new CameraState(camera.x(), camera.y(), camera.z(), camera.pitch(), 0.0f);
+    }
+
+    /** Aligns camera facing directly South (yaw = PI). */
+    public void south() {
+        camera = new CameraState(camera.x(), camera.y(), camera.z(), camera.pitch(), (float) Math.PI);
+    }
+
+    /** Aligns camera facing directly East (yaw = PI / 2). */
+    public void east() {
+        camera = new CameraState(camera.x(), camera.y(), camera.z(), camera.pitch(), (float) (Math.PI / 2.0));
+    }
+
+    /** Aligns camera facing directly West (yaw = -PI / 2). */
+    public void west() {
+        camera = new CameraState(camera.x(), camera.y(), camera.z(), camera.pitch(), (float) (-Math.PI / 2.0));
+    }
+
+    /** Frames the given world coordinate in the center of the viewport. */
+    public void frameSelection(float targetX, float targetY, float targetZ) {
+        camera = new CameraState(targetX, targetY - 1600.0f, targetZ - 2400.0f,
+                (float) -Math.toRadians(35.0), 0.0f);
     }
 
     /**
@@ -50,6 +110,21 @@ public final class ViewportController {
         if (radians == 0.0f) return;
         camera = new CameraState(camera.x(), camera.y(), camera.z(),
                 camera.pitch(), camera.yaw() + radians);
+    }
+
+    /** Dispatches a neutral key event for camera navigation. */
+    public boolean handleKeyEvent(EditorKeyEvent event, float deltaSeconds) {
+        if (event == null || !event.pressed()) return false;
+        float move = MOVE_UNITS_PER_SECOND * deltaSeconds * (event.shift() ? 3.0f : 1.0f);
+        float turn = TURN_RADIANS_PER_SECOND * deltaSeconds;
+        String key = event.key();
+        return switch (key) {
+            case "Up", "ArrowUp" -> { moveForward(move); yield true; }
+            case "Down", "ArrowDown" -> { moveForward(-move); yield true; }
+            case "Left", "ArrowLeft" -> { rotateYaw(-turn); yield true; }
+            case "Right", "ArrowRight" -> { rotateYaw(turn); yield true; }
+            default -> false;
+        };
     }
 
     /** Applies one frame of input; deltas are pixels and wheel is ImGui-style. */

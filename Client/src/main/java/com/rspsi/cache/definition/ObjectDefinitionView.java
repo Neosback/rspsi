@@ -14,33 +14,47 @@ public record ObjectDefinitionView(
         int[] modelIds,
         int[] modelTypes,
         int mapSceneId,
-        boolean interactive
+        boolean interactive,
+        int varbit,
+        int varp,
+        int[] transforms,
+        int defaultTransform
 ) {
     /** Source-compatible constructor for definitions without map-scene data. */
     public ObjectDefinitionView(int id, String name, int width, int length,
                                 List<String> interactions, int[] modelIds) {
         this(id, name, width, length, interactions, modelIds, null, -1,
-                interactions != null && !interactions.isEmpty());
+                interactions != null && !interactions.isEmpty(), -1, -1, new int[0], -1);
     }
 
     /** Source-compatible constructor for definitions with map-scene data. */
     public ObjectDefinitionView(int id, String name, int width, int length,
                                 List<String> interactions, int[] modelIds, int mapSceneId) {
         this(id, name, width, length, interactions, modelIds, null, mapSceneId,
-                interactions != null && !interactions.isEmpty());
+                interactions != null && !interactions.isEmpty(), -1, -1, new int[0], -1);
     }
 
     /** Source-compatible constructor for explicit interactivity without model-type pairing. */
     public ObjectDefinitionView(int id, String name, int width, int length,
                                 List<String> interactions, int[] modelIds, int mapSceneId,
                                 boolean interactive) {
-        this(id, name, width, length, interactions, modelIds, null, mapSceneId, interactive);
+        this(id, name, width, length, interactions, modelIds, null, mapSceneId, interactive,
+                -1, -1, new int[0], -1);
+    }
+
+    /** Source-compatible constructor for definitions without morph data. */
+    public ObjectDefinitionView(int id, String name, int width, int length,
+                                List<String> interactions, int[] modelIds,
+                                int[] modelTypes, int mapSceneId, boolean interactive) {
+        this(id, name, width, length, interactions, modelIds, modelTypes, mapSceneId,
+                interactive, -1, -1, new int[0], -1);
     }
 
     public ObjectDefinitionView {
         interactions = List.copyOf(interactions == null ? List.of() : interactions);
         modelIds = modelIds == null ? new int[0] : modelIds.clone();
         modelTypes = modelTypes == null ? new int[0] : modelTypes.clone();
+        transforms = transforms == null ? new int[0] : transforms.clone();
         if (modelTypes.length != 0 && modelTypes.length != modelIds.length) {
             throw new IllegalArgumentException(
                     "Object model types and model IDs must be paired: " + modelIds.length
@@ -63,6 +77,14 @@ public record ObjectDefinitionView(
         return modelTypes.clone();
     }
 
+    public int[] transforms() {
+        return transforms.clone();
+    }
+
+    public boolean hasTransforms() {
+        return (transforms != null && transforms.length > 0) || varbit != -1 || varp != -1;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
@@ -72,15 +94,21 @@ public record ObjectDefinitionView(
                 && length == value.length
                 && mapSceneId == value.mapSceneId
                 && interactive == value.interactive
+                && varbit == value.varbit
+                && varp == value.varp
+                && defaultTransform == value.defaultTransform
                 && Objects.equals(name, value.name)
                 && Objects.equals(interactions, value.interactions)
                 && Arrays.equals(modelIds, value.modelIds)
-                && Arrays.equals(modelTypes, value.modelTypes);
+                && Arrays.equals(modelTypes, value.modelTypes)
+                && Arrays.equals(transforms, value.transforms);
     }
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(id, name, width, length, interactions, mapSceneId, interactive);
-        return 31 * result + Arrays.hashCode(modelIds);
+        int result = Objects.hash(id, name, width, length, interactions, mapSceneId, interactive, varbit, varp, defaultTransform);
+        result = 31 * result + Arrays.hashCode(modelIds);
+        result = 31 * result + Arrays.hashCode(transforms);
+        return result;
     }
 }

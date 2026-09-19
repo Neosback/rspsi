@@ -26,14 +26,14 @@ public final class SceneTile extends Linkable {
 	public ShapedTile shape;
 	public SimpleTile simple;
 	public boolean needsRendering;
-	public boolean aBoolean1323;
+	public boolean drawSecondary;
 	public boolean hasObjects;
 	public SceneTile tileBelow;
-	public int anInt1310;
-	public int anInt1325;
-	public int anInt1326;
-	public int anInt1327;
-	public int anInt1328;
+	public int minPlane;
+	public int drawGameObjectEdges;
+	public int wallUncullDirection;
+	public int wallCullOppositeDirection;
+	public int cameraAngleMask;
 	private int attributes;// 4 == TILE_EAST
 	public int collisionPlane;
 	public int underlayId;
@@ -93,7 +93,7 @@ public final class SceneTile extends Linkable {
 	public SceneTile(int x, int y, int z) {
 		gameObjects = new GameObject[5];
 		objectAttributes = new int[5];
-		anInt1310 = plane = z;
+		minPlane = plane = z;
 		positionX = x;
 		positionY = y;
 	}
@@ -205,12 +205,12 @@ public final class SceneTile extends Linkable {
 
 	public SceneTile copy() {
 		SceneTile tile = new SceneTile(positionX, positionY, plane);
-		tile.aBoolean1323 = this.aBoolean1323;
-		tile.anInt1310 = this.anInt1310;
-		tile.anInt1325 = this.anInt1325;
-		tile.anInt1326 = this.anInt1326;
-		tile.anInt1327 = this.anInt1327;
-		tile.anInt1328 = this.anInt1328;
+		tile.drawSecondary = this.drawSecondary;
+		tile.minPlane = this.minPlane;
+		tile.drawGameObjectEdges = this.drawGameObjectEdges;
+		tile.wallUncullDirection = this.wallUncullDirection;
+		tile.wallCullOppositeDirection = this.wallCullOppositeDirection;
+		tile.cameraAngleMask = this.cameraAngleMask;
 		tile.attributes = this.attributes;
 		tile.collisionPlane = this.collisionPlane;
 		tile.gameObjects = this.gameObjects;

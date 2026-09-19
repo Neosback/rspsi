@@ -147,6 +147,8 @@ public final class OsrsBundle implements AutoCloseable {
 
     public int mapCount() { return project.maps().index().size(); }
 
+    public CacheDecoderSummary decoderSummary() { return project.decoderSummary(); }
+
     public Optional<ServerAdapter> serverAdapter() { return Optional.ofNullable(serverAdapter); }
 
     public Optional<ServerProjectInspection> serverInspection() {
