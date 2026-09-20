@@ -58,6 +58,11 @@ public final class ExternalPluginRuntime {
             }
         }
 
+        // Versioned installs intentionally keep old artifacts available for rollback.
+        // Select the highest installed release of each managed plugin before dependency
+        // resolution so side-by-side versions never become a duplicate-id failure.
+        managed = selectInstalledReleases(managed, failures);
+
         PluginDependencyResolver.Resolution resolution;
         try {
             resolution = PluginDependencyResolver.resolve(managed, hostPlugins);
@@ -156,6 +161,41 @@ public final class ExternalPluginRuntime {
         }
 
         return new ExternalPluginRuntimeSnapshot(handles, failures);
+    }
+
+    private static List<ExternalPluginCandidate> selectInstalledReleases(
+            List<ExternalPluginCandidate> candidates,
+            List<PluginLoadFailure> failures) {
+        Map<String, List<ExternalPluginCandidate>> byId = new LinkedHashMap<>();
+        for (ExternalPluginCandidate candidate : candidates) {
+            byId.computeIfAbsent(candidate.manifest().id(), ignored -> new ArrayList<>())
+                    .add(candidate);
+        }
+
+        List<ExternalPluginCandidate> selected = new ArrayList<>();
+        for (Map.Entry<String, List<ExternalPluginCandidate>> entry : byId.entrySet()) {
+            List<ExternalPluginCandidate> releases = new ArrayList<>(entry.getValue());
+            releases.sort(Comparator
+                    .comparing((ExternalPluginCandidate value) -> value.manifest().version())
+                    .reversed()
+                    .thenComparing(value -> value.jarPath().toString()));
+            ExternalPluginCandidate newest = releases.get(0);
+            selected.add(newest);
+
+            for (int index = 1; index < releases.size(); index++) {
+                ExternalPluginCandidate older = releases.get(index);
+                if (older.manifest().version().equals(newest.manifest().version())
+                        && !older.sha256().equalsIgnoreCase(newest.sha256())) {
+                    String reason = "Conflicting artifacts provide " + entry.getKey()
+                            + " " + newest.manifest().version()
+                            + "; using " + newest.jarPath().getFileName();
+                    failures.add(failure(older.jarPath(), reason,
+                            new IllegalStateException(reason)));
+                }
+            }
+        }
+        selected.sort(Comparator.comparing(candidate -> candidate.manifest().id()));
+        return List.copyOf(selected);
     }
 
     private static List<EditorPlugin> discoverLocal(ClassLoader loader) {
