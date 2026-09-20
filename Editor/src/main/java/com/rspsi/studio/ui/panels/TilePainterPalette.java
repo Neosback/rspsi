@@ -5,6 +5,7 @@ import com.rspsi.editor.brush.BrushCapability;
 import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.tool.CompositeTilePainterTool;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.theme.StudioFonts;
@@ -55,7 +56,7 @@ public final class TilePainterPalette implements StudioPanel {
     private static final String[] SHAPE_NAMES = {
             "0: Full", "1: Diagonal", "2: Left 1/2", "3: Right 1/2",
             "4: Corner TL", "5: Corner TR", "6: Corner BR", "7: Corner BL",
-            "8: Inv TL", "9: Inv TR", "10: Inv BR", "11: Inv BL", "12: Island"
+            "8: Inv TL", "9: Inv TR", "10: Inv BR", "11: Inv BL"
     };
     private static final String[] ROTATION_NAMES = {"0° (North)", "90° (East)", "180° (South)", "270° (West)"};
 
@@ -528,21 +529,21 @@ public final class TilePainterPalette implements StudioPanel {
         ImGui.text("Flags Mask: 0x" + Integer.toHexString(flags));
         ImGui.separator();
 
-        boolean blocked = (flags & 0x01) != 0;
+        boolean blocked = (flags & OsrsTileFlags.BLOCK_MAP_SQUARE) != 0;
         if (ImGui.checkbox("Blocked Tile (0x01)##blk", blocked)) {
-            flags ^= 0x01;
+            flags ^= OsrsTileFlags.BLOCK_MAP_SQUARE;
             applyFlags.set(true);
         }
 
-        boolean bridge = (flags & 0x02) != 0;
+        boolean bridge = (flags & OsrsTileFlags.BRIDGE) != 0;
         if (ImGui.checkbox("Bridge Tile (0x02)##brg", bridge)) {
-            flags ^= 0x02;
+            flags ^= OsrsTileFlags.BRIDGE;
             applyFlags.set(true);
         }
 
-        boolean roof = (flags & 0x04) != 0;
-        if (ImGui.checkbox("Under Roof / Force Lower (0x04)##rf", roof)) {
-            flags ^= 0x04;
+        boolean roof = (flags & OsrsTileFlags.REMOVE_ROOFS) != 0;
+        if (ImGui.checkbox("Remove Roofs (0x04)##rf", roof)) {
+            flags ^= OsrsTileFlags.REMOVE_ROOFS;
             applyFlags.set(true);
         }
     }
