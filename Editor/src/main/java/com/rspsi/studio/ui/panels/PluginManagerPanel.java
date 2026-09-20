@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui.panels;
 
+import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.plugin.EditorPlugin;
 import com.rspsi.editor.plugin.EditorPluginDescriptor;
 import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
@@ -32,6 +33,7 @@ public final class PluginManagerPanel implements StudioPanel {
 
     private final ImString searchQuery = new ImString(64);
     private String selectedPluginIdForConfig = null;
+    private String categoryFilter = "All";
 
     @Override
     public String id() {
@@ -83,6 +85,7 @@ public final class PluginManagerPanel implements StudioPanel {
 
         String query = searchQuery.get().trim().toLowerCase();
 
+        renderCategoryFilters();
         ImGui.separator();
 
         // 1. Studio UI & Tool Plugins
@@ -92,6 +95,7 @@ public final class PluginManagerPanel implements StudioPanel {
                 ImGui.textColored(0xFF38BDF8, StudioIcons.VIEWPORT + "  STUDIO EXTENSIONS & TOOLS (" + allStudio.size() + ")");
 
                 for (StudioPlugin plugin : allStudio) {
+                    if (!matchesStudioCategory(plugin)) continue;
                     String pid = plugin.id();
                     String pname = plugin.name();
                     String pdesc = plugin.description();
@@ -141,8 +145,10 @@ public final class PluginManagerPanel implements StudioPanel {
             }
         }
 
+        renderBrushManagement(context, query);
+
         // 2. Core Client Engine Plugins
-        if (clientLifecycle != null) {
+        if (clientLifecycle != null && ("All".equals(categoryFilter) || "Engine".equals(categoryFilter))) {
             List<EditorPlugin> candidates = clientLifecycle.candidates();
             if (!candidates.isEmpty()) {
                 ImGui.spacing();
@@ -187,6 +193,84 @@ public final class PluginManagerPanel implements StudioPanel {
                     ImGui.popID();
                 }
             }
+        }
+    }
+
+    private void renderCategoryFilters() {
+        for (String filter : new String[]{"All", "Tools", "Brushes", "Terrain", "HUD", "Engine"}) {
+            boolean selected = filter.equals(categoryFilter);
+            if (selected) {
+                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
+            }
+            if (ImGui.smallButton(filter + "##plugin-filter-" + filter)) {
+                categoryFilter = filter;
+            }
+            if (selected) ImGui.popStyleColor();
+            ImGui.sameLine();
+        }
+        ImGui.newLine();
+    }
+
+    private boolean matchesStudioCategory(StudioPlugin plugin) {
+        return switch (categoryFilter) {
+            case "All" -> true;
+            case "Tools" -> plugin instanceof com.rspsi.studio.plugin.StudioToolPlugin;
+            case "Terrain" -> plugin instanceof com.rspsi.studio.plugin.StudioToolPlugin tool
+                    && "Terrain".equalsIgnoreCase(tool.category());
+            case "HUD" -> !(plugin instanceof com.rspsi.studio.plugin.StudioToolPlugin)
+                    && plugin.id().toLowerCase().contains("hud");
+            case "Brushes", "Engine" -> false;
+            default -> true;
+        };
+    }
+
+    private void renderBrushManagement(StudioPanelContext context, String query) {
+        if (context.brushes() == null
+                || !("All".equals(categoryFilter) || "Brushes".equals(categoryFilter) || "Terrain".equals(categoryFilter))) {
+            return;
+        }
+
+        List<EditorBrush> brushes = context.brushes().allBrushes();
+        if (brushes.isEmpty()) return;
+
+        ImGui.spacing();
+        ImGui.textColored(0xFF38BDF8, StudioIcons.BRUSH + "  BRUSHES (" + brushes.size() + ")");
+        ImGui.textDisabled("Brushes are neutral tool capabilities shared by terrain painters and sculptors.");
+
+        for (EditorBrush brush : brushes) {
+            if (!query.isEmpty()
+                    && !brush.id().toLowerCase().contains(query)
+                    && !brush.name().toLowerCase().contains(query)
+                    && !brush.description().toLowerCase().contains(query)) {
+                continue;
+            }
+
+            ImGui.pushID("brush-" + brush.id());
+            boolean enabled = context.brushes().isEnabled(brush.id());
+            ImBoolean toggle = new ImBoolean(enabled);
+            if (ImGui.checkbox("##brush-toggle-" + brush.id(), toggle)) {
+                boolean accepted = context.brushes().setEnabled(brush.id(), toggle.get());
+                if (!accepted) {
+                    context.brushes().setEnabled(brush.id(), true);
+                }
+            }
+            ImGui.sameLine();
+            ImGui.text(brush.name());
+            for (String capability : context.brushes().capabilityLabels(brush)) {
+                ImGui.sameLine();
+                StudioWidgets.badge(capability, 0.25f, 0.35f, 0.45f);
+            }
+
+            if (!brush.description().isBlank()) {
+                ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
+                ImGui.textWrapped(brush.description());
+                ImGui.popStyleColor();
+            }
+            if (enabled && context.brushes().enabledBrushes().size() == 1) {
+                ImGui.textDisabled("Required: at least one brush must remain enabled.");
+            }
+            ImGui.separator();
+            ImGui.popID();
         }
     }
 
