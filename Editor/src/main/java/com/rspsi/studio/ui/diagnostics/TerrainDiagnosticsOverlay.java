@@ -2,7 +2,7 @@ package com.rspsi.studio.ui.diagnostics;
 
 import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileCoordinate;
-import com.rspsi.editor.model.WorldTileAddress;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.terrain.TerrainFace;
 import com.rspsi.editor.terrain.TerrainMeshBuilder;
 import com.rspsi.editor.terrain.TerrainSceneCompiler;
@@ -38,7 +38,7 @@ public final class TerrainDiagnosticsOverlay implements StudioPlugin {
         var pick = context.viewport().lastPick().orElse(null);
         if (pick == null) return;
 
-        TileCoordinate absolute = pick.tile();
+        WorldTile absolute = pick.tile();
         TileCoordinate local = localCoordinate(context, absolute);
         if (local == null) return;
 
@@ -118,13 +118,9 @@ public final class TerrainDiagnosticsOverlay implements StudioPlugin {
         ImGui.textDisabled("Cyan = underlay, yellow = overlay, magenta = bridge, green = object.");
     }
 
-    private static TileCoordinate localCoordinate(StudioPanelContext context, TileCoordinate absolute) {
-        var world = context.session().world();
-        if (world.contains(absolute)) return absolute;
-        if (absolute.x() < 0 || absolute.y() < 0 || absolute.plane() < 0) return null;
-        WorldTileAddress address = WorldTileAddress.of(absolute.x(), absolute.y(), absolute.plane());
-        return world.contains(absolute.plane(), address.regionLocalX(), address.regionLocalY())
-                ? new TileCoordinate(absolute.plane(), address.regionLocalX(), address.regionLocalY())
-                : null;
+    private static TileCoordinate localCoordinate(StudioPanelContext context, WorldTile absolute) {
+        return context.session().coordinates().toLocal(absolute)
+                .map(local -> local.coordinate())
+                .orElse(null);
     }
 }
