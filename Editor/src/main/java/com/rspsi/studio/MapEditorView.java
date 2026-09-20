@@ -3,6 +3,7 @@ package com.rspsi.studio;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.input.EditorInputRouter;
 import com.rspsi.editor.integration.ServerIntegrationService;
 import com.rspsi.editor.integration.npc.NpcSpawn;
@@ -52,6 +53,11 @@ import com.rspsi.editor.DeleteObjectCommand;
 import com.rspsi.editor.PlaceObjectCommand;
 import com.rspsi.editor.RotateObjectCommand;
 import com.rspsi.editor.SetTileCommand;
+import com.rspsi.editor.SetTileFlagsCommand;
+import com.rspsi.editor.SetTerrainHeightCommand;
+import com.rspsi.editor.CompositeEditCommand;
+import com.rspsi.editor.EditorCommand;
+import com.rspsi.editor.terrain.TerrainVertexLattice;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
@@ -548,18 +554,11 @@ public final class MapEditorView {
         if (ImGui.menuItem("Paint Tile with Active Brush")) {
             if (TilePainterPalette.INSTANCE != null) {
                 CompositeTilePainterTool tool = new CompositeTilePainterTool();
-                tool.setApplyUnderlay(TilePainterPalette.INSTANCE.applyUnderlay());
-                tool.setUnderlayId(TilePainterPalette.INSTANCE.underlayId());
-                tool.setApplyOverlay(TilePainterPalette.INSTANCE.applyOverlay());
-                tool.setOverlayId(TilePainterPalette.INSTANCE.overlayId());
-                tool.setApplyShape(TilePainterPalette.INSTANCE.applyShape());
-                tool.setShape(TilePainterPalette.INSTANCE.shape());
-                tool.setApplyRotation(TilePainterPalette.INSTANCE.applyRotation());
-                tool.setRotation(TilePainterPalette.INSTANCE.rotation());
-                tool.setApplyFlags(TilePainterPalette.INSTANCE.applyFlags());
-                tool.setFlags(TilePainterPalette.INSTANCE.flags());
-                tool.setApplyHeight(TilePainterPalette.INSTANCE.applyHeight());
-                tool.setHeight(TilePainterPalette.INSTANCE.height());
+                EditorBrush activeBrush = brushManager.activeBrush(
+                        "terrain.tile-painter",
+                        Set.of(com.rspsi.editor.brush.BrushCapability.SPATIAL_FOOTPRINT));
+                if (activeBrush != null) tool.setBrush(activeBrush);
+                tool.bindState(TilePainterPalette.INSTANCE.state());
                 tool.applyToCoordinates(Set.of(contextTile), s);
             }
         }
@@ -569,25 +568,15 @@ public final class MapEditorView {
             ImGui.separator();
             ImGui.textDisabled("Height:");
             if (ImGui.menuItem("Flatten Tile")) {
-                int avg = (snap.southWestHeight() + snap.southEastHeight() + snap.northEastHeight() + snap.northWestHeight()) / 4;
-                TileSnapshot after = new TileSnapshot(avg, avg, avg, avg,
-                        snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
-                        snap.flags(), snap.objects());
-                s.execute(new SetTileCommand(contextTile, snap, after, "Flatten tile"));
+                int avg = (snap.southWestHeight() + snap.southEastHeight()
+                        + snap.northEastHeight() + snap.northWestHeight()) / 4;
+                applyQuickHeight(s, contextTile, avg, true);
             }
             if (ImGui.menuItem("Raise (+32)")) {
-                TileSnapshot after = new TileSnapshot(snap.southWestHeight() + 32, snap.southEastHeight() + 32,
-                        snap.northEastHeight() + 32, snap.northWestHeight() + 32,
-                        snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
-                        snap.flags(), snap.objects());
-                s.execute(new SetTileCommand(contextTile, snap, after, "Raise tile"));
+                applyQuickHeight(s, contextTile, 32, false);
             }
             if (ImGui.menuItem("Lower (-32)")) {
-                TileSnapshot after = new TileSnapshot(snap.southWestHeight() - 32, snap.southEastHeight() - 32,
-                        snap.northEastHeight() - 32, snap.northWestHeight() - 32,
-                        snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
-                        snap.flags(), snap.objects());
-                s.execute(new SetTileCommand(contextTile, snap, after, "Lower tile"));
+                applyQuickHeight(s, contextTile, -32, false);
             }
 
             // 5. Tile Flags
@@ -600,7 +589,7 @@ public final class MapEditorView {
                         snap.northEastHeight(), snap.northWestHeight(),
                         snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
                         nextFlags, snap.objects());
-                s.execute(new SetTileCommand(contextTile, snap, after, "Toggle blocked flag"));
+                s.execute(new SetTileFlagsCommand(contextTile, snap, after, "Toggle blocked flag"));
             }
             boolean bridge = (snap.flags() & 0x02) != 0;
             if (ImGui.menuItem((bridge ? "[x] " : "[ ] ") + "Bridge Tile (0x02)")) {
@@ -609,8 +598,45 @@ public final class MapEditorView {
                         snap.northEastHeight(), snap.northWestHeight(),
                         snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
                         nextFlags, snap.objects());
-                s.execute(new SetTileCommand(contextTile, snap, after, "Toggle bridge flag"));
+                s.execute(new SetTileFlagsCommand(contextTile, snap, after, "Toggle bridge flag"));
             }
+        }
+    }
+
+    private static void applyQuickHeight(EditorSession session, TileCoordinate coordinate,
+                                         int value, boolean absolute) {
+        if (session == null || coordinate == null || !session.world().contains(coordinate)) return;
+        var original = session.world();
+        var predicted = original.copy();
+        TerrainVertexLattice source = new TerrainVertexLattice(original);
+        TerrainVertexLattice target = new TerrainVertexLattice(predicted);
+        java.util.Set<TileCoordinate> affected = new java.util.LinkedHashSet<>();
+        int[][] vertices = {
+                {coordinate.x(), coordinate.y()},
+                {coordinate.x() + 1, coordinate.y()},
+                {coordinate.x() + 1, coordinate.y() + 1},
+                {coordinate.x(), coordinate.y() + 1}
+        };
+        for (int[] vertex : vertices) {
+            int height = absolute
+                    ? value
+                    : source.height(coordinate.plane(), vertex[0], vertex[1]) + value;
+            affected.addAll(target.setHeight(coordinate.plane(), vertex[0], vertex[1], height));
+        }
+        java.util.List<EditorCommand> commands = new java.util.ArrayList<>();
+        for (TileCoordinate changed : affected) {
+            TileSnapshot before = original.tile(changed).snapshot();
+            TileSnapshot after = predicted.tile(changed).snapshot();
+            if (!before.equals(after)) {
+                commands.add(new SetTerrainHeightCommand(changed, before, after,
+                        before.heightSource(), after.heightSource(),
+                        (absolute ? "Flatten" : value >= 0 ? "Raise" : "Lower") + " terrain at " + changed));
+            }
+        }
+        if (!commands.isEmpty()) {
+            session.execute(new CompositeEditCommand(
+                    absolute ? "Flatten terrain" : value >= 0 ? "Raise terrain" : "Lower terrain",
+                    commands));
         }
     }
 
