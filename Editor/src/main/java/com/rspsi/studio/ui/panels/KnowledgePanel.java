@@ -9,6 +9,8 @@ import com.rspsi.editor.knowledge.RegionProfile;
 import com.rspsi.editor.knowledge.SemanticTag;
 import com.rspsi.editor.knowledge.WorldKnowledgeService;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.render.PickResult;
@@ -103,16 +105,22 @@ public final class KnowledgePanel implements StudioPanel {
 
         if (picked.isPresent()) {
             PickResult hit = picked.get();
-            TileCoordinate coord = hit.tile();
+            WorldTile worldCoord = hit.tile();
+            LocalTile local = context.session() == null ? null
+                    : context.session().coordinates().toLocal(worldCoord).orElse(null);
             StudioWidgets.section("Selection Semantics");
-            ImGui.text("Selected Tile: (" + coord.plane() + ", " + coord.x() + ", " + coord.y() + ")");
+            ImGui.text("Selected Tile: (" + worldCoord.plane() + ", "
+                    + worldCoord.x() + ", " + worldCoord.y() + ")");
+            if (local == null) {
+                ImGui.textDisabled("Selected tile is outside the active document.");
+                return;
+            }
+            TileCoordinate coord = local.coordinate();
 
             WorldDocument world = context.pluginLifecycle().host().context().world();
             WorldObject pickedObject = null;
             if (hit.objectHit() && world != null && coord.plane() >= 0 && coord.plane() < world.planes()) {
-                int lx = Math.floorMod(coord.x(), Math.max(1, world.width()));
-                int ly = Math.floorMod(coord.y(), Math.max(1, world.length()));
-                for (WorldObject obj : world.tile(coord.plane(), lx, ly).snapshot().objects()) {
+                for (WorldObject obj : world.tile(coord).snapshot().objects()) {
                     if (obj.id() == hit.objectId()) {
                         pickedObject = obj;
                         break;
@@ -185,10 +193,7 @@ public final class KnowledgePanel implements StudioPanel {
             // Explain Rendering (Rule Trace)
             if (ImGui.collapsingHeader("Explain Rendering (Rule Trace)", ImGuiTreeNodeFlags.DefaultOpen)
                     && world != null && coord.plane() >= 0 && coord.plane() < world.planes()) {
-                int traceX = Math.floorMod(coord.x(), Math.max(1, world.width()));
-                int traceY = Math.floorMod(coord.y(), Math.max(1, world.length()));
-                TileCoordinate localCoord = new TileCoordinate(coord.plane(), traceX, traceY);
-                RuleTrace.TileRuleTrace tileTrace = RuleTrace.traceTile(world, localCoord);
+                RuleTrace.TileRuleTrace tileTrace = RuleTrace.traceTile(world, coord);
                 ImGui.pushFont(StudioFonts.mono(), 0.0f);
                 ImGui.text("Tile Elevation:   " + tileTrace.elevation());
                 ImGui.text("Effective Plane:  " + tileTrace.effectivePlane());
