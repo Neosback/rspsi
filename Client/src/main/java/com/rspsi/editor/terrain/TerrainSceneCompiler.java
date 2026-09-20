@@ -16,6 +16,8 @@ import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.RegionNeighborhood;
+import com.rspsi.editor.model.WorldRegion;
 import com.rspsi.editor.render.LightingProfile;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
 import com.rspsi.editor.render.TerrainAppearance;
@@ -117,6 +119,52 @@ public final class TerrainSceneCompiler {
             LightingProfile lightingProfile,
             InvalidationGraph.ZoneCoordinate zone) {
         return compileZones(document, definitions, lightingProfile, Set.of(zone));
+    }
+
+    /**
+     * Compiles the center 64x64 region while sampling appearance, normals and
+     * bridge semantics from its loaded 3x3 neighborhood.
+     */
+    public Map<TileCoordinate, CompiledTerrainTile> compileCenterRegion(
+            RegionNeighborhood neighborhood,
+            DefinitionProvider definitions,
+            LightingProfile lightingProfile) {
+        Objects.requireNonNull(neighborhood, "neighborhood");
+        Objects.requireNonNull(definitions, "definitions");
+        Objects.requireNonNull(lightingProfile, "lightingProfile");
+        WorldRegion center = neighborhood.center();
+        WorldDocument document = center.document();
+        int originX = center.regionX() * WorldRegion.REGION_SIZE;
+        int originY = center.regionY() * WorldRegion.REGION_SIZE;
+        Map<TileCoordinate, CompiledTerrainTile> result = new LinkedHashMap<>();
+
+        for (int plane = 0; plane < document.planes(); plane++) {
+            for (int x = 0; x < document.width(); x++) {
+                for (int y = 0; y < document.length(); y++) {
+                    TileCoordinate coordinate = new TileCoordinate(plane, x, y);
+                    int worldX = originX + x;
+                    int worldY = originY + y;
+                    var snapshot = document.tile(coordinate).snapshot();
+                    TerrainMesh mesh = meshBuilder.build(snapshot);
+                    TerrainAppearance appearance = appearanceBuilder.buildTile(
+                            neighborhood, definitions, plane, worldX, worldY);
+                    TerrainLight lighting = TerrainLighting.buildTile(
+                            neighborhood, lightingProfile, plane, worldX, worldY);
+                    var packet = packetBuilder.build(coordinate, mesh, appearance, lighting);
+                    int flags = snapshot.flags();
+                    int minimapHsl = appearance.overlayMinimapHsl() >= 0
+                            ? appearance.overlayMinimapHsl() : appearance.underlayHsl();
+                    int minimapRgb = minimapHsl >= 0
+                            ? OsrsTerrainColorMath.packedHslToRgb(minimapHsl, 0.6) : 0;
+                    result.put(coordinate, new CompiledTerrainTile(
+                            coordinate, mesh, appearance, lighting, packet,
+                            neighborhood.effectivePlane(plane, worldX, worldY),
+                            OsrsTileFlags.hasBridge(flags), OsrsTileFlags.removesRoofs(flags),
+                            flags, minimapRgb));
+                }
+            }
+        }
+        return Map.copyOf(result);
     }
 
     public CompiledTerrainTile compileTile(WorldDocument document,
