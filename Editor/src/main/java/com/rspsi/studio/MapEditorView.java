@@ -526,7 +526,7 @@ public final class MapEditorView {
             s.selection().select(localCoordinate);
         }
         if (ImGui.menuItem("Add to Selection")) {
-            s.selection().select(contextTile);
+            s.selection().select(localCoordinate);
         }
         if (ImGui.menuItem("Clear Selection")) {
             s.selection().clear();
