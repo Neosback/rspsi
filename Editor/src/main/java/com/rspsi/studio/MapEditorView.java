@@ -32,6 +32,8 @@ import com.rspsi.studio.ui.StudioMenuBar;
 import com.rspsi.studio.ui.StudioPanelContext;
 import com.rspsi.studio.ui.StudioPanelManager;
 import com.rspsi.studio.ui.WorkspaceTabBar;
+import com.rspsi.studio.ui.hud.ViewportHudManager;
+import com.rspsi.studio.ui.hud.TilePainterHud;
 import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.builtin.TileInfoHudPlugin;
 import imgui.ImGui;
@@ -99,6 +101,7 @@ public final class MapEditorView {
     private final StudioPanelManager panelManager = new StudioPanelManager();
     private final StudioPluginManager studioPluginManager = new StudioPluginManager();
     private final StudioBrushManager brushManager = new StudioBrushManager();
+    private final ViewportHudManager hudManager = new ViewportHudManager();
     {
         studioPluginManager.setOwnedPanelSink(panelManager::register);
     }
@@ -106,6 +109,7 @@ public final class MapEditorView {
     {
         minimapHudOverlay.setOnWorldMapClick(() -> panelManager.setActiveRightPanelId(MinimapPanel.ID));
         studioPluginManager.register(new TileInfoHudPlugin());
+        studioPluginManager.register(new TilePainterHud());
     }
 
     private final PreferencesWindow preferencesWindow = new PreferencesWindow();
@@ -220,7 +224,8 @@ public final class MapEditorView {
                 activeToolId,
                 toolController,
                 studioPluginManager,
-                brushManager);
+                brushManager,
+                hudManager);
 
         // 4. Left Tool Rail (TOOL_RAIL slot: Selection, Paint, Height, Path, Objects) - Optional toggle
         if (showLeftToolRail) {
@@ -295,7 +300,9 @@ public final class MapEditorView {
             // Circular OSRS Minimap HUD in the top-right corner of the viewport
             minimapHudOverlay.render(panelContext, layout.viewportX(), layout.contentY(), layout.viewportWidth(), layout.viewportHeight());
 
-            // Render dynamic plugin HUD overlays (Tile Info HUD, telemetry, custom plugin HUDs)
+            // Managed HUD stack: plugins request quadrant slots instead of choosing pixels.
+            hudManager.beginFrame(layout.viewportX(), layout.contentY(),
+                    layout.viewportWidth(), layout.viewportHeight());
             studioPluginManager.renderHUDs(panelContext);
 
             // Floating Tool Rail (Frosted Acrylic Capsule)
