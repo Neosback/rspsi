@@ -197,7 +197,11 @@ public final class StudioPluginManager {
      * Dispatches floating HUD rendering to all active plugins.
      */
     public void renderHUDs(StudioPanelContext context) {
-        for (StudioPlugin p : enabledPlugins()) {
+        List<StudioPlugin> ordered = new ArrayList<>(enabledPlugins());
+        if (context != null && context.huds() != null) {
+            ordered.sort(java.util.Comparator.comparingInt(plugin -> context.huds().priority(plugin.id())));
+        }
+        for (StudioPlugin p : ordered) {
             try {
                 p.renderHUD(context);
             } catch (Exception ex) {
