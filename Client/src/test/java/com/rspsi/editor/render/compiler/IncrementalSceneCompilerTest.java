@@ -56,5 +56,14 @@ class IncrementalSceneCompilerTest {
     }
 
     private static final class EmptyDefinitions implements DefinitionProvider {
+        @Override public java.util.Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) {
+            return java.util.Optional.empty();
+        }
+        @Override public java.util.Optional<com.rspsi.cache.definition.FloorDefinitionView> underlay(int id) {
+            return java.util.Optional.empty();
+        }
+        @Override public java.util.Optional<com.rspsi.cache.definition.FloorDefinitionView> overlay(int id) {
+            return java.util.Optional.empty();
+        }
     }
 }
