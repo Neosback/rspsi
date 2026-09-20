@@ -126,7 +126,7 @@ public final class MapEditorView {
 
     private boolean commandPaletteOpen;
     private final ImString commandQuery = new ImString(128);
-    private boolean showLeftToolRail = false;
+    private boolean showLeftToolRail = true;
 
     // Shared studio runtime services & sibling workspace callbacks
     private Runnable openInterfaceStudio;
@@ -304,17 +304,12 @@ public final class MapEditorView {
             handleViewportDragDrop(viewport, settings, pluginLifecycle);
             handleViewportContextMenu(cache, viewport, settings, pluginLifecycle);
 
-            // Circular OSRS Minimap HUD in the top-right corner of the viewport
-            minimapHudOverlay.render(panelContext, layout.viewportX(), layout.contentY(), layout.viewportWidth(), layout.viewportHeight());
-
-            // Managed HUD stack: plugins request quadrant slots instead of choosing pixels.
+            // All viewport HUDs share one managed stack and cannot overlap.
             hudManager.beginFrame(layout.viewportX(), layout.contentY(),
                     layout.viewportWidth(), layout.viewportHeight());
+            minimapHudOverlay.render(panelContext, layout.viewportX(), layout.contentY(),
+                    layout.viewportWidth(), layout.viewportHeight());
             studioPluginManager.renderHUDs(panelContext);
-
-            // Floating Tool Rail (Frosted Acrylic Capsule)
-            floatingToolbar.render(panelContext, layout.viewportX(), layout.contentY(),
-                    toolId -> activateTool(pluginLifecycle, toolId), activeToolId);
         }
         ImGui.end();
     }
@@ -772,7 +767,7 @@ public final class MapEditorView {
         layoutStore.reset();
         bottomBar.setDrawerOpen(true);
         studioPluginManager.setEnabled(TileInfoHudPlugin.ID, true);
-        showLeftToolRail = false;
+        showLeftToolRail = true;
         floatingToolbar.resetPosition();
         hudManager.resetUserState();
     }
