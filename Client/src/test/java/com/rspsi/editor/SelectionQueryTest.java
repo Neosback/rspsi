@@ -4,6 +4,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.selection.ObjectSelection;
 import com.rspsi.editor.selection.SelectionQuery;
