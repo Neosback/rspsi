@@ -7,6 +7,7 @@ import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
+import com.rspsi.editor.render.SpriteRasterizer;
 import com.rspsi.editor.terrain.CompiledTerrainTile;
 import com.rspsi.editor.terrain.TerrainSceneCompiler;
 import com.rspsi.editor.model.TileCoordinate;
@@ -333,17 +334,7 @@ public final class MinimapBuilder {
         int originY = (document.length() - tileY - definition.length()) * 4
                 + (definition.length() * 4 - sprite.height()) / 2
                 + sprite.offsetY();
-        int[] spritePixels = sprite.argb();
-        for (int y = 0; y < sprite.height(); y++) {
-            int outputY = originY + y;
-            if (outputY < 0 || outputY >= document.length() * 4) continue;
-            for (int x = 0; x < sprite.width(); x++) {
-                int outputX = originX + x;
-                if (outputX < 0 || outputX >= document.width() * 4) continue;
-                int argb = spritePixels[y * sprite.width() + x];
-                if (argb != 0) pixels[outputY * width + outputX] = argb;
-            }
-        }
+        SpriteRasterizer.blit(sprite, pixels, width, document.length() * 4, originX, originY);
     }
 
     private static int blendedUnderlay(WorldDocument document, int plane, int x, int y,
