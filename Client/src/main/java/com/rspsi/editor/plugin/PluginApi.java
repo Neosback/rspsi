@@ -2,6 +2,7 @@ package com.rspsi.editor.plugin;
 
 import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.cache.data.DecodedDataCatalog;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.generation.GenerationSchema;
 import com.rspsi.editor.generation.Generator;
@@ -69,6 +70,11 @@ public final class PluginApi {
 
     public AssetRepository assets() {
         return context.assets();
+    }
+
+    /** Discoverable catalog of decoded cache families and typed providers. */
+    public DecodedDataCatalog data() {
+        return context.services().decodedData();
     }
 
     public Optional<EditorSceneAccess> scene() {
