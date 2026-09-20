@@ -5,8 +5,9 @@ import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.PaintOverlayCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.OverlayDraw;
 
 import java.util.ArrayList;
@@ -21,7 +22,7 @@ public final class PaintOverlayTool implements EditorTool {
     private int rotation;
     private ToolContext context;
     private final List<EditorCommand> stroke = new ArrayList<>();
-    private final Set<TileCoordinate> visited = new LinkedHashSet<>();
+    private final Set<WorldTile> visited = new LinkedHashSet<>();
 
     public PaintOverlayTool(int overlayId) { setOverlayId(overlayId); }
     public int overlayId() { return overlayId; }
@@ -39,6 +40,7 @@ public final class PaintOverlayTool implements EditorTool {
         if (rotation < 0 || rotation > 3) throw new IllegalArgumentException("Overlay rotation must be between 0 and 3");
         this.rotation = rotation;
     }
+
     @Override public String id() { return "paint-overlay"; }
     @Override public void activate(ToolContext context) { this.context = context; clear(); }
     @Override public void deactivate() { clear(); context = null; }
@@ -49,8 +51,9 @@ public final class PaintOverlayTool implements EditorTool {
         if (context != null && event.button() == PointerButton.PRIMARY) addTile(event);
     }
     @Override public void pointerUp(PointerEvent event) {
-        if (context != null && !stroke.isEmpty() && context.session().canEdit()) context.session().execute(
-                new CompositeEditCommand("Paint overlay", stroke));
+        if (context != null && !stroke.isEmpty() && context.session().canEdit()) {
+            context.session().execute(new CompositeEditCommand("Paint overlay", stroke));
+        }
         clear();
     }
     @Override public ToolInspector inspector() {
@@ -60,17 +63,25 @@ public final class PaintOverlayTool implements EditorTool {
                 new PropertyDescriptor("rotation", "Rotation", PropertyDescriptor.ValueType.INTEGER, 0, 3));
     }
     @Override public void renderOverlay(OverlayDraw draw) { visited.forEach(draw::tileOutline); }
+
     private void addTile(PointerEvent event) {
-        context.viewport().tileAt(event.x(), event.y()).ifPresent(coordinate -> {
-            if (!visited.add(coordinate)) return;
-            TileSnapshot before = context.session().world().tile(coordinate).snapshot();
-            if (before.overlayId() == overlayId && before.overlayShape() == shape && before.overlayRotation() == rotation) return;
-            TileSnapshot after = new TileSnapshot(before.southWestHeight(), before.southEastHeight(),
-                    before.northEastHeight(), before.northWestHeight(), before.underlayId(), overlayId,
-                    shape, rotation, before.flags(), before.objects());
-            stroke.add(new PaintOverlayCommand(coordinate, before, after,
-                    "Paint overlay at " + coordinate));
+        context.worldTileAt(event.x(), event.y()).ifPresent(worldTile -> {
+            if (!visited.add(worldTile)) return;
+            LocalTile local = context.local(worldTile).orElse(null);
+            if (local == null) return;
+            TileSnapshot before = context.session().world().tile(local).snapshot();
+            if (before.overlayId() == overlayId
+                    && before.overlayShape() == shape
+                    && before.overlayRotation() == rotation) return;
+            TileSnapshot after = new TileSnapshot(
+                    before.southWestHeight(), before.southEastHeight(),
+                    before.northEastHeight(), before.northWestHeight(),
+                    before.underlayId(), overlayId, shape, rotation,
+                    before.flags(), before.objects(), before.heightSource());
+            stroke.add(new PaintOverlayCommand(local.coordinate(), before, after,
+                    "Paint overlay at " + worldTile));
         });
     }
+
     private void clear() { stroke.clear(); visited.clear(); }
 }
