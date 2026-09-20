@@ -5,6 +5,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.terrain.TerrainFace;
 import com.rspsi.editor.terrain.TerrainMeshBuilder;
+import com.rspsi.editor.terrain.TerrainSceneCompiler;
 import com.rspsi.studio.plugin.StudioPlugin;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.StudioPanelContext;
@@ -42,7 +43,10 @@ public final class TerrainDiagnosticsOverlay implements StudioPlugin {
         if (local == null) return;
 
         var snapshot = context.session().world().tile(local).snapshot();
-        var mesh = meshes.build(snapshot);
+        var compiled = context.cache() == null ? null
+                : new TerrainSceneCompiler().compileTile(
+                        context.session().world(), context.cache().bundle().assets(), local);
+        var mesh = compiled != null ? compiled.mesh() : meshes.build(snapshot);
         var draw = context.viewport().createOverlayDraw();
         float baseX = absolute.x() * 128.0f;
         float baseZ = absolute.y() * 128.0f;
@@ -90,7 +94,8 @@ public final class TerrainDiagnosticsOverlay implements StudioPlugin {
             }
         }
 
-        if ((snapshot.flags() & OsrsTileFlags.BRIDGE) != 0) {
+        int semanticFlags = compiled != null ? compiled.flags() : snapshot.flags();
+        if ((semanticFlags & OsrsTileFlags.BRIDGE) != 0) {
             draw.tileOutline(absolute, 0xE879F9FF);
             if (labels.get()) draw.tileLabel("BRIDGE FACE", absolute);
         }
