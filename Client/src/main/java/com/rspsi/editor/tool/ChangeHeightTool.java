@@ -145,8 +145,11 @@ public final class ChangeHeightTool implements EditorTool, BrushAwareTool {
                 for (var sample : lastMask.samples()) {
                     int dx = sample.absolute().x() - stampCenter.x();
                     int dy = sample.absolute().y() - stampCenter.y();
+                    // The authored tile radius describes included tiles. Falloff reaches
+                    // zero one grid step beyond that footprint, so the outer ring still
+                    // receives a partial influence instead of collapsing to zero.
                     double distance = radius == 0 ? 0.0
-                            : Math.max(Math.abs(dx), Math.abs(dy)) / (double) radius;
+                            : Math.max(Math.abs(dx), Math.abs(dy)) / (double) (radius + 1);
                     double weight = sample.weight() * falloffWeight(distance);
                     int amount = (int) Math.round(effectiveDelta * weight);
                     if (amount == 0) continue;
