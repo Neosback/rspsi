@@ -12,6 +12,7 @@ import com.rspsi.editor.integration.reference.ReferenceService;
 import com.rspsi.editor.plugin.EditorCommandRegistration;
 import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
 import com.rspsi.editor.plugin.EditorToolRegistration;
+import com.rspsi.editor.plugin.runtime.PluginEcosystemService;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.RenderConfigCompiler;
 import com.rspsi.editor.render.RenderSettingKeys;
@@ -143,6 +144,10 @@ public final class MapEditorView {
     private WorkspaceManager workspaces;
     private Runnable openMapEditor;
     private Consumer<WorkspaceManager.Workspace> closeWorkspace;
+
+    public void setPluginEcosystem(PluginEcosystemService ecosystem, Runnable rescanPlugins) {
+        pluginManagerWindow.setEcosystem(ecosystem, rescanPlugins);
+    }
 
     public void render(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
                        NativeSceneViewport viewport, String sceneStatus,
