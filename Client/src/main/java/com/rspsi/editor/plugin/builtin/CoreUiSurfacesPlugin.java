@@ -16,6 +16,12 @@ public final class CoreUiSurfacesPlugin implements EditorPlugin {
     @Override
     public void initialize(EditorPluginContext context) {
         context.registry().registerUiSurface(new UiSurfaceContribution(
+                "studio.minimap-hud", "Minimap HUD", "map",
+                UiSurfaceContribution.SurfaceType.VIEWPORT_HUD,
+                DockRegion.OVERLAY, EnumSet.of(DockRegion.OVERLAY),
+                UiSurfaceContribution.SizeClass.EXPANDED,
+                false, true, "", 10));
+        context.registry().registerUiSurface(new UiSurfaceContribution(
                 "studio.tile-info-hud", "Tile Information HUD", "explore",
                 UiSurfaceContribution.SurfaceType.VIEWPORT_HUD,
                 DockRegion.OVERLAY, EnumSet.of(DockRegion.OVERLAY),
