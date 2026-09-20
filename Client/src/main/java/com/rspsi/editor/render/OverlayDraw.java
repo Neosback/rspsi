@@ -1,6 +1,6 @@
 package com.rspsi.editor.render;
 
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
 
 /**
  * Rich 3D and 2D drawing vocabulary for editor tools and plugin overlays.
@@ -14,19 +14,19 @@ public interface OverlayDraw {
     /**
      * Outlines the specified tile perimeter with default color (white/cyan).
      */
-    void tileOutline(TileCoordinate tile);
+    void tileOutline(WorldTile tile);
 
     /**
      * Outlines the specified tile perimeter with a custom RGBA color.
      */
-    default void tileOutline(TileCoordinate tile, int colorRgba) {
+    default void tileOutline(WorldTile tile, int colorRgba) {
         tileOutline(tile);
     }
 
     /**
      * Fills the specified tile quad with a semi-transparent RGBA color.
      */
-    default void tileFilled(TileCoordinate tile, int colorRgba) {
+    default void tileFilled(WorldTile tile, int colorRgba) {
     }
 
     /**
@@ -96,7 +96,7 @@ public interface OverlayDraw {
     /**
      * Draws a text badge anchored at a tile coordinate in 3D world space.
      */
-    default void tileLabel(String text, TileCoordinate tile) {
+    default void tileLabel(String text, WorldTile tile) {
         if (tile != null) {
             worldLabel(text, tile.x() * 128.0f + 64.0f, 0.0f, tile.y() * 128.0f + 64.0f);
         }
