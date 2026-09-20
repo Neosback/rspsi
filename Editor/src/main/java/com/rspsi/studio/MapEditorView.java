@@ -3,6 +3,7 @@ package com.rspsi.studio;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.input.EditorInputRouter;
 import com.rspsi.editor.integration.ServerIntegrationService;
 import com.rspsi.editor.integration.npc.NpcSpawn;
@@ -32,6 +33,9 @@ import com.rspsi.studio.ui.StudioMenuBar;
 import com.rspsi.studio.ui.StudioPanelContext;
 import com.rspsi.studio.ui.StudioPanelManager;
 import com.rspsi.studio.ui.WorkspaceTabBar;
+import com.rspsi.studio.ui.hud.ViewportHudManager;
+import com.rspsi.studio.ui.hud.TilePainterHud;
+import com.rspsi.studio.ui.diagnostics.TerrainDiagnosticsOverlay;
 import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.builtin.TileInfoHudPlugin;
 import imgui.ImGui;
@@ -48,7 +52,10 @@ import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.editor.DeleteObjectCommand;
 import com.rspsi.editor.PlaceObjectCommand;
 import com.rspsi.editor.RotateObjectCommand;
-import com.rspsi.editor.SetTileCommand;
+import com.rspsi.editor.SetTileFlagsCommand;
+import com.rspsi.editor.SetTerrainHeightCommand;
+import com.rspsi.editor.CompositeEditCommand;
+import com.rspsi.editor.terrain.TerrainVertexLattice;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
@@ -99,6 +106,7 @@ public final class MapEditorView {
     private final StudioPanelManager panelManager = new StudioPanelManager();
     private final StudioPluginManager studioPluginManager = new StudioPluginManager();
     private final StudioBrushManager brushManager = new StudioBrushManager();
+    private final ViewportHudManager hudManager = new ViewportHudManager();
     {
         studioPluginManager.setOwnedPanelSink(panelManager::register);
     }
@@ -106,6 +114,8 @@ public final class MapEditorView {
     {
         minimapHudOverlay.setOnWorldMapClick(() -> panelManager.setActiveRightPanelId(MinimapPanel.ID));
         studioPluginManager.register(new TileInfoHudPlugin());
+        studioPluginManager.register(new TilePainterHud());
+        studioPluginManager.register(new TerrainDiagnosticsOverlay());
     }
 
     private final PreferencesWindow preferencesWindow = new PreferencesWindow();
@@ -116,7 +126,7 @@ public final class MapEditorView {
 
     private boolean commandPaletteOpen;
     private final ImString commandQuery = new ImString(128);
-    private boolean showLeftToolRail = false;
+    private boolean showLeftToolRail = true;
 
     // Shared studio runtime services & sibling workspace callbacks
     private Runnable openInterfaceStudio;
@@ -181,6 +191,7 @@ public final class MapEditorView {
 
         if (pluginLifecycle != null && pluginLifecycle.host() != null) {
             panelManager.syncPluginContributions(pluginLifecycle.host().registry().panelRegistrations());
+            panelManager.syncUiSurfaces(pluginLifecycle.host().registry().uiSurfaceContributions());
             if (!defaultToolActivated) {
                 // The default tool's button shows as active from the field default alone, but
                 // nothing actually calls toolController.activate(...) until the user clicks it -
@@ -220,7 +231,8 @@ public final class MapEditorView {
                 activeToolId,
                 toolController,
                 studioPluginManager,
-                brushManager);
+                brushManager,
+                hudManager);
 
         // 4. Left Tool Rail (TOOL_RAIL slot: Selection, Paint, Height, Path, Objects) - Optional toggle
         if (showLeftToolRail) {
@@ -292,15 +304,12 @@ public final class MapEditorView {
             handleViewportDragDrop(viewport, settings, pluginLifecycle);
             handleViewportContextMenu(cache, viewport, settings, pluginLifecycle);
 
-            // Circular OSRS Minimap HUD in the top-right corner of the viewport
-            minimapHudOverlay.render(panelContext, layout.viewportX(), layout.contentY(), layout.viewportWidth(), layout.viewportHeight());
-
-            // Render dynamic plugin HUD overlays (Tile Info HUD, telemetry, custom plugin HUDs)
+            // All viewport HUDs share one managed stack and cannot overlap.
+            hudManager.beginFrame(layout.viewportX(), layout.contentY(),
+                    layout.viewportWidth(), layout.viewportHeight());
+            minimapHudOverlay.render(panelContext, layout.viewportX(), layout.contentY(),
+                    layout.viewportWidth(), layout.viewportHeight());
             studioPluginManager.renderHUDs(panelContext);
-
-            // Floating Tool Rail (Frosted Acrylic Capsule)
-            floatingToolbar.render(panelContext, layout.viewportX(), layout.contentY(),
-                    toolId -> activateTool(pluginLifecycle, toolId), activeToolId);
         }
         ImGui.end();
     }
@@ -538,18 +547,11 @@ public final class MapEditorView {
         if (ImGui.menuItem("Paint Tile with Active Brush")) {
             if (TilePainterPalette.INSTANCE != null) {
                 CompositeTilePainterTool tool = new CompositeTilePainterTool();
-                tool.setApplyUnderlay(TilePainterPalette.INSTANCE.applyUnderlay());
-                tool.setUnderlayId(TilePainterPalette.INSTANCE.underlayId());
-                tool.setApplyOverlay(TilePainterPalette.INSTANCE.applyOverlay());
-                tool.setOverlayId(TilePainterPalette.INSTANCE.overlayId());
-                tool.setApplyShape(TilePainterPalette.INSTANCE.applyShape());
-                tool.setShape(TilePainterPalette.INSTANCE.shape());
-                tool.setApplyRotation(TilePainterPalette.INSTANCE.applyRotation());
-                tool.setRotation(TilePainterPalette.INSTANCE.rotation());
-                tool.setApplyFlags(TilePainterPalette.INSTANCE.applyFlags());
-                tool.setFlags(TilePainterPalette.INSTANCE.flags());
-                tool.setApplyHeight(TilePainterPalette.INSTANCE.applyHeight());
-                tool.setHeight(TilePainterPalette.INSTANCE.height());
+                EditorBrush activeBrush = brushManager.activeBrush(
+                        "terrain.tile-painter",
+                        Set.of(com.rspsi.editor.brush.BrushCapability.SPATIAL_FOOTPRINT));
+                if (activeBrush != null) tool.setBrush(activeBrush);
+                tool.bindState(TilePainterPalette.INSTANCE.state());
                 tool.applyToCoordinates(Set.of(contextTile), s);
             }
         }
@@ -559,25 +561,15 @@ public final class MapEditorView {
             ImGui.separator();
             ImGui.textDisabled("Height:");
             if (ImGui.menuItem("Flatten Tile")) {
-                int avg = (snap.southWestHeight() + snap.southEastHeight() + snap.northEastHeight() + snap.northWestHeight()) / 4;
-                TileSnapshot after = new TileSnapshot(avg, avg, avg, avg,
-                        snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
-                        snap.flags(), snap.objects());
-                s.execute(new SetTileCommand(contextTile, snap, after, "Flatten tile"));
+                int avg = (snap.southWestHeight() + snap.southEastHeight()
+                        + snap.northEastHeight() + snap.northWestHeight()) / 4;
+                applyQuickHeight(s, contextTile, avg, true);
             }
             if (ImGui.menuItem("Raise (+32)")) {
-                TileSnapshot after = new TileSnapshot(snap.southWestHeight() + 32, snap.southEastHeight() + 32,
-                        snap.northEastHeight() + 32, snap.northWestHeight() + 32,
-                        snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
-                        snap.flags(), snap.objects());
-                s.execute(new SetTileCommand(contextTile, snap, after, "Raise tile"));
+                applyQuickHeight(s, contextTile, 32, false);
             }
             if (ImGui.menuItem("Lower (-32)")) {
-                TileSnapshot after = new TileSnapshot(snap.southWestHeight() - 32, snap.southEastHeight() - 32,
-                        snap.northEastHeight() - 32, snap.northWestHeight() - 32,
-                        snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
-                        snap.flags(), snap.objects());
-                s.execute(new SetTileCommand(contextTile, snap, after, "Lower tile"));
+                applyQuickHeight(s, contextTile, -32, false);
             }
 
             // 5. Tile Flags
@@ -590,7 +582,7 @@ public final class MapEditorView {
                         snap.northEastHeight(), snap.northWestHeight(),
                         snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
                         nextFlags, snap.objects());
-                s.execute(new SetTileCommand(contextTile, snap, after, "Toggle blocked flag"));
+                s.execute(new SetTileFlagsCommand(contextTile, snap, after, "Toggle blocked flag"));
             }
             boolean bridge = (snap.flags() & 0x02) != 0;
             if (ImGui.menuItem((bridge ? "[x] " : "[ ] ") + "Bridge Tile (0x02)")) {
@@ -599,8 +591,45 @@ public final class MapEditorView {
                         snap.northEastHeight(), snap.northWestHeight(),
                         snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
                         nextFlags, snap.objects());
-                s.execute(new SetTileCommand(contextTile, snap, after, "Toggle bridge flag"));
+                s.execute(new SetTileFlagsCommand(contextTile, snap, after, "Toggle bridge flag"));
             }
+        }
+    }
+
+    private static void applyQuickHeight(EditorSession session, TileCoordinate coordinate,
+                                         int value, boolean absolute) {
+        if (session == null || coordinate == null || !session.world().contains(coordinate)) return;
+        var original = session.world();
+        var predicted = original.copy();
+        TerrainVertexLattice source = new TerrainVertexLattice(original);
+        TerrainVertexLattice target = new TerrainVertexLattice(predicted);
+        java.util.Set<TileCoordinate> affected = new java.util.LinkedHashSet<>();
+        int[][] vertices = {
+                {coordinate.x(), coordinate.y()},
+                {coordinate.x() + 1, coordinate.y()},
+                {coordinate.x() + 1, coordinate.y() + 1},
+                {coordinate.x(), coordinate.y() + 1}
+        };
+        for (int[] vertex : vertices) {
+            int height = absolute
+                    ? value
+                    : source.height(coordinate.plane(), vertex[0], vertex[1]) + value;
+            affected.addAll(target.setHeight(coordinate.plane(), vertex[0], vertex[1], height));
+        }
+        java.util.List<EditorCommand> commands = new java.util.ArrayList<>();
+        for (TileCoordinate changed : affected) {
+            TileSnapshot before = original.tile(changed).snapshot();
+            TileSnapshot after = predicted.tile(changed).snapshot();
+            if (!before.equals(after)) {
+                commands.add(new SetTerrainHeightCommand(changed, before, after,
+                        before.heightSource(), after.heightSource(),
+                        (absolute ? "Flatten" : value >= 0 ? "Raise" : "Lower") + " terrain at " + changed));
+            }
+        }
+        if (!commands.isEmpty()) {
+            session.execute(new CompositeEditCommand(
+                    absolute ? "Flatten terrain" : value >= 0 ? "Raise terrain" : "Lower terrain",
+                    commands));
         }
     }
 
@@ -728,21 +757,26 @@ public final class MapEditorView {
         if (layoutRestored) return;
         layoutRestored = true;
         var saved = layoutStore.load();
-        if (saved != null) bottomBar.setDrawerOpen(saved.bottomDrawerVisible());
+        if (saved != null) {
+            bottomBar.setDrawerOpen(saved.bottomDrawerVisible());
+            hudManager.restore(saved.huds());
+        }
     }
 
     private void resetLayout() {
         layoutStore.reset();
         bottomBar.setDrawerOpen(true);
         studioPluginManager.setEnabled(TileInfoHudPlugin.ID, true);
-        showLeftToolRail = false;
+        showLeftToolRail = true;
         floatingToolbar.resetPosition();
+        hudManager.resetUserState();
     }
 
     public void close() {
         if (!layoutRestored) return;
         layoutStore.save(new NativeWorkspaceLayoutStore.State(
-                NativeWorkspaceLayoutStore.CURRENT_VERSION, "", bottomBar.isDrawerOpen()));
+                NativeWorkspaceLayoutStore.CURRENT_VERSION, "", bottomBar.isDrawerOpen(),
+                hudManager.snapshot()));
     }
 
     private record Layout(float x, float y, float width, float height,

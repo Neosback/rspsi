@@ -4,8 +4,13 @@ import com.rspsi.studio.ui.StudioPanelContext;
 import imgui.ImDrawList;
 
 /**
- * RuneLite-inspired plugin contract for OpenRune Studio components, tools,
- * HUD overlays, and extensions.
+ * Internal transitional projection API for built-in Studio presentation code.
+ *
+ * <p>Public/third-party extensions should implement
+ * {@code com.rspsi.editor.plugin.EditorPlugin} and register neutral
+ * contributions through {@code EditorPluginRegistry}. This interface may call
+ * Dear ImGui directly and is therefore intentionally not the public plugin
+ * boundary.</p>
  */
 public interface StudioPlugin {
 

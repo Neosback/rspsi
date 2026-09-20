@@ -11,6 +11,7 @@ import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
+import com.rspsi.studio.ui.hud.ViewportHudManager;
 
 /**
  * Authentic circular OSRS Minimap HUD overlay rendered in the top-right of the 3D viewport.
@@ -38,10 +39,13 @@ public final class MinimapHudOverlay {
 
     public void render(StudioPanelContext context, float vpX, float vpY, float vpWidth, float vpHeight) {
         NativeSceneViewport viewport = context.viewport();
-        if (viewport == null) return;
+        if (viewport == null || context.huds() == null) return;
 
-        float hudX = vpX + vpWidth - HUD_WIDTH - 12.0f;
-        float hudY = vpY + 12.0f;
+        context.huds().register("studio.minimap-hud", ViewportHudManager.Quadrant.TOP_RIGHT, 10);
+        var placement = context.huds().place("studio.minimap-hud", HUD_WIDTH, HUD_HEIGHT);
+        if (placement == null) return;
+        float hudX = placement.x();
+        float hudY = placement.y();
 
         ImGui.setNextWindowPos(hudX, hudY, ImGuiCond.Always);
         ImGui.setNextWindowSize(HUD_WIDTH, HUD_HEIGHT, ImGuiCond.Always);

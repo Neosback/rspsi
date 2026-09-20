@@ -93,6 +93,12 @@ public final class StudioBottomBar {
                 || context.studioPlugins().toolPlugin(activeToolId)
                         .map(StudioToolPlugin::hasContextDrawerContent)
                         .orElse(true);
+        if (panelManager != null && activeToolId != null) {
+            toolHasDrawer = toolHasDrawer
+                    && panelManager.managedRegionForTool(activeToolId)
+                            .map(region -> region == DockRegion.BOTTOM)
+                            .orElse(true);
+        }
         if (!toolHasDrawer) {
             drawerOpen = false;
         }
@@ -108,7 +114,7 @@ public final class StudioBottomBar {
         ImGui.begin("StudioBottomBar", BAR_FLAGS);
 
         // 1. Horizontal Activity Bar (Square tool buttons linked to the drawer below)
-        renderActivityBar(context, activateTool, activeToolId, toolHasDrawer);
+        renderActivityBar(panelManager, context, activateTool, activeToolId, toolHasDrawer);
 
         // 2. Expandable Drawer Body
         if (drawerOpen && toolHasDrawer) {
@@ -119,7 +125,8 @@ public final class StudioBottomBar {
         ImGui.popStyleVar();
     }
 
-    private void renderActivityBar(StudioPanelContext context,
+    private void renderActivityBar(StudioPanelManager panelManager,
+                                   StudioPanelContext context,
                                    Consumer<String> activateTool,
                                    String activeToolId,
                                    boolean toolHasDrawer) {
@@ -136,7 +143,15 @@ public final class StudioBottomBar {
 
         if (!toolPlugins.isEmpty()) {
             for (StudioToolPlugin tool : toolPlugins) {
-                if (!context.studioPlugins().effectiveSurfaces(tool).contains(StudioToolPlugin.ToolSurface.BOTTOM_BAR)) {
+                java.util.Optional<DockRegion> managedRegion =
+                        panelManager != null ? panelManager.managedRegionForTool(tool.toolId())
+                                : java.util.Optional.empty();
+                if (managedRegion.isPresent() && managedRegion.get() != DockRegion.BOTTOM) {
+                    continue;
+                }
+                if (managedRegion.isEmpty()
+                        && !context.studioPlugins().effectiveSurfaces(tool)
+                                .contains(StudioToolPlugin.ToolSurface.BOTTOM_BAR)) {
                     continue;
                 }
                 boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);

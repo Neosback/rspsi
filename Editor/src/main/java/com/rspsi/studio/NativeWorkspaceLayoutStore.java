@@ -7,12 +7,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Map;
+import com.rspsi.studio.ui.hud.ViewportHudManager;
 
 /** Native-only adapter for the versioned ImGui workspace layout payload. */
 final class NativeWorkspaceLayoutStore {
     // Bump whenever the dock contract changes so an old movable shell cannot
     // reintroduce unlocked rails or a titled viewport.
-    static final int CURRENT_VERSION = 7;
+    static final int CURRENT_VERSION = 8;
     private final Path file;
     private final ObjectMapper mapper = JsonUtil.getDefaultMapper();
 
@@ -58,9 +60,15 @@ final class NativeWorkspaceLayoutStore {
         }
     }
 
-    record State(int version, String nativeIni, boolean bottomDrawerVisible) {
+    record State(int version, String nativeIni, boolean bottomDrawerVisible,
+                 Map<String, ViewportHudManager.HudState> huds) {
         State {
             nativeIni = nativeIni == null ? "" : nativeIni;
+            huds = huds == null ? Map.of() : Map.copyOf(huds);
+        }
+
+        State(int version, String nativeIni, boolean bottomDrawerVisible) {
+            this(version, nativeIni, bottomDrawerVisible, Map.of());
         }
     }
 }

@@ -83,6 +83,9 @@ public final class StudioRightSidebar {
             ImGui.pushFont(StudioFonts.icon(), 0.0f);
             if (ImGui.button(p.icon() + "##p-rail-" + p.id(), 40.0f, 40.0f)) {
                 panelManager.setActiveRightPanelId(p.id());
+                panelManager.associatedToolId(p.id()).ifPresent(toolId -> {
+                    if (context.activateTool() != null) context.activateTool().accept(toolId);
+                });
             }
             ImGui.popFont();
 

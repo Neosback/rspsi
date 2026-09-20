@@ -1,6 +1,7 @@
 package com.rspsi.studio.ui;
 
 import com.rspsi.editor.plugin.EditorPanelRegistration;
+import com.rspsi.editor.plugin.ui.UiSurfaceContribution;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.ui.panels.HeightToolPanel;
 import com.rspsi.studio.ui.panels.KnowledgePanel;
@@ -28,6 +29,7 @@ public final class StudioPanelManager {
     private final Map<String, StudioPanel> panels = new LinkedHashMap<>();
     private final Map<String, DockRegion> userOverrides = new LinkedHashMap<>();
     private final Map<String, Boolean> userVisibility = new LinkedHashMap<>();
+    private final Map<String, UiSurfaceContribution> managedSurfaces = new LinkedHashMap<>();
 
     private String activeRightPanelId = TileBrushPanel.ID;
     private String activeBottomPanelId = TilePainterPalette.ID;
@@ -72,8 +74,22 @@ public final class StudioPanelManager {
 
     public void setRegionOverride(String panelId, DockRegion region) {
         StudioPanel panel = panels.get(panelId);
-        if (panel != null && panel.allowedRegions().contains(region)) {
+        if (panel == null || !panel.allowedRegions().contains(region)) return;
+
+        UiSurfaceContribution surface = managedSurfaces.get(panelId);
+        if (surface == null || surface.associatedToolId().isBlank()) {
             userOverrides.put(panelId, region);
+            return;
+        }
+
+        // Paired tool surfaces move together. This keeps a tool button and its
+        // contextual shelf from being split across unrelated layout regions.
+        for (UiSurfaceContribution contribution : managedSurfaces.values()) {
+            if (!surface.associatedToolId().equals(contribution.associatedToolId())) continue;
+            StudioPanel paired = panels.get(contribution.id());
+            if (paired != null && paired.allowedRegions().contains(region)) {
+                userOverrides.put(contribution.id(), region);
+            }
         }
     }
 
@@ -90,6 +106,23 @@ public final class StudioPanelManager {
                 .filter(p -> effectiveRegion(p) == region && isVisible(p))
                 .sorted(Comparator.comparingInt(StudioPanel::order).thenComparing(StudioPanel::id))
                 .toList();
+    }
+
+    public Optional<DockRegion> managedRegionForTool(String toolId) {
+        if (toolId == null || toolId.isBlank()) return Optional.empty();
+        return managedSurfaces.values().stream()
+                .filter(surface -> toolId.equals(surface.associatedToolId()))
+                .filter(surface -> surface.type() != UiSurfaceContribution.SurfaceType.VIEWPORT_HUD)
+                .map(surface -> panels.get(surface.id()))
+                .filter(java.util.Objects::nonNull)
+                .map(this::effectiveRegion)
+                .findFirst();
+    }
+
+    public Optional<String> associatedToolId(String panelId) {
+        UiSurfaceContribution surface = managedSurfaces.get(panelId);
+        if (surface == null || surface.associatedToolId().isBlank()) return Optional.empty();
+        return Optional.of(surface.associatedToolId());
     }
 
     public String activeRightPanelId() {
@@ -113,6 +146,23 @@ public final class StudioPanelManager {
     }
 
     /**
+     * Synchronizes neutral managed surfaces declared by EditorPlugins.
+     * Viewport HUDs are consumed by ViewportHudManager; panel-like surfaces
+     * are projected into controlled Studio slots.
+     */
+    public void syncUiSurfaces(List<UiSurfaceContribution> contributions) {
+        if (contributions == null) return;
+        for (UiSurfaceContribution contribution : contributions) {
+            managedSurfaces.put(contribution.id(), contribution);
+            if (contribution.type() == UiSurfaceContribution.SurfaceType.VIEWPORT_HUD) continue;
+            if (!panels.containsKey(contribution.id())) {
+                register(new ManagedSurfacePanelAdapter(contribution));
+            }
+            userVisibility.putIfAbsent(contribution.id(), true);
+        }
+    }
+
+    /**
      * Synchronizes dynamic panel registrations from plugin host into manager.
      */
     public void syncPluginContributions(List<EditorPanelRegistration> pluginPanels) {
@@ -121,6 +171,26 @@ public final class StudioPanelManager {
             if (!panels.containsKey(reg.id())) {
                 register(new PluginStudioPanelAdapter(reg));
             }
+        }
+    }
+
+    private static final class ManagedSurfacePanelAdapter implements StudioPanel {
+        private final UiSurfaceContribution contribution;
+
+        private ManagedSurfacePanelAdapter(UiSurfaceContribution contribution) {
+            this.contribution = contribution;
+        }
+
+        @Override public String id() { return contribution.id(); }
+        @Override public String title() { return contribution.title(); }
+        @Override public String icon() { return contribution.icon(); }
+        @Override public DockRegion preferredRegion() { return contribution.preferredRegion(); }
+        @Override public java.util.Set<DockRegion> allowedRegions() { return contribution.allowedRegions(); }
+        @Override public int order() { return contribution.priority(); }
+
+        @Override
+        public void render(StudioPanelContext context) {
+            imgui.ImGui.textDisabled("Managed plugin surface: " + contribution.title());
         }
     }
 

@@ -7,6 +7,9 @@ import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
+import com.rspsi.editor.terrain.CompiledTerrainTile;
+import com.rspsi.editor.terrain.TerrainSceneCompiler;
+import com.rspsi.editor.model.TileCoordinate;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -110,6 +113,8 @@ public final class MinimapBuilder {
         int height = document.length() * 4;
         int[] pixels = new int[width * height];
         Arrays.fill(pixels, EMPTY_SCENE_PIXEL);
+        java.util.Map<TileCoordinate, CompiledTerrainTile> compiledTerrain =
+                new TerrainSceneCompiler().compile(document, definitions);
         for (int x = 0; x < document.width(); x++) {
             for (int y = 0; y < document.length(); y++) {
                 // SceneBuilder reserves the outer tile ring for neighbour
@@ -124,7 +129,7 @@ public final class MinimapBuilder {
                 if (!bridgeLinked
                         && (tile.flags() & OsrsTileFlags.MINIMAP_HIDDEN) == 0
                         && !(plane > 0 && (tile.flags() & OsrsTileFlags.BRIDGE) != 0)) {
-                    drawShapedTile(document, plane, x, y, definitions, pixels, width);
+                    drawShapedTile(document, plane, x, y, definitions, compiledTerrain, pixels, width);
                 }
                 // TSPS/OSRS relinks a bridge column before minimap rendering:
                 // plane 0 contains the authored plane-1 tile, and the base
@@ -132,11 +137,11 @@ public final class MinimapBuilder {
                 // bridge source alone so non-overlay pixels remain the
                 // minimap sentinel instead of leaking the base tile color.
                 if (bridgeLinked) {
-                    drawShapedTile(document, plane + 1, x, y, definitions, pixels, width);
+                    drawShapedTile(document, plane + 1, x, y, definitions, compiledTerrain, pixels, width);
                 } else if (plane < document.planes() - 1
                         && (document.tile(plane + 1, x, y).snapshot().flags()
                         & OsrsTileFlags.MINIMAP_BRIDGE) != 0) {
-                    drawShapedTile(document, plane + 1, x, y, definitions, pixels, width);
+                    drawShapedTile(document, plane + 1, x, y, definitions, compiledTerrain, pixels, width);
                 }
             }
         }
@@ -145,17 +150,41 @@ public final class MinimapBuilder {
     }
 
     private static void drawShapedTile(WorldDocument document, int sourcePlane, int x, int y,
-                                       DefinitionProvider definitions, int[] pixels, int width) {
+                                       DefinitionProvider definitions,
+                                       java.util.Map<TileCoordinate, CompiledTerrainTile> compiledTerrain,
+                                       int[] pixels, int width) {
         TileSnapshot tile = document.tile(sourcePlane, x, y).snapshot();
         boolean hasUnderlay = tile.underlayId() > 0;
         boolean hasOverlay = tile.overlayId() > 0;
         if (!hasUnderlay && !hasOverlay) return;
 
-        int underlay = hasUnderlay
-                ? blendedOsrsUnderlay(document, sourcePlane, x, y, definitions)
-                : 0;
-        int overlay = osrsColor(overlayDefinition(definitions, tile.overlayId()),
-                tile.overlayId(), false, definitions);
+        CompiledTerrainTile compiled = compiledTerrain.get(
+                new TileCoordinate(sourcePlane, x, y));
+        int underlay = 0;
+        int overlay = 0xFF000000;
+        if (compiled != null) {
+            int underlayHsl = compiled.appearance().underlayHsl();
+            if (hasUnderlay && underlayHsl >= 0) {
+                underlay = 0xFF000000
+                        | osrsPaletteColor(adjustUnderlayLight(underlayHsl, 96));
+            }
+            int overlayHsl = compiled.appearance().overlayMinimapHsl();
+            if (overlayHsl >= 0) {
+                overlay = 0xFF000000
+                        | osrsPaletteColor(adjustOverlayLight(overlayHsl, 96));
+            } else if (overlayHsl == -2) {
+                overlay = 0xFF000000;
+            } else {
+                overlay = osrsColor(overlayDefinition(definitions, tile.overlayId()),
+                        tile.overlayId(), false, definitions);
+            }
+        } else {
+            underlay = hasUnderlay
+                    ? blendedOsrsUnderlay(document, sourcePlane, x, y, definitions)
+                    : 0;
+            overlay = osrsColor(overlayDefinition(definitions, tile.overlayId()),
+                    tile.overlayId(), false, definitions);
+        }
         int shape = hasOverlay ? tile.overlayShape() + 1 : 0;
         if (shape < 0 || shape >= TILE_SHAPE.length) {
             throw new IllegalArgumentException("Encoded overlay shape must be between 0 and 11");

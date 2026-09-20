@@ -10,6 +10,8 @@ import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.terrain.CompiledTerrainTile;
+import com.rspsi.editor.terrain.TerrainSceneCompiler;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -47,12 +49,19 @@ public final class RenderWindowSceneBuilder {
         WorldRegionWindow prepared = window.copy();
         prepared.stitchSharedEdges();
         WorldDocument worldDocument = prepared.materializePaddedWorldDocument(TERRAIN_CONTEXT_BORDER);
+        var compiledWorld = definitions == null
+                ? java.util.Map.<TileCoordinate, CompiledTerrainTile>of()
+                : new TerrainSceneCompiler().compile(worldDocument, definitions);
         var worldAppearances = definitions == null
                 ? java.util.Map.<TileCoordinate, TerrainAppearance>of()
-                : new TerrainAppearanceBuilder().build(worldDocument, definitions);
-        TerrainShadowMap worldShadows = definitions == null ? null
-                : TerrainShadowMap.from(worldDocument, definitions);
-        var worldLighting = TerrainLighting.build(worldDocument, LightingProfile.osrs(), worldShadows);
+                : compiledWorld.entrySet().stream().collect(java.util.stream.Collectors.toMap(
+                        java.util.Map.Entry::getKey, entry -> entry.getValue().appearance(),
+                        (first, second) -> first, LinkedHashMap::new));
+        var worldLighting = definitions == null
+                ? TerrainLighting.build(worldDocument, LightingProfile.osrs(), null)
+                : compiledWorld.entrySet().stream().collect(java.util.stream.Collectors.toMap(
+                        java.util.Map.Entry::getKey, entry -> entry.getValue().lighting(),
+                        (first, second) -> first, LinkedHashMap::new));
         var meshes = new LinkedHashMap<WorldTileAddress, com.rspsi.editor.terrain.TerrainMesh>();
         var materials = new LinkedHashMap<WorldTileAddress, TerrainMaterial>();
         var appearances = new LinkedHashMap<WorldTileAddress, TerrainAppearance>();

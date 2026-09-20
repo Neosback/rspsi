@@ -1,17 +1,25 @@
 package com.rspsi.editor.tool;
 
 import com.rspsi.editor.CompositeEditCommand;
+import com.rspsi.editor.EditorCommand;
+import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.SetTerrainHeightCommand;
+import com.rspsi.editor.SetTileFlagsCommand;
+import com.rspsi.editor.SetTileMaterialCommand;
 import com.rspsi.editor.brush.BrushAwareTool;
-import com.rspsi.editor.brush.BrushSampling;
+import com.rspsi.editor.brush.BrushEngine;
+import com.rspsi.editor.brush.BrushMask;
 import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.brush.builtin.SquareBrush;
-import com.rspsi.editor.EditorCommand;
-import com.rspsi.editor.SetTileCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.render.OverlayDraw;
+import com.rspsi.editor.terrain.TerrainVertexLattice;
+import com.rspsi.editor.tool.state.TilePainterState;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -20,125 +28,145 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Composite tile painter tool allowing selective application of
- * underlay, overlay, shape, rotation, flags, and height to brushed or selected tiles.
+ * Composite Tile Painter backed by one authoritative state object and the
+ * common BrushEngine. Height painting is projected through the shared vertex
+ * lattice so adjacent tile corners remain synchronized.
  */
 public final class CompositeTilePainterTool implements EditorTool, BrushAwareTool {
-    private boolean applyUnderlay = false;
-    private int underlayId = 0;
-
-    private boolean applyOverlay = true;
-    private int overlayId = 1;
-
-    private boolean applyShape = false;
-    private int shape = 0;
-
-    private boolean applyRotation = false;
-    private int rotation = 0;
-
-    private boolean applyFlags = false;
-    private int flags = 0;
-
-    private boolean applyHeight = false;
-    private int height = 0;
+    private TilePainterState state;
+    private final BrushEngine brushEngine;
+    private EditorBrush brush;
 
     private ToolContext context;
-    private EditorBrush brush = new SquareBrush();
-    private int brushRadius = 0;
-    private final List<EditorCommand> stroke = new ArrayList<>();
     private final Set<TileCoordinate> visited = new LinkedHashSet<>();
     private final Set<TileCoordinate> targetLocals = new LinkedHashSet<>();
+    private BrushMask lastMask;
+    private TileCoordinate lastCenter;
 
     public CompositeTilePainterTool() {
+        this(new TilePainterState(), new BrushEngine());
     }
 
-    public boolean applyUnderlay() { return applyUnderlay; }
-    public void setApplyUnderlay(boolean apply) { this.applyUnderlay = apply; }
-    public int underlayId() { return underlayId; }
-    public void setUnderlayId(int id) { this.underlayId = Math.max(0, id); }
+    public CompositeTilePainterTool(TilePainterState state, BrushEngine brushEngine) {
+        this.state = java.util.Objects.requireNonNull(state, "state");
+        this.brushEngine = java.util.Objects.requireNonNull(brushEngine, "brushEngine");
+        EditorBrush initial;
+        try {
+            initial = brushEngine.brush(state.brushId());
+        } catch (IllegalArgumentException ignored) {
+            initial = new SquareBrush();
+            brushEngine.register(initial);
+            state.setBrushId(initial.id());
+        }
+        this.brush = initial;
+        attachStateListener(this.state);
+    }
 
-    public boolean applyOverlay() { return applyOverlay; }
-    public void setApplyOverlay(boolean apply) { this.applyOverlay = apply; }
-    public int overlayId() { return overlayId; }
-    public void setOverlayId(int id) { this.overlayId = Math.max(0, id); }
+    public TilePainterState state() { return state; }
 
-    public boolean applyShape() { return applyShape; }
-    public void setApplyShape(boolean apply) { this.applyShape = apply; }
-    public int shape() { return shape; }
-    public void setShape(int shape) { this.shape = Math.max(0, Math.min(12, shape)); }
+    /**
+     * Binds the tool to application-owned painter state. The UI and tool then
+     * share one model instead of copying settings into the tool each frame.
+     */
+    public void bindState(TilePainterState state) {
+        this.state = java.util.Objects.requireNonNull(state, "state");
+        try {
+            this.brush = brushEngine.brush(state.brushId());
+        } catch (IllegalArgumentException ignored) {
+            state.setBrushId(brush.id());
+        }
+        attachStateListener(state);
+    }
 
-    public boolean applyRotation() { return applyRotation; }
-    public void setApplyRotation(boolean apply) { this.applyRotation = apply; }
-    public int rotation() { return rotation; }
-    public void setRotation(int rot) { this.rotation = Math.max(0, Math.min(3, rot)); }
+    private void attachStateListener(TilePainterState observed) {
+        observed.addListener(changed -> {
+            try {
+                this.brush = brushEngine.brush(changed.brushId());
+            } catch (IllegalArgumentException ignored) {
+                // Third-party brushes are registered through setBrush().
+            }
+        });
+    }
 
-    public boolean applyFlags() { return applyFlags; }
-    public void setApplyFlags(boolean apply) { this.applyFlags = apply; }
-    public int flags() { return flags; }
-    public void setFlags(int flags) { this.flags = flags; }
+    public boolean applyUnderlay() { return state.applyUnderlay(); }
+    public void setApplyUnderlay(boolean apply) { state.setApplyUnderlay(apply); }
+    public int underlayId() { return state.underlayId(); }
+    public void setUnderlayId(int id) { state.setUnderlayId(id); }
 
-    public boolean applyHeight() { return applyHeight; }
-    public void setApplyHeight(boolean apply) { this.applyHeight = apply; }
-    public int height() { return height; }
-    public void setHeight(int h) { this.height = h; }
+    public boolean applyOverlay() { return state.applyOverlay(); }
+    public void setApplyOverlay(boolean apply) { state.setApplyOverlay(apply); }
+    public int overlayId() { return state.overlayId(); }
+    public void setOverlayId(int id) { state.setOverlayId(id); }
 
-    @Override
-    public EditorBrush brush() { return brush; }
+    public boolean applyShape() { return state.applyShape(); }
+    public void setApplyShape(boolean apply) { state.setApplyShape(apply); }
+    public int shape() { return state.shape(); }
+    public void setShape(int shape) { state.setShape(shape); }
+
+    public boolean applyRotation() { return state.applyRotation(); }
+    public void setApplyRotation(boolean apply) { state.setApplyRotation(apply); }
+    public int rotation() { return state.rotation(); }
+    public void setRotation(int rot) { state.setRotation(rot); }
+
+    public boolean applyFlags() { return state.applyFlags(); }
+    public void setApplyFlags(boolean apply) { state.setApplyFlags(apply); }
+    public int flags() { return state.flags(); }
+    public void setFlags(int flags) { state.setFlags(flags); }
+
+    public boolean applyHeight() { return state.applyHeight(); }
+    public void setApplyHeight(boolean apply) { state.setApplyHeight(apply); }
+    public int height() { return state.height(); }
+    public void setHeight(int h) { state.setHeight(h); }
+
+    @Override public EditorBrush brush() { return brush; }
+
     @Override
     public void setBrush(EditorBrush brush) {
         this.brush = java.util.Objects.requireNonNull(brush, "brush");
-    }
-    @Override
-    public int brushRadius() { return brushRadius; }
-    @Override
-    public void setBrushRadius(int brushRadius) {
-        if (brushRadius < 0 || brushRadius > 64) {
-            throw new IllegalArgumentException("Brush radius must be 0 through 64");
-        }
-        this.brushRadius = brushRadius;
+        brushEngine.register(brush);
+        state.setBrushId(brush.id());
     }
 
-    @Override
-    public String id() {
-        return "tile-painter";
-    }
+    @Override public int brushRadius() { return state.brushRadius(); }
+    @Override public void setBrushRadius(int radius) { state.setBrushRadius(radius); }
+
+    @Override public String id() { return "tile-painter"; }
 
     @Override
     public void activate(ToolContext context) {
         this.context = context;
-        clear();
+        clearStroke();
     }
 
     @Override
     public void deactivate() {
-        clear();
-        this.context = null;
+        clearStroke();
+        context = null;
     }
 
     @Override
     public void pointerDown(PointerEvent event) {
         if (context != null && event.button() == PointerButton.PRIMARY) {
-            clear();
-            addTile(event);
+            clearStroke();
+            sample(event);
         }
     }
 
     @Override
     public void pointerDrag(PointerEvent event) {
-        if (context != null && event.button() == PointerButton.PRIMARY) {
-            addTile(event);
-        }
+        if (context != null && event.button() == PointerButton.PRIMARY) sample(event);
     }
 
     @Override
     public void pointerUp(PointerEvent event) {
-        if (context != null && !targetLocals.isEmpty()) {
-            buildStroke();
-            if (!stroke.isEmpty() && context.session().canEdit()) {
-                context.session().execute(new CompositeEditCommand("Paint composite tiles", stroke));
+        if (context != null && !targetLocals.isEmpty() && context.session().canEdit()) {
+            List<EditorCommand> commands = buildCommands(context.session(), targetLocals);
+            if (!commands.isEmpty()) {
+                context.session().execute(new CompositeEditCommand(
+                        "Paint composite tiles (" + targetLocals.size() + " targets)", commands));
             }
         }
-        clear();
+        clearStroke();
     }
 
     @Override
@@ -146,85 +174,167 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
         return () -> List.of(
                 new PropertyDescriptor("underlayId", "Underlay", PropertyDescriptor.ValueType.INTEGER, 0, Integer.MAX_VALUE),
                 new PropertyDescriptor("overlayId", "Overlay", PropertyDescriptor.ValueType.INTEGER, 0, Integer.MAX_VALUE),
-                new PropertyDescriptor("shape", "Shape", PropertyDescriptor.ValueType.INTEGER, 0, 12),
+                new PropertyDescriptor("shape", "Shape", PropertyDescriptor.ValueType.INTEGER, 0, 11),
                 new PropertyDescriptor("rotation", "Rotation", PropertyDescriptor.ValueType.INTEGER, 0, 3),
-                new PropertyDescriptor("height", "Height", PropertyDescriptor.ValueType.INTEGER, -2048, 2048)
-        );
+                new PropertyDescriptor("height", "Height", PropertyDescriptor.ValueType.INTEGER, -2048, 2048),
+                new PropertyDescriptor("brushRadius", "Brush radius", PropertyDescriptor.ValueType.INTEGER, 0, 64));
     }
 
     @Override
     public void renderOverlay(OverlayDraw draw) {
-        visited.forEach(draw::tileOutline);
+        // This is the exact mask that the edit command consumes during the
+        // current stroke, rather than a second independently-computed shape.
+        if (lastMask != null) {
+            lastMask.samples().forEach(sample -> draw.tileOutline(sample.absolute()));
+        } else {
+            visited.forEach(draw::tileOutline);
+        }
     }
 
     public TileSnapshot transformTile(TileSnapshot before) {
-        int swH = applyHeight ? height : before.southWestHeight();
-        int seH = applyHeight ? height : before.southEastHeight();
-        int neH = applyHeight ? height : before.northEastHeight();
-        int nwH = applyHeight ? height : before.northWestHeight();
-        int und = applyUnderlay ? underlayId : before.underlayId();
-        int ovr = applyOverlay ? overlayId : before.overlayId();
-        int shp = applyShape ? shape : before.overlayShape();
-        int rot = applyRotation ? rotation : before.overlayRotation();
-        int flg = applyFlags ? flags : before.flags();
-        return new TileSnapshot(swH, seH, neH, nwH, und, ovr, shp, rot, flg, before.objects());
+        int und = state.applyUnderlay() ? state.underlayId() : before.underlayId();
+        int ovr = state.applyOverlay() ? state.overlayId() : before.overlayId();
+        int shp = state.applyShape() ? state.shape() : before.overlayShape();
+        int rot = state.applyRotation() ? state.rotation() : before.overlayRotation();
+        int flg = state.applyFlags() ? state.flags() : before.flags();
+        int sw = state.applyHeight() ? state.height() : before.southWestHeight();
+        int se = state.applyHeight() ? state.height() : before.southEastHeight();
+        int ne = state.applyHeight() ? state.height() : before.northEastHeight();
+        int nw = state.applyHeight() ? state.height() : before.northWestHeight();
+        return new TileSnapshot(sw, se, ne, nw, und, ovr, shp, rot, flg,
+                before.objects(), before.heightSource());
     }
 
-    /**
-     * Applies the currently enabled properties to all given tile coordinates in one command.
-     */
-    public void applyToCoordinates(Collection<TileCoordinate> coordinates, com.rspsi.editor.EditorSession session) {
+    /** Applies current state to a selection as one atomic history entry. */
+    public void applyToCoordinates(Collection<TileCoordinate> coordinates, EditorSession session) {
         if (coordinates == null || coordinates.isEmpty() || session == null || !session.canEdit()) return;
-        List<EditorCommand> commands = new ArrayList<>();
-        for (TileCoordinate coord : coordinates) {
-            TileCoordinate local = toLocal(coord, session.world());
-            TileSnapshot before = session.world().tile(local).snapshot();
-            TileSnapshot after = transformTile(before);
-            if (!before.equals(after)) {
-                commands.add(new SetTileCommand(local, before, after, "Paint composite tile at " + local));
-            }
+        Set<TileCoordinate> locals = new LinkedHashSet<>();
+        for (TileCoordinate coordinate : coordinates) {
+            TileCoordinate local = toLocal(coordinate, session.world());
+            if (local != null) locals.add(local);
         }
+        List<EditorCommand> commands = buildCommands(session, locals);
         if (!commands.isEmpty()) {
-            session.execute(new CompositeEditCommand("Apply tile properties to selection (" + commands.size() + " tiles)", commands));
+            session.execute(new CompositeEditCommand(
+                    "Apply tile properties to selection (" + locals.size() + " tiles)", commands));
         }
     }
 
-    private void addTile(PointerEvent event) {
+    private void sample(PointerEvent event) {
         context.viewport().tileAt(event.x(), event.y()).ifPresent(center -> {
-            for (BrushSampling.Sample sample : BrushSampling.sample(
-                    brush, brushRadius, center, context.session().world())) {
-                visited.add(sample.absolute());
-                targetLocals.add(sample.local());
+            List<TileCoordinate> centers = lastCenter == null
+                    ? List.of(center)
+                    : brushEngine.interpolateStroke(lastCenter, center, 1.0);
+            for (TileCoordinate stampCenter : centers) {
+                BrushMask mask = brushEngine.sample(
+                        brush, state.brushRadius(), stampCenter, context.session().world());
+                lastMask = mask;
+                for (var sample : mask.samples()) {
+                    visited.add(sample.absolute());
+                    targetLocals.add(sample.local());
+                }
             }
+            lastCenter = center;
         });
     }
 
-    private void buildStroke() {
-        stroke.clear();
-        for (TileCoordinate local : targetLocals) {
-            TileSnapshot before = context.session().world().tile(local).snapshot();
-            TileSnapshot after = transformTile(before);
-            if (!before.equals(after)) {
-                stroke.add(new SetTileCommand(local, before, after, "Paint composite tile at " + local));
+    private List<EditorCommand> buildCommands(EditorSession session, Collection<TileCoordinate> targets) {
+        if (targets == null || targets.isEmpty()) return List.of();
+
+        List<EditorCommand> commands = new ArrayList<>();
+        WorldDocument original = session.world();
+        WorldDocument predicted = original.copy();
+        Set<TileCoordinate> heightAffected = new LinkedHashSet<>();
+
+        // Height is applied first to a copy through the canonical shared
+        // lattice. Commands then reproduce those synchronized snapshots.
+        if (state.applyHeight()) {
+            TerrainVertexLattice lattice = new TerrainVertexLattice(predicted);
+            for (TileCoordinate coordinate : targets) {
+                int plane = coordinate.plane();
+                int x = coordinate.x();
+                int y = coordinate.y();
+                heightAffected.addAll(lattice.setHeight(plane, x, y, state.height()));
+                heightAffected.addAll(lattice.setHeight(plane, x + 1, y, state.height()));
+                heightAffected.addAll(lattice.setHeight(plane, x + 1, y + 1, state.height()));
+                heightAffected.addAll(lattice.setHeight(plane, x, y + 1, state.height()));
+            }
+            for (TileCoordinate coordinate : heightAffected) {
+                TileSnapshot before = original.tile(coordinate).snapshot();
+                TileSnapshot after = predicted.tile(coordinate).snapshot();
+                if (!before.equals(after)) {
+                    commands.add(new SetTerrainHeightCommand(
+                            coordinate, before, after, before.heightSource(), after.heightSource(),
+                            "Paint terrain height at " + coordinate));
+                }
             }
         }
+
+        // Material and flags build from the predicted post-height state so
+        // sequential application never reverts height edits.
+        for (TileCoordinate coordinate : targets) {
+            TileSnapshot base = predicted.tile(coordinate).snapshot();
+            TileSnapshot materialAfter = materialSnapshot(base);
+            if (!sameMaterial(base, materialAfter)) {
+                commands.add(new SetTileMaterialCommand(
+                        coordinate, base, materialAfter, "Paint tile material at " + coordinate));
+                predicted.tile(coordinate).restore(materialAfter, base.heightSource());
+                base = predicted.tile(coordinate).snapshot();
+            }
+
+            TileSnapshot flagsAfter = flagsSnapshot(base);
+            if (base.flags() != flagsAfter.flags()) {
+                commands.add(new SetTileFlagsCommand(
+                        coordinate, base, flagsAfter, "Paint tile flags at " + coordinate));
+                predicted.tile(coordinate).restore(flagsAfter, base.heightSource());
+            }
+        }
+        return List.copyOf(commands);
     }
 
-    /**
-     * Viewport picks return absolute OSRS world tile coordinates, but {@code WorldDocument} is
-     * indexed by region-local coordinates - every tool that turns a pick into a document lookup
-     * must convert here first, or it throws {@code IndexOutOfBoundsException} the moment someone
-     * clicks/paints outside the tiny 0..width-1 range.
-     */
-    private static TileCoordinate toLocal(TileCoordinate absolute, com.rspsi.editor.model.WorldDocument world) {
-        int localX = Math.floorMod(absolute.x(), Math.max(1, world.width()));
-        int localY = Math.floorMod(absolute.y(), Math.max(1, world.length()));
-        return new TileCoordinate(absolute.plane(), localX, localY);
+    private TileSnapshot materialSnapshot(TileSnapshot before) {
+        return new TileSnapshot(
+                before.southWestHeight(), before.southEastHeight(),
+                before.northEastHeight(), before.northWestHeight(),
+                state.applyUnderlay() ? state.underlayId() : before.underlayId(),
+                state.applyOverlay() ? state.overlayId() : before.overlayId(),
+                state.applyShape() ? state.shape() : before.overlayShape(),
+                state.applyRotation() ? state.rotation() : before.overlayRotation(),
+                before.flags(), before.objects(), before.heightSource());
     }
 
-    private void clear() {
-        stroke.clear();
+    private TileSnapshot flagsSnapshot(TileSnapshot before) {
+        return new TileSnapshot(
+                before.southWestHeight(), before.southEastHeight(),
+                before.northEastHeight(), before.northWestHeight(),
+                before.underlayId(), before.overlayId(), before.overlayShape(), before.overlayRotation(),
+                state.applyFlags() ? state.flags() : before.flags(),
+                before.objects(), before.heightSource());
+    }
+
+    private static boolean sameMaterial(TileSnapshot first, TileSnapshot second) {
+        return first.underlayId() == second.underlayId()
+                && first.overlayId() == second.overlayId()
+                && first.overlayShape() == second.overlayShape()
+                && first.overlayRotation() == second.overlayRotation();
+    }
+
+    private static TileCoordinate toLocal(TileCoordinate coordinate, WorldDocument world) {
+        if (coordinate == null) return null;
+        if (world.contains(coordinate)) return coordinate;
+        if (coordinate.x() < 0 || coordinate.y() < 0 || coordinate.plane() < 0) return null;
+        WorldTileAddress address = WorldTileAddress.of(coordinate.x(), coordinate.y(), coordinate.plane());
+        int localX = address.regionLocalX();
+        int localY = address.regionLocalY();
+        return world.contains(coordinate.plane(), localX, localY)
+                ? new TileCoordinate(coordinate.plane(), localX, localY)
+                : null;
+    }
+
+    private void clearStroke() {
         visited.clear();
         targetLocals.clear();
+        lastMask = null;
+        lastCenter = null;
     }
 }

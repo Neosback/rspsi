@@ -13,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -72,10 +71,11 @@ public final class StudioPluginManager {
     }
 
     /**
-     * Auto-discovers and registers plugins via java.util.ServiceLoader.
+     * Registers internal Studio projections only. Third-party discovery lives
+     * exclusively on the neutral EditorPlugin boundary in Client.
      */
     public void discoverPlugins() {
-        // Core built-in Studio modal tool plugins
+        // Core built-in Studio modal tool projections.
         register(new com.rspsi.studio.plugin.builtin.tool.SingleSelectToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.MultiSelectToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.TilePainterToolPlugin());
@@ -83,14 +83,6 @@ public final class StudioPluginManager {
         register(new com.rspsi.studio.plugin.builtin.tool.PathToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.ObjectPlacementToolPlugin());
 
-        try {
-            ServiceLoader<StudioPlugin> loader = ServiceLoader.load(StudioPlugin.class);
-            for (StudioPlugin plugin : loader) {
-                register(plugin);
-            }
-        } catch (Exception ex) {
-            log.warn("Failed scanning ServiceLoader for StudioPlugins: {}", ex.getMessage());
-        }
     }
 
     public synchronized void register(StudioPlugin plugin) {
@@ -205,7 +197,11 @@ public final class StudioPluginManager {
      * Dispatches floating HUD rendering to all active plugins.
      */
     public void renderHUDs(StudioPanelContext context) {
-        for (StudioPlugin p : enabledPlugins()) {
+        List<StudioPlugin> ordered = new ArrayList<>(enabledPlugins());
+        if (context != null && context.huds() != null) {
+            ordered.sort(java.util.Comparator.comparingInt(plugin -> context.huds().priority(plugin.id())));
+        }
+        for (StudioPlugin p : ordered) {
             try {
                 p.renderHUD(context);
             } catch (Exception ex) {
