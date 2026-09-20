@@ -1,6 +1,7 @@
 package com.rspsi.editor.plugin.services;
 
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.data.DecodedDataCatalog;
 import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.DeleteObjectCommand;
 import com.rspsi.editor.EditorCommand;
@@ -53,6 +54,7 @@ public final class PluginServices {
 
     private final EditorSession session;
     private final AssetRepository assets;
+    private final DecodedDataCatalog decodedData;
     private final EditorPluginRegistry registry;
     private final EditorEventBus events;
     private final BrushEngine brushEngine = new BrushEngine();
@@ -71,6 +73,7 @@ public final class PluginServices {
                            EditorPluginRegistry registry) {
         this.session = Objects.requireNonNull(session, "session");
         this.assets = Objects.requireNonNull(assets, "assets");
+        this.decodedData = DecodedDataCatalog.fromAssets(this.assets);
         this.registry = Objects.requireNonNull(registry, "registry");
         this.events = new EditorEventBus();
         this.corpusFeatures.register(new OsrsRegionFeatureExtractor());
@@ -97,6 +100,7 @@ public final class PluginServices {
     public EditorEventBus events() { return events; }
     public OverlayRegistry overlays() { return overlays; }
     public RegionFeatureRegistry corpusFeatures() { return corpusFeatures; }
+    public DecodedDataCatalog decodedData() { return decodedData; }
 
     public interface TerrainService {
         TileSnapshot tile(TileCoordinate coordinate);
