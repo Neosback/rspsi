@@ -1,14 +1,14 @@
 package com.rspsi.editor.brush;
 
 import com.rspsi.editor.model.TileBounds;
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
 
 import java.util.List;
 import java.util.Objects;
 
 /** Immutable sampled brush footprint shared by preview and edit execution. */
 public record BrushMask(
-        TileCoordinate center,
+        WorldTile center,
         int radius,
         List<BrushSampling.Sample> samples,
         TileBounds bounds) {
