@@ -67,10 +67,48 @@ public final class BrushEngine {
         return new BrushMask(center, radius, samples, new TileBounds(minX, minY, maxX, maxY));
     }
 
+    /**
+     * Generates deterministic tile centers along a drag segment. A spacing of
+     * 1.0 or less visits every rasterized tile; larger values intentionally
+     * leave gaps for stamp/scatter workflows.
+     */
+    public List<TileCoordinate> interpolateStroke(TileCoordinate from,
+                                                  TileCoordinate to,
+                                                  double spacing) {
+        Objects.requireNonNull(from, "from");
+        Objects.requireNonNull(to, "to");
+        if (from.plane() != to.plane()) {
+            throw new IllegalArgumentException("Brush stroke endpoints must be on the same plane");
+        }
+        if (!Double.isFinite(spacing) || spacing <= 0.0) {
+            throw new IllegalArgumentException("Brush stroke spacing must be finite and positive");
+        }
+
+        int dx = to.x() - from.x();
+        int dy = to.y() - from.y();
+        double distance = Math.hypot(dx, dy);
+        if (distance == 0.0) return List.of(to);
+
+        int steps = Math.max(1, (int) Math.ceil(distance / spacing));
+        java.util.LinkedHashSet<TileCoordinate> result = new java.util.LinkedHashSet<>();
+        for (int i = 0; i <= steps; i++) {
+            double t = i / (double) steps;
+            result.add(new TileCoordinate(from.plane(),
+                    (int) Math.round(from.x() + dx * t),
+                    (int) Math.round(from.y() + dy * t)));
+        }
+        return List.copyOf(result);
+    }
+
     public static double applyFalloff(Falloff falloff, double normalizedDistance) {
+        Objects.requireNonNull(falloff, "falloff");
+        if (!Double.isFinite(normalizedDistance)) return 0.0;
+        if (falloff == Falloff.HARD) {
+            return normalizedDistance >= 0.0 && normalizedDistance <= 1.0 ? 1.0 : 0.0;
+        }
         double t = Math.max(0.0, Math.min(1.0, normalizedDistance));
-        return switch (Objects.requireNonNull(falloff, "falloff")) {
-            case HARD -> t <= 1.0 ? 1.0 : 0.0;
+        return switch (falloff) {
+            case HARD -> 1.0;
             case LINEAR -> 1.0 - t;
             case SMOOTH -> {
                 double linear = 1.0 - t;
