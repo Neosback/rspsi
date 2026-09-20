@@ -2,6 +2,7 @@ package com.rspsi.editor.brush;
 
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldTileAddress;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,8 +32,20 @@ public final class BrushSampling {
             throw new IllegalArgumentException("Brush radius must be 0 through 64");
         }
 
-        int centerLocalX = Math.floorMod(absoluteCenter.x(), world.width());
-        int centerLocalY = Math.floorMod(absoluteCenter.y(), world.length());
+        int centerLocalX;
+        int centerLocalY;
+        if (world.contains(absoluteCenter)) {
+            centerLocalX = absoluteCenter.x();
+            centerLocalY = absoluteCenter.y();
+        } else {
+            WorldTileAddress address = WorldTileAddress.of(
+                    absoluteCenter.x(), absoluteCenter.y(), absoluteCenter.plane());
+            centerLocalX = address.regionLocalX();
+            centerLocalY = address.regionLocalY();
+            if (!world.contains(absoluteCenter.plane(), centerLocalX, centerLocalY)) {
+                return List.of();
+            }
+        }
         List<Sample> samples = new ArrayList<>();
 
         for (int dx = -radius; dx <= radius; dx++) {
