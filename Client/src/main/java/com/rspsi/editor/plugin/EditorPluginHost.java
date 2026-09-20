@@ -242,7 +242,10 @@ public final class EditorPluginHost implements AutoCloseable {
         contributions.inspectors().forEach(registry::removeInspector);
         contributions.validators().forEach(registry::removeValidator);
         contributions.shortcuts().forEach(registry::removeShortcut);
-        contributions.panels().forEach(registry::removePanel);
+        contributions.panels().forEach(id -> {
+            registry.removePanel(id);
+            registry.removePanelRegistration(id);
+        });
         contributions.workspaces().forEach(registry::removeWorkspace);
     }
 
@@ -342,7 +345,10 @@ public final class EditorPluginHost implements AutoCloseable {
                     registry.inspectorRegistrations().stream().map(EditorInspectorRegistration::id).toList(),
                     registry.validatorRegistrations().stream().map(EditorValidatorRegistration::id).toList(),
                     registry.shortcutRegistrations().stream().map(EditorShortcutRegistration::id).toList(),
-                    registry.panels().stream().map(com.rspsi.editor.ui.PanelDescriptor::id).toList(),
+                    java.util.stream.Stream.concat(
+                            registry.panels().stream().map(com.rspsi.editor.ui.PanelDescriptor::id),
+                            registry.panelRegistrations().stream().map(EditorPanelRegistration::id)
+                    ).toList(),
                     registry.workspaces().stream().map(com.rspsi.editor.ui.WorkspaceDefinition::id).toList());
         }
 

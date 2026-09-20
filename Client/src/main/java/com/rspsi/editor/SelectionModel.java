@@ -59,6 +59,28 @@ public final class SelectionModel {
         return Collections.unmodifiableSet(tiles);
     }
 
+    /**
+     * Resolves all currently selected tile coordinates across single, set, and area selections.
+     */
+    public Set<TileCoordinate> selectedCoordinates() {
+        if (current instanceof TileSelection single) {
+            return Set.of(single.coordinate());
+        }
+        if (current instanceof TileSetSelection set) {
+            return set.coordinates();
+        }
+        if (current instanceof TileAreaSelection area) {
+            Set<TileCoordinate> areaTiles = new LinkedHashSet<>();
+            for (int x = area.bounds().minX(); x <= area.bounds().maxX(); x++) {
+                for (int y = area.bounds().minY(); y <= area.bounds().maxY(); y++) {
+                    areaTiles.add(new TileCoordinate(area.plane(), x, y));
+                }
+            }
+            return Collections.unmodifiableSet(areaTiles);
+        }
+        return Collections.unmodifiableSet(tiles);
+    }
+
     public Selection current() {
         return current;
     }

@@ -221,13 +221,14 @@ public final class EditorPluginLifecycleManager implements AutoCloseable {
 
     private RebuildResult rebuild(Resolved resolved) {
         EditorPluginHost previous = host;
+        host = null;
+        if (previous != null) previous.close();
         EditorPluginHost next = hostFactory.create(resolved.enabled());
         RebuildResult result = new RebuildResult(
                 next.plugins().stream().map(EditorPlugin::id).toList(),
                 resolved.skippedIds());
         host = next;
         lastRebuild = result;
-        if (previous != null) previous.close();
         return result;
     }
 

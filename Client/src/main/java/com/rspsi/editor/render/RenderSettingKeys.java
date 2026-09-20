@@ -41,6 +41,8 @@ public final class RenderSettingKeys {
             new SettingKey<>("viewport.presentation.fog-depth-tiles", Integer.class);
     public static final SettingKey<Integer> FOG_COLOR =
             new SettingKey<>("viewport.presentation.fog-color", Integer.class);
+    public static final SettingKey<Boolean> HUD_TILE_INSPECTOR_VISIBLE = bool("viewport.hud.tile-inspector.visible");
+    public static final SettingKey<Boolean> HUD_TOOL_CONTROLS_VISIBLE = bool("viewport.hud.tool-controls.visible");
 
     public static SettingsRegistry registry() {
         SettingsRegistry registry = new SettingsRegistry();
@@ -93,6 +95,11 @@ public final class RenderSettingKeys {
         registry.register(SettingSpec.integer(FOG_COLOR, 0x101827, 0, 0xFFFFFF, SettingScope.VIEWPORT,
                 "Fog color", "Presentation-only RGB color used by scene-edge fog.",
                 Set.of(SettingInvalidation.REDRAW)));
+        Set<SettingInvalidation> none = Set.of();
+        registry.register(SettingSpec.of(HUD_TILE_INSPECTOR_VISIBLE, true, SettingScope.VIEWPORT, "Tile inspector HUD",
+                "Show the floating tile inspection card over the viewport.", none));
+        registry.register(SettingSpec.of(HUD_TOOL_CONTROLS_VISIBLE, true, SettingScope.VIEWPORT, "Tool controls HUD",
+                "Show the floating contextual tool controls card over the viewport.", none));
         return registry;
     }
 
@@ -105,6 +112,7 @@ public final class RenderSettingKeys {
                 HIDDEN_TILES_VISIBLE, COLLISION_VISIBLE, WIREFRAME, ACTIVE_PLANE,
                 PLANE_SELECTION, BRIGHTNESS, EXPOSURE, MSAA_SAMPLES, FOG_DEPTH_TILES,
                 FOG_COLOR);
+        consumers.register("map-studio-viewport-hud", HUD_TILE_INSPECTOR_VISIBLE, HUD_TOOL_CONTROLS_VISIBLE);
         return consumers;
     }
 

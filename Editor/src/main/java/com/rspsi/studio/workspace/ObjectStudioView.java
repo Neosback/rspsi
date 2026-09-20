@@ -3,15 +3,15 @@ package com.rspsi.studio.workspace;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
 import com.rspsi.editor.settings.SettingsStore;
+import com.rspsi.studio.WorkspaceManager;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImGui;
-import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiWindowFlags;
-import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * First-class sibling workspace for OSRS model, location, and animation inspection.
@@ -22,14 +22,15 @@ import java.util.Objects;
 public final class ObjectStudioView {
     private final ImInt selectedObjectId = new ImInt(10583); // e.g. Bank booth
     private final ImInt selectedSequenceId = new ImInt(-1);
-    private final ImBoolean loopAnimation = new ImBoolean(true);
 
     public void render(LoadedOsrsCacheSession cache,
                        SettingsStore settings,
                        EditorPluginLifecycleManager pluginLifecycle,
                        Runnable openDashboard,
                        Runnable openMapEditor,
-                       Runnable openInterfaceStudio) {
+                       Runnable openInterfaceStudio,
+                       WorkspaceManager workspaces,
+                       Consumer<WorkspaceManager.Workspace> closeWorkspace) {
         Objects.requireNonNull(openDashboard, "openDashboard");
         Objects.requireNonNull(openMapEditor, "openMapEditor");
         Objects.requireNonNull(openInterfaceStudio, "openInterfaceStudio");
@@ -45,7 +46,7 @@ public final class ObjectStudioView {
             return;
         }
 
-        renderWorkspaceBar(cache, openDashboard, openMapEditor, openInterfaceStudio);
+        renderWorkspaceBar(cache, workspaces, openDashboard, openMapEditor, openInterfaceStudio, closeWorkspace);
 
         float fullWidth = ImGui.getContentRegionAvailX();
         float fullHeight = ImGui.getContentRegionAvailY();
@@ -75,23 +76,15 @@ public final class ObjectStudioView {
         ImGui.end();
     }
 
-    private void renderWorkspaceBar(LoadedOsrsCacheSession cache,
-                                     Runnable openDashboard, Runnable openMapEditor, Runnable openInterfaceStudio) {
+    private void renderWorkspaceBar(LoadedOsrsCacheSession cache, WorkspaceManager workspaces,
+                                     Runnable openDashboard, Runnable openMapEditor, Runnable openInterfaceStudio,
+                                     Consumer<WorkspaceManager.Workspace> closeWorkspace) {
         if (ImGui.beginMenuBar()) {
-            if (ImGui.menuItem("Dashboard")) openDashboard.run();
-            if (ImGui.menuItem("Map Editor")) openMapEditor.run();
-            if (ImGui.menuItem("Interface Studio")) openInterfaceStudio.run();
-
-            ImGui.pushStyleColor(ImGuiCol.Text, 0.45f, 0.72f, 1.0f, 1.0f);
-            ImGui.menuItem("Object Studio (Active)");
-            ImGui.popStyleColor();
-
-            float rightBadgePos = ImGui.getWindowWidth() - 280.0f;
-            if (rightBadgePos > ImGui.getCursorPosX()) {
-                ImGui.sameLine(rightBadgePos);
-                String rev = cache != null ? String.valueOf(cache.identity().revision()) : "?";
-                ImGui.textDisabled("OpenGL 3.3  |  Cache: OSRS (" + rev + ")");
+            if (workspaces != null) {
+                StudioWidgets.workspaceTabs(workspaces, openDashboard, openMapEditor,
+                        openInterfaceStudio, null, closeWorkspace);
             }
+
             ImGui.endMenuBar();
         }
     }
@@ -110,7 +103,6 @@ public final class ObjectStudioView {
         ImGui.separator();
         StudioWidgets.section("Animation Sequence");
         ImGui.inputInt("Sequence ID##seq-id-input", selectedSequenceId);
-        ImGui.checkbox("Loop Animation", loopAnimation);
 
         ImGui.dummy(1.0f, 12.0f);
         if (ImGui.button("Reset Pose", ImGui.getContentRegionAvailX(), 26)) {
@@ -138,13 +130,9 @@ public final class ObjectStudioView {
         draw.addLine(cx, cy - 60, cx, cy + 60, 0xFF44FF44, 1.5f);
         draw.addText(StudioFonts.mono(), 12, cx - 40, cy + 80, 0xFFAAAAAA, "Object #" + selectedObjectId.get());
 
-        // Playback bar
+        // Animation playback is not implemented yet — no controls pretending otherwise.
         ImGui.setCursorPosY(ImGui.getCursorPosY() + canvasH + 6.0f);
-        if (ImGui.button("▶ Play")) {}
-        ImGui.sameLine();
-        if (ImGui.button("⏸ Pause")) {}
-        ImGui.sameLine();
-        ImGui.textDisabled("Frame: 0 / 12  |  50 Hz");
+        ImGui.textDisabled("Animation playback not yet implemented.");
     }
 
     private void renderInspectorPanel(LoadedOsrsCacheSession cache) {

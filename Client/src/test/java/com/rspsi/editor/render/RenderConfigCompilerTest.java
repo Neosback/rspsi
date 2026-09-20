@@ -55,9 +55,8 @@ class RenderConfigCompilerTest {
 
     @Test
     void everyRegisteredCoreRenderSettingHasACompilerDestination() {
-        SettingsRegistry registry = RenderSettingKeys.registry();
-        Set<String> registered = registry.specifications().stream()
-                .map(specification -> specification.key().id()).collect(java.util.stream.Collectors.toSet());
+        Set<String> renderConfigKeys = RenderSettingKeys.consumerCatalog().consumers().get("render-config").stream()
+                .map(com.rspsi.editor.settings.SettingKey::id).collect(java.util.stream.Collectors.toSet());
         Set<String> handled = Set.of(
                 RenderSettingKeys.PROFILE.id(), RenderSettingKeys.TERRAIN_VISIBLE.id(),
                 RenderSettingKeys.OBJECTS_VISIBLE.id(), RenderSettingKeys.WALLS_VISIBLE.id(),
@@ -70,7 +69,8 @@ class RenderConfigCompilerTest {
                 RenderSettingKeys.MSAA_SAMPLES.id(), RenderSettingKeys.FOG_DEPTH_TILES.id(),
                 RenderSettingKeys.FOG_COLOR.id());
 
-        assertEquals(handled, registered);
+        assertEquals(handled, renderConfigKeys);
+        SettingsRegistry registry = RenderSettingKeys.registry();
         assertTrue(registry.specifications().stream()
                 .allMatch(specification -> !specification.invalidations().contains(SettingInvalidation.SCENE)
                         || specification.scope() == SettingScope.GLOBAL

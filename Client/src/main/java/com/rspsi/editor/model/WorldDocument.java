@@ -68,8 +68,21 @@ public class WorldDocument {
         return copy;
     }
 
+    public boolean contains(int plane, int x, int y) {
+        return plane >= 0 && plane < planes && x >= 0 && x < width && y >= 0 && y < length;
+    }
+
+    public boolean contains(TileCoordinate coordinate) {
+        return coordinate != null && contains(coordinate.plane(), coordinate.x(), coordinate.y());
+    }
+
+    public Optional<Tile> tileOpt(TileCoordinate coordinate) {
+        if (!contains(coordinate)) return Optional.empty();
+        return Optional.of(tiles[coordinate.plane()][coordinate.x()][coordinate.y()]);
+    }
+
     public Tile tile(int plane, int x, int y) {
-        if (plane < 0 || plane >= planes || x < 0 || x >= width || y < 0 || y >= length) {
+        if (!contains(plane, x, y)) {
             throw new IndexOutOfBoundsException("Tile outside world: " + plane + "," + x + "," + y);
         }
         return tiles[plane][x][y];

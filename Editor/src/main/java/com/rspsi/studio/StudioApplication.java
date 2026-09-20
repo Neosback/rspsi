@@ -140,51 +140,54 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private void drawApplication() {
-        if (workspaces.active() == WorkspaceManager.Workspace.DASHBOARD) {
-            dashboard.render(cacheSessions.status(), this::loadCache,
-                    this::openMapEditor,
-                    this::openInterfaceStudio,
-                    this::openObjectStudio,
-                    integrations,
-                    () -> integrationCenterOpen.set(true));
-            rememberReadyCache();
-            integrationCenter.render(integrations, integrationCenterOpen);
-            return;
-        }
         LoadedOsrsCacheSession cache = cacheSessions.current().orElse(null);
-        if (cache == null || cacheSessions.status().state() != CacheSessionState.READY) {
+        boolean cacheReady = cache != null && cacheSessions.status().state() == CacheSessionState.READY;
+        if (workspaces.active() != WorkspaceManager.Workspace.DASHBOARD && !cacheReady) {
             openDashboard();
-            return;
         }
 
-        if (workspaces.active() == WorkspaceManager.Workspace.INTERFACE_STUDIO) {
-            interfaceStudio.render(cache, renderSettings, pluginLifecycle,
-                    this::requestDashboard, this::openMapEditor, this::openObjectStudio);
-            integrationCenter.render(integrations, integrationCenterOpen);
-            return;
+        switch (workspaces.active()) {
+            case INTERFACE_STUDIO -> {
+                interfaceStudio.render(cache, renderSettings, pluginLifecycle,
+                        this::openDashboard, this::openMapEditor, this::openObjectStudio,
+                        workspaces, this::requestCloseWorkspace);
+                integrationCenter.render(integrations, integrationCenterOpen);
+            }
+            case OBJECT_STUDIO -> {
+                objectStudio.render(cache, renderSettings, pluginLifecycle,
+                        this::openDashboard, this::openMapEditor, this::openInterfaceStudio,
+                        workspaces, this::requestCloseWorkspace);
+                integrationCenter.render(integrations, integrationCenterOpen);
+            }
+            case MAP_EDITOR -> {
+                pollSceneLoad();
+                if (loadedScene != null && renderedSettingsRevision != renderSettings.revision()) {
+                    RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
+                    currentPlan = new GpuUploadPlanBuilder().build(config.apply(loadedScene.packet()));
+                    renderedSettingsRevision = renderSettings.revision();
+                }
+                mapEditor.render(cache, currentPlan, sceneViewport, sceneStatus,
+                        this::openDashboard, renderSettings, pluginLifecycle,
+                        loadedScene != null && loadedScene.opened().region().session().isDirty(),
+                        this::openInterfaceStudio, this::openObjectStudio,
+                        () -> integrationCenterOpen.set(true),
+                        simulation, symbols, references, spawns, integrations,
+                        workspaces, this::openMapEditor, this::requestCloseWorkspace);
+                renderClosePrompt();
+                integrationCenter.render(integrations, integrationCenterOpen);
+            }
+            default -> {
+                dashboard.render(cacheSessions.status(), this::loadCache,
+                        this::openMapEditor,
+                        this::openInterfaceStudio,
+                        this::openObjectStudio,
+                        integrations,
+                        () -> integrationCenterOpen.set(true),
+                        workspaces, this::openDashboard, this::requestCloseWorkspace);
+                rememberReadyCache();
+                integrationCenter.render(integrations, integrationCenterOpen);
+            }
         }
-
-        if (workspaces.active() == WorkspaceManager.Workspace.OBJECT_STUDIO) {
-            objectStudio.render(cache, renderSettings, pluginLifecycle,
-                    this::requestDashboard, this::openMapEditor, this::openInterfaceStudio);
-            integrationCenter.render(integrations, integrationCenterOpen);
-            return;
-        }
-
-        pollSceneLoad();
-        if (loadedScene != null && renderedSettingsRevision != renderSettings.revision()) {
-            RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
-            currentPlan = new GpuUploadPlanBuilder().build(config.apply(loadedScene.packet()));
-            renderedSettingsRevision = renderSettings.revision();
-        }
-        mapEditor.render(cache, currentPlan, sceneViewport, sceneStatus,
-                this::requestDashboard, renderSettings, pluginLifecycle,
-                loadedScene != null && loadedScene.opened().region().session().isDirty(),
-                this::openInterfaceStudio, this::openObjectStudio,
-                () -> integrationCenterOpen.set(true),
-                simulation, symbols, references, spawns, integrations);
-        renderClosePrompt();
-        integrationCenter.render(integrations, integrationCenterOpen);
     }
 
     private void openInterfaceStudio() {
@@ -201,7 +204,9 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private void openMapEditor() {
+        boolean alreadyOpen = workspaces.isOpen(WorkspaceManager.Workspace.MAP_EDITOR);
         if (!workspaces.openMapEditor(cacheSessions.status().state())) return;
+        if (alreadyOpen) return;
         closePluginLifecycle();
         loadedScene = null;
         currentPlan = null;
@@ -327,27 +332,38 @@ public final class StudioApplication implements AutoCloseable {
         pluginLifecycle = next;
     }
 
+    /** Focuses the Dashboard tab. It is always open, so this never tears anything down. */
     private void openDashboard() {
+        workspaces.openDashboard();
+    }
+
+    /** Closes one workspace tab, gated by an unsaved-changes prompt for Map Studio. */
+    private void requestCloseWorkspace(WorkspaceManager.Workspace workspace) {
+        if (workspace == WorkspaceManager.Workspace.MAP_EDITOR) {
+            if (loadedScene != null && loadedScene.opened().region().session().isDirty()) {
+                closePrompt = true;
+                return;
+            }
+            closeMapEditorTab();
+        } else {
+            workspaces.close(workspace);
+        }
+    }
+
+    /** Tears down the loaded scene and plugin lifecycle, then removes the Map Studio tab. */
+    private void closeMapEditorTab() {
         closePluginLifecycle();
         cancelPendingScene();
         loadedScene = null;
         currentPlan = null;
         closePrompt = false;
-        workspaces.openDashboard();
-    }
-
-    private void requestDashboard() {
-        if (loadedScene != null && loadedScene.opened().region().session().isDirty()) {
-            closePrompt = true;
-            return;
-        }
-        openDashboard();
+        workspaces.close(WorkspaceManager.Workspace.MAP_EDITOR);
     }
 
     private void renderClosePrompt() {
         if (closePrompt) ImGui.openPopup("Unsaved map changes##dashboard");
         if (!ImGui.beginPopupModal("Unsaved map changes##dashboard")) return;
-        ImGui.textWrapped("This map has unsaved changes. Save before returning to Dashboard?");
+        ImGui.textWrapped("This map has unsaved changes. Save before closing Map Studio?");
         if (ImGui.button("Save")) {
             try {
                 if (loadedScene == null || !loadedScene.opened().region().session().canSave()) {
@@ -355,7 +371,7 @@ public final class StudioApplication implements AutoCloseable {
                 }
                 loadedScene.opened().region().session().save();
                 ImGui.closeCurrentPopup();
-                openDashboard();
+                closeMapEditorTab();
             } catch (RuntimeException failure) {
                 sceneStatus = "Save failed: " + rootMessage(failure);
                 notifications.error("Map save failed", sceneStatus);
@@ -364,7 +380,7 @@ public final class StudioApplication implements AutoCloseable {
         ImGui.sameLine();
         if (ImGui.button("Discard")) {
             ImGui.closeCurrentPopup();
-            openDashboard();
+            closeMapEditorTab();
         }
         ImGui.sameLine();
         if (ImGui.button("Cancel")) {

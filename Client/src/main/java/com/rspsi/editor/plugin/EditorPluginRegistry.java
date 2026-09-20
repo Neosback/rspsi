@@ -37,6 +37,7 @@ public final class EditorPluginRegistry {
     private final Map<String, EditorValidatorRegistration> validators = new LinkedHashMap<>();
     private final Map<String, EditorShortcutRegistration> shortcuts = new LinkedHashMap<>();
     private final Map<String, PanelDescriptor> panels = new LinkedHashMap<>();
+    private final Map<String, EditorPanelRegistration> panelRegistrations = new LinkedHashMap<>();
     private final Map<String, WorkspaceDefinition> workspaces = new LinkedHashMap<>();
 
     public void registerTool(String id, Supplier<? extends EditorTool> factory) {
@@ -47,9 +48,18 @@ public final class EditorPluginRegistry {
 
     public void registerTool(String id, String label, String category,
                              Supplier<? extends EditorTool> factory) {
+        registerTool(new EditorToolRegistration(id, label, category, factory));
+    }
+
+    public void registerTool(String id, String label, String category,
+                             String toolGroup, String icon, String shortcut, int order,
+                             Supplier<? extends EditorTool> factory) {
+        registerTool(new EditorToolRegistration(id, label, category, toolGroup, icon, shortcut, order, factory));
+    }
+
+    public void registerTool(EditorToolRegistration registration) {
         ensureOpen();
-        EditorToolRegistration registration = new EditorToolRegistration(
-                id, label, category, factory);
+        Objects.requireNonNull(registration, "tool registration");
         if (tools.putIfAbsent(registration.id(), registration) != null) {
             throw new IllegalArgumentException("Duplicate editor tool: " + registration.id());
         }
@@ -395,6 +405,22 @@ public final class EditorPluginRegistry {
 
     public List<PanelDescriptor> panels() {
         return List.copyOf(panels.values());
+    }
+
+    public void registerPanel(EditorPanelRegistration registration) {
+        ensureOpen();
+        Objects.requireNonNull(registration, "panel registration");
+        if (panelRegistrations.putIfAbsent(registration.id(), registration) != null) {
+            throw new IllegalArgumentException("Duplicate editor panel: " + registration.id());
+        }
+    }
+
+    public List<EditorPanelRegistration> panelRegistrations() {
+        return List.copyOf(panelRegistrations.values());
+    }
+
+    void removePanelRegistration(String id) {
+        panelRegistrations.remove(id);
     }
 
     public List<WorkspaceDefinition> workspaces() {

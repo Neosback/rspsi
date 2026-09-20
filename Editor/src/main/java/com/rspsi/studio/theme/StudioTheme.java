@@ -18,25 +18,25 @@ public final class StudioTheme {
     private StudioTheme() {
     }
 
-    // Backgrounds, darkest to lightest.
-    private static final float[] BG_APP = rgb(0x12, 0x14, 0x18);
-    private static final float[] BG_PANEL = rgb(0x17, 0x1A, 0x1F);
-    private static final float[] BG_PANEL_ALT = rgb(0x1C, 0x20, 0x26);
-    private static final float[] BG_FIELD = rgb(0x20, 0x24, 0x2B);
-    private static final float[] BG_FIELD_HOVERED = rgb(0x27, 0x2C, 0x34);
+    // Backgrounds, darkest to lightest in soft modern graphite slate (#2E3035).
+    private static final float[] BG_APP = rgb(0x2E, 0x30, 0x35);
+    private static final float[] BG_PANEL = rgb(0x26, 0x28, 0x2B);
+    private static final float[] BG_PANEL_ALT = rgb(0x32, 0x35, 0x3B);
+    private static final float[] BG_FIELD = rgb(0x22, 0x23, 0x26);
+    private static final float[] BG_FIELD_HOVERED = rgb(0x35, 0x38, 0x40);
 
-    private static final float[] BORDER = rgb(0x2A, 0x2F, 0x37);
+    private static final float[] BORDER = rgb(0x44, 0x4A, 0x54);
 
-    // Restrained OpenRune navy/blue accent - reserved for active/selected/
-    // focused state, never used as a decorative header fill.
-    private static final float[] ACCENT = rgb(0x3B, 0x7D, 0xD8);
-    private static final float[] ACCENT_HOVER = rgb(0x4E, 0x8F, 0xE8);
-    private static final float[] ACCENT_ACTIVE = rgb(0x2E, 0x66, 0xB8);
-    private static final float[] ACCENT_MUTED = rgb(0x2A, 0x3A, 0x50);
+    // Warm OSRS gold and bronze accents (#D49B35)
+    private static final float[] ACCENT = rgb(0xD4, 0x9B, 0x35);
+    private static final float[] ACCENT_HOVER = rgb(0xF5, 0xC4, 0x69);
+    private static final float[] ACCENT_ACTIVE = rgb(0xB8, 0x82, 0x28);
+    private static final float[] ACCENT_MUTED = rgb(0x3D, 0x42, 0x4D);
+    private static final float[] ACCENT_GOLD = rgb(0xD4, 0x9B, 0x35);
 
-    private static final float[] TEXT = rgb(0xE4, 0xE6, 0xEA);
-    private static final float[] TEXT_MUTED = rgb(0x8A, 0x90, 0x9C);
-    private static final float[] TEXT_DISABLED = rgb(0x5A, 0x60, 0x6B);
+    private static final float[] TEXT = rgb(0xEB, 0xEE, 0xF2);
+    private static final float[] TEXT_MUTED = rgb(0x9E, 0xA8, 0xB6);
+    private static final float[] TEXT_DISABLED = rgb(0x6E, 0x77, 0x85);
 
     /** Applies the theme once. Call after {@code ImGui.createContext()}. */
     public static void apply() {
@@ -46,24 +46,23 @@ public final class StudioTheme {
         ImGui.styleColorsDark();
         ImGuiStyle style = ImGui.getStyle();
 
-        // Subtle curvature gives the shell a crafted IDE feel without making
-        // the map editor look like a rounded consumer application.
-        style.setWindowRounding(4.0f);
-        style.setChildRounding(2.0f);
-        style.setFrameRounding(3.0f);
-        style.setPopupRounding(4.0f);
+        // Modern softer rounding for a refined IDE feel
+        style.setWindowRounding(6.0f);
+        style.setChildRounding(4.0f);
+        style.setFrameRounding(4.0f);
+        style.setPopupRounding(6.0f);
         style.setScrollbarRounding(6.0f);
-        style.setGrabRounding(3.0f);
-        style.setTabRounding(4.0f);
+        style.setGrabRounding(4.0f);
+        style.setTabRounding(5.0f);
         style.setWindowBorderSize(0.0f);
         style.setChildBorderSize(0.0f);
         style.setPopupBorderSize(1.0f);
         style.setFrameBorderSize(0.0f);
-        style.setWindowPadding(12.0f, 10.0f);
-        style.setFramePadding(8.0f, 5.0f);
-        style.setItemSpacing(7.0f, 6.0f);
-        style.setItemInnerSpacing(6.0f, 4.0f);
-        style.setIndentSpacing(18.0f);
+        style.setWindowPadding(8.0f, 6.0f);
+        style.setFramePadding(6.0f, 4.0f);
+        style.setItemSpacing(6.0f, 4.0f);
+        style.setItemInnerSpacing(5.0f, 3.0f);
+        style.setIndentSpacing(16.0f);
         style.setScrollbarSize(10.0f);
 
         color(style, ImGuiCol.Text, TEXT);

@@ -3,10 +3,10 @@ package com.rspsi.studio.workspace;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
 import com.rspsi.editor.settings.SettingsStore;
+import com.rspsi.studio.WorkspaceManager;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImGui;
-import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiTreeNodeFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
@@ -14,12 +14,13 @@ import imgui.type.ImInt;
 import imgui.type.ImString;
 
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * First-class sibling workspace for OSRS interface, component, and CS2 editing.
  *
  * <p>Shares the Studio runtime, cache definitions, fonts, simulation clock, and plugin services
- * with the Map Editor without being coupled to map terrain or world objects.</p>
+ * with Map Studio without being coupled to map terrain or world objects.</p>
  */
 public final class InterfaceStudioView {
     public enum PreviewMode { BLANK_CANVAS, OVER_GAME_SCENE }
@@ -35,7 +36,9 @@ public final class InterfaceStudioView {
                        EditorPluginLifecycleManager pluginLifecycle,
                        Runnable openDashboard,
                        Runnable openMapEditor,
-                       Runnable openObjectStudio) {
+                       Runnable openObjectStudio,
+                       WorkspaceManager workspaces,
+                       Consumer<WorkspaceManager.Workspace> closeWorkspace) {
         Objects.requireNonNull(openDashboard, "openDashboard");
         Objects.requireNonNull(openMapEditor, "openMapEditor");
         Objects.requireNonNull(openObjectStudio, "openObjectStudio");
@@ -51,7 +54,7 @@ public final class InterfaceStudioView {
             return;
         }
 
-        renderWorkspaceBar(cache, openDashboard, openMapEditor, openObjectStudio);
+        renderWorkspaceBar(cache, workspaces, openDashboard, openMapEditor, openObjectStudio, closeWorkspace);
 
         // Three-column workspace layout
         float fullWidth = ImGui.getContentRegionAvailX();
@@ -82,24 +85,15 @@ public final class InterfaceStudioView {
         ImGui.end();
     }
 
-    private void renderWorkspaceBar(LoadedOsrsCacheSession cache,
-                                     Runnable openDashboard, Runnable openMapEditor, Runnable openObjectStudio) {
+    private void renderWorkspaceBar(LoadedOsrsCacheSession cache, WorkspaceManager workspaces,
+                                     Runnable openDashboard, Runnable openMapEditor, Runnable openObjectStudio,
+                                     Consumer<WorkspaceManager.Workspace> closeWorkspace) {
         if (ImGui.beginMenuBar()) {
-            if (ImGui.menuItem("Dashboard")) openDashboard.run();
-            if (ImGui.menuItem("Map Editor")) openMapEditor.run();
-
-            ImGui.pushStyleColor(ImGuiCol.Text, 0.45f, 0.72f, 1.0f, 1.0f);
-            ImGui.menuItem("Interface Studio (Active)");
-            ImGui.popStyleColor();
-
-            if (ImGui.menuItem("Object Studio")) openObjectStudio.run();
-
-            float rightBadgePos = ImGui.getWindowWidth() - 280.0f;
-            if (rightBadgePos > ImGui.getCursorPosX()) {
-                ImGui.sameLine(rightBadgePos);
-                String rev = cache != null ? String.valueOf(cache.identity().revision()) : "?";
-                ImGui.textDisabled("OpenGL 3.3  |  Cache: OSRS (" + rev + ")");
+            if (workspaces != null) {
+                StudioWidgets.workspaceTabs(workspaces, openDashboard, openMapEditor,
+                        null, openObjectStudio, closeWorkspace);
             }
+
             ImGui.endMenuBar();
         }
     }

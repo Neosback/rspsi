@@ -26,6 +26,7 @@ public final class RendererDiagnosticsPlugin implements EditorPlugin {
                 "renderer-debug.scene-semantics",
                 "Scene semantics",
                 "Renderer diagnostics",
+                false,
                 RendererDiagnosticsOverlay::new));
     }
 
@@ -36,11 +37,13 @@ public final class RendererDiagnosticsPlugin implements EditorPlugin {
             scene.tileProjections().values().forEach(tile -> {
                 if (!tile.hasBridge() && !tile.hasKnownObjects()) return;
                 draw.tileOutline(tile.coordinate());
+                float wx = tile.coordinate().x() * 128.0f + 64.0f;
+                float wz = tile.coordinate().y() * 128.0f + 64.0f;
                 if (tile.hasBridge()) {
-                    draw.label("bridge", tile.coordinate().x(), tile.coordinate().y());
+                    draw.worldLabel("bridge", wx, 0.0f, wz, 0xFFFFFFFF, 0xCCB91C1C);
                 } else if (tile.hasKnownObjects()) {
-                    draw.label(tile.objectsBySceneLayer().get(0).category().displayName(),
-                            tile.coordinate().x(), tile.coordinate().y());
+                    draw.worldLabel(tile.objectsBySceneLayer().get(0).category().displayName(),
+                            wx, 0.0f, wz, 0xFFFFFFFF, 0xCC1E293B);
                 }
             });
         }

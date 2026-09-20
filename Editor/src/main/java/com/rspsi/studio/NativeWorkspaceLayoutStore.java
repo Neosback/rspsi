@@ -12,7 +12,7 @@ import java.nio.file.StandardCopyOption;
 final class NativeWorkspaceLayoutStore {
     // Bump whenever the dock contract changes so an old movable shell cannot
     // reintroduce unlocked rails or a titled viewport.
-    static final int CURRENT_VERSION = 6;
+    static final int CURRENT_VERSION = 7;
     private final Path file;
     private final ObjectMapper mapper = JsonUtil.getDefaultMapper();
 

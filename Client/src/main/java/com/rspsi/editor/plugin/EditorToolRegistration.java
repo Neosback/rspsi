@@ -14,12 +14,26 @@ public record EditorToolRegistration(
         String id,
         String label,
         String category,
+        String toolGroup,
+        String icon,
+        String shortcut,
+        int order,
         Supplier<? extends EditorTool> factory) {
+
     public EditorToolRegistration {
         id = requireText(id, "tool id");
         label = requireText(label, "tool label");
         category = requireText(category, "tool category");
+        toolGroup = toolGroup != null && !toolGroup.isBlank() ? toolGroup.trim() : category;
         Objects.requireNonNull(factory, "tool factory");
+    }
+
+    public EditorToolRegistration(
+            String id,
+            String label,
+            String category,
+            Supplier<? extends EditorTool> factory) {
+        this(id, label, category, category, null, null, 0, factory);
     }
 
     private static String requireText(String value, String name) {

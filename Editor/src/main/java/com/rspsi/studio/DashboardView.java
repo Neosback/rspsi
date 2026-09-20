@@ -5,6 +5,8 @@ import com.rspsi.cache.workspace.CacheDecoderSummary.IndexEntry;
 import com.rspsi.cache.workspace.CacheSessionState;
 import com.rspsi.cache.workspace.CacheSessionStatus;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.studio.theme.StudioWidgets;
+import imgui.ImDrawList;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiStyleVar;
@@ -25,6 +27,8 @@ public final class DashboardView {
 
     private final ImString cachePath = new ImString(512);
     private final ImString region = new ImString("50,50", 32);
+    private boolean editingCachePath = false;
+    private boolean serverIntegrationExpanded = true;
 
     public DashboardView(String initialPath) {
         cachePath.set(initialPath == null ? "" : initialPath);
@@ -36,7 +40,10 @@ public final class DashboardView {
                                 Runnable openInterfaceStudio,
                                 Runnable openObjectStudio,
                                 com.rspsi.editor.integration.ServerIntegrationService integrations,
-                                Runnable openIntegrationCenter) {
+                                Runnable openIntegrationCenter,
+                                WorkspaceManager workspaces,
+                                Runnable openDashboard,
+                                Consumer<WorkspaceManager.Workspace> closeWorkspace) {
         Objects.requireNonNull(status, "cache status");
         Objects.requireNonNull(loadCache, "load cache callback");
         Objects.requireNonNull(openMapEditor, "open workspace callback");
@@ -54,9 +61,17 @@ public final class DashboardView {
             return;
         }
 
-        float contentWidth = Math.min(920.0f, ImGui.getContentRegionAvailX());
-        float margin = Math.max(24.0f, (ImGui.getContentRegionAvailX() - contentWidth) * 0.5f);
-        ImGui.dummy(1.0f, 20.0f);
+        if (workspaces != null) {
+            StudioWidgets.workspaceTabs(workspaces, openDashboard, openMapEditor,
+                    openInterfaceStudio, openObjectStudio, closeWorkspace);
+            ImGui.separator();
+        }
+
+        // A fixed margin, not a centered fixed-width column: this screen grows into
+        // future sections (cache management, plugins) instead of stranding them in
+        // empty space either side of a narrow reading-width block.
+        float margin = 24.0f;
+        ImGui.dummy(1.0f, 16.0f);
         ImGui.indent(margin);
 
         // Header Title
@@ -68,16 +83,36 @@ public final class DashboardView {
 
         // Cache Configuration Section
         ImGui.separatorText("Cache Configuration");
-        ImGui.textDisabled("Specify the OSRS cache folder containing main_file_cache.dat2 and .idx files.");
-        ImGui.inputTextWithHint("##cache-path", "Path to an OSRS cache directory (e.g. /path/to/cache)", cachePath);
-        ImGui.sameLine();
-        boolean loading = status.state() == CacheSessionState.LOADING;
-        ImGui.beginDisabled(loading || cachePath.isEmpty());
-        if (ImGui.button(loading ? "Loading..." : "Load cache")) {
-            Path path = Path.of(cachePath.get().trim()).toAbsolutePath().normalize();
-            loadCache.accept(path);
+        boolean ready = status.state() == CacheSessionState.READY;
+        if (ready && !editingCachePath) {
+            status.currentSession().ifPresent(session -> {
+                ImGui.textDisabled("Cache:");
+                ImGui.sameLine();
+                ImGui.text(session.path().toString());
+                ImGui.sameLine();
+                if (ImGui.smallButton("Change...##cache-path-edit")) {
+                    editingCachePath = true;
+                }
+            });
+        } else {
+            ImGui.textDisabled("Specify the OSRS cache folder containing main_file_cache.dat2 and .idx files.");
+            ImGui.inputTextWithHint("##cache-path", "Path to an OSRS cache directory (e.g. /path/to/cache)", cachePath);
+            ImGui.sameLine();
+            boolean loading = status.state() == CacheSessionState.LOADING;
+            ImGui.beginDisabled(loading || cachePath.isEmpty());
+            if (ImGui.button(loading ? "Loading..." : "Load cache")) {
+                Path path = Path.of(cachePath.get().trim()).toAbsolutePath().normalize();
+                loadCache.accept(path);
+                editingCachePath = false;
+            }
+            ImGui.endDisabled();
+            if (ready) {
+                ImGui.sameLine();
+                if (ImGui.smallButton("Cancel##cache-path-cancel")) {
+                    editingCachePath = false;
+                }
+            }
         }
-        ImGui.endDisabled();
 
         // Path Validation Warning Cards
         renderPathWarnings(status);
@@ -96,7 +131,7 @@ public final class DashboardView {
 
         ImGui.spacing();
         ImGui.beginDisabled(status.state() != CacheSessionState.READY);
-        if (ImGui.button("Map Editor", 130, 32)) openMapEditor.run();
+        if (ImGui.button("Map Studio", 130, 32)) openMapEditor.run();
         ImGui.sameLine();
         if (ImGui.button("Interface Studio", 140, 32) && openInterfaceStudio != null) {
             openInterfaceStudio.run();
@@ -115,7 +150,7 @@ public final class DashboardView {
     public void render(CacheSessionStatus status,
                        Consumer<Path> loadCache,
                        Runnable openMapEditor) {
-        render(status, loadCache, openMapEditor, null, null, null, null);
+        render(status, loadCache, openMapEditor, null, null, null, null, null, null, null);
     }
 
     public void render(CacheSessionStatus status,
@@ -124,17 +159,32 @@ public final class DashboardView {
                        Runnable openInterfaceStudio,
                        Runnable openObjectStudio,
                        com.rspsi.editor.integration.ServerIntegrationService integrations,
-                       Runnable openIntegrationCenter) {
-        renderInternal(status, loadCache, openMapEditor, openInterfaceStudio, openObjectStudio, integrations, openIntegrationCenter);
+                       Runnable openIntegrationCenter,
+                       WorkspaceManager workspaces,
+                       Runnable openDashboard,
+                       Consumer<WorkspaceManager.Workspace> closeWorkspace) {
+        renderInternal(status, loadCache, openMapEditor, openInterfaceStudio, openObjectStudio, integrations,
+                openIntegrationCenter, workspaces, openDashboard, closeWorkspace);
     }
 
     private void renderServerIntegrationSection(com.rspsi.editor.integration.ServerIntegrationService integrations,
                                                 Runnable openIntegrationCenter) {
         ImGui.dummy(1.0f, 8.0f);
+        boolean connected = integrations != null && integrations.isConnected();
+
+        if (!connected && !serverIntegrationExpanded) {
+            ImGui.textDisabled("Server integration not set up.");
+            ImGui.sameLine();
+            if (ImGui.smallButton("Set up...##server-integration-expand")) {
+                serverIntegrationExpanded = true;
+            }
+            return;
+        }
+
         ImGui.separatorText("Server Integration");
-        if (integrations != null && integrations.isConnected()) {
+        if (connected) {
             var session = integrations.activeSession().get();
-            ImGui.textColored(0xFF66FF66, "● Connected: " + session.provider().name());
+            ImGui.textColored(0xFF66FF66, "[OK] Connected: " + session.provider().name());
             ImGui.textDisabled("Root: " + session.projectRoot() + " (" + session.activeCapabilities().size() + " capabilities active)");
             if (openIntegrationCenter != null) {
                 if (ImGui.button("Configure Integration")) openIntegrationCenter.run();
@@ -145,6 +195,10 @@ public final class DashboardView {
             ImGui.textDisabled("No server project connected. Connect an OpenRune or custom server repository for symbols and spawns.");
             if (openIntegrationCenter != null) {
                 if (ImGui.button("Connect Project...")) openIntegrationCenter.run();
+                ImGui.sameLine();
+                if (ImGui.smallButton("Not now##server-integration-collapse")) {
+                    serverIntegrationExpanded = false;
+                }
             }
         }
     }
@@ -184,12 +238,7 @@ public final class DashboardView {
             case EMPTY -> {
                 // Warning banner handled by renderPathWarnings above
             }
-            case LOADING -> {
-                ImGui.dummy(1.0f, 6.0f);
-                ImGui.text("Loading cache: " + status.message());
-                ImGui.progressBar((float) status.progress(), -1, 0,
-                        status.phase().name().replace('_', ' '));
-            }
+            case LOADING -> renderLoadingIndicator(status);
             case READY -> status.currentSession().ifPresent(session -> {
                 ImGui.dummy(1.0f, 6.0f);
                 renderReadyHeader(session);
@@ -202,6 +251,45 @@ public final class DashboardView {
                 renderErrorCard("CACHE LOAD FAILED",
                         detail == null || detail.isBlank() ? status.message() : detail);
             }
+        }
+    }
+
+    /**
+     * The cache loader only ever reports {@link com.rspsi.cache.workspace.CacheLoadPhase}
+     * checkpoints, not fine-grained progress within a phase — the slowest part
+     * (decoding every definition table) happens entirely inside one phase, so a
+     * literal percentage bar sat still and then jumped, which read as broken.
+     * An indeterminate, centered animation is honest about what we actually
+     * know: a phase name and "still working," not a fake number.
+     */
+    private static void renderLoadingIndicator(CacheSessionStatus status) {
+        ImGui.dummy(1.0f, 16.0f);
+        float barWidth = 320.0f;
+        float barHeight = 8.0f;
+        float available = ImGui.getContentRegionAvailX();
+        ImGui.setCursorPosX(ImGui.getCursorPosX() + Math.max(0.0f, (available - barWidth) * 0.5f));
+
+        float x = ImGui.getCursorScreenPosX();
+        float y = ImGui.getCursorScreenPosY();
+        ImDrawList drawList = ImGui.getWindowDrawList();
+        drawList.addRectFilled(x, y, x + barWidth, y + barHeight,
+                ImGui.getColorU32(0.16f, 0.18f, 0.22f, 1.0f), 3.0f);
+        float sweepWidth = barWidth * 0.28f;
+        float phase = (float) (ImGui.getTime() % 1.2) / 1.2f;
+        float sweepX = x + (barWidth - sweepWidth) * (0.5f - 0.5f * (float) Math.cos(phase * Math.PI * 2.0));
+        drawList.addRectFilled(sweepX, y, sweepX + sweepWidth, y + barHeight,
+                ImGui.getColorU32(0.35f, 0.58f, 0.85f, 1.0f), 3.0f);
+        ImGui.dummy(barWidth, barHeight);
+
+        ImGui.dummy(1.0f, 8.0f);
+        String label = status.phase().name().replace('_', ' ') + "...";
+        float labelWidth = ImGui.calcTextSize(label).x;
+        ImGui.setCursorPosX(ImGui.getCursorPosX() + Math.max(0.0f, (available - labelWidth) * 0.5f));
+        ImGui.textDisabled(label);
+        if (!status.message().isBlank()) {
+            float msgWidth = ImGui.calcTextSize(status.message()).x;
+            ImGui.setCursorPosX(ImGui.getCursorPosX() + Math.max(0.0f, (available - msgWidth) * 0.5f));
+            ImGui.textDisabled(status.message());
         }
     }
 
@@ -219,8 +307,8 @@ public final class DashboardView {
             ImGui.text("Revision " + session.identity().revision()
                     + "  ·  " + fmt(session.mapCount()) + " map groups  ·  FileStore decoders operational");
             ImGui.textDisabled(session.path().toString());
-            ImGui.endChild();
         }
+        ImGui.endChild();
 
         ImGui.popStyleVar(3);
         ImGui.popStyleColor(2);
@@ -306,7 +394,8 @@ public final class DashboardView {
         ImGui.dummy(1.0f, 4.0f);
         if (ImGui.collapsingHeader("Raw Cache Indices Breakdown (" + summary.totalIndices() + " indices, " + fmt(summary.totalArchives()) + " archives)")) {
             if (ImGui.beginTable("##raw-indices-table", 3,
-                    ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.BordersOuter)) {
+                    ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.BordersOuter
+                            | ImGuiTableFlags.SizingFixedFit)) {
                 ImGui.tableSetupColumn("Index ID", 0, 80.0f);
                 ImGui.tableSetupColumn("Category / Name", 0, 320.0f);
                 ImGui.tableSetupColumn("Archives", 0, 120.0f);
@@ -343,8 +432,8 @@ public final class DashboardView {
             ImGui.popStyleColor();
             ImGui.separator();
             rows.run();
-            ImGui.endChild();
         }
+        ImGui.endChild();
 
         ImGui.popStyleVar(3);
         ImGui.popStyleColor(2);
@@ -378,8 +467,8 @@ public final class DashboardView {
             ImGui.pushStyleColor(ImGuiCol.Text, 0.92f, 0.92f, 0.92f, 1.0f);
             ImGui.textWrapped(message);
             ImGui.popStyleColor();
-            ImGui.endChild();
         }
+        ImGui.endChild();
 
         ImGui.popStyleVar(3);
         ImGui.popStyleColor(2);
@@ -399,8 +488,8 @@ public final class DashboardView {
             ImGui.pushStyleColor(ImGuiCol.Text, 0.92f, 0.92f, 0.92f, 1.0f);
             ImGui.textWrapped(message);
             ImGui.popStyleColor();
-            ImGui.endChild();
         }
+        ImGui.endChild();
 
         ImGui.popStyleVar(3);
         ImGui.popStyleColor(2);

@@ -13,7 +13,10 @@ import java.util.Objects;
 
 /** Loads the native shell's readable UI and diagnostic font set. */
 public final class StudioFonts {
-    private static final short[] ICON_RANGES = {
+    private static final short[] MATERIAL_ICON_RANGES = {
+            (short) 0xe000, (short) 0xf8ff, 0
+    };
+    private static final short[] FA_ICON_RANGES = {
             (short) 0xf000, (short) 0xf8ff, 0
     };
 
@@ -42,19 +45,37 @@ public final class StudioFonts {
         byte[] roboto = resource("/font/Roboto-Regular.ttf");
         ui = atlas.addFontFromMemoryTTF(roboto, 15.0f * uiScale, uiConfig);
 
-        ImFontConfig iconConfig = new ImFontConfig();
-        iconConfig.setMergeMode(true);
-        iconConfig.setPixelSnapH(true);
-        iconConfig.setDstFont(ui);
-        atlas.addFontFromMemoryTTF(resource("/font/fontawesome-webfont.ttf"),
-                14.0f * uiScale, iconConfig, ICON_RANGES);
+        // Merge Google Fonts Material Icons into primary UI font
+        ImFontConfig materialIconConfig = new ImFontConfig();
+        materialIconConfig.setMergeMode(true);
+        materialIconConfig.setPixelSnapH(true);
+        materialIconConfig.setDstFont(ui);
+        atlas.addFontFromMemoryTTF(resource("/font/MaterialIcons-Regular.ttf"),
+                16.0f * uiScale, materialIconConfig, MATERIAL_ICON_RANGES);
 
+        // Merge FontAwesome as secondary fallback
+        ImFontConfig faConfig = new ImFontConfig();
+        faConfig.setMergeMode(true);
+        faConfig.setPixelSnapH(true);
+        faConfig.setDstFont(ui);
+        atlas.addFontFromMemoryTTF(resource("/font/fontawesome-webfont.ttf"),
+                14.0f * uiScale, faConfig, FA_ICON_RANGES);
+
+        // Standalone Icon font for larger rail and tool buttons (22px)
         ImFontConfig railIconConfig = new ImFontConfig();
         railIconConfig.setOversampleH(2);
         railIconConfig.setOversampleV(1);
         railIconConfig.setPixelSnapH(true);
-        icon = atlas.addFontFromMemoryTTF(resource("/font/fontawesome-webfont.ttf"),
-                18.0f * uiScale, railIconConfig, ICON_RANGES);
+        icon = atlas.addFontFromMemoryTTF(resource("/font/MaterialIcons-Regular.ttf"),
+                22.0f * uiScale, railIconConfig, MATERIAL_ICON_RANGES);
+
+        // Merge FontAwesome into icon font as fallback
+        ImFontConfig railFaConfig = new ImFontConfig();
+        railFaConfig.setMergeMode(true);
+        railFaConfig.setPixelSnapH(true);
+        railFaConfig.setDstFont(icon);
+        atlas.addFontFromMemoryTTF(resource("/font/fontawesome-webfont.ttf"),
+                20.0f * uiScale, railFaConfig, FA_ICON_RANGES);
 
         ImFontConfig monoConfig = new ImFontConfig();
         monoConfig.setOversampleH(2);
@@ -75,8 +96,10 @@ public final class StudioFonts {
         mono.setScale(1.0f / uiScale);
         io.setFontDefault(ui);
         uiConfig.destroy();
-        iconConfig.destroy();
+        materialIconConfig.destroy();
+        faConfig.destroy();
         railIconConfig.destroy();
+        railFaConfig.destroy();
         monoConfig.destroy();
     }
 

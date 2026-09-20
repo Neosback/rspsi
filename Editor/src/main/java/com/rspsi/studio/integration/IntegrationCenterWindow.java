@@ -61,14 +61,14 @@ public final class IntegrationCenterWindow {
         StudioWidgets.section("Connected Server Project");
 
         ImGui.pushFont(StudioFonts.mono(), 0.0f);
-        ImGui.textColored(0xFF66FF66, "● Connected: " + session.provider().name());
+        ImGui.textColored(0xFF66FF66, "[OK] Connected: " + session.provider().name());
         ImGui.text("Project Root: " + session.projectRoot().toString());
         ImGui.popFont();
 
         ImGui.separator();
         StudioWidgets.section("Active Capabilities");
         for (IntegrationCapability cap : session.activeCapabilities()) {
-            ImGui.bulletText("✓ " + cap.description());
+            ImGui.bulletText("[x] " + cap.description());
         }
 
         ImGui.dummy(1.0f, 16.0f);

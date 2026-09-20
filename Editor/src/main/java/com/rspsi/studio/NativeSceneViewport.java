@@ -80,6 +80,10 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         return java.util.Optional.ofNullable(selection);
     }
 
+    public java.util.Optional<PickResult> lastPick() {
+        return selection();
+    }
+
     public void clearSelection() {
         selection = null;
     }
@@ -115,9 +119,31 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         updateCameraFromKeyboard();
     }
 
+    public float imageOriginX() { return imageOriginX; }
+    public float imageOriginY() { return imageOriginY; }
+    public int lastWidth() { return lastWidth; }
+    public int lastHeight() { return lastHeight; }
+
     public ViewportOverlayDraw createOverlayDraw() {
         return new ViewportOverlayDraw(ImGui.getWindowDrawList(), imageOriginX, imageOriginY,
                 lastWidth, lastHeight, navigation.camera());
+    }
+
+    private final java.util.Set<String> enabledOverlays = new java.util.HashSet<>();
+
+    public boolean isOverlayEnabled(String id, boolean defaultValue) {
+        if (enabledOverlays.contains(id)) return true;
+        return defaultValue && !enabledOverlays.contains("!" + id);
+    }
+
+    public void setOverlayEnabled(String id, boolean enabled) {
+        if (enabled) {
+            enabledOverlays.remove("!" + id);
+            enabledOverlays.add(id);
+        } else {
+            enabledOverlays.remove(id);
+            enabledOverlays.add("!" + id);
+        }
     }
 
     public void renderOverlays(com.rspsi.editor.tool.EditorTool activeTool,
@@ -134,6 +160,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
             var context = pluginLifecycle.host().context();
             var sceneSnapshot = context.scene().map(com.rspsi.editor.plugin.EditorSceneAccess::snapshot).orElse(null);
             for (var reg : pluginLifecycle.host().registry().overlayRegistrations()) {
+                if (!isOverlayEnabled(reg.id(), reg.enabledByDefault())) continue;
                 try {
                     var overlay = pluginLifecycle.host().registry().createOverlay(reg.id());
                     overlay.render(sceneSnapshot, draw);

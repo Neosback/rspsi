@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Centralized memory cache for animation sequences, skeleton bone transforms,
  * animation frames, and base model geometry.
  *
- * <p>Shared between Map Editor, Interface Studio, and Object Studio to avoid
+ * <p>Shared between Map Studio, Interface Studio, and Object Studio to avoid
  * re-decoding models or textures during dynamic entity pose updates.</p>
  */
 public final class AnimationCache {

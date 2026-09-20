@@ -4,6 +4,10 @@ import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.assets.EmptyAssetRepository;
 import com.rspsi.editor.model.WorldModel;
+import com.rspsi.editor.settings.EditorSettingKeys;
+import com.rspsi.editor.settings.SettingKey;
+import com.rspsi.editor.settings.SettingsStore;
+import com.rspsi.plugins.server.openrune.OpenRuneServerPlugin;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -165,6 +169,62 @@ class EditorPluginLifecycleManagerTest {
                 "owned discovery resources must be released exactly once");
     }
 
+    @Test
+    void pluginSettingsSurviveAnUnrelatedPluginToggle() {
+        Path file = tempDir.resolve("plugins.json");
+        SettingsStore sharedSettings = new SettingsStore(EditorSettingKeys.registry());
+        EditorPluginLifecycleManager manager = EditorPluginLifecycleManager.start(
+                List.of(new TerrainLikePlugin(), new ObjectLikePlugin(), new SettingsOwningPlugin()),
+                EditorPluginStateStore.load(file),
+                session(),
+                EmptyAssetRepository.INSTANCE,
+                null,
+                candidates -> EditorPluginHost.initialize(candidates, session(), EmptyAssetRepository.INSTANCE,
+                        null, sharedSettings, new EditorTaskService(), new EditorNotificationService()));
+
+        assertEquals(3, manager.host().context().settingsService().get(SettingsOwningPlugin.WIDTH));
+        assertEquals(ContributionOwner.plugin(SettingsOwningPlugin.ID),
+                manager.host().context().settingsService().ownerOf(SettingsOwningPlugin.WIDTH.id()).orElseThrow());
+
+        assertDoesNotThrow(() -> manager.setEnabled(TerrainLikePlugin.ID, false));
+
+        assertEquals(3, manager.host().context().settingsService().get(SettingsOwningPlugin.WIDTH));
+        assertEquals(ContributionOwner.plugin(SettingsOwningPlugin.ID),
+                manager.host().context().settingsService().ownerOf(SettingsOwningPlugin.WIDTH.id()).orElseThrow());
+
+        manager.close();
+    }
+
+    @Test
+    void openRuneServerPluginSettingsSurviveTogglesOfItselfAndOtherPlugins() {
+        Path file = tempDir.resolve("plugins.json");
+        SettingsStore sharedSettings = new SettingsStore(EditorSettingKeys.registry());
+        EditorPluginLifecycleManager manager = EditorPluginLifecycleManager.start(
+                List.of(new OpenRuneServerPlugin(), new PlainPlugin()),
+                EditorPluginStateStore.load(file),
+                session(),
+                EmptyAssetRepository.INSTANCE,
+                null,
+                candidates -> EditorPluginHost.initialize(candidates, session(), EmptyAssetRepository.INSTANCE,
+                        null, sharedSettings, new EditorTaskService(), new EditorNotificationService()));
+
+        assertEquals(ContributionOwner.plugin(OpenRuneServerPlugin.PLUGIN_ID),
+                manager.host().context().settingsService().ownerOf(OpenRuneServerPlugin.ENABLED.id()).orElseThrow());
+
+        assertDoesNotThrow(() -> manager.setEnabled(PlainPlugin.ID, false));
+        assertEquals(ContributionOwner.plugin(OpenRuneServerPlugin.PLUGIN_ID),
+                manager.host().context().settingsService().ownerOf(OpenRuneServerPlugin.ENABLED.id()).orElseThrow());
+
+        assertDoesNotThrow(() -> manager.setEnabled(OpenRuneServerPlugin.PLUGIN_ID, false));
+        assertTrue(manager.host().context().settingsService().ownerOf(OpenRuneServerPlugin.ENABLED.id()).isEmpty());
+
+        assertDoesNotThrow(() -> manager.setEnabled(OpenRuneServerPlugin.PLUGIN_ID, true));
+        assertEquals(ContributionOwner.plugin(OpenRuneServerPlugin.PLUGIN_ID),
+                manager.host().context().settingsService().ownerOf(OpenRuneServerPlugin.ENABLED.id()).orElseThrow());
+
+        manager.close();
+    }
+
     private EditorPluginLifecycleManager start(Path file) {
         EditorPluginStateStore store = EditorPluginStateStore.load(file);
         return EditorPluginLifecycleManager.start(
@@ -216,5 +276,19 @@ class EditorPluginLifecycleManagerTest {
         static final String ID = "test.toggle";
 
         @Override public String id() { return ID; }
+    }
+
+    private static final class SettingsOwningPlugin implements EditorPlugin {
+        static final String ID = "test.settings-owner";
+        static final SettingKey<Integer> WIDTH = new SettingKey<>("test.settings-owner.width", Integer.class);
+
+        @Override public String id() { return ID; }
+
+        @Override
+        public void initialize(EditorPluginContext context) {
+            context.api(this).setting(WIDTH.id(), 3)
+                    .category("Test").label("Width").description("Width in tiles")
+                    .register();
+        }
     }
 }

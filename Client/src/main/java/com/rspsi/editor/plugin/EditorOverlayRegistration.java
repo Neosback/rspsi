@@ -8,7 +8,14 @@ public record EditorOverlayRegistration(
         String id,
         String label,
         String category,
+        boolean enabledByDefault,
         Supplier<? extends EditorSceneOverlay> factory) {
+
+    public EditorOverlayRegistration(String id, String label, String category,
+                                    Supplier<? extends EditorSceneOverlay> factory) {
+        this(id, label, category, false, factory);
+    }
+
     public EditorOverlayRegistration {
         id = text(id, "overlay id");
         label = text(label, "overlay label");

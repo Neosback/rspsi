@@ -94,10 +94,24 @@ public interface OverlayDraw {
     }
 
     /**
-     * Backwards-compatible label method.
+     * Draws a text badge anchored at a tile coordinate in 3D world space.
+     */
+    default void tileLabel(String text, TileCoordinate tile) {
+        if (tile != null) {
+            worldLabel(text, tile.x() * 128.0f + 64.0f, 0.0f, tile.y() * 128.0f + 64.0f);
+        }
+    }
+
+    /**
+     * Backwards-compatible label method. If coordinates appear to be tile coordinates (0..128),
+     * projects to world space; otherwise renders as screen coordinates.
      */
     default void label(String text, float x, float y) {
-        screenLabel(text, x, y);
+        if (x >= 0.0f && x <= 128.0f && y >= 0.0f && y <= 128.0f) {
+            worldLabel(text, x * 128.0f + 64.0f, 0.0f, y * 128.0f + 64.0f);
+        } else {
+            screenLabel(text, x, y);
+        }
     }
 
     /**
