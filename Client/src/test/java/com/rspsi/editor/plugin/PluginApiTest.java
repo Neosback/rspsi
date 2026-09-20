@@ -89,7 +89,7 @@ class PluginApiTest {
             public void initialize(EditorPluginContext context) {
                 PluginApi api = context.api(this);
                 api.sceneOverlay("test.overlay", (snapshot, draw) ->
-                        draw.tileOutline(new TileCoordinate(0, 10, 20)));
+                        draw.tileOutline(new WorldTile(0, 10, 20)));
             }
         };
 
@@ -108,7 +108,7 @@ class PluginApiTest {
         });
 
         assertEquals(1, outlinedTiles.size());
-        assertEquals(new TileCoordinate(0, 10, 20), outlinedTiles.get(0));
+        assertEquals(new WorldTile(0, 10, 20), outlinedTiles.get(0));
 
         host.close();
         assertTrue(host.registry().overlayRegistrations().isEmpty());
