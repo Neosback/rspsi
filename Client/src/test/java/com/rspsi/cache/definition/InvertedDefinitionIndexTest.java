@@ -38,7 +38,7 @@ class InvertedDefinitionIndexTest {
         assertEquals(java.util.Set.of(10), index.objectsNamed("ladder"));
         assertEquals(java.util.Set.of(10), index.objectsWithAction("climb-up"));
         assertEquals(java.util.Set.of(10), index.objectsUsingModel(201));
-        assertEquals(java.util.Set.of(10), index.interactiveObjects());
+        assertEquals(java.util.Set.of(10, 11), index.interactiveObjects());
         assertEquals(List.of(11, 12, 13), index.transformLinks(10));
         assertEquals(java.util.Set.of(10), index.transformParents(11));
         assertEquals(java.util.Set.of(2), index.underlaysByRgb(0x112233));
