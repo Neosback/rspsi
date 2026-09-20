@@ -15,6 +15,7 @@ import com.rspsi.editor.overlay.OverlayContribution;
 import com.rspsi.editor.overlay.OverlayLayer;
 import com.rspsi.editor.overlay.OverlayPosition;
 import com.rspsi.editor.corpus.RegionFeatureExtractor;
+import com.rspsi.editor.plugin.extension.ExtensionPoint;
 import com.rspsi.editor.settings.SettingHandle;
 import com.rspsi.editor.settings.SettingKey;
 import com.rspsi.editor.settings.SettingScope;
@@ -262,6 +263,20 @@ public final class PluginApi {
             Objects.requireNonNull(factory, "tool factory");
             api.context.registry().registerTool(id, label, category, factory);
         }
+    }
+
+    /**
+     * Publishes a typed inter-plugin extension and removes it automatically
+     * when this plugin unloads.
+     */
+    public <T> void extension(ExtensionPoint<T> point, String id, int priority, T extension) {
+        AutoCloseable handle = context.services().extensions().register(
+                Objects.requireNonNull(point, "point"), id, priority, extension);
+        track(handle);
+    }
+
+    public <T> void extension(ExtensionPoint<T> point, String id, T extension) {
+        extension(point, id, 0, extension);
     }
 
     /** Registers a cache/region feature family for similarity, WFC and analysis. */

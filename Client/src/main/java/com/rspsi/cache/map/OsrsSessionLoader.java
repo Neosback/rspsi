@@ -37,8 +37,9 @@ public final class OsrsSessionLoader {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Region is not present in the OSRS map index: " + regionX + "," + regionY));
         EditorSession session = saveable
-                ? new EditorSession(region.document(), current -> saves.save(current, regionX, regionY))
-                : EditorSession.readOnly(region.document());
+                ? new EditorSession(region.document(), region.window(),
+                        current -> saves.save(current, regionX, regionY))
+                : EditorSession.readOnly(region.document(), region.window());
         session.markSaved();
         return new LoadedRegion(regionX, regionY, session);
     }

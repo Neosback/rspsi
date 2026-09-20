@@ -1,6 +1,6 @@
 package com.rspsi.editor.render.picker;
 
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.GpuDrawCommand;
@@ -176,13 +176,13 @@ public final class DdaScenePicker {
     private static PickResult toResult(Hit hit, Ray ray) {
         GpuDrawCommand command = hit.triangle().command();
         WorldTileAddress address = command.tile();
-        TileCoordinate tile;
+        WorldTile tile;
         if (command.layer() == SceneLayer.Kind.TERRAIN && command.objectId() < 0) {
             float hitX = ray.ox() + hit.distance() * ray.dx();
             float hitZ = ray.oz() + hit.distance() * ray.dz();
-            tile = new TileCoordinate(address.plane(), floorTile(hitX), floorTile(hitZ));
+            tile = new WorldTile(address.plane(), floorTile(hitX), floorTile(hitZ));
         } else {
-            tile = new TileCoordinate(address.plane(), address.worldX(), address.worldY());
+            tile = new WorldTile(address.plane(), address.worldX(), address.worldY());
         }
         return new PickResult(tile, address.plane(), command.objectId(), hit.distance(),
                 command.layer(), command.priority(), command.depthBias(), command.textureId());

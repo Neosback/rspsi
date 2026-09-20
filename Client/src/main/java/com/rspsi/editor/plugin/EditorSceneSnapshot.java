@@ -6,6 +6,9 @@ import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.WorldWindow;
+import com.rspsi.editor.model.WorldTile;
+import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.render.RenderObject;
 import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.TerrainLight;
@@ -36,6 +39,7 @@ public final class EditorSceneSnapshot {
     private final int width;
     private final int length;
     private final int planes;
+    private final WorldWindow window;
     private final Map<TileCoordinate, TileSnapshot> tiles;
     private final Map<TileCoordinate, TerrainMesh> terrainMeshes;
     private final Map<TileCoordinate, TerrainMaterial> terrainMaterials;
@@ -48,7 +52,7 @@ public final class EditorSceneSnapshot {
     private final List<RenderObject> renderObjects;
     private final List<BridgeLink> bridges;
 
-    private EditorSceneSnapshot(int width, int length, int planes,
+    private EditorSceneSnapshot(int width, int length, int planes, WorldWindow window,
                                 Map<TileCoordinate, TileSnapshot> tiles,
                                 Map<TileCoordinate, TerrainMesh> terrainMeshes,
                                 Map<TileCoordinate, TerrainMaterial> terrainMaterials,
@@ -63,6 +67,7 @@ public final class EditorSceneSnapshot {
         this.width = width;
         this.length = length;
         this.planes = planes;
+        this.window = Objects.requireNonNull(window, "window");
         this.tiles = immutableMap(tiles);
         this.terrainMeshes = immutableMap(terrainMeshes);
         this.terrainMaterials = immutableMap(terrainMaterials);
@@ -80,6 +85,17 @@ public final class EditorSceneSnapshot {
     public static EditorSceneSnapshot from(RenderScene scene) {
         Objects.requireNonNull(scene, "scene");
         var document = scene.document();
+        return from(scene, new WorldWindow(0, 0, document.width(), document.length()));
+    }
+
+    /** Copies a scene while preserving its absolute placement in the OSRS world. */
+    public static EditorSceneSnapshot from(RenderScene scene, WorldWindow window) {
+        Objects.requireNonNull(scene, "scene");
+        Objects.requireNonNull(window, "window");
+        var document = scene.document();
+        if (document.width() != window.width() || document.length() != window.length()) {
+            throw new IllegalArgumentException("Scene/window dimensions differ");
+        }
         Map<TileCoordinate, TileSnapshot> tiles = new LinkedHashMap<>();
         for (int plane = 0; plane < document.planes(); plane++) {
             for (int x = 0; x < document.width(); x++) {
@@ -126,7 +142,7 @@ public final class EditorSceneSnapshot {
                 }
             }
         }
-        return new EditorSceneSnapshot(document.width(), document.length(), document.planes(),
+        return new EditorSceneSnapshot(document.width(), document.length(), document.planes(), window,
                 tiles, scene.terrainMeshes(), scene.terrainMaterials(), scene.terrainAppearances(),
                 scene.terrainLighting(), scene.lightingProfile(),
                 scene.collision(), projections, scene.objects(), scene.renderObjects(), scene.bridges());
@@ -135,6 +151,11 @@ public final class EditorSceneSnapshot {
     public int width() { return width; }
     public int length() { return length; }
     public int planes() { return planes; }
+    public WorldWindow window() { return window; }
+
+    public WorldTile worldTile(TileCoordinate local) {
+        return window.toWorld(LocalTile.from(Objects.requireNonNull(local, "local")));
+    }
 
     public boolean contains(TileCoordinate coordinate) {
         return coordinate != null && tiles.containsKey(coordinate);

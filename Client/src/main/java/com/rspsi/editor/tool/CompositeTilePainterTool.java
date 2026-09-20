@@ -14,9 +14,10 @@ import com.rspsi.editor.brush.builtin.SquareBrush;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
-import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.render.OverlayDraw;
 import com.rspsi.editor.terrain.TerrainVertexLattice;
 import com.rspsi.editor.tool.state.TilePainterState;
@@ -38,10 +39,10 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
     private EditorBrush brush;
 
     private ToolContext context;
-    private final Set<TileCoordinate> visited = new LinkedHashSet<>();
-    private final Set<TileCoordinate> targetLocals = new LinkedHashSet<>();
+    private final Set<WorldTile> visited = new LinkedHashSet<>();
+    private final Set<LocalTile> targetLocals = new LinkedHashSet<>();
     private BrushMask lastMask;
-    private TileCoordinate lastCenter;
+    private WorldTile lastCenter;
 
     public CompositeTilePainterTool() {
         this(new TilePainterState(), new BrushEngine());
@@ -160,7 +161,8 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
     @Override
     public void pointerUp(PointerEvent event) {
         if (context != null && !targetLocals.isEmpty() && context.session().canEdit()) {
-            List<EditorCommand> commands = buildCommands(context.session(), targetLocals);
+            List<EditorCommand> commands = buildCommands(context.session(),
+                    targetLocals.stream().map(LocalTile::coordinate).toList());
             if (!commands.isEmpty()) {
                 context.session().execute(new CompositeEditCommand(
                         "Paint composite tiles (" + targetLocals.size() + " targets)", commands));
@@ -210,8 +212,9 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
         if (coordinates == null || coordinates.isEmpty() || session == null || !session.canEdit()) return;
         Set<TileCoordinate> locals = new LinkedHashSet<>();
         for (TileCoordinate coordinate : coordinates) {
-            TileCoordinate local = toLocal(coordinate, session.world());
-            if (local != null) locals.add(local);
+            if (coordinate == null) continue;
+            LocalTile local = LocalTile.from(coordinate);
+            if (session.world().contains(local)) locals.add(local.coordinate());
         }
         List<EditorCommand> commands = buildCommands(session, locals);
         if (!commands.isEmpty()) {
@@ -222,12 +225,13 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
 
     private void sample(PointerEvent event) {
         context.viewport().tileAt(event.x(), event.y()).ifPresent(center -> {
-            List<TileCoordinate> centers = lastCenter == null
+            List<WorldTile> centers = lastCenter == null
                     ? List.of(center)
                     : brushEngine.interpolateStroke(lastCenter, center, 1.0);
-            for (TileCoordinate stampCenter : centers) {
+            for (WorldTile stampCenter : centers) {
                 BrushMask mask = brushEngine.sample(
-                        brush, state.brushRadius(), stampCenter, context.session().world());
+                        brush, state.brushRadius(), stampCenter,
+                        context.session().world(), context.session().window());
                 lastMask = mask;
                 for (var sample : mask.samples()) {
                     visited.add(sample.absolute());
@@ -317,18 +321,6 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
                 && first.overlayId() == second.overlayId()
                 && first.overlayShape() == second.overlayShape()
                 && first.overlayRotation() == second.overlayRotation();
-    }
-
-    private static TileCoordinate toLocal(TileCoordinate coordinate, WorldDocument world) {
-        if (coordinate == null) return null;
-        if (world.contains(coordinate)) return coordinate;
-        if (coordinate.x() < 0 || coordinate.y() < 0 || coordinate.plane() < 0) return null;
-        WorldTileAddress address = WorldTileAddress.of(coordinate.x(), coordinate.y(), coordinate.plane());
-        int localX = address.regionLocalX();
-        int localY = address.regionLocalY();
-        return world.contains(coordinate.plane(), localX, localY)
-                ? new TileCoordinate(coordinate.plane(), localX, localY)
-                : null;
     }
 
     private void clearStroke() {

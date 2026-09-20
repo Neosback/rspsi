@@ -3,7 +3,7 @@ package com.rspsi.editor.tool;
 import com.rspsi.editor.PlaceObjectCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.render.OverlayDraw;
 
@@ -28,20 +28,17 @@ public final class PlaceObjectTool implements EditorTool {
     @Override public String id() { return "place-object"; }
     @Override public void activate(ToolContext context) { this.context = context; }
     @Override public void deactivate() { context = null; }
+
     @Override public void pointerDown(PointerEvent event) {
         if (context == null || event.button() != PointerButton.PRIMARY) return;
-        var world = context.session().world();
-        context.viewport().tileAt(event.x(), event.y()).ifPresent(tile -> {
-            // Viewport picks are absolute world coordinates; WorldObject/WorldDocument are
-            // region-local, matching how objects already loaded from the cache are stored.
-            int localX = Math.floorMod(tile.x(), Math.max(1, world.width()));
-            int localY = Math.floorMod(tile.y(), Math.max(1, world.length()));
+        context.localTileAt(event.x(), event.y()).ifPresent(local -> {
             if (context.session().canEdit()) {
                 context.session().execute(new PlaceObjectCommand(
-                        new WorldObject(id, type, rotation, tile.plane(), localX, localY)));
+                        new WorldObject(id, type, rotation, local.plane(), local.x(), local.y())));
             }
         });
     }
+
     @Override public void pointerDrag(PointerEvent event) { }
     @Override public void pointerUp(PointerEvent event) { }
     @Override public ToolInspector inspector() {

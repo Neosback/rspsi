@@ -6,6 +6,7 @@ import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.integration.npc.NpcSpawn;
 import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.render.PickResult;
@@ -101,7 +102,14 @@ public final class OutlinerPanel implements StudioPanel {
 
     private void renderOutlinerServerContent(WorldDocument world, int plane, StudioPanelContext context) {
         if (context.spawns() == null) return;
-        List<NpcSpawn> planeSpawns = context.spawns().spawns(plane, 0, 0, world.width() * 64, world.length() * 64);
+        EditorSession session = context.session();
+        if (session == null) return;
+        int minX = session.window().originX();
+        int minY = session.window().originY();
+        int maxX = minX + world.width() - 1;
+        int maxY = minY + world.length() - 1;
+        List<NpcSpawn> planeSpawns = context.spawns().spawns(
+                plane, minX, minY, maxX, maxY);
         if (planeSpawns.isEmpty()) return;
         String title = "Server NPC Spawns (" + planeSpawns.size() + ")##p" + plane + "-server-npcs";
         if (ImGui.treeNode(title)) {
@@ -112,9 +120,8 @@ public final class OutlinerPanel implements StudioPanel {
                         spawn.symbolicName(), spawn.id(), plane, i);
                 if (ImGui.selectable(label)) {
                     if (context.viewport() != null) {
-                        float cx = (spawn.coordinate().x() & 63) * 128.0f + 64.0f;
-                        float cz = (spawn.coordinate().y() & 63) * 128.0f + 64.0f;
-                        context.viewport().navigation().frameSelection(cx, 0.0f, cz);
+                        context.viewport().navigationService().synchronizeFromCamera(plane);
+                        context.viewport().navigationService().jumpTo(spawn.coordinate());
                     }
                 }
             }
@@ -152,7 +159,8 @@ public final class OutlinerPanel implements StudioPanel {
                 if (ImGui.selectable(itemLabel)) {
                     if (context.viewport() != null) {
                         context.viewport().setSelection(new PickResult(
-                                new TileCoordinate(plane, obj.x(), obj.y()),
+                                context.session().coordinates().toWorld(
+                                        new LocalTile(plane, obj.x(), obj.y())),
                                 plane, obj.id(), 0.0f));
                     }
                 }

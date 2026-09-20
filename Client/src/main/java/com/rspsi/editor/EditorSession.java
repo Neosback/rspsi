@@ -3,6 +3,8 @@ package com.rspsi.editor;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldModel;
 import com.rspsi.editor.model.DirtyRegion;
+import com.rspsi.editor.model.DocumentCoordinates;
+import com.rspsi.editor.model.WorldWindow;
 
 import java.util.List;
 import java.util.Objects;
@@ -14,6 +16,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /** Owns editor state without requiring JavaFX or a renderer. */
 public final class EditorSession {
     private final WorldDocument world;
+    private final WorldWindow window;
+    private final DocumentCoordinates coordinates;
     private final SessionSaveHandler saveHandler;
     private final boolean editable;
     private final SelectionModel selection = new SelectionModel();
@@ -24,27 +28,55 @@ public final class EditorSession {
     private int savedHistoryPosition;
 
     public EditorSession(WorldDocument world) {
-        this(world, null, true);
+        this(world, new WorldWindow(0, 0, world.width(), world.length()), null, true);
+    }
+
+    public EditorSession(WorldDocument world, WorldWindow window) {
+        this(world, window, null, true);
     }
 
     /** Creates a session with an optional neutral persistence callback. */
     public EditorSession(WorldDocument world, SessionSaveHandler saveHandler) {
-        this(world, saveHandler, true);
+        this(world, new WorldWindow(0, 0, world.width(), world.length()), saveHandler, true);
     }
 
-    private EditorSession(WorldDocument world, SessionSaveHandler saveHandler, boolean editable) {
+    /** Creates a region/window-aware session with an optional persistence callback. */
+    public EditorSession(WorldDocument world, WorldWindow window, SessionSaveHandler saveHandler) {
+        this(world, window, saveHandler, true);
+    }
+
+    private EditorSession(WorldDocument world, WorldWindow window,
+                          SessionSaveHandler saveHandler, boolean editable) {
         this.world = Objects.requireNonNull(world, "world");
+        this.window = Objects.requireNonNull(window, "window");
+        this.coordinates = new DocumentCoordinates(this.world, this.window);
         this.saveHandler = saveHandler;
         this.editable = editable;
     }
 
     /** Creates an inspect-only session that rejects all document mutations. */
     public static EditorSession readOnly(WorldDocument world) {
-        return new EditorSession(world, null, false);
+        return new EditorSession(world,
+                new WorldWindow(0, 0, world.width(), world.length()), null, false);
+    }
+
+    /** Creates an inspect-only region/window-aware session. */
+    public static EditorSession readOnly(WorldDocument world, WorldWindow window) {
+        return new EditorSession(world, window, null, false);
     }
 
     public WorldDocument world() {
         return world;
+    }
+
+    /** Absolute placement of this document in the OSRS world. */
+    public WorldWindow window() {
+        return window;
+    }
+
+    /** Canonical world/local conversion service for this session. */
+    public DocumentCoordinates coordinates() {
+        return coordinates;
     }
 
     /** @deprecated use {@link #world()}. */

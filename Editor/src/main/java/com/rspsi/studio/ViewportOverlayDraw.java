@@ -1,6 +1,6 @@
 package com.rspsi.studio;
 
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.OverlayDraw;
 import com.rspsi.editor.render.SceneCameraProjection;
@@ -94,12 +94,12 @@ public final class ViewportOverlayDraw implements OverlayDraw {
     }
 
     @Override
-    public void tileOutline(TileCoordinate tile) {
+    public void tileOutline(WorldTile tile) {
         tileOutline(tile, 0x40E0D0FF); // Vibrant turquoise/cyan
     }
 
     @Override
-    public void tileOutline(TileCoordinate tile, int colorRgba) {
+    public void tileOutline(WorldTile tile, int colorRgba) {
         if (tile == null) return;
         float x0 = tile.x() * 128.0f;
         float x1 = (tile.x() + 1) * 128.0f;
@@ -119,7 +119,7 @@ public final class ViewportOverlayDraw implements OverlayDraw {
     }
 
     @Override
-    public void tileFilled(TileCoordinate tile, int colorRgba) {
+    public void tileFilled(WorldTile tile, int colorRgba) {
         if (tile == null) return;
         float x0 = tile.x() * 128.0f;
         float x1 = (tile.x() + 1) * 128.0f;

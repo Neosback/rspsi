@@ -5,6 +5,7 @@ import com.rspsi.editor.integration.IntegrationOptions;
 import com.rspsi.editor.integration.IntegrationProbe;
 import com.rspsi.editor.integration.IntegrationSession;
 import com.rspsi.editor.integration.ServerIntegrationProvider;
+import com.rspsi.editor.integration.content.ContentCapability;
 import com.rspsi.editor.integration.npc.NpcSpawnProvider;
 import com.rspsi.editor.integration.reference.ReferenceProvider;
 import com.rspsi.editor.symbols.SymbolProvider;
@@ -12,71 +13,115 @@ import com.rspsi.editor.symbols.SymbolProvider;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumSet;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
 /**
- * Concrete ServerIntegrationProvider connecting OpenRune Studio to an OpenRune Server repository.
+ * OpenRune-Server integration backed exclusively by declarative artifacts.
+ *
+ * <p>Studio never parses Kotlin source or executes server classes. Current
+ * stock OpenRune data is discovered from .data/raw-cache, gamevals and
+ * content-manifest.toml sidecars.</p>
  */
 public final class OpenRuneServerProvider implements ServerIntegrationProvider {
 
-    @Override
-    public String id() {
-        return "server.openrune";
-    }
-
-    @Override
-    public String name() {
-        return "OpenRune Server";
-    }
+    @Override public String id() { return "server.openrune"; }
+    @Override public String name() { return "OpenRune Server"; }
 
     @Override
     public String description() {
-        return "Connects to an OpenRune server project to load GameVals, RSCM mappings, content scripts, and NPC spawns.";
+        return "Connects to OpenRune declarative data: manifests, GameVals, NPC spawns, areas and compatible content adapters.";
     }
 
     @Override
     public boolean canOpen(Path project) {
-        if (project == null || !Files.isDirectory(project)) return false;
-        return Files.exists(project.resolve("gamevals.toml"))
-                || Files.isDirectory(project.resolve(".data").resolve("gamevals"))
-                || (Files.exists(project.resolve("settings.gradle.kts")) && Files.isDirectory(project.resolve("content")));
+        return project != null && Files.isDirectory(project)
+                && new OpenRuneProjectLayoutResolver().resolve(project).isPresent();
     }
 
     @Override
     public IntegrationProbe probe(Path project) {
         Objects.requireNonNull(project, "project");
-        if (!canOpen(project)) {
-            return IntegrationProbe.invalid(project, id());
-        }
+        if (!canOpen(project)) return IntegrationProbe.invalid(project, id());
 
+        OpenRuneContentCatalog catalog = new OpenRuneContentCatalog(project);
         Set<IntegrationCapability> capabilities = EnumSet.noneOf(IntegrationCapability.class);
-        Map<String, String> details = new HashMap<>();
+        Map<String, String> details = new LinkedHashMap<>();
+        Map<String, String> schemas = new LinkedHashMap<>();
 
-        if (Files.exists(project.resolve("gamevals.toml")) || Files.isDirectory(project.resolve(".data").resolve("gamevals"))) {
+        var discovery = catalog.discovery();
+        var known = catalog.layout().knownRoots();
+
+        if (known.containsKey(ContentCapability.GAMEVALS)) {
             capabilities.add(IntegrationCapability.SYMBOLS);
             capabilities.add(IntegrationCapability.GAMEVALS);
-            details.put("Gamevals", "Found RSCM / Gameval definition files");
+            details.put("GameVals", "Declarative GameVal/RSCM data found");
+            schemas.put("gamevals", "unversioned");
         }
-
-        if (Files.isDirectory(project.resolve("content"))) {
-            capabilities.add(IntegrationCapability.CONTENT_INDEX);
-            capabilities.add(IntegrationCapability.LOC_REFERENCES);
+        if (known.containsKey(ContentCapability.NPC_SPAWNS)) {
             capabilities.add(IntegrationCapability.NPC_SPAWNS);
+            details.put("NPC spawns", "OpenRune .data/raw-cache/map/npcs TOML found");
+            schemas.put("spawns", "openrune-raw/1");
+        }
+        if (known.containsKey(ContentCapability.AREAS)) {
+            capabilities.add(IntegrationCapability.AREAS);
+            details.put("Areas", "OpenRune .data/raw-cache/map/area TOML found");
+            schemas.put("areas", "openrune-raw/1");
+        }
+
+        if (!discovery.manifests().isEmpty()) {
+            capabilities.add(IntegrationCapability.CONTENT_MANIFESTS);
+            for (var manifest : discovery.manifests()) {
+                manifest.schemaVersions().forEach(schemas::putIfAbsent);
+                for (ContentCapability capability : manifest.capabilities()) {
+                    addCapability(capabilities, capability);
+                }
+            }
+            details.put("Manifests", discovery.manifests().size()
+                    + " content-manifest.toml sidecar(s)");
+        }
+
+        if (!discovery.artifacts().isEmpty()) {
+            capabilities.add(IntegrationCapability.CONTENT_INDEX);
+            capabilities.add(IntegrationCapability.CONTENT_DIAGNOSTICS);
+            capabilities.add(IntegrationCapability.LOC_REFERENCES);
             capabilities.add(IntegrationCapability.MAP_REFERENCES);
-            capabilities.add(IntegrationCapability.SOURCE_NAVIGATION);
-            details.put("Content", "Found Kotlin content modules in content/");
+            details.put("Declarative content", discovery.artifacts().size() + " TOML/JSON artifact(s)");
+        }
+        if (!discovery.unrecognized().isEmpty()) {
+            details.put("Unrecognized content", discovery.unrecognized().size()
+                    + " declarative file(s) available in the generic inspector");
+        }
+        if (!discovery.diagnostics().entries().isEmpty()) {
+            details.put("Diagnostics", discovery.diagnostics().entries().size()
+                    + " discovery/parse diagnostic(s)");
         }
 
-        if (Files.exists(project.resolve("build.gradle.kts")) || Files.exists(project.resolve("settings.gradle.kts"))) {
+        if (Files.exists(project.resolve("build.gradle.kts"))
+                || Files.exists(project.resolve("settings.gradle.kts"))) {
             capabilities.add(IntegrationCapability.CACHE_BUILD);
-            details.put("Build Tooling", "Gradle Kotlin DSL project structure detected");
+            details.put("Build tooling", "Gradle Kotlin DSL project detected; source is not parsed as content");
         }
 
-        return new IntegrationProbe(project, id(), name(), true, capabilities, details);
+        return new IntegrationProbe(project, id(), name(), true,
+                capabilities, schemas, details);
+    }
+
+    private static void addCapability(Set<IntegrationCapability> target,
+                                      ContentCapability capability) {
+        switch (capability) {
+            case NPC_SPAWNS -> target.add(IntegrationCapability.NPC_SPAWNS);
+            case AREAS -> target.add(IntegrationCapability.AREAS);
+            case DROP_TABLES -> target.add(IntegrationCapability.DROP_TABLES);
+            case SKILL_NODES -> target.add(IntegrationCapability.SKILL_NODES);
+            case GAMEVALS -> target.add(IntegrationCapability.GAMEVALS);
+            case SYMBOLS -> target.add(IntegrationCapability.SYMBOLS);
+            case COLLISION -> target.add(IntegrationCapability.SERVER_COLLISION);
+            default -> { }
+        }
     }
 
     @Override
@@ -86,10 +131,12 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
 
         OpenRuneSymbolProvider symbolProvider = options.isEnabled(IntegrationCapability.SYMBOLS)
                 ? new OpenRuneSymbolProvider(project) : null;
-        OpenRuneReferenceProvider referenceProvider = options.isEnabled(IntegrationCapability.CONTENT_INDEX)
-                ? new OpenRuneReferenceProvider(project) : null;
-        OpenRuneNpcSpawnProvider npcSpawnProvider = options.isEnabled(IntegrationCapability.NPC_SPAWNS)
-                ? new OpenRuneNpcSpawnProvider(project) : null;
+        OpenRuneReferenceProvider referenceProvider =
+                options.isEnabled(IntegrationCapability.CONTENT_INDEX)
+                        ? new OpenRuneReferenceProvider(project) : null;
+        OpenRuneNpcSpawnProvider npcSpawnProvider =
+                options.isEnabled(IntegrationCapability.NPC_SPAWNS)
+                        ? new OpenRuneNpcSpawnProvider(project) : null;
 
         return new OpenRuneSession(this, project, options.enabledCapabilities(),
                 symbolProvider, referenceProvider, npcSpawnProvider);
@@ -122,6 +169,6 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
         @Override public Optional<SymbolProvider> symbolProvider() { return Optional.ofNullable(symbolProvider); }
         @Override public Optional<ReferenceProvider> referenceProvider() { return Optional.ofNullable(referenceProvider); }
         @Override public Optional<NpcSpawnProvider> npcSpawnProvider() { return Optional.ofNullable(npcSpawnProvider); }
-        @Override public void close() {}
+        @Override public void close() { }
     }
 }

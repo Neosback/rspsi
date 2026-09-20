@@ -1,10 +1,10 @@
 # OpenRune Studio plugin and feature architecture
 
-Status: adopted as the direction for first-party features; the JavaFX shell
-now owns plugin lifecycle and mounts tool contexts, inspectors, asset
-providers, status values, plugin commands, and a command palette. The
-frontend-neutral Dear ImGui projection/input seam is implemented; native
-ImGui context and draw-list integration remains frontend acceptance work.
+Status: active architecture for first-party and third-party features. Studio
+owns plugin lifecycle, contribution cleanup, isolated external JAR loading,
+manifest/dependency resolution, repository feeds, verified installs, typed
+inter-plugin extensions, and frontend-neutral declarative HUDs. The Dear ImGui
+frontend projects those neutral contributions into the native Studio shell.
 
 This document records the architecture decision prompted by the feature/plugin
 proposal: a feature should own its behavior and UI contributions together,
@@ -271,6 +271,41 @@ expose the mutable `WorldDocument` held by the renderer-facing `RenderScene`.
 Both JavaFX and Dear ImGui can therefore render the same semantic scene without
 giving a plugin a mutation back door.
 
+## External ecosystem contract
+
+The managed plugin path is intentionally small and stable:
+
+```text
+repository feed
+  -> ExternalPluginManifest
+  -> semantic dependency resolution
+  -> SHA-256 verified artifact
+  -> IsolatedPluginClassLoader
+  -> EditorPluginHost
+  -> PluginApi / PluginServices
+  -> disposable contributions and resources
+```
+
+Third-party tools should prefer `PluginApi` and `PluginServices`. The shared
+service facade covers terrain/object/selection/brush/tool/command/UI operations,
+typed editor events, declarative viewport HUDs, decoded cache-data discovery,
+region-corpus feature extraction, and a generic typed extension registry.
+`EditorExtensionRegistry` is the escape hatch for new families such as layer
+codecs, map-piece libraries, WFC solvers, inpainting engines, exporters, path
+policies, placement policies, and world-map writers. A new system therefore
+does not require a new frontend hook simply to become pluggable.
+
+`DecodedDataCatalog` separately records two facts: what FileStore/cache
+decoders report as available, and which families currently have a neutral typed
+provider. That distinction lets analytics/WFC tooling discover broad cache
+coverage without leaking backend objects into plugins or pretending every
+decoded family already has a stable editor contract.
+
+Declarative HUD contributions use `OverlayComponent` trees and
+`OverlayContribution` metadata. Plugins choose content, position, layer, and
+priority; Studio owns fonts, colors, spacing, collision-free placement, and the
+Dear ImGui projection. Direct ImGui imports remain outside the plugin API.
+
 ## Packaging and loading policy
 
 Keep vertical feature packages inside a small number of meaningful Gradle
@@ -290,10 +325,23 @@ The current repository maps these responsibilities across `Client`, `Editor`,
 and `Plugins`; the package boundary is the immediate concern, not a Gradle
 rename. Built-in features should use the same plugin API as external plugins.
 
-External JAR discovery, classloader isolation, enable/disable, and hot reload
-remain later runtime work. When that becomes a real requirement, compare
-generalizing the current loader with PF4J. Do not add PF4J merely to validate
-the first-party architecture.
+External JAR discovery is now a managed runtime rather than a raw ServiceLoader
+directory scan. A managed JAR carries `META-INF/rspsi-plugin.json`; the
+runtime validates semantic versions and plugin-API compatibility, resolves
+required/optional dependencies, selects the newest installed release of each
+plugin, creates one isolated classloader per artifact, and unloads those
+classloaders with the host. Manifest-less JARs remain a compatibility path and
+do not participate in dependency/update resolution.
+
+Repository feeds are versioned JSON indices. Downloads are staged, SHA-256
+verified, and atomically installed before Studio rescans the plugin directory.
+The Plugin Manager can add/remove repository URLs, refresh feeds, install or
+update releases, and rescan JARs without reloading the active map document.
+
+Classloader isolation is an ownership and dependency boundary, not a security
+sandbox. Manifest permissions are currently metadata surfaced in Plugin
+Manager and must not be described as JVM-level containment until service-level
+permission enforcement is implemented.
 
 ## What is adopted now versus deferred
 
@@ -310,9 +358,9 @@ Adopt now:
 
 Defer until the foundation and core map workflow are accepted:
 
-- public plugin distribution and a Plugin Hub;
-- Lua/CS2 scripting and plugin permissions;
-- sophisticated third-party hot reload;
+- a curated/signature-backed public Plugin Hub beyond generic repository feeds;
+- Lua/CS2 scripting and service-level permission enforcement;
+- class redefinition/live code swap inside an already-instantiated plugin;
 - a full custom-editor workspace API; and
 - a Dear ImGui migration or renderer replacement.
 

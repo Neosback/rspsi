@@ -6,6 +6,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.tool.DuplicateObjectTool;
 import com.rspsi.editor.tool.DuplicateSelectionTool;
 import com.rspsi.editor.tool.EditorToolController;
@@ -110,8 +111,8 @@ class CoreObjectTransformToolsTest {
         put(world, object);
         EditorSession session = new EditorSession(world);
         Viewport viewport = new Viewport() {
-            @Override public Optional<TileCoordinate> tileAt(float x, float y) {
-                return Optional.of(new TileCoordinate(0, 1, 1));
+            @Override public Optional<WorldTile> tileAt(float x, float y) {
+                return Optional.of(new WorldTile(0, 1, 1));
             }
 
             @Override public Optional<WorldObject> objectAt(float x, float y) {
@@ -209,7 +210,7 @@ class CoreObjectTransformToolsTest {
     }
     private static ToolContext context(EditorSession session) {
         return new ToolContext(session, new EmptyAssets(),
-                (x, y) -> Optional.of(new TileCoordinate(0, (int) x, (int) y)));
+                (x, y) -> Optional.of(new WorldTile(0, (int) x, (int) y)));
     }
     private static PointerEvent pointer(float x, float y) {
         return new PointerEvent(x, y, PointerButton.PRIMARY, false, false, false);

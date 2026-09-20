@@ -118,6 +118,7 @@ public final class StudioApplication implements AutoCloseable {
         String initialCache = System.getenv("RSPSI_OSRS_CACHE");
         if (initialCache == null || initialCache.isBlank()) initialCache = preferences.recentCache();
         dashboard = new DashboardView(initialCache);
+        mapEditor.setPluginEcosystem(pluginEcosystem, this::rescanPlugins);
         if (initialCache != null && !initialCache.isBlank()
                 && Files.isDirectory(Path.of(initialCache))) {
             loadCache(Path.of(initialCache));
@@ -251,7 +252,7 @@ public final class StudioApplication implements AutoCloseable {
         RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).build(region.document());
         EditorSession session = opened.region().session();
         if (!session.canEdit()) {
-            session = new EditorSession(region.document());
+            session = new EditorSession(region.document(), region.window());
         }
         return new LoadedMapScene(opened, session, renderScene, packet, plan, settingsRevision,
                 new com.rspsi.editor.render.CameraState(
@@ -346,7 +347,8 @@ public final class StudioApplication implements AutoCloseable {
                 .map(LoadedOsrsCacheSession::bundle)
                 .map(com.rspsi.cache.workspace.OsrsBundle::assets)
                 .orElse(EmptyAssetRepository.INSTANCE);
-        EditorSceneAccess sceneAccess = () -> EditorSceneSnapshot.from(scene.renderScene());
+        EditorSceneAccess sceneAccess = () -> EditorSceneSnapshot.from(
+                scene.renderScene(), scene.opened().worldRegion().window());
         CacheDecoderSummary decodedSummary = cacheSessions.current()
                 .map(LoadedOsrsCacheSession::decoderSummary)
                 .orElse(CacheDecoderSummary.empty());
@@ -365,6 +367,13 @@ public final class StudioApplication implements AutoCloseable {
                 },
                 discovery);
         pluginLifecycle = next;
+    }
+
+    /** Re-discovers plugin JARs and rebuilds the active host without reloading the scene. */
+    private void rescanPlugins() {
+        if (loadedScene == null) return;
+        closePluginLifecycle();
+        initializePlugins(loadedScene);
     }
 
     /** Focuses the Dashboard tab. It is always open, so this never tears anything down. */

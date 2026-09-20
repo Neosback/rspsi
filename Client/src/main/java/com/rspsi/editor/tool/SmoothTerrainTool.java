@@ -6,6 +6,8 @@ import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.render.OverlayDraw;
 
@@ -19,7 +21,7 @@ public final class SmoothTerrainTool implements EditorTool {
     private int strengthPercent;
     private ToolContext context;
     private final List<EditorCommand> stroke = new ArrayList<>();
-    private final Set<TileCoordinate> visited = new LinkedHashSet<>();
+    private final Set<WorldTile> visited = new LinkedHashSet<>();
 
     public SmoothTerrainTool(int strengthPercent) { setStrengthPercent(strengthPercent); }
     public int strengthPercent() { return strengthPercent; }
@@ -55,10 +57,10 @@ public final class SmoothTerrainTool implements EditorTool {
             // at the real world position); WorldDocument needs the region-local equivalent.
             if (!visited.add(absolute)) return;
             var world = context.session().world();
-            int localX = Math.floorMod(absolute.x(), Math.max(1, world.width()));
-            int localY = Math.floorMod(absolute.y(), Math.max(1, world.length()));
-            TileCoordinate coordinate = new TileCoordinate(absolute.plane(), localX, localY);
-            TileSnapshot before = world.tile(coordinate).snapshot();
+            LocalTile local = context.local(absolute).orElse(null);
+            if (local == null) return;
+            TileCoordinate coordinate = local.coordinate();
+            TileSnapshot before = world.tile(local).snapshot();
             int[] smoothed = {
                     smoothCorner(coordinate, Corner.SOUTH_WEST, before.southWestHeight()),
                     smoothCorner(coordinate, Corner.SOUTH_EAST, before.southEastHeight()),
@@ -66,7 +68,7 @@ public final class SmoothTerrainTool implements EditorTool {
                     smoothCorner(coordinate, Corner.NORTH_WEST, before.northWestHeight())};
             TileSnapshot after = new TileSnapshot(smoothed[0], smoothed[1], smoothed[2], smoothed[3],
                     before.underlayId(), before.overlayId(), before.overlayShape(), before.overlayRotation(),
-                    before.flags(), before.objects());
+                    before.flags(), before.objects(), before.heightSource());
             if (!before.equals(after)) stroke.add(new ChangeHeightCommand(coordinate, before, after,
                     "Smooth terrain at " + coordinate));
         });

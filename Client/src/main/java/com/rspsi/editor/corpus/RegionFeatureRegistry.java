@@ -27,6 +27,10 @@ public final class RegionFeatureRegistry {
         return List.copyOf(extractors.values());
     }
 
+    public synchronized void clear() {
+        extractors.clear();
+    }
+
     public synchronized RegionFingerprint fingerprint(RegionFeatureContext context) {
         Map<String, FeatureBlock> blocks = new LinkedHashMap<>();
         for (RegionFeatureExtractor extractor : extractors.values()) {

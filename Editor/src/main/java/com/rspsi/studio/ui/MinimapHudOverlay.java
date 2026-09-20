@@ -107,8 +107,12 @@ public final class MinimapHudOverlay {
             texId = textureService.textureForPlane(world, activePlane, context.cache().bundle().definitions());
         }
 
-        float camTileX = viewport.navigation().camera().x() / 128.0f;
-        float camTileZ = viewport.navigation().camera().z() / 128.0f;
+        // Camera coordinates are absolute world-space. The minimap texture is
+        // document-local, so subtract the session WorldWindow exactly once.
+        float camTileX = viewport.navigation().camera().x() / 128.0f
+                - session.window().originX();
+        float camTileZ = viewport.navigation().camera().z() / 128.0f
+                - session.window().originY();
         float yaw = viewport.navigation().camera().yaw();
 
         float cosY = (float) Math.cos(-yaw);

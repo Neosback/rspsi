@@ -158,7 +158,7 @@ public final class DecodedDataCatalog {
         List<Integer> availableIds = List.copyOf(ids.get());
         families.put(id, new DecodedDataFamily(id, label, group,
                 availableIds.isEmpty() ? -1 : availableIds.size(), true));
-        providers.put(id, new DecodedDataProvider<>() {
+        providers.put(id, new DecodedDataProvider<T>() {
             @Override public String familyId() { return id; }
             @Override public Class<T> valueType() { return type; }
             @Override public List<Integer> ids() { return List.copyOf(ids.get()); }

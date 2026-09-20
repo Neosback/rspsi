@@ -1,7 +1,7 @@
 package com.rspsi.studio.plugin.builtin;
 
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.studio.NativeSceneViewport;
 import com.rspsi.studio.plugin.StudioPlugin;
@@ -77,10 +77,13 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         if (lastPick.isEmpty()) return;
 
         PickResult hit = lastPick.get();
-        TileCoordinate coord = hit.tile();
+        WorldTile coord = hit.tile();
         int height = 0;
-        if (context.session() != null && context.session().world().contains(coord)) {
-            height = context.session().world().tile(coord).snapshot().southWestHeight();
+        if (context.session() != null) {
+            var local = context.session().coordinates().toLocal(coord).orElse(null);
+            if (local != null) {
+                height = context.session().world().tile(local).snapshot().southWestHeight();
+            }
         }
 
         StringBuilder sb = new StringBuilder();

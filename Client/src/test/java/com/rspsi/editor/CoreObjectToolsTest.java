@@ -6,6 +6,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.tool.DeleteObjectTool;
 import com.rspsi.editor.tool.PlaceObjectTool;
 import com.rspsi.editor.tool.RotateObjectTool;
@@ -26,7 +27,7 @@ class CoreObjectToolsTest {
         EditorSession session = new EditorSession(world);
         EditorToolController controller = new EditorToolController();
         ToolContext context = new ToolContext(session, new EmptyAssets(),
-                (x, y) -> Optional.of(new TileCoordinate(0, (int) x, (int) y)));
+                (x, y) -> Optional.of(new WorldTile(0, (int) x, (int) y)));
         PointerEvent click = new PointerEvent(1, 1, PointerButton.PRIMARY, false, false, false);
 
         controller.activate(new PlaceObjectTool(100, 10, 0), context);
@@ -50,8 +51,8 @@ class CoreObjectToolsTest {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(first, second)));
         EditorSession session = new EditorSession(world);
         Viewport viewport = new Viewport() {
-            @Override public Optional<TileCoordinate> tileAt(float x, float y) {
-                return Optional.of(new TileCoordinate(0, 1, 1));
+            @Override public Optional<WorldTile> tileAt(float x, float y) {
+                return Optional.of(new WorldTile(0, 1, 1));
             }
 
             @Override public Optional<WorldObject> objectAt(float x, float y) {

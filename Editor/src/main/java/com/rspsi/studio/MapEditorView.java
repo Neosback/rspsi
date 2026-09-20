@@ -12,6 +12,7 @@ import com.rspsi.editor.integration.reference.ReferenceService;
 import com.rspsi.editor.plugin.EditorCommandRegistration;
 import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
 import com.rspsi.editor.plugin.EditorToolRegistration;
+import com.rspsi.editor.plugin.runtime.PluginEcosystemService;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.RenderConfigCompiler;
 import com.rspsi.editor.render.RenderSettingKeys;
@@ -58,6 +59,8 @@ import com.rspsi.editor.SetTerrainHeightCommand;
 import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.terrain.TerrainVertexLattice;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.settings.EditorSettingKeys;
@@ -91,7 +94,7 @@ public final class MapEditorView {
 
     private String activeToolId = "selection.single";
     private NativeSceneViewport viewport;
-    private TileCoordinate contextTile;
+    private WorldTile contextTile;
 
     private final EditorToolController toolController = new EditorToolController();
     private EditorInputRouter inputRouter;
@@ -143,6 +146,10 @@ public final class MapEditorView {
     private WorkspaceManager workspaces;
     private Runnable openMapEditor;
     private Consumer<WorkspaceManager.Workspace> closeWorkspace;
+
+    public void setPluginEcosystem(PluginEcosystemService ecosystem, Runnable rescanPlugins) {
+        pluginManagerWindow.setEcosystem(ecosystem, rescanPlugins);
+    }
 
     public void render(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
                        NativeSceneViewport viewport, String sceneStatus,
@@ -459,12 +466,14 @@ public final class MapEditorView {
                 float localY = ImGui.getIO().getMousePosY() - viewport.imageOriginY();
                 viewport.tileAt(localX, localY).ifPresent(coord -> {
                     EditorSession s = session(pluginLifecycle);
-                    if (s != null && s.world().contains(coord)) {
-                        int type = settings.snapshot().get(EditorSettingKeys.OBJECT_TYPE);
-                        int rot = settings.snapshot().get(EditorSettingKeys.OBJECT_ROTATION);
-                        WorldObject worldObj = new WorldObject(droppedId, type, rot, coord.plane(), coord.x(), coord.y());
-                        s.execute(new PlaceObjectCommand(worldObj, "Spawn Object #" + droppedId));
-                    }
+                    if (s == null) return;
+                    LocalTile local = s.coordinates().toLocal(coord).orElse(null);
+                    if (local == null) return;
+                    int type = settings.snapshot().get(EditorSettingKeys.OBJECT_TYPE);
+                    int rot = settings.snapshot().get(EditorSettingKeys.OBJECT_ROTATION);
+                    WorldObject worldObj = new WorldObject(
+                            droppedId, type, rot, local.plane(), local.x(), local.y());
+                    s.execute(new PlaceObjectCommand(worldObj, "Spawn Object #" + droppedId));
                 });
             }
             ImGui.endDragDropTarget();
@@ -504,20 +513,27 @@ public final class MapEditorView {
         ImGui.textColored(0xFF38BDF8, String.format("Tile (%d, %d, Pl %d)", contextTile.x(), contextTile.y(), contextTile.plane()));
         ImGui.separator();
 
+        LocalTile contextLocal = s.coordinates().toLocal(contextTile).orElse(null);
+        if (contextLocal == null) {
+            ImGui.textDisabled("Tile is outside the active document");
+            return;
+        }
+        TileCoordinate localCoordinate = contextLocal.coordinate();
+
         // 1. Selection Options
         if (ImGui.menuItem("Select Tile")) {
             s.selection().clear();
-            s.selection().select(contextTile);
+            s.selection().select(localCoordinate);
         }
         if (ImGui.menuItem("Add to Selection")) {
-            s.selection().select(contextTile);
+            s.selection().select(localCoordinate);
         }
         if (ImGui.menuItem("Clear Selection")) {
             s.selection().clear();
         }
 
         // 2. Objects on Tile
-        var tile = s.world().contains(contextTile) ? s.world().tile(contextTile) : null;
+        var tile = s.world().tile(contextLocal);
         TileSnapshot snap = tile != null ? tile.snapshot() : null;
         if (snap != null && !snap.objects().isEmpty()) {
             ImGui.separator();
@@ -552,8 +568,8 @@ public final class MapEditorView {
         ImGui.separator();
         ImGui.textDisabled("Painter:");
         if (ImGui.menuItem("Sample Tile (Eyedropper)")) {
-            if (TilePainterPalette.INSTANCE != null && s.world().contains(contextTile)) {
-                TilePainterPalette.INSTANCE.sampleTile(s, contextTile);
+            if (TilePainterPalette.INSTANCE != null) {
+                TilePainterPalette.INSTANCE.sampleTile(s, localCoordinate);
             }
         }
         if (ImGui.menuItem("Paint Tile with Active Brush")) {
@@ -564,7 +580,7 @@ public final class MapEditorView {
                         Set.of(com.rspsi.editor.brush.BrushCapability.SPATIAL_FOOTPRINT));
                 if (activeBrush != null) tool.setBrush(activeBrush);
                 tool.bindState(TilePainterPalette.INSTANCE.state());
-                tool.applyToCoordinates(Set.of(contextTile), s);
+                tool.applyToCoordinates(Set.of(localCoordinate), s);
             }
         }
 
@@ -575,13 +591,13 @@ public final class MapEditorView {
             if (ImGui.menuItem("Flatten Tile")) {
                 int avg = (snap.southWestHeight() + snap.southEastHeight()
                         + snap.northEastHeight() + snap.northWestHeight()) / 4;
-                applyQuickHeight(s, contextTile, avg, true);
+                applyQuickHeight(s, localCoordinate, avg, true);
             }
             if (ImGui.menuItem("Raise (+32)")) {
-                applyQuickHeight(s, contextTile, 32, false);
+                applyQuickHeight(s, localCoordinate, 32, false);
             }
             if (ImGui.menuItem("Lower (-32)")) {
-                applyQuickHeight(s, contextTile, -32, false);
+                applyQuickHeight(s, localCoordinate, -32, false);
             }
 
             // 5. Tile Flags
@@ -594,7 +610,7 @@ public final class MapEditorView {
                         snap.northEastHeight(), snap.northWestHeight(),
                         snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
                         nextFlags, snap.objects());
-                s.execute(new SetTileFlagsCommand(contextTile, snap, after, "Toggle blocked flag"));
+                s.execute(new SetTileFlagsCommand(localCoordinate, snap, after, "Toggle blocked flag"));
             }
             boolean bridge = (snap.flags() & 0x02) != 0;
             if (ImGui.menuItem((bridge ? "[x] " : "[ ] ") + "Bridge Tile (0x02)")) {
@@ -603,7 +619,7 @@ public final class MapEditorView {
                         snap.northEastHeight(), snap.northWestHeight(),
                         snap.underlayId(), snap.overlayId(), snap.overlayShape(), snap.overlayRotation(),
                         nextFlags, snap.objects());
-                s.execute(new SetTileFlagsCommand(contextTile, snap, after, "Toggle bridge flag"));
+                s.execute(new SetTileFlagsCommand(localCoordinate, snap, after, "Toggle bridge flag"));
             }
         }
     }
