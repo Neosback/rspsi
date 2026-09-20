@@ -12,14 +12,15 @@ import com.rspsi.editor.assets.EmptyAssetRepository;
 import com.rspsi.editor.plugin.EditorPlugin;
 import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
-import com.rspsi.editor.plugin.EditorPluginLoader;
 import com.rspsi.editor.plugin.EditorPluginStateStore;
 import com.rspsi.editor.plugin.EditorNotificationService;
 import com.rspsi.editor.plugin.EditorSceneAccess;
 import com.rspsi.editor.plugin.EditorSceneSnapshot;
 import com.rspsi.editor.plugin.EditorTaskService;
-import com.rspsi.editor.plugin.PluginDiscovery;
 import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
+import com.rspsi.editor.plugin.runtime.ExternalPluginRuntime;
+import com.rspsi.editor.plugin.runtime.ExternalPluginRuntimeSnapshot;
+import com.rspsi.editor.plugin.runtime.SemanticVersion;
 import com.rspsi.editor.render.GpuScenePacket;
 import com.rspsi.editor.render.GpuScenePacketBuilder;
 import com.rspsi.editor.render.GpuUploadPlan;
@@ -320,9 +321,23 @@ public final class StudioApplication implements AutoCloseable {
         // Without it, selecting the tool highlights fine but painting silently no-ops.
         candidates.add(new TilePainterToolPlugin());
         candidates.add(new OpenRuneServerPlugin());
-        PluginDiscovery discovery = EditorPluginLoader.discoverOwned(
-                Path.of("plugins"), Thread.currentThread().getContextClassLoader());
+        Map<String, SemanticVersion> hostPluginVersions = new java.util.LinkedHashMap<>();
+        for (EditorPlugin candidate : candidates) {
+            try {
+                hostPluginVersions.put(candidate.id(),
+                        SemanticVersion.parse(candidate.descriptor().version()));
+            } catch (RuntimeException ignored) {
+                hostPluginVersions.put(candidate.id(), new SemanticVersion(0, 0, 0, ""));
+            }
+        }
+        ExternalPluginRuntimeSnapshot discovery = new ExternalPluginRuntime().discover(
+                Path.of("plugins"), Thread.currentThread().getContextClassLoader(),
+                hostPluginVersions);
         candidates.addAll(discovery.plugins());
+        for (var failure : discovery.failures()) {
+            LOGGER.warn("External plugin {} was not loaded: {}",
+                    failure.jarPath(), failure.message(), failure.cause());
+        }
         EditorSession session = scene.session();
         AssetRepository assets = cacheSessions.current()
                 .map(LoadedOsrsCacheSession::bundle)
