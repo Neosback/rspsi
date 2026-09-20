@@ -137,8 +137,9 @@ public final class RenderSceneBuilder {
         Map<TileCoordinate, TerrainRenderPacket> packets = new LinkedHashMap<>(previous.terrainPackets());
         Set<TileCoordinate> dirtyTiles = changes.dirtyTiles();
         Set<com.rspsi.editor.render.compiler.InvalidationGraph.ZoneCoordinate> dirtyZones =
-                definitions == null ? Set.of() : InvalidationGraph.invalidate(
-                        dirtyTiles, InvalidationGraph.InvalidationCause.UNDERLAY_EDIT);
+                definitions == null ? Set.of() : InvalidationGraph.computeInvalidatedZones(
+                        dirtyTiles, InvalidationGraph.InvalidationCause.UNDERLAY_EDIT,
+                        document.width(), document.length());
         Map<TileCoordinate, CompiledTerrainTile> compiledTerrain = definitions == null
                 ? Map.of() : new TerrainSceneCompiler().compileZones(
                         document, definitions, lightingProfile, dirtyZones);
