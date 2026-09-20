@@ -32,6 +32,18 @@ public final class TerrainAppearanceBuilder {
         return result;
     }
 
+    /** Builds one authored tile appearance using only its radius-five neighborhood. */
+    public TerrainAppearance buildTile(WorldDocument document, DefinitionProvider definitions,
+                                       int plane, int x, int y) {
+        Objects.requireNonNull(document, "document");
+        Objects.requireNonNull(definitions, "definitions");
+        if (!document.contains(plane, x, y)) {
+            throw new IndexOutOfBoundsException("Terrain tile outside document: " + plane + "," + x + "," + y);
+        }
+        return appearance(document, definitions, plane, x, y,
+                document.tile(plane, x, y).snapshot());
+    }
+
     private TerrainAppearance appearance(WorldDocument document, DefinitionProvider definitions,
                                          int plane, int x, int y, TileSnapshot tile) {
         // The client blends underlay color once per TILE (class470's var36),
