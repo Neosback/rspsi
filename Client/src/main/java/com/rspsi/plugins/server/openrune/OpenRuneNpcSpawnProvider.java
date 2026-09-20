@@ -3,7 +3,7 @@ package com.rspsi.plugins.server.openrune;
 import com.rspsi.editor.integration.content.ParseDiagnostics;
 import com.rspsi.editor.integration.npc.NpcSpawn;
 import com.rspsi.editor.integration.npc.NpcSpawnProvider;
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
 import org.tomlj.Toml;
 import org.tomlj.TomlArray;
 import org.tomlj.TomlParseResult;
@@ -89,7 +89,7 @@ public final class OpenRuneNpcSpawnProvider implements NpcSpawnProvider {
                             "spawn[" + index + "] requires npc and coords");
                     continue;
                 }
-                TileCoordinate coordinate = parseCoordinate(coords);
+                WorldTile coordinate = parseCoordinate(coords);
                 if (coordinate == null) {
                     diagnostics.skipped();
                     diagnostics.warning("spawn.coords", file, 0,
@@ -125,7 +125,7 @@ public final class OpenRuneNpcSpawnProvider implements NpcSpawnProvider {
      * OpenRune raw-cache coords are plane_regionX_regionY_localX_localY.
      * Convert once into an absolute world coordinate for server-content queries.
      */
-    private static TileCoordinate parseCoordinate(String value) {
+    private static WorldTile parseCoordinate(String value) {
         String[] parts = value.trim().split("_");
         if (parts.length != 5) return null;
         try {
@@ -135,7 +135,7 @@ public final class OpenRuneNpcSpawnProvider implements NpcSpawnProvider {
             int localX = Integer.parseInt(parts[3]);
             int localY = Integer.parseInt(parts[4]);
             if (plane < 0 || localX < 0 || localX >= 64 || localY < 0 || localY >= 64) return null;
-            return new TileCoordinate(plane, regionX * 64 + localX, regionY * 64 + localY);
+            return new WorldTile(plane, regionX * 64 + localX, regionY * 64 + localY);
         } catch (NumberFormatException ignored) {
             return null;
         }
@@ -170,7 +170,7 @@ public final class OpenRuneNpcSpawnProvider implements NpcSpawnProvider {
             int y = Integer.parseInt(parts[3]);
             int wander = parts.length > 4 ? Integer.parseInt(parts[4]) : 0;
             spawns.add(new NpcSpawn(id, "npc." + id,
-                    new TileCoordinate(plane, x, y), wander, 0,
+                    new WorldTile(plane, x, y), wander, 0,
                     "spawns", projectRoot.relativize(file).toString()));
             diagnostics.imported();
         } catch (NumberFormatException error) {
@@ -191,7 +191,7 @@ public final class OpenRuneNpcSpawnProvider implements NpcSpawnProvider {
     public List<NpcSpawn> spawns(int plane, int minX, int minY, int maxX, int maxY) {
         List<NpcSpawn> inArea = new ArrayList<>();
         for (NpcSpawn spawn : spawns) {
-            TileCoordinate coordinate = spawn.coordinate();
+            WorldTile coordinate = spawn.coordinate();
             if (coordinate.plane() == plane
                     && coordinate.x() >= minX && coordinate.x() <= maxX
                     && coordinate.y() >= minY && coordinate.y() <= maxY) {
