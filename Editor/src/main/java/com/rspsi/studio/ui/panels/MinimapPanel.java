@@ -3,6 +3,8 @@ package com.rspsi.studio.ui.panels;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.render.RenderSettingKeys;
 import com.rspsi.editor.ui.DockRegion;
@@ -74,14 +76,18 @@ public final class MinimapPanel implements StudioPanel {
         }
 
         int activePlane = context.settings().snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
-        int camTileX = (int) (viewport.navigation().camera().x() / 128.0f);
-        int camTileY = (int) (viewport.navigation().camera().z() / 128.0f);
+        int cameraWorldX = Math.max(0, (int) Math.floor(viewport.navigation().camera().x() / 128.0f));
+        int cameraWorldY = Math.max(0, (int) Math.floor(viewport.navigation().camera().z() / 128.0f));
+        WorldTile cameraWorld = new WorldTile(activePlane, cameraWorldX, cameraWorldY);
+        LocalTile cameraLocal = session == null ? null
+                : session.coordinates().toLocal(cameraWorld).orElse(null);
 
         int worldW = session != null ? session.world().width() : 64;
         int worldL = session != null ? session.world().length() : 64;
 
-        // 1. Header with Camera Info & Plane Switcher
-        ImGui.textColored(0xFF38BDF8, String.format("Pos: (%d, %d)  Pl: %d", camTileX, camTileY, activePlane));
+        // 1. Header with absolute camera info & plane switcher
+        ImGui.textColored(0xFF38BDF8, String.format(
+                "World: (%d, %d)  Pl: %d", cameraWorldX, cameraWorldY, activePlane));
         ImGui.sameLine();
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 4.0f, 2.0f);
         for (int p = 0; p < 4; p++) {
@@ -132,18 +138,23 @@ public final class MinimapPanel implements StudioPanel {
             int clickedTileX = Math.max(0, Math.min(worldW - 1, (int) (mouseRelX / tileSize)));
             int clickedTileY = Math.max(0, Math.min(worldL - 1, (worldL - 1 - (int) (mouseRelY / tileSize))));
 
-            float targetX = clickedTileX * 128.0f + 64.0f;
-            float targetZ = clickedTileY * 128.0f + 64.0f;
-            viewport.navigation().frameSelection(targetX, 0.0f, targetZ);
+            if (session != null) {
+                viewport.navigationService().synchronizeFromCamera(activePlane);
+                viewport.navigationService().jumpTo(
+                        session.coordinates().toWorld(
+                                new LocalTile(activePlane, clickedTileX, clickedTileY)));
+            }
         }
 
         // Render camera frustum & position dot
-        float camRelX = camTileX * tileSize + tileSize * 0.5f;
-        float camRelY = (worldL - 1 - camTileY) * tileSize + tileSize * 0.5f;
+        float camRelX = cameraLocal == null ? -1.0f : cameraLocal.x() * tileSize + tileSize * 0.5f;
+        float camRelY = cameraLocal == null ? -1.0f
+                : (worldL - 1 - cameraLocal.y()) * tileSize + tileSize * 0.5f;
         float camScreenX = rx + camRelX;
         float camScreenY = ry + camRelY;
 
-        if (camRelX >= 0 && camRelX <= radarSize && camRelY >= 0 && camRelY <= radarSize) {
+        if (cameraLocal != null && camRelX >= 0 && camRelX <= radarSize
+                && camRelY >= 0 && camRelY <= radarSize) {
             float yaw = viewport.navigation().camera().yaw();
             float dirX = (float) Math.sin(yaw);
             float dirY = -(float) Math.cos(yaw);
@@ -171,19 +182,24 @@ public final class MinimapPanel implements StudioPanel {
         if (ImGui.button("Jump##jump-coord")) {
             int targetTileX = Math.max(0, Math.min(worldW - 1, jumpX.get()));
             int targetTileY = Math.max(0, Math.min(worldL - 1, jumpY.get()));
-            float targetX = targetTileX * 128.0f + 64.0f;
-            float targetZ = targetTileY * 128.0f + 64.0f;
-            viewport.navigation().frameSelection(targetX, 0.0f, targetZ);
+            if (session != null) {
+                viewport.navigationService().synchronizeFromCamera(activePlane);
+                viewport.navigationService().jumpTo(
+                        session.coordinates().toWorld(
+                                new LocalTile(activePlane, targetTileX, targetTileY)));
+            }
         }
 
         if (ImGui.button("Center on Camera##re-center", availW, 24.0f)) {
-            viewport.navigation().frameSelection(camTileX * 128.0f + 64.0f, 0.0f, camTileY * 128.0f + 64.0f);
+            viewport.navigationService().jumpTo(cameraWorld);
         }
 
         if (session != null && !session.selection().selectedCoordinates().isEmpty()) {
             if (ImGui.button("Center on Selection##sel-center", availW, 24.0f)) {
                 var first = session.selection().selectedCoordinates().iterator().next();
-                viewport.navigation().frameSelection(first.x() * 128.0f + 64.0f, 0.0f, first.y() * 128.0f + 64.0f);
+                viewport.navigationService().synchronizeFromCamera(activePlane);
+                viewport.navigationService().jumpTo(
+                        session.coordinates().toWorld(LocalTile.from(first)));
             }
         }
 
