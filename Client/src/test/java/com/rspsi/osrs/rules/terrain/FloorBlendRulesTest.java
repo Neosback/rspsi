@@ -23,12 +23,18 @@ class FloorBlendRulesTest {
         east.document().tile(0, 0, 32).restore(tile(2));
 
         DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) {
+                return Optional.empty();
+            }
             @Override public Optional<FloorDefinitionView> underlay(int id) {
                 return id == 0
                         ? Optional.of(new FloorDefinitionView(0, -1, 0xAA0000, 16, 200, 80, 64, 256))
                         : id == 1
                         ? Optional.of(new FloorDefinitionView(1, -1, 0x00AA00, 48, 160, 120, 192, 256))
                         : Optional.empty();
+            }
+            @Override public Optional<FloorDefinitionView> overlay(int id) {
+                return Optional.empty();
             }
         };
 
