@@ -1,6 +1,8 @@
 package com.rspsi.editor.tool;
 
 import com.rspsi.editor.CompositeEditCommand;
+import com.rspsi.editor.brush.BrushAwareTool;
+import com.rspsi.editor.brush.BrushSampling;
 import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.brush.builtin.SquareBrush;
 import com.rspsi.editor.EditorCommand;
@@ -21,7 +23,7 @@ import java.util.Set;
  * Composite tile painter tool allowing selective application of
  * underlay, overlay, shape, rotation, flags, and height to brushed or selected tiles.
  */
-public final class CompositeTilePainterTool implements EditorTool {
+public final class CompositeTilePainterTool implements EditorTool, BrushAwareTool {
     private boolean applyUnderlay = false;
     private int underlayId = 0;
 
@@ -80,11 +82,15 @@ public final class CompositeTilePainterTool implements EditorTool {
     public int height() { return height; }
     public void setHeight(int h) { this.height = h; }
 
+    @Override
     public EditorBrush brush() { return brush; }
+    @Override
     public void setBrush(EditorBrush brush) {
         this.brush = java.util.Objects.requireNonNull(brush, "brush");
     }
+    @Override
     public int brushRadius() { return brushRadius; }
+    @Override
     public void setBrushRadius(int brushRadius) {
         if (brushRadius < 0 || brushRadius > 64) {
             throw new IllegalArgumentException("Brush radius must be 0 through 64");
@@ -185,17 +191,10 @@ public final class CompositeTilePainterTool implements EditorTool {
 
     private void addTile(PointerEvent event) {
         context.viewport().tileAt(event.x(), event.y()).ifPresent(center -> {
-            int radius = Math.max(0, brushRadius);
-            for (int dx = -radius; dx <= radius; dx++) {
-                for (int dy = -radius; dy <= radius; dy++) {
-                    if (brush.weight(dx, dy, radius) <= 0.0) continue;
-                    TileCoordinate absolute = new TileCoordinate(
-                            center.plane(), center.x() + dx, center.y() + dy);
-                    TileCoordinate local = toLocal(absolute, context.session().world());
-                    if (!context.session().world().contains(local)) continue;
-                    visited.add(absolute);
-                    targetLocals.add(local);
-                }
+            for (BrushSampling.Sample sample : BrushSampling.sample(
+                    brush, brushRadius, center, context.session().world())) {
+                visited.add(sample.absolute());
+                targetLocals.add(sample.local());
             }
         });
     }
