@@ -35,7 +35,22 @@ public final class IsolatedPluginClassLoader extends URLClassLoader {
             if (loaded != null) return loaded;
 
             if (parentFirst(name)) {
-                return super.loadClass(name, resolve);
+                try {
+                    return getParent().loadClass(name);
+                } catch (ClassNotFoundException ignored) {
+                    // A dependency may intentionally expose a type beneath a
+                    // Studio-like namespace. Core API classes still win when
+                    // the parent actually provides them.
+                }
+                for (ClassLoader dependency : dependencyLoaders) {
+                    try {
+                        return dependency.loadClass(name);
+                    } catch (ClassNotFoundException ignored) {
+                    }
+                }
+                Class<?> own = findClass(name);
+                if (resolve) resolveClass(own);
+                return own;
             }
 
             try {
