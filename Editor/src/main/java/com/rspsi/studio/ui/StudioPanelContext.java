@@ -11,6 +11,7 @@ import com.rspsi.editor.simulation.SimulationEngine;
 import com.rspsi.editor.symbols.SymbolService;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.studio.NativeSceneViewport;
+import com.rspsi.studio.brush.StudioBrushManager;
 
 import java.util.function.Consumer;
 
@@ -31,5 +32,6 @@ public record StudioPanelContext(
         Consumer<String> activateTool,
         String activeToolId,
         EditorToolController toolController,
-        com.rspsi.studio.plugin.StudioPluginManager studioPlugins) {
+        com.rspsi.studio.plugin.StudioPluginManager studioPlugins,
+        StudioBrushManager brushes) {
 }
