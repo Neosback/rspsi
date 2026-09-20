@@ -21,6 +21,8 @@ import com.rspsi.editor.render.TerrainAppearance;
 import com.rspsi.editor.render.TerrainAppearanceBuilder;
 import com.rspsi.editor.render.TerrainLight;
 import com.rspsi.editor.render.TerrainLighting;
+import com.rspsi.editor.render.TerrainShadowMap;
+import com.rspsi.editor.render.LightingProfile;
 import com.rspsi.editor.render.TerrainPacketBuilder;
 
 import java.util.LinkedHashMap;
@@ -41,10 +43,18 @@ public final class TerrainSceneCompiler {
                                                              AssetRepository assets) {
         Objects.requireNonNull(document, "document");
         Objects.requireNonNull(assets, "assets");
-        DefinitionProvider definitions = new AssetRepositoryDefinitions(assets);
+        return compile(document, new AssetRepositoryDefinitions(assets));
+    }
+
+    public Map<TileCoordinate, CompiledTerrainTile> compile(WorldDocument document,
+                                                             DefinitionProvider definitions) {
+        Objects.requireNonNull(document, "document");
+        Objects.requireNonNull(definitions, "definitions");
         Map<TileCoordinate, TerrainAppearance> appearances =
                 new TerrainAppearanceBuilder().build(document, definitions);
-        Map<TileCoordinate, TerrainLight> lighting = TerrainLighting.build(document);
+        TerrainShadowMap shadows = TerrainShadowMap.from(document, definitions);
+        Map<TileCoordinate, TerrainLight> lighting =
+                TerrainLighting.build(document, LightingProfile.osrs(), shadows);
 
         Map<TileCoordinate, CompiledTerrainTile> result = new LinkedHashMap<>();
         for (int plane = 0; plane < document.planes(); plane++) {
@@ -62,7 +72,7 @@ public final class TerrainSceneCompiler {
                             ? OsrsTerrainColorMath.packedHslToRgb(minimapHsl, 0.6)
                             : 0;
                     result.put(coordinate, new CompiledTerrainTile(
-                            coordinate, mesh, appearance, packet,
+                            coordinate, mesh, appearance, lighting.get(coordinate), packet,
                             document.effectivePlane(coordinate),
                             OsrsTileFlags.hasBridge(flags),
                             OsrsTileFlags.removesRoofs(flags),
@@ -79,6 +89,15 @@ public final class TerrainSceneCompiler {
                                            TileCoordinate coordinate) {
         Objects.requireNonNull(coordinate, "coordinate");
         CompiledTerrainTile tile = compile(document, assets).get(coordinate);
+        if (tile == null) throw new IndexOutOfBoundsException("Tile outside document: " + coordinate);
+        return tile;
+    }
+
+    public CompiledTerrainTile compileTile(WorldDocument document,
+                                           DefinitionProvider definitions,
+                                           TileCoordinate coordinate) {
+        Objects.requireNonNull(coordinate, "coordinate");
+        CompiledTerrainTile tile = compile(document, definitions).get(coordinate);
         if (tile == null) throw new IndexOutOfBoundsException("Tile outside document: " + coordinate);
         return tile;
     }
