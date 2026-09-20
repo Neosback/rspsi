@@ -242,6 +242,7 @@ public final class EditorPluginHost implements AutoCloseable {
         contributions.inspectors().forEach(registry::removeInspector);
         contributions.validators().forEach(registry::removeValidator);
         contributions.shortcuts().forEach(registry::removeShortcut);
+        contributions.uiSurfaces().forEach(registry::removeUiSurface);
         contributions.panels().forEach(id -> {
             registry.removePanel(id);
             registry.removePanelRegistration(id);
@@ -331,6 +332,7 @@ public final class EditorPluginHost implements AutoCloseable {
             List<String> inspectors,
             List<String> validators,
             List<String> shortcuts,
+            List<String> uiSurfaces,
             List<String> panels,
             List<String> workspaces) {
         private static ContributionSet capture(EditorPluginRegistry registry) {
@@ -345,6 +347,7 @@ public final class EditorPluginHost implements AutoCloseable {
                     registry.inspectorRegistrations().stream().map(EditorInspectorRegistration::id).toList(),
                     registry.validatorRegistrations().stream().map(EditorValidatorRegistration::id).toList(),
                     registry.shortcutRegistrations().stream().map(EditorShortcutRegistration::id).toList(),
+                    registry.uiSurfaceContributions().stream().map(com.rspsi.editor.plugin.ui.UiSurfaceContribution::id).toList(),
                     java.util.stream.Stream.concat(
                             registry.panels().stream().map(com.rspsi.editor.ui.PanelDescriptor::id),
                             registry.panelRegistrations().stream().map(EditorPanelRegistration::id)
@@ -364,6 +367,7 @@ public final class EditorPluginHost implements AutoCloseable {
                     difference(inspectors, before.inspectors()),
                     difference(validators, before.validators()),
                     difference(shortcuts, before.shortcuts()),
+                    difference(uiSurfaces, before.uiSurfaces()),
                     difference(panels, before.panels()),
                     difference(workspaces, before.workspaces()));
         }
