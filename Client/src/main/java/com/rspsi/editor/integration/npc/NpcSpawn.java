@@ -1,6 +1,6 @@
 package com.rspsi.editor.integration.npc;
 
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
 
 import java.util.Objects;
 
@@ -13,7 +13,7 @@ import java.util.Objects;
 public record NpcSpawn(
         int id,
         String symbolicName,
-        TileCoordinate coordinate,
+        WorldTile coordinate,
         int wanderRadius,
         int direction,
         String module,
