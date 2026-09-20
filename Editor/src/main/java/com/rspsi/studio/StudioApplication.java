@@ -252,7 +252,7 @@ public final class StudioApplication implements AutoCloseable {
         RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).build(region.document());
         EditorSession session = opened.region().session();
         if (!session.canEdit()) {
-            session = new EditorSession(region.document());
+            session = new EditorSession(region.document(), region.window());
         }
         return new LoadedMapScene(opened, session, renderScene, packet, plan, settingsRevision,
                 new com.rspsi.editor.render.CameraState(
@@ -347,7 +347,8 @@ public final class StudioApplication implements AutoCloseable {
                 .map(LoadedOsrsCacheSession::bundle)
                 .map(com.rspsi.cache.workspace.OsrsBundle::assets)
                 .orElse(EmptyAssetRepository.INSTANCE);
-        EditorSceneAccess sceneAccess = () -> EditorSceneSnapshot.from(scene.renderScene());
+        EditorSceneAccess sceneAccess = () -> EditorSceneSnapshot.from(
+                scene.renderScene(), scene.opened().worldRegion().window());
         CacheDecoderSummary decodedSummary = cacheSessions.current()
                 .map(LoadedOsrsCacheSession::decoderSummary)
                 .orElse(CacheDecoderSummary.empty());
