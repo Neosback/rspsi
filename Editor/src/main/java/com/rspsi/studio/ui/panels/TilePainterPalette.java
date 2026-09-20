@@ -1,14 +1,17 @@
 package com.rspsi.studio.ui.panels;
 
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.brush.BrushCapability;
 import com.rspsi.editor.brush.EditorBrush;
-import com.rspsi.editor.EditorSession;
-import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.OsrsTileFlags;
+import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.terrain.TerrainMesh;
+import com.rspsi.editor.terrain.TerrainMeshBuilder;
 import com.rspsi.editor.tool.CompositeTilePainterTool;
+import com.rspsi.editor.tool.state.TilePainterState;
 import com.rspsi.editor.ui.DockRegion;
-import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
@@ -22,130 +25,86 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
- * Multi-tab composite Tile Painter console matching the user's specification:
- * Each section (Underlay, Overlay, Shape, Rotation, Flags, Height) has its own tab,
- * and each tab has an "Apply" checkbox allowing selective tile attribute painting.
+ * Composite Tile Painter console bound to one authoritative TilePainterState.
+ * The active tool shares this same state object rather than receiving copied
+ * settings every frame.
  */
 public final class TilePainterPalette implements StudioPanel {
     public static final String ID = "studio.tile-palette";
     public static TilePainterPalette INSTANCE;
 
-    private int activeTab = 1; // Default to Overlay tab
-
-    // State for composite tile attributes
-    private final ImBoolean applyUnderlay = new ImBoolean(false);
-    private int underlayId = 0;
-
-    private final ImBoolean applyOverlay = new ImBoolean(true);
-    private int overlayId = 1;
-
-    private final ImBoolean applyShape = new ImBoolean(false);
-    private int shape = 0;
-
-    private final ImBoolean applyRotation = new ImBoolean(false);
-    private int rotation = 0;
-
-    private final ImBoolean applyFlags = new ImBoolean(false);
-    private int flags = 0;
-
-    private final ImBoolean applyHeight = new ImBoolean(false);
-    private final ImInt heightValue = new ImInt(0);
+    private final TilePainterState state = new TilePainterState();
+    private final TerrainMeshBuilder meshBuilder = new TerrainMeshBuilder();
+    private int activeTab = 1;
 
     private static final String[] SHAPE_NAMES = {
             "0: Full", "1: Diagonal", "2: Left 1/2", "3: Right 1/2",
             "4: Corner TL", "5: Corner TR", "6: Corner BR", "7: Corner BL",
             "8: Inv TL", "9: Inv TR", "10: Inv BR", "11: Inv BL"
     };
-    private static final String[] ROTATION_NAMES = {"0° (North)", "90° (East)", "180° (South)", "270° (West)"};
+    private static final String[] ROTATION_NAMES = {
+            "0° (North)", "90° (East)", "180° (South)", "270° (West)"
+    };
 
     public TilePainterPalette() {
         INSTANCE = this;
     }
 
+    public TilePainterState state() { return state; }
+
     public void sampleTile(EditorSession session, TileCoordinate coord) {
-        if (session == null || coord == null) return;
-        var snap = session.world().tile(coord).snapshot();
-        this.underlayId = snap.underlayId();
-        this.overlayId = snap.overlayId();
-        this.shape = snap.overlayShape();
-        this.rotation = snap.overlayRotation();
-        this.flags = snap.flags();
-        this.heightValue.set(snap.southWestHeight());
+        if (session == null || coord == null || !session.world().contains(coord)) return;
+        TileSnapshot snap = session.world().tile(coord).snapshot();
+        state.setUnderlayId(snap.underlayId());
+        state.setOverlayId(snap.overlayId());
+        state.setShape(snap.overlayShape());
+        state.setRotation(snap.overlayRotation());
+        state.setFlags(snap.flags());
+        state.setHeight(snap.southWestHeight());
     }
 
-    @Override
-    public String id() {
-        return ID;
-    }
-
-    @Override
-    public String title() {
-        return "Tile Painter";
-    }
-
-    @Override
-    public String icon() {
-        return StudioIcons.PALETTE;
-    }
-
-    @Override
-    public DockRegion preferredRegion() {
-        return DockRegion.BOTTOM;
-    }
-
-    @Override
-    public Set<DockRegion> allowedRegions() {
+    @Override public String id() { return ID; }
+    @Override public String title() { return "Tile Painter"; }
+    @Override public String icon() { return StudioIcons.PALETTE; }
+    @Override public DockRegion preferredRegion() { return DockRegion.BOTTOM; }
+    @Override public Set<DockRegion> allowedRegions() {
         return EnumSet.of(DockRegion.BOTTOM, DockRegion.RIGHT);
     }
+    @Override public int order() { return 5; }
 
-    @Override
-    public int order() {
-        return 5;
-    }
-
-    public boolean applyUnderlay() { return applyUnderlay.get(); }
-    public boolean applyOverlay() { return applyOverlay.get(); }
-    public boolean applyShape() { return applyShape.get(); }
-    public boolean applyRotation() { return applyRotation.get(); }
-    public boolean applyFlags() { return applyFlags.get(); }
-    public boolean applyHeight() { return applyHeight.get(); }
-
-    public int underlayId() { return underlayId; }
-    public int overlayId() { return overlayId; }
-    public int shape() { return shape; }
-    public int rotation() { return rotation; }
-    public int flags() { return flags; }
-    public int height() { return heightValue.get(); }
+    public boolean applyUnderlay() { return state.applyUnderlay(); }
+    public boolean applyOverlay() { return state.applyOverlay(); }
+    public boolean applyShape() { return state.applyShape(); }
+    public boolean applyRotation() { return state.applyRotation(); }
+    public boolean applyFlags() { return state.applyFlags(); }
+    public boolean applyHeight() { return state.applyHeight(); }
+    public int underlayId() { return state.underlayId(); }
+    public int overlayId() { return state.overlayId(); }
+    public int shape() { return state.shape(); }
+    public int rotation() { return state.rotation(); }
+    public int flags() { return state.flags(); }
+    public int height() { return state.height(); }
 
     @Override
     public void render(StudioPanelContext context) {
         LoadedOsrsCacheSession cache = context.cache();
         EditorSession session = context.session();
 
-        // Sync with active tool if it is CompositeTilePainterTool
-        if (context.toolController() != null && context.toolController().activeTool() instanceof CompositeTilePainterTool tool) {
-            tool.setApplyUnderlay(applyUnderlay.get());
-            tool.setUnderlayId(underlayId);
-            tool.setApplyOverlay(applyOverlay.get());
-            tool.setOverlayId(overlayId);
-            tool.setApplyShape(applyShape.get());
-            tool.setShape(shape);
-            tool.setApplyRotation(applyRotation.get());
-            tool.setRotation(rotation);
-            tool.setApplyFlags(applyFlags.get());
-            tool.setFlags(flags);
-            tool.setApplyHeight(applyHeight.get());
-            tool.setHeight(heightValue.get());
+        if (context.toolController() != null
+                && context.toolController().activeTool() instanceof CompositeTilePainterTool tool) {
+            if (tool.state() != state) tool.bindState(state);
             if (context.brushes() != null) {
-                EditorBrush activeBrush = activeBrush(context);
-                if (activeBrush != null) tool.setBrush(activeBrush);
-                tool.setBrushRadius(context.brushes().brushRadius());
+                EditorBrush active = activeBrush(context);
+                if (active != null && !active.id().equals(tool.brush().id())) tool.setBrush(active);
+                if (state.brushRadius() != context.brushes().brushRadius()) {
+                    state.setBrushRadius(context.brushes().brushRadius());
+                }
             }
         }
 
-        // Header matching Displee
         ImGui.textColored(0xFFE2E8F0, "Tile Painter");
         ImGui.sameLine(0.0f, 20.0f);
         renderPresets();
@@ -155,19 +114,16 @@ public final class TilePainterPalette implements StudioPanel {
 
         float availW = ImGui.getContentRegionAvailX();
         float availH = ImGui.getContentRegionAvailY();
-
-        // 1. Left Preview Column (matching media_1789882734367.png)
         float previewW = 160.0f;
+
         ImGui.beginChild("tile-painter-preview-col", previewW, Math.max(100.0f, availH - 4.0f), false);
         renderPreviewBlock(cache, session);
         ImGui.endChild();
 
         ImGui.sameLine(0.0f, 12.0f);
 
-        // 2. Main Area: Checkbox Tabs + Palette/Settings Content
         float contentW = availW - previewW - 16.0f;
         if (ImGui.beginChild("tile-painter-tab-content", contentW, Math.max(100.0f, availH - 4.0f), false)) {
-            // Checkbox Tabs strip
             ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 6.0f, 3.0f);
             ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 4.0f, 0.0f);
             renderSectionTabs();
@@ -181,72 +137,73 @@ public final class TilePainterPalette implements StudioPanel {
                 case 3 -> renderHeightTab();
                 case 4 -> renderFlagsTab();
                 case 5 -> renderRotationTab();
+                default -> { }
             }
         }
         ImGui.endChild();
     }
 
+    /** Exact topology preview generated by the same TerrainMeshBuilder as scene terrain. */
     private void renderPreviewBlock(LoadedOsrsCacheSession cache, EditorSession session) {
         ImGui.textDisabled("Preview");
 
-        // Square preview swatch box (64x64)
-        float boxSize = 64.0f;
-        float curX = ImGui.getCursorScreenPos().x;
-        float curY = ImGui.getCursorScreenPos().y;
-        imgui.ImDrawList dl = ImGui.getWindowDrawList();
+        float box = 96.0f;
+        float x = ImGui.getCursorScreenPos().x;
+        float y = ImGui.getCursorScreenPos().y;
+        imgui.ImDrawList draw = ImGui.getWindowDrawList();
 
-        int underlayColor = 0xFF2A2A2A;
-        if (cache != null && underlayId > 0) {
-            var def = cache.bundle().definitions().underlay(underlayId);
-            if (def.isPresent() && def.get().rgb() > 0) {
-                underlayColor = 0xFF000000 | def.get().rgb();
-            }
+        int underlayColor = floorColor(cache, state.underlayId(), true, 0xFF2A2A2A);
+        int overlayColor = floorColor(cache, state.overlayId(), false, 0xFF4A4A4A);
+
+        TileSnapshot preview = new TileSnapshot(
+                state.height(), state.height(), state.height(), state.height(),
+                state.underlayId(), state.overlayId(), state.shape(), state.rotation(),
+                state.flags(), List.of());
+        TerrainMesh mesh = meshBuilder.build(preview);
+
+        draw.addRectFilled(x, y, x + box, y + box, underlayColor, 3.0f);
+        for (var face : mesh.faces()) {
+            if (face.material() == 1 && state.overlayId() <= 0) continue;
+            int color = face.material() == 1 ? overlayColor : underlayColor;
+            var a = mesh.vertices().get(face.a());
+            var b = mesh.vertices().get(face.b());
+            var c = mesh.vertices().get(face.c());
+            draw.addTriangleFilled(px(x, box, a.x()), py(y, box, a.y()),
+                    px(x, box, b.x()), py(y, box, b.y()),
+                    px(x, box, c.x()), py(y, box, c.y()), color);
         }
 
-        int overlayColor = 0xFF4A4A4A;
-        if (cache != null && overlayId > 0) {
-            var def = cache.bundle().definitions().overlay(overlayId);
-            if (def.isPresent() && def.get().rgb() > 0) {
-                overlayColor = 0xFF000000 | def.get().rgb();
-            }
-        }
+        draw.addRect(x, y, x + box, y + box, 0xFF64748B, 3.0f, 0, 1.5f);
+        draw.addText(x + box / 2.0f - 10.0f, y - 15.0f, 0xFFE2E8F0, "N ↑");
+        ImGui.dummy(box, box);
 
-        // Draw base underlay or background
-        dl.addRectFilled(curX, curY, curX + boxSize, curY + boxSize, underlayColor, 4.0f);
+        ImGui.textDisabled("Shape " + state.shape() + "  |  Rotation " + state.rotation() * 90 + "°");
 
-        // Draw overlay shape if overlay is active
-        if (overlayId > 0) {
-            if (shape == 0) {
-                dl.addRectFilled(curX, curY, curX + boxSize, curY + boxSize, overlayColor, 4.0f);
-            } else {
-                // Diagonal / shape representation
-                dl.addTriangleFilled(curX, curY, curX + boxSize, curY, curX + boxSize, curY + boxSize, overlayColor);
-            }
-        }
-
-        dl.addRect(curX, curY, curX + boxSize, curY + boxSize, 0xFF64748B, 4.0f, 0, 1.5f);
-        ImGui.dummy(boxSize, boxSize);
-
-        ImGui.spacing();
-        ImGui.pushTextWrapPos(curX + boxSize + 40.0f);
-        ImGui.textDisabled("Select an overlay or underlay");
-        ImGui.popTextWrapPos();
-
-        ImGui.spacing();
         Set<TileCoordinate> selected = session != null ? session.selection().selectedCoordinates() : Set.of();
-        int selCount = selected.size();
-        boolean canApply = selCount > 0 && session != null;
+        int count = selected.size();
+        if (count == 0) ImGui.beginDisabled();
+        if (ImGui.button("Apply (" + count + ")##tp-apply-btn", 140.0f, 26.0f)) {
+            applyCompositeToSelection(session, selected, null);
+        }
+        if (count == 0) ImGui.endDisabled();
+    }
 
-        if (!canApply) ImGui.beginDisabled();
-        ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.18f, 0.55f, 0.35f, 1.0f));
-        if (ImGui.button("Apply (" + selCount + ")##tp-apply-btn", 140.0f, 26.0f)) {
-            applyCompositeToSelection(session, selected);
-        }
-        ImGui.popStyleColor();
-        if (!canApply) ImGui.endDisabled();
-        if (ImGui.isItemHovered() && selCount == 0) {
-            ImGui.setTooltip("Select tiles first with the Selector to apply");
-        }
+    private static float px(float x, float size, int vertexX) {
+        return x + vertexX / 128.0f * size;
+    }
+
+    private static float py(float y, float size, int vertexY) {
+        return y + size - vertexY / 128.0f * size;
+    }
+
+    private static int floorColor(LoadedOsrsCacheSession cache, int id,
+                                  boolean underlay, int fallback) {
+        if (cache == null || id <= 0) return fallback;
+        var def = underlay
+                ? cache.bundle().definitions().underlay(id)
+                : cache.bundle().definitions().overlay(id);
+        return def.isPresent() && def.get().rgb() >= 0
+                ? 0xFF000000 | def.get().rgb() : fallback;
     }
 
     private void renderBrushStrip(StudioPanelContext context) {
@@ -254,29 +211,33 @@ public final class TilePainterPalette implements StudioPanel {
 
         List<EditorBrush> compatible = compatibleBrushes(context);
         EditorBrush active = activeBrush(context);
-
         ImGui.textDisabled("Brush:");
         ImGui.sameLine();
+
         for (EditorBrush brush : compatible) {
             boolean selected = active != null && brush.id().equals(active.id());
-            if (selected) {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
-            }
+            if (selected) ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
             if (ImGui.smallButton(brush.name() + "##tile-brush-" + brush.id())) {
                 context.brushes().setActiveBrush("terrain.tile-painter", brush.id());
+                state.setBrushId(brush.id());
+                if (context.toolController().activeTool() instanceof CompositeTilePainterTool tool) {
+                    tool.setBrush(brush);
+                }
                 active = brush;
             }
             if (selected) ImGui.popStyleColor();
             if (ImGui.isItemHovered()) {
-                ImGui.setTooltip(brush.description() + "\n" + String.join(", ", context.brushes().capabilityLabels(brush)));
+                ImGui.setTooltip(brush.description() + "\n"
+                        + String.join(", ", context.brushes().capabilityLabels(brush)));
             }
             ImGui.sameLine();
         }
         ImGui.newLine();
 
-        ImInt radius = new ImInt(context.brushes().brushRadius());
+        ImInt radius = new ImInt(state.brushRadius());
         ImGui.setNextItemWidth(180.0f);
         if (ImGui.sliderInt("Radius##tile-brush-radius", radius.getData(), 0, 16)) {
+            state.setBrushRadius(radius.get());
             context.brushes().setBrushRadius(radius.get());
         }
         ImGui.sameLine();
@@ -284,6 +245,7 @@ public final class TilePainterPalette implements StudioPanel {
         for (int preset : new int[]{0, 1, 2, 3, 5}) {
             ImGui.sameLine();
             if (ImGui.smallButton(preset + "##tile-brush-radius-" + preset)) {
+                state.setBrushRadius(preset);
                 context.brushes().setBrushRadius(preset);
             }
         }
@@ -295,9 +257,7 @@ public final class TilePainterPalette implements StudioPanel {
             boolean spatial = brush.capabilities().contains(BrushCapability.SPATIAL_FOOTPRINT);
             boolean paint = brush.capabilities().contains(BrushCapability.TILE_PAINT);
             boolean height = brush.capabilities().contains(BrushCapability.HEIGHT_MANIPULATION);
-            if (spatial && (paint || (applyHeight.get() && height))) {
-                result.add(brush);
-            }
+            if (spatial && (paint || (state.applyHeight() && height))) result.add(brush);
         }
         return List.copyOf(result);
     }
@@ -307,262 +267,199 @@ public final class TilePainterPalette implements StudioPanel {
         if (compatible.isEmpty()) return null;
         EditorBrush active = context.brushes().activeBrush(
                 "terrain.tile-painter", Set.of(BrushCapability.SPATIAL_FOOTPRINT));
-        if (active != null && compatible.stream().anyMatch(brush -> brush.id().equals(active.id()))) {
+        if (active != null && compatible.stream().anyMatch(b -> b.id().equals(active.id()))) {
+            if (!state.brushId().equals(active.id())) state.setBrushId(active.id());
             return active;
         }
         EditorBrush fallback = compatible.get(0);
         context.brushes().setActiveBrush("terrain.tile-painter", fallback.id());
+        state.setBrushId(fallback.id());
         return fallback;
     }
 
     private void renderPresets() {
         ImGui.textDisabled("Presets:");
-        ImGui.sameLine(0.0f, 4.0f);
+        ImGui.sameLine();
         if (ImGui.smallButton(StudioIcons.ENVIRONMENT + " Grass##sw-grass")) {
-            underlayId = 1;
-            applyUnderlay.set(true);
+            state.setUnderlayId(1); state.setApplyUnderlay(true);
         }
-        ImGui.sameLine(0.0f, 3.0f);
+        ImGui.sameLine();
         if (ImGui.smallButton(StudioIcons.GRID + " Cobble##sw-cobl")) {
-            underlayId = 10;
-            applyUnderlay.set(true);
+            state.setUnderlayId(10); state.setApplyUnderlay(true);
         }
-        ImGui.sameLine(0.0f, 3.0f);
+        ImGui.sameLine();
         if (ImGui.smallButton(StudioIcons.WATER + " Water##sw-wtr")) {
-            overlayId = 12;
-            applyOverlay.set(true);
+            state.setOverlayId(12); state.setApplyOverlay(true);
         }
-        ImGui.sameLine(0.0f, 3.0f);
+        ImGui.sameLine();
         if (ImGui.smallButton(StudioIcons.TERRAIN + " Sand##sw-snd")) {
-            underlayId = 28;
-            applyUnderlay.set(true);
+            state.setUnderlayId(28); state.setApplyUnderlay(true);
         }
-        ImGui.sameLine(0.0f, 3.0f);
+        ImGui.sameLine();
         if (ImGui.smallButton("Snow##sw-snw")) {
-            underlayId = 35;
-            applyUnderlay.set(true);
+            state.setUnderlayId(35); state.setApplyUnderlay(true);
         }
     }
 
     private void renderSectionTabs() {
-        tabButton(0, StudioIcons.LAYERS + " Overlay", applyOverlay);
+        tabButton(0, StudioIcons.LAYERS + " Overlay", state.applyOverlay(), state::setApplyOverlay);
         ImGui.sameLine();
-        tabButton(1, StudioIcons.TEXTURE + " Underlay", applyUnderlay);
+        tabButton(1, StudioIcons.TEXTURE + " Underlay", state.applyUnderlay(), state::setApplyUnderlay);
         ImGui.sameLine();
-        tabButton(2, StudioIcons.TILE + " Shape", applyShape);
+        tabButton(2, StudioIcons.TILE + " Shape", state.applyShape(), state::setApplyShape);
         ImGui.sameLine();
-        tabButton(3, StudioIcons.HEIGHT + " Height", applyHeight);
+        tabButton(3, StudioIcons.HEIGHT + " Height", state.applyHeight(), state::setApplyHeight);
         ImGui.sameLine();
-        tabButton(4, StudioIcons.FLAG + " Mask", applyFlags);
+        tabButton(4, StudioIcons.FLAG + " Mask", state.applyFlags(), state::setApplyFlags);
         ImGui.sameLine();
-        tabButton(5, StudioIcons.REFRESH + " Rotation", applyRotation);
+        tabButton(5, StudioIcons.REFRESH + " Rotation", state.applyRotation(), state::setApplyRotation);
     }
 
-    private void tabButton(int index, String label, ImBoolean checkState) {
-        boolean isCurrent = activeTab == index;
-        if (isCurrent) {
-            ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
-        }
-
-        String mark = checkState.get() ? StudioIcons.CHECK + " " : "   ";
-        if (ImGui.button(mark + label + "##tp-tab-" + index)) {
+    private void tabButton(int index, String label, boolean enabled, Consumer<Boolean> setter) {
+        boolean current = activeTab == index;
+        if (current) ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
+        if (ImGui.button((enabled ? StudioIcons.CHECK + " " : "   ") + label + "##tp-tab-" + index)) {
             activeTab = index;
         }
-
-        if (ImGui.isItemClicked(1)) {
-            // Right-click toggles checkbox state
-            checkState.set(!checkState.get());
-        }
-
-        if (isCurrent) {
-            ImGui.popStyleColor();
-        }
+        if (ImGui.isItemClicked(1)) setter.accept(!enabled);
+        if (current) ImGui.popStyleColor();
     }
 
-    private void applyCompositeToSelection(EditorSession session, Set<TileCoordinate> selected) {
+    private void applyCompositeToSelection(EditorSession session, Set<TileCoordinate> selected,
+                                           StudioPanelContext context) {
         if (session == null || selected.isEmpty()) return;
         CompositeTilePainterTool helper = new CompositeTilePainterTool();
-        helper.setApplyUnderlay(applyUnderlay.get());
-        helper.setUnderlayId(underlayId);
-        helper.setApplyOverlay(applyOverlay.get());
-        helper.setOverlayId(overlayId);
-        helper.setApplyShape(applyShape.get());
-        helper.setShape(shape);
-        helper.setApplyRotation(applyRotation.get());
-        helper.setRotation(rotation);
-        helper.setApplyFlags(applyFlags.get());
-        helper.setFlags(flags);
-        helper.setApplyHeight(applyHeight.get());
-        helper.setHeight(heightValue.get());
+        helper.bindState(state);
+        if (context != null && context.brushes() != null) {
+            EditorBrush active = activeBrush(context);
+            if (active != null) helper.setBrush(active);
+        }
         helper.applyToCoordinates(selected, session);
     }
 
     private void renderUnderlayTab(LoadedOsrsCacheSession cache) {
-        ImGui.checkbox("Apply Underlay to painted/selected tiles##chk-und", applyUnderlay);
+        checkbox("Apply Underlay to painted/selected tiles##chk-und",
+                state.applyUnderlay(), state::setApplyUnderlay);
         ImGui.sameLine(0.0f, 20.0f);
-        ImGui.text("Selected Underlay: #" + underlayId);
+        ImGui.text("Selected Underlay: #" + state.underlayId());
         ImGui.separator();
-
-        float swatchSize = 22.0f;
-        float spacing = 3.0f;
-        float availW = ImGui.getContentRegionAvailX();
-        int cols = Math.max(1, (int) (availW / (swatchSize + spacing)));
-        imgui.ImDrawList draw = ImGui.getWindowDrawList();
-
-        for (int i = 0; i < 128; i++) {
-            if (i > 0 && i % cols != 0) ImGui.sameLine(0.0f, spacing);
-
-            int color = 0xFF333333;
-            if (cache != null) {
-                var def = cache.bundle().definitions().underlay(i);
-                if (def.isPresent() && def.get().rgb() > 0) {
-                    color = 0xFF000000 | def.get().rgb();
-                }
-            }
-
-            float sx = ImGui.getCursorScreenPos().x;
-            float sy = ImGui.getCursorScreenPos().y;
-
-            draw.addRectFilled(sx, sy, sx + swatchSize, sy + swatchSize, color);
-            if (i == underlayId) {
-                draw.addRect(sx - 1, sy - 1, sx + swatchSize + 1, sy + swatchSize + 1, 0xFFFFFFFF, 0.0f, 0, 2.0f);
-            } else {
-                draw.addRect(sx, sy, sx + swatchSize, sy + swatchSize, 0xFF222222);
-            }
-
-            if (ImGui.invisibleButton("und-" + i, swatchSize, swatchSize)) {
-                underlayId = i;
-                applyUnderlay.set(true);
-            }
-            if (ImGui.isItemHovered()) {
-                ImGui.setTooltip("Underlay #" + i);
-            }
-        }
+        renderFloorGrid(cache, true);
     }
 
     private void renderOverlayTab(LoadedOsrsCacheSession cache) {
-        ImGui.checkbox("Apply Overlay to painted/selected tiles##chk-ovr", applyOverlay);
+        checkbox("Apply Overlay to painted/selected tiles##chk-ovr",
+                state.applyOverlay(), state::setApplyOverlay);
         ImGui.sameLine(0.0f, 20.0f);
-        ImGui.text("Selected Overlay: #" + overlayId);
+        ImGui.text("Selected Overlay: #" + state.overlayId());
         ImGui.separator();
+        renderFloorGrid(cache, false);
+    }
 
-        float swatchSize = 22.0f;
+    private void renderFloorGrid(LoadedOsrsCacheSession cache, boolean underlay) {
+        float size = 22.0f;
         float spacing = 3.0f;
-        float availW = ImGui.getContentRegionAvailX();
-        int cols = Math.max(1, (int) (availW / (swatchSize + spacing)));
+        int cols = Math.max(1, (int) (ImGui.getContentRegionAvailX() / (size + spacing)));
         imgui.ImDrawList draw = ImGui.getWindowDrawList();
 
         for (int i = 0; i < 128; i++) {
             if (i > 0 && i % cols != 0) ImGui.sameLine(0.0f, spacing);
-
-            int color = 0xFF4A4A4A;
-            if (cache != null) {
-                var def = cache.bundle().definitions().overlay(i);
-                if (def.isPresent() && def.get().rgb() > 0) {
-                    color = 0xFF000000 | def.get().rgb();
-                }
-            }
-
+            int color = floorColor(cache, i, underlay, underlay ? 0xFF333333 : 0xFF4A4A4A);
             float sx = ImGui.getCursorScreenPos().x;
             float sy = ImGui.getCursorScreenPos().y;
-
-            draw.addRectFilled(sx, sy, sx + swatchSize, sy + swatchSize, color);
-            if (i == overlayId) {
-                draw.addRect(sx - 1, sy - 1, sx + swatchSize + 1, sy + swatchSize + 1, 0xFFFFFFFF, 0.0f, 0, 2.0f);
-            } else {
-                draw.addRect(sx, sy, sx + swatchSize, sy + swatchSize, 0xFF222222);
+            draw.addRectFilled(sx, sy, sx + size, sy + size, color);
+            int selected = underlay ? state.underlayId() : state.overlayId();
+            draw.addRect(sx - (i == selected ? 1 : 0), sy - (i == selected ? 1 : 0),
+                    sx + size + (i == selected ? 1 : 0), sy + size + (i == selected ? 1 : 0),
+                    i == selected ? 0xFFFFFFFF : 0xFF222222, 0.0f, 0, i == selected ? 2.0f : 1.0f);
+            if (ImGui.invisibleButton((underlay ? "und-" : "ovr-") + i, size, size)) {
+                if (underlay) {
+                    state.setUnderlayId(i); state.setApplyUnderlay(true);
+                } else {
+                    state.setOverlayId(i); state.setApplyOverlay(true);
+                }
             }
-
-            if (ImGui.invisibleButton("ovr-" + i, swatchSize, swatchSize)) {
-                overlayId = i;
-                applyOverlay.set(true);
-            }
-            if (ImGui.isItemHovered()) {
-                ImGui.setTooltip("Overlay #" + i);
-            }
+            if (ImGui.isItemHovered()) ImGui.setTooltip((underlay ? "Underlay #" : "Overlay #") + i);
         }
     }
 
     private void renderShapeTab() {
-        ImGui.checkbox("Apply Shape to painted/selected tiles##chk-shp", applyShape);
+        checkbox("Apply Shape to painted/selected tiles##chk-shp", state.applyShape(), state::setApplyShape);
         ImGui.sameLine(0.0f, 20.0f);
-        ImGui.text("Selected Shape: " + shape);
+        ImGui.text("Selected Shape: " + state.shape());
         ImGui.separator();
 
         for (int i = 0; i < SHAPE_NAMES.length; i++) {
-            boolean isCur = shape == i;
-            if (isCur) ImGui.pushStyleColor(ImGuiCol.Button, 0xFF3B82F6);
+            boolean current = state.shape() == i;
+            if (current) ImGui.pushStyleColor(ImGuiCol.Button, 0xFF3B82F6);
             if (ImGui.button(SHAPE_NAMES[i] + "##shp-" + i, 140.0f, 28.0f)) {
-                shape = i;
-                applyShape.set(true);
+                state.setShape(i); state.setApplyShape(true);
             }
-            if (isCur) ImGui.popStyleColor();
-
-            if ((i + 1) % 4 != 0 && i + 1 < SHAPE_NAMES.length) {
-                ImGui.sameLine();
-            }
+            if (current) ImGui.popStyleColor();
+            if ((i + 1) % 4 != 0 && i + 1 < SHAPE_NAMES.length) ImGui.sameLine();
         }
     }
 
     private void renderRotationTab() {
-        ImGui.checkbox("Apply Rotation to painted/selected tiles##chk-rot", applyRotation);
+        checkbox("Apply Rotation to painted/selected tiles##chk-rot",
+                state.applyRotation(), state::setApplyRotation);
         ImGui.sameLine(0.0f, 20.0f);
-        ImGui.text("Selected Rotation: " + (rotation * 90) + "°");
+        ImGui.text("Selected Rotation: " + state.rotation() * 90 + "°");
         ImGui.separator();
 
         for (int i = 0; i < ROTATION_NAMES.length; i++) {
-            boolean isCur = rotation == i;
-            if (isCur) ImGui.pushStyleColor(ImGuiCol.Button, 0xFF3B82F6);
+            boolean current = state.rotation() == i;
+            if (current) ImGui.pushStyleColor(ImGuiCol.Button, 0xFF3B82F6);
             if (ImGui.button(ROTATION_NAMES[i] + "##rot-" + i, 160.0f, 32.0f)) {
-                rotation = i;
-                applyRotation.set(true);
+                state.setRotation(i); state.setApplyRotation(true);
             }
-            if (isCur) ImGui.popStyleColor();
+            if (current) ImGui.popStyleColor();
             ImGui.sameLine();
         }
         ImGui.newLine();
     }
 
     private void renderFlagsTab() {
-        ImGui.checkbox("Apply Flags to painted/selected tiles##chk-flg", applyFlags);
+        checkbox("Apply Flags to painted/selected tiles##chk-flg", state.applyFlags(), state::setApplyFlags);
         ImGui.sameLine(0.0f, 20.0f);
-        ImGui.text("Flags Mask: 0x" + Integer.toHexString(flags));
+        ImGui.text("Flags Mask: 0x" + Integer.toHexString(state.flags()));
         ImGui.separator();
 
-        boolean blocked = (flags & OsrsTileFlags.BLOCK_MAP_SQUARE) != 0;
-        if (ImGui.checkbox("Blocked Tile (0x01)##blk", blocked)) {
-            flags ^= OsrsTileFlags.BLOCK_MAP_SQUARE;
-            applyFlags.set(true);
-        }
+        flagCheckbox("Blocked Tile (0x01)##blk", OsrsTileFlags.BLOCK_MAP_SQUARE);
+        flagCheckbox("Bridge Tile (0x02)##brg", OsrsTileFlags.BRIDGE);
+        flagCheckbox("Remove Roofs (0x04)##rf", OsrsTileFlags.REMOVE_ROOFS);
+        flagCheckbox("Minimap Bridge (0x08)##mmb", OsrsTileFlags.MINIMAP_BRIDGE);
+    }
 
-        boolean bridge = (flags & OsrsTileFlags.BRIDGE) != 0;
-        if (ImGui.checkbox("Bridge Tile (0x02)##brg", bridge)) {
-            flags ^= OsrsTileFlags.BRIDGE;
-            applyFlags.set(true);
-        }
-
-        boolean roof = (flags & OsrsTileFlags.REMOVE_ROOFS) != 0;
-        if (ImGui.checkbox("Remove Roofs (0x04)##rf", roof)) {
-            flags ^= OsrsTileFlags.REMOVE_ROOFS;
-            applyFlags.set(true);
+    private void flagCheckbox(String label, int bit) {
+        boolean current = (state.flags() & bit) != 0;
+        ImBoolean value = new ImBoolean(current);
+        if (ImGui.checkbox(label, value)) {
+            state.setFlags(value.get() ? state.flags() | bit : state.flags() & ~bit);
+            state.setApplyFlags(true);
         }
     }
 
     private void renderHeightTab() {
-        ImGui.checkbox("Apply Height to painted/selected tiles##chk-hgt", applyHeight);
+        checkbox("Apply Height to painted/selected tiles##chk-hgt", state.applyHeight(), state::setApplyHeight);
         ImGui.sameLine(0.0f, 20.0f);
-        ImGui.text("Target Height: " + heightValue.get());
+        ImGui.text("Target Height: " + state.height());
         ImGui.separator();
 
+        ImInt height = new ImInt(state.height());
         ImGui.setNextItemWidth(260.0f);
-        if (ImGui.sliderInt("Height Value##h-val", heightValue.getData(), -512, 512)) {
-            applyHeight.set(true);
+        if (ImGui.sliderInt("Height Value##h-val", height.getData(), -2048, 2048)) {
+            state.setHeight(height.get());
+            state.setApplyHeight(true);
         }
-
         ImGui.sameLine();
         if (ImGui.button("Reset to 0##h-0")) {
-            heightValue.set(0);
-            applyHeight.set(true);
+            state.setHeight(0);
+            state.setApplyHeight(true);
         }
+    }
+
+    private static void checkbox(String label, boolean current, Consumer<Boolean> setter) {
+        ImBoolean value = new ImBoolean(current);
+        if (ImGui.checkbox(label, value)) setter.accept(value.get());
     }
 }
