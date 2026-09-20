@@ -85,7 +85,7 @@ class EditorPluginHostTest {
         assertEquals(List.of("rspsi.tools.terrain", "rspsi.tools.objects", "rspsi.tools.selection",
                         "rspsi.tools.renderer-debug", "rspsi.ui.core-surfaces"),
                 host.plugins().stream().map(EditorPlugin::id).toList());
-        assertEquals(22, host.registry().toolRegistrations().size());
+        assertEquals(21, host.registry().toolRegistrations().size());
         EditorToolRegistration registration = host.registry().toolRegistrations().get(0);
         assertEquals("terrain.paint-underlay", registration.id());
         assertEquals("Terrain", registration.category());
