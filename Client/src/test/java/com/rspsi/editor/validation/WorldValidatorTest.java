@@ -18,14 +18,19 @@ class WorldValidatorTest {
     void reportsBrokenEdgesAndUnsupportedMapValues() {
         WorldDocument document = new WorldDocument(2, 2, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 8, 8, 8,
-                0, 1, 13, 0, 33, List.of()));
+                0, 1, 11, 0, 33, List.of()));
 
         List<ValidationIssue> issues = WorldValidator.validate(document);
 
         assertTrue(issues.stream().anyMatch(issue -> issue.code().equals("BROKEN_EAST_EDGE")));
         assertTrue(issues.stream().anyMatch(issue -> issue.code().equals("BROKEN_NORTH_EDGE")));
-        assertTrue(issues.stream().anyMatch(issue -> issue.code().equals("UNSUPPORTED_OVERLAY_SHAPE")));
         assertTrue(issues.stream().anyMatch(issue -> issue.code().equals("INVALID_TILE_FLAGS")));
+    }
+
+    @Test
+    void canonicalSnapshotRejectsUnsupportedOverlayShapeBeforeValidation() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+                new TileSnapshot(0, 0, 0, 0, 0, 1, 12, 0, 0, List.of()));
     }
 
     @Test
