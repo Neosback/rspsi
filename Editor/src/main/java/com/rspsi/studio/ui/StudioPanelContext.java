@@ -36,4 +36,26 @@ public record StudioPanelContext(
         com.rspsi.studio.plugin.StudioPluginManager studioPlugins,
         StudioBrushManager brushes,
         ViewportHudManager huds) {
+
+    /** Compatibility constructor for tests and transitional callers. */
+    public StudioPanelContext(
+            LoadedOsrsCacheSession cache,
+            SettingsStore settings,
+            EditorSession session,
+            EditorPluginLifecycleManager pluginLifecycle,
+            NativeSceneViewport viewport,
+            SimulationEngine simulation,
+            SymbolService symbols,
+            ReferenceService references,
+            NpcSpawnService spawns,
+            ServerIntegrationService integrations,
+            Consumer<String> activateTool,
+            String activeToolId,
+            EditorToolController toolController,
+            com.rspsi.studio.plugin.StudioPluginManager studioPlugins,
+            StudioBrushManager brushes) {
+        this(cache, settings, session, pluginLifecycle, viewport, simulation, symbols,
+                references, spawns, integrations, activateTool, activeToolId,
+                toolController, studioPlugins, brushes, new ViewportHudManager());
+    }
 }
