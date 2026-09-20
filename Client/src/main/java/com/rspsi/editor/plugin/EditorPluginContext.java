@@ -127,6 +127,16 @@ public record EditorPluginContext(
         return ContributionOwner.SYSTEM;
     }
 
+    /** Unified domain services for third-party and first-party plugins. */
+    public com.rspsi.editor.plugin.services.PluginServices services() {
+        return com.rspsi.editor.plugin.services.PluginServices.resolve(session, assets, registry);
+    }
+
+    /** Typed synchronous event bus shared by every plugin in this host. */
+    public com.rspsi.editor.plugin.event.EditorEventBus events() {
+        return services().events();
+    }
+
     /** Tracks a plugin-owned resource for automatic host cleanup. */
     @Override
     public <T extends AutoCloseable> T track(T resource) {

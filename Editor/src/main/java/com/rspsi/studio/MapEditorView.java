@@ -288,6 +288,11 @@ public final class MapEditorView {
                     Math.max(160.0f, ImGui.getContentRegionAvailY()),
                     settings.snapshot().get(RenderSettingKeys.MSAA_SAMPLES),
                     new RenderConfigCompiler().compile(settings.snapshot()).presentation());
+            if (pluginLifecycle != null && pluginLifecycle.host() != null) {
+                pluginLifecycle.host().context().events().publish(
+                        new com.rspsi.editor.plugin.event.SceneRenderedEvent(
+                                plan.fingerprint(), 0L));
+            }
 
             // Feed real mouse input to the active EditorTool (selection, tile-painter brush,
             // height sculptor, etc). Must run before any other ImGui widget call this frame so
@@ -345,6 +350,7 @@ public final class MapEditorView {
     }
 
     private void activateTool(EditorPluginLifecycleManager pluginLifecycle, String registrationId) {
+        String previousToolId = activeToolId;
         activeToolId = registrationId;
         // Tools with nothing to show in the shelf (e.g. Single/Multi Select, which report into
         // the Tile Inspector panel instead) auto-collapse the drawer rather than showing it empty.
@@ -374,6 +380,9 @@ public final class MapEditorView {
         toolController.activate(tool,
                 new ToolContext(pluginLifecycle.host().context().session(),
                         pluginLifecycle.host().context().assets(), viewport));
+        pluginLifecycle.host().context().events().publish(
+                new com.rspsi.editor.plugin.event.ToolActivatedEvent(
+                        previousToolId, registrationId));
     }
 
     private static EditorSession session(EditorPluginLifecycleManager pluginLifecycle) {

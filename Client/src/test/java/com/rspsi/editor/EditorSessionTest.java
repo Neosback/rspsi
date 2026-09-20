@@ -17,7 +17,7 @@ class EditorSessionTest {
         WorldModel world = new WorldModel(4, 4);
         EditorSession session = new EditorSession(world);
         TileSnapshot before = world.tile(TILE).snapshot();
-        TileSnapshot after = new TileSnapshot(10, 20, 30, 40, 3, 4, 12, 2, 8, List.of());
+        TileSnapshot after = new TileSnapshot(10, 20, 30, 40, 3, 4, 11, 2, 8, List.of());
 
         session.markSaved();
         session.execute(new SetTileCommand(TILE, before, after, "Paint tile"));

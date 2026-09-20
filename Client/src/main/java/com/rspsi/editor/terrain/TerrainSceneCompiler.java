@@ -16,28 +16,38 @@ import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.RegionNeighborhood;
+import com.rspsi.editor.model.WorldRegion;
+import com.rspsi.editor.render.LightingProfile;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
 import com.rspsi.editor.render.TerrainAppearance;
 import com.rspsi.editor.render.TerrainAppearanceBuilder;
 import com.rspsi.editor.render.TerrainLight;
 import com.rspsi.editor.render.TerrainLighting;
-import com.rspsi.editor.render.TerrainShadowMap;
-import com.rspsi.editor.render.LightingProfile;
 import com.rspsi.editor.render.TerrainPacketBuilder;
+import com.rspsi.editor.render.TerrainShadowMap;
+import com.rspsi.editor.render.compiler.InvalidationGraph;
+import com.rspsi.editor.render.compiler.SceneZone;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
- * Authoritative authored-terrain compiler. The same compiled tile can be used
- * by the 3D renderer, palette preview, hover ghost, minimap and diagnostics.
+ * Authoritative authored-terrain compiler.
+ *
+ * <p>The zone APIs are the incremental path: only tiles inside requested 8x8
+ * zones are compiled, while radius-based underlay and normal sampling still
+ * reads canonical neighboring tiles from the document.</p>
  */
 public final class TerrainSceneCompiler {
     private final TerrainMeshBuilder meshBuilder = new TerrainMeshBuilder();
     private final TerrainPacketBuilder packetBuilder = new TerrainPacketBuilder();
+    private final TerrainAppearanceBuilder appearanceBuilder = new TerrainAppearanceBuilder();
 
     public Map<TileCoordinate, CompiledTerrainTile> compile(WorldDocument document,
                                                              AssetRepository assets) {
@@ -55,36 +65,102 @@ public final class TerrainSceneCompiler {
                                                              DefinitionProvider definitions,
                                                              LightingProfile lightingProfile) {
         Objects.requireNonNull(document, "document");
+        Set<InvalidationGraph.ZoneCoordinate> zones = new LinkedHashSet<>();
+        int maxZoneX = (document.width() - 1) >> 3;
+        int maxZoneY = (document.length() - 1) >> 3;
+        for (int plane = 0; plane < document.planes(); plane++) {
+            for (int zoneX = 0; zoneX <= maxZoneX; zoneX++) {
+                for (int zoneY = 0; zoneY <= maxZoneY; zoneY++) {
+                    zones.add(new InvalidationGraph.ZoneCoordinate(plane, zoneX, zoneY));
+                }
+            }
+        }
+        return compileZones(document, definitions, lightingProfile, zones);
+    }
+
+    /**
+     * Compiles only the requested 8x8 zones. Neighborhood-dependent rules are
+     * sampled from the full canonical document, so a zone boundary never
+     * becomes a color or normal boundary.
+     */
+    public Map<TileCoordinate, CompiledTerrainTile> compileZones(
+            WorldDocument document,
+            DefinitionProvider definitions,
+            LightingProfile lightingProfile,
+            Set<InvalidationGraph.ZoneCoordinate> zones) {
+        Objects.requireNonNull(document, "document");
         Objects.requireNonNull(definitions, "definitions");
         Objects.requireNonNull(lightingProfile, "lightingProfile");
-        Map<TileCoordinate, TerrainAppearance> appearances =
-                new TerrainAppearanceBuilder().build(document, definitions);
-        TerrainShadowMap shadows = TerrainShadowMap.from(document, definitions);
-        Map<TileCoordinate, TerrainLight> lighting =
-                TerrainLighting.build(document, lightingProfile, shadows);
+        Objects.requireNonNull(zones, "zones");
+        if (zones.isEmpty()) return Map.of();
 
+        TerrainShadowMap shadows = TerrainShadowMap.from(document, definitions);
         Map<TileCoordinate, CompiledTerrainTile> result = new LinkedHashMap<>();
+        for (InvalidationGraph.ZoneCoordinate zone : zones) {
+            validateZone(document, zone);
+            int startX = zone.zoneX() * SceneZone.ZONE_SIZE;
+            int startY = zone.zoneY() * SceneZone.ZONE_SIZE;
+            int endX = Math.min(document.width(), startX + SceneZone.ZONE_SIZE);
+            int endY = Math.min(document.length(), startY + SceneZone.ZONE_SIZE);
+            for (int x = startX; x < endX; x++) {
+                for (int y = startY; y < endY; y++) {
+                    TileCoordinate coordinate = new TileCoordinate(zone.plane(), x, y);
+                    result.put(coordinate, compileTile(
+                            document, definitions, lightingProfile, shadows, coordinate));
+                }
+            }
+        }
+        return Map.copyOf(result);
+    }
+
+    public Map<TileCoordinate, CompiledTerrainTile> compileZone(
+            WorldDocument document,
+            DefinitionProvider definitions,
+            LightingProfile lightingProfile,
+            InvalidationGraph.ZoneCoordinate zone) {
+        return compileZones(document, definitions, lightingProfile, Set.of(zone));
+    }
+
+    /**
+     * Compiles the center 64x64 region while sampling appearance, normals and
+     * bridge semantics from its loaded 3x3 neighborhood.
+     */
+    public Map<TileCoordinate, CompiledTerrainTile> compileCenterRegion(
+            RegionNeighborhood neighborhood,
+            DefinitionProvider definitions,
+            LightingProfile lightingProfile) {
+        Objects.requireNonNull(neighborhood, "neighborhood");
+        Objects.requireNonNull(definitions, "definitions");
+        Objects.requireNonNull(lightingProfile, "lightingProfile");
+        WorldRegion center = neighborhood.center();
+        WorldDocument document = center.document();
+        int originX = center.regionX() * WorldRegion.REGION_SIZE;
+        int originY = center.regionY() * WorldRegion.REGION_SIZE;
+        Map<TileCoordinate, CompiledTerrainTile> result = new LinkedHashMap<>();
+
         for (int plane = 0; plane < document.planes(); plane++) {
             for (int x = 0; x < document.width(); x++) {
                 for (int y = 0; y < document.length(); y++) {
                     TileCoordinate coordinate = new TileCoordinate(plane, x, y);
+                    int worldX = originX + x;
+                    int worldY = originY + y;
                     var snapshot = document.tile(coordinate).snapshot();
                     TerrainMesh mesh = meshBuilder.build(snapshot);
-                    TerrainAppearance appearance = appearances.get(coordinate);
-                    var packet = packetBuilder.build(coordinate, mesh, appearance, lighting.get(coordinate));
+                    TerrainAppearance appearance = appearanceBuilder.buildTile(
+                            neighborhood, definitions, plane, worldX, worldY);
+                    TerrainLight lighting = TerrainLighting.buildTile(
+                            neighborhood, lightingProfile, plane, worldX, worldY);
+                    var packet = packetBuilder.build(coordinate, mesh, appearance, lighting);
                     int flags = snapshot.flags();
                     int minimapHsl = appearance.overlayMinimapHsl() >= 0
                             ? appearance.overlayMinimapHsl() : appearance.underlayHsl();
                     int minimapRgb = minimapHsl >= 0
-                            ? OsrsTerrainColorMath.packedHslToRgb(minimapHsl, 0.6)
-                            : 0;
+                            ? OsrsTerrainColorMath.packedHslToRgb(minimapHsl, 0.6) : 0;
                     result.put(coordinate, new CompiledTerrainTile(
-                            coordinate, mesh, appearance, lighting.get(coordinate), packet,
-                            document.effectivePlane(coordinate),
-                            OsrsTileFlags.hasBridge(flags),
-                            OsrsTileFlags.removesRoofs(flags),
-                            flags,
-                            minimapRgb));
+                            coordinate, mesh, appearance, lighting, packet,
+                            neighborhood.effectivePlane(plane, worldX, worldY),
+                            OsrsTileFlags.hasBridge(flags), OsrsTileFlags.removesRoofs(flags),
+                            flags, minimapRgb));
                 }
             }
         }
@@ -94,19 +170,66 @@ public final class TerrainSceneCompiler {
     public CompiledTerrainTile compileTile(WorldDocument document,
                                            AssetRepository assets,
                                            TileCoordinate coordinate) {
-        Objects.requireNonNull(coordinate, "coordinate");
-        CompiledTerrainTile tile = compile(document, assets).get(coordinate);
-        if (tile == null) throw new IndexOutOfBoundsException("Tile outside document: " + coordinate);
-        return tile;
+        Objects.requireNonNull(assets, "assets");
+        return compileTile(document, new AssetRepositoryDefinitions(assets),
+                LightingProfile.osrs(), TerrainShadowMap.from(document,
+                        new AssetRepositoryDefinitions(assets)), coordinate);
     }
 
     public CompiledTerrainTile compileTile(WorldDocument document,
                                            DefinitionProvider definitions,
                                            TileCoordinate coordinate) {
+        Objects.requireNonNull(definitions, "definitions");
+        return compileTile(document, definitions, LightingProfile.osrs(),
+                TerrainShadowMap.from(document, definitions), coordinate);
+    }
+
+    private CompiledTerrainTile compileTile(WorldDocument document,
+                                            DefinitionProvider definitions,
+                                            LightingProfile lightingProfile,
+                                            TerrainShadowMap shadows,
+                                            TileCoordinate coordinate) {
+        Objects.requireNonNull(document, "document");
+        Objects.requireNonNull(definitions, "definitions");
+        Objects.requireNonNull(lightingProfile, "lightingProfile");
         Objects.requireNonNull(coordinate, "coordinate");
-        CompiledTerrainTile tile = compile(document, definitions).get(coordinate);
-        if (tile == null) throw new IndexOutOfBoundsException("Tile outside document: " + coordinate);
-        return tile;
+        if (!document.contains(coordinate)) {
+            throw new IndexOutOfBoundsException("Tile outside document: " + coordinate);
+        }
+
+        var snapshot = document.tile(coordinate).snapshot();
+        TerrainMesh mesh = meshBuilder.build(snapshot);
+        TerrainAppearance appearance = appearanceBuilder.buildTile(
+                document, definitions, coordinate.plane(), coordinate.x(), coordinate.y());
+        TerrainLight lighting = TerrainLighting.buildTile(
+                document, lightingProfile, shadows,
+                coordinate.plane(), coordinate.x(), coordinate.y());
+        var packet = packetBuilder.build(coordinate, mesh, appearance, lighting);
+        int flags = snapshot.flags();
+        int minimapHsl = appearance.overlayMinimapHsl() >= 0
+                ? appearance.overlayMinimapHsl() : appearance.underlayHsl();
+        int minimapRgb = minimapHsl >= 0
+                ? OsrsTerrainColorMath.packedHslToRgb(minimapHsl, 0.6)
+                : 0;
+        return new CompiledTerrainTile(
+                coordinate, mesh, appearance, lighting, packet,
+                document.effectivePlane(coordinate),
+                OsrsTileFlags.hasBridge(flags),
+                OsrsTileFlags.removesRoofs(flags),
+                flags,
+                minimapRgb);
+    }
+
+    private static void validateZone(WorldDocument document,
+                                     InvalidationGraph.ZoneCoordinate zone) {
+        Objects.requireNonNull(zone, "zone");
+        int maxZoneX = (document.width() - 1) >> 3;
+        int maxZoneY = (document.length() - 1) >> 3;
+        if (zone.plane() < 0 || zone.plane() >= document.planes()
+                || zone.zoneX() < 0 || zone.zoneX() > maxZoneX
+                || zone.zoneY() < 0 || zone.zoneY() > maxZoneY) {
+            throw new IndexOutOfBoundsException("Zone outside document: " + zone);
+        }
     }
 
     /** Adapter that keeps the compiler on the public AssetRepository boundary. */

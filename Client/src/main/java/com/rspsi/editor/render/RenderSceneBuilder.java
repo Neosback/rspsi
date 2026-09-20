@@ -16,6 +16,7 @@ import com.rspsi.editor.terrain.TerrainMesh;
 import com.rspsi.editor.terrain.TerrainMeshBuilder;
 import com.rspsi.editor.terrain.CompiledTerrainTile;
 import com.rspsi.editor.terrain.TerrainSceneCompiler;
+import com.rspsi.editor.render.compiler.InvalidationGraph;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -134,39 +135,48 @@ public final class RenderSceneBuilder {
         Map<TileCoordinate, TerrainMaterial> materials = new LinkedHashMap<>(previous.terrainMaterials());
         Map<TileCoordinate, TerrainAppearance> appearances = new LinkedHashMap<>(previous.terrainAppearances());
         Map<TileCoordinate, TerrainRenderPacket> packets = new LinkedHashMap<>(previous.terrainPackets());
+        Set<TileCoordinate> dirtyTiles = changes.dirtyTiles();
+        Set<com.rspsi.editor.render.compiler.InvalidationGraph.ZoneCoordinate> dirtyZones =
+                definitions == null ? Set.of() : InvalidationGraph.computeInvalidatedZones(
+                        dirtyTiles, InvalidationGraph.InvalidationCause.UNDERLAY_EDIT,
+                        document.width(), document.length());
         Map<TileCoordinate, CompiledTerrainTile> compiledTerrain = definitions == null
-                ? Map.of() : new TerrainSceneCompiler().compile(document, definitions, lightingProfile);
-        Map<TileCoordinate, TerrainLight> lighting = definitions == null
-                ? new LinkedHashMap<>(TerrainLighting.build(document, lightingProfile, null))
-                : compiledTerrain.entrySet().stream().collect(java.util.stream.Collectors.toMap(
-                        Map.Entry::getKey, entry -> entry.getValue().lighting(),
-                        (first, second) -> first, LinkedHashMap::new));
+                ? Map.of() : new TerrainSceneCompiler().compileZones(
+                        document, definitions, lightingProfile, dirtyZones);
+        Map<TileCoordinate, TerrainLight> lighting =
+                new LinkedHashMap<>(previous.terrainLighting());
+        if (definitions == null) {
+            lighting.putAll(TerrainLighting.build(document, lightingProfile, null));
+        } else {
+            compiledTerrain.forEach((coordinate, tile) ->
+                    lighting.put(coordinate, tile.lighting()));
+        }
         Map<TileCoordinate, CollisionTileSnapshot> collision = collision(document);
         List<RenderObject> renderObjects = new ArrayList<>();
-        Set<TileCoordinate> dirtyTiles = changes.dirtyTiles();
         for (TileCoordinate coordinate : dirtyTiles) {
-            if (coordinate.plane() >= document.planes()
-                    || coordinate.x() >= document.width()
-                    || coordinate.y() >= document.length()) {
+            if (coordinate.plane() < 0 || coordinate.plane() >= document.planes()
+                    || coordinate.x() < 0 || coordinate.x() >= document.width()
+                    || coordinate.y() < 0 || coordinate.y() >= document.length()) {
                 throw new IllegalArgumentException("Dirty tile is outside the scene document: " + coordinate);
             }
             if (definitions == null) {
                 meshes.put(coordinate, terrainMeshes.build(document.tile(coordinate).snapshot()));
-            } else {
-                CompiledTerrainTile compiled = compiledTerrain.get(coordinate);
+            }
+        }
+        if (definitions != null) {
+            compiledTerrain.forEach((coordinate, compiled) -> {
                 meshes.put(coordinate, compiled.mesh());
                 materials.put(coordinate, material(document.tile(coordinate).snapshot()));
                 appearances.put(coordinate, compiled.appearance());
-            }
+            });
         }
         List<WorldObject> objects = collectObjects(document);
         for (WorldObject object : objects) renderObjects.add(resolve(object));
         List<ModelRenderPacket> modelPackets = definitions == null
                 ? List.of() : new ModelPacketBuilder(definitions, lightingProfile).build(document, clientCycle);
         if (definitions != null) {
-            for (TileCoordinate coordinate : dirtyTiles) {
-                packets.put(coordinate, compiledTerrain.get(coordinate).renderPacket());
-            }
+            compiledTerrain.forEach((coordinate, compiled) ->
+                    packets.put(coordinate, compiled.renderPacket()));
         }
         Map<Integer, RenderTextureResource> textures = definitions == null ? previous.textures()
                 : RenderTextureResourceBuilder.build(definitions, lightingProfile,

@@ -14,13 +14,13 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /** Resolves only the textures referenced by the immutable scene packets. */
-final class RenderTextureResourceBuilder {
+public final class RenderTextureResourceBuilder {
     private static final int OSRS_TEXTURE_SIZE = 128;
 
     private RenderTextureResourceBuilder() {
     }
 
-    static Map<Integer, RenderTextureResource> build(DefinitionProvider definitions,
+    public static Map<Integer, RenderTextureResource> build(DefinitionProvider definitions,
                                                       LightingProfile lighting,
                                                       Collection<TerrainRenderPacket> terrainPackets,
                                                       Collection<ModelRenderPacket> modelPackets) {

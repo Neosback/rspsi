@@ -3,7 +3,7 @@ package com.rspsi.studio;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.render.CameraState;
-import com.rspsi.editor.render.GpuPlanPicker;
+import com.rspsi.editor.render.picker.DdaScenePicker;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.editor.render.RenderPresentation;
@@ -22,7 +22,7 @@ import java.util.Objects;
 public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private final OpenGlSceneRenderer renderer = new OpenGlSceneRenderer();
     private final GlFramebuffer framebuffer = new GlFramebuffer();
-    private final GpuPlanPicker picker = new GpuPlanPicker();
+    private final DdaScenePicker picker = new DdaScenePicker();
     private GpuUploadPlan lastPlan;
     private int lastWidth;
     private int lastHeight;
@@ -81,7 +81,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     }
 
     /**
-     * Ray-picks the last rendered plan at a position in viewport-local
+     * DDA-picks the last rendered plan at a position in viewport-local
      * pixels. The plan, size, and camera used for the most recent frame are
      * retained so a click resolves against exactly what the user saw.
      */
