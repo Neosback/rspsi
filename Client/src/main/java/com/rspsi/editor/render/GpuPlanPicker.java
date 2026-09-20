@@ -1,6 +1,6 @@
 package com.rspsi.editor.render;
 
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.WorldTileAddress;
 
 import java.util.Objects;
@@ -73,15 +73,15 @@ public final class GpuPlanPicker {
         }
         if (best == null) return Optional.empty();
         WorldTileAddress address = best.command.tile();
-        TileCoordinate tile;
+        WorldTile tile;
         if (best.command.layer() == SceneLayer.Kind.TERRAIN && best.command.objectId() < 0) {
             float hitX = ray.ox() + best.distance * ray.dx();
             float hitZ = ray.oz() + best.distance * ray.dz();
             int tileX = (int) Math.floor(hitX / 128.0f);
             int tileY = (int) Math.floor(hitZ / 128.0f);
-            tile = new TileCoordinate(address.plane(), tileX, tileY);
+            tile = new WorldTile(address.plane(), tileX, tileY);
         } else {
-            tile = new TileCoordinate(address.plane(), address.worldX(), address.worldY());
+            tile = new WorldTile(address.plane(), address.worldX(), address.worldY());
         }
         return Optional.of(new PickResult(tile, address.plane(), best.command.objectId(),
                 best.distance, best.command.layer(), best.command.priority(),
