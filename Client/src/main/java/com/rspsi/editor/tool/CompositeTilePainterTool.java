@@ -1,6 +1,8 @@
 package com.rspsi.editor.tool;
 
 import com.rspsi.editor.CompositeEditCommand;
+import com.rspsi.editor.brush.EditorBrush;
+import com.rspsi.editor.brush.builtin.SquareBrush;
 import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.SetTileCommand;
 import com.rspsi.editor.input.PointerButton;
@@ -39,8 +41,11 @@ public final class CompositeTilePainterTool implements EditorTool {
     private int height = 0;
 
     private ToolContext context;
+    private EditorBrush brush = new SquareBrush();
+    private int brushRadius = 0;
     private final List<EditorCommand> stroke = new ArrayList<>();
     private final Set<TileCoordinate> visited = new LinkedHashSet<>();
+    private final Set<TileCoordinate> targetLocals = new LinkedHashSet<>();
 
     public CompositeTilePainterTool() {
     }
@@ -74,6 +79,18 @@ public final class CompositeTilePainterTool implements EditorTool {
     public void setApplyHeight(boolean apply) { this.applyHeight = apply; }
     public int height() { return height; }
     public void setHeight(int h) { this.height = h; }
+
+    public EditorBrush brush() { return brush; }
+    public void setBrush(EditorBrush brush) {
+        this.brush = java.util.Objects.requireNonNull(brush, "brush");
+    }
+    public int brushRadius() { return brushRadius; }
+    public void setBrushRadius(int brushRadius) {
+        if (brushRadius < 0 || brushRadius > 64) {
+            throw new IllegalArgumentException("Brush radius must be 0 through 64");
+        }
+        this.brushRadius = brushRadius;
+    }
 
     @Override
     public String id() {
@@ -109,8 +126,11 @@ public final class CompositeTilePainterTool implements EditorTool {
 
     @Override
     public void pointerUp(PointerEvent event) {
-        if (context != null && !stroke.isEmpty()) {
-            context.session().execute(new CompositeEditCommand("Paint composite tiles", stroke));
+        if (context != null && !targetLocals.isEmpty()) {
+            buildStroke();
+            if (!stroke.isEmpty()) {
+                context.session().execute(new CompositeEditCommand("Paint composite tiles", stroke));
+            }
         }
         clear();
     }
@@ -164,18 +184,31 @@ public final class CompositeTilePainterTool implements EditorTool {
     }
 
     private void addTile(PointerEvent event) {
-        context.viewport().tileAt(event.x(), event.y()).ifPresent(absolute -> {
-            // "visited" dedups by the absolute pick and drives the 3D brush overlay (which must
-            // draw at the real world position); WorldDocument/the command need the region-local
-            // equivalent since that's what they're indexed by.
-            if (!visited.add(absolute)) return;
-            TileCoordinate local = toLocal(absolute, context.session().world());
+        context.viewport().tileAt(event.x(), event.y()).ifPresent(center -> {
+            int radius = Math.max(0, brushRadius);
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dy = -radius; dy <= radius; dy++) {
+                    if (brush.weight(dx, dy, radius) <= 0.0) continue;
+                    TileCoordinate absolute = new TileCoordinate(
+                            center.plane(), center.x() + dx, center.y() + dy);
+                    TileCoordinate local = toLocal(absolute, context.session().world());
+                    if (!context.session().world().contains(local)) continue;
+                    visited.add(absolute);
+                    targetLocals.add(local);
+                }
+            }
+        });
+    }
+
+    private void buildStroke() {
+        stroke.clear();
+        for (TileCoordinate local : targetLocals) {
             TileSnapshot before = context.session().world().tile(local).snapshot();
             TileSnapshot after = transformTile(before);
             if (!before.equals(after)) {
                 stroke.add(new SetTileCommand(local, before, after, "Paint composite tile at " + local));
             }
-        });
+        }
     }
 
     /**
@@ -193,5 +226,6 @@ public final class CompositeTilePainterTool implements EditorTool {
     private void clear() {
         stroke.clear();
         visited.clear();
+        targetLocals.clear();
     }
 }

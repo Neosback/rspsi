@@ -1,6 +1,8 @@
 package com.rspsi.studio.ui.panels;
 
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.editor.brush.BrushCapability;
+import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.tool.CompositeTilePainterTool;
@@ -15,7 +17,9 @@ import imgui.flag.ImGuiStyleVar;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -133,12 +137,19 @@ public final class TilePainterPalette implements StudioPanel {
             tool.setFlags(flags);
             tool.setApplyHeight(applyHeight.get());
             tool.setHeight(heightValue.get());
+            if (context.brushes() != null) {
+                EditorBrush activeBrush = activeBrush(context);
+                if (activeBrush != null) tool.setBrush(activeBrush);
+                tool.setBrushRadius(context.brushes().brushRadius());
+            }
         }
 
         // Header matching Displee
         ImGui.textColored(0xFFE2E8F0, "Tile Painter");
         ImGui.sameLine(0.0f, 20.0f);
         renderPresets();
+        ImGui.separator();
+        renderBrushStrip(context);
         ImGui.separator();
 
         float availW = ImGui.getContentRegionAvailX();
@@ -235,6 +246,72 @@ public final class TilePainterPalette implements StudioPanel {
         if (ImGui.isItemHovered() && selCount == 0) {
             ImGui.setTooltip("Select tiles first with the Selector to apply");
         }
+    }
+
+    private void renderBrushStrip(StudioPanelContext context) {
+        if (context.brushes() == null) return;
+
+        List<EditorBrush> compatible = compatibleBrushes(context);
+        EditorBrush active = activeBrush(context);
+
+        ImGui.textDisabled("Brush:");
+        ImGui.sameLine();
+        for (EditorBrush brush : compatible) {
+            boolean selected = active != null && brush.id().equals(active.id());
+            if (selected) {
+                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
+            }
+            if (ImGui.smallButton(brush.name() + "##tile-brush-" + brush.id())) {
+                context.brushes().setActiveBrush("terrain.tile-painter", brush.id());
+                active = brush;
+            }
+            if (selected) ImGui.popStyleColor();
+            if (ImGui.isItemHovered()) {
+                ImGui.setTooltip(brush.description() + "\n" + String.join(", ", context.brushes().capabilityLabels(brush)));
+            }
+            ImGui.sameLine();
+        }
+        ImGui.newLine();
+
+        ImInt radius = new ImInt(context.brushes().brushRadius());
+        ImGui.setNextItemWidth(180.0f);
+        if (ImGui.sliderInt("Radius##tile-brush-radius", radius.getData(), 0, 16)) {
+            context.brushes().setBrushRadius(radius.get());
+        }
+        ImGui.sameLine();
+        ImGui.textDisabled("Quick:");
+        for (int preset : new int[]{0, 1, 2, 3, 5}) {
+            ImGui.sameLine();
+            if (ImGui.smallButton(preset + "##tile-brush-radius-" + preset)) {
+                context.brushes().setBrushRadius(preset);
+            }
+        }
+    }
+
+    private List<EditorBrush> compatibleBrushes(StudioPanelContext context) {
+        List<EditorBrush> result = new ArrayList<>();
+        for (EditorBrush brush : context.brushes().enabledBrushes()) {
+            boolean spatial = brush.capabilities().contains(BrushCapability.SPATIAL_FOOTPRINT);
+            boolean paint = brush.capabilities().contains(BrushCapability.TILE_PAINT);
+            boolean height = brush.capabilities().contains(BrushCapability.HEIGHT_MANIPULATION);
+            if (spatial && (paint || (applyHeight.get() && height))) {
+                result.add(brush);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private EditorBrush activeBrush(StudioPanelContext context) {
+        List<EditorBrush> compatible = compatibleBrushes(context);
+        if (compatible.isEmpty()) return null;
+        EditorBrush active = context.brushes().activeBrush(
+                "terrain.tile-painter", Set.of(BrushCapability.SPATIAL_FOOTPRINT));
+        if (active != null && compatible.stream().anyMatch(brush -> brush.id().equals(active.id()))) {
+            return active;
+        }
+        EditorBrush fallback = compatible.get(0);
+        context.brushes().setActiveBrush("terrain.tile-painter", fallback.id());
+        return fallback;
     }
 
     private void renderPresets() {
