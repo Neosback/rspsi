@@ -12,6 +12,7 @@ import com.rspsi.editor.symbols.SymbolService;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.studio.NativeSceneViewport;
 import com.rspsi.studio.brush.StudioBrushManager;
+import com.rspsi.studio.ui.hud.ViewportHudManager;
 
 import java.util.function.Consumer;
 
@@ -33,5 +34,6 @@ public record StudioPanelContext(
         String activeToolId,
         EditorToolController toolController,
         com.rspsi.studio.plugin.StudioPluginManager studioPlugins,
-        StudioBrushManager brushes) {
+        StudioBrushManager brushes,
+        ViewportHudManager huds) {
 }
