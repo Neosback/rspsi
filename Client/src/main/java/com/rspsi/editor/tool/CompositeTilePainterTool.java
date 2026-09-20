@@ -41,6 +41,7 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
     private final Set<TileCoordinate> visited = new LinkedHashSet<>();
     private final Set<TileCoordinate> targetLocals = new LinkedHashSet<>();
     private BrushMask lastMask;
+    private TileCoordinate lastCenter;
 
     public CompositeTilePainterTool() {
         this(new TilePainterState(), new BrushEngine());
@@ -221,11 +222,19 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
 
     private void sample(PointerEvent event) {
         context.viewport().tileAt(event.x(), event.y()).ifPresent(center -> {
-            lastMask = brushEngine.sample(brush, state.brushRadius(), center, context.session().world());
-            for (var sample : lastMask.samples()) {
-                visited.add(sample.absolute());
-                targetLocals.add(sample.local());
+            List<TileCoordinate> centers = lastCenter == null
+                    ? List.of(center)
+                    : brushEngine.interpolateStroke(lastCenter, center, 1.0);
+            for (TileCoordinate stampCenter : centers) {
+                BrushMask mask = brushEngine.sample(
+                        brush, state.brushRadius(), stampCenter, context.session().world());
+                lastMask = mask;
+                for (var sample : mask.samples()) {
+                    visited.add(sample.absolute());
+                    targetLocals.add(sample.local());
+                }
             }
+            lastCenter = center;
         });
     }
 
@@ -326,5 +335,6 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
         visited.clear();
         targetLocals.clear();
         lastMask = null;
+        lastCenter = null;
     }
 }
