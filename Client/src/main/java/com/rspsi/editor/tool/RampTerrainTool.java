@@ -1,19 +1,20 @@
 package com.rspsi.editor.tool;
 
-import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.ChangeHeightCommand;
+import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
+import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.TileBounds;
-import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.OverlayDraw;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** Creates a linear height ramp over a dragged rectangular area. */
+/** Creates a linear height ramp over a dragged rectangular world-space area. */
 public final class RampTerrainTool implements EditorTool {
     public enum Axis { X, Y }
 
@@ -21,8 +22,8 @@ public final class RampTerrainTool implements EditorTool {
     private int endHeight;
     private Axis axis = Axis.X;
     private ToolContext context;
-    private TileCoordinate start;
-    private TileCoordinate current;
+    private WorldTile start;
+    private WorldTile current;
     private final List<EditorCommand> stroke = new ArrayList<>();
 
     public RampTerrainTool(int startHeight, int endHeight) {
@@ -44,16 +45,16 @@ public final class RampTerrainTool implements EditorTool {
     @Override public void pointerDown(PointerEvent event) {
         if (context == null || event.button() != PointerButton.PRIMARY) return;
         clear();
-        context.viewport().tileAt(event.x(), event.y()).ifPresent(tile -> {
-            start = tile;
-            current = tile;
-        });
+        context.worldTileAt(event.x(), event.y())
+                .filter(tile -> context.local(tile).isPresent())
+                .ifPresent(tile -> { start = tile; current = tile; });
     }
 
     @Override public void pointerDrag(PointerEvent event) {
         if (context != null && start != null && event.button() == PointerButton.PRIMARY) {
-            context.viewport().tileAt(event.x(), event.y())
+            context.worldTileAt(event.x(), event.y())
                     .filter(tile -> tile.plane() == start.plane())
+                    .filter(tile -> context.local(tile).isPresent())
                     .ifPresent(tile -> current = tile);
         }
     }
@@ -62,8 +63,9 @@ public final class RampTerrainTool implements EditorTool {
         if (context != null && start != null && current != null
                 && event.button() == PointerButton.PRIMARY) {
             buildStroke(bounds(start, current));
-            if (!stroke.isEmpty() && context.session().canEdit()) context.session().execute(
-                    new CompositeEditCommand("Ramp terrain", stroke));
+            if (!stroke.isEmpty() && context.session().canEdit()) {
+                context.session().execute(new CompositeEditCommand("Ramp terrain", stroke));
+            }
         }
         clear();
     }
@@ -80,27 +82,33 @@ public final class RampTerrainTool implements EditorTool {
         TileBounds bounds = bounds(start, current);
         for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
             for (int y = bounds.minY(); y <= bounds.maxY(); y++) {
-                draw.tileOutline(new TileCoordinate(start.plane(), x, y));
+                draw.tileOutline(new WorldTile(start.plane(), x, y));
             }
         }
     }
 
-    private void buildStroke(TileBounds bounds) {
-        int startCoordinate = axis == Axis.X ? bounds.minX() : bounds.minY();
-        int endCoordinate = axis == Axis.X ? bounds.maxX() + 1 : bounds.maxY() + 1;
+    private void buildStroke(TileBounds worldBounds) {
+        int startCoordinate = axis == Axis.X ? worldBounds.minX() : worldBounds.minY();
+        int endCoordinate = axis == Axis.X ? worldBounds.maxX() + 1 : worldBounds.maxY() + 1;
         int span = endCoordinate - startCoordinate;
-        for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
-            for (int y = bounds.minY(); y <= bounds.maxY(); y++) {
-                TileCoordinate coordinate = new TileCoordinate(start.plane(), x, y);
-                TileSnapshot before = context.session().world().tile(coordinate).snapshot();
-                int sw = height(axis == Axis.X ? x : y, startCoordinate, span);
-                int se = height(axis == Axis.X ? x + 1 : y, startCoordinate, span);
-                int ne = height(axis == Axis.X ? x + 1 : y + 1, startCoordinate, span);
-                int nw = height(axis == Axis.X ? x : y + 1, startCoordinate, span);
-                TileSnapshot after = new TileSnapshot(sw, se, ne, nw, before.underlayId(), before.overlayId(),
-                        before.overlayShape(), before.overlayRotation(), before.flags(), before.objects());
-                if (!before.equals(after)) stroke.add(new ChangeHeightCommand(coordinate, before, after,
-                        "Ramp terrain at " + coordinate));
+        for (int worldX = worldBounds.minX(); worldX <= worldBounds.maxX(); worldX++) {
+            for (int worldY = worldBounds.minY(); worldY <= worldBounds.maxY(); worldY++) {
+                WorldTile absolute = new WorldTile(start.plane(), worldX, worldY);
+                LocalTile local = context.local(absolute).orElse(null);
+                if (local == null) continue;
+                TileSnapshot before = context.session().world().tile(local).snapshot();
+                int sw = height(axis == Axis.X ? worldX : worldY, startCoordinate, span);
+                int se = height(axis == Axis.X ? worldX + 1 : worldY, startCoordinate, span);
+                int ne = height(axis == Axis.X ? worldX + 1 : worldY + 1, startCoordinate, span);
+                int nw = height(axis == Axis.X ? worldX : worldY + 1, startCoordinate, span);
+                TileSnapshot after = new TileSnapshot(sw, se, ne, nw,
+                        before.underlayId(), before.overlayId(), before.overlayShape(),
+                        before.overlayRotation(), before.flags(), before.objects(),
+                        before.heightSource());
+                if (!before.equals(after)) {
+                    stroke.add(new ChangeHeightCommand(local.coordinate(), before, after,
+                            "Ramp terrain at " + absolute));
+                }
             }
         }
     }
@@ -111,7 +119,7 @@ public final class RampTerrainTool implements EditorTool {
         return (int) Math.round(startHeight + (endHeight - (double) startHeight) * progress);
     }
 
-    private static TileBounds bounds(TileCoordinate first, TileCoordinate second) {
+    private static TileBounds bounds(WorldTile first, WorldTile second) {
         return new TileBounds(Math.min(first.x(), second.x()), Math.min(first.y(), second.y()),
                 Math.max(first.x(), second.x()), Math.max(first.y(), second.y()));
     }
