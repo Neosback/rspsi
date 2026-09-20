@@ -9,6 +9,7 @@ import com.rspsi.editor.render.PickResult;
 import com.rspsi.editor.render.RenderPresentation;
 import com.rspsi.editor.render.SceneCameraProjection;
 import com.rspsi.editor.render.ViewportController;
+import com.rspsi.editor.render.NavigationService;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.viewport.Viewport;
 import com.rspsi.renderer.opengl.OpenGlSceneRenderer;
@@ -36,6 +37,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
             // above the terrain so negative terrain heights rise on screen.
             new CameraState(3200.0f, -2400.0f, -4200.0f,
                     (float) -Math.toRadians(28.0), 0.0f));
+    private final NavigationService navigationService = new NavigationService(navigation);
 
     public void initialize() {
         if (initialized) return;
@@ -49,6 +51,11 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
 
     public ViewportController navigation() {
         return navigation;
+    }
+
+    /** Shared jump/history service used by minimap, world map and search panels. */
+    public NavigationService navigationService() {
+        return navigationService;
     }
 
     /** Back-face culling mode for model geometry; see the renderer. */
