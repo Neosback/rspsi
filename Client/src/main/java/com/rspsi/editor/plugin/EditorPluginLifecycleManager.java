@@ -173,6 +173,16 @@ public final class EditorPluginLifecycleManager implements AutoCloseable {
         return rebuild(resolved);
     }
 
+    /**
+     * Hot-reloads the active plugin host from the current enabled candidate set.
+     * Plugin shutdown runs before reinitialization, so managed resources and
+     * contributions cannot leak across reloads.
+     */
+    public RebuildResult reload() {
+        if (closed) throw new IllegalStateException("Plugin lifecycle is closed");
+        return rebuild(resolveEnabled(candidates, state, null));
+    }
+
     /** Re-enables every candidate and rebuilds the host. */
     public RebuildResult enableAll() {
         state.replaceDisabled(Set.of());
