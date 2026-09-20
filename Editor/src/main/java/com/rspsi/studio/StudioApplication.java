@@ -1,6 +1,7 @@
 package com.rspsi.studio;
 
 import com.rspsi.cache.workspace.CacheSessionState;
+import com.rspsi.cache.workspace.CacheDecoderSummary;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.cache.workspace.OsrsCacheSessionService;
 import com.rspsi.cache.map.OsrsProjectSessionLoader;
@@ -346,15 +347,22 @@ public final class StudioApplication implements AutoCloseable {
                 .map(com.rspsi.cache.workspace.OsrsBundle::assets)
                 .orElse(EmptyAssetRepository.INSTANCE);
         EditorSceneAccess sceneAccess = () -> EditorSceneSnapshot.from(scene.renderScene());
+        CacheDecoderSummary decodedSummary = cacheSessions.current()
+                .map(LoadedOsrsCacheSession::decoderSummary)
+                .orElse(CacheDecoderSummary.empty());
         EditorPluginLifecycleManager next = EditorPluginLifecycleManager.start(
                 candidates,
                 EditorPluginStateStore.defaultStore(),
                 session,
                 assets,
                 sceneAccess,
-                enabled -> EditorPluginHost.initialize(enabled, session,
-                        assets, sceneAccess, renderSettings, tasks, notifications,
-                        null, null, symbols, references, spawns, simulation, integrations),
+                enabled -> {
+                    EditorPluginHost host = EditorPluginHost.initialize(enabled, session,
+                            assets, sceneAccess, renderSettings, tasks, notifications,
+                            null, null, symbols, references, spawns, simulation, integrations);
+                    host.context().services().decodedData().mergeSummary(decodedSummary);
+                    return host;
+                },
                 discovery);
         pluginLifecycle = next;
     }
