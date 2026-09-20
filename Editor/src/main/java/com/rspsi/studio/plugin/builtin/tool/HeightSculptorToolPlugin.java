@@ -8,6 +8,8 @@ import imgui.ImGui;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 
+import java.util.Set;
+
 /**
  * Modal tool plugin for raising, lowering, flattening, and smoothing terrain elevation.
  */
@@ -54,6 +56,12 @@ public final class HeightSculptorToolPlugin implements StudioToolPlugin {
     @Override
     public String toolId() {
         return ENGINE_TOOL_ID;
+    }
+
+    @Override
+    public Set<String> toolIds() {
+        return Set.of("terrain.raise", "terrain.lower", "terrain.flatten",
+                "terrain.smooth", "terrain.ramp", "terrain.blend", "terrain.terrace");
     }
 
     @Override

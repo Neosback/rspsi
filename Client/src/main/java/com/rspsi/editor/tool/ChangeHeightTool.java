@@ -69,6 +69,7 @@ public final class ChangeHeightTool implements EditorTool {
             // at the real world position); the vertex/height math below needs the region-local
             // equivalent since that's what WorldDocument and vertexDeltas are indexed by.
             if (!visited.add(absolute) || delta == 0) return;
+            int effectiveDelta = event.alt() ? -delta : delta;
             int localX = Math.floorMod(absolute.x(), Math.max(1, context.session().world().width()));
             int localY = Math.floorMod(absolute.y(), Math.max(1, context.session().world().length()));
             int minX = Math.max(0, localX - radius);
@@ -79,7 +80,7 @@ public final class ChangeHeightTool implements EditorTool {
                 for (int y = minY; y <= maxY; y++) {
                     double distance = vertexDistance(x, y, localX, localY);
                     if (distance > radius && radius > 0) continue;
-                    int amount = (int) Math.round(delta * weight(distance));
+                    int amount = (int) Math.round(effectiveDelta * weight(distance));
                     if (amount == 0) continue;
                     addVertexDelta(absolute.plane(), x, y, amount);
                 }

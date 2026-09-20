@@ -32,6 +32,15 @@ public interface StudioToolPlugin extends StudioPlugin {
     String toolId();
 
     /**
+     * Engine tool IDs represented by this Studio tool surface. Composite tool
+     * UIs can switch between several neutral tools while keeping one rail item
+     * and one context drawer active.
+     */
+    default Set<String> toolIds() {
+        return Set.of(toolId());
+    }
+
+    /**
      * Single-character or modifier hotkey hint (e.g. "P", "H", "S", "O", "B").
      */
     String shortcut();

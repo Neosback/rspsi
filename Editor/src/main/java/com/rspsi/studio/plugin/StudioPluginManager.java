@@ -180,7 +180,7 @@ public final class StudioPluginManager {
         if (toolId == null) return Optional.empty();
         for (StudioPlugin plugin : plugins.values()) {
             if (plugin instanceof StudioToolPlugin toolPlugin) {
-                if (toolId.equals(toolPlugin.toolId()) || toolId.equals(toolPlugin.id())) {
+                if (toolPlugin.toolIds().contains(toolId) || toolId.equals(toolPlugin.id())) {
                     return Optional.of(toolPlugin);
                 }
             }

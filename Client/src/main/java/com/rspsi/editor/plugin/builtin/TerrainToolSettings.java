@@ -4,6 +4,7 @@ import com.rspsi.editor.plugin.EditorSetting;
 import com.rspsi.editor.settings.EditorSettingKeys;
 import com.rspsi.editor.settings.SettingsSnapshot;
 import com.rspsi.editor.settings.SettingsStore;
+import com.rspsi.editor.tool.BlendTerrainTool;
 import com.rspsi.editor.tool.ChangeHeightTool;
 import com.rspsi.editor.tool.EditorTool;
 import com.rspsi.editor.tool.FlattenTerrainTool;
@@ -12,6 +13,7 @@ import com.rspsi.editor.tool.PaintOverlayTool;
 import com.rspsi.editor.tool.PaintUnderlayTool;
 import com.rspsi.editor.tool.RampTerrainTool;
 import com.rspsi.editor.tool.SmoothTerrainTool;
+import com.rspsi.editor.tool.TerraceTerrainTool;
 
 import java.util.List;
 
@@ -62,6 +64,12 @@ public final class TerrainToolSettings {
                     values.get(EditorSettingKeys.TERRAIN_FLATTEN_HEIGHT));
             case "terrain.smooth" -> ((SmoothTerrainTool) tool).setStrengthPercent(
                     values.get(EditorSettingKeys.TERRAIN_SMOOTH_STRENGTH));
+            case "terrain.blend" -> {
+                BlendTerrainTool blend = (BlendTerrainTool) tool;
+                blend.setStrengthPercent(values.get(EditorSettingKeys.TERRAIN_SMOOTH_STRENGTH));
+                blend.setEdgeThreshold(56);
+            }
+            case "terrain.terrace" -> ((TerraceTerrainTool) tool).setStep(16);
             case "terrain.ramp" -> {
                 RampTerrainTool ramp = (RampTerrainTool) tool;
                 ramp.setStartHeight(values.get(EditorSettingKeys.TERRAIN_RAMP_START));
