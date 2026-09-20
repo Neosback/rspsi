@@ -72,7 +72,7 @@ public final class RenderSceneBuilder {
         Map<TileCoordinate, TerrainAppearance> appearances = new LinkedHashMap<>();
         Map<TileCoordinate, TerrainRenderPacket> packets = new LinkedHashMap<>();
         Map<TileCoordinate, CompiledTerrainTile> compiledTerrain = definitions == null
-                ? Map.of() : new TerrainSceneCompiler().compile(document, definitions);
+                ? Map.of() : new TerrainSceneCompiler().compile(document, definitions, lightingProfile);
         Map<TileCoordinate, CollisionTileSnapshot> collision = collision(document);
         List<WorldObject> objects = new ArrayList<>();
         List<RenderObject> renderObjects = new ArrayList<>();
@@ -135,7 +135,7 @@ public final class RenderSceneBuilder {
         Map<TileCoordinate, TerrainAppearance> appearances = new LinkedHashMap<>(previous.terrainAppearances());
         Map<TileCoordinate, TerrainRenderPacket> packets = new LinkedHashMap<>(previous.terrainPackets());
         Map<TileCoordinate, CompiledTerrainTile> compiledTerrain = definitions == null
-                ? Map.of() : new TerrainSceneCompiler().compile(document, definitions);
+                ? Map.of() : new TerrainSceneCompiler().compile(document, definitions, lightingProfile);
         Map<TileCoordinate, TerrainLight> lighting = definitions == null
                 ? new LinkedHashMap<>(TerrainLighting.build(document, lightingProfile, null))
                 : compiledTerrain.entrySet().stream().collect(java.util.stream.Collectors.toMap(
