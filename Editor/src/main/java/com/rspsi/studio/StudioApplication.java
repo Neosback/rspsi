@@ -18,8 +18,8 @@ import com.rspsi.editor.plugin.EditorSceneAccess;
 import com.rspsi.editor.plugin.EditorSceneSnapshot;
 import com.rspsi.editor.plugin.EditorTaskService;
 import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
-import com.rspsi.editor.plugin.runtime.ExternalPluginRuntime;
 import com.rspsi.editor.plugin.runtime.ExternalPluginRuntimeSnapshot;
+import com.rspsi.editor.plugin.runtime.PluginEcosystemService;
 import com.rspsi.editor.plugin.runtime.SemanticVersion;
 import com.rspsi.editor.render.GpuScenePacket;
 import com.rspsi.editor.render.GpuScenePacketBuilder;
@@ -87,6 +87,9 @@ public final class StudioApplication implements AutoCloseable {
     private final SettingsStore renderSettings = new SettingsStore(EditorSettingKeys.registry());
     private final EditorTaskService tasks = new EditorTaskService();
     private final EditorNotificationService notifications = new EditorNotificationService();
+    private final PluginEcosystemService pluginEcosystem = new PluginEcosystemService(
+            Path.of("plugins"),
+            Path.of(System.getProperty("user.home"), ".openrune-studio", "plugin-repositories.json"));
     private final Path settingsFile = Path.of(System.getProperty("user.home"),
             ".openrune-studio", "settings.json");
     private final ExecutorService sceneExecutor = Executors.newSingleThreadExecutor(runnable -> {
@@ -330,9 +333,8 @@ public final class StudioApplication implements AutoCloseable {
                 hostPluginVersions.put(candidate.id(), new SemanticVersion(0, 0, 0, ""));
             }
         }
-        ExternalPluginRuntimeSnapshot discovery = new ExternalPluginRuntime().discover(
-                Path.of("plugins"), Thread.currentThread().getContextClassLoader(),
-                hostPluginVersions);
+        ExternalPluginRuntimeSnapshot discovery = pluginEcosystem.scan(
+                Thread.currentThread().getContextClassLoader(), hostPluginVersions);
         candidates.addAll(discovery.plugins());
         for (var failure : discovery.failures()) {
             LOGGER.warn("External plugin {} was not loaded: {}",
