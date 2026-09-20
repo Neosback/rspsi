@@ -185,6 +185,7 @@ public final class MapEditorView {
 
         if (pluginLifecycle != null && pluginLifecycle.host() != null) {
             panelManager.syncPluginContributions(pluginLifecycle.host().registry().panelRegistrations());
+            panelManager.syncUiSurfaces(pluginLifecycle.host().registry().uiSurfaceContributions());
             if (!defaultToolActivated) {
                 // The default tool's button shows as active from the field default alone, but
                 // nothing actually calls toolController.activate(...) until the user clicks it -
