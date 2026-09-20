@@ -72,7 +72,7 @@ public final class OsrsRegionFeatureExtractor implements RegionFeatureExtractor 
                                 context.assets().objectCollision(object.id()).orElse(null);
                         if (objectCollision != null) {
                             add(collision, planeKey + "objects", 1.0);
-                            if (objectCollision.blockWalk()) add(collision, planeKey + "walk", 1.0);
+                            if (objectCollision.blockWalk() > 0) add(collision, planeKey + "walk", 1.0);
                             if (objectCollision.blockProjectile()) {
                                 add(collision, planeKey + "projectile", 1.0);
                             }
