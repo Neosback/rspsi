@@ -9,6 +9,7 @@ import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.MoveObjectCommand;
 import com.rspsi.editor.PlaceObjectCommand;
 import com.rspsi.editor.RotateObjectCommand;
+import com.rspsi.editor.SelectionChangeListener;
 import com.rspsi.editor.SetTerrainHeightCommand;
 import com.rspsi.editor.SetTileMaterialCommand;
 import com.rspsi.editor.assets.AssetRepository;
@@ -58,6 +59,7 @@ public final class PluginServices {
     private final DecodedDataCatalog decodedData;
     private final EditorPluginRegistry registry;
     private final EditorEventBus events;
+    private final SelectionChangeListener selectionListener;
     private final BrushEngine brushEngine = new BrushEngine();
     private final OverlayRegistry overlays = new OverlayRegistry();
     private final RegionFeatureRegistry corpusFeatures = new RegionFeatureRegistry();
@@ -79,9 +81,10 @@ public final class PluginServices {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.events = new EditorEventBus();
         this.corpusFeatures.register(new OsrsRegionFeatureExtractor());
-        session.selection().addChangeListener(ignored ->
+        this.selectionListener = ignored ->
                 events.publish(new SelectionChangedEvent(
-                        session.selection().selectedCoordinates())));
+                        session.selection().selectedCoordinates()));
+        session.selection().addChangeListener(selectionListener);
     }
 
     /** One service bundle per plugin registry/host lifecycle. */
@@ -90,6 +93,21 @@ public final class PluginServices {
                                                       EditorPluginRegistry registry) {
         return INSTANCES.computeIfAbsent(Objects.requireNonNull(registry, "registry"),
                 ignored -> new PluginServices(session, assets, registry));
+    }
+
+    /** Releases host-scoped listeners and contribution registries. */
+    public static synchronized void release(EditorPluginRegistry registry) {
+        if (registry == null) return;
+        PluginServices services = INSTANCES.remove(registry);
+        if (services != null) services.close();
+    }
+
+    private void close() {
+        session.selection().removeChangeListener(selectionListener);
+        events.clear();
+        overlays.clear();
+        extensions.clear();
+        corpusFeatures.clear();
     }
 
     public TerrainService terrain() { return terrain; }
