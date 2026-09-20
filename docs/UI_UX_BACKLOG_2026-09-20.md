@@ -347,11 +347,27 @@ Status key: `[x]` done and verified in a running build, `[~]` in progress / part
         valid picker id for fragments outside the active plane in the first place - no
         fallback cast needed at all.
 
-      **Phased implementation plan** (not started - this is the scope, pending a go-ahead):
-      1. Add 4 picker fields to `GpuSceneVertex`; populate them in `terrainVertex`/`modelVertex`
-         from the already-in-scope tile/model address, broadcasting the same value to every
-         vertex of that tile/object (mirrors the reference project's per-tile/per-object-slot
-         broadcast exactly).
+      **Phased implementation plan** (Phase 1 done, rest pending):
+      1. **DONE.** Added `PickerId` (`Client/.../render/PickerId.java`) - the canonical bit
+         layout (`valid|plane(2b)|tileX(13b)|tileY(13b)|slot(3b)`), matching the reference
+         project's scheme exactly, plus `terrainSlot()`/`slotFor(SceneLayer.Kind)` helpers so
+         terrain and every model layer (WALL/WALL_DECORATION/GROUND_OBJECT/GROUND_DECORATION)
+         get a distinct, stable slot. Added 4 fields to `GpuSceneVertex`
+         (`pickerPlane`/`pickerTileX`/`pickerTileY`/`pickerSlot`), populated in
+         `GpuUploadPlanBuilder.terrainVertex`/`modelVertex` from the tile/model address already
+         in scope at both emission sites, broadcast identically to every vertex of that
+         tile's/object's triangles - exactly the plan. Threaded `layer.kind()` into
+         `modelVertex` (it didn't receive it before). Fixed the one other production
+         `GpuSceneVertex` construction site (`SoftwareSceneRenderer.interpolateVertex`, a
+         clip-interpolation helper - carries the payload through unchanged since clipping never
+         crosses a tile/object boundary) and 5 test-fixture constructors that needed the new
+         trailing arguments. Added `PickerIdTest` (round-trip pack/unpack, one per
+         `SceneLayer.Kind`, max-13-bit-coordinate case) and a new
+         `GpuUploadPlanBuilderTest.everyVertexCarriesItsTileOrObjectsPickerPayloadBroadcast` test
+         asserting the broadcast is correct for both a terrain triangle and a model triangle in
+         the same tile. Full `Client` test suite passes, `Editor` compiles clean, app relaunches
+         and renders with no regression (the new fields aren't consumed by the GL upload yet -
+         phase 2/3 - so this phase is purely additive to the data model).
       2. Extend `GlFramebuffer`: second `GL_R32UI` texture (2D and 2D-multisample variants),
          `GL_COLOR_ATTACHMENT1` on both the multisample and resolve FBOs, `GL_NEAREST` sampler
          params, `glDrawBuffers` targeting both attachments during the scene pass, and an

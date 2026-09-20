@@ -62,7 +62,7 @@ public final class RampTerrainTool implements EditorTool {
         if (context != null && start != null && current != null
                 && event.button() == PointerButton.PRIMARY) {
             buildStroke(bounds(start, current));
-            if (!stroke.isEmpty()) context.session().execute(
+            if (!stroke.isEmpty() && context.session().canEdit()) context.session().execute(
                     new CompositeEditCommand("Ramp terrain", stroke));
         }
         clear();

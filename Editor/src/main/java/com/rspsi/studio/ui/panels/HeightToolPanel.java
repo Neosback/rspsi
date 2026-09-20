@@ -32,28 +32,36 @@ public final class HeightToolPanel implements StudioPanel {
     }
 
     public enum HeightMode {
-        RAISE("Raise (+)", 1),
-        LOWER("Lower (-)", -1),
-        FLATTEN("Flatten (=)", 0),
-        SMOOTH("Smooth (~)", 0),
-        SET_VALUE("Set Value =", 0);
+        RAISE("Raise (+)", 1, "terrain.raise"),
+        LOWER("Lower (-)", -1, "terrain.lower"),
+        FLATTEN("Flatten (=)", 0, "terrain.flatten"),
+        SMOOTH("Smooth (~)", 0, "terrain.smooth"),
+        BLEND("Blend", 0, "terrain.blend"),
+        TERRACE("Terrace", 0, "terrain.terrace"),
+        SET_VALUE("Set Value =", 0, "terrain.flatten");
 
         private final String label;
         private final int direction;
+        private final String engineToolId;
 
-        HeightMode(String label, int direction) {
+        HeightMode(String label, int direction, String engineToolId) {
             this.label = label;
             this.direction = direction;
+            this.engineToolId = engineToolId;
         }
 
         public String label() { return label; }
         public int direction() { return direction; }
+        public String engineToolId() { return engineToolId; }
     }
 
     private HeightMode mode = HeightMode.RAISE;
     private final ImInt brushRadius = new ImInt(1);
     private final ImInt stepRate = new ImInt(32);
     private final ImInt targetHeight = new ImInt(0);
+    private final ImInt terraceStep = new ImInt(16);
+    private final ImInt blendStrength = new ImInt(50);
+    private final ImInt edgeThreshold = new ImInt(56);
     private int falloff = 0; // 0: None, 1: Linear, 2: Smooth
     private static final String[] FALLOFF_NAMES = {"None (Flat block)", "Linear falloff", "Smooth (Cosine)"};
 
@@ -96,6 +104,16 @@ public final class HeightToolPanel implements StudioPanel {
     public void render(StudioPanelContext context) {
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 6.0f, 3.0f);
 
+        // Sync mode with active tool if active tool matches an engine tool
+        if (context.activeToolId() != null) {
+            for (HeightMode m : HeightMode.values()) {
+                if (m.engineToolId().equals(context.activeToolId())) {
+                    this.mode = m;
+                    break;
+                }
+            }
+        }
+
         // 1. Height Mode Selector
         ImGui.textDisabled("Mode:");
         ImGui.sameLine();
@@ -106,6 +124,9 @@ public final class HeightToolPanel implements StudioPanel {
             }
             if (ImGui.button(m.label() + "##hm-" + m.name())) {
                 this.mode = m;
+                if (context.activateTool() != null) {
+                    context.activateTool().accept(m.engineToolId());
+                }
             }
             if (isCur) {
                 ImGui.popStyleColor();
@@ -120,10 +141,26 @@ public final class HeightToolPanel implements StudioPanel {
         float colW = 200.0f;
         ImGui.beginGroup();
         ImGui.setNextItemWidth(colW);
-        ImGui.sliderInt("Brush Radius", brushRadius.getData(), 0, 16);
+        if (context.brushes() != null) {
+            ImInt rad = new ImInt(context.brushes().brushRadius());
+            if (ImGui.sliderInt("Brush Radius", rad.getData(), 0, 16)) {
+                context.brushes().setBrushRadius(rad.get());
+                brushRadius.set(rad.get());
+            }
+        } else {
+            ImGui.sliderInt("Brush Radius", brushRadius.getData(), 0, 16);
+        }
 
-        ImGui.setNextItemWidth(colW);
-        ImGui.sliderInt("Step Rate", stepRate.getData(), 4, 128);
+        if (mode == HeightMode.TERRACE) {
+            ImGui.setNextItemWidth(colW);
+            ImGui.sliderInt("Terrace Step", terraceStep.getData(), 2, 96);
+        } else if (mode == HeightMode.BLEND) {
+            ImGui.setNextItemWidth(colW);
+            ImGui.sliderInt("Blend Strength (%)", blendStrength.getData(), 0, 100);
+        } else {
+            ImGui.setNextItemWidth(colW);
+            ImGui.sliderInt("Step Rate", stepRate.getData(), 4, 128);
+        }
         ImGui.endGroup();
 
         ImGui.sameLine(0.0f, 24.0f);
@@ -131,6 +168,11 @@ public final class HeightToolPanel implements StudioPanel {
         if (mode == HeightMode.FLATTEN || mode == HeightMode.SET_VALUE) {
             ImGui.setNextItemWidth(colW);
             ImGui.inputInt("Target Height", targetHeight);
+        } else if (mode == HeightMode.BLEND) {
+            ImGui.setNextItemWidth(colW);
+            ImGui.sliderInt("Cliff Threshold", edgeThreshold.getData(), 8, 128);
+        } else if (mode == HeightMode.TERRACE) {
+            ImGui.textDisabled("Terracing snaps terrain into uniform stepped plateaus.");
         } else {
             ImGui.setNextItemWidth(colW);
             if (ImGui.combo("Falloff", new ImInt(falloff), FALLOFF_NAMES)) {
@@ -139,17 +181,29 @@ public final class HeightToolPanel implements StudioPanel {
         }
 
         // Quick Preset Deltas
-        ImGui.textDisabled("Quick Steps:");
-        ImGui.sameLine();
-        if (ImGui.smallButton("8##qs8")) stepRate.set(8);
-        ImGui.sameLine();
-        if (ImGui.smallButton("16##qs16")) stepRate.set(16);
-        ImGui.sameLine();
-        if (ImGui.smallButton("32##qs32")) stepRate.set(32);
-        ImGui.sameLine();
-        if (ImGui.smallButton("64##qs64")) stepRate.set(64);
-        ImGui.sameLine();
-        if (ImGui.smallButton("128##qs128")) stepRate.set(128);
+        if (mode == HeightMode.RAISE || mode == HeightMode.LOWER) {
+            ImGui.textDisabled("Quick Steps:");
+            ImGui.sameLine();
+            if (ImGui.smallButton("8##qs8")) stepRate.set(8);
+            ImGui.sameLine();
+            if (ImGui.smallButton("16##qs16")) stepRate.set(16);
+            ImGui.sameLine();
+            if (ImGui.smallButton("32##qs32")) stepRate.set(32);
+            ImGui.sameLine();
+            if (ImGui.smallButton("64##qs64")) stepRate.set(64);
+            ImGui.sameLine();
+            if (ImGui.smallButton("128##qs128")) stepRate.set(128);
+        } else if (mode == HeightMode.TERRACE) {
+            ImGui.textDisabled("Quick Steps:");
+            ImGui.sameLine();
+            if (ImGui.smallButton("4##qt4")) terraceStep.set(4);
+            ImGui.sameLine();
+            if (ImGui.smallButton("8##qt8")) terraceStep.set(8);
+            ImGui.sameLine();
+            if (ImGui.smallButton("16##qt16")) terraceStep.set(16);
+            ImGui.sameLine();
+            if (ImGui.smallButton("32##qt32")) terraceStep.set(32);
+        }
         ImGui.endGroup();
 
         ImGui.sameLine(0.0f, 24.0f);
@@ -183,7 +237,7 @@ public final class HeightToolPanel implements StudioPanel {
     }
 
     private void applyHeightToSelection(EditorSession session, Set<TileCoordinate> coords) {
-        if (session == null || coords.isEmpty()) return;
+        if (session == null || !session.canEdit() || coords.isEmpty()) return;
         List<EditorCommand> commands = new ArrayList<>();
         int delta = mode.direction() * stepRate.get();
 
@@ -193,6 +247,29 @@ public final class HeightToolPanel implements StudioPanel {
             if (mode == HeightMode.FLATTEN || mode == HeightMode.SET_VALUE) {
                 int target = targetHeight.get();
                 sw = target; se = target; ne = target; nw = target;
+            } else if (mode == HeightMode.TERRACE) {
+                int step = Math.max(2, Math.min(96, terraceStep.get()));
+                sw = Math.round((float) before.southWestHeight() / step) * step;
+                se = Math.round((float) before.southEastHeight() / step) * step;
+                ne = Math.round((float) before.northEastHeight() / step) * step;
+                nw = Math.round((float) before.northWestHeight() / step) * step;
+            } else if (mode == HeightMode.BLEND) {
+                int strength = blendStrength.get();
+                int thresh = edgeThreshold.get();
+                int avg = (before.southWestHeight() + before.southEastHeight()
+                        + before.northEastHeight() + before.northWestHeight()) / 4;
+                sw = Math.abs(avg - before.southWestHeight()) <= thresh
+                        ? before.southWestHeight() + (avg - before.southWestHeight()) * strength / 100
+                        : before.southWestHeight();
+                se = Math.abs(avg - before.southEastHeight()) <= thresh
+                        ? before.southEastHeight() + (avg - before.southEastHeight()) * strength / 100
+                        : before.southEastHeight();
+                ne = Math.abs(avg - before.northEastHeight()) <= thresh
+                        ? before.northEastHeight() + (avg - before.northEastHeight()) * strength / 100
+                        : before.northEastHeight();
+                nw = Math.abs(avg - before.northWestHeight()) <= thresh
+                        ? before.northWestHeight() + (avg - before.northWestHeight()) * strength / 100
+                        : before.northWestHeight();
             } else if (mode == HeightMode.SMOOTH) {
                 int avg = (before.southWestHeight() + before.southEastHeight()
                         + before.northEastHeight() + before.northWestHeight()) / 4;
@@ -220,7 +297,7 @@ public final class HeightToolPanel implements StudioPanel {
     }
 
     private void flattenSelectionTo(EditorSession session, Set<TileCoordinate> coords, int height) {
-        if (session == null || coords.isEmpty()) return;
+        if (session == null || !session.canEdit() || coords.isEmpty()) return;
         List<EditorCommand> commands = new ArrayList<>();
         for (TileCoordinate c : coords) {
             TileSnapshot before = session.world().tile(c).snapshot();

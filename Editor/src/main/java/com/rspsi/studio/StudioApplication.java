@@ -169,7 +169,7 @@ public final class StudioApplication implements AutoCloseable {
                 }
                 mapEditor.render(cache, currentPlan, sceneViewport, sceneStatus,
                         this::openDashboard, renderSettings, pluginLifecycle,
-                        loadedScene != null && loadedScene.opened().region().session().isDirty(),
+                        loadedScene != null && loadedScene.session().isDirty(),
                         this::openInterfaceStudio, this::openObjectStudio,
                         () -> integrationCenterOpen.set(true),
                         simulation, symbols, references, spawns, integrations,
@@ -244,7 +244,11 @@ public final class StudioApplication implements AutoCloseable {
         double centerX = sceneWindow.sceneBaseX() * 128.0 + window.worldWindow().width() * 64.0;
         double centerZ = sceneWindow.sceneBaseY() * 128.0 + window.worldWindow().length() * 64.0;
         RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).build(region.document());
-        return new LoadedMapScene(opened, renderScene, packet, plan, settingsRevision,
+        EditorSession session = opened.region().session();
+        if (!session.canEdit()) {
+            session = new EditorSession(region.document());
+        }
+        return new LoadedMapScene(opened, session, renderScene, packet, plan, settingsRevision,
                 new com.rspsi.editor.render.CameraState(
                 (float) centerX, -2400.0f, (float) centerZ - 4200.0f,
                 (float) -Math.toRadians(28.0), 0.0f));
@@ -319,7 +323,7 @@ public final class StudioApplication implements AutoCloseable {
         PluginDiscovery discovery = EditorPluginLoader.discoverOwned(
                 Path.of("plugins"), Thread.currentThread().getContextClassLoader());
         candidates.addAll(discovery.plugins());
-        EditorSession session = scene.opened().region().session();
+        EditorSession session = scene.session();
         AssetRepository assets = cacheSessions.current()
                 .map(LoadedOsrsCacheSession::bundle)
                 .map(com.rspsi.cache.workspace.OsrsBundle::assets)
@@ -346,7 +350,7 @@ public final class StudioApplication implements AutoCloseable {
     /** Closes one workspace tab, gated by an unsaved-changes prompt for Map Studio. */
     private void requestCloseWorkspace(WorkspaceManager.Workspace workspace) {
         if (workspace == WorkspaceManager.Workspace.MAP_EDITOR) {
-            if (loadedScene != null && loadedScene.opened().region().session().isDirty()) {
+            if (loadedScene != null && loadedScene.session().isDirty()) {
                 closePrompt = true;
                 return;
             }
@@ -372,10 +376,10 @@ public final class StudioApplication implements AutoCloseable {
         ImGui.textWrapped("This map has unsaved changes. Save before closing Map Studio?");
         if (ImGui.button("Save")) {
             try {
-                if (loadedScene == null || !loadedScene.opened().region().session().canSave()) {
+                if (loadedScene == null || !loadedScene.session().canSave()) {
                     throw new IllegalStateException("This map session is read-only");
                 }
-                loadedScene.opened().region().session().save();
+                loadedScene.session().save();
                 ImGui.closeCurrentPopup();
                 closeMapEditorTab();
             } catch (RuntimeException failure) {
@@ -422,6 +426,7 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private record LoadedMapScene(OsrsProjectSessionLoader.OpenedProject opened,
+                                  EditorSession session,
                                   RenderScene renderScene,
                                   GpuScenePacket packet,
                                   GpuUploadPlan plan,

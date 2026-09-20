@@ -60,7 +60,7 @@ public final class BlendTerrainTool implements EditorTool {
     }
 
     @Override public void pointerUp(PointerEvent event) {
-        if (context != null && !stroke.isEmpty()) {
+        if (context != null && !stroke.isEmpty() && context.session().canEdit()) {
             context.session().execute(new CompositeEditCommand("Blend terrain", stroke));
         }
         clear();

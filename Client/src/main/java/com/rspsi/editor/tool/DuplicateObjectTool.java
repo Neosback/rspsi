@@ -41,7 +41,8 @@ public final class DuplicateObjectTool implements EditorTool {
     }
     @Override public void pointerUp(PointerEvent event) {
         if (context != null && object != null && target != null
-                && target.plane() == object.plane()) {
+                && target.plane() == object.plane()
+                && context.session().canEdit()) {
             context.session().execute(new DuplicateObjectCommand(object, target.x(), target.y()));
         }
         clear();

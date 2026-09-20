@@ -13,7 +13,7 @@ import imgui.type.ImInt;
 public final class PathToolPlugin implements StudioToolPlugin {
 
     public static final String ID = "studio.tool.path";
-    public static final String ENGINE_TOOL_ID = "terrain.smooth";
+    public static final String ENGINE_TOOL_ID = "terrain.ramp";
 
     // Configurable settings
     private final ImInt defaultPathWidth = new ImInt(1);

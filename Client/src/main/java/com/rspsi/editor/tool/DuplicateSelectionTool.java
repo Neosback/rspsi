@@ -56,7 +56,7 @@ public final class DuplicateSelectionTool implements EditorTool {
                 && event.button() == PointerButton.PRIMARY) {
             int deltaX = target.x() - anchor.x();
             int deltaY = target.y() - anchor.y();
-            if (deltaX != 0 || deltaY != 0) {
+            if ((deltaX != 0 || deltaY != 0) && context.session().canEdit()) {
                 DuplicateObjectsCommand command = new DuplicateObjectsCommand(objects, deltaX, deltaY);
                 context.session().execute(command);
                 context.session().selection().selectObjects(objects.stream()

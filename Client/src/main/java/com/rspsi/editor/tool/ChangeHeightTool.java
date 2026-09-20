@@ -50,7 +50,7 @@ public final class ChangeHeightTool implements EditorTool {
     @Override public void pointerUp(PointerEvent event) {
         if (context != null && !vertexDeltas.isEmpty()) {
             buildStroke();
-            if (!stroke.isEmpty()) context.session().execute(
+            if (!stroke.isEmpty() && context.session().canEdit()) context.session().execute(
                     new CompositeEditCommand(delta < 0 ? "Lower terrain" : "Raise terrain", stroke));
         }
         clear();

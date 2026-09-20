@@ -38,7 +38,7 @@ public final class RotateObjectTool implements EditorTool {
     }
 
     private void rotate(WorldObject object) {
-        if (quarterTurns != 0) {
+        if (quarterTurns != 0 && context.session().canEdit()) {
             context.session().execute(new RotateObjectCommand(object, (object.rotation() + quarterTurns) & 3));
         }
     }

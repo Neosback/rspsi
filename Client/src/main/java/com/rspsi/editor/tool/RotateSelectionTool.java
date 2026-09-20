@@ -33,8 +33,10 @@ public final class RotateSelectionTool implements EditorTool {
         context.viewport().tileAt(event.x(), event.y())
                 .filter(tile -> contains(objects, tile))
                 .ifPresent(ignored -> {
-                    context.session().execute(new RotateObjectsCommand(objects, quarterTurns));
-                    context.session().selection().selectObjects(rotated(objects, quarterTurns));
+                    if (context.session().canEdit()) {
+                        context.session().execute(new RotateObjectsCommand(objects, quarterTurns));
+                        context.session().selection().selectObjects(rotated(objects, quarterTurns));
+                    }
                 });
     }
 

@@ -2,6 +2,7 @@ package com.rspsi.studio;
 
 import static org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT;
 import static org.lwjgl.opengl.GL11.GL_LINEAR;
+import static org.lwjgl.opengl.GL11.GL_NEAREST;
 import static org.lwjgl.opengl.GL11.GL_RGBA;
 import static org.lwjgl.opengl.GL11.GL_RGBA8;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_2D;
@@ -11,20 +12,25 @@ import static org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE;
 import static org.lwjgl.opengl.GL11.glBindTexture;
 import static org.lwjgl.opengl.GL11.glDeleteTextures;
 import static org.lwjgl.opengl.GL11.glGenTextures;
+import static org.lwjgl.opengl.GL11.glReadBuffer;
 import static org.lwjgl.opengl.GL11.glTexImage2D;
 import static org.lwjgl.opengl.GL11.glTexParameteri;
+import static org.lwjgl.opengl.GL20.glDrawBuffers;
 import static org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER;
 import static org.lwjgl.opengl.GL30.GL_DRAW_FRAMEBUFFER;
 import static org.lwjgl.opengl.GL30.GL_COLOR_ATTACHMENT0;
+import static org.lwjgl.opengl.GL30.GL_COLOR_ATTACHMENT1;
 import static org.lwjgl.opengl.GL30.GL_DEPTH24_STENCIL8;
 import static org.lwjgl.opengl.GL30.GL_DEPTH_STENCIL_ATTACHMENT;
 import static org.lwjgl.opengl.GL30.GL_FRAMEBUFFER;
 import static org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_COMPLETE;
+import static org.lwjgl.opengl.GL30.GL_R32UI;
 import static org.lwjgl.opengl.GL30.GL_RENDERBUFFER;
 import static org.lwjgl.opengl.GL32.GL_TEXTURE_2D_MULTISAMPLE;
 import static org.lwjgl.opengl.GL30.glBindFramebuffer;
 import static org.lwjgl.opengl.GL30.glBindRenderbuffer;
 import static org.lwjgl.opengl.GL30.glCheckFramebufferStatus;
+import static org.lwjgl.opengl.GL30.glClearBufferuiv;
 import static org.lwjgl.opengl.GL30.glDeleteFramebuffers;
 import static org.lwjgl.opengl.GL30.glDeleteRenderbuffers;
 import static org.lwjgl.opengl.GL30.glFramebufferRenderbuffer;
@@ -38,13 +44,21 @@ import static org.lwjgl.opengl.GL30.glBlitFramebuffer;
 /**
  * Render-target framebuffer with optional MSAA and a single-sample texture
  * suitable for {@code ImGui.image}.
+ *
+ * <p>Carries a second, integer color attachment (a GPU picker-id buffer, see
+ * {@link com.rspsi.editor.render.PickerId}) alongside the visible color attachment - the scene
+ * shader writes a packed tile/object id to it, and a caller reads back a single pixel instead of
+ * a CPU ray-triangle scan. {@code GL_R32UI} textures must never be given linear filtering (an
+ * id must not be interpolated), so the picker texture is always {@code GL_NEAREST}.</p>
  */
 public final class GlFramebuffer implements AutoCloseable {
     private int resolveFramebuffer;
     private int resolveTexture;
+    private int resolvePickerTexture;
     private int resolveDepth;
     private int multisampleFramebuffer;
     private int multisampleColor;
+    private int multisamplePickerColor;
     private int multisampleDepth;
     private int width;
     private int height;

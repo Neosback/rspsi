@@ -29,6 +29,8 @@ public final class DeleteObjectTool implements EditorTool {
     }
 
     private void delete(com.rspsi.editor.model.WorldObject object) {
-        context.session().execute(new DeleteObjectCommand(object));
+        if (context.session().canEdit()) {
+            context.session().execute(new DeleteObjectCommand(object));
+        }
     }
 }

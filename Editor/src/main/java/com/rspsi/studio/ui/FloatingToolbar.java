@@ -179,7 +179,7 @@ public final class FloatingToolbar {
 
         if (toolPlugins != null && !toolPlugins.isEmpty()) {
             for (StudioToolPlugin tool : toolPlugins) {
-                boolean isActive = tool.toolId().equals(activeToolId);
+                boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
 
                 curY = renderToolButton(startX + padding, curY, btnSize, tool.icon(),
                         tool.toolId(), tool.name(), tool.shortcut(), isActive, activateTool);

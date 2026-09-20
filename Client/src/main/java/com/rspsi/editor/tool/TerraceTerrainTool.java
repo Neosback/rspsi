@@ -49,7 +49,7 @@ public final class TerraceTerrainTool implements EditorTool {
     }
 
     @Override public void pointerUp(PointerEvent event) {
-        if (context != null && !stroke.isEmpty()) {
+        if (context != null && !stroke.isEmpty() && context.session().canEdit()) {
             context.session().execute(new CompositeEditCommand("Terrace terrain", stroke));
         }
         clear();

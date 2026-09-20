@@ -49,7 +49,7 @@ public final class PaintOverlayTool implements EditorTool {
         if (context != null && event.button() == PointerButton.PRIMARY) addTile(event);
     }
     @Override public void pointerUp(PointerEvent event) {
-        if (context != null && !stroke.isEmpty()) context.session().execute(
+        if (context != null && !stroke.isEmpty() && context.session().canEdit()) context.session().execute(
                 new CompositeEditCommand("Paint overlay", stroke));
         clear();
     }

@@ -134,7 +134,7 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
     public void pointerUp(PointerEvent event) {
         if (context != null && !targetLocals.isEmpty()) {
             buildStroke();
-            if (!stroke.isEmpty()) {
+            if (!stroke.isEmpty() && context.session().canEdit()) {
                 context.session().execute(new CompositeEditCommand("Paint composite tiles", stroke));
             }
         }
@@ -174,7 +174,7 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
      * Applies the currently enabled properties to all given tile coordinates in one command.
      */
     public void applyToCoordinates(Collection<TileCoordinate> coordinates, com.rspsi.editor.EditorSession session) {
-        if (coordinates == null || coordinates.isEmpty() || session == null) return;
+        if (coordinates == null || coordinates.isEmpty() || session == null || !session.canEdit()) return;
         List<EditorCommand> commands = new ArrayList<>();
         for (TileCoordinate coord : coordinates) {
             TileCoordinate local = toLocal(coord, session.world());

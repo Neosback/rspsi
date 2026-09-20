@@ -61,7 +61,7 @@ public final class HeightSculptorToolPlugin implements StudioToolPlugin {
     @Override
     public Set<String> toolIds() {
         return Set.of("terrain.raise", "terrain.lower", "terrain.flatten",
-                "terrain.smooth", "terrain.ramp", "terrain.blend", "terrain.terrace");
+                "terrain.smooth", "terrain.blend", "terrain.terrace");
     }
 
     @Override

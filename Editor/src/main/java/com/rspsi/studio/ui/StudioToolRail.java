@@ -52,7 +52,7 @@ public final class StudioToolRail {
                 if (!context.studioPlugins().effectiveSurfaces(tool).contains(StudioToolPlugin.ToolSurface.TOOL_RAIL)) {
                     continue;
                 }
-                boolean isSel = tool.toolId().equals(activeToolId) || tool.id().equals(activeToolId);
+                boolean isSel = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
 
                 if (isSel) {
                     ImGui.pushStyleColor(ImGuiCol.Button, 0xFF2563EB); // Vibrant active blue

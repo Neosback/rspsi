@@ -98,10 +98,14 @@ class StudioPluginsAndMinimapTest {
         }
 
         // Verify each canonical tool ID can be resolved
-        assertTrue(manager.toolPlugin("selection.box").isPresent());
+        assertTrue(manager.toolPlugin("selection.single").isPresent());
+        assertTrue(manager.toolPlugin("selection.multi").isPresent());
         assertTrue(manager.toolPlugin("terrain.tile-painter").isPresent());
         assertTrue(manager.toolPlugin("terrain.raise").isPresent());
         assertTrue(manager.toolPlugin("terrain.smooth").isPresent());
+        assertTrue(manager.toolPlugin("terrain.blend").isPresent());
+        assertTrue(manager.toolPlugin("terrain.terrace").isPresent());
+        assertTrue(manager.toolPlugin("terrain.ramp").isPresent());
         assertTrue(manager.toolPlugin("object.place").isPresent());
 
         var painter = manager.toolPlugin("terrain.tile-painter").get();

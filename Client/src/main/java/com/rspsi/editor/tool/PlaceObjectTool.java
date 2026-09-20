@@ -36,8 +36,10 @@ public final class PlaceObjectTool implements EditorTool {
             // region-local, matching how objects already loaded from the cache are stored.
             int localX = Math.floorMod(tile.x(), Math.max(1, world.width()));
             int localY = Math.floorMod(tile.y(), Math.max(1, world.length()));
-            context.session().execute(new PlaceObjectCommand(
-                    new WorldObject(id, type, rotation, tile.plane(), localX, localY)));
+            if (context.session().canEdit()) {
+                context.session().execute(new PlaceObjectCommand(
+                        new WorldObject(id, type, rotation, tile.plane(), localX, localY)));
+            }
         });
     }
     @Override public void pointerDrag(PointerEvent event) { }

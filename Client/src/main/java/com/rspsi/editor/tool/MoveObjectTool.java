@@ -47,7 +47,8 @@ public final class MoveObjectTool implements EditorTool {
     }
     @Override public void pointerUp(PointerEvent event) {
         if (context != null && object != null && target != null
-                && (target.x() != object.x() || target.y() != object.y())) {
+                && (target.x() != object.x() || target.y() != object.y())
+                && context.session().canEdit()) {
             context.session().execute(new MoveObjectCommand(object, target.x(), target.y()));
         }
         clear();

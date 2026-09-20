@@ -37,9 +37,11 @@ public final class ReplaceSelectionTool implements EditorTool {
         context.viewport().tileAt(event.x(), event.y())
                 .filter(tile -> contains(objects, tile))
                 .ifPresent(ignored -> {
-                    ReplaceObjectsCommand command = new ReplaceObjectsCommand(objects, replacementId);
-                    context.session().execute(command);
-                    context.session().selection().selectObjects(command.replacementObjects());
+                    if (context.session().canEdit()) {
+                        ReplaceObjectsCommand command = new ReplaceObjectsCommand(objects, replacementId);
+                        context.session().execute(command);
+                        context.session().selection().selectObjects(command.replacementObjects());
+                    }
                 });
     }
 

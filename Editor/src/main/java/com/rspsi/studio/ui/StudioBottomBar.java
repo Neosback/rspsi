@@ -139,7 +139,7 @@ public final class StudioBottomBar {
                 if (!context.studioPlugins().effectiveSurfaces(tool).contains(StudioToolPlugin.ToolSurface.BOTTOM_BAR)) {
                     continue;
                 }
-                boolean isActive = tool.toolId().equals(activeToolId);
+                boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
 
                 if (isActive) {
                     ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
