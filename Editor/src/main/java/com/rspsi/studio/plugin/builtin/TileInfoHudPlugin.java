@@ -129,7 +129,9 @@ public final class TileInfoHudPlugin implements StudioPlugin {
             case 3 -> ViewportHudManager.Quadrant.TOP_RIGHT;
             default -> ViewportHudManager.Quadrant.BOTTOM_LEFT;
         };
-        var placement = context.huds().place(quadrant, badgeW, badgeH);
+        context.huds().register(ID, quadrant, 20);
+        var placement = context.huds().place(ID, badgeW, badgeH);
+        if (placement == null) return;
         float hudX = placement.x();
         float hudY = placement.y();
 
