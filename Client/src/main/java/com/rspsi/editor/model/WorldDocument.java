@@ -72,13 +72,25 @@ public class WorldDocument {
         return plane >= 0 && plane < planes && x >= 0 && x < width && y >= 0 && y < length;
     }
 
-    public boolean contains(TileCoordinate coordinate) {
+    public boolean contains(LocalTile coordinate) {
         return coordinate != null && contains(coordinate.plane(), coordinate.x(), coordinate.y());
     }
 
-    public Optional<Tile> tileOpt(TileCoordinate coordinate) {
+    public Optional<Tile> tileOpt(LocalTile coordinate) {
         if (!contains(coordinate)) return Optional.empty();
         return Optional.of(tiles[coordinate.plane()][coordinate.x()][coordinate.y()]);
+    }
+
+    /** @deprecated Use LocalTile so coordinate space is compiler-visible. */
+    @Deprecated
+    public boolean contains(TileCoordinate coordinate) {
+        return coordinate != null && contains(LocalTile.from(coordinate));
+    }
+
+    /** @deprecated Use LocalTile so coordinate space is compiler-visible. */
+    @Deprecated
+    public Optional<Tile> tileOpt(TileCoordinate coordinate) {
+        return coordinate == null ? Optional.empty() : tileOpt(LocalTile.from(coordinate));
     }
 
     public Tile tile(int plane, int x, int y) {
@@ -88,8 +100,15 @@ public class WorldDocument {
         return tiles[plane][x][y];
     }
 
-    public Tile tile(TileCoordinate coordinate) {
+    public Tile tile(LocalTile coordinate) {
+        Objects.requireNonNull(coordinate, "coordinate");
         return tile(coordinate.plane(), coordinate.x(), coordinate.y());
+    }
+
+    /** @deprecated Use LocalTile so absolute world coordinates cannot cross this boundary. */
+    @Deprecated
+    public Tile tile(TileCoordinate coordinate) {
+        return tile(LocalTile.from(coordinate));
     }
 
     /**
