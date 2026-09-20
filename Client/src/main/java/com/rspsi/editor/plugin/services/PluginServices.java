@@ -1,6 +1,7 @@
 package com.rspsi.editor.plugin.services;
 
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.data.DecodedDataCatalog;
 import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.DeleteObjectCommand;
 import com.rspsi.editor.EditorCommand;
@@ -17,6 +18,9 @@ import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.overlay.OverlayRegistry;
+import com.rspsi.editor.corpus.RegionFeatureRegistry;
+import com.rspsi.editor.corpus.OsrsRegionFeatureExtractor;
 import com.rspsi.editor.plugin.EditorPluginRegistry;
 import com.rspsi.editor.plugin.EditorToolRegistration;
 import com.rspsi.editor.plugin.event.EditorEventBus;
@@ -50,9 +54,12 @@ public final class PluginServices {
 
     private final EditorSession session;
     private final AssetRepository assets;
+    private final DecodedDataCatalog decodedData;
     private final EditorPluginRegistry registry;
     private final EditorEventBus events;
     private final BrushEngine brushEngine = new BrushEngine();
+    private final OverlayRegistry overlays = new OverlayRegistry();
+    private final RegionFeatureRegistry corpusFeatures = new RegionFeatureRegistry();
 
     private final TerrainService terrain = new TerrainServiceImpl();
     private final ObjectService objects = new ObjectServiceImpl();
@@ -66,8 +73,10 @@ public final class PluginServices {
                            EditorPluginRegistry registry) {
         this.session = Objects.requireNonNull(session, "session");
         this.assets = Objects.requireNonNull(assets, "assets");
+        this.decodedData = DecodedDataCatalog.fromAssets(this.assets);
         this.registry = Objects.requireNonNull(registry, "registry");
         this.events = new EditorEventBus();
+        this.corpusFeatures.register(new OsrsRegionFeatureExtractor());
         session.selection().addChangeListener(ignored ->
                 events.publish(new SelectionChangedEvent(
                         session.selection().selectedCoordinates())));
@@ -89,6 +98,9 @@ public final class PluginServices {
     public UiService ui() { return ui; }
     public CommandService commands() { return commands; }
     public EditorEventBus events() { return events; }
+    public OverlayRegistry overlays() { return overlays; }
+    public RegionFeatureRegistry corpusFeatures() { return corpusFeatures; }
+    public DecodedDataCatalog decodedData() { return decodedData; }
 
     public interface TerrainService {
         TileSnapshot tile(TileCoordinate coordinate);

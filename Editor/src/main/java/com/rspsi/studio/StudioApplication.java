@@ -1,6 +1,7 @@
 package com.rspsi.studio;
 
 import com.rspsi.cache.workspace.CacheSessionState;
+import com.rspsi.cache.workspace.CacheDecoderSummary;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.cache.workspace.OsrsCacheSessionService;
 import com.rspsi.cache.map.OsrsProjectSessionLoader;
@@ -12,14 +13,15 @@ import com.rspsi.editor.assets.EmptyAssetRepository;
 import com.rspsi.editor.plugin.EditorPlugin;
 import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
-import com.rspsi.editor.plugin.EditorPluginLoader;
 import com.rspsi.editor.plugin.EditorPluginStateStore;
 import com.rspsi.editor.plugin.EditorNotificationService;
 import com.rspsi.editor.plugin.EditorSceneAccess;
 import com.rspsi.editor.plugin.EditorSceneSnapshot;
 import com.rspsi.editor.plugin.EditorTaskService;
-import com.rspsi.editor.plugin.PluginDiscovery;
 import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
+import com.rspsi.editor.plugin.runtime.ExternalPluginRuntimeSnapshot;
+import com.rspsi.editor.plugin.runtime.PluginEcosystemService;
+import com.rspsi.editor.plugin.runtime.SemanticVersion;
 import com.rspsi.editor.render.GpuScenePacket;
 import com.rspsi.editor.render.GpuScenePacketBuilder;
 import com.rspsi.editor.render.GpuUploadPlan;
@@ -86,6 +88,9 @@ public final class StudioApplication implements AutoCloseable {
     private final SettingsStore renderSettings = new SettingsStore(EditorSettingKeys.registry());
     private final EditorTaskService tasks = new EditorTaskService();
     private final EditorNotificationService notifications = new EditorNotificationService();
+    private final PluginEcosystemService pluginEcosystem = new PluginEcosystemService(
+            Path.of("plugins"),
+            Path.of(System.getProperty("user.home"), ".openrune-studio", "plugin-repositories.json"));
     private final Path settingsFile = Path.of(System.getProperty("user.home"),
             ".openrune-studio", "settings.json");
     private final ExecutorService sceneExecutor = Executors.newSingleThreadExecutor(runnable -> {
@@ -320,24 +325,44 @@ public final class StudioApplication implements AutoCloseable {
         // Without it, selecting the tool highlights fine but painting silently no-ops.
         candidates.add(new TilePainterToolPlugin());
         candidates.add(new OpenRuneServerPlugin());
-        PluginDiscovery discovery = EditorPluginLoader.discoverOwned(
-                Path.of("plugins"), Thread.currentThread().getContextClassLoader());
+        Map<String, SemanticVersion> hostPluginVersions = new java.util.LinkedHashMap<>();
+        for (EditorPlugin candidate : candidates) {
+            try {
+                hostPluginVersions.put(candidate.id(),
+                        SemanticVersion.parse(candidate.descriptor().version()));
+            } catch (RuntimeException ignored) {
+                hostPluginVersions.put(candidate.id(), new SemanticVersion(0, 0, 0, ""));
+            }
+        }
+        ExternalPluginRuntimeSnapshot discovery = pluginEcosystem.scan(
+                Thread.currentThread().getContextClassLoader(), hostPluginVersions);
         candidates.addAll(discovery.plugins());
+        for (var failure : discovery.failures()) {
+            LOGGER.warn("External plugin {} was not loaded: {}",
+                    failure.jarPath(), failure.message(), failure.cause());
+        }
         EditorSession session = scene.session();
         AssetRepository assets = cacheSessions.current()
                 .map(LoadedOsrsCacheSession::bundle)
                 .map(com.rspsi.cache.workspace.OsrsBundle::assets)
                 .orElse(EmptyAssetRepository.INSTANCE);
         EditorSceneAccess sceneAccess = () -> EditorSceneSnapshot.from(scene.renderScene());
+        CacheDecoderSummary decodedSummary = cacheSessions.current()
+                .map(LoadedOsrsCacheSession::decoderSummary)
+                .orElse(CacheDecoderSummary.empty());
         EditorPluginLifecycleManager next = EditorPluginLifecycleManager.start(
                 candidates,
                 EditorPluginStateStore.defaultStore(),
                 session,
                 assets,
                 sceneAccess,
-                enabled -> EditorPluginHost.initialize(enabled, session,
-                        assets, sceneAccess, renderSettings, tasks, notifications,
-                        null, null, symbols, references, spawns, simulation, integrations),
+                enabled -> {
+                    EditorPluginHost host = EditorPluginHost.initialize(enabled, session,
+                            assets, sceneAccess, renderSettings, tasks, notifications,
+                            null, null, symbols, references, spawns, simulation, integrations);
+                    host.context().services().decodedData().mergeSummary(decodedSummary);
+                    return host;
+                },
                 discovery);
         pluginLifecycle = next;
     }

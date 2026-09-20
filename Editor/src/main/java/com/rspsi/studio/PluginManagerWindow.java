@@ -60,6 +60,10 @@ public final class PluginManagerWindow {
         if (ImGui.button("Enable All")) {
             pluginLifecycle.enableAll();
         }
+        ImGui.sameLine();
+        if (ImGui.button("Reload Plugins")) {
+            pluginLifecycle.reload();
+        }
 
         ImGui.separator();
 
@@ -118,6 +122,20 @@ public final class PluginManagerWindow {
             // Dependencies
             if (descriptor != null && !descriptor.dependencies().isEmpty()) {
                 ImGui.textDisabled("Dependencies: " + String.join(", ", descriptor.dependencies()));
+            }
+            if (descriptor != null && !descriptor.optionalDependencies().isEmpty()) {
+                ImGui.textDisabled("Optional: " + String.join(", ", descriptor.optionalDependencies()));
+            }
+            if (descriptor != null) {
+                ImGui.textDisabled("Plugin API " + descriptor.apiVersion()
+                        + "  |  Minimum Studio " + descriptor.minimumStudioVersion());
+                if (!descriptor.tags().isEmpty()) {
+                    ImGui.textDisabled("Tags: " + String.join(", ", descriptor.tags()));
+                }
+                if (!descriptor.permissions().isEmpty()) {
+                    ImGui.textDisabled("Permissions: " + descriptor.permissions().stream()
+                            .map(Enum::name).sorted().collect(java.util.stream.Collectors.joining(", ")));
+                }
             }
 
             // Dependents warning if disabling

@@ -34,6 +34,7 @@ import com.rspsi.studio.ui.StudioPanelContext;
 import com.rspsi.studio.ui.StudioPanelManager;
 import com.rspsi.studio.ui.WorkspaceTabBar;
 import com.rspsi.studio.ui.hud.ViewportHudManager;
+import com.rspsi.studio.ui.hud.DeclarativeOverlayRenderer;
 import com.rspsi.studio.ui.hud.TilePainterHud;
 import com.rspsi.studio.ui.diagnostics.TerrainDiagnosticsOverlay;
 import com.rspsi.studio.plugin.StudioPluginManager;
@@ -107,6 +108,7 @@ public final class MapEditorView {
     private final StudioPluginManager studioPluginManager = new StudioPluginManager();
     private final StudioBrushManager brushManager = new StudioBrushManager();
     private final ViewportHudManager hudManager = new ViewportHudManager();
+    private final DeclarativeOverlayRenderer declarativeOverlays = new DeclarativeOverlayRenderer();
     {
         studioPluginManager.setOwnedPanelSink(panelManager::register);
     }
@@ -314,6 +316,7 @@ public final class MapEditorView {
                     layout.viewportWidth(), layout.viewportHeight());
             minimapHudOverlay.render(panelContext, layout.viewportX(), layout.contentY(),
                     layout.viewportWidth(), layout.viewportHeight());
+            declarativeOverlays.render(panelContext, pluginLifecycle);
             studioPluginManager.renderHUDs(panelContext);
         }
         ImGui.end();
