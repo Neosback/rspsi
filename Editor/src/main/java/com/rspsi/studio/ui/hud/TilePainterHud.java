@@ -34,7 +34,9 @@ public final class TilePainterHud implements StudioPlugin {
         float padY = 4.0f;
         float width = ImGui.calcTextSize(text).x + padX * 2.0f;
         float height = 22.0f;
-        var placement = context.huds().place(ViewportHudManager.Quadrant.BOTTOM_LEFT, width, height);
+        context.huds().register(ID, ViewportHudManager.Quadrant.BOTTOM_LEFT, 30);
+        var placement = context.huds().place(ID, width, height);
+        if (placement == null) return;
 
         ImDrawList draw = ImGui.getWindowDrawList();
         draw.addRectFilled(placement.x(), placement.y(),
