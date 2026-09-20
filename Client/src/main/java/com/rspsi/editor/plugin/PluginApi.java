@@ -2,6 +2,7 @@ package com.rspsi.editor.plugin;
 
 import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.cache.data.DecodedDataCatalog;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.generation.GenerationSchema;
 import com.rspsi.editor.generation.Generator;
@@ -9,6 +10,12 @@ import com.rspsi.editor.generation.GeneratorService;
 import com.rspsi.editor.knowledge.KnowledgeAnalyzer;
 import com.rspsi.editor.knowledge.WorldKnowledgeService;
 import com.rspsi.editor.render.OverlayDraw;
+import com.rspsi.editor.overlay.OverlayComponent;
+import com.rspsi.editor.overlay.OverlayContribution;
+import com.rspsi.editor.overlay.OverlayLayer;
+import com.rspsi.editor.overlay.OverlayPosition;
+import com.rspsi.editor.corpus.RegionFeatureExtractor;
+import com.rspsi.editor.plugin.extension.ExtensionPoint;
 import com.rspsi.editor.settings.SettingHandle;
 import com.rspsi.editor.settings.SettingKey;
 import com.rspsi.editor.settings.SettingScope;
@@ -64,6 +71,11 @@ public final class PluginApi {
 
     public AssetRepository assets() {
         return context.assets();
+    }
+
+    /** Discoverable catalog of decoded cache families and typed providers. */
+    public DecodedDataCatalog data() {
+        return context.services().decodedData();
     }
 
     public Optional<EditorSceneAccess> scene() {
@@ -250,6 +262,111 @@ public final class PluginApi {
         public void register() {
             Objects.requireNonNull(factory, "tool factory");
             api.context.registry().registerTool(id, label, category, factory);
+        }
+    }
+
+    /**
+     * Publishes a typed inter-plugin extension and removes it automatically
+     * when this plugin unloads.
+     */
+    public <T> void extension(ExtensionPoint<T> point, String id, int priority, T extension) {
+        AutoCloseable handle = context.services().extensions().register(
+                Objects.requireNonNull(point, "point"), id, priority, extension);
+        track(handle);
+    }
+
+    public <T> void extension(ExtensionPoint<T> point, String id, T extension) {
+        extension(point, id, 0, extension);
+    }
+
+    /** Registers a cache/region feature family for similarity, WFC and analysis. */
+    public void regionFeature(RegionFeatureExtractor extractor) {
+        AutoCloseable handle = context.services().corpusFeatures().register(
+                Objects.requireNonNull(extractor, "extractor"));
+        track(handle);
+    }
+
+    // --- Declarative HUD Overlay ---
+
+    /**
+     * Builds a frontend-neutral movable HUD contribution. This is preferred
+     * over direct scene drawing for status panels, infoboxes, progress and
+     * tool telemetry because every frontend can render the same component tree.
+     */
+    public HudBuilder hud(String id) {
+        return new HudBuilder(this, id);
+    }
+
+    public static final class HudBuilder {
+        private final PluginApi api;
+        private final String id;
+        private String label;
+        private OverlayPosition position = OverlayPosition.TOP_LEFT;
+        private OverlayLayer layer = OverlayLayer.HUD;
+        private int priority;
+        private boolean movable = true;
+        private boolean enabledByDefault = true;
+        private float preferredWidth = 240.0f;
+        private Supplier<? extends OverlayComponent> content;
+
+        HudBuilder(PluginApi api, String id) {
+            this.api = api;
+            this.id = id;
+            this.label = id;
+        }
+
+        public HudBuilder label(String label) {
+            this.label = label;
+            return this;
+        }
+
+        public HudBuilder position(OverlayPosition position) {
+            this.position = Objects.requireNonNull(position, "position");
+            return this;
+        }
+
+        public HudBuilder layer(OverlayLayer layer) {
+            this.layer = Objects.requireNonNull(layer, "layer");
+            return this;
+        }
+
+        public HudBuilder priority(int priority) {
+            this.priority = priority;
+            return this;
+        }
+
+        public HudBuilder movable(boolean movable) {
+            this.movable = movable;
+            return this;
+        }
+
+        public HudBuilder enabledByDefault(boolean enabledByDefault) {
+            this.enabledByDefault = enabledByDefault;
+            return this;
+        }
+
+        public HudBuilder width(float preferredWidth) {
+            this.preferredWidth = preferredWidth;
+            return this;
+        }
+
+        public HudBuilder content(OverlayComponent component) {
+            Objects.requireNonNull(component, "component");
+            this.content = () -> component;
+            return this;
+        }
+
+        public HudBuilder content(Supplier<? extends OverlayComponent> content) {
+            this.content = Objects.requireNonNull(content, "content");
+            return this;
+        }
+
+        public void register() {
+            Objects.requireNonNull(content, "HUD content");
+            AutoCloseable handle = api.context.services().overlays().register(
+                    new OverlayContribution(id, label, position, layer, priority,
+                            movable, enabledByDefault, preferredWidth, content));
+            api.track(handle);
         }
     }
 

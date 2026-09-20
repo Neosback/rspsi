@@ -11,6 +11,8 @@ import com.rspsi.editor.brush.builtin.SquareBrush;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.render.OverlayDraw;
 import com.rspsi.editor.terrain.TerrainVertexLattice;
@@ -36,10 +38,10 @@ public final class ChangeHeightTool implements EditorTool, BrushAwareTool {
     private final BrushEngine brushEngine = new BrushEngine();
 
     private ToolContext context;
-    private final Set<TileCoordinate> visited = new LinkedHashSet<>();
+    private final Set<WorldTile> visited = new LinkedHashSet<>();
     private final Map<VertexKey, Integer> vertexDeltas = new LinkedHashMap<>();
     private BrushMask lastMask;
-    private TileCoordinate lastCenter;
+    private WorldTile lastCenter;
 
     public ChangeHeightTool(int delta) { setDelta(delta); }
 
@@ -132,14 +134,15 @@ public final class ChangeHeightTool implements EditorTool, BrushAwareTool {
     private void addStamp(PointerEvent event) {
         context.viewport().tileAt(event.x(), event.y()).ifPresent(center -> {
             if (delta == 0) return;
-            List<TileCoordinate> centers = lastCenter == null
+            List<WorldTile> centers = lastCenter == null
                     ? List.of(center)
                     : brushEngine.interpolateStroke(lastCenter, center, 1.0);
             int effectiveDelta = event.alt() ? -delta : delta;
 
-            for (TileCoordinate stampCenter : centers) {
+            for (WorldTile stampCenter : centers) {
                 if (!visited.add(stampCenter)) continue;
-                lastMask = brushEngine.sample(brush, radius, stampCenter, context.session().world());
+                lastMask = brushEngine.sample(brush, radius, stampCenter,
+                        context.session().world(), context.session().window());
                 Map<VertexKey, Integer> stamp = new LinkedHashMap<>();
 
                 for (var sample : lastMask.samples()) {
@@ -154,7 +157,7 @@ public final class ChangeHeightTool implements EditorTool, BrushAwareTool {
                     int amount = (int) Math.round(effectiveDelta * weight);
                     if (amount == 0) continue;
 
-                    TileCoordinate local = sample.local();
+                    LocalTile local = sample.local();
                     mergeStrongest(stamp, new VertexKey(local.plane(), local.x(), local.y()), amount);
                     mergeStrongest(stamp, new VertexKey(local.plane(), local.x() + 1, local.y()), amount);
                     mergeStrongest(stamp, new VertexKey(local.plane(), local.x() + 1, local.y() + 1), amount);

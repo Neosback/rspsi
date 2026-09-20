@@ -3,6 +3,7 @@ description = 'Client'
 apply plugin: 'java-library'
 
 dependencies {
+    implementation "org.tomlj:tomlj:1.1.1"
     // Raw cache-library types are confined to legacy adapters/renderers and
     // must not become part of the editor module's transitive API.
     implementation 'com.displee:rs-cache-library:7.3.0'

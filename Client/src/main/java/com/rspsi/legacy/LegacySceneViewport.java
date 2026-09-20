@@ -1,7 +1,7 @@
 package com.rspsi.legacy;
 
 import com.jagex.map.SceneGraph;
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.viewport.Viewport;
 
 import java.util.Optional;
@@ -19,7 +19,7 @@ public final class LegacySceneViewport implements Viewport {
     }
 
     @Override
-    public Optional<TileCoordinate> tileAt(float x, float y) {
+    public Optional<WorldTile> tileAt(float x, float y) {
         int plane = SceneGraph.hoveredTileZ;
         int tileX = SceneGraph.hoveredTileX;
         int tileY = SceneGraph.hoveredTileY;
@@ -27,6 +27,6 @@ public final class LegacySceneViewport implements Viewport {
                 || tileX >= sceneGraph.width || tileY < 0 || tileY >= sceneGraph.length) {
             return Optional.empty();
         }
-        return Optional.of(new TileCoordinate(plane, tileX, tileY));
+        return Optional.of(new WorldTile(plane, tileX, tileY));
     }
 }

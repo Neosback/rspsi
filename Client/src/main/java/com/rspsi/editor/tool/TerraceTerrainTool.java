@@ -6,6 +6,8 @@ import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.render.OverlayDraw;
 
@@ -19,7 +21,7 @@ public final class TerraceTerrainTool implements EditorTool {
     private int step;
     private ToolContext context;
     private final List<EditorCommand> stroke = new ArrayList<>();
-    private final Set<TileCoordinate> visited = new LinkedHashSet<>();
+    private final Set<WorldTile> visited = new LinkedHashSet<>();
 
     public TerraceTerrainTool(int step) {
         setStep(step);
@@ -68,10 +70,10 @@ public final class TerraceTerrainTool implements EditorTool {
         context.viewport().tileAt(event.x(), event.y()).ifPresent(absolute -> {
             if (!visited.add(absolute)) return;
             var world = context.session().world();
-            int localX = Math.floorMod(absolute.x(), Math.max(1, world.width()));
-            int localY = Math.floorMod(absolute.y(), Math.max(1, world.length()));
-            TileCoordinate coordinate = new TileCoordinate(absolute.plane(), localX, localY);
-            TileSnapshot before = world.tile(coordinate).snapshot();
+            LocalTile local = context.local(absolute).orElse(null);
+            if (local == null) return;
+            TileCoordinate coordinate = local.coordinate();
+            TileSnapshot before = world.tile(local).snapshot();
 
             TileSnapshot after = new TileSnapshot(
                     quantize(before.southWestHeight()),
@@ -79,7 +81,7 @@ public final class TerraceTerrainTool implements EditorTool {
                     quantize(before.northEastHeight()),
                     quantize(before.northWestHeight()),
                     before.underlayId(), before.overlayId(), before.overlayShape(), before.overlayRotation(),
-                    before.flags(), before.objects());
+                    before.flags(), before.objects(), before.heightSource());
 
             if (!before.equals(after)) {
                 stroke.add(new ChangeHeightCommand(coordinate, before, after, "Terrace terrain at " + coordinate));

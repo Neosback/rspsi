@@ -3,8 +3,9 @@ package com.rspsi.editor.tool;
 import com.rspsi.editor.ReplaceObjectsCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.OverlayDraw;
 import com.rspsi.editor.selection.ObjectSelection;
 import com.rspsi.editor.selection.ObjectSetSelection;
@@ -34,7 +35,7 @@ public final class ReplaceSelectionTool implements EditorTool {
         if (context == null || event.button() != PointerButton.PRIMARY) return;
         Set<WorldObject> objects = selectedObjects(context.session().selection().current());
         if (objects == null) return;
-        context.viewport().tileAt(event.x(), event.y())
+        context.worldTileAt(event.x(), event.y())
                 .filter(tile -> contains(objects, tile))
                 .ifPresent(ignored -> {
                     if (context.session().canEdit()) {
@@ -52,14 +53,15 @@ public final class ReplaceSelectionTool implements EditorTool {
                     0, Integer.MAX_VALUE)); }
     @Override public void renderOverlay(OverlayDraw draw) { }
 
+    private boolean contains(Set<WorldObject> objects, WorldTile tile) {
+        LocalTile local = context.local(tile).orElse(null);
+        return local != null && objects.stream().anyMatch(object -> object.plane() == local.plane()
+                && object.x() == local.x() && object.y() == local.y());
+    }
+
     private static Set<WorldObject> selectedObjects(Selection selection) {
         if (selection instanceof ObjectSelection object) return Set.of(object.object());
         if (selection instanceof ObjectSetSelection objects) return new LinkedHashSet<>(objects.objects());
         return null;
-    }
-
-    private static boolean contains(Set<WorldObject> objects, TileCoordinate tile) {
-        return objects.stream().anyMatch(object -> object.plane() == tile.plane()
-                && object.x() == tile.x() && object.y() == tile.y());
     }
 }

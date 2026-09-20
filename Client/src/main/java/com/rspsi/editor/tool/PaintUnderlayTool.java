@@ -6,8 +6,9 @@ import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.PaintUnderlayCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.OverlayDraw;
 
 import java.util.ArrayList;
@@ -20,100 +21,61 @@ public final class PaintUnderlayTool implements EditorTool {
     private int underlayId;
     private ToolContext context;
     private final List<EditorCommand> stroke = new ArrayList<>();
-    private final Set<TileCoordinate> visited = new LinkedHashSet<>();
+    private final Set<WorldTile> visited = new LinkedHashSet<>();
 
-    public PaintUnderlayTool(int underlayId) {
-        setUnderlayId(underlayId);
-    }
-
-    public int underlayId() {
-        return underlayId;
-    }
-
+    public PaintUnderlayTool(int underlayId) { setUnderlayId(underlayId); }
+    public int underlayId() { return underlayId; }
     public void setUnderlayId(int underlayId) {
-        if (underlayId < 0) {
-            throw new IllegalArgumentException("Underlay ID cannot be negative");
-        }
+        if (underlayId < 0) throw new IllegalArgumentException("Underlay ID cannot be negative");
         this.underlayId = underlayId;
     }
 
-    @Override
-    public String id() {
-        return "paint-underlay";
-    }
+    @Override public String id() { return "paint-underlay"; }
+    @Override public void activate(ToolContext context) { this.context = context; clearStroke(); }
+    @Override public void deactivate() { clearStroke(); context = null; }
 
-    @Override
-    public void activate(ToolContext context) {
-        this.context = context;
-        clearStroke();
-    }
-
-    @Override
-    public void deactivate() {
-        clearStroke();
-        context = null;
-    }
-
-    @Override
-    public void pointerDown(PointerEvent event) {
-        if (event.button() != PointerButton.PRIMARY || context == null) {
-            return;
-        }
+    @Override public void pointerDown(PointerEvent event) {
+        if (event.button() != PointerButton.PRIMARY || context == null) return;
         clearStroke();
         addTileAt(event);
     }
 
-    @Override
-    public void pointerDrag(PointerEvent event) {
-        if (event.button() == PointerButton.PRIMARY && context != null) {
-            addTileAt(event);
-        }
+    @Override public void pointerDrag(PointerEvent event) {
+        if (event.button() == PointerButton.PRIMARY && context != null) addTileAt(event);
     }
 
-    @Override
-    public void pointerUp(PointerEvent event) {
-        if (context == null || stroke.isEmpty()) {
-            clearStroke();
-            return;
-        }
+    @Override public void pointerUp(PointerEvent event) {
+        if (context == null || stroke.isEmpty()) { clearStroke(); return; }
         EditorSession session = context.session();
-        session.execute(new CompositeEditCommand("Paint underlay", stroke));
+        if (session.canEdit()) session.execute(new CompositeEditCommand("Paint underlay", stroke));
         clearStroke();
     }
 
-    @Override
-    public ToolInspector inspector() {
-        return () -> List.of(new PropertyDescriptor("underlayId", "Underlay", 
+    @Override public ToolInspector inspector() {
+        return () -> List.of(new PropertyDescriptor("underlayId", "Underlay",
                 PropertyDescriptor.ValueType.INTEGER, 0, Integer.MAX_VALUE));
     }
 
-    @Override
-    public void renderOverlay(OverlayDraw draw) {
-        for (TileCoordinate tile : visited) {
-            draw.tileOutline(tile);
-        }
+    @Override public void renderOverlay(OverlayDraw draw) {
+        visited.forEach(draw::tileOutline);
     }
 
     private void addTileAt(PointerEvent event) {
-        context.viewport().tileAt(event.x(), event.y()).ifPresent(coordinate -> {
-            if (!visited.add(coordinate)) {
-                return;
-            }
-            TileSnapshot before = context.session().world().tile(coordinate).snapshot();
-            if (before.underlayId() == underlayId) {
-                return;
-            }
-            TileSnapshot after = new TileSnapshot(before.southWestHeight(), before.southEastHeight(),
+        context.worldTileAt(event.x(), event.y()).ifPresent(worldTile -> {
+            if (!visited.add(worldTile)) return;
+            LocalTile local = context.local(worldTile).orElse(null);
+            if (local == null) return;
+            TileSnapshot before = context.session().world().tile(local).snapshot();
+            if (before.underlayId() == underlayId) return;
+            TileSnapshot after = new TileSnapshot(
+                    before.southWestHeight(), before.southEastHeight(),
                     before.northEastHeight(), before.northWestHeight(), underlayId,
                     before.overlayId(), before.overlayShape(), before.overlayRotation(),
-                    before.flags(), before.objects());
-            stroke.add(new PaintUnderlayCommand(coordinate, before, after,
-                    "Paint underlay at " + coordinate));
+                    before.flags(), before.objects(), before.heightSource());
+            stroke.add(new PaintUnderlayCommand(local.coordinate(), before, after,
+                    "Paint underlay at " + worldTile));
         });
     }
 
-    private void clearStroke() {
-        stroke.clear();
-        visited.clear();
-    }
+    private void clearStroke() { stroke.clear(); visited.clear(); }
 }

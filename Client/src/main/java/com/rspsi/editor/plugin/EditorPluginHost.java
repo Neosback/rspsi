@@ -4,6 +4,7 @@ import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.settings.EditorSettingKeys;
+import com.rspsi.editor.plugin.services.PluginServices;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -162,6 +163,7 @@ public final class EditorPluginHost implements AutoCloseable {
         } catch (RuntimeException | Error failure) {
             shutdownReverse(initialized, registry, context, failure);
             closeResources(resources, failure);
+            releasePluginServices(registry, failure);
             registry.close();
             throw failure;
         }
@@ -190,6 +192,7 @@ public final class EditorPluginHost implements AutoCloseable {
         loadedPlugins.clear();
         plugins.clear();
         closeResources(context.resources(), failure);
+        failure = releasePluginServices(registry, failure);
         registry.close();
         if (failure != null) {
             throw new IllegalStateException("One or more editor plugins failed to shut down", failure);
@@ -221,6 +224,16 @@ public final class EditorPluginHost implements AutoCloseable {
         } catch (RuntimeException | Error resourceFailure) {
             if (failure != null) failure.addSuppressed(resourceFailure);
             else throw resourceFailure;
+        }
+    }
+
+    private static Throwable releasePluginServices(
+            EditorPluginRegistry registry, Throwable failure) {
+        try {
+            PluginServices.release(registry);
+            return failure;
+        } catch (RuntimeException | Error serviceFailure) {
+            return appendFailure(failure, serviceFailure);
         }
     }
 

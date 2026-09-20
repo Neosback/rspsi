@@ -1,6 +1,7 @@
 package com.rspsi.editor.plugin.services;
 
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.data.DecodedDataCatalog;
 import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.DeleteObjectCommand;
 import com.rspsi.editor.EditorCommand;
@@ -8,6 +9,7 @@ import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.MoveObjectCommand;
 import com.rspsi.editor.PlaceObjectCommand;
 import com.rspsi.editor.RotateObjectCommand;
+import com.rspsi.editor.SelectionChangeListener;
 import com.rspsi.editor.SetTerrainHeightCommand;
 import com.rspsi.editor.SetTileMaterialCommand;
 import com.rspsi.editor.assets.AssetRepository;
@@ -15,11 +17,16 @@ import com.rspsi.editor.brush.BrushEngine;
 import com.rspsi.editor.brush.BrushMask;
 import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.overlay.OverlayRegistry;
+import com.rspsi.editor.corpus.RegionFeatureRegistry;
+import com.rspsi.editor.corpus.OsrsRegionFeatureExtractor;
 import com.rspsi.editor.plugin.EditorPluginRegistry;
 import com.rspsi.editor.plugin.EditorToolRegistration;
 import com.rspsi.editor.plugin.event.EditorEventBus;
+import com.rspsi.editor.plugin.extension.EditorExtensionRegistry;
 import com.rspsi.editor.plugin.event.SelectionChangedEvent;
 import com.rspsi.editor.plugin.event.TileEditedEvent;
 import com.rspsi.editor.plugin.ui.UiSurfaceContribution;
@@ -50,9 +57,14 @@ public final class PluginServices {
 
     private final EditorSession session;
     private final AssetRepository assets;
+    private final DecodedDataCatalog decodedData;
     private final EditorPluginRegistry registry;
     private final EditorEventBus events;
+    private final SelectionChangeListener selectionListener;
     private final BrushEngine brushEngine = new BrushEngine();
+    private final OverlayRegistry overlays = new OverlayRegistry();
+    private final RegionFeatureRegistry corpusFeatures = new RegionFeatureRegistry();
+    private final EditorExtensionRegistry extensions = new EditorExtensionRegistry();
 
     private final TerrainService terrain = new TerrainServiceImpl();
     private final ObjectService objects = new ObjectServiceImpl();
@@ -66,11 +78,14 @@ public final class PluginServices {
                            EditorPluginRegistry registry) {
         this.session = Objects.requireNonNull(session, "session");
         this.assets = Objects.requireNonNull(assets, "assets");
+        this.decodedData = DecodedDataCatalog.fromAssets(this.assets);
         this.registry = Objects.requireNonNull(registry, "registry");
         this.events = new EditorEventBus();
-        session.selection().addChangeListener(ignored ->
+        this.corpusFeatures.register(new OsrsRegionFeatureExtractor());
+        this.selectionListener = ignored ->
                 events.publish(new SelectionChangedEvent(
-                        session.selection().selectedCoordinates())));
+                        session.selection().selectedCoordinates()));
+        session.selection().addChangeListener(selectionListener);
     }
 
     /** One service bundle per plugin registry/host lifecycle. */
@@ -81,6 +96,21 @@ public final class PluginServices {
                 ignored -> new PluginServices(session, assets, registry));
     }
 
+    /** Releases host-scoped listeners and contribution registries. */
+    public static synchronized void release(EditorPluginRegistry registry) {
+        if (registry == null) return;
+        PluginServices services = INSTANCES.remove(registry);
+        if (services != null) services.close();
+    }
+
+    private void close() {
+        session.selection().removeChangeListener(selectionListener);
+        events.clear();
+        overlays.clear();
+        extensions.clear();
+        corpusFeatures.clear();
+    }
+
     public TerrainService terrain() { return terrain; }
     public ObjectService objects() { return objects; }
     public SelectionService selections() { return selections; }
@@ -89,6 +119,10 @@ public final class PluginServices {
     public UiService ui() { return ui; }
     public CommandService commands() { return commands; }
     public EditorEventBus events() { return events; }
+    public OverlayRegistry overlays() { return overlays; }
+    public RegionFeatureRegistry corpusFeatures() { return corpusFeatures; }
+    public DecodedDataCatalog decodedData() { return decodedData; }
+    public EditorExtensionRegistry extensions() { return extensions; }
 
     public interface TerrainService {
         TileSnapshot tile(TileCoordinate coordinate);
@@ -253,7 +287,9 @@ public final class PluginServices {
 
         @Override
         public BrushMask sample(String brushId, int radius, TileCoordinate center) {
-            return brushEngine.sample(brushEngine.brush(brushId), radius, center, session.world());
+            LocalTile local = LocalTile.from(Objects.requireNonNull(center, "center"));
+            return brushEngine.sample(brushEngine.brush(brushId), radius,
+                    session.coordinates().toWorld(local), session.world(), session.window());
         }
 
         @Override

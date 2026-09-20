@@ -8,7 +8,8 @@ import com.rspsi.editor.brush.builtin.SlopeBrush;
 import com.rspsi.editor.brush.builtin.SquareBrush;
 import com.rspsi.editor.brush.builtin.TerraceBrush;
 import com.rspsi.editor.model.TileBounds;
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
+import com.rspsi.editor.model.WorldWindow;
 import com.rspsi.editor.model.WorldDocument;
 
 import java.util.LinkedHashMap;
@@ -52,8 +53,9 @@ public final class BrushEngine {
         return List.copyOf(brushes.values());
     }
 
-    public BrushMask sample(EditorBrush brush, int radius, TileCoordinate center, WorldDocument world) {
-        List<BrushSampling.Sample> samples = BrushSampling.sample(brush, radius, center, world);
+    public BrushMask sample(EditorBrush brush, int radius, WorldTile center,
+                            WorldDocument world, WorldWindow window) {
+        List<BrushSampling.Sample> samples = BrushSampling.sample(brush, radius, center, world, window);
         int minX = center.x();
         int maxX = center.x();
         int minY = center.y();
@@ -72,9 +74,9 @@ public final class BrushEngine {
      * 1.0 or less visits every rasterized tile; larger values intentionally
      * leave gaps for stamp/scatter workflows.
      */
-    public List<TileCoordinate> interpolateStroke(TileCoordinate from,
-                                                  TileCoordinate to,
-                                                  double spacing) {
+    public List<WorldTile> interpolateStroke(WorldTile from,
+                                             WorldTile to,
+                                             double spacing) {
         Objects.requireNonNull(from, "from");
         Objects.requireNonNull(to, "to");
         if (from.plane() != to.plane()) {
@@ -90,10 +92,10 @@ public final class BrushEngine {
         if (distance == 0.0) return List.of(to);
 
         int steps = Math.max(1, (int) Math.ceil(distance / spacing));
-        java.util.LinkedHashSet<TileCoordinate> result = new java.util.LinkedHashSet<>();
+        java.util.LinkedHashSet<WorldTile> result = new java.util.LinkedHashSet<>();
         for (int i = 0; i <= steps; i++) {
             double t = i / (double) steps;
-            result.add(new TileCoordinate(from.plane(),
+            result.add(new WorldTile(from.plane(),
                     (int) Math.round(from.x() + dx * t),
                     (int) Math.round(from.y() + dy * t)));
         }

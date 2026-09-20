@@ -6,6 +6,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.selection.ObjectSetSelection;
 import com.rspsi.editor.selection.TileAreaSelection;
 import com.rspsi.editor.tool.BoxSelectTool;
@@ -163,7 +164,7 @@ class CoreBoxSelectToolTest {
 
     private static ToolContext context(EditorSession session) {
         return new ToolContext(session, new EmptyAssets(),
-                (x, y) -> Optional.of(new TileCoordinate(0, (int) x, (int) y)));
+                (x, y) -> Optional.of(new WorldTile(0, (int) x, (int) y)));
     }
 
     private static PointerEvent pointer(float x, float y) {

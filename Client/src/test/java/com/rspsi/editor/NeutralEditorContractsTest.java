@@ -4,6 +4,7 @@ import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.OverlayDraw;
 import com.rspsi.editor.tool.EditorTool;
 import com.rspsi.editor.tool.EditorToolController;
@@ -53,7 +54,7 @@ class NeutralEditorContractsTest {
         PaintUnderlayTool tool = new PaintUnderlayTool(42);
         EditorToolController controller = new EditorToolController();
         ToolContext context = new ToolContext(session, new EmptyAssets(),
-                (x, y) -> Optional.of(new com.rspsi.editor.model.TileCoordinate(0, (int) x, 0)));
+                (x, y) -> Optional.of(new WorldTile(0, (int) x, 0)));
         PointerEvent first = new PointerEvent(0, 0, PointerButton.PRIMARY, false, false, false);
         PointerEvent second = new PointerEvent(1, 0, PointerButton.PRIMARY, false, false, false);
 

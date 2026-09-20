@@ -1,6 +1,6 @@
 package com.rspsi.studio;
 
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.PickResult;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +17,7 @@ class NativeSceneViewportTest {
         assertNotNull(viewport.navigation(), "navigation controller must not be null");
         assertFalse(viewport.selection().isPresent(), "initial selection should be empty");
 
-        PickResult hit = new PickResult(new TileCoordinate(1, 3200, 3200), 1, 1050, 42.0f);
+        PickResult hit = new PickResult(new WorldTile(1, 3200, 3200), 1, 1050, 42.0f);
         viewport.setSelection(hit);
 
         assertTrue(viewport.selection().isPresent());

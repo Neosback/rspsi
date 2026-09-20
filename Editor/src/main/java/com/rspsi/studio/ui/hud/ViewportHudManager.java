@@ -11,7 +11,11 @@ import java.util.Objects;
  * can be persisted by the workspace layout store.
  */
 public final class ViewportHudManager {
-    public enum Quadrant { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+    public enum Quadrant {
+        TOP_LEFT, TOP_CENTER, TOP_RIGHT,
+        CENTER_LEFT, CENTER, CENTER_RIGHT,
+        BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT
+    }
 
     public record Placement(float x, float y, float width, float height) { }
 
@@ -141,12 +145,16 @@ public final class ViewportHudManager {
         float h = Math.max(1.0f, height);
         float offset = stackOffsets.getOrDefault(quadrant, 0.0f);
         float x = switch (quadrant) {
-            case TOP_LEFT, BOTTOM_LEFT -> viewportX + padding;
-            case TOP_RIGHT, BOTTOM_RIGHT -> viewportX + viewportWidth - padding - w;
+            case TOP_LEFT, CENTER_LEFT, BOTTOM_LEFT -> viewportX + padding;
+            case TOP_CENTER, CENTER, BOTTOM_CENTER -> viewportX + (viewportWidth - w) * 0.5f;
+            case TOP_RIGHT, CENTER_RIGHT, BOTTOM_RIGHT -> viewportX + viewportWidth - padding - w;
         };
         float y = switch (quadrant) {
-            case TOP_LEFT, TOP_RIGHT -> viewportY + padding + offset;
-            case BOTTOM_LEFT, BOTTOM_RIGHT -> viewportY + viewportHeight - padding - h - offset;
+            case TOP_LEFT, TOP_CENTER, TOP_RIGHT -> viewportY + padding + offset;
+            case CENTER_LEFT, CENTER, CENTER_RIGHT ->
+                    viewportY + (viewportHeight - h) * 0.5f + offset;
+            case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT ->
+                    viewportY + viewportHeight - padding - h - offset;
         };
         stackOffsets.put(quadrant, offset + h + gap);
         return new Placement(x, y, w, h);

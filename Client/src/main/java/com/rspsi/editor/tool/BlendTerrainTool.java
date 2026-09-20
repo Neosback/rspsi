@@ -6,6 +6,8 @@ import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.render.OverlayDraw;
 
@@ -23,7 +25,7 @@ public final class BlendTerrainTool implements EditorTool {
     private int edgeThreshold;
     private ToolContext context;
     private final List<EditorCommand> stroke = new ArrayList<>();
-    private final Set<TileCoordinate> visited = new LinkedHashSet<>();
+    private final Set<WorldTile> visited = new LinkedHashSet<>();
 
     public BlendTerrainTool(int strengthPercent, int edgeThreshold) {
         setStrengthPercent(strengthPercent);
@@ -82,10 +84,10 @@ public final class BlendTerrainTool implements EditorTool {
         context.viewport().tileAt(event.x(), event.y()).ifPresent(absolute -> {
             if (!visited.add(absolute)) return;
             var world = context.session().world();
-            int localX = Math.floorMod(absolute.x(), Math.max(1, world.width()));
-            int localY = Math.floorMod(absolute.y(), Math.max(1, world.length()));
-            TileCoordinate coordinate = new TileCoordinate(absolute.plane(), localX, localY);
-            TileSnapshot before = world.tile(coordinate).snapshot();
+            LocalTile local = context.local(absolute).orElse(null);
+            if (local == null) return;
+            TileCoordinate coordinate = local.coordinate();
+            TileSnapshot before = world.tile(local).snapshot();
 
             int sw = blendCorner(coordinate, Corner.SOUTH_WEST, before.southWestHeight());
             int se = blendCorner(coordinate, Corner.SOUTH_EAST, before.southEastHeight());
@@ -94,7 +96,7 @@ public final class BlendTerrainTool implements EditorTool {
 
             TileSnapshot after = new TileSnapshot(sw, se, ne, nw,
                     before.underlayId(), before.overlayId(), before.overlayShape(), before.overlayRotation(),
-                    before.flags(), before.objects());
+                    before.flags(), before.objects(), before.heightSource());
 
             if (!before.equals(after)) {
                 stroke.add(new ChangeHeightCommand(coordinate, before, after, "Blend terrain at " + coordinate));
