@@ -43,6 +43,57 @@ public final class TerrainLighting {
         return Map.copyOf(result);
     }
 
+    /**
+     * Builds lighting for one tile without materializing a full document light map.
+     * The four corner calculations are bit-for-bit equivalent to {@link #build}
+     * for interior vertices and use ambient light on the outer document edge.
+     */
+    public static TerrainLight buildTile(WorldDocument document, LightingProfile profile,
+                                         TerrainShadowMap shadows, int plane, int x, int y) {
+        Objects.requireNonNull(document, "document");
+        Objects.requireNonNull(profile, "profile");
+        if (!document.contains(plane, x, y)) {
+            throw new IndexOutOfBoundsException("Terrain tile outside document: " + plane + "," + x + "," + y);
+        }
+        return new TerrainLight(
+                cornerLight(document, profile, shadows, plane, x, y),
+                cornerLight(document, profile, shadows, plane, x + 1, y),
+                cornerLight(document, profile, shadows, plane, x + 1, y + 1),
+                cornerLight(document, profile, shadows, plane, x, y + 1));
+    }
+
+    private static int cornerLight(WorldDocument document, LightingProfile profile,
+                                   TerrainShadowMap shadows, int plane, int vx, int vy) {
+        if (vx <= 0 || vy <= 0 || vx >= document.width() || vy >= document.length()) {
+            return profile.ambient();
+        }
+        int heightDeltaX = cornerHeight(document, plane, vx + 1, vy)
+                - cornerHeight(document, plane, vx - 1, vy);
+        int heightDeltaY = cornerHeight(document, plane, vx, vy + 1)
+                - cornerHeight(document, plane, vx, vy - 1);
+        int shadowPenalty = shadows == null ? 0
+                : com.rspsi.osrs.rules.terrain.TerrainLightRules.calculateShadowPenalty(
+                        shadows.cornerStrength(plane, vx, vy),
+                        shadows.cornerStrength(plane, vx - 1, vy),
+                        shadows.cornerStrength(plane, vx + 1, vy),
+                        shadows.cornerStrength(plane, vx, vy - 1),
+                        shadows.cornerStrength(plane, vx, vy + 1));
+        return com.rspsi.osrs.rules.terrain.TerrainLightRules.calculateCornerLight(
+                heightDeltaX, heightDeltaY, profile, shadowPenalty);
+    }
+
+    private static int cornerHeight(WorldDocument document, int plane, int vx, int vy) {
+        int x = Math.max(0, Math.min(document.width(), vx));
+        int y = Math.max(0, Math.min(document.length(), vy));
+        int tileX = Math.min(x, document.width() - 1);
+        int tileY = Math.min(y, document.length() - 1);
+        TileSnapshot tile = document.tile(plane, tileX, tileY).snapshot();
+        if (x == document.width() && y == document.length()) return tile.northEastHeight();
+        if (x == document.width()) return tile.southEastHeight();
+        if (y == document.length()) return tile.northWestHeight();
+        return tile.southWestHeight();
+    }
+
     private static int[][] cornerHeights(WorldDocument document, int plane) {
         int[][] heights = new int[document.width() + 1][document.length() + 1];
         for (int x = 0; x <= document.width(); x++) {
