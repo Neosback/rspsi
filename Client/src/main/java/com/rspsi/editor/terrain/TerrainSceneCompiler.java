@@ -48,13 +48,20 @@ public final class TerrainSceneCompiler {
 
     public Map<TileCoordinate, CompiledTerrainTile> compile(WorldDocument document,
                                                              DefinitionProvider definitions) {
+        return compile(document, definitions, LightingProfile.osrs());
+    }
+
+    public Map<TileCoordinate, CompiledTerrainTile> compile(WorldDocument document,
+                                                             DefinitionProvider definitions,
+                                                             LightingProfile lightingProfile) {
         Objects.requireNonNull(document, "document");
         Objects.requireNonNull(definitions, "definitions");
+        Objects.requireNonNull(lightingProfile, "lightingProfile");
         Map<TileCoordinate, TerrainAppearance> appearances =
                 new TerrainAppearanceBuilder().build(document, definitions);
         TerrainShadowMap shadows = TerrainShadowMap.from(document, definitions);
         Map<TileCoordinate, TerrainLight> lighting =
-                TerrainLighting.build(document, LightingProfile.osrs(), shadows);
+                TerrainLighting.build(document, lightingProfile, shadows);
 
         Map<TileCoordinate, CompiledTerrainTile> result = new LinkedHashMap<>();
         for (int plane = 0; plane < document.planes(); plane++) {
