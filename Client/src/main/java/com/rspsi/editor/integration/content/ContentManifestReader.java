@@ -26,10 +26,14 @@ public final class ContentManifestReader {
                 return null;
             }
 
-            int manifestVersion = Math.toIntExact(toml.getLong("manifest_version", 1L));
-            String id = toml.getString("id", "");
-            String name = toml.getString("name", id);
-            String homepage = toml.getString("homepage", "");
+            Long manifestValue = toml.getLong("manifest_version");
+            int manifestVersion = manifestValue == null ? 1 : Math.toIntExact(manifestValue);
+            String id = toml.getString("id");
+            if (id == null) id = "";
+            String name = toml.getString("name");
+            if (name == null) name = id;
+            String homepage = toml.getString("homepage");
+            if (homepage == null) homepage = "";
             List<String> authors = strings(toml.getArray("authors"));
 
             EnumSet<ContentCapability> capabilities = EnumSet.noneOf(ContentCapability.class);
