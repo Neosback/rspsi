@@ -5,6 +5,7 @@ import com.rspsi.editor.assets.AssetDescriptor;
 import com.rspsi.editor.ui.PanelDescriptor;
 import com.rspsi.editor.ui.WorkspaceCatalog;
 import com.rspsi.editor.ui.WorkspaceDefinition;
+import com.rspsi.editor.plugin.ui.UiSurfaceContribution;
 import com.rspsi.editor.validation.ValidationIssue;
 import com.rspsi.editor.input.EditorKeyEvent;
 
@@ -39,6 +40,7 @@ public final class EditorPluginRegistry {
     private final Map<String, PanelDescriptor> panels = new LinkedHashMap<>();
     private final Map<String, EditorPanelRegistration> panelRegistrations = new LinkedHashMap<>();
     private final Map<String, WorkspaceDefinition> workspaces = new LinkedHashMap<>();
+    private final Map<String, UiSurfaceContribution> uiSurfaces = new LinkedHashMap<>();
 
     public void registerTool(String id, Supplier<? extends EditorTool> factory) {
         ensureOpen();
@@ -253,6 +255,25 @@ public final class EditorPluginRegistry {
         if (panels.putIfAbsent(panel.id(), panel) != null) {
             throw new IllegalArgumentException("Duplicate editor panel: " + panel.id());
         }
+    }
+
+    public void registerUiSurface(UiSurfaceContribution contribution) {
+        ensureOpen();
+        Objects.requireNonNull(contribution, "ui surface contribution");
+        if (uiSurfaces.putIfAbsent(contribution.id(), contribution) != null) {
+            throw new IllegalArgumentException("Duplicate UI surface: " + contribution.id());
+        }
+    }
+
+    public List<UiSurfaceContribution> uiSurfaceContributions() {
+        return uiSurfaces.values().stream()
+                .sorted(Comparator.comparingInt(UiSurfaceContribution::priority)
+                        .thenComparing(UiSurfaceContribution::id))
+                .toList();
+    }
+
+    void removeUiSurface(String id) {
+        uiSurfaces.remove(id);
     }
 
     public void registerWorkspace(WorkspaceDefinition workspace) {
