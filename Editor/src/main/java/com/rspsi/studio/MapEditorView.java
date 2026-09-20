@@ -34,6 +34,7 @@ import com.rspsi.studio.ui.StudioPanelManager;
 import com.rspsi.studio.ui.WorkspaceTabBar;
 import com.rspsi.studio.ui.hud.ViewportHudManager;
 import com.rspsi.studio.ui.hud.TilePainterHud;
+import com.rspsi.studio.ui.diagnostics.TerrainDiagnosticsOverlay;
 import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.builtin.TileInfoHudPlugin;
 import imgui.ImGui;
@@ -110,6 +111,7 @@ public final class MapEditorView {
         minimapHudOverlay.setOnWorldMapClick(() -> panelManager.setActiveRightPanelId(MinimapPanel.ID));
         studioPluginManager.register(new TileInfoHudPlugin());
         studioPluginManager.register(new TilePainterHud());
+        studioPluginManager.register(new TerrainDiagnosticsOverlay());
     }
 
     private final PreferencesWindow preferencesWindow = new PreferencesWindow();
