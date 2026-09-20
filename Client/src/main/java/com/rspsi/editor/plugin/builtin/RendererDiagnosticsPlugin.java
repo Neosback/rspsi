@@ -36,9 +36,10 @@ public final class RendererDiagnosticsPlugin implements EditorPlugin {
                            com.rspsi.editor.render.OverlayDraw draw) {
             scene.tileProjections().values().forEach(tile -> {
                 if (!tile.hasBridge() && !tile.hasKnownObjects()) return;
-                draw.tileOutline(tile.coordinate());
-                float wx = tile.coordinate().x() * 128.0f + 64.0f;
-                float wz = tile.coordinate().y() * 128.0f + 64.0f;
+                var world = scene.worldTile(tile.coordinate());
+                draw.tileOutline(world);
+                float wx = world.x() * 128.0f + 64.0f;
+                float wz = world.y() * 128.0f + 64.0f;
                 if (tile.hasBridge()) {
                     draw.worldLabel("bridge", wx, 0.0f, wz, 0xFFFFFFFF, 0xCCB91C1C);
                 } else if (tile.hasKnownObjects()) {
