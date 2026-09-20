@@ -11,6 +11,7 @@ import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.render.OverlayDraw;
 
 import java.util.ArrayList;
@@ -65,7 +66,7 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
     public boolean applyShape() { return applyShape; }
     public void setApplyShape(boolean apply) { this.applyShape = apply; }
     public int shape() { return shape; }
-    public void setShape(int shape) { this.shape = Math.max(0, Math.min(12, shape)); }
+    public void setShape(int shape) { this.shape = Math.max(0, Math.min(11, shape)); }
 
     public boolean applyRotation() { return applyRotation; }
     public void setApplyRotation(boolean apply) { this.applyRotation = apply; }
@@ -146,7 +147,7 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
         return () -> List.of(
                 new PropertyDescriptor("underlayId", "Underlay", PropertyDescriptor.ValueType.INTEGER, 0, Integer.MAX_VALUE),
                 new PropertyDescriptor("overlayId", "Overlay", PropertyDescriptor.ValueType.INTEGER, 0, Integer.MAX_VALUE),
-                new PropertyDescriptor("shape", "Shape", PropertyDescriptor.ValueType.INTEGER, 0, 12),
+                new PropertyDescriptor("shape", "Shape", PropertyDescriptor.ValueType.INTEGER, 0, 11),
                 new PropertyDescriptor("rotation", "Rotation", PropertyDescriptor.ValueType.INTEGER, 0, 3),
                 new PropertyDescriptor("height", "Height", PropertyDescriptor.ValueType.INTEGER, -2048, 2048)
         );
@@ -178,6 +179,7 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
         List<EditorCommand> commands = new ArrayList<>();
         for (TileCoordinate coord : coordinates) {
             TileCoordinate local = toLocal(coord, session.world());
+            if (local == null) continue;
             TileSnapshot before = session.world().tile(local).snapshot();
             TileSnapshot after = transformTile(before);
             if (!before.equals(after)) {
@@ -217,9 +219,14 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
      * clicks/paints outside the tiny 0..width-1 range.
      */
     private static TileCoordinate toLocal(TileCoordinate absolute, com.rspsi.editor.model.WorldDocument world) {
-        int localX = Math.floorMod(absolute.x(), Math.max(1, world.width()));
-        int localY = Math.floorMod(absolute.y(), Math.max(1, world.length()));
-        return new TileCoordinate(absolute.plane(), localX, localY);
+        if (world.contains(absolute)) return absolute;
+        if (absolute.x() < 0 || absolute.y() < 0 || absolute.plane() < 0) return null;
+        WorldTileAddress address = WorldTileAddress.of(absolute.x(), absolute.y(), absolute.plane());
+        int localX = address.regionLocalX();
+        int localY = address.regionLocalY();
+        return world.contains(absolute.plane(), localX, localY)
+                ? new TileCoordinate(absolute.plane(), localX, localY)
+                : null;
     }
 
     private void clear() {
