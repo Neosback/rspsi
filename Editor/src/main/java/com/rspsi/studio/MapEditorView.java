@@ -762,7 +762,10 @@ public final class MapEditorView {
         if (layoutRestored) return;
         layoutRestored = true;
         var saved = layoutStore.load();
-        if (saved != null) bottomBar.setDrawerOpen(saved.bottomDrawerVisible());
+        if (saved != null) {
+            bottomBar.setDrawerOpen(saved.bottomDrawerVisible());
+            hudManager.restore(saved.huds());
+        }
     }
 
     private void resetLayout() {
@@ -771,12 +774,14 @@ public final class MapEditorView {
         studioPluginManager.setEnabled(TileInfoHudPlugin.ID, true);
         showLeftToolRail = false;
         floatingToolbar.resetPosition();
+        hudManager.resetUserState();
     }
 
     public void close() {
         if (!layoutRestored) return;
         layoutStore.save(new NativeWorkspaceLayoutStore.State(
-                NativeWorkspaceLayoutStore.CURRENT_VERSION, "", bottomBar.isDrawerOpen()));
+                NativeWorkspaceLayoutStore.CURRENT_VERSION, "", bottomBar.isDrawerOpen(),
+                hudManager.snapshot()));
     }
 
     private record Layout(float x, float y, float width, float height,
