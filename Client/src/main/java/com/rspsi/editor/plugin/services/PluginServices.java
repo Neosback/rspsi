@@ -17,6 +17,7 @@ import com.rspsi.editor.brush.BrushEngine;
 import com.rspsi.editor.brush.BrushMask;
 import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.overlay.OverlayRegistry;
@@ -286,7 +287,9 @@ public final class PluginServices {
 
         @Override
         public BrushMask sample(String brushId, int radius, TileCoordinate center) {
-            return brushEngine.sample(brushEngine.brush(brushId), radius, center, session.world());
+            LocalTile local = LocalTile.from(Objects.requireNonNull(center, "center"));
+            return brushEngine.sample(brushEngine.brush(brushId), radius,
+                    session.coordinates().toWorld(local), session.world(), session.window());
         }
 
         @Override
