@@ -164,19 +164,37 @@ public final class MinimapBuilder {
         int overlay = 0xFF000000;
         if (compiled != null) {
             int underlayHsl = compiled.appearance().underlayHsl();
-            if (hasUnderlay && underlayHsl >= 0) {
-                underlay = 0xFF000000
-                        | osrsPaletteColor(adjustUnderlayLight(underlayHsl, 96));
+            if (hasUnderlay) {
+                // Some lightweight/test providers expose RGB but no derived HSL
+                // metadata. Preserve the historical deterministic fallback in
+                // that case rather than turning the underlay black.
+                underlay = underlayHsl >= 0
+                        ? 0xFF000000 | osrsPaletteColor(adjustUnderlayLight(underlayHsl, 96))
+                        : blendedOsrsUnderlay(document, sourcePlane, x, y, definitions);
             }
+
+            java.util.Optional<FloorDefinitionView> overlayDefinition =
+                    overlayDefinition(definitions, tile.overlayId());
+            FloorDefinitionView floor = overlayDefinition.orElse(null);
+            boolean secondaryNeedsRgbFallback = floor != null && floor.secondaryRgb() != -1
+                    && floor.secondaryHue() == 0
+                    && floor.secondarySaturation() == 0
+                    && floor.secondaryLuminance() == 0;
+            boolean primaryNeedsRgbFallback = floor != null && floor.texture() < 0
+                    && floor.secondaryRgb() == -1
+                    && floor.hue() == 0 && floor.saturation() == 0 && floor.luminance() == 0
+                    && (floor.rgb() & 0xFFFFFF) != 0xFF00FF;
+
             int overlayHsl = compiled.appearance().overlayMinimapHsl();
-            if (overlayHsl >= 0) {
+            if (secondaryNeedsRgbFallback || primaryNeedsRgbFallback) {
+                overlay = osrsColor(overlayDefinition, tile.overlayId(), false, definitions);
+            } else if (overlayHsl >= 0) {
                 overlay = 0xFF000000
                         | osrsPaletteColor(adjustOverlayLight(overlayHsl, 96));
             } else if (overlayHsl == -2) {
                 overlay = 0xFF000000;
             } else {
-                overlay = osrsColor(overlayDefinition(definitions, tile.overlayId()),
-                        tile.overlayId(), false, definitions);
+                overlay = osrsColor(overlayDefinition, tile.overlayId(), false, definitions);
             }
         } else {
             underlay = hasUnderlay
