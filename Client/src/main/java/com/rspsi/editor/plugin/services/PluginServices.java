@@ -24,6 +24,7 @@ import com.rspsi.editor.corpus.OsrsRegionFeatureExtractor;
 import com.rspsi.editor.plugin.EditorPluginRegistry;
 import com.rspsi.editor.plugin.EditorToolRegistration;
 import com.rspsi.editor.plugin.event.EditorEventBus;
+import com.rspsi.editor.plugin.extension.EditorExtensionRegistry;
 import com.rspsi.editor.plugin.event.SelectionChangedEvent;
 import com.rspsi.editor.plugin.event.TileEditedEvent;
 import com.rspsi.editor.plugin.ui.UiSurfaceContribution;
@@ -60,6 +61,7 @@ public final class PluginServices {
     private final BrushEngine brushEngine = new BrushEngine();
     private final OverlayRegistry overlays = new OverlayRegistry();
     private final RegionFeatureRegistry corpusFeatures = new RegionFeatureRegistry();
+    private final EditorExtensionRegistry extensions = new EditorExtensionRegistry();
 
     private final TerrainService terrain = new TerrainServiceImpl();
     private final ObjectService objects = new ObjectServiceImpl();
@@ -101,6 +103,7 @@ public final class PluginServices {
     public OverlayRegistry overlays() { return overlays; }
     public RegionFeatureRegistry corpusFeatures() { return corpusFeatures; }
     public DecodedDataCatalog decodedData() { return decodedData; }
+    public EditorExtensionRegistry extensions() { return extensions; }
 
     public interface TerrainService {
         TileSnapshot tile(TileCoordinate coordinate);
