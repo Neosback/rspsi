@@ -4,6 +4,7 @@ import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.OverlayDraw;
 import com.rspsi.editor.tool.EditorTool;
 import com.rspsi.editor.tool.EditorToolController;
