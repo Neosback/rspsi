@@ -6,6 +6,7 @@ import com.rspsi.cache.definition.TextureDefinitionView;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.RegionNeighborhood;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -44,6 +45,20 @@ public final class TerrainAppearanceBuilder {
                 document.tile(plane, x, y).snapshot());
     }
 
+    /** Builds one world-coordinate appearance using adjacent loaded regions. */
+    public TerrainAppearance buildTile(RegionNeighborhood neighborhood,
+                                       DefinitionProvider definitions,
+                                       int plane, int worldX, int worldY) {
+        Objects.requireNonNull(neighborhood, "neighborhood");
+        Objects.requireNonNull(definitions, "definitions");
+        TileSnapshot tile = neighborhood.tileAt(plane, worldX, worldY)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "Terrain tile is not loaded: " + plane + "," + worldX + "," + worldY));
+        int underlayHsl = com.rspsi.osrs.rules.terrain.FloorBlendRules.blendUnderlay(
+                neighborhood, definitions, plane, worldX, worldY);
+        return appearance(definitions, tile, underlayHsl);
+    }
+
     private TerrainAppearance appearance(WorldDocument document, DefinitionProvider definitions,
                                          int plane, int x, int y, TileSnapshot tile) {
         // The client blends underlay color once per TILE (class470's var36),
@@ -56,6 +71,11 @@ public final class TerrainAppearanceBuilder {
         // producing a softer/off-color blend at underlay-type boundaries
         // that the real client never produces.
         int underlayHsl = blendedUnderlay(document, definitions, plane, x, y);
+        return appearance(definitions, tile, underlayHsl);
+    }
+
+    private TerrainAppearance appearance(DefinitionProvider definitions, TileSnapshot tile,
+                                         int underlayHsl) {
         FloorDefinitionView overlay = tile.overlayId() <= 0
                 ? null : definitions.overlay(tile.overlayId() - 1).orElse(null);
         int overlayHsl = overlay == null ? -1
