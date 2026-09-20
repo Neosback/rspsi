@@ -141,7 +141,7 @@ public final class MinimapBuilder {
                 } else if (plane < document.planes() - 1
                         && (document.tile(plane + 1, x, y).snapshot().flags()
                         & OsrsTileFlags.MINIMAP_BRIDGE) != 0) {
-                    drawShapedTile(document, plane + 1, x, y, definitions, pixels, width);
+                    drawShapedTile(document, plane + 1, x, y, definitions, compiledTerrain, pixels, width);
                 }
             }
         }
