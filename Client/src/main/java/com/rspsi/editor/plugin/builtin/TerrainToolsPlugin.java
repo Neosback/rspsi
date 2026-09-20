@@ -4,6 +4,7 @@ import com.rspsi.editor.plugin.EditorPlugin;
 import com.rspsi.editor.plugin.EditorPluginContext;
 import com.rspsi.editor.plugin.EditorPluginRegistry;
 import com.rspsi.editor.plugin.EditorToolContextRegistration;
+import com.rspsi.editor.tool.BlendTerrainTool;
 import com.rspsi.editor.tool.ChangeHeightTool;
 import com.rspsi.editor.tool.FlattenTerrainTool;
 import com.rspsi.editor.tool.PaintFlagsTool;
@@ -11,6 +12,7 @@ import com.rspsi.editor.tool.PaintOverlayTool;
 import com.rspsi.editor.tool.PaintUnderlayTool;
 import com.rspsi.editor.tool.RampTerrainTool;
 import com.rspsi.editor.tool.SmoothTerrainTool;
+import com.rspsi.editor.tool.TerraceTerrainTool;
 
 import java.util.List;
 
@@ -33,13 +35,15 @@ public final class TerrainToolsPlugin implements EditorPlugin {
         register(registry, "terrain.lower", "Lower", "Terrain");
         register(registry, "terrain.flatten", "Flatten", "Terrain");
         register(registry, "terrain.smooth", "Smooth", "Terrain");
+        register(registry, "terrain.blend", "Blend", "Terrain");
+        register(registry, "terrain.terrace", "Terrace", "Terrain");
         register(registry, "terrain.ramp", "Ramp", "More terrain");
         register(registry, "terrain.flags", "Paint flags", "More terrain");
         registry.registerToolContext(new EditorToolContextRegistration(
                 "terrain.context", "Terrain settings",
                 List.of("terrain.paint-underlay", "terrain.paint-overlay", "terrain.raise",
-                        "terrain.lower", "terrain.flatten", "terrain.smooth", "terrain.ramp",
-                        "terrain.flags"), 0, () -> ignored -> settings.settings()));
+                        "terrain.lower", "terrain.flatten", "terrain.smooth", "terrain.blend",
+                        "terrain.terrace", "terrain.ramp", "terrain.flags"), 0, () -> ignored -> settings.settings()));
     }
 
     private void register(EditorPluginRegistry registry, String id, String label, String category) {
@@ -51,6 +55,8 @@ public final class TerrainToolsPlugin implements EditorPlugin {
                 case "terrain.lower" -> new ChangeHeightTool(-8);
                 case "terrain.flatten" -> new FlattenTerrainTool(0);
                 case "terrain.smooth" -> new SmoothTerrainTool(50);
+                case "terrain.blend" -> new BlendTerrainTool(50, 56);
+                case "terrain.terrace" -> new TerraceTerrainTool(16);
                 case "terrain.ramp" -> new RampTerrainTool(0, 64);
                 case "terrain.flags" -> new PaintFlagsTool(0);
                 default -> throw new IllegalArgumentException("Unknown terrain tool: " + id);
