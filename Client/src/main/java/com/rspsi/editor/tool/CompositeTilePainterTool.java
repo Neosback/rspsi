@@ -33,7 +33,7 @@ import java.util.Set;
  * lattice so adjacent tile corners remain synchronized.
  */
 public final class CompositeTilePainterTool implements EditorTool, BrushAwareTool {
-    private final TilePainterState state;
+    private TilePainterState state;
     private final BrushEngine brushEngine;
     private EditorBrush brush;
 
@@ -58,9 +58,34 @@ public final class CompositeTilePainterTool implements EditorTool, BrushAwareToo
             state.setBrushId(initial.id());
         }
         this.brush = initial;
+        attachStateListener(this.state);
     }
 
     public TilePainterState state() { return state; }
+
+    /**
+     * Binds the tool to application-owned painter state. The UI and tool then
+     * share one model instead of copying settings into the tool each frame.
+     */
+    public void bindState(TilePainterState state) {
+        this.state = java.util.Objects.requireNonNull(state, "state");
+        try {
+            this.brush = brushEngine.brush(state.brushId());
+        } catch (IllegalArgumentException ignored) {
+            state.setBrushId(brush.id());
+        }
+        attachStateListener(state);
+    }
+
+    private void attachStateListener(TilePainterState observed) {
+        observed.addListener(changed -> {
+            try {
+                this.brush = brushEngine.brush(changed.brushId());
+            } catch (IllegalArgumentException ignored) {
+                // Third-party brushes are registered through setBrush().
+            }
+        });
+    }
 
     public boolean applyUnderlay() { return state.applyUnderlay(); }
     public void setApplyUnderlay(boolean apply) { state.setApplyUnderlay(apply); }
