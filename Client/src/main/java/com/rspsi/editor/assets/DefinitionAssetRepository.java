@@ -6,6 +6,7 @@ import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
+import com.rspsi.cache.definition.InvertedDefinitionIndex;
 import com.rspsi.cache.definition.ModelDefinitionView;
 import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.MapSceneSpriteView;
@@ -32,6 +33,7 @@ public final class DefinitionAssetRepository implements AssetRepository {
     private final DefinitionProvider definitions;
     private final SymbolicNameProvider symbolicNames;
     private volatile List<AssetDescriptor> catalog;
+    private volatile InvertedDefinitionIndex definitionIndex;
 
     public DefinitionAssetRepository(DefinitionProvider definitions) {
         this(definitions, SymbolicNameProvider.none());
@@ -88,6 +90,20 @@ public final class DefinitionAssetRepository implements AssetRepository {
     public Optional<AssetDescriptor> get(int id, String type) {
         if (id < 0 || type == null) return Optional.empty();
         return descriptorFor(id, type.trim().toLowerCase(Locale.ROOT));
+    }
+
+    @Override
+    public Optional<InvertedDefinitionIndex> definitionIndex() {
+        InvertedDefinitionIndex current = definitionIndex;
+        if (current != null) return Optional.of(current);
+        synchronized (this) {
+            current = definitionIndex;
+            if (current == null) {
+                current = new InvertedDefinitionIndex(definitions);
+                definitionIndex = current;
+            }
+        }
+        return Optional.of(current);
     }
 
     @Override
