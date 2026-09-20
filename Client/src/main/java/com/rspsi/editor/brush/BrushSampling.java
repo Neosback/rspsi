@@ -52,10 +52,11 @@ public final class BrushSampling {
                 double weight = brush.weight(dx, dy, radius);
                 if (weight <= 0.0) continue;
 
-                LocalTile local = new LocalTile(
-                        center.plane(), center.x() + dx, center.y() + dy);
-                if (!world.contains(local)) continue;
+                int localX = center.x() + dx;
+                int localY = center.y() + dy;
+                if (!world.contains(center.plane(), localX, localY)) continue;
 
+                LocalTile local = new LocalTile(center.plane(), localX, localY);
                 samples.add(new Sample(
                         new WorldTile(worldCenter.plane(),
                                 worldCenter.x() + dx, worldCenter.y() + dy),
