@@ -13,6 +13,8 @@ public final class CoreUiSurfacesPlugin implements EditorPlugin {
 
     @Override public String id() { return ID; }
 
+    @Override public int loadOrder() { return 50; }
+
     @Override
     public void initialize(EditorPluginContext context) {
         context.registry().registerUiSurface(new UiSurfaceContribution(
