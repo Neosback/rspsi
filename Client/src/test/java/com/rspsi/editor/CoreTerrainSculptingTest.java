@@ -5,6 +5,7 @@ import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.ChangeHeightTool;
 import com.rspsi.editor.tool.FlattenTerrainTool;
