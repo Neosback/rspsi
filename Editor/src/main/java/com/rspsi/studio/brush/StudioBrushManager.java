@@ -67,7 +67,7 @@ public final class StudioBrushManager {
     }
 
     public synchronized List<EditorBrush> compatibleBrushes(Set<BrushCapability> requiredCapabilities) {
-        Set<BrushCapability> required = requiredCapabilities == null
+        Set<BrushCapability> required = requiredCapabilities == null || requiredCapabilities.isEmpty()
                 ? Set.of() : EnumSet.copyOf(requiredCapabilities);
         return enabledBrushes().stream()
                 .filter(brush -> brush.capabilities().containsAll(required))
