@@ -21,6 +21,8 @@ import com.rspsi.editor.input.EditorInputRouter;
 import com.rspsi.editor.input.EditorKeyEvent;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.LocalTile;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldWindow;
@@ -392,23 +394,26 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
         if (tileX >= scene.document().width() || tileY >= scene.document().length()) {
             return Optional.empty();
         }
-        TileCoordinate tile = new TileCoordinate(plane, tileX, tileY);
+        if (worldWindow == null) return Optional.empty();
+        WorldTile tile = worldWindow.toWorld(new LocalTile(plane, tileX, tileY));
         return Optional.of(new PickResult(tile, plane));
     }
 
     @Override
-    public Optional<TileCoordinate> tileAt(float x, float y) {
+    public Optional<WorldTile> tileAt(float x, float y) {
         return pick(x, y).map(PickResult::tile);
     }
 
     @Override
     public Optional<WorldObject> objectAt(float x, float y) {
         if (scene == null) return Optional.empty();
-        return tileAt(x, y).flatMap(tile -> scene.renderObjects().stream()
-                .filter(renderObject -> renderObject.object().plane() == tile.plane())
-                .filter(renderObject -> contains(renderObject, tile))
-                .map(com.rspsi.editor.render.RenderObject::object)
-                .findFirst());
+        return tileAt(x, y)
+                .flatMap(this::localTile)
+                .flatMap(tile -> scene.renderObjects().stream()
+                        .filter(renderObject -> renderObject.object().plane() == tile.plane())
+                        .filter(renderObject -> contains(renderObject, tile))
+                        .map(com.rspsi.editor.render.RenderObject::object)
+                        .findFirst());
     }
 
     private void pickAndSelect(double x, double y) {
@@ -417,13 +422,14 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
             session.selection().selectObject(object);
             requestFocus();
         }, () -> pick((float) x, (float) y).ifPresent(result -> {
-            session.selection().select(result.tile());
+            localTile(result.tile()).ifPresent(local ->
+                    session.selection().select(local.coordinate()));
             requestFocus();
         }));
     }
 
     private static boolean contains(com.rspsi.editor.render.RenderObject renderObject,
-                                    TileCoordinate tile) {
+                                    LocalTile tile) {
         WorldObject object = renderObject.object();
         return tile.x() >= object.x() && tile.x() < object.x() + renderObject.footprintWidth()
                 && tile.y() >= object.y() && tile.y() < object.y() + renderObject.footprintLength();
@@ -431,7 +437,15 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
 
     private void notifyHover(double x, double y) {
         if (closed) return;
-        hoverListener.accept(pick((float) x, (float) y).map(PickResult::tile));
+        Optional<TileCoordinate> local = pick((float) x, (float) y)
+                .map(PickResult::tile)
+                .flatMap(this::localTile)
+                .map(LocalTile::coordinate);
+        hoverListener.accept(local);
+    }
+
+    private Optional<LocalTile> localTile(WorldTile tile) {
+        return worldWindow == null ? Optional.empty() : worldWindow.tryToLocal(tile);
     }
 
     private void redrawOnFxThread() {
@@ -524,13 +538,14 @@ public final class CanonicalSceneViewport extends StackPane implements SceneRend
         EditorTool tool = toolController.activeTool();
         if (tool == null) return;
         tool.renderOverlay(new com.rspsi.editor.render.OverlayDraw() {
-            @Override public void tileOutline(TileCoordinate tile) {
-                if (tile.plane() != plane || tile.x() < 0 || tile.y() < 0
-                        || scene == null || tile.x() >= scene.document().width()
-                        || tile.y() >= scene.document().length()) return;
+            @Override public void tileOutline(WorldTile tile) {
+                LocalTile local = localTile(tile).orElse(null);
+                if (local == null || local.plane() != plane || scene == null
+                        || local.x() >= scene.document().width()
+                        || local.y() >= scene.document().length()) return;
                 graphics.setStroke(Color.color(0.25, 0.88, 1.0, 0.95));
                 graphics.setLineWidth(1.5);
-                graphics.strokeRect(tile.x() * TILE_PIXELS + 1, tile.y() * TILE_PIXELS + 1,
+                graphics.strokeRect(local.x() * TILE_PIXELS + 1, local.y() * TILE_PIXELS + 1,
                         TILE_PIXELS - 2, TILE_PIXELS - 2);
             }
 
