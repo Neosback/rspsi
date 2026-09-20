@@ -108,6 +108,23 @@ public final class StudioPanelManager {
                 .toList();
     }
 
+    public Optional<DockRegion> managedRegionForTool(String toolId) {
+        if (toolId == null || toolId.isBlank()) return Optional.empty();
+        return managedSurfaces.values().stream()
+                .filter(surface -> toolId.equals(surface.associatedToolId()))
+                .filter(surface -> surface.type() != UiSurfaceContribution.SurfaceType.VIEWPORT_HUD)
+                .map(surface -> panels.get(surface.id()))
+                .filter(java.util.Objects::nonNull)
+                .map(this::effectiveRegion)
+                .findFirst();
+    }
+
+    public Optional<String> associatedToolId(String panelId) {
+        UiSurfaceContribution surface = managedSurfaces.get(panelId);
+        if (surface == null || surface.associatedToolId().isBlank()) return Optional.empty();
+        return Optional.of(surface.associatedToolId());
+    }
+
     public String activeRightPanelId() {
         return activeRightPanelId;
     }
