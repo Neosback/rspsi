@@ -17,6 +17,7 @@ import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.overlay.OverlayRegistry;
 import com.rspsi.editor.plugin.EditorPluginRegistry;
 import com.rspsi.editor.plugin.EditorToolRegistration;
 import com.rspsi.editor.plugin.event.EditorEventBus;
@@ -53,6 +54,7 @@ public final class PluginServices {
     private final EditorPluginRegistry registry;
     private final EditorEventBus events;
     private final BrushEngine brushEngine = new BrushEngine();
+    private final OverlayRegistry overlays = new OverlayRegistry();
 
     private final TerrainService terrain = new TerrainServiceImpl();
     private final ObjectService objects = new ObjectServiceImpl();
@@ -89,6 +91,7 @@ public final class PluginServices {
     public UiService ui() { return ui; }
     public CommandService commands() { return commands; }
     public EditorEventBus events() { return events; }
+    public OverlayRegistry overlays() { return overlays; }
 
     public interface TerrainService {
         TileSnapshot tile(TileCoordinate coordinate);
