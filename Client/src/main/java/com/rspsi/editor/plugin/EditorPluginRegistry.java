@@ -3,6 +3,7 @@ package com.rspsi.editor.plugin;
 import com.rspsi.editor.tool.EditorTool;
 import com.rspsi.editor.assets.AssetDescriptor;
 import com.rspsi.editor.ui.PanelDescriptor;
+import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.editor.ui.WorkspaceCatalog;
 import com.rspsi.editor.ui.WorkspaceDefinition;
 import com.rspsi.editor.plugin.ui.UiSurfaceContribution;
@@ -241,6 +242,18 @@ public final class EditorPluginRegistry {
             if (!commands.containsKey(menu.commandId())) {
                 throw new IllegalArgumentException("Menu contribution references unknown command: "
                         + menu.commandId());
+            }
+        }
+        for (UiSurfaceContribution surface : uiSurfaces.values()) {
+            if (!surface.associatedToolId().isBlank()
+                    && !tools.containsKey(surface.associatedToolId())) {
+                throw new IllegalArgumentException("UI surface references unknown tool: "
+                        + surface.id() + " -> " + surface.associatedToolId());
+            }
+            if (surface.type() == UiSurfaceContribution.SurfaceType.VIEWPORT_HUD
+                    && surface.preferredRegion() != DockRegion.OVERLAY) {
+                throw new IllegalArgumentException("Viewport HUD surface must prefer OVERLAY: "
+                        + surface.id());
             }
         }
     }
