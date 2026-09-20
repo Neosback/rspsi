@@ -13,6 +13,7 @@ import com.rspsi.editor.overlay.OverlayComponent;
 import com.rspsi.editor.overlay.OverlayContribution;
 import com.rspsi.editor.overlay.OverlayLayer;
 import com.rspsi.editor.overlay.OverlayPosition;
+import com.rspsi.editor.corpus.RegionFeatureExtractor;
 import com.rspsi.editor.settings.SettingHandle;
 import com.rspsi.editor.settings.SettingKey;
 import com.rspsi.editor.settings.SettingScope;
@@ -255,6 +256,13 @@ public final class PluginApi {
             Objects.requireNonNull(factory, "tool factory");
             api.context.registry().registerTool(id, label, category, factory);
         }
+    }
+
+    /** Registers a cache/region feature family for similarity, WFC and analysis. */
+    public void regionFeature(RegionFeatureExtractor extractor) {
+        AutoCloseable handle = context.services().corpusFeatures().register(
+                Objects.requireNonNull(extractor, "extractor"));
+        track(handle);
     }
 
     // --- Declarative HUD Overlay ---
