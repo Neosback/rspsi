@@ -118,6 +118,7 @@ public final class StudioApplication implements AutoCloseable {
         String initialCache = System.getenv("RSPSI_OSRS_CACHE");
         if (initialCache == null || initialCache.isBlank()) initialCache = preferences.recentCache();
         dashboard = new DashboardView(initialCache);
+        mapEditor.setPluginEcosystem(pluginEcosystem, this::rescanPlugins);
         if (initialCache != null && !initialCache.isBlank()
                 && Files.isDirectory(Path.of(initialCache))) {
             loadCache(Path.of(initialCache));
@@ -365,6 +366,13 @@ public final class StudioApplication implements AutoCloseable {
                 },
                 discovery);
         pluginLifecycle = next;
+    }
+
+    /** Re-discovers plugin JARs and rebuilds the active host without reloading the scene. */
+    private void rescanPlugins() {
+        if (loadedScene == null) return;
+        closePluginLifecycle();
+        initializePlugins(loadedScene);
     }
 
     /** Focuses the Dashboard tab. It is always open, so this never tears anything down. */
