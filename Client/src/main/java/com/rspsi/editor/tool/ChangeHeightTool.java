@@ -39,6 +39,7 @@ public final class ChangeHeightTool implements EditorTool, BrushAwareTool {
     private final Set<TileCoordinate> visited = new LinkedHashSet<>();
     private final Map<VertexKey, Integer> vertexDeltas = new LinkedHashMap<>();
     private BrushMask lastMask;
+    private TileCoordinate lastCenter;
 
     public ChangeHeightTool(int delta) { setDelta(delta); }
 
@@ -130,29 +131,36 @@ public final class ChangeHeightTool implements EditorTool, BrushAwareTool {
 
     private void addStamp(PointerEvent event) {
         context.viewport().tileAt(event.x(), event.y()).ifPresent(center -> {
-            if (!visited.add(center) || delta == 0) return;
-
-            lastMask = brushEngine.sample(brush, radius, center, context.session().world());
+            if (delta == 0) return;
+            List<TileCoordinate> centers = lastCenter == null
+                    ? List.of(center)
+                    : brushEngine.interpolateStroke(lastCenter, center, 1.0);
             int effectiveDelta = event.alt() ? -delta : delta;
-            Map<VertexKey, Integer> stamp = new LinkedHashMap<>();
 
-            for (var sample : lastMask.samples()) {
-                int dx = sample.absolute().x() - center.x();
-                int dy = sample.absolute().y() - center.y();
-                double distance = radius == 0 ? 0.0
-                        : Math.max(Math.abs(dx), Math.abs(dy)) / (double) radius;
-                double weight = sample.weight() * falloffWeight(distance);
-                int amount = (int) Math.round(effectiveDelta * weight);
-                if (amount == 0) continue;
+            for (TileCoordinate stampCenter : centers) {
+                if (!visited.add(stampCenter)) continue;
+                lastMask = brushEngine.sample(brush, radius, stampCenter, context.session().world());
+                Map<VertexKey, Integer> stamp = new LinkedHashMap<>();
 
-                TileCoordinate local = sample.local();
-                mergeStrongest(stamp, new VertexKey(local.plane(), local.x(), local.y()), amount);
-                mergeStrongest(stamp, new VertexKey(local.plane(), local.x() + 1, local.y()), amount);
-                mergeStrongest(stamp, new VertexKey(local.plane(), local.x() + 1, local.y() + 1), amount);
-                mergeStrongest(stamp, new VertexKey(local.plane(), local.x(), local.y() + 1), amount);
+                for (var sample : lastMask.samples()) {
+                    int dx = sample.absolute().x() - stampCenter.x();
+                    int dy = sample.absolute().y() - stampCenter.y();
+                    double distance = radius == 0 ? 0.0
+                            : Math.max(Math.abs(dx), Math.abs(dy)) / (double) radius;
+                    double weight = sample.weight() * falloffWeight(distance);
+                    int amount = (int) Math.round(effectiveDelta * weight);
+                    if (amount == 0) continue;
+
+                    TileCoordinate local = sample.local();
+                    mergeStrongest(stamp, new VertexKey(local.plane(), local.x(), local.y()), amount);
+                    mergeStrongest(stamp, new VertexKey(local.plane(), local.x() + 1, local.y()), amount);
+                    mergeStrongest(stamp, new VertexKey(local.plane(), local.x() + 1, local.y() + 1), amount);
+                    mergeStrongest(stamp, new VertexKey(local.plane(), local.x(), local.y() + 1), amount);
+                }
+
+                stamp.forEach((key, amount) -> vertexDeltas.merge(key, amount, Math::addExact));
             }
-
-            stamp.forEach((key, amount) -> vertexDeltas.merge(key, amount, Math::addExact));
+            lastCenter = center;
         });
     }
 
@@ -199,6 +207,7 @@ public final class ChangeHeightTool implements EditorTool, BrushAwareTool {
         visited.clear();
         vertexDeltas.clear();
         lastMask = null;
+        lastCenter = null;
     }
 
     private record VertexKey(int plane, int x, int y) { }
