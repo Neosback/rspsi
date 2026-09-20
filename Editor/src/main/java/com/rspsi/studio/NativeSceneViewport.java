@@ -65,7 +65,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     }
 
     @Override
-    public java.util.Optional<com.rspsi.editor.model.TileCoordinate> tileAt(float x, float y) {
+    public java.util.Optional<com.rspsi.editor.model.WorldTile> tileAt(float x, float y) {
         return pickAt(x, y).map(PickResult::tile);
     }
 
