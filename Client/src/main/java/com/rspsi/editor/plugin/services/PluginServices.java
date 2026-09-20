@@ -18,6 +18,8 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.overlay.OverlayRegistry;
+import com.rspsi.editor.corpus.RegionFeatureRegistry;
+import com.rspsi.editor.corpus.OsrsRegionFeatureExtractor;
 import com.rspsi.editor.plugin.EditorPluginRegistry;
 import com.rspsi.editor.plugin.EditorToolRegistration;
 import com.rspsi.editor.plugin.event.EditorEventBus;
@@ -55,6 +57,7 @@ public final class PluginServices {
     private final EditorEventBus events;
     private final BrushEngine brushEngine = new BrushEngine();
     private final OverlayRegistry overlays = new OverlayRegistry();
+    private final RegionFeatureRegistry corpusFeatures = new RegionFeatureRegistry();
 
     private final TerrainService terrain = new TerrainServiceImpl();
     private final ObjectService objects = new ObjectServiceImpl();
@@ -70,6 +73,7 @@ public final class PluginServices {
         this.assets = Objects.requireNonNull(assets, "assets");
         this.registry = Objects.requireNonNull(registry, "registry");
         this.events = new EditorEventBus();
+        this.corpusFeatures.register(new OsrsRegionFeatureExtractor());
         session.selection().addChangeListener(ignored ->
                 events.publish(new SelectionChangedEvent(
                         session.selection().selectedCoordinates())));
@@ -92,6 +96,7 @@ public final class PluginServices {
     public CommandService commands() { return commands; }
     public EditorEventBus events() { return events; }
     public OverlayRegistry overlays() { return overlays; }
+    public RegionFeatureRegistry corpusFeatures() { return corpusFeatures; }
 
     public interface TerrainService {
         TileSnapshot tile(TileCoordinate coordinate);
