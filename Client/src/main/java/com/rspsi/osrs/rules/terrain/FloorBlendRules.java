@@ -3,6 +3,7 @@ package com.rspsi.osrs.rules.terrain;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.RegionNeighborhood;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
 
 import java.util.Objects;
@@ -63,5 +64,44 @@ public final class FloorBlendRules {
         int averageSaturation = (int) (saturation / Math.max(1, count));
         int averageLuminance = (int) (luminance / Math.max(1, count));
         return OsrsTerrainColorMath.packHsl(averageHue, averageSaturation, averageLuminance);
+    }
+
+    /**
+     * World-coordinate underlay blend across loaded adjacent regions.
+     * Missing neighbors are skipped, never clamped to the center edge.
+     */
+    public static int blendUnderlay(RegionNeighborhood neighborhood,
+                                    DefinitionProvider definitions,
+                                    int plane, int worldX, int worldY) {
+        Objects.requireNonNull(neighborhood, "neighborhood");
+        Objects.requireNonNull(definitions, "definitions");
+        var center = neighborhood.tileAt(plane, worldX, worldY).orElse(null);
+        if (center == null || center.underlayId() <= 0) return -1;
+
+        long saturation = 0;
+        long luminance = 0;
+        long weightedHue = 0;
+        long chroma = 0;
+        int count = 0;
+        for (int sampleX = worldX - UNDERLAY_BLEND_RADIUS + 1;
+             sampleX <= worldX + UNDERLAY_BLEND_RADIUS; sampleX++) {
+            for (int sampleY = worldY - UNDERLAY_BLEND_RADIUS + 1;
+                 sampleY <= worldY + UNDERLAY_BLEND_RADIUS; sampleY++) {
+                var tile = neighborhood.tileAt(plane, sampleX, sampleY).orElse(null);
+                if (tile == null || tile.underlayId() <= 0) continue;
+                FloorDefinitionView floor = definitions.underlay(tile.underlayId() - 1).orElse(null);
+                if (floor == null || floor.chroma() <= 0) continue;
+                saturation += floor.saturation();
+                luminance += floor.luminance();
+                weightedHue += floor.weightedHue();
+                chroma += floor.chroma();
+                count++;
+            }
+        }
+        if (chroma == 0) return -1;
+        return OsrsTerrainColorMath.packHsl(
+                (int) (weightedHue * 256 / chroma),
+                (int) (saturation / Math.max(1, count)),
+                (int) (luminance / Math.max(1, count)));
     }
 }
