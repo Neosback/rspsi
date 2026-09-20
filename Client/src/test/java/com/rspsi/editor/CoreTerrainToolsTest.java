@@ -4,6 +4,7 @@ import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.tool.ChangeHeightTool;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.PaintFlagsTool;
