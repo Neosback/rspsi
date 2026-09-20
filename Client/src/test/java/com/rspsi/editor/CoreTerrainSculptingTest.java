@@ -99,7 +99,7 @@ class CoreTerrainSculptingTest {
 
     private static ToolContext context(EditorSession session) {
         return new ToolContext(session, new EmptyAssets(),
-                (x, y) -> Optional.of(new TileCoordinate(0, (int) x, (int) y)));
+                (x, y) -> Optional.of(new WorldTile(0, (int) x, (int) y)));
     }
 
     private static PointerEvent pointer(float x, float y) {
