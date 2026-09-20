@@ -4,7 +4,7 @@ import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.assets.AssetDescriptor;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.input.EditorKeyEvent;
-import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.WorldModel;
 import com.rspsi.editor.render.OverlayDraw;
 import org.junit.jupiter.api.Test;
@@ -77,7 +77,7 @@ class PluginApiTest {
     @Test
     void testFluentOverlayRegistration() {
         EditorSession session = new EditorSession(new WorldModel(1, 1, 1));
-        List<TileCoordinate> outlinedTiles = new ArrayList<>();
+        List<WorldTile> outlinedTiles = new ArrayList<>();
 
         EditorPlugin testPlugin = new EditorPlugin() {
             @Override
@@ -102,7 +102,7 @@ class PluginApiTest {
         EditorSceneOverlay overlay = host.registry().createOverlay(reg.id());
         overlay.render(null, new OverlayDraw() {
             @Override
-            public void tileOutline(TileCoordinate tile) {
+            public void tileOutline(WorldTile tile) {
                 outlinedTiles.add(tile);
             }
         });
