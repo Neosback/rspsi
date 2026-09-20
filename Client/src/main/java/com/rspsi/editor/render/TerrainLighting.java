@@ -3,6 +3,8 @@ package com.rspsi.editor.render;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.RegionNeighborhood;
+import com.rspsi.editor.terrain.TerrainVertexLattice;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -60,6 +62,41 @@ public final class TerrainLighting {
                 cornerLight(document, profile, shadows, plane, x + 1, y),
                 cornerLight(document, profile, shadows, plane, x + 1, y + 1),
                 cornerLight(document, profile, shadows, plane, x, y + 1));
+    }
+
+    /**
+     * Builds one tile's slope lighting in world coordinates, allowing height
+     * derivatives to sample across loaded region seams.
+     */
+    public static TerrainLight buildTile(RegionNeighborhood neighborhood,
+                                         LightingProfile profile,
+                                         int plane, int worldX, int worldY) {
+        Objects.requireNonNull(neighborhood, "neighborhood");
+        Objects.requireNonNull(profile, "profile");
+        if (neighborhood.tileAt(plane, worldX, worldY).isEmpty()) {
+            throw new IndexOutOfBoundsException(
+                    "Terrain tile is not loaded: " + plane + "," + worldX + "," + worldY);
+        }
+        TerrainVertexLattice lattice = new TerrainVertexLattice(neighborhood);
+        return new TerrainLight(
+                worldCornerLight(lattice, profile, plane, worldX, worldY),
+                worldCornerLight(lattice, profile, plane, worldX + 1, worldY),
+                worldCornerLight(lattice, profile, plane, worldX + 1, worldY + 1),
+                worldCornerLight(lattice, profile, plane, worldX, worldY + 1));
+    }
+
+    private static int worldCornerLight(TerrainVertexLattice lattice, LightingProfile profile,
+                                        int plane, int vx, int vy) {
+        try {
+            int heightDeltaX = lattice.heightWorld(plane, vx + 1, vy)
+                    - lattice.heightWorld(plane, vx - 1, vy);
+            int heightDeltaY = lattice.heightWorld(plane, vx, vy + 1)
+                    - lattice.heightWorld(plane, vx, vy - 1);
+            return com.rspsi.osrs.rules.terrain.TerrainLightRules.calculateCornerLight(
+                    heightDeltaX, heightDeltaY, profile, 0);
+        } catch (IndexOutOfBoundsException missingNeighbor) {
+            return profile.ambient();
+        }
     }
 
     private static int cornerLight(WorldDocument document, LightingProfile profile,
