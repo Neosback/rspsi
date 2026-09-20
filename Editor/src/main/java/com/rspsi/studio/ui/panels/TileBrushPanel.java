@@ -4,6 +4,8 @@ import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
+import com.rspsi.editor.model.WorldTileAddress;
+import com.rspsi.editor.terrain.TerrainMeshBuilder;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.OverlayTextureCache;
@@ -103,10 +105,20 @@ public final class TileBrushPanel implements StudioPanel {
             ImGui.textDisabled("Selected tile's plane is outside the loaded map.");
             return;
         }
-        // Selection coordinates are absolute world tile coordinates; WorldDocument indexes by
-        // region-local coordinates, so wrap into range the same way KnowledgePanel does.
-        int localX = Math.floorMod(coord.x(), Math.max(1, world.width()));
-        int localY = Math.floorMod(coord.y(), Math.max(1, world.length()));
+        int localX;
+        int localY;
+        if (world.contains(coord)) {
+            localX = coord.x();
+            localY = coord.y();
+        } else {
+            WorldTileAddress address = WorldTileAddress.of(coord.x(), coord.y(), coord.plane());
+            localX = address.regionLocalX();
+            localY = address.regionLocalY();
+            if (!world.contains(coord.plane(), localX, localY)) {
+                ImGui.textDisabled("Selected tile is outside the loaded map.");
+                return;
+            }
+        }
         TileSnapshot snapshot = world.tile(coord.plane(), localX, localY).snapshot();
 
         ImGui.text("Coordinate: " + coord.x() + ", " + coord.y() + "  (plane " + coord.plane() + ")");
@@ -127,14 +139,7 @@ public final class TileBrushPanel implements StudioPanel {
         ImGui.endGroup();
     }
 
-    /**
-     * One combined, shape-aware preview of the tile as it actually sits (underlay filling the
-     * tile, overlay covering only the portion its shape/rotation says it should) instead of two
-     * separate flat swatches - the closest a flat 2D box can get to "what this tile looks like."
-     * Exact per-shape geometry (OSRS has 12 overlay shapes with a 14-point mesh) isn't modeled
-     * here yet, only the two most common/legible cases (full tile, and a rotation-aware diagonal
-     * half) - full precision is tracked as a follow-up rather than guessed at.
-     */
+    /** Draws exact authored topology using the canonical TerrainMeshBuilder. */
     private void renderLiveTilePreview(LoadedOsrsCacheSession cache, TileSnapshot snapshot) {
         float size = 96.0f;
         float x = ImGui.getCursorScreenPos().x;
@@ -146,42 +151,30 @@ public final class TileBrushPanel implements StudioPanel {
             var def = cache.bundle().definitions().underlay(snapshot.underlayId());
             if (def.isPresent()) underlayRgb = 0xFF000000 | def.get().rgb();
         }
-        draw.addRectFilled(x, y, x + size, y + size, underlayRgb, 2.0f);
 
-        if (snapshot.overlayId() > 0) {
-            int overlayRgb = 0xFF4A4A4A;
-            int textureHandle = 0;
-            if (cache != null) {
-                var def = cache.bundle().definitions().overlay(snapshot.overlayId());
-                if (def.isPresent()) {
-                    overlayRgb = 0xFF000000 | def.get().rgb();
-                    if (def.get().texture() >= 0) {
-                        textureHandle = OverlayTextureCache.handleFor(cache, def.get().texture());
-                    }
-                }
-            }
-
-            if (snapshot.overlayShape() == 0) {
-                // Full tile is overlay - the common case (paths, water, plain textured ground).
-                if (textureHandle > 0) {
-                    ImGui.setCursorScreenPos(x, y);
-                    ImGui.image(textureHandle, size, size);
-                } else {
-                    draw.addRectFilled(x, y, x + size, y + size, overlayRgb, 2.0f);
-                }
-            } else {
-                // Rotation-aware diagonal half as a legible approximation of a partial shape.
-                float[][] corners = {{x, y}, {x + size, y}, {x + size, y + size}, {x, y + size}};
-                int r = ((snapshot.overlayRotation() % 4) + 4) % 4;
-                float[] p1 = corners[r];
-                float[] p2 = corners[(r + 1) % 4];
-                float[] p3 = corners[(r + 2) % 4];
-                draw.addTriangleFilled(p1[0], p1[1], p2[0], p2[1], p3[0], p3[1], overlayRgb);
-            }
+        int overlayRgb = 0xFF4A4A4A;
+        if (cache != null && snapshot.overlayId() > 0) {
+            var def = cache.bundle().definitions().overlay(snapshot.overlayId());
+            if (def.isPresent()) overlayRgb = 0xFF000000 | def.get().rgb();
         }
 
-        ImGui.setCursorScreenPos(x, y);
+        var mesh = new TerrainMeshBuilder().build(snapshot);
+        draw.addRectFilled(x, y, x + size, y + size, underlayRgb, 2.0f);
+        for (var face : mesh.faces()) {
+            if (face.material() == 1 && snapshot.overlayId() <= 0) continue;
+            int color = face.material() == 1 ? overlayRgb : underlayRgb;
+            var a = mesh.vertices().get(face.a());
+            var b = mesh.vertices().get(face.b());
+            var c = mesh.vertices().get(face.c());
+            draw.addTriangleFilled(
+                    x + a.x() / 128.0f * size, y + size - a.y() / 128.0f * size,
+                    x + b.x() / 128.0f * size, y + size - b.y() / 128.0f * size,
+                    x + c.x() / 128.0f * size, y + size - c.y() / 128.0f * size,
+                    color);
+        }
+
         draw.addRect(x, y, x + size, y + size, 0xFF64748B, 2.0f, 0, 1.5f);
+        draw.addText(x + size / 2.0f - 10.0f, y - 15.0f, 0xFFE2E8F0, "N ↑");
         ImGui.dummy(size, size);
     }
 
