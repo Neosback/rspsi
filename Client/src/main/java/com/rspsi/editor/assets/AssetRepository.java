@@ -10,6 +10,7 @@ import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.SequenceDefinitionView;
 import com.rspsi.cache.definition.TextureDefinitionView;
+import com.rspsi.cache.definition.InvertedDefinitionIndex;
 import com.rspsi.cache.AssetCategory;
 import com.rspsi.cache.AssetRepositoryCapabilities;
 
@@ -54,6 +55,11 @@ public interface AssetRepository {
     List<AssetDescriptor> search(String query);
 
     Optional<AssetDescriptor> get(int id, String type);
+
+    /** Optional prebuilt definition index for high-volume editor lookup. */
+    default Optional<InvertedDefinitionIndex> definitionIndex() {
+        return Optional.empty();
+    }
 
     /** Lazy object/location definition, including footprint and interactions. */
     default Optional<ObjectDefinitionView> object(int id) {
