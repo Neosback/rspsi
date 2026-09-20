@@ -20,6 +20,7 @@ import com.rspsi.editor.symbols.SymbolService;
 import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.studio.theme.StudioFonts;
+import com.rspsi.studio.brush.StudioBrushManager;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.FloatingToolbar;
 import com.rspsi.studio.ui.MinimapHudOverlay;
@@ -97,6 +98,7 @@ public final class MapEditorView {
     private final StudioBottomBar bottomBar = new StudioBottomBar();
     private final StudioPanelManager panelManager = new StudioPanelManager();
     private final StudioPluginManager studioPluginManager = new StudioPluginManager();
+    private final StudioBrushManager brushManager = new StudioBrushManager();
     {
         studioPluginManager.setOwnedPanelSink(panelManager::register);
     }
@@ -217,7 +219,8 @@ public final class MapEditorView {
                 toolId -> activateTool(pluginLifecycle, toolId),
                 activeToolId,
                 toolController,
-                studioPluginManager);
+                studioPluginManager,
+                brushManager);
 
         // 4. Left Tool Rail (TOOL_RAIL slot: Selection, Paint, Height, Path, Objects) - Optional toggle
         if (showLeftToolRail) {
