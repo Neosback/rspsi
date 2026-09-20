@@ -7,6 +7,7 @@ import com.rspsi.studio.NativeSceneViewport;
 import com.rspsi.studio.plugin.StudioPlugin;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.StudioPanelContext;
+import com.rspsi.studio.ui.hud.ViewportHudManager;
 import imgui.ImDrawList;
 import imgui.ImGui;
 import imgui.type.ImBoolean;
@@ -121,32 +122,16 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         float badgeW = textW + padX * 2.0f;
         float badgeH = 22.0f;
 
-        float vpX = ImGui.getWindowPosX();
-        float vpY = ImGui.getWindowPosY();
-        float vpW = ImGui.getWindowWidth();
-        float vpH = ImGui.getWindowHeight();
-
-        float hudX;
-        float hudY;
-
-        switch (anchorCorner.get()) {
-            case 1 -> { // Top-Left
-                hudX = vpX + 16.0f;
-                hudY = vpY + 40.0f;
-            }
-            case 2 -> { // Bottom-Right
-                hudX = vpX + vpW - badgeW - 16.0f;
-                hudY = vpY + vpH - badgeH - 14.0f;
-            }
-            case 3 -> { // Top-Right
-                hudX = vpX + vpW - badgeW - 16.0f;
-                hudY = vpY + 40.0f;
-            }
-            default -> { // Bottom-Left (0)
-                hudX = vpX + 16.0f;
-                hudY = vpY + vpH - badgeH - 14.0f;
-            }
-        }
+        if (context.huds() == null) return;
+        ViewportHudManager.Quadrant quadrant = switch (anchorCorner.get()) {
+            case 1 -> ViewportHudManager.Quadrant.TOP_LEFT;
+            case 2 -> ViewportHudManager.Quadrant.BOTTOM_RIGHT;
+            case 3 -> ViewportHudManager.Quadrant.TOP_RIGHT;
+            default -> ViewportHudManager.Quadrant.BOTTOM_LEFT;
+        };
+        var placement = context.huds().place(quadrant, badgeW, badgeH);
+        float hudX = placement.x();
+        float hudY = placement.y();
 
         ImDrawList dl = ImGui.getWindowDrawList();
         int alphaByte = (int) (Math.max(0.1f, Math.min(1.0f, bgAlpha.get())) * 255.0f);
