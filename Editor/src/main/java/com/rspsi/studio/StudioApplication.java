@@ -41,6 +41,7 @@ import com.rspsi.editor.integration.reference.ReferenceService;
 import com.rspsi.editor.simulation.SimulationEngine;
 import com.rspsi.editor.symbols.CacheGamevalProvider;
 import com.rspsi.editor.symbols.SymbolService;
+import com.rspsi.editor.plugin.builtin.tool.TilePainterToolPlugin;
 import com.rspsi.plugins.server.openrune.OpenRuneServerPlugin;
 import com.rspsi.plugins.server.openrune.OpenRuneServerProvider;
 import com.rspsi.studio.integration.IntegrationCenterWindow;
@@ -309,6 +310,11 @@ public final class StudioApplication implements AutoCloseable {
 
     private void initializePlugins(LoadedMapScene scene) {
         List<EditorPlugin> candidates = new ArrayList<>(CoreToolsPlugin.builtIns());
+        // Not covered by any of the "vertical" builtIns() groups above — this is the
+        // only place "terrain.tile-painter" (the composite multi-channel brush the
+        // Tile Painter palette and rail/bottom-bar tool both target) gets registered.
+        // Without it, selecting the tool highlights fine but painting silently no-ops.
+        candidates.add(new TilePainterToolPlugin());
         candidates.add(new OpenRuneServerPlugin());
         PluginDiscovery discovery = EditorPluginLoader.discoverOwned(
                 Path.of("plugins"), Thread.currentThread().getContextClassLoader());

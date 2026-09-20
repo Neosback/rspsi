@@ -219,6 +219,8 @@ public final class SoftwareSceneRenderer {
 
     private static GpuSceneVertex interpolateVertex(GpuSceneVertex first, GpuSceneVertex second,
                                                     float amount) {
+        // Clipping never crosses a tile/object boundary, so first and second always share the
+        // same picker payload - carried through from first rather than interpolated.
         return new GpuSceneVertex(
                 mix(first.x(), second.x(), amount),
                 mix(first.y(), second.y(), amount),
@@ -233,7 +235,8 @@ public final class SoftwareSceneRenderer {
                 Math.round(mix(first.normalMagnitude(), second.normalMagnitude(), amount)),
                 first.textureId(),
                 Math.round(mix(first.alpha(), second.alpha(), amount)),
-                first.priority());
+                first.priority(),
+                first.pickerPlane(), first.pickerTileX(), first.pickerTileY(), first.pickerSlot());
     }
 
     private static float mix(float first, float second, float amount) {

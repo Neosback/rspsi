@@ -120,7 +120,7 @@ public final class StudioMenuBar {
         if (ImGui.beginMenu("Help")) {
             ImGui.menuItem(StudioIcons.INFO + "  OpenRune Studio", null, true, false);
             ImGui.separator();
-            if (ImGui.menuItem(StudioIcons.SETTINGS + "  Plugins...", null, pluginManagerWindow != null && pluginManagerWindow.isOpen())) {
+            if (ImGui.menuItem(StudioIcons.PREFAB + "  Plugins...", null, pluginManagerWindow != null && pluginManagerWindow.isOpen())) {
                 if (pluginManagerWindow != null) pluginManagerWindow.toggle();
             }
             ImGui.endMenu();

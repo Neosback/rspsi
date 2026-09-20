@@ -30,9 +30,15 @@ public final class PlaceObjectTool implements EditorTool {
     @Override public void deactivate() { context = null; }
     @Override public void pointerDown(PointerEvent event) {
         if (context == null || event.button() != PointerButton.PRIMARY) return;
-        context.viewport().tileAt(event.x(), event.y()).ifPresent(tile ->
-                context.session().execute(new PlaceObjectCommand(
-                        new WorldObject(id, type, rotation, tile.plane(), tile.x(), tile.y()))));
+        var world = context.session().world();
+        context.viewport().tileAt(event.x(), event.y()).ifPresent(tile -> {
+            // Viewport picks are absolute world coordinates; WorldObject/WorldDocument are
+            // region-local, matching how objects already loaded from the cache are stored.
+            int localX = Math.floorMod(tile.x(), Math.max(1, world.width()));
+            int localY = Math.floorMod(tile.y(), Math.max(1, world.length()));
+            context.session().execute(new PlaceObjectCommand(
+                    new WorldObject(id, type, rotation, tile.plane(), localX, localY)));
+        });
     }
     @Override public void pointerDrag(PointerEvent event) { }
     @Override public void pointerUp(PointerEvent event) { }

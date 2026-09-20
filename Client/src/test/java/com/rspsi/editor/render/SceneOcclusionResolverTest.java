@@ -84,6 +84,6 @@ class SceneOcclusionResolverTest {
     private static GpuSceneVertex vertex(float x, float y, float z) {
         return new GpuSceneVertex(x, y, z, 0, 0, 0,
                 GpuColorEncoding.PACKED_JAGEX_HSL, 0,
-                0, 0, 0, 0, -1, 255, 0);
+                0, 0, 0, 0, -1, 255, 0, 0, 0, 0, 0);
     }
 }

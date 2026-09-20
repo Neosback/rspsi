@@ -40,7 +40,8 @@ public final class WorkspaceTabBar {
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 8.0f, 2.0f);
-        ImGui.pushStyleColor(ImGuiCol.WindowBg, ImGui.getColorU32(0.08f, 0.09f, 0.12f, 1.0f));
+        // Same panel gray as the menu bar/other chrome, instead of a near-black that clashed.
+        ImGui.pushStyleColor(ImGuiCol.WindowBg, ImGui.getColorU32(0x26 / 255.0f, 0x28 / 255.0f, 0x2B / 255.0f, 1.0f));
 
         ImGui.begin("StudioWorkspaceTabBar", BAR_FLAGS);
 
@@ -55,7 +56,7 @@ public final class WorkspaceTabBar {
 
                 String title = switch (ws) {
                     case DASHBOARD -> StudioIcons.HOME + " Dashboard";
-                    case MAP_EDITOR -> StudioIcons.MAP + " Map Editor";
+                    case MAP_EDITOR -> StudioIcons.MAP + " Map Studio";
                     case INTERFACE_STUDIO -> StudioIcons.VIEWPORT + " Interface Studio";
                     case OBJECT_STUDIO -> StudioIcons.OBJECT + " Object Studio";
                 };

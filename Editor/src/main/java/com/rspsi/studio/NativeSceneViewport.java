@@ -1,11 +1,15 @@
 package com.rspsi.studio;
 
+import com.rspsi.editor.input.PointerButton;
+import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.GpuPlanPicker;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.editor.render.RenderPresentation;
+import com.rspsi.editor.render.SceneCameraProjection;
 import com.rspsi.editor.render.ViewportController;
+import com.rspsi.editor.tool.EditorToolController;
 import com.rspsi.editor.viewport.Viewport;
 import com.rspsi.renderer.opengl.OpenGlSceneRenderer;
 import imgui.ImGui;
@@ -65,6 +69,17 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         return pickAt(x, y).map(PickResult::tile);
     }
 
+    private Integer pickPlaneRestriction;
+
+    /**
+     * Restricts clicks/picks to one plane even while other planes are also visible ("show all
+     * levels") - the user editing plane 0 should not be able to select a plane-1 tile just
+     * because it happens to be rendered. Pass {@code null} to remove the restriction.
+     */
+    public void setPickPlaneRestriction(Integer plane) {
+        this.pickPlaneRestriction = plane;
+    }
+
     /**
      * Ray-picks the last rendered plan at a position in viewport-local
      * pixels. The plan, size, and camera used for the most recent frame are
@@ -72,7 +87,8 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
      */
     public java.util.Optional<PickResult> pickAt(float x, float y) {
         if (lastPlan == null || lastWidth <= 0 || lastHeight <= 0) return java.util.Optional.empty();
-        return picker.pick(lastPlan, navigation.camera(), lastWidth, lastHeight, x, y);
+        return picker.pick(lastPlan, navigation.camera(), lastWidth, lastHeight, x, y,
+                SceneCameraProjection.editorDefault(), pickPlaneRestriction);
     }
 
     /** The most recent pick, updated when the user clicks inside the viewport. */
@@ -167,6 +183,36 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
                 } catch (Exception ignored) {
                 }
             }
+        }
+    }
+
+    /**
+     * Feeds real mouse input to the active {@link com.rspsi.editor.tool.EditorTool} (Single/
+     * Multi Select, the Tile Painter brush, Height Sculptor, etc). Must be called right after
+     * {@link #render}, before any other ImGui widget call, so {@code isItemHovered()} still
+     * refers to the scene image. Without this, tools never receive pointerDown/Drag/Up and
+     * anything built on them (selection, click-drag painting) silently does nothing.
+     */
+    public void dispatchToolInput(EditorToolController toolController) {
+        if (toolController == null || !ImGui.isItemHovered()) return;
+        // Middle/right-drag orbit/pan the camera; don't also feed those to the active tool.
+        if (ImGui.isMouseDragging(ImGuiMouseButton.Middle, 1.0f)
+                || ImGui.isMouseDragging(ImGuiMouseButton.Right, 1.0f)) {
+            return;
+        }
+
+        float localX = ImGui.getIO().getMousePosX() - imageOriginX;
+        float localY = ImGui.getIO().getMousePosY() - imageOriginY;
+        var io = ImGui.getIO();
+        PointerEvent event = new PointerEvent(localX, localY, PointerButton.PRIMARY,
+                io.getKeyShift(), io.getKeyCtrl(), io.getKeyAlt());
+
+        if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
+            toolController.pointerDown(event);
+        } else if (ImGui.isMouseDown(ImGuiMouseButton.Left) && ImGui.isMouseDragging(ImGuiMouseButton.Left, 1.0f)) {
+            toolController.pointerDrag(event);
+        } else if (ImGui.isMouseReleased(ImGuiMouseButton.Left)) {
+            toolController.pointerUp(event);
         }
     }
 

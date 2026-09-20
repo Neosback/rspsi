@@ -75,10 +75,12 @@ public final class GpuUploadPlanBuilder {
         return new GpuSceneVertex(tile.worldX() * 128.0f + vertex.x(), vertex.height(),
                 tile.worldY() * 128.0f + vertex.y(), vertex.u() / 128.0f, vertex.v() / 128.0f,
                 vertex.packedHsl(), encoding,
-                0, 0, 0, 0, 0, face.textureId(), face.alpha(), face.priority());
+                0, 0, 0, 0, 0, face.textureId(), face.alpha(), face.priority(),
+                tile.plane(), tile.worldX(), tile.worldY(), PickerId.terrainSlot());
     }
 
-    private static GpuSceneVertex modelVertex(ModelRenderPacket model, ModelVertex vertex,
+    private static GpuSceneVertex modelVertex(WorldTileAddress tile, SceneLayer.Kind layer,
+                                              ModelRenderPacket model, ModelVertex vertex,
                                               float u, float v, int color, ModelTriangle face) {
         return new GpuSceneVertex(model.anchor().x() * 128.0f + vertex.x(),
                 model.placementHeight() + vertex.y(),
@@ -86,7 +88,8 @@ public final class GpuUploadPlanBuilder {
                 face.textureId() >= 0 ? GpuColorEncoding.TEXTURE_LIGHTNESS
                         : GpuColorEncoding.PACKED_JAGEX_HSL,
                 face.renderType(), vertex.normalX(), vertex.normalY(), vertex.normalZ(), vertex.normalMagnitude(),
-                face.textureId(), face.alpha(), face.priority());
+                face.textureId(), face.alpha(), face.priority(),
+                tile.plane(), tile.worldX(), tile.worldY(), PickerId.slotFor(layer));
     }
 
     /**
@@ -128,10 +131,10 @@ public final class GpuUploadPlanBuilder {
                         ? face.colorA() : face.colorC();
                 int first = indices.size();
                 int base = vertices.size();
-                vertices.add(modelVertex(model, a, face.uA(), face.vA(), face.colorA(), face));
-                vertices.add(modelVertex(model, b, face.uB(), face.vB(),
+                vertices.add(modelVertex(tile.worldAddress(), layer.kind(), model, a, face.uA(), face.vA(), face.colorA(), face));
+                vertices.add(modelVertex(tile.worldAddress(), layer.kind(), model, b, face.uB(), face.vB(),
                         face.renderType() == 1 || face.renderType() == 3 ? flatColor : face.colorB(), face));
-                vertices.add(modelVertex(model, c, face.uC(), face.vC(), flatColor, face));
+                vertices.add(modelVertex(tile.worldAddress(), layer.kind(), model, c, face.uC(), face.vC(), flatColor, face));
                 indices.add(base);
                 indices.add(base + 1);
                 indices.add(base + 2);

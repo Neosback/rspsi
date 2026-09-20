@@ -1,5 +1,6 @@
 package com.rspsi.studio.plugin;
 
+import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
 import imgui.ImDrawList;
 import org.slf4j.Logger;
@@ -7,11 +8,14 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.ServiceLoader;
+import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * Central registry and lifecycle manager for {@link StudioPlugin}s.
@@ -23,9 +27,48 @@ public final class StudioPluginManager {
 
     private final Map<String, StudioPlugin> plugins = new LinkedHashMap<>();
     private final Map<String, Boolean> enabledStates = new LinkedHashMap<>();
+    private final Map<String, Set<StudioToolPlugin.ToolSurface>> surfaceOverrides = new LinkedHashMap<>();
+    private Consumer<StudioPanel> ownedPanelSink;
 
     public StudioPluginManager() {
         discoverPlugins();
+    }
+
+    /**
+     * Called once, right after construction, by whoever owns the right-sidebar's
+     * {@code StudioPanelManager} so any tool plugin's {@link StudioToolPlugin#ownedPanel()} gets
+     * registered there too - mirrors RuneLite's {@code NavigationButton.panel}: a tool's panel
+     * is a permanent sidebar entry, not something conjured only while the tool is active.
+     */
+    public void setOwnedPanelSink(Consumer<StudioPanel> sink) {
+        this.ownedPanelSink = sink;
+        if (sink != null) {
+            for (StudioPlugin plugin : plugins.values()) {
+                if (plugin instanceof StudioToolPlugin tool) {
+                    tool.ownedPanel().ifPresent(sink);
+                }
+            }
+        }
+    }
+
+    /**
+     * The surfaces this tool's button actually appears on right now: a user/Plugin-Manager
+     * override if one has been set, otherwise the tool's own declared default.
+     */
+    public synchronized Set<StudioToolPlugin.ToolSurface> effectiveSurfaces(StudioToolPlugin tool) {
+        return surfaceOverrides.getOrDefault(tool.id(), tool.surfaces());
+    }
+
+    public synchronized void setSurfaceOverride(String toolPluginId, Set<StudioToolPlugin.ToolSurface> surfaces) {
+        surfaceOverrides.put(toolPluginId, EnumSet.copyOf(surfaces));
+    }
+
+    public synchronized void resetSurfaceOverride(String toolPluginId) {
+        surfaceOverrides.remove(toolPluginId);
+    }
+
+    public synchronized boolean hasSurfaceOverride(String toolPluginId) {
+        return surfaceOverrides.containsKey(toolPluginId);
     }
 
     /**
@@ -33,7 +76,8 @@ public final class StudioPluginManager {
      */
     public void discoverPlugins() {
         // Core built-in Studio modal tool plugins
-        register(new com.rspsi.studio.plugin.builtin.tool.TileSelectionToolPlugin());
+        register(new com.rspsi.studio.plugin.builtin.tool.SingleSelectToolPlugin());
+        register(new com.rspsi.studio.plugin.builtin.tool.MultiSelectToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.TilePainterToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.HeightSculptorToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.PathToolPlugin());
@@ -58,6 +102,9 @@ public final class StudioPluginManager {
             log.info("Registered StudioPlugin: {} [{}]", plugin.name(), plugin.id());
         } catch (Exception ex) {
             log.error("Error enabling plugin {}: {}", plugin.id(), ex.getMessage(), ex);
+        }
+        if (plugin instanceof StudioToolPlugin tool && ownedPanelSink != null) {
+            tool.ownedPanel().ifPresent(ownedPanelSink);
         }
     }
 

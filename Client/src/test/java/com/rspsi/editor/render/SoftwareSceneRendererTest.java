@@ -182,26 +182,26 @@ class SoftwareSceneRendererTest {
     private static GpuSceneVertex vertex(float x, float y, float z, int hsl, int priority) {
         return new GpuSceneVertex(x, y, z, 0, 0, hsl,
                 GpuColorEncoding.PACKED_JAGEX_HSL, 0,
-                0, 0, 0, 0, -1, 255, priority);
+                0, 0, 0, 0, -1, 255, priority, 0, 0, 0, 0);
     }
 
     private static GpuSceneVertex modelPriorityVertex(float x, float y, float z,
                                                        int hsl, int priority) {
         return new GpuSceneVertex(x, y, z, 0, 0, hsl,
                 GpuColorEncoding.PACKED_JAGEX_HSL, 0,
-                0, 0, 0, 0, -1, 0, priority);
+                0, 0, 0, 0, -1, 0, priority, 0, 0, 0, 0);
     }
 
     private static GpuSceneVertex texturedVertex(float x, float y, float z,
                                                   int lightness, int textureId) {
         return new GpuSceneVertex(x, y, z, 0, 0, lightness,
                 GpuColorEncoding.TEXTURE_LIGHTNESS, 0,
-                0, 0, 0, 0, textureId, 255, 0);
+                0, 0, 0, 0, textureId, 255, 0, 0, 0, 0, 0);
     }
 
     private static GpuSceneVertex modelVertex(float x, float y, float z, int color) {
         return new GpuSceneVertex(x, y, z, 0, 0, color,
                 GpuColorEncoding.PACKED_JAGEX_HSL, 1,
-                0, 0, 0, 0, -1, 0, 0);
+                0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0);
     }
 }

@@ -67,6 +67,6 @@ class GpuPlanPickerTest {
     private static GpuSceneVertex vertex(float x, float y, float z, int hsl) {
         return new GpuSceneVertex(x, y, z, 0, 0, hsl,
                 GpuColorEncoding.PACKED_JAGEX_HSL, 0,
-                0, 0, 0, 0, -1, 0, 0);
+                0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0);
     }
 }

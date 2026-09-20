@@ -64,19 +64,24 @@ public final class ChangeHeightTool implements EditorTool {
     }
     @Override public void renderOverlay(OverlayDraw draw) { visited.forEach(draw::tileOutline); }
     private void addTile(PointerEvent event) {
-        context.viewport().tileAt(event.x(), event.y()).ifPresent(coordinate -> {
-            if (!visited.add(coordinate) || delta == 0) return;
-            int minX = Math.max(0, coordinate.x() - radius);
-            int maxX = Math.min(context.session().world().width(), coordinate.x() + 1 + radius);
-            int minY = Math.max(0, coordinate.y() - radius);
-            int maxY = Math.min(context.session().world().length(), coordinate.y() + 1 + radius);
+        context.viewport().tileAt(event.x(), event.y()).ifPresent(absolute -> {
+            // "visited" dedups by the absolute pick and drives the 3D overlay (which must draw
+            // at the real world position); the vertex/height math below needs the region-local
+            // equivalent since that's what WorldDocument and vertexDeltas are indexed by.
+            if (!visited.add(absolute) || delta == 0) return;
+            int localX = Math.floorMod(absolute.x(), Math.max(1, context.session().world().width()));
+            int localY = Math.floorMod(absolute.y(), Math.max(1, context.session().world().length()));
+            int minX = Math.max(0, localX - radius);
+            int maxX = Math.min(context.session().world().width(), localX + 1 + radius);
+            int minY = Math.max(0, localY - radius);
+            int maxY = Math.min(context.session().world().length(), localY + 1 + radius);
             for (int x = minX; x <= maxX; x++) {
                 for (int y = minY; y <= maxY; y++) {
-                    double distance = vertexDistance(x, y, coordinate.x(), coordinate.y());
+                    double distance = vertexDistance(x, y, localX, localY);
                     if (distance > radius && radius > 0) continue;
                     int amount = (int) Math.round(delta * weight(distance));
                     if (amount == 0) continue;
-                    addVertexDelta(coordinate.plane(), x, y, amount);
+                    addVertexDelta(absolute.plane(), x, y, amount);
                 }
             }
         });

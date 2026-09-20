@@ -49,6 +49,9 @@ public final class StudioToolRail {
             List<StudioToolPlugin> toolPlugins = context.studioPlugins().toolPlugins();
 
             for (StudioToolPlugin tool : toolPlugins) {
+                if (!context.studioPlugins().effectiveSurfaces(tool).contains(StudioToolPlugin.ToolSurface.TOOL_RAIL)) {
+                    continue;
+                }
                 boolean isSel = tool.toolId().equals(activeToolId) || tool.id().equals(activeToolId);
 
                 if (isSel) {

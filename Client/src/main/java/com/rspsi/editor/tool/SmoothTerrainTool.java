@@ -50,9 +50,15 @@ public final class SmoothTerrainTool implements EditorTool {
     @Override public void renderOverlay(OverlayDraw draw) { visited.forEach(draw::tileOutline); }
 
     private void addTile(PointerEvent event) {
-        context.viewport().tileAt(event.x(), event.y()).ifPresent(coordinate -> {
-            if (!visited.add(coordinate)) return;
-            TileSnapshot before = context.session().world().tile(coordinate).snapshot();
+        context.viewport().tileAt(event.x(), event.y()).ifPresent(absolute -> {
+            // "visited" dedups by the absolute pick and drives the 3D overlay (which must draw
+            // at the real world position); WorldDocument needs the region-local equivalent.
+            if (!visited.add(absolute)) return;
+            var world = context.session().world();
+            int localX = Math.floorMod(absolute.x(), Math.max(1, world.width()));
+            int localY = Math.floorMod(absolute.y(), Math.max(1, world.length()));
+            TileCoordinate coordinate = new TileCoordinate(absolute.plane(), localX, localY);
+            TileSnapshot before = world.tile(coordinate).snapshot();
             int[] smoothed = {
                     smoothCorner(coordinate, Corner.SOUTH_WEST, before.southWestHeight()),
                     smoothCorner(coordinate, Corner.SOUTH_EAST, before.southEastHeight()),

@@ -80,7 +80,7 @@ public final class MapEditorView {
             | ImGuiWindowFlags.NoScrollWithMouse
             | ImGuiWindowFlags.NoBackground;
 
-    private String activeToolId = "selection.box";
+    private String activeToolId = "selection.single";
     private NativeSceneViewport viewport;
     private TileCoordinate contextTile;
 
@@ -97,6 +97,9 @@ public final class MapEditorView {
     private final StudioBottomBar bottomBar = new StudioBottomBar();
     private final StudioPanelManager panelManager = new StudioPanelManager();
     private final StudioPluginManager studioPluginManager = new StudioPluginManager();
+    {
+        studioPluginManager.setOwnedPanelSink(panelManager::register);
+    }
 
     {
         minimapHudOverlay.setOnWorldMapClick(() -> panelManager.setActiveRightPanelId(MinimapPanel.ID));
@@ -107,10 +110,10 @@ public final class MapEditorView {
     private final PluginManagerWindow pluginManagerWindow = new PluginManagerWindow();
     private final NativeWorkspaceLayoutStore layoutStore = new NativeWorkspaceLayoutStore();
     private boolean layoutRestored;
+    private boolean defaultToolActivated;
 
     private boolean commandPaletteOpen;
     private final ImString commandQuery = new ImString(128);
-    private boolean singleTileMode = true;
     private boolean showLeftToolRail = false;
 
     // Shared studio runtime services & sibling workspace callbacks
@@ -176,6 +179,14 @@ public final class MapEditorView {
 
         if (pluginLifecycle != null && pluginLifecycle.host() != null) {
             panelManager.syncPluginContributions(pluginLifecycle.host().registry().panelRegistrations());
+            if (!defaultToolActivated) {
+                // The default tool's button shows as active from the field default alone, but
+                // nothing actually calls toolController.activate(...) until the user clicks it -
+                // so it visually looks "on" while doing nothing until re-clicked once. Activate
+                // it for real the first frame the engine host is ready.
+                defaultToolActivated = true;
+                activateTool(pluginLifecycle, activeToolId);
+            }
         }
 
         Layout layout = Layout.compute(bottomBar, showLeftToolRail);
@@ -217,13 +228,15 @@ public final class MapEditorView {
         // 5. Viewport (Displee 3D Canvas) with FloatingToolbar, Minimap HUD, and Tile HUD
         renderViewport(cache, plan, viewport, sceneStatus, settings, pluginLifecycle, layout, panelContext);
 
-        // 6. Right Sidebar (Vertical icon rail + active panel host)
+        // 6. Right Sidebar (Vertical icon rail + active panel host) - spans the full content
+        // height so it runs all the way down next to the bottom drawer instead of stopping short.
         rightSidebar.render(panelManager, panelContext,
-                layout.rightX(), layout.contentY(), layout.rightWidth(), layout.contentHeight());
+                layout.rightX(), layout.contentY(), layout.rightWidth(), layout.rightHeight());
 
-        // 7. Bottom Bar (Context-Sensitive Tool Shelf & Drawer)
+        // 7. Bottom Bar (Context-Sensitive Tool Shelf & Drawer) - stops before the right sidebar
+        // instead of running underneath it.
         bottomBar.render(panelManager, panelContext,
-                layout.x(), layout.bottomY(), layout.width(), layout.bottomHeight(),
+                layout.x(), layout.bottomY(), layout.bottomWidth(), layout.bottomHeight(),
                 toolId -> activateTool(pluginLifecycle, toolId),
                 activeToolId);
 
@@ -251,10 +264,20 @@ public final class MapEditorView {
         if (plan == null) {
             ImGui.text(sceneStatus == null ? "Preparing scene..." : sceneStatus);
         } else {
+            // Even with other planes visible ("show all levels"), clicks must only land on the
+            // plane actually being edited - a tile on a plane rendered above/below is not a
+            // valid pick just because it's visible.
+            viewport.setPickPlaneRestriction(settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE));
+
             viewport.render(plan, ImGui.getContentRegionAvailX(),
                     Math.max(160.0f, ImGui.getContentRegionAvailY()),
                     settings.snapshot().get(RenderSettingKeys.MSAA_SAMPLES),
                     new RenderConfigCompiler().compile(settings.snapshot()).presentation());
+
+            // Feed real mouse input to the active EditorTool (selection, tile-painter brush,
+            // height sculptor, etc). Must run before any other ImGui widget call this frame so
+            // isItemHovered() still refers to the scene image.
+            viewport.dispatchToolInput(toolController);
 
             viewport.renderOverlays(toolController.activeTool(), pluginLifecycle);
             studioPluginManager.renderOverlays(ImGui.getWindowDrawList(), panelContext);
@@ -274,8 +297,7 @@ public final class MapEditorView {
 
             // Floating Tool Rail (Frosted Acrylic Capsule)
             floatingToolbar.render(panelContext, layout.viewportX(), layout.contentY(),
-                    toolId -> activateTool(pluginLifecycle, toolId), activeToolId,
-                    singleTileMode, mode -> this.singleTileMode = mode);
+                    toolId -> activateTool(pluginLifecycle, toolId), activeToolId);
         }
         ImGui.end();
     }
@@ -312,13 +334,32 @@ public final class MapEditorView {
 
     private void activateTool(EditorPluginLifecycleManager pluginLifecycle, String registrationId) {
         activeToolId = registrationId;
+        // Tools with nothing to show in the shelf (e.g. Single/Multi Select, which report into
+        // the Tile Inspector panel instead) auto-collapse the drawer rather than showing it empty.
+        studioPluginManager.toolPlugin(registrationId)
+                .filter(tool -> !tool.hasContextDrawerContent())
+                .ifPresent(tool -> bottomBar.setDrawerOpen(false));
         if (inputRouter == null || pluginLifecycle == null || pluginLifecycle.host() == null) return;
+
+        // Single Select / Multi Select are Studio-level presentation ids; both drive the one
+        // real "selection.box" engine tool, distinguished by its Mode.
+        String engineId = switch (registrationId) {
+            case "selection.single", "selection.multi" -> "selection.box";
+            default -> registrationId;
+        };
+
         var registration = pluginLifecycle.host().registry().toolRegistrations().stream()
-                .filter(tool -> registrationId.equals(tool.id()))
+                .filter(tool -> engineId.equals(tool.id()))
                 .findFirst()
                 .orElse(null);
         if (registration == null) return;
-        toolController.activate(registration.factory().get(),
+
+        var tool = registration.factory().get();
+        if (tool instanceof BoxSelectTool boxSelectTool) {
+            boxSelectTool.setMode("selection.single".equals(registrationId)
+                    ? BoxSelectTool.Mode.SINGLE : BoxSelectTool.Mode.MULTI);
+        }
+        toolController.activate(tool,
                 new ToolContext(pluginLifecycle.host().context().session(),
                         pluginLifecycle.host().context().assets(), viewport));
     }
@@ -355,11 +396,11 @@ public final class MapEditorView {
             }
             // Tool hotkeys:
             else if (ImGui.isKeyPressed(ImGuiKey.V, false)) {
-                activateTool(pluginLifecycle, "selection.box");
+                activateTool(pluginLifecycle, "selection.single");
             } else if (ImGui.isKeyPressed(ImGuiKey.B, false)) {
-                activateTool(pluginLifecycle, "tile.painter");
+                activateTool(pluginLifecycle, "terrain.tile-painter");
             } else if (ImGui.isKeyPressed(ImGuiKey.E, false)) {
-                activateTool(pluginLifecycle, "height.edit");
+                activateTool(pluginLifecycle, "terrain.raise");
             } else if (ImGui.isKeyPressed(ImGuiKey.O, false)) {
                 activateTool(pluginLifecycle, "object.place");
             } else if (ImGui.isKeyPressed(ImGuiKey.X, false) || ImGui.isKeyPressed(ImGuiKey.Delete, false)) {
@@ -660,32 +701,19 @@ public final class MapEditorView {
         ImGui.pushStyleColor(ImGuiCol.WindowBg, ImGui.getColorU32(0.12f, 0.13f, 0.15f, 1.0f));
 
         if (ImGui.begin("##AppStatusBar", statusFlags)) {
-            String hoverInfo = StudioIcons.NAVIGATION + " Ready";
-            if (context.viewport() != null) {
-                var pick = context.viewport().selection();
-                if (pick.isPresent()) {
-                    var p = pick.get();
-                    var c = p.tile();
-                    int height = 0;
-                    if (context.session() != null && context.session().world().contains(c)) {
-                        height = context.session().world().tile(c).snapshot().southWestHeight();
-                    }
-                    String objLabel = p.objectHit() ? " | " + StudioIcons.OBJECT + " Object: #" + p.objectId() : "";
-                    hoverInfo = String.format("%s Tile: [%d, %d] | Plane: %d | Height: %d%s",
-                            StudioIcons.EXPLORE, c.x(), c.y(), p.plane(), height, objLabel);
-                }
-            }
+            ImGui.text("Ready");
 
-            ImGui.text(hoverInfo);
-
-            // Trailing diagnostic info
-            float rightMargin = 320.0f;
-            if (vpW > 600.0f) {
-                ImGui.sameLine(vpW - rightMargin);
-                String rev = cache != null ? String.valueOf(cache.identity().revision()) : "240";
-                float fps = ImGui.getIO().getFramerate();
-                ImGui.textDisabled(String.format("%s OSRS Cache (#%s) | Scene 3D | %s %.0f FPS",
-                        StudioIcons.FOLDER, rev, StudioIcons.SPEED, fps));
+            // Trailing diagnostic info: cache path and FPS only - no icons, no tile/selection dump
+            // (that already lives in the Tile Inspector panel and viewport tile-info overlay).
+            String cachePath = cache != null ? cache.path().toString() : "No cache loaded";
+            float fps = ImGui.getIO().getFramerate();
+            Runtime rt = Runtime.getRuntime();
+            long usedMb = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
+            String trailing = String.format("%s  |  %.0f FPS  |  %d MB", cachePath, fps, usedMb);
+            float trailingWidth = ImGui.calcTextSize(trailing).x;
+            if (vpW - trailingWidth - 16.0f > ImGui.getCursorPosX()) {
+                ImGui.sameLine(vpW - trailingWidth - 16.0f);
+                ImGui.textDisabled(trailing);
             }
         }
         ImGui.end();
@@ -717,8 +745,8 @@ public final class MapEditorView {
     private record Layout(float x, float y, float width, float height,
                           float contentY, float contentHeight,
                           float viewportX, float viewportWidth, float viewportHeight,
-                          float rightX, float rightWidth,
-                          float bottomY, float bottomHeight,
+                          float rightX, float rightWidth, float rightHeight,
+                          float bottomY, float bottomWidth, float bottomHeight,
                           float drawerHeight) {
 
         private static Layout compute(StudioBottomBar bottomBar, boolean showLeftToolRail) {
@@ -726,10 +754,13 @@ public final class MapEditorView {
             float menuBarH = ImGui.getFrameHeight();
             float wsBarH = WorkspaceTabBar.HEIGHT;
             float statusBarH = 24.0f;
+            // Small gap below the native menu bar so the workspace tab strip never looks tucked
+            // under it.
+            float menuBarGap = 3.0f;
             float x = main.getPosX();
-            float y = main.getPosY() + menuBarH;
+            float y = main.getPosY() + menuBarH + menuBarGap;
             float width = Math.max(1.0f, main.getSizeX());
-            float height = Math.max(1.0f, main.getSizeY() - menuBarH);
+            float height = Math.max(1.0f, main.getSizeY() - menuBarH - menuBarGap);
 
             float leftRailW = showLeftToolRail ? StudioToolRail.RAIL_WIDTH : 0.0f;
             float rightWidth = Math.min(330.0f, Math.max(260.0f, width * 0.28f));
@@ -744,12 +775,16 @@ public final class MapEditorView {
 
             float contentY = y + wsBarH;
             float bottomY = contentY + contentH;
+            // The bottom drawer must stop where the right sidebar begins instead of running
+            // underneath it; the right sidebar spans the full content height (viewport + drawer
+            // rows combined) so it never looks cut short next to the drawer.
+            float bottomWidth = Math.max(160.0f, width - rightWidth);
 
             return new Layout(x, y, width, height,
                     contentY, contentH,
                     viewportX, viewportWidth, contentH,
-                    rightX, rightWidth,
-                    bottomY, drawerH,
+                    rightX, rightWidth, availContentH,
+                    bottomY, bottomWidth, drawerH,
                     drawerH);
         }
     }

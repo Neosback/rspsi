@@ -28,6 +28,17 @@ public final class GpuPlanPicker {
     public Optional<PickResult> pick(GpuUploadPlan plan, CameraState camera,
                                      int width, int height, float screenX, float screenY,
                                      SceneCameraProjection projection) {
+        return pick(plan, camera, width, height, screenX, screenY, projection, null);
+    }
+
+    /**
+     * Same ray-triangle pick, but ignores geometry on any plane other than {@code restrictToPlane}
+     * when it is non-null. Lets a caller keep multiple planes visible ("show all levels") while
+     * still only allowing clicks to land on the plane the user is actually editing.
+     */
+    public Optional<PickResult> pick(GpuUploadPlan plan, CameraState camera,
+                                     int width, int height, float screenX, float screenY,
+                                     SceneCameraProjection projection, Integer restrictToPlane) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(camera, "camera");
         Objects.requireNonNull(projection, "projection");
@@ -39,6 +50,9 @@ public final class GpuPlanPicker {
         Ray ray = ray(camera, width, height, screenX, screenY, projection);
         Hit best = null;
         for (GpuDrawCommand command : plan.commands()) {
+            if (restrictToPlane != null && command.tile().plane() != restrictToPlane) {
+                continue;
+            }
             for (int offset = command.firstIndex();
                  offset + 2 < command.firstIndex() + command.indexCount(); offset += 3) {
                 GpuSceneVertex first = plan.vertices().get(plan.indices().get(offset));

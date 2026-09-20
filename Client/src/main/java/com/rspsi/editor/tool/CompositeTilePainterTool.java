@@ -151,10 +151,11 @@ public final class CompositeTilePainterTool implements EditorTool {
         if (coordinates == null || coordinates.isEmpty() || session == null) return;
         List<EditorCommand> commands = new ArrayList<>();
         for (TileCoordinate coord : coordinates) {
-            TileSnapshot before = session.world().tile(coord).snapshot();
+            TileCoordinate local = toLocal(coord, session.world());
+            TileSnapshot before = session.world().tile(local).snapshot();
             TileSnapshot after = transformTile(before);
             if (!before.equals(after)) {
-                commands.add(new SetTileCommand(coord, before, after, "Paint composite tile at " + coord));
+                commands.add(new SetTileCommand(local, before, after, "Paint composite tile at " + local));
             }
         }
         if (!commands.isEmpty()) {
@@ -163,14 +164,30 @@ public final class CompositeTilePainterTool implements EditorTool {
     }
 
     private void addTile(PointerEvent event) {
-        context.viewport().tileAt(event.x(), event.y()).ifPresent(coordinate -> {
-            if (!visited.add(coordinate)) return;
-            TileSnapshot before = context.session().world().tile(coordinate).snapshot();
+        context.viewport().tileAt(event.x(), event.y()).ifPresent(absolute -> {
+            // "visited" dedups by the absolute pick and drives the 3D brush overlay (which must
+            // draw at the real world position); WorldDocument/the command need the region-local
+            // equivalent since that's what they're indexed by.
+            if (!visited.add(absolute)) return;
+            TileCoordinate local = toLocal(absolute, context.session().world());
+            TileSnapshot before = context.session().world().tile(local).snapshot();
             TileSnapshot after = transformTile(before);
             if (!before.equals(after)) {
-                stroke.add(new SetTileCommand(coordinate, before, after, "Paint composite tile at " + coordinate));
+                stroke.add(new SetTileCommand(local, before, after, "Paint composite tile at " + local));
             }
         });
+    }
+
+    /**
+     * Viewport picks return absolute OSRS world tile coordinates, but {@code WorldDocument} is
+     * indexed by region-local coordinates - every tool that turns a pick into a document lookup
+     * must convert here first, or it throws {@code IndexOutOfBoundsException} the moment someone
+     * clicks/paints outside the tiny 0..width-1 range.
+     */
+    private static TileCoordinate toLocal(TileCoordinate absolute, com.rspsi.editor.model.WorldDocument world) {
+        int localX = Math.floorMod(absolute.x(), Math.max(1, world.width()));
+        int localY = Math.floorMod(absolute.y(), Math.max(1, world.length()));
+        return new TileCoordinate(absolute.plane(), localX, localY);
     }
 
     private void clear() {

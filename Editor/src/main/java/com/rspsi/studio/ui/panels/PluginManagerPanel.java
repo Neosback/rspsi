@@ -190,6 +190,14 @@ public final class PluginManagerPanel implements StudioPanel {
         }
     }
 
+    private static String surfaceLabel(com.rspsi.studio.plugin.StudioToolPlugin.ToolSurface surface) {
+        return switch (surface) {
+            case BOTTOM_BAR -> "Bottom Bar";
+            case FLOATING_TOOLBAR -> "Floating Tool Rail";
+            case TOOL_RAIL -> "Left Tool Rail";
+        };
+    }
+
     private void renderPluginConfigPage(StudioPanelContext context, StudioPluginManager studioPlugins, String pluginId) {
         var opt = studioPlugins.plugin(pluginId);
         if (opt.isEmpty()) {
@@ -226,6 +234,35 @@ public final class PluginManagerPanel implements StudioPanel {
             ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
             ImGui.textWrapped(plugin.description());
             ImGui.popStyleColor();
+        }
+
+        // Tool placement: which chrome surfaces this tool's button appears on. Lets the user
+        // customize layout (e.g. a tool on both the bottom bar and the floating toolbar) or
+        // restrict a tool to fewer surfaces, without editing code.
+        if (plugin instanceof com.rspsi.studio.plugin.StudioToolPlugin toolPlugin) {
+            ImGui.separator();
+            ImGui.spacing();
+            ImGui.textColored(0xFF38BDF8, "Placement");
+            Set<com.rspsi.studio.plugin.StudioToolPlugin.ToolSurface> active =
+                    new HashSet<>(studioPlugins.effectiveSurfaces(toolPlugin));
+
+            boolean changed = false;
+            for (var surface : com.rspsi.studio.plugin.StudioToolPlugin.ToolSurface.values()) {
+                ImBoolean surfaceToggle = new ImBoolean(active.contains(surface));
+                if (ImGui.checkbox(surfaceLabel(surface) + "##surf-" + pluginId + "-" + surface, surfaceToggle)) {
+                    if (surfaceToggle.get()) active.add(surface); else active.remove(surface);
+                    changed = true;
+                }
+            }
+            if (changed) {
+                studioPlugins.setSurfaceOverride(pluginId, active);
+            }
+            if (studioPlugins.hasSurfaceOverride(pluginId)) {
+                ImGui.sameLine();
+                if (ImGui.smallButton("Reset##surf-reset-" + pluginId)) {
+                    studioPlugins.resetSurfaceOverride(pluginId);
+                }
+            }
         }
 
         ImGui.separator();

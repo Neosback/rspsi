@@ -25,7 +25,7 @@ import java.util.function.Consumer;
 public final class StudioBottomBar {
 
     public static final float COLLAPSED_HEIGHT = 34.0f;
-    public static final float EXPANDED_HEIGHT = 180.0f;
+    public static final float EXPANDED_HEIGHT = 220.0f;
 
     private static final int BAR_FLAGS = ImGuiWindowFlags.NoTitleBar
             | ImGuiWindowFlags.NoResize
@@ -86,6 +86,17 @@ public final class StudioBottomBar {
                        Consumer<String> activateTool,
                        String activeToolId) {
 
+        // Tools with nothing to show (e.g. Single/Multi Select, which report into the Tile
+        // Inspector panel instead) keep the drawer collapsed and un-openable - there is nothing
+        // for the user to expand into.
+        boolean toolHasDrawer = context == null || context.studioPlugins() == null
+                || context.studioPlugins().toolPlugin(activeToolId)
+                        .map(StudioToolPlugin::hasContextDrawerContent)
+                        .orElse(true);
+        if (!toolHasDrawer) {
+            drawerOpen = false;
+        }
+
         float curH = currentHeight();
 
         // Exact positioning from Layout - zero dead space
@@ -97,10 +108,10 @@ public final class StudioBottomBar {
         ImGui.begin("StudioBottomBar", BAR_FLAGS);
 
         // 1. Horizontal Activity Bar (Square tool buttons linked to the drawer below)
-        renderActivityBar(context, activateTool, activeToolId);
+        renderActivityBar(context, activateTool, activeToolId, toolHasDrawer);
 
         // 2. Expandable Drawer Body
-        if (drawerOpen) {
+        if (drawerOpen && toolHasDrawer) {
             renderDrawerBody(panelManager, context, activeToolId, curH - COLLAPSED_HEIGHT - 6.0f);
         }
 
@@ -110,7 +121,8 @@ public final class StudioBottomBar {
 
     private void renderActivityBar(StudioPanelContext context,
                                    Consumer<String> activateTool,
-                                   String activeToolId) {
+                                   String activeToolId,
+                                   boolean toolHasDrawer) {
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 4.0f, 0.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 2.0f, 2.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 4.0f);
@@ -124,13 +136,20 @@ public final class StudioBottomBar {
 
         if (!toolPlugins.isEmpty()) {
             for (StudioToolPlugin tool : toolPlugins) {
+                if (!context.studioPlugins().effectiveSurfaces(tool).contains(StudioToolPlugin.ToolSurface.BOTTOM_BAR)) {
+                    continue;
+                }
                 boolean isActive = tool.toolId().equals(activeToolId);
 
                 if (isActive) {
                     ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
+                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.28f, 0.53f, 0.92f, 1.0f));
+                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.16f, 0.40f, 0.78f, 1.0f));
                     ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
                 } else {
                     ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.18f, 0.22f, 0.28f, 1.0f));
+                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.24f, 0.29f, 0.36f, 1.0f));
+                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.14f, 0.17f, 0.22f, 1.0f));
                     ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
                 }
 
@@ -146,7 +165,7 @@ public final class StudioBottomBar {
                 }
                 ImGui.popFont();
 
-                ImGui.popStyleColor(2);
+                ImGui.popStyleColor(4);
 
                 if (ImGui.isItemHovered()) {
                     String shortcutSuffix = tool.shortcut().isEmpty() ? "" : " [" + tool.shortcut() + "]";
@@ -172,9 +191,10 @@ public final class StudioBottomBar {
             }
         }
 
-        // Far right: Drawer Toggle chevron [v] or [^]
+        // Far right: Drawer Toggle chevron [v] or [^] - disabled when the active tool has
+        // nothing to show, so there is nothing to expand into.
         float rightX = ImGui.getWindowWidth() - 36.0f;
-        if (rightX > ImGui.getCursorPosX()) {
+        if (rightX > ImGui.getCursorPosX() && toolHasDrawer) {
             ImGui.sameLine(rightX);
             ImGui.pushFont(StudioFonts.icon(), 0.0f);
             String toggleIcon = drawerOpen ? StudioIcons.EXPAND_MORE : StudioIcons.EXPAND_LESS;

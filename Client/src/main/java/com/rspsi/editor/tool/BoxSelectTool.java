@@ -61,16 +61,24 @@ public final class BoxSelectTool implements EditorTool {
         if (target == Target.TILES) {
             context.session().selection().selectArea(start.plane(), bounds);
         } else {
+            var world = context.session().world();
             Set<WorldObject> objects = new LinkedHashSet<>();
             for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
                 for (int y = bounds.minY(); y <= bounds.maxY(); y++) {
-                    context.session().world().tile(start.plane(), x, y).snapshot()
+                    // bounds are absolute world tile coordinates; WorldDocument is indexed
+                    // region-locally, so wrap before touching it (avoids IndexOutOfBoundsException
+                    // the moment a marquee is drawn on a real map).
+                    int localX = Math.floorMod(x, Math.max(1, world.width()));
+                    int localY = Math.floorMod(y, Math.max(1, world.length()));
+                    world.tile(start.plane(), localX, localY).snapshot()
                             .objects().forEach(objects::add);
                 }
             }
             context.session().selection().selectObjects(objects);
         }
-        clear();
+        // Deliberately not clearing start/current here: renderOverlay keeps showing the
+        // selection outline until the next pointerDown (which clears it first) or an explicit
+        // selection clear, instead of vanishing the instant the mouse is released.
     }
 
     @Override public ToolInspector inspector() {
@@ -83,10 +91,20 @@ public final class BoxSelectTool implements EditorTool {
             draw.tileOutline(start);
             return;
         }
+        // Outline only the marquee's border tiles, not every tile inside it - a large drag
+        // (e.g. 80x80) would otherwise submit thousands of outline draws per frame.
         TileBounds bounds = bounds(start, current);
+        int plane = start.plane();
         for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
-            for (int y = bounds.minY(); y <= bounds.maxY(); y++) {
-                draw.tileOutline(new TileCoordinate(start.plane(), x, y));
+            draw.tileOutline(new TileCoordinate(plane, x, bounds.minY()));
+            if (bounds.maxY() != bounds.minY()) {
+                draw.tileOutline(new TileCoordinate(plane, x, bounds.maxY()));
+            }
+        }
+        for (int y = bounds.minY() + 1; y < bounds.maxY(); y++) {
+            draw.tileOutline(new TileCoordinate(plane, bounds.minX(), y));
+            if (bounds.maxX() != bounds.minX()) {
+                draw.tileOutline(new TileCoordinate(plane, bounds.maxX(), y));
             }
         }
     }

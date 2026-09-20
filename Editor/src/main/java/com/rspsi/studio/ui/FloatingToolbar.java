@@ -72,15 +72,13 @@ public final class FloatingToolbar {
     }
 
     public void render(float baseStartX, float baseStartY,
-                       Consumer<String> activateTool, String activeToolId,
-                       boolean singleTileMode, Consumer<Boolean> setSingleTileMode) {
-        render(null, baseStartX, baseStartY, activateTool, activeToolId, singleTileMode, setSingleTileMode);
+                       Consumer<String> activateTool, String activeToolId) {
+        render(null, baseStartX, baseStartY, activateTool, activeToolId);
     }
 
     public void render(StudioPanelContext context,
                        float baseStartX, float baseStartY,
-                       Consumer<String> activateTool, String activeToolId,
-                       boolean singleTileMode, Consumer<Boolean> setSingleTileMode) {
+                       Consumer<String> activateTool, String activeToolId) {
 
         float startX = baseStartX + offsetX;
         float startY = baseStartY + offsetY;
@@ -117,14 +115,19 @@ public final class FloatingToolbar {
             return;
         }
 
-        // Get tools list from StudioPluginManager if available
+        // Get tools list from StudioPluginManager if available, filtered to only those placed
+        // on this surface (a tool may opt out of the floating toolbar via surfaces()/the
+        // Plugin Manager's per-tool surface override).
         StudioPluginManager plugins = context != null ? context.studioPlugins() : null;
-        List<StudioToolPlugin> toolPlugins = plugins != null ? plugins.toolPlugins() : null;
+        List<StudioToolPlugin> toolPlugins = plugins != null
+                ? plugins.toolPlugins().stream()
+                        .filter(t -> plugins.effectiveSurfaces(t).contains(StudioToolPlugin.ToolSurface.FLOATING_TOOLBAR))
+                        .toList()
+                : null;
 
         int toolCount = (toolPlugins != null && !toolPlugins.isEmpty()) ? toolPlugins.size() : 5;
-        // Extra height for grip (16px) + selection sub-toggle (if box select is active: 24px)
-        boolean showSelectionSubMode = "selection.box".equals(activeToolId);
-        float extraHeight = 18.0f + (showSelectionSubMode ? 28.0f : 0.0f);
+        // Extra height for grip
+        float extraHeight = 18.0f;
         float totalHeight = extraHeight + (toolCount * (btnSize + 4.0f)) + (padding * 2.0f);
 
         this.boundMinX = startX;
@@ -197,51 +200,6 @@ public final class FloatingToolbar {
             }
         }
 
-        // 4. Selection Sub-Mode Pill (Single Tile vs Multi Marquee)
-        if (showSelectionSubMode) {
-            dl.addLine(startX + padding, curY + 2.0f, startX + railWidth - padding, curY + 2.0f, 0x4094A3B8, 1.0f);
-            curY += 6.0f;
-
-            float subW = (btnSize - 2.0f) * 0.5f;
-            float subH = 20.0f;
-
-            // Single Tile toggle
-            ImGui.setCursorScreenPos(startX + padding, curY);
-            if (singleTileMode) {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
-            } else {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.18f, 0.22f, 0.28f, 1.0f));
-            }
-            ImGui.pushFont(StudioFonts.icon(), 0.0f);
-            if (ImGui.button(StudioIcons.TILE + "##ftb-sub-single", subW, subH)) {
-                if (setSingleTileMode != null) setSingleTileMode.accept(true);
-            }
-            ImGui.popFont();
-            ImGui.popStyleColor();
-            if (ImGui.isItemHovered()) {
-                this.hovered = true;
-                ImGui.setTooltip("Single Tile Mode");
-            }
-
-            // Multi / Marquee toggle
-            ImGui.setCursorScreenPos(startX + padding + subW + 2.0f, curY);
-            if (!singleTileMode) {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
-            } else {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.18f, 0.22f, 0.28f, 1.0f));
-            }
-            ImGui.pushFont(StudioFonts.icon(), 0.0f);
-            if (ImGui.button(StudioIcons.AREA + "##ftb-sub-multi", subW, subH)) {
-                if (setSingleTileMode != null) setSingleTileMode.accept(false);
-            }
-            ImGui.popFont();
-            ImGui.popStyleColor();
-            if (ImGui.isItemHovered()) {
-                this.hovered = true;
-                ImGui.setTooltip("Multi Tile / Marquee Range Mode");
-            }
-        }
-
         ImGui.popStyleVar(2);
 
         // Check if mouse is within toolbar bounds
@@ -258,10 +216,17 @@ public final class FloatingToolbar {
         ImGui.setCursorScreenPos(x, y);
 
         if (isActive) {
+            // Also cover Hovered/Active so the button stays visibly "on" immediately on click
+            // instead of only after the mouse moves away (ImGui's hover/press colors otherwise
+            // paint over the plain Button color while the cursor sits on top of it).
             ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.28f, 0.53f, 0.92f, 1.0f));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.16f, 0.40f, 0.78f, 1.0f));
             ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
         } else {
             ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.15f, 0.18f, 0.24f, 0.85f));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.22f, 0.26f, 0.34f, 0.9f));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.12f, 0.15f, 0.20f, 0.9f));
             ImGui.pushStyleColor(ImGuiCol.Text, 0xFFCBD5E1);
         }
 
@@ -271,7 +236,7 @@ public final class FloatingToolbar {
         }
         ImGui.popFont();
 
-        ImGui.popStyleColor(2);
+        ImGui.popStyleColor(4);
 
         if (ImGui.isItemHovered()) {
             this.hovered = true;
