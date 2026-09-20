@@ -68,7 +68,7 @@ public final class TerrainDiagnosticsOverlay implements StudioPlugin {
             if (labels.get()) {
                 draw.worldLabel((face.material() == 0 ? "UNDERLAY" : "OVERLAY")
                                 + " FACE " + faceId + "  bias=0",
-                        cx, cy, cz, color, 0xCC0F172AFF);
+                        cx, cy, cz, color, 0x0F172ACC);
             }
 
             if (normals.get()) {
@@ -100,7 +100,7 @@ public final class TerrainDiagnosticsOverlay implements StudioPlugin {
             if (labels.get()) {
                 draw.worldLabel("OBJECT FACE #" + pick.objectId(),
                         baseX + 64.0f, snapshot.southWestHeight(), baseZ + 64.0f,
-                        0x22C55EFF, 0xCC0F172AFF);
+                        0x22C55EFF, 0x0F172ACC);
             }
         }
     }
