@@ -45,8 +45,7 @@ public record ToolContext(
      * should receive the real loaded-region WorldWindow.
      */
     public ToolContext(EditorSession session, AssetRepository assets, Viewport viewport) {
-        this(session, assets, viewport,
-                new WorldWindow(0, 0, session.world().width(), session.world().length()));
+        this(session, assets, viewport, session.coordinates());
     }
 
     public Optional<WorldTile> worldTileAt(float x, float y) {
