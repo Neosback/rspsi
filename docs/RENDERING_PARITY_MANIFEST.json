@@ -306,14 +306,28 @@
       "id": "objects.wallNormalMerge",
       "domain": "walls",
       "title": "Wall neighbor normal merge and L-wall pair merge",
-      "status": "partial",
+      "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Model#getVertexNormals", "net.runelite.api.WallObject"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/render/RenderWindowSceneBuilder.java", "Client/src/main/java/com/rspsi/editor/model/WorldRegionWindow.java"],
-      "tsps": ["rs/model/ModelData.ts", "rs/scene/Scene.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java", "Client/src/test/java/com/rspsi/editor/model/WorldRegionWindowMaterializationTest.java", "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
-      "reason": "Pairwise packet normal merge, shape-2 L-wall variant merging, and duplicate internal-face hiding are implemented in ModelPacketBuilder using world-space vertex keys. RenderWindowSceneBuilder already builds model packets from one materialized multi-region document, so adjacent loaded regions naturally participate. The remaining live-editor gap is that StudioApplication currently constructs a 1x1 WorldRegionWindow, so an object on the edited region boundary cannot see a wall/model from an adjacent cache region that was never loaded.",
-      "nextAction": "Load available adjacent cache regions into a 3x3 derived context window around the editable center region, then add a two-region boundary fixture proving shared wall normals and duplicate-face hiding across the 64-tile seam. Keep edits/saves scoped to the center region unless multi-region editing is explicitly enabled."
+      "runelite": [
+        "net.runelite.api.Model#getVertexNormals",
+        "net.runelite.api.WallObject"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/RenderWindowSceneBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/model/WorldRegionWindow.java",
+        "Client/src/main/java/com/jagex/map/SceneGraph.java"
+      ],
+      "tsps": [
+        "rs/model/ModelData.ts",
+        "rs/scene/Scene.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/RenderWindowSceneBuilderTest.java"
+      ],
+      "reason": "L-wall pair normal merging, scene-wide shared-vertex normal accumulation, duplicate internal-face hiding, and cross-region wall joins are now covered. The live world-window renderer stitches adjacent 64x64 regions, materializes one padded multi-region document, and runs ModelPacketBuilder over that document; the boundary fixture proves merge-enabled walls on x=63/x=0 share normals and hide coincident seam faces across the region boundary.",
+      "nextAction": "Keep the L-wall and multi-region boundary fixtures as regression coverage when region materialization, model placement, or normal merging changes."
     },
     {
       "id": "objects.decorations",
@@ -345,10 +359,30 @@
       "title": "Wall-decoration offsets, dual renderables, and wall-width compensation",
       "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.DecorativeObject#getXOffset", "net.runelite.api.DecorativeObject#getYOffset", "net.runelite.api.DecorativeObject#getRenderable", "net.runelite.api.DecorativeObject#getRenderable2", "RuneLite-melxin/runescape-client/src/main/java/Scene.java#newWallDecoration", "RuneLite-melxin/runelite-mixins/src/main/java/net/runelite/mixins/RSWallDecorationMixin.java#getClickbox"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/render/WallDecorationPresentation.java", "Client/src/main/java/com/rspsi/osrs/rules/loc/WallDecorationRules.java", "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java"],
-      "tsps": ["rs/scene/Scene.ts", "rs/config/loctype/LocModelLoader.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java", "Client/src/test/java/com/rspsi/editor/render/WallDecorationPresentationTest.java", "Client/src/test/java/com/rspsi/osrs/rules/loc/WallDecorationRulesTest.java", "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"],
+      "runelite": [
+        "net.runelite.api.DecorativeObject#getXOffset",
+        "net.runelite.api.DecorativeObject#getYOffset",
+        "net.runelite.api.DecorativeObject#getRenderable",
+        "net.runelite.api.DecorativeObject#getRenderable2",
+        "RuneLite-melxin/runescape-client/src/main/java/Scene.java#newWallDecoration",
+        "RuneLite-melxin/runelite-mixins/src/main/java/net/runelite/mixins/RSWallDecorationMixin.java#getClickbox"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/WallDecorationPresentation.java",
+        "Client/src/main/java/com/rspsi/osrs/rules/loc/WallDecorationRules.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "rs/config/loctype/LocModelLoader.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/WallDecorationPresentationTest.java",
+        "Client/src/test/java/com/rspsi/osrs/rules/loc/WallDecorationRulesTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"
+      ],
       "reason": "Shape-8 wall decorations are preserved as distinct primary and secondary neutral model packets; primary carries the inherited wall-relative offset while secondary remains at the bare tile position, matching RuneLite's clickbox and Scene representation. Camera-side orientation-256 ordering is retained as renderer-neutral metadata and consumed by software/native ordering. Shapes 5/6/8 inherit supporting-wall displacement with the client's fallback of 16 when no wall is available.",
       "nextAction": "Keep the shape-8 camera-order, supporting-wall displacement, fallback-16, and GPU-command propagation fixtures as regression coverage."
     },
