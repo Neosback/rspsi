@@ -304,28 +304,16 @@
     },
     {
       "id": "objects.wallNormalMerge",
-      "domain": "normals",
+      "domain": "walls",
       "title": "Wall neighbor normal merge and L-wall pair merge",
       "status": "partial",
       "priority": "p0",
-      "runelite": [
-        "net.runelite.api.Model#getVertexNormals",
-        "net.runelite.api.WallObject"
-      ],
-      "rspsi": [
-        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
-        "Client/src/main/java/com/jagex/map/SceneGraph.java"
-      ],
-      "tsps": [
-        "rs/scene/Scene.ts",
-        "rs/model/ModelData.ts"
-      ],
-      "evidence": [
-        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
-        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
-      ],
-      "reason": "Pairwise packet normal merge and occluded-face hiding (tagging internal cross-section faces with renderType 2) are verified in ModelPacketBuilder; full extended multi-region neighbor traversal remains partial.",
-      "nextAction": "Implement extended multi-region neighbor traversal for world-chunk boundary wall joins."
+      "runelite": ["net.runelite.api.Model#getVertexNormals", "net.runelite.api.WallObject"],
+      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/render/RenderWindowSceneBuilder.java", "Client/src/main/java/com/rspsi/editor/model/WorldRegionWindow.java"],
+      "tsps": ["rs/model/ModelData.ts", "rs/scene/Scene.ts"],
+      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java", "Client/src/test/java/com/rspsi/editor/model/WorldRegionWindowMaterializationTest.java", "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "reason": "Pairwise packet normal merge, shape-2 L-wall variant merging, and duplicate internal-face hiding are implemented in ModelPacketBuilder using world-space vertex keys. RenderWindowSceneBuilder already builds model packets from one materialized multi-region document, so adjacent loaded regions naturally participate. The remaining live-editor gap is that StudioApplication currently constructs a 1x1 WorldRegionWindow, so an object on the edited region boundary cannot see a wall/model from an adjacent cache region that was never loaded.",
+      "nextAction": "Load available adjacent cache regions into a 3x3 derived context window around the editable center region, then add a two-region boundary fixture proving shared wall normals and duplicate-face hiding across the 64-tile seam. Keep edits/saves scoped to the center region unless multi-region editing is explicitly enabled."
     },
     {
       "id": "objects.decorations",
