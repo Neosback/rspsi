@@ -48,9 +48,20 @@ public final class BackfacePolicy {
      * the real-cache model and shaped-tile acceptance checks are complete.
      */
     public enum NativeCullingMode {
-        TWO_SIDED,
-        CLIENT_FRONT,
-        REVERSED_DEBUG
+        TWO_SIDED("Two Sided"),
+        CLIENT_FRONT("Client Front"),
+        REVERSED_DEBUG("Reversed Debug");
+
+        private final String label;
+
+        NativeCullingMode(String label) {
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
     }
 
     public enum NativeWinding {
