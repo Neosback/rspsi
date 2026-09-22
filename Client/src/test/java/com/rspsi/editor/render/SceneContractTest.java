@@ -35,7 +35,7 @@ class SceneContractTest {
         Map<String, SceneContract.ApiClass> surface = SceneContract.runeLiteApiSurface();
 
         assertEquals(SceneContract.ApiClass.SEMANTIC, surface.get("getBaseX"));
-        assertEquals(SceneContract.ApiClass.SEMANTIC, surface.get("getRenderLevel"));
+        assertEquals(SceneContract.ApiClass.SEMANTIC, surface.get("getMinLevel"));
         assertEquals(SceneContract.ApiClass.PRESENTATION_ONLY, surface.get("getDrawDistance"));
         assertEquals(SceneContract.ApiClass.PRESENTATION_ONLY, surface.get("getRoofRemovalMode"));
         assertEquals(SceneContract.ApiClass.MUTATION, surface.get("buildRoofs"));
