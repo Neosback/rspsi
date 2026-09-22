@@ -164,7 +164,7 @@ public final class GpuUploadPlanBuilder {
                 appendCommand(commands, tile.worldAddress(), layer.kind(), pass,
                         first, face.textureId(), submissionPriority(layer.kind(), face.priority()),
                         submissionDepthBias(layer.kind(), face.priority(), face.depthBias()), model.objectId(),
-                        model.renderMode());
+                        model.renderMode(), model.wallDecorationPresentation());
             }
         }
     }
@@ -215,6 +215,15 @@ public final class GpuUploadPlanBuilder {
                                       SceneLayer.Kind layer, GpuDrawCommand.SubmissionPass pass,
                                       int firstIndex, int textureId, int priority, int depthBias, int objectId,
                                       GpuDrawCommand.RenderMode renderMode) {
+        appendCommand(commands, tile, layer, pass, firstIndex, textureId, priority,
+                depthBias, objectId, renderMode, WallDecorationPresentation.none());
+    }
+
+    private static void appendCommand(List<GpuDrawCommand> commands, WorldTileAddress tile,
+                                      SceneLayer.Kind layer, GpuDrawCommand.SubmissionPass pass,
+                                      int firstIndex, int textureId, int priority, int depthBias, int objectId,
+                                      GpuDrawCommand.RenderMode renderMode,
+                                      WallDecorationPresentation wallDecorationPresentation) {
         if (!commands.isEmpty()) {
             int last = commands.size() - 1;
             GpuDrawCommand previous = commands.get(last);
@@ -223,13 +232,14 @@ public final class GpuUploadPlanBuilder {
             // range would make the native backend blend them in source order.
             if (pass != GpuDrawCommand.SubmissionPass.ALPHA
                     && previous.canMerge(tile, layer, pass, textureId, priority, depthBias,
-                    objectId, firstIndex, renderMode)) {
+                    objectId, firstIndex, renderMode, wallDecorationPresentation)) {
                 commands.set(last, previous.extend(3));
                 return;
             }
         }
         commands.add(new GpuDrawCommand(tile, layer, pass, firstIndex, 3,
-                textureId, priority, depthBias, objectId, renderMode));
+                textureId, priority, depthBias, objectId, renderMode,
+                wallDecorationPresentation));
     }
 
     private static String fingerprint(String packetFingerprint, List<GpuSceneVertex> vertices,
@@ -248,7 +258,7 @@ public final class GpuUploadPlanBuilder {
             digest.update(counts);
 
             if (!commands.isEmpty()) {
-                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 36);
+                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 56);
                 for (GpuDrawCommand cmd : commands) {
                     cmdBuffer.putInt(cmd.tile().plane())
                             .putInt(cmd.tile().worldX())
@@ -258,7 +268,12 @@ public final class GpuUploadPlanBuilder {
                             .putInt(cmd.firstIndex())
                             .putInt(cmd.indexCount())
                             .putInt(cmd.textureId())
-                            .putInt(cmd.renderMode().ordinal());
+                            .putInt(cmd.renderMode().ordinal())
+                            .putInt(cmd.wallDecorationPresentation().part().ordinal())
+                            .putInt(cmd.wallDecorationPresentation().offsetX())
+                            .putInt(cmd.wallDecorationPresentation().offsetZ())
+                            .putInt(cmd.wallDecorationPresentation().orientation())
+                            .putInt(cmd.wallDecorationPresentation().cameraOrdered() ? 1 : 0);
                 }
                 cmdBuffer.flip();
                 digest.update(cmdBuffer);
