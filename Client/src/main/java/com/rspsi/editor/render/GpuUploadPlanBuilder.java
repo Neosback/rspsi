@@ -165,7 +165,7 @@ public final class GpuUploadPlanBuilder {
                         first, face.textureId(), submissionPriority(layer.kind(), face.priority()),
                         submissionDepthBias(layer.kind(), face.priority(), face.depthBias()), model.objectId(),
                         model.renderMode(), model.wallDecorationPresentation(),
-                        model.gameObjectSceneMetadata(), model.clientModelBounds());
+                        model.gameObjectSceneMetadata(), model.clientRenderableBounds());
             }
         }
     }
@@ -258,7 +258,7 @@ public final class GpuUploadPlanBuilder {
                     && previous.canMerge(tile.worldAddress(), tile.effectivePlane(),
                     tile.planeCullLevel(), layer, pass, textureId, priority, depthBias,
                     objectId, firstIndex, renderMode, wallDecorationPresentation,
-                    gameObjectSceneMetadata, clientModelBounds)) {
+                    gameObjectSceneMetadata, clientRenderableBounds)) {
                 commands.set(last, previous.extend(3));
                 return;
             }
@@ -266,7 +266,7 @@ public final class GpuUploadPlanBuilder {
         commands.add(new GpuDrawCommand(tile.worldAddress(), tile.effectivePlane(),
                 tile.planeCullLevel(), layer, pass, firstIndex, 3,
                 textureId, priority, depthBias, objectId, renderMode,
-                wallDecorationPresentation, gameObjectSceneMetadata, clientModelBounds));
+                wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds));
     }
 
     static String fingerprint(String packetFingerprint, List<GpuSceneVertex> vertices,
