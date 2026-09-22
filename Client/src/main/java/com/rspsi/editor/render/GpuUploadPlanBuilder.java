@@ -165,7 +165,7 @@ public final class GpuUploadPlanBuilder {
                         first, face.textureId(), submissionPriority(layer.kind(), face.priority()),
                         submissionDepthBias(layer.kind(), face.priority(), face.depthBias()), model.objectId(),
                         model.renderMode(), model.wallDecorationPresentation(),
-                        model.gameObjectSceneMetadata());
+                        model.gameObjectSceneMetadata(), model.clientModelBounds());
             }
         }
     }
@@ -236,6 +236,18 @@ public final class GpuUploadPlanBuilder {
                                       GpuDrawCommand.RenderMode renderMode,
                                       WallDecorationPresentation wallDecorationPresentation,
                                       GameObjectSceneMetadata gameObjectSceneMetadata) {
+        appendCommand(commands, tile, layer, pass, firstIndex, textureId, priority,
+                depthBias, objectId, renderMode, wallDecorationPresentation,
+                gameObjectSceneMetadata, ClientModelBounds.none());
+    }
+
+    private static void appendCommand(List<GpuDrawCommand> commands, SceneTileSnapshot tile,
+                                      SceneLayer.Kind layer, GpuDrawCommand.SubmissionPass pass,
+                                      int firstIndex, int textureId, int priority, int depthBias, int objectId,
+                                      GpuDrawCommand.RenderMode renderMode,
+                                      WallDecorationPresentation wallDecorationPresentation,
+                                      GameObjectSceneMetadata gameObjectSceneMetadata,
+                                      ClientModelBounds clientModelBounds) {
         if (!commands.isEmpty()) {
             int last = commands.size() - 1;
             GpuDrawCommand previous = commands.get(last);
@@ -246,7 +258,7 @@ public final class GpuUploadPlanBuilder {
                     && previous.canMerge(tile.worldAddress(), tile.effectivePlane(),
                     tile.planeCullLevel(), layer, pass, textureId, priority, depthBias,
                     objectId, firstIndex, renderMode, wallDecorationPresentation,
-                    gameObjectSceneMetadata)) {
+                    gameObjectSceneMetadata, clientModelBounds)) {
                 commands.set(last, previous.extend(3));
                 return;
             }
@@ -254,7 +266,7 @@ public final class GpuUploadPlanBuilder {
         commands.add(new GpuDrawCommand(tile.worldAddress(), tile.effectivePlane(),
                 tile.planeCullLevel(), layer, pass, firstIndex, 3,
                 textureId, priority, depthBias, objectId, renderMode,
-                wallDecorationPresentation, gameObjectSceneMetadata));
+                wallDecorationPresentation, gameObjectSceneMetadata, clientModelBounds));
     }
 
     static String fingerprint(String packetFingerprint, List<GpuSceneVertex> vertices,
@@ -293,7 +305,7 @@ public final class GpuUploadPlanBuilder {
             digest.update(counts);
 
             if (!commands.isEmpty()) {
-                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 100);
+                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 160);
                 for (GpuDrawCommand cmd : commands) {
                     cmdBuffer.putInt(cmd.tile().plane())
                             .putInt(cmd.tile().worldX())
@@ -319,7 +331,22 @@ public final class GpuUploadPlanBuilder {
                             .putInt(cmd.gameObjectSceneMetadata().maxTileX())
                             .putInt(cmd.gameObjectSceneMetadata().maxTileY())
                             .putInt(cmd.gameObjectSceneMetadata().modelOrientation())
-                            .putInt(cmd.gameObjectSceneMetadata().orientation());
+                            .putInt(cmd.gameObjectSceneMetadata().orientation())
+                            .putInt(cmd.clientModelBounds().present() ? 1 : 0)
+                            .putInt(cmd.clientModelBounds().height())
+                            .putInt(cmd.clientModelBounds().bottomY())
+                            .putInt(cmd.clientModelBounds().xzRadius())
+                            .putInt(cmd.clientModelBounds().radius())
+                            .putInt(cmd.clientModelBounds().diameter())
+                            .putInt(cmd.clientModelBounds().singleTile() ? 1 : 0)
+                            .putInt(cmd.clientModelBounds().drawAabb().present() ? 1 : 0)
+                            .putInt(cmd.clientModelBounds().drawAabb().orientation())
+                            .putInt(cmd.clientModelBounds().drawAabb().xMid())
+                            .putInt(cmd.clientModelBounds().drawAabb().yMid())
+                            .putInt(cmd.clientModelBounds().drawAabb().zMid())
+                            .putInt(cmd.clientModelBounds().drawAabb().xMidOffset())
+                            .putInt(cmd.clientModelBounds().drawAabb().yMidOffset())
+                            .putInt(cmd.clientModelBounds().drawAabb().zMidOffset());
                 }
                 cmdBuffer.flip();
                 digest.update(cmdBuffer);
