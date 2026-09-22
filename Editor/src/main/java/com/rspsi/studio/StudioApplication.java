@@ -28,6 +28,7 @@ import com.rspsi.editor.render.GpuScenePacket;
 import com.rspsi.editor.render.GpuScenePacketBuilder;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.GpuUploadPlanBuilder;
+import com.rspsi.editor.render.IncrementalGpuUploadPlanBuilder;
 import com.rspsi.editor.render.RenderConfig;
 import com.rspsi.editor.render.RenderConfigCompiler;
 import com.rspsi.editor.render.RenderScene;
@@ -268,7 +269,11 @@ public final class StudioApplication implements AutoCloseable {
         long settingsRevision = renderSettings.revision();
         RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
         long planStart = System.nanoTime();
-        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(config.apply(packet));
+        IncrementalGpuUploadPlanBuilder incrementalPlanBuilder =
+                new IncrementalGpuUploadPlanBuilder();
+        IncrementalGpuUploadPlanBuilder.BuildResult initialPlan =
+                incrementalPlanBuilder.buildInitial(config.apply(packet));
+        GpuUploadPlan plan = initialPlan.plan();
         long planNanos = System.nanoTime() - planStart;
 
         double centerX = sceneWindow.sceneBaseX() * 128.0 + window.worldWindow().width() * 64.0;
@@ -288,7 +293,8 @@ public final class StudioApplication implements AutoCloseable {
                 plan.vertices().size(), plan.indices().size(), plan.commands().size(),
                 plan.textures().size());
         logSceneBuild("initial", regionX, regionY, metrics);
-        return new LoadedMapScene(opened, session, scene, renderScene, packet, plan, settingsRevision,
+        return new LoadedMapScene(opened, session, scene, renderScene, packet, plan,
+                incrementalPlanBuilder, settingsRevision,
                 new com.rspsi.editor.render.CameraState(
                 (float) centerX, -2400.0f, (float) centerZ - 4200.0f,
                 (float) -Math.toRadians(28.0), 0.0f));
@@ -377,13 +383,33 @@ public final class StudioApplication implements AutoCloseable {
 
         SceneWindow sceneWindow = SceneWindow.from(window);
         long packetStart = System.nanoTime();
-        GpuScenePacket packet = new GpuScenePacketBuilder().build(sceneWindow, scene);
+        GpuScenePacketBuilder packetBuilder = new GpuScenePacketBuilder();
+        GpuScenePacketBuilder.IncrementalBuildResult packetUpdate;
+        if (windowUpdate.fullRebuild()) {
+            GpuScenePacket fullPacket = packetBuilder.build(sceneWindow, scene);
+            packetUpdate = new GpuScenePacketBuilder.IncrementalBuildResult(
+                    fullPacket, fullPacket.tiles().size(), 0, true);
+        } else {
+            packetUpdate = packetBuilder.buildIncremental(
+                    baseScene.packet(), sceneWindow, scene, windowUpdate.dirtyWorldZones());
+        }
+        GpuScenePacket packet = packetUpdate.packet();
         long packetNanos = System.nanoTime() - packetStart;
 
         long settingsRevision = renderSettings.revision();
         RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
+        GpuScenePacket visiblePacket = config.apply(packet);
         long planStart = System.nanoTime();
-        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(config.apply(packet));
+        IncrementalGpuUploadPlanBuilder incrementalPlanBuilder = baseScene.planBuilder();
+        IncrementalGpuUploadPlanBuilder.BuildResult planUpdate;
+        if (windowUpdate.fullRebuild() || settingsRevision != baseScene.settingsRevision()) {
+            incrementalPlanBuilder.invalidateAll();
+            planUpdate = incrementalPlanBuilder.buildInitial(visiblePacket);
+        } else {
+            planUpdate = incrementalPlanBuilder.build(
+                    visiblePacket, windowUpdate.dirtyWorldZones());
+        }
+        GpuUploadPlan plan = planUpdate.plan();
         long planNanos = System.nanoTime() - planStart;
 
         long renderSceneStart = System.nanoTime();
@@ -397,12 +423,16 @@ public final class StudioApplication implements AutoCloseable {
                 plan.vertices().size(), plan.indices().size(), plan.commands().size(),
                 plan.textures().size());
         logSceneBuild("edit", region.regionX(), region.regionY(), metrics);
-        LOGGER.info("Map scene edit window mode={}, reason={}, dirtyZones={}, compiledVisibleTiles={}",
+        LOGGER.info("Map scene edit window mode={}, reason={}, dirtyZones={}, worldZones={}, "
+                        + "compiledVisibleTiles={}, packetRebuilt={}, packetReused={}, "
+                        + "planRebuilt={}, planReused={}",
                 windowUpdate.fullRebuild() ? "full" : "incremental",
                 windowUpdate.reason(), windowUpdate.dirtyZones().size(),
-                windowUpdate.compiledVisibleTiles());
+                windowUpdate.dirtyWorldZones().size(), windowUpdate.compiledVisibleTiles(),
+                packetUpdate.rebuiltTiles(), packetUpdate.reusedTiles(),
+                planUpdate.rebuiltTiles(), planUpdate.reusedTiles());
         return new LoadedMapScene(baseScene.opened(), baseScene.session(), scene, renderScene, packet, plan,
-                settingsRevision, baseScene.camera());
+                incrementalPlanBuilder, settingsRevision, baseScene.camera());
     }
 
     private static int[] parseRegion(String value) {
@@ -635,6 +665,7 @@ public final class StudioApplication implements AutoCloseable {
                                   RenderScene renderScene,
                                   GpuScenePacket packet,
                                   GpuUploadPlan plan,
+                                  IncrementalGpuUploadPlanBuilder planBuilder,
                                   long settingsRevision,
                                   com.rspsi.editor.render.CameraState camera) { }
 }
