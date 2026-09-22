@@ -25,8 +25,22 @@ public record ModelRenderPacket(
         boolean supportsParticles,
         int placementHeight,
         boolean roofRelated,
-        GpuDrawCommand.RenderMode renderMode
+        GpuDrawCommand.RenderMode renderMode,
+        WallDecorationPresentation wallDecorationPresentation
 ) {
+    /** Compatibility constructor before wall-decoration renderables were retained separately. */
+    public ModelRenderPacket(TileCoordinate anchor, int objectId, ObjectCategory category,
+                             List<ModelVertex> vertices, List<ModelTriangle> triangles,
+                             List<TextureTriangle> textureTriangles, int animationId,
+                             int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
+                             boolean supportsAnimation, boolean supportsParticles,
+                             int placementHeight, boolean roofRelated,
+                             GpuDrawCommand.RenderMode renderMode) {
+        this(anchor, objectId, category, vertices, triangles, textureTriangles, animationId,
+                minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles,
+                placementHeight, roofRelated, renderMode, WallDecorationPresentation.none());
+    }
+
     /** Compatibility constructor before model placement elevation was explicit. */
     public ModelRenderPacket(TileCoordinate anchor, int objectId, ObjectCategory category,
                              List<ModelVertex> vertices, List<ModelTriangle> triangles,
@@ -35,7 +49,7 @@ public record ModelRenderPacket(
                              boolean supportsAnimation, boolean supportsParticles) {
         this(anchor, objectId, category, vertices, triangles, textureTriangles, animationId,
                 minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles,
-                0, false, GpuDrawCommand.RenderMode.DEFAULT);
+                0, false, GpuDrawCommand.RenderMode.DEFAULT, WallDecorationPresentation.none());
     }
 
     /** Compatibility constructor before explicit placement and roof metadata. */
@@ -47,7 +61,8 @@ public record ModelRenderPacket(
                              int placementHeight, boolean roofRelated) {
         this(anchor, objectId, category, vertices, triangles, textureTriangles, animationId,
                 minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles,
-                placementHeight, roofRelated, GpuDrawCommand.RenderMode.DEFAULT);
+                placementHeight, roofRelated, GpuDrawCommand.RenderMode.DEFAULT,
+                WallDecorationPresentation.none());
     }
 
     public ModelRenderPacket {
@@ -57,6 +72,8 @@ public record ModelRenderPacket(
         triangles = List.copyOf(Objects.requireNonNull(triangles, "triangles"));
         textureTriangles = List.copyOf(Objects.requireNonNull(textureTriangles, "textureTriangles"));
         renderMode = Objects.requireNonNull(renderMode, "renderMode");
+        wallDecorationPresentation = Objects.requireNonNull(
+                wallDecorationPresentation, "wallDecorationPresentation");
         if (objectId < 0 || animationId < -1 || minX > maxX || minY > maxY || minZ > maxZ) {
             throw new IllegalArgumentException("Invalid model packet identity or bounds");
         }
@@ -78,7 +95,8 @@ public record ModelRenderPacket(
     public ModelRenderPacket withAnchor(TileCoordinate newAnchor) {
         return new ModelRenderPacket(newAnchor, objectId, category, vertices, triangles,
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
-                supportsAnimation, supportsParticles, placementHeight, roofRelated, renderMode);
+                supportsAnimation, supportsParticles, placementHeight, roofRelated, renderMode,
+                wallDecorationPresentation);
     }
 
     /** Returns this packet with an explicit RuneLite-compatible render mode. */
@@ -86,7 +104,16 @@ public record ModelRenderPacket(
         return new ModelRenderPacket(anchor, objectId, category, vertices, triangles,
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
-                newRenderMode);
+                newRenderMode, wallDecorationPresentation);
+    }
+
+    /** Returns this packet with explicit wall-decoration renderable identity. */
+    public ModelRenderPacket withWallDecorationPresentation(
+            WallDecorationPresentation presentation) {
+        return new ModelRenderPacket(anchor, objectId, category, vertices, triangles,
+                textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
+                supportsAnimation, supportsParticles, placementHeight, roofRelated,
+                renderMode, Objects.requireNonNull(presentation, "presentation"));
     }
 
     /** Triangle indices suitable for the opaque submission pass. */
