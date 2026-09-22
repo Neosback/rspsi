@@ -50,7 +50,7 @@ This foundation PR has now moved five P0 items to covered:
 
 | id | title | next action |
 |---|---|---|
-| `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Software/native winding polarity is corrected to GL_CCW; validate one asymmetric real-cache model and one shaped tile in the live viewport before enabling hardware culling |
+| `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Software/native winding polarity is corrected to GL_CCW; validate model-only Client Front culling against an asymmetric real-cache model and wall/roof/bridge-heavy views. Terrain remains two-sided |
 
 P1-partial items worth picking up after this final P0 validation: `scene.apiSurface`,
 `terrain.bridge`, `scene.roofs`, `objects.wallTransforms`, `objects.decorations`,
