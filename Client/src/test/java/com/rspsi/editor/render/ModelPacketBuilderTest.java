@@ -585,6 +585,25 @@ class ModelPacketBuilderTest {
     }
 
     @Test
+    void duplicateAuthoredPlacementsReceiveDistinctStableOccurrences() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        WorldObject duplicate = new WorldObject(42, 10, 0, 0, 0, 0);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(duplicate, duplicate)));
+        DefinitionProvider definitions = typedDefinitions(10, 7, triangle(7, 100));
+
+        List<ModelRenderPacket> packets = new ModelPacketBuilder(definitions).build(document);
+
+        assertEquals(2, packets.size());
+        assertEquals(0, packets.get(0).sceneObjectIdentity().occurrence());
+        assertEquals(1, packets.get(1).sceneObjectIdentity().occurrence());
+        assertNotEquals(packets.get(0).sceneObjectIdentity(),
+                packets.get(1).sceneObjectIdentity());
+        assertNotEquals(packets.get(0).sceneObjectIdentity().stableId(),
+                packets.get(1).sceneObjectIdentity().stableId());
+    }
+
+    @Test
     void preservesDoubleDiagonalWallDecorationAsTwoSceneRenderables() {
         WorldDocument document = new WorldDocument(1, 1, 1);
         WorldObject decoration = new WorldObject(42, 8, 1, 0, 0, 0);
