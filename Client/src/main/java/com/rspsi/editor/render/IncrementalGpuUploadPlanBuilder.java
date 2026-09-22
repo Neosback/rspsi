@@ -20,15 +20,15 @@ import java.util.Set;
  * merge rules as {@link GpuUploadPlanBuilder}.</p>
  */
 public final class IncrementalGpuUploadPlanBuilder {
+    private static final GpuUploadPlan EMPTY_GEOMETRY = new GpuUploadPlan(
+            List.of(), List.of(), List.of(), List.of(), Map.of(), List.of(), "empty-tile-fragment");
+
     private final GpuUploadPlanBuilder fullBuilder = new GpuUploadPlanBuilder();
     private final Map<WorldTileAddress, TileFragment> cache = new LinkedHashMap<>();
 
     public BuildResult buildInitial(GpuScenePacket packet) {
         cache.clear();
-        return build(packet, packet.tiles().stream()
-                .map(SceneTileSnapshot::worldAddress)
-                .map(WorldZoneCoordinate::from)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet()));
+        return build(packet, Set.of());
     }
 
     public BuildResult build(GpuScenePacket packet, Set<WorldZoneCoordinate> dirtyZones) {
@@ -84,6 +84,10 @@ public final class IncrementalGpuUploadPlanBuilder {
     }
 
     private TileFragment flattenTile(GpuScenePacket packet, SceneTileSnapshot tile) {
+        if (tile.terrain().isEmpty() && tile.models().isEmpty()) {
+            return new TileFragment(tile, EMPTY_GEOMETRY);
+        }
+
         // Fragment geometry only depends on the immutable tile snapshot.
         // Texture pixels/resources are attached once to the final global plan,
         // so hashing the full texture repository for every dirty tile would
