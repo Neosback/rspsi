@@ -25,9 +25,12 @@ public final class IncrementalGpuUploadPlanBuilder {
 
     private final GpuUploadPlanBuilder fullBuilder = new GpuUploadPlanBuilder();
     private final Map<WorldTileAddress, TileFragment> cache = new LinkedHashMap<>();
+    private IncrementalGpuZonedUploadPlanBuilder zonedBuilder =
+            new IncrementalGpuZonedUploadPlanBuilder();
 
     public BuildResult buildInitial(GpuScenePacket packet) {
         cache.clear();
+        zonedBuilder.invalidateAll();
         return build(packet, Set.of());
     }
 
@@ -65,18 +68,21 @@ public final class IncrementalGpuUploadPlanBuilder {
                 packet.textures(), mergedOccluders,
                 GpuUploadPlanBuilder.fingerprint(packet.fingerprint(), vertices, indices, commands,
                         textureTriangles, packet.textures(), mergedOccluders));
-        return new BuildResult(plan, rebuilt, reused);
+        GpuZonedUploadPlan zonedPlan = zonedBuilder.build(plan, dirtyZones);
+        return new BuildResult(plan, zonedPlan, rebuilt, reused);
     }
 
     /** Creates an isolated cache snapshot for an asynchronous rebuild transaction. */
     public IncrementalGpuUploadPlanBuilder fork() {
         IncrementalGpuUploadPlanBuilder copy = new IncrementalGpuUploadPlanBuilder();
         copy.cache.putAll(cache);
+        copy.zonedBuilder = zonedBuilder.fork();
         return copy;
     }
 
     public void invalidateAll() {
         cache.clear();
+        zonedBuilder.invalidateAll();
     }
 
     public int cachedTileCount() {
@@ -151,9 +157,11 @@ public final class IncrementalGpuUploadPlanBuilder {
         }
     }
 
-    public record BuildResult(GpuUploadPlan plan, int rebuiltTiles, int reusedTiles) {
+    public record BuildResult(GpuUploadPlan plan, GpuZonedUploadPlan zonedPlan,
+                              int rebuiltTiles, int reusedTiles) {
         public BuildResult {
             plan = Objects.requireNonNull(plan, "plan");
+            zonedPlan = Objects.requireNonNull(zonedPlan, "zonedPlan");
             if (rebuiltTiles < 0 || reusedTiles < 0) {
                 throw new IllegalArgumentException("Tile counts cannot be negative");
             }

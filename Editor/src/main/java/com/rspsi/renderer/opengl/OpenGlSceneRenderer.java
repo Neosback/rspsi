@@ -5,6 +5,7 @@ import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuDrawBatchPlanner;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
+import com.rspsi.editor.render.GpuZonedUploadPlan;
 import com.rspsi.editor.render.RenderTextureResource;
 import com.rspsi.editor.render.SceneLayer;
 import com.rspsi.editor.render.CameraState;
@@ -349,16 +350,28 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     public void draw(GpuUploadPlan plan, CameraState camera, int width, int height) {
-        draw(plan, camera, width, height, RenderPresentation.neutral());
+        draw(plan, null, camera, width, height, RenderPresentation.neutral());
     }
 
     public void draw(GpuUploadPlan plan, CameraState camera, int width, int height,
               RenderPresentation presentation) {
-        draw(plan, camera, width, height, presentation, clientCycle());
+        draw(plan, null, camera, width, height, presentation, clientCycle());
     }
 
     public void draw(GpuUploadPlan plan, CameraState camera, int width, int height,
               RenderPresentation presentation, int clientCycle) {
+        draw(plan, null, camera, width, height, presentation, clientCycle);
+    }
+
+    public void draw(GpuUploadPlan plan, GpuZonedUploadPlan zonedPlan,
+                     CameraState camera, int width, int height,
+                     RenderPresentation presentation) {
+        draw(plan, zonedPlan, camera, width, height, presentation, clientCycle());
+    }
+
+    public void draw(GpuUploadPlan plan, GpuZonedUploadPlan zonedPlan,
+                     CameraState camera, int width, int height,
+                     RenderPresentation presentation, int clientCycle) {
         if (presentation == null) throw new IllegalArgumentException("presentation cannot be null");
         // Reassert all state that the previous alpha pass or the ImGui backend
         // may have changed. In particular, glDepthMask(false) survives a
@@ -403,7 +416,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         boolean geometryUploaded = false;
         boolean textureUploaded = false;
         if (!plan.fingerprint().equals(uploadedFingerprint)) {
-            zoneManager.upload(plan);
+            if (zonedPlan != null && plan.fingerprint().equals(zonedPlan.sourceFingerprint())) {
+                zoneManager.upload(zonedPlan);
+            } else {
+                zoneManager.upload(plan);
+            }
             geometryUploaded = zoneManager.dirtyZonesUploadedCount() > 0;
             uploadedFingerprint = plan.fingerprint();
             orderedPlanFingerprint = null;
