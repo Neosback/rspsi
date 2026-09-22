@@ -29,8 +29,14 @@ class SceneVisibilityPolicyTest {
                 SceneWindow.from(window), scene, SceneVisibilityPolicy.effectivePlane(0));
 
         assertEquals(64 * 64 + 1, selected.tiles().size());
-        assertTrue(selected.tiles().stream().anyMatch(tile -> tile.visibleBelow()
-                && tile.effectivePlane() == 0));
+        SceneTileSnapshot bridgeTile = selected.tiles().stream()
+                .filter(SceneTileSnapshot::visibleBelow)
+                .filter(tile -> tile.authoredPlane() == 1)
+                .findFirst().orElseThrow();
+        assertEquals(0, bridgeTile.effectivePlane());
+        assertEquals(1, bridgeTile.authoredPlane());
+        assertEquals(1, bridgeTile.renderLevel());
+        assertEquals(0, bridgeTile.planeCullLevel());
         assertNotEquals(all.fingerprint(), selected.fingerprint());
     }
 
