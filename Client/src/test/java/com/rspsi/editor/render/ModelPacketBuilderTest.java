@@ -681,6 +681,82 @@ class ModelPacketBuilderTest {
         assertTrue(!packet.gameObjectSceneMetadata().present());
     }
 
+    @Test
+    void clientBoundsStayModelLocalAndIndependentFromSceneFootprint() {
+        WorldDocument document = new WorldDocument(8, 8, 1);
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{-10, -20, -30, 50, 40, 70, 20, 10, -5},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+        DefinitionProvider definitions = sizedDefinitions(2, 3, 10, 7, geometry);
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions)
+                .build(new WorldObject(42, 10, 0, 0, 2, 3), document)
+                .orElseThrow();
+
+        ClientModelBounds bounds = packet.clientModelBounds();
+        assertTrue(bounds.present());
+        assertEquals(20, bounds.height());
+        assertEquals(40, bounds.bottomY());
+        assertEquals(87, bounds.xzRadius());
+        assertEquals(90, bounds.radius());
+        assertEquals(186, bounds.diameter());
+        assertEquals(20, bounds.drawAabb().xMid());
+        assertEquals(20, bounds.drawAabb().zMid());
+
+        // Render geometry is translated to the 2x3 footprint centre, while
+        // client model bounds remain local exactly like Model + Scene.
+        assertEquals(118, packet.minX());
+        assertEquals(178, packet.maxX());
+        assertEquals(162, packet.minZ());
+        assertEquals(262, packet.maxZ());
+        assertEquals(2, packet.gameObjectSceneMetadata().sizeX());
+        assertEquals(3, packet.gameObjectSceneMetadata().sizeY());
+    }
+
+    @Test
+    void clientBoundsIncludeDefinitionScaleAndOffsetBeforeScenePlacement() {
+        WorldDocument document = new WorldDocument(4, 4, 1);
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{0, -20, 0, 64, 40, 0, 0, 10, 32},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+        ObjectAppearanceView appearance = new ObjectAppearanceView(
+                -1, false, 256, 64, 128, 10, -5, 20,
+                Map.of(), Map.of(), true, false, false, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
+        DefinitionProvider definitions = sizedDefinitions(1, 1, 10, 7, geometry, appearance);
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions)
+                .build(new WorldObject(42, 10, 0, 0, 1, 1), document)
+                .orElseThrow();
+
+        ClientModelBounds bounds = packet.clientModelBounds();
+        assertEquals(15, bounds.height());
+        assertEquals(15, bounds.bottomY());
+        assertEquals(140, bounds.xzRadius());
+        assertEquals(141, bounds.radius());
+        assertEquals(282, bounds.diameter());
+        assertEquals(69, bounds.drawAabb().xMid());
+        assertEquals(0, bounds.drawAabb().yMid());
+        assertEquals(26, bounds.drawAabb().zMid());
+        assertEquals(69, bounds.drawAabb().xMidOffset());
+        assertEquals(15, bounds.drawAabb().yMidOffset());
+        assertEquals(32, bounds.drawAabb().zMidOffset());
+    }
+
+    @Test
+    void shapeElevenCarriesClientDrawAabbOrientationSeparatelyFromPlacementRotation() {
+        WorldDocument document = new WorldDocument(8, 8, 1);
+        DefinitionProvider definitions = sizedDefinitions(2, 3, 10, 7, triangle(7, 100));
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions)
+                .build(new WorldObject(42, 11, 3, 0, 1, 2), document)
+                .orElseThrow();
+
+        assertEquals(256, packet.clientModelBounds().drawAabb().orientation());
+        assertEquals(256, packet.gameObjectSceneMetadata().modelOrientation());
+        assertEquals(3 * 512 + 256, packet.gameObjectSceneMetadata().orientation());
+    }
+
     private static ModelGeometryView triangle(int id, int color) {
         return new ModelGeometryView(id,
                 new int[]{0, 0, 0, 64, 0, 0, 0, 0, 64},
@@ -740,6 +816,12 @@ class ModelPacketBuilderTest {
 
     private static DefinitionProvider sizedDefinitions(int width, int length, int type,
                                                        int modelId, ModelGeometryView geometry) {
+        return sizedDefinitions(width, length, type, modelId, geometry, ObjectAppearanceView.empty());
+    }
+
+    private static DefinitionProvider sizedDefinitions(int width, int length, int type,
+                                                       int modelId, ModelGeometryView geometry,
+                                                       ObjectAppearanceView appearance) {
         return new DefinitionProvider() {
             @Override public Optional<ObjectDefinitionView> object(int id) {
                 return Optional.of(new ObjectDefinitionView(id, "sized", width, length,
@@ -748,7 +830,7 @@ class ModelPacketBuilderTest {
             @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
             @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
             @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
-                return Optional.of(ObjectAppearanceView.empty());
+                return Optional.of(appearance);
             }
             @Override public Optional<ModelGeometryView> modelGeometry(int id) {
                 return Optional.of(geometry);
