@@ -45,6 +45,23 @@ class IncrementalGpuUploadPlanBuilderTest {
     }
 
     @Test
+    void assemblyPreservesFullBuilderMergingInsideOneWorldZone() {
+        SceneTileSnapshot first = terrainTile(1, 1, 100);
+        SceneTileSnapshot second = terrainTile(1, 2, 100);
+        GpuScenePacket packet = packet(List.of(first, second), "same-zone");
+
+        GpuUploadPlan expected = new GpuUploadPlanBuilder().build(packet);
+        GpuUploadPlan actual = new IncrementalGpuUploadPlanBuilder()
+                .buildInitial(packet).plan();
+
+        assertEquals(1, expected.commands().size());
+        assertEquals(expected.vertices(), actual.vertices());
+        assertEquals(expected.indices(), actual.indices());
+        assertEquals(expected.commands(), actual.commands());
+        assertEquals(expected.fingerprint(), actual.fingerprint());
+    }
+
+    @Test
     void forkKeepsLiveCacheIsolatedFromBackgroundRebuild() {
         SceneTileSnapshot first = terrainTile(1, 1, 100);
         SceneTileSnapshot second = terrainTile(16, 1, 200);
