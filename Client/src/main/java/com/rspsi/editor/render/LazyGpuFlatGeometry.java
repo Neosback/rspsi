@@ -135,7 +135,7 @@ final class LazyGpuFlatGeometry {
 
     private abstract static class GeometryView<E> extends AbstractList<E>
             implements RandomAccess {
-        private final LazyGpuFlatGeometry owner;
+        final LazyGpuFlatGeometry owner;
 
         private GeometryView(LazyGpuFlatGeometry owner) {
             this.owner = owner;
