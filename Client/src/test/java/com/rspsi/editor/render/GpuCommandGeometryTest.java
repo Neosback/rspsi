@@ -32,6 +32,42 @@ class GpuCommandGeometryTest {
         assertEquals(SceneFog.bounds(flat), SceneFog.bounds(zoned));
     }
 
+
+    @Test
+    void flatAndZonedVisibilityAgreeWithOccluders() {
+        WorldTileAddress tile = WorldTileAddress.of(2, 0, 0);
+        SceneOccluder wall = new SceneOccluder(1, 1, 1, 0, 0, 0, 0,
+                128, 128, 0, 128, 0, 128);
+        CameraState camera = new CameraState(0, 64, 0, 0, 0);
+
+        List<GpuSceneVertex> vertices = List.of(
+                visibilityVertex(256, 32, 32),
+                visibilityVertex(256, 32, 96),
+                visibilityVertex(256, 96, 64),
+                visibilityVertex(64, 32, 32),
+                visibilityVertex(64, 32, 96),
+                visibilityVertex(64, 96, 64));
+        List<Integer> indices = List.of(0, 1, 2, 3, 4, 5);
+        List<GpuDrawCommand> commands = List.of(
+                new GpuDrawCommand(tile, SceneLayer.Kind.GROUND_OBJECT,
+                        GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 1),
+                new GpuDrawCommand(tile, SceneLayer.Kind.GROUND_OBJECT,
+                        GpuDrawCommand.SubmissionPass.OPAQUE, 3, 3, -1, 0, 1));
+        GpuUploadPlan flat = new GpuUploadPlan(vertices, indices, commands,
+                List.of(), Map.of(), List.of(wall), "visibility-equivalence");
+        GpuZonedUploadPlan zoned = new GpuZonedUploadPlanBuilder().build(flat);
+
+        GpuCommandVisibility flatVisibility = GpuCommandVisibility.of(flat, camera);
+        GpuCommandVisibility zonedVisibility =
+                GpuCommandVisibility.of(zoned, camera, flat.occluders());
+
+        assertEquals(flatVisibility.occlusionApplied(), zonedVisibility.occlusionApplied());
+        for (int commandIndex = 0; commandIndex < flat.commandCount(); commandIndex++) {
+            assertEquals(flatVisibility.visible(commandIndex),
+                    zonedVisibility.visible(commandIndex));
+        }
+    }
+
     private static GpuUploadPlan plan() {
         List<GpuSceneVertex> vertices = List.of(
                 vertex(7, 4, 0), vertex(7, 4, 1), vertex(7, 4, 2),
@@ -48,6 +84,14 @@ class GpuCommandGeometryTest {
         return new GpuDrawCommand(tile, SceneLayer.Kind.TERRAIN,
                 GpuDrawCommand.SubmissionPass.OPAQUE,
                 firstIndex, 3, -1, 0, 0, -1, GpuDrawCommand.RenderMode.DEFAULT);
+    }
+
+
+    private static GpuSceneVertex visibilityVertex(float x, float y, float z) {
+        return new GpuSceneVertex(x, y, z, 0, 0, 0,
+                GpuColorEncoding.PACKED_JAGEX_HSL, 0,
+                0, 0, 0, 0, -1, 255, 0,
+                0, 0, 0, 0);
     }
 
     private static GpuSceneVertex vertex(int worldX, int worldY, int offset) {
