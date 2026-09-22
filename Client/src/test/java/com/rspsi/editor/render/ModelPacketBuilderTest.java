@@ -862,4 +862,46 @@ class ModelPacketBuilderTest {
         assertEquals(10778, packet.get().objectId(),
                 "placement identity stays the placed shell id, not the resolved transform");
     }
+
+    @Test
+    void multilocSceneFootprintUsesPlacedDefinitionSizeNotResolvedModelSize() {
+        WorldDocument document = new WorldDocument(8, 8, 1);
+        ModelGeometryView geometry = triangle(7, 100);
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                if (id == 1000) {
+                    // The placed multiloc occupies 2x3 tiles.
+                    return Optional.of(new ObjectDefinitionView(id, "base", 2, 3,
+                            List.of(), new int[0], new int[0], -1, false,
+                            1, -1, new int[]{2000}, 2000));
+                }
+                if (id == 2000) {
+                    // Its visible fallback model deliberately has a different size.
+                    return Optional.of(new ObjectDefinitionView(id, "visible", 1, 1,
+                            List.of(), new int[]{7}, new int[]{10}, -1, false));
+                }
+                return Optional.empty();
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(ObjectAppearanceView.empty());
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(geometry);
+            }
+        };
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions)
+                .build(new WorldObject(1000, 10, 1, 0, 2, 3), document)
+                .orElseThrow();
+
+        GameObjectSceneMetadata metadata = packet.gameObjectSceneMetadata();
+        assertEquals(3, metadata.sizeX());
+        assertEquals(2, metadata.sizeY());
+        assertEquals(2, metadata.minTileX());
+        assertEquals(3, metadata.minTileY());
+        assertEquals(4, metadata.maxTileX());
+        assertEquals(4, metadata.maxTileY());
+    }
 }
