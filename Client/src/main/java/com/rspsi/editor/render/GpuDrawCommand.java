@@ -21,7 +21,9 @@ public record GpuDrawCommand(
         RenderMode renderMode,
         WallDecorationPresentation wallDecorationPresentation,
         GameObjectSceneMetadata gameObjectSceneMetadata,
-        List<ClientModelBounds> clientRenderableBounds
+        List<ClientModelBounds> clientRenderableBounds,
+        SceneObjectIdentity sceneObjectIdentity,
+        int placementHeight
 ) {
     public enum SubmissionPass {
         OPAQUE,
@@ -52,6 +54,7 @@ public record GpuDrawCommand(
                 gameObjectSceneMetadata, "gameObjectSceneMetadata");
         clientRenderableBounds = List.copyOf(Objects.requireNonNull(
                 clientRenderableBounds, "clientRenderableBounds"));
+        sceneObjectIdentity = Objects.requireNonNull(sceneObjectIdentity, "sceneObjectIdentity");
         if (clientRenderableBounds.stream().anyMatch(value -> value == null || !value.present())) {
             throw new IllegalArgumentException("Client renderable bounds must be present");
         }
@@ -63,6 +66,20 @@ public record GpuDrawCommand(
                 || objectId < -1) {
             throw new IllegalArgumentException("Invalid GPU draw command");
         }
+    }
+
+    /** Compatibility constructor before stable scene identity and placement height were explicit. */
+    public GpuDrawCommand(WorldTileAddress tile, int scenePlane, int planeCullLevel,
+                          SceneLayer.Kind layer, SubmissionPass pass,
+                          int firstIndex, int indexCount, int textureId, int priority,
+                          int depthBias, int objectId, RenderMode renderMode,
+                          WallDecorationPresentation wallDecorationPresentation,
+                          GameObjectSceneMetadata gameObjectSceneMetadata,
+                          List<ClientModelBounds> clientRenderableBounds) {
+        this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
+                textureId, priority, depthBias, objectId, renderMode,
+                wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
+                SceneObjectIdentity.none(), 0);
     }
 
     /** Compatibility constructor before client model bounds were explicit. */
@@ -182,6 +199,21 @@ public record GpuDrawCommand(
                      WallDecorationPresentation nextWallDecorationPresentation,
                      GameObjectSceneMetadata nextGameObjectSceneMetadata,
                      List<ClientModelBounds> nextClientRenderableBounds) {
+        return canMerge(nextTile, nextScenePlane, nextPlaneCullLevel, nextLayer, nextPass,
+                nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
+                nextRenderMode, nextWallDecorationPresentation, nextGameObjectSceneMetadata,
+                nextClientRenderableBounds, sceneObjectIdentity, placementHeight);
+    }
+
+    boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
+                     SceneLayer.Kind nextLayer, SubmissionPass nextPass, int nextTextureId,
+                     int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex,
+                     RenderMode nextRenderMode,
+                     WallDecorationPresentation nextWallDecorationPresentation,
+                     GameObjectSceneMetadata nextGameObjectSceneMetadata,
+                     List<ClientModelBounds> nextClientRenderableBounds,
+                     SceneObjectIdentity nextSceneObjectIdentity,
+                     int nextPlacementHeight) {
         boolean sameWorldZone = (tile.worldX() >> 3) == (nextTile.worldX() >> 3)
                 && (tile.worldY() >> 3) == (nextTile.worldY() >> 3);
         boolean tileCompatible = tile.equals(nextTile)
@@ -198,12 +230,15 @@ public record GpuDrawCommand(
                 && wallDecorationPresentation.equals(nextWallDecorationPresentation)
                 && gameObjectSceneMetadata.equals(nextGameObjectSceneMetadata)
                 && clientRenderableBounds.equals(nextClientRenderableBounds)
+                && sceneObjectIdentity.equals(nextSceneObjectIdentity)
+                && placementHeight == nextPlacementHeight
                 && firstIndex + indexCount == nextFirstIndex;
     }
 
     GpuDrawCommand extend(int additionalIndices) {
         return new GpuDrawCommand(tile, scenePlane, planeCullLevel, layer, pass, firstIndex,
                 indexCount + additionalIndices, textureId, priority, depthBias, objectId, renderMode,
-                wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds);
+                wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
+                sceneObjectIdentity, placementHeight);
     }
 }
