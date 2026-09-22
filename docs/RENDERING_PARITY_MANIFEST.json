@@ -7,7 +7,12 @@
     "tspsRoot": "../RSPSi-resources/TSPS/client",
     "rspsiRoot": ".."
   },
-  "statuses": ["covered", "partial", "blocked", "deferred"],
+  "statuses": [
+    "covered",
+    "partial",
+    "blocked",
+    "deferred"
+  ],
   "entries": [
     {
       "id": "scene.tiles",
@@ -15,10 +20,22 @@
       "title": "Four-plane scene tile storage and scene coordinates",
       "status": "covered",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Scene#getTiles", "net.runelite.api.Tile"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/SceneWindow.java", "Client/src/main/java/com/rspsi/editor/render/SceneTileSnapshot.java"],
-      "tsps": ["rs/scene/Scene.ts", "rs/scene/SceneTile.ts"],
-      "evidence": ["docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md", "Client/src/test/java/com/rspsi/editor/render/RenderSceneParityTest.java"],
+      "runelite": [
+        "net.runelite.api.Scene#getTiles",
+        "net.runelite.api.Tile"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/SceneWindow.java",
+        "Client/src/main/java/com/rspsi/editor/render/SceneTileSnapshot.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "rs/scene/SceneTile.ts"
+      ],
+      "evidence": [
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md",
+        "Client/src/test/java/com/rspsi/editor/render/RenderSceneParityTest.java"
+      ],
       "nextAction": "Keep the region-window contract and add an extended-tile fixture."
     },
     {
@@ -27,10 +44,41 @@
       "title": "Complete RuneLite Scene API surface",
       "status": "partial",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Scene#getBaseX", "net.runelite.api.Scene#getBaseY", "net.runelite.api.Scene#getDrawDistance", "net.runelite.api.Scene#getExtendedTiles", "net.runelite.api.Scene#getExtendedTileSettings", "net.runelite.api.Scene#getInstanceTemplateChunks", "net.runelite.api.Scene#getMapRegions", "net.runelite.api.Scene#getMinLevel", "net.runelite.api.Scene#getOverlayIds", "net.runelite.api.Scene#getRoofRemovalMode", "net.runelite.api.Scene#getRoofs", "net.runelite.api.Scene#getSkybox", "net.runelite.api.Scene#getTileHeights", "net.runelite.api.Scene#getTiles", "net.runelite.api.Scene#getTileShapes", "net.runelite.api.Scene#getUnderlayIds", "net.runelite.api.Scene#getWorldViewId", "net.runelite.api.Scene#isInstance", "net.runelite.api.Scene#buildRoofs"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/SceneWindow.java", "Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java", "Client/src/main/java/com/rspsi/editor/render/RenderConfig.java"],
-      "tsps": ["rs/scene/Scene.ts", "render/render/camera/roof.ts", "render/SceneBuffer.ts"],
-      "evidence": ["docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md", "docs/RENDERING_PARITY_INDEX.md"],
+      "runelite": [
+        "net.runelite.api.Scene#getBaseX",
+        "net.runelite.api.Scene#getBaseY",
+        "net.runelite.api.Scene#getDrawDistance",
+        "net.runelite.api.Scene#getExtendedTiles",
+        "net.runelite.api.Scene#getExtendedTileSettings",
+        "net.runelite.api.Scene#getInstanceTemplateChunks",
+        "net.runelite.api.Scene#getMapRegions",
+        "net.runelite.api.Scene#getMinLevel",
+        "net.runelite.api.Scene#getOverlayIds",
+        "net.runelite.api.Scene#getRoofRemovalMode",
+        "net.runelite.api.Scene#getRoofs",
+        "net.runelite.api.Scene#getSkybox",
+        "net.runelite.api.Scene#getTileHeights",
+        "net.runelite.api.Scene#getTiles",
+        "net.runelite.api.Scene#getTileShapes",
+        "net.runelite.api.Scene#getUnderlayIds",
+        "net.runelite.api.Scene#getWorldViewId",
+        "net.runelite.api.Scene#isInstance",
+        "net.runelite.api.Scene#buildRoofs"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/SceneWindow.java",
+        "Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java",
+        "Client/src/main/java/com/rspsi/editor/render/RenderConfig.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "render/render/camera/roof.ts",
+        "render/SceneBuffer.ts"
+      ],
+      "evidence": [
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md",
+        "docs/RENDERING_PARITY_INDEX.md"
+      ],
       "reason": "The neutral editor intentionally models the map-rendering subset; base coordinates, draw distance, roof arrays, overrides, skybox, world-view identity, and mutation APIs are not all first-class contracts.",
       "nextAction": "Add a SceneContract record and classify each API as semantic, presentation-only, mutation, or deferred."
     },
@@ -40,10 +88,19 @@
       "title": "Extended tile border context",
       "status": "partial",
       "priority": "p2",
-      "runelite": ["net.runelite.api.Scene#getExtendedTiles"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/SceneWindow.java"],
-      "tsps": ["rs/scene/Scene.ts", "render/render/camera/roof.ts"],
-      "evidence": ["docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Scene#getExtendedTiles"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/SceneWindow.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "render/render/camera/roof.ts"
+      ],
+      "evidence": [
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "Border data exists, but camera traversal does not yet reproduce the client extended-scene walk.",
       "nextAction": "Add a border/roof camera fixture before enabling exact culling parity."
     },
@@ -53,10 +110,21 @@
       "title": "Shared corner heights and tile interpolation",
       "status": "covered",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Scene#getTileHeights"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/TerrainPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/render/TerrainRenderVertex.java"],
-      "tsps": ["rs/scene/Scene.ts", "render/render/shaders/main.vert.glsl"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/TerrainPacketBuilderTest.java", "docs/TERRAIN_PARITY.md"],
+      "runelite": [
+        "net.runelite.api.Scene#getTileHeights"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/TerrainPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/TerrainRenderVertex.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "render/render/shaders/main.vert.glsl"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/TerrainPacketBuilderTest.java",
+        "docs/TERRAIN_PARITY.md"
+      ],
       "nextAction": "Add a native height-gradient acceptance fixture."
     },
     {
@@ -65,10 +133,24 @@
       "title": "Tile shape, overlay, underlay, and rotation topology",
       "status": "covered",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Scene#getTileShapes", "net.runelite.api.SceneTileModel", "net.runelite.api.SceneTilePaint"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/TerrainPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/render/TerrainRenderFace.java", "Client/src/main/java/com/rspsi/editor/render/OsrsTerrainColorMath.java"],
-      "tsps": ["rs/scene/Scene.ts", "render/SceneBuffer.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/TerrainPacketBuilderTest.java", "docs/OSRS_MECHANICS_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Scene#getTileShapes",
+        "net.runelite.api.SceneTileModel",
+        "net.runelite.api.SceneTilePaint"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/TerrainPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/TerrainRenderFace.java",
+        "Client/src/main/java/com/rspsi/editor/render/OsrsTerrainColorMath.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "render/SceneBuffer.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/TerrainPacketBuilderTest.java",
+        "docs/OSRS_MECHANICS_PARITY_AUDIT_2026-09-18.md"
+      ],
       "nextAction": "Compare all shape IDs against an external revision-240 fixture."
     },
     {
@@ -77,10 +159,23 @@
       "title": "Bridge links, effective plane, and authored height",
       "status": "partial",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Tile#getBridge", "net.runelite.api.Tile#getRenderLevel"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/WorldBridgeLink.java", "Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java", "Client/src/main/java/com/rspsi/editor/render/SceneTileSnapshot.java"],
-      "tsps": ["rs/scene/Scene.ts", "rs/scene/SceneLocs.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/SceneVisibilityPolicyTest.java", "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Tile#getBridge",
+        "net.runelite.api.Tile#getRenderLevel"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/WorldBridgeLink.java",
+        "Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java",
+        "Client/src/main/java/com/rspsi/editor/render/SceneTileSnapshot.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "rs/scene/SceneLocs.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/SceneVisibilityPolicyTest.java",
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "Effective-plane visibility is present, but authored plane, render level, and plane-cull level are not separate packet fields.",
       "nextAction": "Add explicit authoredPlane/renderLevel/planeCullLevel fields and a bridge fixture."
     },
@@ -90,10 +185,22 @@
       "title": "OSRS terrain lighting and color math",
       "status": "covered",
       "priority": "p1",
-      "runelite": ["net.runelite.api.SceneTilePaint", "net.runelite.api.SceneTileModel"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/TerrainLighting.java", "Client/src/main/java/com/rspsi/editor/render/OsrsTerrainColorMath.java"],
-      "tsps": ["rs/scene/Scene.ts", "render/render/shaders/main.frag.glsl"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/OsrsTerrainColorMathTest.java", "docs/OSRS_MECHANICS_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.SceneTilePaint",
+        "net.runelite.api.SceneTileModel"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/TerrainLighting.java",
+        "Client/src/main/java/com/rspsi/editor/render/OsrsTerrainColorMath.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "render/render/shaders/main.frag.glsl"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/OsrsTerrainColorMathTest.java",
+        "docs/OSRS_MECHANICS_PARITY_AUDIT_2026-09-18.md"
+      ],
       "nextAction": "Lock byte-exact terrain light outputs in revision-240 fixtures."
     },
     {
@@ -102,10 +209,23 @@
       "title": "Roof removal, minimum level, and camera visibility",
       "status": "partial",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Scene#getRoofRemovalMode", "net.runelite.api.Scene#getMinLevel", "net.runelite.api.Tile#getRenderLevel"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java", "Client/src/main/java/com/rspsi/editor/render/RenderConfig.java"],
-      "tsps": ["render/render/camera/roof.ts", "rs/scene/SceneLocs.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/SceneVisibilityPolicyTest.java", "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Scene#getRoofRemovalMode",
+        "net.runelite.api.Scene#getMinLevel",
+        "net.runelite.api.Tile#getRenderLevel"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java",
+        "Client/src/main/java/com/rspsi/editor/render/RenderConfig.java"
+      ],
+      "tsps": [
+        "render/render/camera/roof.ts",
+        "rs/scene/SceneLocs.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/SceneVisibilityPolicyTest.java",
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "Roof metadata filtering works, but the client camera traversal and minimum-level policy are not fully represented.",
       "nextAction": "Implement camera-dependent roof/min-level fixtures after explicit scene-level fields exist."
     },
@@ -115,10 +235,20 @@
       "title": "Instance template chunks and rotated regions",
       "status": "partial",
       "priority": "p3",
-      "runelite": ["net.runelite.api.Scene#getInstanceTemplateChunks"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/model/WorldDocument.java", "Client/src/main/java/com/rspsi/editor/render/SceneWindow.java"],
-      "tsps": ["rs/scene/Scene.ts", "rs/scene/SceneLocs.ts"],
-      "evidence": ["docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Scene#getInstanceTemplateChunks"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/model/WorldDocument.java",
+        "Client/src/main/java/com/rspsi/editor/render/SceneWindow.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "rs/scene/SceneLocs.ts"
+      ],
+      "evidence": [
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "The neutral model has instance context, but rotated template reconstruction is not a native parity fixture.",
       "nextAction": "Add an instance-template fixture before claiming full scene parity."
     },
@@ -128,10 +258,22 @@
       "title": "Wall orientation A/B bitfields",
       "status": "covered",
       "priority": "p1",
-      "runelite": ["net.runelite.api.WallObject#getOrientationA", "net.runelite.api.WallObject#getOrientationB"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/model/WorldObject.java", "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java"],
-      "tsps": ["rs/config/loctype/LocModelType.ts", "rs/scene/SceneBuilder.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/model/OsrsLocShapeTest.java", "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.WallObject#getOrientationA",
+        "net.runelite.api.WallObject#getOrientationB"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/model/WorldObject.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java"
+      ],
+      "tsps": [
+        "rs/config/loctype/LocModelType.ts",
+        "rs/scene/SceneBuilder.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/model/OsrsLocShapeTest.java",
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "nextAction": "Retain the separate orientation contract in wall fixtures."
     },
     {
@@ -140,10 +282,23 @@
       "title": "Wall, corner, diagonal, and decoration model transforms",
       "status": "partial",
       "priority": "p1",
-      "runelite": ["net.runelite.api.WallObject", "net.runelite.api.DecorativeObject", "net.runelite.api.GameObject#getOrientation"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/model/OsrsLocShape.java"],
-      "tsps": ["rs/config/loctype/LocModelLoader.ts", "rs/scene/SceneBuilder.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java", "docs/TSPS_SCENE_REFERENCE.md"],
+      "runelite": [
+        "net.runelite.api.WallObject",
+        "net.runelite.api.DecorativeObject",
+        "net.runelite.api.GameObject#getOrientation"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/model/OsrsLocShape.java"
+      ],
+      "tsps": [
+        "rs/config/loctype/LocModelLoader.ts",
+        "rs/scene/SceneBuilder.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "docs/TSPS_SCENE_REFERENCE.md"
+      ],
       "reason": "Static transform ordering is aligned, but all wall join and decoration displacement cases are not fixture-covered.",
       "nextAction": "Add cardinal, diagonal, L-wall, corner, multi-tile, and decoration golden fixtures."
     },
@@ -153,10 +308,22 @@
       "title": "Wall neighbor normal merge and L-wall pair merge",
       "status": "partial",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Model#getVertexNormals", "net.runelite.api.WallObject"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/jagex/map/SceneGraph.java"],
-      "tsps": ["rs/scene/Scene.ts", "rs/model/ModelData.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java", "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Model#getVertexNormals",
+        "net.runelite.api.WallObject"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/jagex/map/SceneGraph.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "rs/model/ModelData.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "Pairwise packet normal merge and occluded-face hiding (tagging internal cross-section faces with renderType 2) are verified in ModelPacketBuilder; full extended multi-region neighbor traversal remains partial.",
       "nextAction": "Implement extended multi-region neighbor traversal for world-chunk boundary wall joins."
     },
@@ -166,10 +333,21 @@
       "title": "Decorative object displacement and attached-wall relationship",
       "status": "partial",
       "priority": "p1",
-      "runelite": ["net.runelite.api.DecorativeObject#getX", "net.runelite.api.DecorativeObject#getY"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/model/WorldObject.java"],
-      "tsps": ["rs/scene/SceneBuilder.ts", "rs/config/loctype/LocModelLoader.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"],
+      "runelite": [
+        "net.runelite.api.DecorativeObject#getX",
+        "net.runelite.api.DecorativeObject#getY"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/model/WorldObject.java"
+      ],
+      "tsps": [
+        "rs/scene/SceneBuilder.ts",
+        "rs/config/loctype/LocModelLoader.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"
+      ],
       "reason": "Known displacement formulas are present, but attached-wall and diagonal-half-displacement combinations need fixture evidence.",
       "nextAction": "Add decoration-on-cardinal-wall and decoration-on-diagonal-wall fixtures."
     },
@@ -179,10 +357,26 @@
       "title": "Wall-decoration offsets, dual renderables, and wall-width compensation",
       "status": "partial",
       "priority": "p0",
-      "runelite": ["net.runelite.api.DecorativeObject#getXOffset", "net.runelite.api.DecorativeObject#getYOffset", "net.runelite.api.DecorativeObject#getXOffset2", "net.runelite.api.DecorativeObject#getYOffset2", "net.runelite.api.DecorativeObject#getRenderable", "net.runelite.api.DecorativeObject#getRenderable2"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/model/WorldObject.java"],
-      "tsps": ["rs/scene/Scene.ts", "rs/config/loctype/LocModelLoader.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java", "docs/TSPS_SCENE_REFERENCE.md"],
+      "runelite": [
+        "net.runelite.api.DecorativeObject#getXOffset",
+        "net.runelite.api.DecorativeObject#getYOffset",
+        "net.runelite.api.DecorativeObject#getXOffset2",
+        "net.runelite.api.DecorativeObject#getYOffset2",
+        "net.runelite.api.DecorativeObject#getRenderable",
+        "net.runelite.api.DecorativeObject#getRenderable2"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/model/WorldObject.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "rs/config/loctype/LocModelLoader.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "docs/TSPS_SCENE_REFERENCE.md"
+      ],
       "reason": "Primary displacement is represented, but RuneLite's two offset pairs and two decorative renderables are not separate neutral fields.",
       "nextAction": "Carry both decoration renderables and wall-relative offsets before declaring wall-decoration parity."
     },
@@ -192,10 +386,22 @@
       "title": "Object footprint, orientation, and scene bounds",
       "status": "partial",
       "priority": "p1",
-      "runelite": ["net.runelite.api.GameObject#getSceneMinLocation", "net.runelite.api.GameObject#getSceneMaxLocation", "net.runelite.api.GameObject#getModelOrientation"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/RenderObject.java", "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java"],
-      "tsps": ["rs/scene/SceneLocs.ts", "rs/config/loctype/LocModelLoader.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"],
+      "runelite": [
+        "net.runelite.api.GameObject#getSceneMinLocation",
+        "net.runelite.api.GameObject#getSceneMaxLocation",
+        "net.runelite.api.GameObject#getModelOrientation"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/RenderObject.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java"
+      ],
+      "tsps": [
+        "rs/scene/SceneLocs.ts",
+        "rs/config/loctype/LocModelLoader.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"
+      ],
       "reason": "Static placement is available, but runtime scene min/max identity and model orientation are not separate packet metadata.",
       "nextAction": "Carry scene bounds and original model orientation into the neutral packet."
     },
@@ -205,10 +411,21 @@
       "title": "Ground objects and ground decorations",
       "status": "covered",
       "priority": "p1",
-      "runelite": ["net.runelite.api.GroundObject", "net.runelite.api.Tile#getGroundObject"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/SceneLayer.java", "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java"],
-      "tsps": ["rs/scene/Scene.ts", "render/SceneBuffer.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"],
+      "runelite": [
+        "net.runelite.api.GroundObject",
+        "net.runelite.api.Tile#getGroundObject"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/SceneLayer.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "render/SceneBuffer.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"
+      ],
       "nextAction": "Add a cache-backed ground-decoration fixture."
     },
     {
@@ -217,10 +434,21 @@
       "title": "Face colors, unlit colors, and flat-face sentinels",
       "status": "partial",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Model#getFaceColors1", "net.runelite.api.Model#getUnlitFaceColors"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelTriangle.java", "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java"],
-      "tsps": ["rs/model/ModelData.ts", "render/SceneBuffer.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"],
+      "runelite": [
+        "net.runelite.api.Model#getFaceColors1",
+        "net.runelite.api.Model#getUnlitFaceColors"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelTriangle.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java"
+      ],
+      "tsps": [
+        "rs/model/ModelData.ts",
+        "render/SceneBuffer.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"
+      ],
       "reason": "Colors are retained and relit, but unlit-face submission is not independently selectable as a callback mode.",
       "nextAction": "Add explicit source-color and lit-color parity assertions."
     },
@@ -230,10 +458,22 @@
       "title": "Face alpha, hidden faces, and transparent render types",
       "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Model#getTransparency", "net.runelite.api.Model#getFaceRenderTypes"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java", "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java"],
-      "tsps": ["render/SceneBuffer.ts", "render/render/shaders/main.frag.glsl"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java", "docs/OSRS_MECHANICS_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Model#getTransparency",
+        "net.runelite.api.Model#getFaceRenderTypes"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java"
+      ],
+      "tsps": [
+        "render/SceneBuffer.ts",
+        "render/render/shaders/main.frag.glsl"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "docs/OSRS_MECHANICS_PARITY_AUDIT_2026-09-18.md"
+      ],
       "nextAction": "Include texture alpha in the same classification contract."
     },
     {
@@ -242,10 +482,26 @@
       "title": "Texture transparency in face-pass classification",
       "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Model#getFaceTextures", "net.runelite.api.Model#getTextureFaceIndices", "RuneLite-melxin/runelite-client/src/main/resources/net/runelite/client/plugins/gpu/frag.glsl", "RuneLite-melxin/runelite-client/src/main/java/net/runelite/client/plugins/gpu/TextureManager.java#computeTextureAnimations"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java", "Client/src/main/java/com/rspsi/editor/render/RenderTextureResource.java", "Client/src/main/java/com/rspsi/editor/render/TextureAnimation.java", "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"],
-      "tsps": ["render/SceneBuffer.ts", "render/render/textures/TextureLoader.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java", "Client/src/test/java/com/rspsi/editor/render/TextureAnimationTest.java"],
+      "runelite": [
+        "net.runelite.api.Model#getFaceTextures",
+        "net.runelite.api.Model#getTextureFaceIndices",
+        "RuneLite-melxin/runelite-client/src/main/resources/net/runelite/client/plugins/gpu/frag.glsl",
+        "RuneLite-melxin/runelite-client/src/main/java/net/runelite/client/plugins/gpu/TextureManager.java#computeTextureAnimations"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/RenderTextureResource.java",
+        "Client/src/main/java/com/rspsi/editor/render/TextureAnimation.java",
+        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
+      ],
+      "tsps": [
+        "render/SceneBuffer.ts",
+        "render/render/textures/TextureLoader.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/TextureAnimationTest.java"
+      ],
       "reason": "Model texture cutouts remain in the opaque/depth-writing pass, blended model-face alpha remains in the sorted alpha pass, the native shader now matches RuneLite's base-LOD rule by discarding any model texture texel below fully opaque alpha, and UV animation direction/speed is covered by RuneLite-referenced fixtures.",
       "nextAction": "Keep the RuneLite GPU alpha cutoff and animation-vector fixtures as regression coverage when texture filtering or animation timing changes."
     },
@@ -255,10 +511,21 @@
       "title": "Renderable mode and depth participation",
       "status": "covered",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Renderable#RENDERMODE_SORTED_NO_DEPTH", "net.runelite.api.hooks.DrawCallbacks"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java", "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java"],
-      "tsps": ["render/SceneBuffer.ts", "render/render/frame/RenderFrame.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"],
+      "runelite": [
+        "net.runelite.api.Renderable#RENDERMODE_SORTED_NO_DEPTH",
+        "net.runelite.api.hooks.DrawCallbacks"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java"
+      ],
+      "tsps": [
+        "render/SceneBuffer.ts",
+        "render/render/frame/RenderFrame.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"
+      ],
       "nextAction": "Add a native acceptance case for sorted/no-depth submission."
     },
     {
@@ -267,10 +534,20 @@
       "title": "Smooth versus flat normal construction",
       "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Model#getVertexNormals", "net.runelite.api.Model#getFaceNormals"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/render/ModelVertex.java"],
-      "tsps": ["rs/model/ModelData.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"],
+      "runelite": [
+        "net.runelite.api.Model#getVertexNormals",
+        "net.runelite.api.Model#getFaceNormals"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelVertex.java"
+      ],
+      "tsps": [
+        "rs/model/ModelData.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"
+      ],
       "nextAction": "Keep render-type-0-only accumulation and extend it with scene-merge fixtures."
     },
     {
@@ -279,10 +556,21 @@
       "title": "Contour ground and height-map model placement",
       "status": "partial",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Model#getUnskewedModel", "net.runelite.api.hooks.DrawCallbacks#HILLSKEW"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/render/TerrainPacketBuilder.java"],
-      "tsps": ["rs/config/loctype/LocModelLoader.ts", "render/render/shaders/main.vert.glsl"],
-      "evidence": ["docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Model#getUnskewedModel",
+        "net.runelite.api.hooks.DrawCallbacks#HILLSKEW"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/TerrainPacketBuilder.java"
+      ],
+      "tsps": [
+        "rs/config/loctype/LocModelLoader.ts",
+        "render/render/shaders/main.vert.glsl"
+      ],
+      "evidence": [
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "Static contouring exists, but runtime height-map skew modes are not a first-class packet contract.",
       "nextAction": "Add contour type/parameter fields and a sloped-object fixture."
     },
@@ -292,10 +580,22 @@
       "title": "Model bounds, radius, diameter, and bottom height",
       "status": "partial",
       "priority": "p2",
-      "runelite": ["net.runelite.api.Model#getAABB", "net.runelite.api.Model#getRadius", "net.runelite.api.Model#getBottomY"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java", "Client/src/main/java/com/rspsi/editor/render/GpuPlanPicker.java"],
-      "tsps": ["rs/model/ModelData.ts", "render/render/interact/ModelHashBuffer.ts"],
-      "evidence": ["docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Model#getAABB",
+        "net.runelite.api.Model#getRadius",
+        "net.runelite.api.Model#getBottomY"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuPlanPicker.java"
+      ],
+      "tsps": [
+        "rs/model/ModelData.ts",
+        "render/render/interact/ModelHashBuffer.ts"
+      ],
+      "evidence": [
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "Conservative packet bounds exist, but orientation-aware client bounds and radius are not retained as a public contract.",
       "nextAction": "Carry model bounds metadata into picking and culling fixtures."
     },
@@ -305,10 +605,20 @@
       "title": "Texture definitions, pixels, and average-color fallback",
       "status": "partial",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Model#getFaceTextures"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/RenderTextureResourceBuilder.java", "Client/src/main/java/com/rspsi/cache"],
-      "tsps": ["render/render/textures/TextureLoader.ts", "render/render/textures/TextureArray.ts"],
-      "evidence": ["docs/RENDERING_SYSTEM_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Model#getFaceTextures"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/RenderTextureResourceBuilder.java",
+        "Client/src/main/java/com/rspsi/cache"
+      ],
+      "tsps": [
+        "render/render/textures/TextureLoader.ts",
+        "render/render/textures/TextureArray.ts"
+      ],
+      "evidence": [
+        "docs/RENDERING_SYSTEM_AUDIT_2026-09-18.md"
+      ],
       "reason": "Decoded texture diagnostics exist, but texture alpha, animation, and cache-backed pixel parity still need fixtures.",
       "nextAction": "Add real revision-240 texture and transparent-pixel fixtures."
     },
@@ -318,10 +628,20 @@
       "title": "Texture animation direction, speed, and offsets",
       "status": "partial",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Model#getFaceTextures"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/TextureAnimation.java", "Client/src/main/java/com/rspsi/editor/render/TextureTriangle.java"],
-      "tsps": ["render/render/textures/TextureAnimator.ts", "render/SceneBuffer.ts"],
-      "evidence": ["docs/OSRS_MECHANICS_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Model#getFaceTextures"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/TextureAnimation.java",
+        "Client/src/main/java/com/rspsi/editor/render/TextureTriangle.java"
+      ],
+      "tsps": [
+        "render/render/textures/TextureAnimator.ts",
+        "render/SceneBuffer.ts"
+      ],
+      "evidence": [
+        "docs/OSRS_MECHANICS_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "Definition metadata is transported, but native frame-time animation parity is incomplete.",
       "nextAction": "Add a deterministic animation-offset fixture and native frame comparison."
     },
@@ -331,10 +651,21 @@
       "title": "Valid fixed-axis occluder planes",
       "status": "covered",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Scene", "net.runelite.api.WallObject"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuScenePacketBuilder.java", "Client/src/main/java/com/rspsi/editor/render/SceneOcclusionResolver.java"],
-      "tsps": ["render/render/camera/occlusion.ts", "rs/scene/Scene.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuScenePacketBuilderTest.java"],
+      "runelite": [
+        "net.runelite.api.Scene",
+        "net.runelite.api.WallObject"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/GpuScenePacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/SceneOcclusionResolver.java"
+      ],
+      "tsps": [
+        "render/render/camera/occlusion.ts",
+        "rs/scene/Scene.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/GpuScenePacketBuilderTest.java"
+      ],
       "nextAction": "Add camera-facing occlusion fixtures after wall joins are corrected."
     },
     {
@@ -343,10 +674,21 @@
       "title": "Scene visibility and effective-plane filtering",
       "status": "partial",
       "priority": "p1",
-      "runelite": ["net.runelite.api.Scene", "net.runelite.api.Tile#getRenderLevel"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java", "Client/src/main/java/com/rspsi/editor/render/OsrsSceneResolver.java"],
-      "tsps": ["render/render/camera/roof.ts", "rs/scene/Scene.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/SceneVisibilityPolicyTest.java"],
+      "runelite": [
+        "net.runelite.api.Scene",
+        "net.runelite.api.Tile#getRenderLevel"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java",
+        "Client/src/main/java/com/rspsi/editor/render/OsrsSceneResolver.java"
+      ],
+      "tsps": [
+        "render/render/camera/roof.ts",
+        "rs/scene/Scene.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/SceneVisibilityPolicyTest.java"
+      ],
       "reason": "Static policy exists, but camera and runtime line-of-sight traversal are not exact.",
       "nextAction": "Tie visibility to explicit render level and camera roof state."
     },
@@ -356,10 +698,20 @@
       "title": "OpenGL framebuffer, depth, blend, cull, and polygon state",
       "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.hooks.DrawCallbacks"],
-      "rspsi": ["Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java", "Client/src/main/java/com/rspsi/editor/render/GpuSceneUploader.java"],
-      "tsps": ["render/render/frame/RenderFrame.ts", "render/render/gl/GlState.ts"],
-      "evidence": ["docs/GPU_DIVERGENCE_REVIEW_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.hooks.DrawCallbacks"
+      ],
+      "rspsi": [
+        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuSceneUploader.java"
+      ],
+      "tsps": [
+        "render/render/frame/RenderFrame.ts",
+        "render/render/gl/GlState.ts"
+      ],
+      "evidence": [
+        "docs/GPU_DIVERGENCE_REVIEW_2026-09-18.md"
+      ],
       "nextAction": "Keep first-GL-error and framebuffer diagnostics in native acceptance output."
     },
     {
@@ -368,10 +720,23 @@
       "title": "Opaque/alpha draw ranges, batching, and diagnostics",
       "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.hooks.DrawCallbacks#PASS_OPAQUE", "net.runelite.api.hooks.DrawCallbacks#PASS_ALPHA"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java", "Client/src/main/java/com/rspsi/editor/render/GpuDrawBatchPlanner.java", "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"],
-      "tsps": ["render/SceneBuffer.ts", "render/render/frame/RenderFrame.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java", "Client/src/test/java/com/rspsi/editor/render/GpuDrawBatchPlannerTest.java"],
+      "runelite": [
+        "net.runelite.api.hooks.DrawCallbacks#PASS_OPAQUE",
+        "net.runelite.api.hooks.DrawCallbacks#PASS_ALPHA"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuDrawBatchPlanner.java",
+        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
+      ],
+      "tsps": [
+        "render/SceneBuffer.ts",
+        "render/render/frame/RenderFrame.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuDrawBatchPlannerTest.java"
+      ],
       "reason": "Opaque/alpha separation and native draw-call grouping are now expressed by a backend-neutral planner. Synthetic fixtures verify material, depth-mode, priority-order, submission-pass, and 8x8 resident-zone boundaries without requiring a live GL context.",
       "nextAction": "Keep the synthetic batching fixtures aligned with future render-state keys so incompatible draw ranges cannot silently merge."
     },
@@ -402,10 +767,11 @@
       "evidence": [
         "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
         "Client/src/test/java/com/rspsi/editor/render/RenderOrderKeyTest.java",
-        "Client/src/test/java/com/rspsi/editor/render/BackfacePolicyTest.java"
+        "Client/src/test/java/com/rspsi/editor/render/BackfacePolicyTest.java",
+        "RuneLite-melxin/runescape-client/src/main/java/Model.java#draw0"
       ],
-      "reason": "Depth mode, scene/model category priority, face priority, face bias, and the current facing policy meet in one backend-neutral RenderOrderKey. The software-to-native coordinate transform now proves that client-front triangles map to GL counter-clockwise window winding; the previous clockwise hint was incorrect. Native culling remains intentionally disabled until a real asymmetric cache model and shaped-tile fixture validate the corrected polarity end to end.",
-      "nextAction": "Validate GL_CCW against one asymmetric real-cache model and one shaped-tile fixture in the live viewport; if both agree with the software reference, enable verified culling selectively or globally as the evidence permits."
+      "reason": "Depth mode, scene/model category priority, face priority, face bias, and the current facing policy meet in one backend-neutral RenderOrderKey. A concrete reproduction of the RuneLite-melxin Model.draw0 edge expression shows that client-front projected triangles map to clockwise OpenGL window winding after accounting for both the client's reversed edge-expression convention and the Y-down to Y-up coordinate conversion. Native culling remains intentionally disabled until a real asymmetric cache model and shaped-tile fixture validate the full geometry/projection path.",
+      "nextAction": "Validate GL_CW against one asymmetric real-cache model and one shaped-tile fixture in the live viewport; if both agree with the software reference, enable verified culling selectively or globally only where the evidence permits."
     },
     {
       "id": "native.picking",
@@ -413,10 +779,21 @@
       "title": "Scene object and tile picking",
       "status": "partial",
       "priority": "p2",
-      "runelite": ["net.runelite.api.TileObject", "net.runelite.api.Model#getAABB"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuPlanPicker.java", "Client/src/main/java/com/rspsi/editor/render/PickResult.java"],
-      "tsps": ["render/render/interact/InteractionRenderer.ts", "render/render/interact/ModelHashBuffer.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuPlanPickerTest.java"],
+      "runelite": [
+        "net.runelite.api.TileObject",
+        "net.runelite.api.Model#getAABB"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/GpuPlanPicker.java",
+        "Client/src/main/java/com/rspsi/editor/render/PickResult.java"
+      ],
+      "tsps": [
+        "render/render/interact/InteractionRenderer.ts",
+        "render/render/interact/ModelHashBuffer.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/GpuPlanPickerTest.java"
+      ],
       "reason": "Picking exists, but object identity and orientation-aware model bounds are incomplete.",
       "nextAction": "Carry stable scene-instance IDs and model bounds through the packet."
     },
@@ -426,10 +803,23 @@
       "title": "Actors, NPCs, players, and animated models",
       "status": "deferred",
       "priority": "p3",
-      "runelite": ["net.runelite.api.Actor", "net.runelite.api.NPC", "net.runelite.api.Player"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelAnimation.java", "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java"],
-      "tsps": ["render/npc/NpcGeometryData.ts", "render/player/PlayerRenderer.ts", "render/render/anim"],
-      "evidence": ["docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Actor",
+        "net.runelite.api.NPC",
+        "net.runelite.api.Player"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelAnimation.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java"
+      ],
+      "tsps": [
+        "render/npc/NpcGeometryData.ts",
+        "render/player/PlayerRenderer.ts",
+        "render/render/anim"
+      ],
+      "evidence": [
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "Static map editing is the current gate; dynamic actor submission is inventory-only.",
       "nextAction": "Audit animation height offsets, scene identity, and dynamic material submission in a later phase."
     },
@@ -439,10 +829,21 @@
       "title": "Sequence frames, animation height offset, and frame-time transforms",
       "status": "partial",
       "priority": "p2",
-      "runelite": ["net.runelite.api.Renderable#getAnimationHeightOffset", "net.runelite.api.Model"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelAnimation.java", "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java"],
-      "tsps": ["render/render/anim", "rs/model/ModelData.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"],
+      "runelite": [
+        "net.runelite.api.Renderable#getAnimationHeightOffset",
+        "net.runelite.api.Model"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelAnimation.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java"
+      ],
+      "tsps": [
+        "render/render/anim",
+        "rs/model/ModelData.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"
+      ],
       "reason": "Sequence transforms are applied for static previews, but animation height offsets and runtime scene identity are not packet fields.",
       "nextAction": "Add animated model metadata and frame-time native fixtures after static wall parity."
     },
@@ -452,10 +853,21 @@
       "title": "Dynamic material and texture-array submission",
       "status": "deferred",
       "priority": "p3",
-      "runelite": ["net.runelite.api.Model#getFaceTextures", "net.runelite.api.Renderable"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/RenderTextureResource.java", "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"],
-      "tsps": ["render/render/textures", "render/render/shaders/main.frag.glsl"],
-      "evidence": ["docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Model#getFaceTextures",
+        "net.runelite.api.Renderable"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/RenderTextureResource.java",
+        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
+      ],
+      "tsps": [
+        "render/render/textures",
+        "render/render/shaders/main.frag.glsl"
+      ],
+      "evidence": [
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "Dynamic material changes are outside the static map acceptance gate.",
       "nextAction": "Audit material lifetime and animated texture binding with dynamic entity fixtures."
     },
@@ -465,10 +877,20 @@
       "title": "Projectiles and graphics/spot animations",
       "status": "deferred",
       "priority": "p3",
-      "runelite": ["net.runelite.api.Projectile", "net.runelite.api.GraphicsObject"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelAnimation.java"],
-      "tsps": ["render/projectiles/ProjectileRenderer.ts", "render/gfx/GfxRenderer.ts"],
-      "evidence": ["docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.Projectile",
+        "net.runelite.api.GraphicsObject"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelAnimation.java"
+      ],
+      "tsps": [
+        "render/projectiles/ProjectileRenderer.ts",
+        "render/gfx/GfxRenderer.ts"
+      ],
+      "evidence": [
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "These are not part of the static map-editor renderer gate.",
       "nextAction": "Create dynamic render-mode and animation fixtures after static parity."
     },
@@ -478,10 +900,20 @@
       "title": "Ground items and item-layer rendering",
       "status": "deferred",
       "priority": "p3",
-      "runelite": ["net.runelite.api.ItemLayer", "net.runelite.api.Tile#getItemLayer"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/SceneLayer.java"],
-      "tsps": ["render/ground/GroundItemMeshBuilder.ts", "rs/scene/Scene.ts"],
-      "evidence": ["docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.ItemLayer",
+        "net.runelite.api.Tile#getItemLayer"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/SceneLayer.java"
+      ],
+      "tsps": [
+        "render/ground/GroundItemMeshBuilder.ts",
+        "rs/scene/Scene.ts"
+      ],
+      "evidence": [
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "Inventory is documented for review but item entities are outside the static map gate.",
       "nextAction": "Add item-layer identity, stacking, and picking fixtures in the dynamic phase."
     },
@@ -491,10 +923,24 @@
       "title": "RuneLite draw callback modes and optional passes",
       "status": "partial",
       "priority": "p2",
-      "runelite": ["net.runelite.api.hooks.DrawCallbacks#PASS_OPAQUE", "net.runelite.api.hooks.DrawCallbacks#PASS_ALPHA", "net.runelite.api.hooks.DrawCallbacks#PRE_PASS_ALPHA", "net.runelite.api.hooks.DrawCallbacks#HILLSKEW", "net.runelite.api.hooks.DrawCallbacks#NORMALS"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java", "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"],
-      "tsps": ["render/render/frame/RenderFrame.ts", "render/SceneBuffer.ts"],
-      "evidence": ["docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
+      "runelite": [
+        "net.runelite.api.hooks.DrawCallbacks#PASS_OPAQUE",
+        "net.runelite.api.hooks.DrawCallbacks#PASS_ALPHA",
+        "net.runelite.api.hooks.DrawCallbacks#PRE_PASS_ALPHA",
+        "net.runelite.api.hooks.DrawCallbacks#HILLSKEW",
+        "net.runelite.api.hooks.DrawCallbacks#NORMALS"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java",
+        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
+      ],
+      "tsps": [
+        "render/render/frame/RenderFrame.ts",
+        "render/SceneBuffer.ts"
+      ],
+      "evidence": [
+        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+      ],
       "reason": "Opaque/alpha and normal data are present; pre-alpha, HILLSKEW, and callback negotiation remain explicit gaps.",
       "nextAction": "Add only source-backed optional passes after fixture evidence requires them."
     }
