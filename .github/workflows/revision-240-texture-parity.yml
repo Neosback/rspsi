@@ -2,15 +2,10 @@ name: Revision 240 Texture Acceptance
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feature/map-studio-v1-foundation
-    paths:
-      - '.github/workflows/revision-240-texture-parity.yml'
-      - 'RuneLite-melxin/cache/src/test/java/net/runelite/cache/Revision240TextureParityExporterTest.java'
-      - 'Client/src/main/java/com/rspsi/cache/verify/**'
-      - 'Client/src/main/java/com/rspsi/cache/store/**'
-      - 'docs/TEXTURE_PARITY_FIXTURE.md'
+
+concurrency:
+  group: revision-240-texture-parity
+  cancel-in-progress: true
 
 jobs:
   texture-parity:
