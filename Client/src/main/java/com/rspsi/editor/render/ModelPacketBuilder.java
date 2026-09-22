@@ -142,6 +142,7 @@ public final class ModelPacketBuilder {
             WallDecorationPresentation presentation) {
         PacketParts parts = new PacketParts();
         for (WallRules.LocModelVariant variant : variants) {
+            int renderableBoundsStart = parts.clientBoundsVertices.size();
             for (int modelId : modelIdsFor(resolved.objectDefinition(), variant.sourceType())) {
                 Optional<ModelGeometryView> geometry = definitions.modelGeometry(modelId);
                 if (geometry.isEmpty()) continue;
@@ -162,14 +163,24 @@ public final class ModelPacketBuilder {
                     parts.wallVariantRanges.add(new VertexRange(variantStart, parts.vertices.size()));
                 }
             }
+            if (parts.clientBoundsVertices.size() > renderableBoundsStart) {
+                parts.clientRenderableRanges.add(new VertexRange(
+                        renderableBoundsStart, parts.clientBoundsVertices.size()));
+            }
         }
         if (parts.vertices.isEmpty() || parts.triangles.isEmpty()) return Optional.empty();
         int[] bounds = bounds(parts.vertices);
+        int modelDrawOrientation = object.type() == 11 ? 256 : 0;
+        List<ClientModelBounds> clientRenderableBounds = parts.clientRenderableRanges.stream()
+                .map(range -> ClientModelBounds.calculate(
+                        parts.clientBoundsVertices.subList(range.start(), range.end()),
+                        modelDrawOrientation, false))
+                .toList();
         GameObjectSceneMetadata sceneMetadata = object.category()
                 == com.rspsi.editor.model.ObjectCategory.GROUND
                 ? GameObjectSceneMetadata.of(object.x(), object.y(),
                         resolved.footprintWidth(), resolved.footprintLength(),
-                        object.rotation(), object.type() == 11 ? 256 : 0)
+                        object.rotation(), modelDrawOrientation)
                 : GameObjectSceneMetadata.none();
         ModelRenderPacket packet = new ModelRenderPacket(
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
@@ -178,7 +189,8 @@ public final class ModelPacketBuilder {
                 bounds[3], bounds[4], bounds[5], resolved.animation().isPresent(), false,
                 objectCenterHeight(document, object, resolved.footprintWidth(), resolved.footprintLength()),
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
-                GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata);
+                GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata,
+                clientRenderableBounds);
         return Optional.of(resolved.appearance().mergeNormals()
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }
@@ -461,6 +473,10 @@ public final class ModelPacketBuilder {
                     normal.x, normal.y, normal.z, normal.magnitude,
                     normalized(value.x, transformed, true),
                     normalized(value.z, transformed, false)));
+            parts.clientBoundsVertices.add(new ModelVertex(
+                    value.x - centerX - variant.decorX(), value.y,
+                    value.z - centerZ - variant.decorZ(),
+                    0, 0, 0, 0, 0.0f, 0.0f));
         }
         int[] textureIndices = geometry.textureTriangleIndices();
         for (int index = 0; index + 2 < textureIndices.length; index += 3) {
@@ -658,7 +674,8 @@ public final class ModelPacketBuilder {
                 packet.minX(), packet.minY(), packet.minZ(), packet.maxX(), packet.maxY(),
                 packet.maxZ(), packet.supportsAnimation(), packet.supportsParticles(),
                 packet.placementHeight(), packet.roofRelated(), packet.renderMode(),
-                packet.wallDecorationPresentation());
+                packet.wallDecorationPresentation(), packet.gameObjectSceneMetadata(),
+                packet.clientRenderableBounds());
     }
 
     /**
@@ -1486,6 +1503,8 @@ public final class ModelPacketBuilder {
 
     private static final class PacketParts {
         private final List<ModelVertex> vertices = new ArrayList<>();
+        private final List<ModelVertex> clientBoundsVertices = new ArrayList<>();
+        private final List<VertexRange> clientRenderableRanges = new ArrayList<>();
         private final List<ModelTriangle> triangles = new ArrayList<>();
         private final List<TextureTriangle> textureTriangles = new ArrayList<>();
         private final List<VertexRange> wallVariantRanges = new ArrayList<>();

@@ -19,6 +19,11 @@ class GpuPlanPickerTest {
         GpuSceneVertex farB = vertex(20, -20, 200, 0x4A38);
         GpuSceneVertex farC = vertex(0, 20, 200, 0x4A38);
         WorldTileAddress tile = WorldTileAddress.of(3200, 3200, 0);
+        ClientModelBounds clientBounds = ClientModelBounds.calculate(
+                List.of(new ModelVertex(-10, -20, -30, 0, 0, 0, 0, 0, 0),
+                        new ModelVertex(50, 40, 70, 0, 0, 0, 0, 0, 0),
+                        new ModelVertex(20, 10, -5, 0, 0, 0, 0, 0, 0)),
+                0, false);
         GpuUploadPlan plan = new GpuUploadPlan(
                 List.of(nearA, nearB, nearC, farA, farB, farC),
                 List.of(0, 1, 2, 3, 4, 5),
@@ -27,7 +32,8 @@ class GpuPlanPickerTest {
                                 GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 0, 11,
                                 GpuDrawCommand.RenderMode.DEFAULT,
                                 WallDecorationPresentation.none(),
-                                GameObjectSceneMetadata.of(3200, 3200, 3, 2, 1, 0)),
+                                GameObjectSceneMetadata.of(3200, 3200, 3, 2, 1, 0),
+                                List.of(clientBounds)),
                         new GpuDrawCommand(tile, SceneLayer.Kind.GROUND_OBJECT,
                                 GpuDrawCommand.SubmissionPass.OPAQUE, 3, 3, -1, 0, 22)),
                 List.of(), Map.of(), "picker-test");
@@ -48,6 +54,10 @@ class GpuPlanPickerTest {
         assertEquals(3201, result.objectSceneMaxTile().y());
         assertEquals(1, result.gameObjectSceneMetadata().rotation());
         assertEquals(512, result.gameObjectSceneMetadata().orientation());
+        assertTrue(result.hasClientModelBounds());
+        assertEquals(List.of(clientBounds), result.clientRenderableBounds());
+        assertEquals(90, result.clientRenderableBounds().get(0).radius());
+        assertEquals(186, result.clientRenderableBounds().get(0).diameter());
     }
 
     @Test

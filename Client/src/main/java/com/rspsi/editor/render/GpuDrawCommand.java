@@ -2,6 +2,7 @@ package com.rspsi.editor.render;
 
 import com.rspsi.editor.model.WorldTileAddress;
 
+import java.util.List;
 import java.util.Objects;
 
 /** Ordered material submission range in a backend-neutral upload plan. */
@@ -19,7 +20,8 @@ public record GpuDrawCommand(
         int objectId,
         RenderMode renderMode,
         WallDecorationPresentation wallDecorationPresentation,
-        GameObjectSceneMetadata gameObjectSceneMetadata
+        GameObjectSceneMetadata gameObjectSceneMetadata,
+        List<ClientModelBounds> clientRenderableBounds
 ) {
     public enum SubmissionPass {
         OPAQUE,
@@ -48,6 +50,11 @@ public record GpuDrawCommand(
                 wallDecorationPresentation, "wallDecorationPresentation");
         gameObjectSceneMetadata = Objects.requireNonNull(
                 gameObjectSceneMetadata, "gameObjectSceneMetadata");
+        clientRenderableBounds = List.copyOf(Objects.requireNonNull(
+                clientRenderableBounds, "clientRenderableBounds"));
+        if (clientRenderableBounds.stream().anyMatch(value -> value == null || !value.present())) {
+            throw new IllegalArgumentException("Client renderable bounds must be present");
+        }
         if (scenePlane < 0 || scenePlane > 3 || planeCullLevel < 0 || planeCullLevel > 3) {
             throw new IllegalArgumentException("Invalid scene-plane command metadata");
         }
@@ -56,6 +63,18 @@ public record GpuDrawCommand(
                 || objectId < -1) {
             throw new IllegalArgumentException("Invalid GPU draw command");
         }
+    }
+
+    /** Compatibility constructor before client model bounds were explicit. */
+    public GpuDrawCommand(WorldTileAddress tile, int scenePlane, int planeCullLevel,
+                          SceneLayer.Kind layer, SubmissionPass pass,
+                          int firstIndex, int indexCount, int textureId, int priority,
+                          int depthBias, int objectId, RenderMode renderMode,
+                          WallDecorationPresentation wallDecorationPresentation,
+                          GameObjectSceneMetadata gameObjectSceneMetadata) {
+        this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
+                textureId, priority, depthBias, objectId, renderMode,
+                wallDecorationPresentation, gameObjectSceneMetadata, List.of());
     }
 
     /** Compatibility constructor before game-object scene metadata was explicit. */
@@ -108,7 +127,8 @@ public record GpuDrawCommand(
                      int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex) {
         return canMerge(nextTile, nextTile.plane(), nextTile.plane(), nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
-                RenderMode.DEFAULT, WallDecorationPresentation.none(), gameObjectSceneMetadata);
+                RenderMode.DEFAULT, WallDecorationPresentation.none(), gameObjectSceneMetadata,
+                clientRenderableBounds);
     }
 
     boolean canMerge(WorldTileAddress nextTile, SceneLayer.Kind nextLayer,
@@ -117,7 +137,8 @@ public record GpuDrawCommand(
                      RenderMode nextRenderMode) {
         return canMerge(nextTile, nextTile.plane(), nextTile.plane(), nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
-                nextRenderMode, WallDecorationPresentation.none(), gameObjectSceneMetadata);
+                nextRenderMode, WallDecorationPresentation.none(), gameObjectSceneMetadata,
+                clientRenderableBounds);
     }
 
     boolean canMerge(WorldTileAddress nextTile, SceneLayer.Kind nextLayer,
@@ -127,7 +148,8 @@ public record GpuDrawCommand(
                      WallDecorationPresentation nextWallDecorationPresentation) {
         return canMerge(nextTile, nextTile.plane(), nextTile.plane(), nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
-                nextRenderMode, nextWallDecorationPresentation, gameObjectSceneMetadata);
+                nextRenderMode, nextWallDecorationPresentation, gameObjectSceneMetadata,
+                clientRenderableBounds);
     }
 
     boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
@@ -137,7 +159,8 @@ public record GpuDrawCommand(
                      WallDecorationPresentation nextWallDecorationPresentation) {
         return canMerge(nextTile, nextScenePlane, nextPlaneCullLevel, nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
-                nextRenderMode, nextWallDecorationPresentation, gameObjectSceneMetadata);
+                nextRenderMode, nextWallDecorationPresentation, gameObjectSceneMetadata,
+                clientRenderableBounds);
     }
 
     boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
@@ -146,6 +169,19 @@ public record GpuDrawCommand(
                      RenderMode nextRenderMode,
                      WallDecorationPresentation nextWallDecorationPresentation,
                      GameObjectSceneMetadata nextGameObjectSceneMetadata) {
+        return canMerge(nextTile, nextScenePlane, nextPlaneCullLevel, nextLayer, nextPass,
+                nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
+                nextRenderMode, nextWallDecorationPresentation, nextGameObjectSceneMetadata,
+                clientRenderableBounds);
+    }
+
+    boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
+                     SceneLayer.Kind nextLayer, SubmissionPass nextPass, int nextTextureId,
+                     int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex,
+                     RenderMode nextRenderMode,
+                     WallDecorationPresentation nextWallDecorationPresentation,
+                     GameObjectSceneMetadata nextGameObjectSceneMetadata,
+                     List<ClientModelBounds> nextClientRenderableBounds) {
         boolean sameWorldZone = (tile.worldX() >> 3) == (nextTile.worldX() >> 3)
                 && (tile.worldY() >> 3) == (nextTile.worldY() >> 3);
         boolean tileCompatible = tile.equals(nextTile)
@@ -161,12 +197,13 @@ public record GpuDrawCommand(
                 && renderMode == nextRenderMode
                 && wallDecorationPresentation.equals(nextWallDecorationPresentation)
                 && gameObjectSceneMetadata.equals(nextGameObjectSceneMetadata)
+                && clientRenderableBounds.equals(nextClientRenderableBounds)
                 && firstIndex + indexCount == nextFirstIndex;
     }
 
     GpuDrawCommand extend(int additionalIndices) {
         return new GpuDrawCommand(tile, scenePlane, planeCullLevel, layer, pass, firstIndex,
                 indexCount + additionalIndices, textureId, priority, depthBias, objectId, renderMode,
-                wallDecorationPresentation, gameObjectSceneMetadata);
+                wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds);
     }
 }
