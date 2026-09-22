@@ -1,5 +1,7 @@
 package com.rspsi.editor.render;
 
+import com.rspsi.editor.model.ObjectCategory;
+import com.rspsi.editor.model.TileCoordinate;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -45,6 +47,20 @@ class ClientModelBoundsTest {
         assertEquals(57, aabb.xMidOffset());
         assertEquals(30, aabb.yMidOffset());
         assertEquals(32, aabb.zMidOffset());
+    }
+
+    @Test
+    void packetAnchorRebaseDoesNotTranslateModelLocalBounds() {
+        ClientModelBounds bounds = ClientModelBounds.calculate(ASYMMETRIC, 0, false);
+        ModelRenderPacket packet = new ModelRenderPacket(
+                new TileCoordinate(0, 1, 1), 42, ObjectCategory.GROUND,
+                List.of(vertex(0, 0, 0)), List.of(), List.of(), -1,
+                0, 0, 0, 0, 0, 0, false, false)
+                .withClientModelBounds(bounds);
+
+        ModelRenderPacket world = packet.withAnchor(new TileCoordinate(0, 3200, 6400));
+
+        assertEquals(List.of(bounds), world.clientRenderableBounds());
     }
 
     @Test
