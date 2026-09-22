@@ -64,8 +64,7 @@ jobs:
           chmod +x gradlew
           RSPSI_REFERENCE_CACHE="${RSPSI_REFERENCE_CACHE}" \
           RSPSI_TEXTURE_FIXTURE_OUT="${FIXTURE_DIR}/textures.json" \
-            ./gradlew --no-daemon :cache:test \
-              --tests net.runelite.cache.Revision240TextureParityExporterTest
+            ./gradlew --no-daemon :cache:exportRevision240TextureParity
 
           test -s "${FIXTURE_DIR}/textures.json"
           cat "${FIXTURE_DIR}/textures.json"
