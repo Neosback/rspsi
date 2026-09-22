@@ -584,6 +584,8 @@ class ModelPacketBuilderTest {
         assertEquals(1, packets.get(0).triangles().size());
         assertEquals(WallDecorationPresentation.Part.PRIMARY,
                 packets.get(0).wallDecorationPresentation().part());
+        assertEquals(1, packets.get(0).clientRenderableBounds().size());
+        assertEquals(1, packets.get(1).clientRenderableBounds().size());
         assertEquals(-8, packets.get(0).wallDecorationPresentation().offsetX());
         assertEquals(-8, packets.get(0).wallDecorationPresentation().offsetZ());
         assertEquals(1, packets.get(0).wallDecorationPresentation().orientation());
@@ -602,6 +604,8 @@ class ModelPacketBuilderTest {
         assertEquals(2, compatibility.triangles().size());
         assertEquals(WallDecorationPresentation.Part.NONE,
                 compatibility.wallDecorationPresentation().part());
+        assertEquals(2, compatibility.clientRenderableBounds().size(),
+                "compatibility flattening must still retain both client renderable bounds");
     }
 
     @Test
