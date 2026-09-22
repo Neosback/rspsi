@@ -665,12 +665,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     private static long drawStateKey(GpuDrawCommand command, boolean alpha) {
-        RenderOrderKey order = RenderOrderKey.from(command);
-        long key = command.textureId() + 1L;
-        key = key * 17L + order.modelPriority();
-        key = key * 257L + order.faceBias();
-        key = key * 8L + order.depthMode().ordinal();
-        return key * 2L + (alpha ? 1L : 0L);
+        return RenderOrderKey.nativeState(command) * 2L + (alpha ? 1L : 0L);
     }
 
     private List<Integer> opaqueOrder(GpuUploadPlan plan, List<GpuDrawCommand> commands,
