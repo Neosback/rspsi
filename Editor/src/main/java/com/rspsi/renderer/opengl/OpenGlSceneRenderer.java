@@ -377,12 +377,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         //
         // A previous experiment enabling global GL_CW back-face culling made
         // walls see-through from some angles, hid roofs, darkened the scene,
-        // and broke bridges. That proves a single global cull switch is not yet
-        // safe for every geometry family; it does not by itself disprove the
-        // projected winding sign. BackfacePolicy's concrete edge-function
-        // mapping identifies client-front projected triangles as GL_CW, but
-        // keep native culling disabled until an asymmetric real-cache model
-        // and shaped-tile fixture validate the full geometry/projection path.
+        // and broke bridges. RuneLite-melxin Model.draw0 now explains why:
+        // edge <= 0 is the client's CULLED flag, so visible faces have edge > 0.
+        // With the software Y-down to native Y-up conversion that maps to
+        // GL_CCW, not the GL_CW polarity used by that failed experiment.
+        // Keep native culling disabled until an asymmetric real-cache model
+        // and shaped-tile fixture validate GL_CCW end to end.
         // Culling also cannot fix coincident wall-decoration faces because
         // coplanar layers may share the same winding.
         glDisable(GL_CULL_FACE);
