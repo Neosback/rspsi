@@ -47,6 +47,10 @@ public final class IncrementalGpuZonedUploadPlanBuilder {
         return GpuZonedUploadPlanBuilder.assemble(plan, next);
     }
 
+    public void invalidateAll() {
+        cache.clear();
+    }
+
     public IncrementalGpuZonedUploadPlanBuilder fork() {
         IncrementalGpuZonedUploadPlanBuilder copy =
                 new IncrementalGpuZonedUploadPlanBuilder();

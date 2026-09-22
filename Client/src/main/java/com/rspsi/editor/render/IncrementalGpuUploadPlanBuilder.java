@@ -25,9 +25,12 @@ public final class IncrementalGpuUploadPlanBuilder {
 
     private final GpuUploadPlanBuilder fullBuilder = new GpuUploadPlanBuilder();
     private final Map<WorldTileAddress, TileFragment> cache = new LinkedHashMap<>();
+    private IncrementalGpuZonedUploadPlanBuilder zonedBuilder =
+            new IncrementalGpuZonedUploadPlanBuilder();
 
     public BuildResult buildInitial(GpuScenePacket packet) {
         cache.clear();
+        zonedBuilder.invalidateAll();
         return build(packet, Set.of());
     }
 
@@ -65,7 +68,7 @@ public final class IncrementalGpuUploadPlanBuilder {
                 packet.textures(), mergedOccluders,
                 GpuUploadPlanBuilder.fingerprint(packet.fingerprint(), vertices, indices, commands,
                         textureTriangles, packet.textures(), mergedOccluders));
-        GpuZonedUploadPlan zonedPlan = new GpuZonedUploadPlanBuilder().build(plan);
+        GpuZonedUploadPlan zonedPlan = zonedBuilder.build(plan, dirtyZones);
         return new BuildResult(plan, zonedPlan, rebuilt, reused);
     }
 
@@ -73,11 +76,13 @@ public final class IncrementalGpuUploadPlanBuilder {
     public IncrementalGpuUploadPlanBuilder fork() {
         IncrementalGpuUploadPlanBuilder copy = new IncrementalGpuUploadPlanBuilder();
         copy.cache.putAll(cache);
+        copy.zonedBuilder = zonedBuilder.fork();
         return copy;
     }
 
     public void invalidateAll() {
         cache.clear();
+        zonedBuilder.invalidateAll();
     }
 
     public int cachedTileCount() {
