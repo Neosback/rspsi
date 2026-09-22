@@ -110,7 +110,7 @@ class GpuUploadPlanBuilderTest {
 
         assertEquals(1, plan.commands().size());
         assertEquals(metadata, plan.commands().get(0).gameObjectSceneMetadata());
-        assertEquals(clientBounds, plan.commands().get(0).clientModelBounds());
+        assertEquals(List.of(clientBounds), plan.commands().get(0).clientRenderableBounds());
     }
 
     @Test
@@ -147,11 +147,11 @@ class GpuUploadPlanBuilderTest {
         GpuDrawCommand first = new GpuDrawCommand(tile, 0, 0, SceneLayer.Kind.GROUND_OBJECT,
                 GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 0, 42,
                 GpuDrawCommand.RenderMode.DEFAULT, WallDecorationPresentation.none(),
-                sceneMetadata, firstBounds);
+                sceneMetadata, List.of(firstBounds));
         GpuDrawCommand second = new GpuDrawCommand(tile, 0, 0, SceneLayer.Kind.GROUND_OBJECT,
                 GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 0, 42,
                 GpuDrawCommand.RenderMode.DEFAULT, WallDecorationPresentation.none(),
-                sceneMetadata, secondBounds);
+                sceneMetadata, List.of(secondBounds));
 
         String firstFingerprint = GpuUploadPlanBuilder.fingerprint(
                 "same", List.of(), List.of(), List.of(first), List.of(), Map.of(), List.of());
