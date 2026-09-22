@@ -269,6 +269,8 @@ public final class OsrsRevisionVerifier {
                     document, messages);
             VerificationCheck collisionParity = collisionParityCheck(fixture, fixtureProblems,
                     collision, messages);
+            VerificationCheck textureParity = textureParityCheck(fixture, fixtureProblems,
+                    definitions, revision, messages);
             VerificationCheck minimapParity = minimapParityCheck(fixture, fixtureProblems,
                     document, definitions, minimaps, shapedMinimaps, messages, errors);
             if (renderParity.status() == VerificationCheck.Status.FAIL) {
@@ -288,6 +290,9 @@ public final class OsrsRevisionVerifier {
             }
             if (collisionParity.status() == VerificationCheck.Status.FAIL) {
                 errors.add("collision parity failed: " + collisionParity.detail());
+            }
+            if (textureParity.status() == VerificationCheck.Status.FAIL) {
+                errors.add("texture parity failed: " + textureParity.detail());
             }
             // TSPS collision flags are useful diagnostics, but are not the
             // authoritative gate: its client scene uses clipType and omits
@@ -388,6 +393,7 @@ public final class OsrsRevisionVerifier {
                             locationParity,
                             geometryParity,
                             collisionParity,
+                            textureParity,
                             minimapParity))));
         } catch (RuntimeException exception) {
             errors.add(exception.getClass().getSimpleName() + ": " + exception.getMessage());
@@ -541,6 +547,37 @@ public final class OsrsRevisionVerifier {
                 comparison.matches()
                         ? "independent collision flags match"
                         : comparison.differenceCount() + " differing canonical route collision tiles"
+                        + (comparison.samples().isEmpty() ? "" : "; " + comparison.samples()));
+    }
+
+    private static VerificationCheck textureParityCheck(OsrsParityFixture fixture,
+                                                        List<String> fixtureProblems,
+                                                        DefinitionProvider definitions,
+                                                        int revision,
+                                                        List<String> messages) {
+        if (fixture == null && fixtureProblems.isEmpty()) {
+            return check("texture.parity", VerificationCheck.Status.NOT_RUN,
+                    "independent texture fixture was not supplied");
+        }
+        if (!fixtureProblems.isEmpty()) {
+            return check("texture.parity", VerificationCheck.Status.FAIL,
+                    "fixture is incompatible or could not be loaded");
+        }
+        if (fixture.textures() == null) {
+            return check("texture.parity", VerificationCheck.Status.WARN,
+                    "fixture contains no textures.json export");
+        }
+        OsrsTextureSemanticFixture.Comparison comparison =
+                fixture.textures().compare(definitions, revision);
+        messages.add("texture semantic parity: " + comparison.differenceCount()
+                + " differences across " + fixture.textures().textures().size()
+                + " texture fixtures"
+                + (comparison.samples().isEmpty() ? "" : "; samples=" + comparison.samples()));
+        return check("texture.parity",
+                comparison.matches() ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
+                comparison.matches()
+                        ? "independent texture definitions and decoded pixels match"
+                        : comparison.differenceCount() + " differing texture fields/pixel facts"
                         + (comparison.samples().isEmpty() ? "" : "; " + comparison.samples()));
     }
 
