@@ -46,7 +46,7 @@ adding RuneLite-referenced texture-animation fixtures:
 | `objects.wallNormalMerge` | Wall neighbor normal merge / L-wall pair merge | Implement extended multi-region neighbor traversal for world-chunk boundary wall joins |
 | `objects.wallDecorationOffsets` | Wall-decoration offsets, dual renderables, wall-width compensation | Carry both decoration renderables and wall-relative offsets before declaring parity |
 | `textures.definitions` | Texture definitions, pixels, average-color fallback | Add real revision-240 texture and transparent-pixel fixtures |
-| `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Introduce a backend-neutral render-order key (model priority, face priority, depth mode, bias, facing); keep culling off until winding fixtures pass |
+| `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Shared `RenderOrderKey` is now wired; add asymmetric-model/shaped-tile winding fixtures before changing the two-sided native baseline |
 
 P1-partial items worth picking up next, once the P0s are down: `scene.apiSurface`,
 `terrain.bridge`, `scene.roofs`, `objects.wallTransforms`, `objects.decorations`,
