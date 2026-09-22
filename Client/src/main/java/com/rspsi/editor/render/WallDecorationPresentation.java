@@ -18,8 +18,7 @@ public record WallDecorationPresentation(
         Part part,
         int offsetX,
         int offsetZ,
-        int orientation,
-        boolean cameraOrdered
+        int orientation
 ) {
     public enum Part {
         NONE,
@@ -28,18 +27,15 @@ public record WallDecorationPresentation(
     }
 
     private static final WallDecorationPresentation NONE =
-            new WallDecorationPresentation(Part.NONE, 0, 0, 0, false);
+            new WallDecorationPresentation(Part.NONE, 0, 0, 0);
 
     public WallDecorationPresentation {
         part = Objects.requireNonNull(part, "part");
         if (orientation < 0 || orientation > 3) {
             throw new IllegalArgumentException("Wall-decoration orientation must be in [0, 3]");
         }
-        if (part == Part.NONE && (offsetX != 0 || offsetZ != 0 || cameraOrdered)) {
+        if (part == Part.NONE && (offsetX != 0 || offsetZ != 0)) {
             throw new IllegalArgumentException("Non-decoration presentation cannot carry wall metadata");
-        }
-        if (cameraOrdered && part != Part.PRIMARY && part != Part.SECONDARY) {
-            throw new IllegalArgumentException("Only a primary/secondary pair can be camera ordered");
         }
     }
 
@@ -48,11 +44,15 @@ public record WallDecorationPresentation(
     }
 
     public static WallDecorationPresentation primary(int offsetX, int offsetZ, int orientation) {
-        return new WallDecorationPresentation(Part.PRIMARY, offsetX, offsetZ, orientation & 3, true);
+        return new WallDecorationPresentation(Part.PRIMARY, offsetX, offsetZ, orientation & 3);
     }
 
     public static WallDecorationPresentation secondary(int orientation) {
-        return new WallDecorationPresentation(Part.SECONDARY, 0, 0, orientation & 3, true);
+        return new WallDecorationPresentation(Part.SECONDARY, 0, 0, orientation & 3);
+    }
+
+    public boolean cameraOrdered() {
+        return part == Part.PRIMARY || part == Part.SECONDARY;
     }
 
     /**
@@ -62,7 +62,7 @@ public record WallDecorationPresentation(
     public int cameraOrder(WorldTileAddress tile, CameraState camera) {
         Objects.requireNonNull(tile, "tile");
         Objects.requireNonNull(camera, "camera");
-        if (!cameraOrdered) return 0;
+        if (!cameraOrdered()) return 0;
 
         float centerX = tile.worldX() * 128.0f + 64.0f;
         float centerZ = tile.worldY() * 128.0f + 64.0f;
