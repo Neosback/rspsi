@@ -34,16 +34,17 @@ Where it's a "target," it's a gap with a concrete next action, not a vague aspir
 
 ### 1.2 What's not correct yet - the tracked backlog
 
-`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 21 "partial," 4 "deferred." Five are
+`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 20 "partial," 4 "deferred." Four are
 P0-and-partial, each with an already-written `nextAction` - this is the actual near-term
 rendering roadmap, not something to re-derive. `native.drawRanges` moved to covered after the
-backend-neutral draw-batch planner and synthetic multi-material/zone fixtures landed:
+backend-neutral draw-batch planner and synthetic multi-material/zone fixtures landed;
+`models.textureAlpha` moved to covered after matching RuneLite's model-texture alpha cutoff and
+adding RuneLite-referenced texture-animation fixtures:
 
 | id | title | next action |
 |---|---|---|
 | `objects.wallNormalMerge` | Wall neighbor normal merge / L-wall pair merge | Implement extended multi-region neighbor traversal for world-chunk boundary wall joins |
 | `objects.wallDecorationOffsets` | Wall-decoration offsets, dual renderables, wall-width compensation | Carry both decoration renderables and wall-relative offsets before declaring parity |
-| `models.textureAlpha` | Texture transparency in face-pass classification | Add golden test cases for animated texture UV offset handling |
 | `textures.definitions` | Texture definitions, pixels, average-color fallback | Add real revision-240 texture and transparent-pixel fixtures |
 | `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Introduce a backend-neutral render-order key (model priority, face priority, depth mode, bias, facing); keep culling off until winding fixtures pass |
 
