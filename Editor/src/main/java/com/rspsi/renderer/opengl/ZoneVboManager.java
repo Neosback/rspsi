@@ -5,6 +5,9 @@ import com.rspsi.editor.render.GpuColorEncoding;
 import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
+import com.rspsi.editor.render.GpuZoneUpload;
+import com.rspsi.editor.render.GpuZonedDrawCommand;
+import com.rspsi.editor.render.GpuZonedUploadPlan;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
 import com.rspsi.editor.render.WorldZoneCoordinate;
 import org.lwjgl.BufferUtils;
@@ -114,7 +117,7 @@ public final class ZoneVboManager implements AutoCloseable {
             touchedGlobal.clear();
 
             // Compute zone fingerprint
-            long fingerprint = computeFingerprint(localVertices, localIndices);
+            long fingerprint = GpuZoneUpload.fingerprint(localVertices, localIndices);
             ZoneAllocation existing = allocations.get(key);
 
             if (existing != null && existing.fingerprint() == fingerprint) {
@@ -152,6 +155,69 @@ public final class ZoneVboManager implements AutoCloseable {
                 return true;
             }
             return false;
+        });
+    }
+
+    /**
+     * Uploads a pre-partitioned native plan without scanning or copying the
+     * global flat vertex/index arrays on the render thread.
+     */
+    public void upload(GpuZonedUploadPlan plan) {
+        dirtyZonesUploadedCount = 0;
+        if (plan == null || plan.zones().isEmpty() || plan.commandRefs().isEmpty()) {
+            close();
+            totalZonesCount = 0;
+            return;
+        }
+
+        List<GpuZonedDrawCommand> refs = plan.commandRefs();
+        if (commandLocalFirstIndices.length < refs.size()) {
+            commandLocalFirstIndices = new int[refs.size()];
+            commandZoneKeys = new long[refs.size()];
+        }
+        for (int index = 0; index < refs.size(); index++) {
+            GpuZonedDrawCommand ref = refs.get(index);
+            commandLocalFirstIndices[index] = ref.localFirstIndex();
+            commandZoneKeys[index] = ref.zone().key();
+        }
+
+        totalZonesCount = plan.zones().size();
+        Set<Long> activeZones = new HashSet<>();
+        for (GpuZoneUpload zone : plan.zones().values()) {
+            long key = zone.zone().key();
+            activeZones.add(key);
+            ZoneAllocation existing = allocations.get(key);
+            if (existing != null && existing.fingerprint() == zone.fingerprint()) {
+                continue;
+            }
+
+            int vao;
+            int vbo;
+            int ibo;
+            if (existing == null) {
+                vao = glGenVertexArrays();
+                vbo = glGenBuffers();
+                ibo = glGenBuffers();
+                setupVao(vao, vbo, ibo);
+            } else {
+                vao = existing.vao();
+                vbo = existing.vbo();
+                ibo = existing.ibo();
+            }
+            uploadZoneBuffers(vao, vbo, ibo, zone.vertices(), zone.indices());
+            allocations.put(key, new ZoneAllocation(key, vao, vbo, ibo, zone.fingerprint()));
+            dirtyZonesUploadedCount++;
+        }
+
+        allocations.keySet().removeIf(key -> {
+            if (activeZones.contains(key)) return false;
+            ZoneAllocation allocation = allocations.get(key);
+            if (allocation != null) {
+                glDeleteVertexArrays(allocation.vao());
+                glDeleteBuffers(allocation.vbo());
+                glDeleteBuffers(allocation.ibo());
+            }
+            return true;
         });
     }
 
@@ -211,24 +277,6 @@ public final class ZoneVboManager implements AutoCloseable {
         glBindVertexArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    }
-
-    private static long computeFingerprint(List<GpuSceneVertex> vertices, List<Integer> indices) {
-        long hash = 1125899906842597L;
-        for (GpuSceneVertex v : vertices) {
-            hash = hash * 31L + Float.floatToIntBits(v.x());
-            hash = hash * 31L + Float.floatToIntBits(v.y());
-            hash = hash * 31L + Float.floatToIntBits(v.z());
-            hash = hash * 31L + v.encodedColor();
-            hash = hash * 31L + v.alpha();
-            hash = hash * 31L + v.renderType();
-            hash = hash * 31L + v.textureId();
-            hash = hash * 31L + v.priority();
-        }
-        for (int idx : indices) {
-            hash = hash * 31L + idx;
-        }
-        return hash;
     }
 
     public int localFirstIndex(int commandIndex) {
