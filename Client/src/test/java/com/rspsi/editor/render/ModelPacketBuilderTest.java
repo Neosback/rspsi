@@ -602,6 +602,9 @@ class ModelPacketBuilderTest {
                 packets.get(0).wallDecorationPresentation().part());
         assertEquals(1, packets.get(0).clientRenderableBounds().size());
         assertEquals(1, packets.get(1).clientRenderableBounds().size());
+        assertTrue(packets.get(0).sceneObjectIdentity().present());
+        assertEquals(packets.get(0).sceneObjectIdentity(), packets.get(1).sceneObjectIdentity(),
+                "both shape-8 renderables belong to one placed scene object");
         assertEquals(-8, packets.get(0).wallDecorationPresentation().offsetX());
         assertEquals(-8, packets.get(0).wallDecorationPresentation().offsetZ());
         assertEquals(1, packets.get(0).wallDecorationPresentation().orientation());
@@ -648,6 +651,11 @@ class ModelPacketBuilderTest {
             assertEquals(rotation, metadata.rotation());
             assertEquals(rotation * 512, metadata.orientation());
             assertEquals(0, metadata.modelOrientation());
+            assertEquals(object.id(), packet.sceneObjectIdentity().objectId());
+            assertEquals(object.type(), packet.sceneObjectIdentity().shape());
+            assertEquals(object.rotation(), packet.sceneObjectIdentity().rotation());
+            assertEquals(expectedSizeX, packet.sceneObjectIdentity().footprintWidth());
+            assertEquals(expectedSizeY, packet.sceneObjectIdentity().footprintLength());
 
             // Scene occupancy is definition-driven, not inferred from this tiny model AABB.
             assertTrue(packet.maxX() - packet.minX() < expectedSizeX * 128);
@@ -777,6 +785,8 @@ class ModelPacketBuilderTest {
         assertTrue(packet.clientRenderableBounds().get(1).present());
         assertEquals(0, packet.clientRenderableBounds().get(0).drawAabb().orientation());
         assertEquals(0, packet.clientRenderableBounds().get(1).drawAabb().orientation());
+        assertTrue(packet.sceneObjectIdentity().present());
+        assertEquals(2, packet.sceneObjectIdentity().shape());
     }
 
     @Test
