@@ -525,6 +525,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return cullMode;
     }
 
+    static boolean cullEnabledFor(SceneLayer.Kind layer, int mode) {
+        return mode != CULL_OFF && layer != SceneLayer.Kind.TERRAIN;
+    }
+
     public Statistics statistics() {
         return statistics;
     }
@@ -769,7 +773,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             lastTextureMissing = textureMissing;
         }
         int isTerrain = command.layer() == SceneLayer.Kind.TERRAIN ? 1 : 0;
-        int cull = cullMode != CULL_OFF && isTerrain == 0 ? 1 : 0;
+        int cull = cullEnabledFor(command.layer(), cullMode) ? 1 : 0;
         if (cull != lastCull) {
             if (cull == 1) glEnable(GL_CULL_FACE);
             else glDisable(GL_CULL_FACE);
