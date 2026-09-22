@@ -199,12 +199,14 @@ public record ModelRenderPacket(
 
     /** Returns this packet with one client-local bounds entry per client renderable. */
     public ModelRenderPacket withClientRenderableBounds(List<ClientModelBounds> bounds) {
+        List<ClientModelBounds> copied = List.copyOf(Objects.requireNonNull(bounds, "bounds"));
+        List<ClientRenderablePlacement> placements = copied.size() == clientRenderablePlacements.size()
+                ? clientRenderablePlacements : defaultPlacements(copied);
         return new ModelRenderPacket(anchor, objectId, category, vertices, triangles,
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
-                List.copyOf(Objects.requireNonNull(bounds, "bounds")),
-                defaultPlacements(bounds), sceneObjectIdentity);
+                copied, placements, sceneObjectIdentity);
     }
 
     /** Returns this packet with per-renderable scene placement offsets. */
