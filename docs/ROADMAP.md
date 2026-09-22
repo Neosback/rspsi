@@ -48,7 +48,7 @@ This foundation PR has already moved four P0 items to covered:
 
 | id | title | next action |
 |---|---|---|
-| `textures.definitions` | Texture definitions, pixels, average-color fallback | Run the new external `textures.json` fixture against a real revision-240 cache/reference export; the verifier and deterministic hash/count schema are implemented on this PR |
+| `textures.definitions` | Texture definitions, pixels, average-color fallback | Run the implemented external `textures.json` verifier against an independently exported real revision-240 cache fixture; code and deterministic tests are complete |
 | `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Software/native winding polarity is corrected to GL_CCW; validate one asymmetric real-cache model and one shaped tile in the live viewport before enabling hardware culling |
 
 P1-partial items worth picking up after these P0 validations: `scene.apiSurface`,
