@@ -48,6 +48,7 @@ public final class ZoneVboManager implements AutoCloseable {
     private int[] commandLocalFirstIndices = new int[0];
     private long[] commandZoneKeys = new long[0];
     private int dirtyZonesUploadedCount = 0;
+    private int reusedAllocationsCount = 0;
     private int totalZonesCount = 0;
 
     public static long zoneKey(WorldTileAddress tile) {
@@ -56,6 +57,7 @@ public final class ZoneVboManager implements AutoCloseable {
 
     public void upload(GpuUploadPlan plan) {
         dirtyZonesUploadedCount = 0;
+        reusedAllocationsCount = 0;
         if (plan == null || plan.commands().isEmpty() || plan.vertices().isEmpty()) {
             close();
             totalZonesCount = 0;
@@ -122,6 +124,7 @@ public final class ZoneVboManager implements AutoCloseable {
 
             if (existing != null && existing.fingerprint() == fingerprint) {
                 // Buffer is already up to date on GPU
+                reusedAllocationsCount++;
                 continue;
             }
 
@@ -164,6 +167,7 @@ public final class ZoneVboManager implements AutoCloseable {
      */
     public void upload(GpuZonedUploadPlan plan) {
         dirtyZonesUploadedCount = 0;
+        reusedAllocationsCount = 0;
         if (plan == null || plan.zones().isEmpty() || plan.commandRefs().isEmpty()) {
             close();
             totalZonesCount = 0;
@@ -188,6 +192,7 @@ public final class ZoneVboManager implements AutoCloseable {
             activeZones.add(key);
             ZoneAllocation existing = allocations.get(key);
             if (existing != null && existing.fingerprint() == zone.fingerprint()) {
+                reusedAllocationsCount++;
                 continue;
             }
 
@@ -299,6 +304,10 @@ public final class ZoneVboManager implements AutoCloseable {
         return totalZonesCount;
     }
 
+    public int reusedAllocationsCount() {
+        return reusedAllocationsCount;
+    }
+
     @Override
     public void close() {
         for (ZoneAllocation alloc : allocations.values()) {
@@ -310,6 +319,7 @@ public final class ZoneVboManager implements AutoCloseable {
         commandLocalFirstIndices = new int[0];
         commandZoneKeys = new long[0];
         dirtyZonesUploadedCount = 0;
+        reusedAllocationsCount = 0;
         totalZonesCount = 0;
     }
 }
