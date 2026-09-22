@@ -288,7 +288,7 @@
       "id": "objects.wallTransforms",
       "domain": "walls",
       "title": "Wall, corner, diagonal, and decoration model transforms",
-      "status": "partial",
+      "status": "covered",
       "priority": "p1",
       "runelite": [
         "net.runelite.api.WallObject",
@@ -296,6 +296,7 @@
         "net.runelite.api.GameObject#getOrientation"
       ],
       "rspsi": [
+        "Client/src/main/java/com/rspsi/osrs/rules/loc/WallRules.java",
         "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
         "Client/src/main/java/com/rspsi/editor/model/OsrsLocShape.java"
       ],
@@ -304,11 +305,13 @@
         "rs/scene/SceneBuilder.ts"
       ],
       "evidence": [
+        "Client/src/test/java/com/rspsi/osrs/rules/loc/WallRulesTest.java",
         "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/legacy/WallRenderingParityTest.java",
         "docs/TSPS_SCENE_REFERENCE.md"
       ],
-      "reason": "Static transform ordering is aligned, but all wall join and decoration displacement cases are not fixture-covered.",
-      "nextAction": "Add cardinal, diagonal, L-wall, corner, multi-tile, and decoration golden fixtures."
+      "reason": "Wall and decoration variant decomposition now has one authoritative OSRS rule source. The fixture matrix covers wall shapes 0-3 and decoration shapes 4-8 across all four rotations, including L-wall dual variants, diagonal +4 rotations, opposite-facing decoration variants, and type-11 post-scale angle rotation. Packet-level fixtures cover the client isRotated XOR (rotation > 3) mirror rule, L-wall pair construction/normal merging, transform order, and real renderer-neutral placement.",
+      "nextAction": "Keep the full shape/rotation matrix and packet transform fixtures as regression coverage; track multi-tile scene bounds separately under objects.gameObjectFootprint."
     },
     {
       "id": "objects.wallNormalMerge",
@@ -341,14 +344,17 @@
       "id": "objects.decorations",
       "domain": "walls",
       "title": "Decorative object displacement and attached-wall relationship",
-      "status": "partial",
+      "status": "covered",
       "priority": "p1",
       "runelite": [
         "net.runelite.api.DecorativeObject#getX",
         "net.runelite.api.DecorativeObject#getY"
       ],
       "rspsi": [
+        "Client/src/main/java/com/rspsi/osrs/rules/loc/WallRules.java",
+        "Client/src/main/java/com/rspsi/osrs/rules/loc/WallDecorationRules.java",
         "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/WallDecorationPresentation.java",
         "Client/src/main/java/com/rspsi/editor/model/WorldObject.java"
       ],
       "tsps": [
@@ -356,10 +362,13 @@
         "rs/config/loctype/LocModelLoader.ts"
       ],
       "evidence": [
-        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"
+        "Client/src/test/java/com/rspsi/osrs/rules/loc/WallRulesTest.java",
+        "Client/src/test/java/com/rspsi/osrs/rules/loc/WallDecorationRulesTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/WallDecorationPresentationTest.java"
       ],
-      "reason": "Known displacement formulas are present, but attached-wall and diagonal-half-displacement combinations need fixture evidence.",
-      "nextAction": "Add decoration-on-cardinal-wall and decoration-on-diagonal-wall fixtures."
+      "reason": "Decoration shapes 4-8 are fixture-covered for all four rotations. Shapes 5, 6, and 8 inherit the supporting wall's decor displacement; straight placement uses the full displacement while diagonal placement uses the client half-displacement vector, with the fallback-16 rule retained when no wall exists. Shape 8 preserves distinct primary/secondary packets and the orientation-256 camera-dependent primary/secondary phase order used by Scene traversal.",
+      "nextAction": "Keep cardinal/diagonal displacement, fallback-16, shape-8 dual-renderable, and camera-order fixtures as regression coverage."
     },
     {
       "id": "objects.wallDecorationOffsets",
