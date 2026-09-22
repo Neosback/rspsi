@@ -192,6 +192,29 @@ tasks.register('verifyOsrsRevisionMatrix') {
     }
 }
 
+tasks.register('verifyOsrsTextures') {
+    description = 'Runs focused real-cache OSRS texture parity against an external textures.json fixture.'
+    group = 'verification'
+    dependsOn(':Client:classes')
+    doLast {
+        def cachePath = providers.environmentVariable('RSPSI_OSRS_CACHE').orNull
+        def fixturePath = providers.environmentVariable('RSPSI_OSRS_TEXTURE_FIXTURE').orNull
+        def revision = providers.environmentVariable('RSPSI_OSRS_REVISION').orNull
+        if ([cachePath, fixturePath, revision].any { it == null || it.isBlank() }) {
+            throw new GradleException('Set RSPSI_OSRS_CACHE, RSPSI_OSRS_TEXTURE_FIXTURE, and RSPSI_OSRS_REVISION.')
+        }
+        project(':Client').javaexec {
+            def javaLauncher = project(':Client').javaToolchains.launcherFor {
+                languageVersion = JavaLanguageVersion.of(21)
+            }.get()
+            executable = javaLauncher.executablePath.asFile.absolutePath
+            classpath = project(':Client').sourceSets.main.runtimeClasspath
+            mainClass = 'com.rspsi.cache.verify.OsrsTextureRevisionVerifier'
+            args cachePath, revision, fixturePath
+        }
+    }
+}
+
 tasks.register('verifyOsrsInstance') {
     description = 'Runs the opt-in external OSRS instance-template parity fixture.'
     group = 'verification'

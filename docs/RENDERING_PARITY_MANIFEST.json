@@ -149,16 +149,30 @@
     },
     {
       "id": "objects.wallNormalMerge",
-      "domain": "normals",
+      "domain": "walls",
       "title": "Wall neighbor normal merge and L-wall pair merge",
-      "status": "partial",
+      "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Model#getVertexNormals", "net.runelite.api.WallObject"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/jagex/map/SceneGraph.java"],
-      "tsps": ["rs/scene/Scene.ts", "rs/model/ModelData.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java", "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
-      "reason": "Pairwise packet normal merge and occluded-face hiding (tagging internal cross-section faces with renderType 2) are verified in ModelPacketBuilder; full extended multi-region neighbor traversal remains partial.",
-      "nextAction": "Implement extended multi-region neighbor traversal for world-chunk boundary wall joins."
+      "runelite": [
+        "net.runelite.api.Model#getVertexNormals",
+        "net.runelite.api.WallObject"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/RenderWindowSceneBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/model/WorldRegionWindow.java",
+        "Client/src/main/java/com/jagex/map/SceneGraph.java"
+      ],
+      "tsps": [
+        "rs/model/ModelData.ts",
+        "rs/scene/Scene.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/RenderWindowSceneBuilderTest.java"
+      ],
+      "reason": "L-wall pair normal merging, scene-wide shared-vertex normal accumulation, duplicate internal-face hiding, and cross-region wall joins are now covered. The live world-window renderer stitches adjacent 64x64 regions, materializes one padded multi-region document, and runs ModelPacketBuilder over that document; the boundary fixture proves merge-enabled walls on x=63/x=0 share normals and hide coincident seam faces across the region boundary.",
+      "nextAction": "Keep the L-wall and multi-region boundary fixtures as regression coverage when region materialization, model placement, or normal merging changes."
     },
     {
       "id": "objects.decorations",
@@ -177,14 +191,34 @@
       "id": "objects.wallDecorationOffsets",
       "domain": "walls",
       "title": "Wall-decoration offsets, dual renderables, and wall-width compensation",
-      "status": "partial",
+      "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.DecorativeObject#getXOffset", "net.runelite.api.DecorativeObject#getYOffset", "net.runelite.api.DecorativeObject#getXOffset2", "net.runelite.api.DecorativeObject#getYOffset2", "net.runelite.api.DecorativeObject#getRenderable", "net.runelite.api.DecorativeObject#getRenderable2"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/model/WorldObject.java"],
-      "tsps": ["rs/scene/Scene.ts", "rs/config/loctype/LocModelLoader.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java", "docs/TSPS_SCENE_REFERENCE.md"],
-      "reason": "Primary displacement is represented, but RuneLite's two offset pairs and two decorative renderables are not separate neutral fields.",
-      "nextAction": "Carry both decoration renderables and wall-relative offsets before declaring wall-decoration parity."
+      "runelite": [
+        "net.runelite.api.DecorativeObject#getXOffset",
+        "net.runelite.api.DecorativeObject#getYOffset",
+        "net.runelite.api.DecorativeObject#getRenderable",
+        "net.runelite.api.DecorativeObject#getRenderable2",
+        "RuneLite-melxin/runescape-client/src/main/java/Scene.java#newWallDecoration",
+        "RuneLite-melxin/runelite-mixins/src/main/java/net/runelite/mixins/RSWallDecorationMixin.java#getClickbox"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/WallDecorationPresentation.java",
+        "Client/src/main/java/com/rspsi/osrs/rules/loc/WallDecorationRules.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java"
+      ],
+      "tsps": [
+        "rs/scene/Scene.ts",
+        "rs/config/loctype/LocModelLoader.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/WallDecorationPresentationTest.java",
+        "Client/src/test/java/com/rspsi/osrs/rules/loc/WallDecorationRulesTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"
+      ],
+      "reason": "Shape-8 wall decorations are preserved as distinct primary and secondary neutral model packets; primary carries the inherited wall-relative offset while secondary remains at the bare tile position, matching RuneLite's clickbox and Scene representation. Camera-side orientation-256 ordering is retained as renderer-neutral metadata and consumed by software/native ordering. Shapes 5/6/8 inherit supporting-wall displacement with the client's fallback of 16 when no wall is available.",
+      "nextAction": "Keep the shape-8 camera-order, supporting-wall displacement, fallback-16, and GPU-command propagation fixtures as regression coverage."
     },
     {
       "id": "objects.gameObjectFootprint",
@@ -240,14 +274,30 @@
       "id": "models.textureAlpha",
       "domain": "blending",
       "title": "Texture transparency in face-pass classification",
-      "status": "partial",
+      "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Model#getFaceTextures", "net.runelite.api.Model#getTextureFaceIndices"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java", "Client/src/main/java/com/rspsi/editor/render/RenderTextureResource.java"],
-      "tsps": ["render/SceneBuffer.ts", "render/render/textures/TextureLoader.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"],
-      "reason": "TSPS and OSRS shader conventions keep transparent-pixel textures in the opaque pass with alpha discard for depth testing; blended face alpha is routed to the alpha pass with sorted draw commands.",
-      "nextAction": "Add golden test cases for animated texture UV offset handling."
+      "runelite": [
+        "net.runelite.api.Model#getFaceTextures",
+        "net.runelite.api.Model#getTextureFaceIndices",
+        "RuneLite-melxin/runelite-client/src/main/resources/net/runelite/client/plugins/gpu/frag.glsl",
+        "RuneLite-melxin/runelite-client/src/main/java/net/runelite/client/plugins/gpu/TextureManager.java#computeTextureAnimations"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/RenderTextureResource.java",
+        "Client/src/main/java/com/rspsi/editor/render/TextureAnimation.java",
+        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
+      ],
+      "tsps": [
+        "render/SceneBuffer.ts",
+        "render/render/textures/TextureLoader.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/TextureAnimationTest.java"
+      ],
+      "reason": "Model texture cutouts remain in the opaque/depth-writing pass, blended model-face alpha remains in the sorted alpha pass, the native shader now matches RuneLite's base-LOD rule by discarding any model texture texel below fully opaque alpha, and UV animation direction/speed is covered by RuneLite-referenced fixtures.",
+      "nextAction": "Keep the RuneLite GPU alpha cutoff and animation-vector fixtures as regression coverage when texture filtering or animation timing changes."
     },
     {
       "id": "models.renderModes",
@@ -303,14 +353,32 @@
       "id": "textures.definitions",
       "domain": "textures",
       "title": "Texture definitions, pixels, and average-color fallback",
-      "status": "partial",
+      "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Model#getFaceTextures"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/RenderTextureResourceBuilder.java", "Client/src/main/java/com/rspsi/cache"],
-      "tsps": ["render/render/textures/TextureLoader.ts", "render/render/textures/TextureArray.ts"],
-      "evidence": ["docs/RENDERING_SYSTEM_AUDIT_2026-09-18.md"],
-      "reason": "Decoded texture diagnostics exist, but texture alpha, animation, and cache-backed pixel parity still need fixtures.",
-      "nextAction": "Add real revision-240 texture and transparent-pixel fixtures."
+      "runelite": [
+        "net.runelite.api.Model#getFaceTextures"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/RenderTextureResourceBuilder.java",
+        "Client/src/main/java/com/rspsi/cache"
+      ],
+      "tsps": [
+        "render/render/textures/TextureLoader.ts",
+        "render/render/textures/TextureArray.ts"
+      ],
+      "evidence": [
+        "docs/RENDERING_SYSTEM_AUDIT_2026-09-18.md",
+        "Client/src/test/java/com/rspsi/cache/store/OpenRuneTextureDefinitionDecoderTest.java",
+        "Client/src/test/java/com/rspsi/cache/verify/OsrsTextureSemanticFixtureTest.java",
+        "Client/src/test/java/com/rspsi/cache/verify/OsrsParityFixtureTest.java",
+        "docs/TEXTURE_PARITY_FIXTURE.md",
+        "Client/src/main/java/com/rspsi/cache/verify/OsrsTextureRevisionVerifier.java",
+        ".github/tools/Revision240TextureParityExporterTest.java",
+        ".github/workflows/revision-240-texture-parity.yml",
+        "GitHub Actions Revision 240 Texture Acceptance run 35718110830"
+      ],
+      "reason": "Real revision-240 texture parity is now verified against OpenRS2 archive 2710 (oldschool/live/en build 240) using an independent RuneLite-melxin TextureLoader/SpriteManager exporter. The reference fixture selected texture 0 (opaque), 7 (RGB-zero cutout), and 17 (animated), each at 128x128 and brightness 0.6. The focused OsrsTextureRevisionVerifier detected revision 240, compared all 3 definitions/pixel rasters, and reported 0 differences with texture.parity PASS. The workflow artifact retains the generated metadata and SHA-256 pixel evidence without checking cache assets into the repository.",
+      "nextAction": "Keep the revision-240 acceptance workflow manual and rerun it when the supported revision, texture record decoder, sprite decode path, or texture pixel semantics change."
     },
     {
       "id": "textures.animation",
@@ -366,14 +434,27 @@
       "id": "native.drawRanges",
       "domain": "native",
       "title": "Opaque/alpha draw ranges, batching, and diagnostics",
-      "status": "partial",
+      "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.hooks.DrawCallbacks#PASS_OPAQUE", "net.runelite.api.hooks.DrawCallbacks#PASS_ALPHA"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java", "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"],
-      "tsps": ["render/SceneBuffer.ts", "render/render/frame/RenderFrame.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"],
-      "reason": "Pass separation is present, but texture transparency and all TSPS draw-command partitions are not equivalent.",
-      "nextAction": "Add a synthetic multi-material plan and compare command ranges and draw calls."
+      "runelite": [
+        "net.runelite.api.hooks.DrawCallbacks#PASS_OPAQUE",
+        "net.runelite.api.hooks.DrawCallbacks#PASS_ALPHA"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuDrawBatchPlanner.java",
+        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
+      ],
+      "tsps": [
+        "render/SceneBuffer.ts",
+        "render/render/frame/RenderFrame.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuDrawBatchPlannerTest.java"
+      ],
+      "reason": "Opaque/alpha separation and native draw-call grouping are now expressed by a backend-neutral planner. Synthetic fixtures verify material, depth-mode, priority-order, submission-pass, and 8x8 resident-zone boundaries without requiring a live GL context.",
+      "nextAction": "Keep the synthetic batching fixtures aligned with future render-state keys so incompatible draw ranges cannot silently merge."
     },
     {
       "id": "native.depthPriorityFacing",
@@ -381,12 +462,33 @@
       "title": "Depth modes, face bias, priority ordering, and winding/facing",
       "status": "partial",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Renderable#getRenderMode", "net.runelite.api.Model#getFaceBias", "net.runelite.api.Model#getFaceRenderPriorities", "net.runelite.api.hooks.DrawCallbacks#ZBUF"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java", "Client/src/main/java/com/rspsi/editor/render/RsFaceOrderPlanner.java", "Client/src/main/java/com/rspsi/editor/render/BackfacePolicy.java", "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"],
-      "tsps": ["render/shaders/main.vert.glsl", "render/SceneBuffer.ts", "render/render/tick2.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java", "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"],
-      "reason": "Depth reset, face bias, alpha ordering, and two-sided baseline are present, but model-level priority, camera-dependent facing, and verified native winding are not one shared contract.",
-      "nextAction": "Introduce a backend-neutral render-order key carrying model priority, face priority, depth mode, bias, and facing policy; keep culling disabled until winding fixtures pass."
+      "runelite": [
+        "net.runelite.api.Renderable#getRenderMode",
+        "net.runelite.api.Model#getFaceBias",
+        "net.runelite.api.Model#getFaceRenderPriorities",
+        "net.runelite.api.hooks.DrawCallbacks#ZBUF"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java",
+        "Client/src/main/java/com/rspsi/editor/render/RenderOrderKey.java",
+        "Client/src/main/java/com/rspsi/editor/render/RsFaceOrderPlanner.java",
+        "Client/src/main/java/com/rspsi/editor/render/BackfacePolicy.java",
+        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
+      ],
+      "tsps": [
+        "render/shaders/main.vert.glsl",
+        "render/SceneBuffer.ts",
+        "render/render/tick2.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/RenderOrderKeyTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/BackfacePolicyTest.java",
+        "RuneLite-melxin/runescape-client/src/main/java/Model.java#draw0",
+        "Client/src/main/java/com/rspsi/editor/render/SoftwareSceneRenderer.java"
+      ],
+      "reason": "Depth mode, scene/model category priority, face priority, and face bias are expressed in the backend-neutral RenderOrderKey and consumed by native ordering/batching. Facing is intentionally separate: BackfacePolicy defines the RuneLite-derived winding contract, while the viewport validation mode applies model-only culling and leaves terrain two-sided. RuneLite-melxin Model.draw0 stores edge <= 0 in its culled-face flag and only draws !culled faces, so visible client faces have edge > 0. The software renderer uses the same edge-function sign; converting its Y-down viewport to OpenGL Y-up makes those visible faces counter-clockwise (GL_CCW). Normal editing remains two-sided until live asymmetric-model acceptance validates the full upload/projection path.",
+      "nextAction": "Validate Client Front (GL_CCW) against one asymmetric real-cache model plus wall/roof/bridge-heavy views. Terrain remains two-sided until shaped-tile winding receives its own acceptance evidence; enable culling by default only where the evidence permits."
     },
     {
       "id": "native.picking",

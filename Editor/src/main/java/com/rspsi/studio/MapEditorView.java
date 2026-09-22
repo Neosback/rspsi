@@ -308,6 +308,7 @@ public final class MapEditorView {
                 viewport.setPickPlaneRestriction(settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE));
             }
 
+            viewport.setCullMode(settings.snapshot().get(RenderSettingKeys.NATIVE_CULLING_MODE));
             viewport.render(plan, ImGui.getContentRegionAvailX(),
                     Math.max(160.0f, ImGui.getContentRegionAvailY()),
                     settings.snapshot().get(RenderSettingKeys.MSAA_SAMPLES),

@@ -73,7 +73,17 @@ public final class OpenRuneCacheStore implements CacheStore {
                 throw new IllegalArgumentException(
                         "Selected directory does not contain OpenRune OSRS config and map indices");
             }
-            return configuredRevision();
+
+            Integer override = explicitConfiguredRevision();
+            if (override != null) return override;
+
+            int versionArchive = cache.archiveId(12, "version.dat");
+            if (versionArchive >= 0) {
+                byte[] data = cache.data(12, versionArchive, 0, null);
+                Integer detected = revisionFromVersionData(data);
+                if (detected != null) return detected;
+            }
+            return DEFAULT_OSRS_REVISION;
         } finally {
             cache.close();
         }
@@ -84,7 +94,7 @@ public final class OpenRuneCacheStore implements CacheStore {
         return false;
     }
 
-    private static int configuredRevision() {
+    private static Integer explicitConfiguredRevision() {
         String configured = System.getProperty("rspsi.osrs.revision");
         if (configured == null || configured.isBlank()) {
             configured = System.getenv("RSPSI_OSRS_REVISION");
@@ -94,10 +104,24 @@ public final class OpenRuneCacheStore implements CacheStore {
                 int revision = Integer.parseInt(configured.trim());
                 if (revision > 0) return revision;
             } catch (NumberFormatException ignored) {
-                // Fall back to the audited OpenRune profile below.
+                // Fall through to cache metadata/default profile.
             }
         }
-        return DEFAULT_OSRS_REVISION;
+        return null;
+    }
+
+    /**
+     * Mirrors OpenRune's readCacheRevision(version.dat) contract without
+     * importing its default-package Kotlin helper into this named Java
+     * package. version.dat contains a two-byte script version followed by the
+     * four-byte cache revision.
+     */
+    static Integer revisionFromVersionData(byte[] data) {
+        if (data == null || data.length < 6) return null;
+        ByteBuffer buffer = ByteBuffer.wrap(data);
+        buffer.getShort();
+        int revision = buffer.getInt();
+        return revision > 0 ? revision : null;
     }
 
     /**

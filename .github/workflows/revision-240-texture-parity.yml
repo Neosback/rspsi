@@ -1,0 +1,87 @@
+name: Revision 240 Texture Acceptance
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: revision-240-texture-parity
+  cancel-in-progress: true
+
+jobs:
+  texture-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Download OpenRS2 build 240 cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/osrs240"
+          curl --fail --location --retry 3 --retry-delay 5 \
+            --output "${RUNNER_TEMP}/osrs240.zip" \
+            "https://archive.openrs2.org/caches/runescape/2710/disk.zip"
+          unzip -q "${RUNNER_TEMP}/osrs240.zip" -d "${RUNNER_TEMP}/osrs240"
+
+          CACHE_DIR="$(find "${RUNNER_TEMP}/osrs240" -type f -name 'main_file_cache.dat2' -printf '%h\n' -quit)"
+          if [[ -z "${CACHE_DIR}" ]]; then
+            echo "Could not locate main_file_cache.dat2 in OpenRS2 cache 2710" >&2
+            find "${RUNNER_TEMP}/osrs240" -maxdepth 3 -type f | head -100 >&2
+            exit 1
+          fi
+
+          echo "RSPSI_REFERENCE_CACHE=${CACHE_DIR}" >> "${GITHUB_ENV}"
+          echo "Reference cache: ${CACHE_DIR}"
+          ls -lh "${CACHE_DIR}"/main_file_cache.dat2 "${CACHE_DIR}"/main_file_cache.idx*
+
+      - name: Export independent RuneLite texture fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          FIXTURE_DIR="${RUNNER_TEMP}/revision240-fixture"
+          mkdir -p "${FIXTURE_DIR}"
+          echo "RSPSI_TEXTURE_FIXTURE_OUT=${FIXTURE_DIR}/textures.json" >> "${GITHUB_ENV}"
+
+          cp ".github/tools/Revision240TextureParityExporterTest.java" \
+            "RuneLite-melxin/cache/src/test/java/net/runelite/cache/Revision240TextureParityExporterTest.java"
+
+          cd RuneLite-melxin
+          chmod +x gradlew
+          RSPSI_REFERENCE_CACHE="${RSPSI_REFERENCE_CACHE}" \
+          RSPSI_TEXTURE_FIXTURE_OUT="${FIXTURE_DIR}/textures.json" \
+            ./gradlew --no-daemon :cache:test \
+              --tests net.runelite.cache.Revision240TextureParityExporterTest
+
+          test -s "${FIXTURE_DIR}/textures.json"
+          cat "${FIXTURE_DIR}/textures.json"
+
+      - name: Verify RuneLite fixture through RSPSi
+        shell: bash
+        run: |
+          set -euo pipefail
+          RSPSI_OSRS_CACHE="${RSPSI_REFERENCE_CACHE}" \
+          RSPSI_OSRS_TEXTURE_FIXTURE="${RSPSI_TEXTURE_FIXTURE_OUT}" \
+          RSPSI_OSRS_REVISION=240 \
+            gradle --no-daemon verifyOsrsTextures
+
+      - name: Upload texture parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: revision-240-texture-parity
+          path: |
+            ${{ runner.temp }}/revision240-fixture/textures.json
+          if-no-files-found: warn

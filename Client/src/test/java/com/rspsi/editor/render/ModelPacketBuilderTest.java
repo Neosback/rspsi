@@ -480,16 +480,39 @@ class ModelPacketBuilderTest {
     }
 
     @Test
-    void expandsDoubleDiagonalWallDecorationIntoTwoInsideModels() {
+    void preservesDoubleDiagonalWallDecorationAsTwoSceneRenderables() {
         WorldDocument document = new WorldDocument(1, 1, 1);
+        WorldObject decoration = new WorldObject(42, 8, 1, 0, 0, 0);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
-                0, 0, 0, 0, 0, List.of(new WorldObject(42, 8, 1, 0, 0, 0))));
+                0, 0, 0, 0, 0, List.of(decoration)));
         DefinitionProvider definitions = typedDefinitions(4, 7, triangle(7, 100));
+        ModelPacketBuilder builder = new ModelPacketBuilder(definitions);
 
-        ModelRenderPacket packet = new ModelPacketBuilder(definitions).build(document).get(0);
+        List<ModelRenderPacket> packets = builder.build(document);
 
-        assertEquals(6, packet.vertices().size());
-        assertEquals(2, packet.triangles().size());
+        assertEquals(2, packets.size());
+        assertEquals(3, packets.get(0).vertices().size());
+        assertEquals(1, packets.get(0).triangles().size());
+        assertEquals(WallDecorationPresentation.Part.PRIMARY,
+                packets.get(0).wallDecorationPresentation().part());
+        assertEquals(-8, packets.get(0).wallDecorationPresentation().offsetX());
+        assertEquals(-8, packets.get(0).wallDecorationPresentation().offsetZ());
+        assertEquals(1, packets.get(0).wallDecorationPresentation().orientation());
+
+        assertEquals(3, packets.get(1).vertices().size());
+        assertEquals(1, packets.get(1).triangles().size());
+        assertEquals(WallDecorationPresentation.Part.SECONDARY,
+                packets.get(1).wallDecorationPresentation().part());
+        assertEquals(0, packets.get(1).wallDecorationPresentation().offsetX());
+        assertEquals(0, packets.get(1).wallDecorationPresentation().offsetZ());
+
+        // The compatibility single-object API intentionally remains flattened
+        // for object preview/inspection callers that predate scene ordering.
+        ModelRenderPacket compatibility = builder.build(decoration, document).orElseThrow();
+        assertEquals(6, compatibility.vertices().size());
+        assertEquals(2, compatibility.triangles().size());
+        assertEquals(WallDecorationPresentation.Part.NONE,
+                compatibility.wallDecorationPresentation().part());
     }
 
     private static ModelGeometryView triangle(int id, int color) {

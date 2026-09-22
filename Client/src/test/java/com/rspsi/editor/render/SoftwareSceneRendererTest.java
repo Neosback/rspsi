@@ -48,7 +48,7 @@ class SoftwareSceneRendererTest {
                 vertex(-20, -20, 100, 0x1200),
                 vertex(20, -20, 100, 0x1200),
                 vertex(0, 20, 100, 0x1200));
-        GpuUploadPlan backFace = new GpuUploadPlan(vertices, List.of(0, 2, 1),
+        GpuUploadPlan backFace = new GpuUploadPlan(vertices, List.of(0, 1, 2),
                 List.of(new GpuDrawCommand(WorldTileAddress.of(0, 0, 0),
                         SceneLayer.Kind.TERRAIN, GpuDrawCommand.SubmissionPass.OPAQUE,
                         0, 3, -1, 0, -1)), List.of(), Map.of(), "back-face-test");
@@ -116,7 +116,7 @@ class SoftwareSceneRendererTest {
                 modelVertex(-20, -20, 100, flatColor),
                 modelVertex(20, -20, 100, 0x7FFF),
                 modelVertex(0, 20, 100, -1));
-        GpuUploadPlan plan = new GpuUploadPlan(vertices, List.of(0, 1, 2),
+        GpuUploadPlan plan = new GpuUploadPlan(vertices, List.of(0, 2, 1),
                 List.of(new GpuDrawCommand(WorldTileAddress.of(0, 0, 0),
                         SceneLayer.Kind.GROUND_OBJECT, GpuDrawCommand.SubmissionPass.OPAQUE,
                         0, 3, -1, 0, 1)), List.of(), Map.of(), "flat-model-test");
@@ -138,7 +138,7 @@ class SoftwareSceneRendererTest {
                 modelPriorityVertex(-20, -20, 100, 0x4A38, 11),
                 modelPriorityVertex(20, -20, 100, 0x4A38, 11),
                 modelPriorityVertex(0, 20, 100, 0x4A38, 11));
-        GpuUploadPlan plan = new GpuUploadPlan(vertices, List.of(0, 1, 2, 3, 4, 5),
+        GpuUploadPlan plan = new GpuUploadPlan(vertices, List.of(0, 2, 1, 3, 5, 4),
                 List.of(
                         new GpuDrawCommand(WorldTileAddress.of(0, 0, 0), SceneLayer.Kind.GROUND_OBJECT,
                                 GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 1),
@@ -174,7 +174,7 @@ class SoftwareSceneRendererTest {
     private static GpuUploadPlan plan(List<GpuSceneVertex> vertices,
                                       Map<Integer, RenderTextureResource> textures) {
         GpuSceneVertex ignored = vertices.get(0);
-        return new GpuUploadPlan(vertices, List.of(0, 1, 2),
+        return new GpuUploadPlan(vertices, List.of(0, 2, 1),
                 List.of(new GpuDrawCommand(WorldTileAddress.of(0, 0, 0),
                         SceneLayer.Kind.TERRAIN, GpuDrawCommand.SubmissionPass.OPAQUE,
                         0, 3, ignored.textureId(), 0, -1)),

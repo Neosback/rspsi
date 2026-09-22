@@ -2,6 +2,7 @@ package com.rspsi.renderer.opengl;
 
 import com.rspsi.editor.render.GpuCommandVisibility;
 import com.rspsi.editor.render.GpuDrawCommand;
+import com.rspsi.editor.render.GpuDrawBatchPlanner;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.RenderTextureResource;
@@ -10,6 +11,7 @@ import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.GpuColorEncoding;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
 import com.rspsi.editor.render.RenderPresentation;
+import com.rspsi.editor.render.RenderOrderKey;
 import com.rspsi.editor.render.SceneFog;
 import com.rspsi.editor.render.SceneOcclusionResolver;
 import com.rspsi.editor.render.TextureAnimation;
@@ -371,18 +373,14 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             glFrontFace(cullMode == CULL_FRONT_CW ? GL_CW : GL_CCW);
             glCullFace(GL_BACK);
         }
-        // Two-sided by default.
+        // Begin each frame two-sided. applyDrawState() may enable culling for
+        // non-terrain commands when the validation mode is active, and turns
+        // it back off for terrain. Normal editing keeps cullMode=CULL_OFF.
         //
-        // Culling model back faces (GL_CW front, per
-        // BackfacePolicy.nativeWinding) was tried and reverted: it made
-        // walls see-through from some angles, hid roofs, darkened the scene,
-        // and broke bridges - all symptoms of the scene being drawn from its
-        // back faces, i.e. the documented winding does not match what this
-        // projection actually produces. It also did NOT stop a flat banner
-        // from z-fighting itself, which means that decoration's coincident
-        // faces share a winding and culling could never have separated them.
-        // Do not re-enable this without first verifying winding against a
-        // known asymmetric model.
+        // The earlier global GL_CW experiment produced see-through walls,
+        // missing roofs and bridge regressions. RuneLite-melxin Model.draw0
+        // shows that visible client faces use edge > 0, which maps to GL_CCW
+        // after the Y-down software viewport -> Y-up OpenGL conversion.
         glDisable(GL_CULL_FACE);
         glPolygonMode(GL_FRONT_AND_BACK, presentation.wireframe() ? GL_LINE : GL_FILL);
         glClearDepth(0.0);
@@ -453,7 +451,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // wall trim/decor faces can be resolved by the OSRS submission order
         // instead of failing a strict depth test. List.sort is stable, so
         // indices are only reordered relative to distinct priority values.
-        List<Integer> opaqueOrder = opaqueOrder(plan, commands, visibility);
+        List<Integer> opaqueOrder = opaqueOrder(plan, commands, visibility, camera);
         drawCalls += drawBatches(plan, commands, opaqueOrder, visibility, camera, false, clientCycle);
         // The software reference renderer composites transparent triangles
         // back-to-front. Keep opaque submission order stable, but apply the
@@ -468,7 +466,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             }
         }
         alpha = RsFaceOrderPlanner.orderAlpha(alpha,
-                command -> averageDepth(plan, command, camera));
+                command -> averageDepth(plan, command, camera),
+                command -> command.wallDecorationPresentation().cameraOrder(command.tile(), camera));
         List<Integer> alphaOrder = new ArrayList<>(alpha.size());
         for (GpuDrawCommand command : alpha) {
             alphaOrder.add(alphaIndices.get(command));
@@ -510,18 +509,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     /**
-     * Selects back-face culling for model geometry.
+     * Selects validation-only back-face culling for non-terrain geometry.
      *
-     * <p>The scene's true front-face winding has never been verified against
-     * a known asymmetric model. {@code BackfacePolicy} documents clockwise,
-     * but enabling that produced see-through walls, missing roofs and a
-     * darker scene - the signature of drawing back faces - so the documented
-     * value is suspect. Culling matters because thin decorations (a hanging
-     * banner's cloth and its backing sit about 1.4 units apart) draw both
-     * skins without it and shimmer where they nearly touch.</p>
-     *
-     * <p>Terrain is never culled here: shaped-tile winding is a separate
-     * unverified question and getting it wrong drops whole tiles.</p>
+     * <p>{@link #applyDrawState(GpuUploadPlan, GpuDrawCommand, boolean, int)}
+     * enables culling only for non-terrain commands and disables it again for
+     * terrain. The default is {@link #CULL_OFF}. Client-front validation uses
+     * GL_CCW via {@code BackfacePolicy}; the opposite winding exists only as a
+     * comparison mode for acceptance testing.</p>
      */
     public void setCullMode(int mode) {
         cullMode = mode < CULL_OFF || mode > CULL_FRONT_CW ? CULL_OFF : mode;
@@ -529,6 +523,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
 
     public int cullMode() {
         return cullMode;
+    }
+
+    static boolean cullEnabledFor(SceneLayer.Kind layer, int mode) {
+        return mode != CULL_OFF && layer != SceneLayer.Kind.TERRAIN;
     }
 
     public Statistics statistics() {
@@ -623,23 +621,19 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int drawBatches(GpuUploadPlan plan, List<GpuDrawCommand> commands,
                             List<Integer> orderedIndices, GpuCommandVisibility visibility,
                             CameraState camera, boolean alpha, int clientCycle) {
+        GpuDrawCommand.SubmissionPass pass = alpha
+                ? GpuDrawCommand.SubmissionPass.ALPHA
+                : GpuDrawCommand.SubmissionPass.OPAQUE;
+        List<GpuDrawBatchPlanner.Batch> batches = GpuDrawBatchPlanner.plan(
+                commands, orderedIndices, pass, zoneManager::zoneKeyForCommand);
+
         int drawCalls = 0;
-        int cursor = 0;
         int lastBoundVao = -1;
-        while (cursor < orderedIndices.size()) {
-            int firstIndex = orderedIndices.get(cursor);
+        for (GpuDrawBatchPlanner.Batch batch : batches) {
+            int firstIndex = batch.firstCommandIndex();
             GpuDrawCommand first = commands.get(firstIndex);
-            long zoneKey = zoneManager.zoneKeyForCommand(firstIndex);
-            ZoneVboManager.ZoneAllocation alloc = zoneManager.allocation(zoneKey);
-            int end = cursor + 1;
-            while (end < orderedIndices.size()) {
-                int candIndex = orderedIndices.get(end);
-                GpuDrawCommand candidate = commands.get(candIndex);
-                if (!sameDrawBatch(first, firstIndex, candidate, candIndex, alpha)) break;
-                end++;
-            }
+            ZoneVboManager.ZoneAllocation alloc = zoneManager.allocation(batch.zoneKey());
             if (alloc == null) {
-                cursor = end;
                 continue;
             }
             if (alloc.vao() != lastBoundVao) {
@@ -647,20 +641,18 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 lastBoundVao = alloc.vao();
             }
             applyDrawState(plan, first, alpha, clientCycle);
-            int count = end - cursor;
-            if (count == 1) {
+            if (batch.commandCount() == 1) {
                 int localFirst = zoneManager.localFirstIndex(firstIndex);
                 glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
                         (long) localFirst * Integer.BYTES);
             } else {
                 try (MemoryStack stack = MemoryStack.stackPush()) {
-                    IntBuffer counts = stack.mallocInt(count);
-                    PointerBuffer offsets = stack.mallocPointer(count);
-                    for (int i = cursor; i < end; i++) {
-                        int cmdIdx = orderedIndices.get(i);
-                        GpuDrawCommand command = commands.get(cmdIdx);
+                    IntBuffer counts = stack.mallocInt(batch.commandCount());
+                    PointerBuffer offsets = stack.mallocPointer(batch.commandCount());
+                    for (int commandIndex : batch.commandIndices()) {
+                        GpuDrawCommand command = commands.get(commandIndex);
                         counts.put(command.indexCount());
-                        offsets.put((long) zoneManager.localFirstIndex(cmdIdx) * Integer.BYTES);
+                        offsets.put((long) zoneManager.localFirstIndex(commandIndex) * Integer.BYTES);
                     }
                     counts.flip();
                     offsets.flip();
@@ -668,39 +660,21 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 }
             }
             drawCalls++;
-            cursor = end;
         }
         return drawCalls;
     }
 
-    private boolean sameDrawBatch(GpuDrawCommand first, int firstIdx,
-                                 GpuDrawCommand candidate, int candIdx,
-                                 boolean alpha) {
-        return sameDrawState(first, candidate, alpha)
-                && zoneManager.zoneKeyForCommand(firstIdx) == zoneManager.zoneKeyForCommand(candIdx);
-    }
-
-    private static boolean sameDrawState(GpuDrawCommand first, GpuDrawCommand candidate,
-                                         boolean alpha) {
-        return (candidate.pass() == (alpha ? GpuDrawCommand.SubmissionPass.ALPHA
-                : GpuDrawCommand.SubmissionPass.OPAQUE))
-                && first.textureId() == candidate.textureId()
-                && first.layer() == candidate.layer()
-                && first.depthBias() == candidate.depthBias()
-                && first.renderMode() == candidate.renderMode();
-    }
-
     private static long drawStateKey(GpuDrawCommand command, boolean alpha) {
-        long key = command.textureId() + 1L;
-        key = key * 17L + command.layer().ordinal();
-        key = key * 257L + command.depthBias();
-        key = key * 8L + command.renderMode().ordinal();
-        return key * 2L + (alpha ? 1L : 0L);
+        return RenderOrderKey.nativeState(command) * 2L + (alpha ? 1L : 0L);
     }
 
     private List<Integer> opaqueOrder(GpuUploadPlan plan, List<GpuDrawCommand> commands,
-                                      GpuCommandVisibility visibility) {
-        if (!visibility.occlusionApplied() && plan.fingerprint().equals(orderedPlanFingerprint)) {
+                                      GpuCommandVisibility visibility, CameraState camera) {
+        boolean cameraOrderedDecorations = commands.stream()
+                .anyMatch(command -> command.wallDecorationPresentation().cameraOrdered());
+        if (!cameraOrderedDecorations
+                && !visibility.occlusionApplied()
+                && plan.fingerprint().equals(orderedPlanFingerprint)) {
             return cachedOpaqueOrder;
         }
         List<Integer> result = new ArrayList<>();
@@ -726,9 +700,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // GL_GEQUAL tie. Wall decorations separately beat their mounting wall via
         // submissionDepthBias in view-space depth.
         result.sort(Comparator.comparingInt((Integer index) -> commands.get(index).priority())
+                .thenComparingInt(index -> commands.get(index).wallDecorationPresentation()
+                        .cameraOrder(commands.get(index).tile(), camera))
                 .thenComparingLong(index -> zoneManager.zoneKeyForCommand(index))
                 .thenComparingLong(index -> drawStateKey(commands.get(index), false)));
-        if (!visibility.occlusionApplied()) {
+        if (!cameraOrderedDecorations && !visibility.occlusionApplied()) {
             orderedPlanFingerprint = plan.fingerprint();
             cachedOpaqueOrder = List.copyOf(result);
         }
@@ -792,7 +768,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             lastTextureMissing = textureMissing;
         }
         int isTerrain = command.layer() == SceneLayer.Kind.TERRAIN ? 1 : 0;
-        int cull = cullMode != CULL_OFF && isTerrain == 0 ? 1 : 0;
+        int cull = cullEnabledFor(command.layer(), cullMode) ? 1 : 0;
         if (cull != lastCull) {
             if (cull == 1) glEnable(GL_CULL_FACE);
             else glDisable(GL_CULL_FACE);
@@ -1151,10 +1127,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                             // is mixed toward the tile's own flat colour and
                             // written opaquely (see below).
                             if (texel0.a <= 0.0) discard;
-                        } else if (texel0.a < 0.5) {
-                            // Model cutouts stay in the opaque stream so their
-                            // visible texels keep depth ownership and do not
-                            // fight their own backing faces.
+                        } else if (texel0.a < 1.0) {
+                            // RuneLite GPU frag.glsl rejects any model texture
+                            // texel whose base-LOD alpha is not fully opaque.
+                            // Keep cutouts in the opaque stream for depth
+                            // ownership, but do not let partially transparent
+                            // texels survive as opaque model fragments.
                             discard;
                         }
 

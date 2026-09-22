@@ -69,7 +69,8 @@ public final class SoftwareSceneRenderer {
                 .filter(command -> command.pass() == GpuDrawCommand.SubmissionPass.ALPHA)
                 .toList();
         List<GpuDrawCommand> orderedAlpha = RsFaceOrderPlanner.orderAlpha(alphaCommands,
-                command -> averageDepth(plan, command, camera));
+                command -> averageDepth(plan, command, camera),
+                command -> command.wallDecorationPresentation().cameraOrder(command.tile(), camera));
         Map<GpuDrawCommand, Integer> alphaOrder = new java.util.HashMap<>();
         for (int index = 0; index < orderedAlpha.size(); index++) {
             alphaOrder.put(orderedAlpha.get(index), index);
@@ -86,7 +87,9 @@ public final class SoftwareSceneRenderer {
         // a depth offset (see GpuPriority/OpenGlSceneRenderer for the same
         // no-longer-synthetic-bias contract). The sort is stable, so faces
         // with equal priority keep their original relative order.
-        opaque.sort(Comparator.comparingInt((DrawWork value) -> value.command.priority()).reversed());
+        opaque.sort(Comparator.comparingInt((DrawWork value) -> value.command.priority()).reversed()
+                .thenComparingInt(value -> value.command.wallDecorationPresentation()
+                        .cameraOrder(value.command.tile(), camera)));
 
         int rasterized = 0;
         for (DrawWork work : opaque) {

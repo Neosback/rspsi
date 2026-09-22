@@ -147,6 +147,86 @@ class RenderWindowSceneBuilderTest {
         assertTrue(scene.terrainPackets().containsKey(boundary));
     }
 
+
+    @Test
+    void mergesWallNormalsAcrossLoadedRegionBoundary() {
+        WorldDocument westDocument = new WorldDocument(64, 64, 4);
+        WorldDocument eastDocument = new WorldDocument(64, 64, 4);
+        int y = 10;
+        westDocument.tile(0, 63, y).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0,
+                List.of(new WorldObject(42, 0, 0, 0, 63, y))));
+        eastDocument.tile(0, 0, y).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0,
+                List.of(new WorldObject(42, 0, 2, 0, 0, y))));
+
+        WorldRegion west = new WorldRegion(10, 20, westDocument);
+        WorldRegion east = new WorldRegion(11, 20, eastDocument);
+        WorldRegionWindow window = new WorldRegionWindow(10, 20, 2, 1,
+                Map.of(west.regionId(), west, east.regionId(), east));
+
+        RenderWindowScene scene = new RenderWindowSceneBuilder(mergingWallDefinitions()).build(window);
+
+        ModelRenderPacket westPacket = scene.modelPackets()
+                .get(WorldTileAddress.of(10 * 64 + 63, 20 * 64 + y, 0)).get(0);
+        ModelRenderPacket eastPacket = scene.modelPackets()
+                .get(WorldTileAddress.of(11 * 64, 20 * 64 + y, 0)).get(0);
+
+        assertTrue(westPacket.vertices().stream().anyMatch(vertex -> vertex.normalMagnitude() > 1),
+                "west boundary wall should receive its east neighbor's normal");
+        assertTrue(eastPacket.vertices().stream().anyMatch(vertex -> vertex.normalMagnitude() > 1),
+                "east boundary wall should receive its west neighbor's normal");
+        assertTrue(westPacket.triangles().stream().anyMatch(face -> face.renderType() == 2));
+        assertTrue(eastPacket.triangles().stream().anyMatch(face -> face.renderType() == 2));
+    }
+
+    private static DefinitionProvider mergingWallDefinitions() {
+        com.rspsi.cache.definition.ModelGeometryView wallGeometry =
+                new com.rspsi.cache.definition.ModelGeometryView(
+                        7,
+                        new int[]{
+                                64, 0, -32,
+                                64, 64, 0,
+                                64, 0, 32
+                        },
+                        new int[]{0, 1, 2},
+                        new short[]{100},
+                        new int[]{0},
+                        new int[]{-1});
+        com.rspsi.cache.definition.ObjectAppearanceView merging =
+                new com.rspsi.cache.definition.ObjectAppearanceView(
+                        -1, false, 128, 128, 128,
+                        0, 0, 0, Map.of(), Map.of(),
+                        true, false, true, false,
+                        0, 0, 16, -1, 0,
+                        false, false, false, 0);
+        return new DefinitionProvider() {
+            @Override public Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) {
+                return id == 42
+                        ? Optional.of(new com.rspsi.cache.definition.ObjectDefinitionView(
+                                42, "boundary wall", 1, 1, List.of(),
+                                new int[]{7}, new int[]{0}, -1, false))
+                        : Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.ObjectAppearanceView> objectAppearance(int id) {
+                return id == 42 ? Optional.of(merging) : Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.ModelGeometryView> modelGeometry(int id) {
+                return id == 7 ? Optional.of(wallGeometry) : Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> underlay(int id) {
+                return Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> overlay(int id) {
+                return Optional.empty();
+            }
+        };
+    }
+
     private static WorldDocument filledRegion(int underlayId) {
         WorldDocument document = new WorldDocument(64, 64, 4);
         for (int x = 0; x < 64; x++) {

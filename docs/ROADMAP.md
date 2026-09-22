@@ -34,20 +34,25 @@ Where it's a "target," it's a gap with a concrete next action, not a vague aspir
 
 ### 1.2 What's not correct yet - the tracked backlog
 
-`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 22 "partial," 4 "deferred." Six are
-P0-and-partial, each with an already-written `nextAction` - this is the actual near-term
-rendering roadmap, not something to re-derive:
+`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 17 "partial," 4 "deferred." Only one
+P0 item remains partial.
+
+This foundation PR has now moved five P0 items to covered:
+
+- `native.drawRanges` - backend-neutral batch planning plus synthetic material/zone fixtures.
+- `models.textureAlpha` - RuneLite model cutout threshold plus texture-animation fixtures.
+- `objects.wallDecorationOffsets` - distinct shape-8 primary/secondary renderables, inherited
+  wall displacement, and camera-dependent submission order.
+- `objects.wallNormalMerge` - L-wall pair merge plus a passing cross-region x=63/x=0 seam
+  fixture over the stitched/padded world-window path.
+- `textures.definitions` - OpenRS2 build-240 cache, independent RuneLite exporter, and focused
+  RSPSi verifier matched 3 representative 128x128 textures with zero metadata/pixel differences.
 
 | id | title | next action |
 |---|---|---|
-| `objects.wallNormalMerge` | Wall neighbor normal merge / L-wall pair merge | Implement extended multi-region neighbor traversal for world-chunk boundary wall joins |
-| `objects.wallDecorationOffsets` | Wall-decoration offsets, dual renderables, wall-width compensation | Carry both decoration renderables and wall-relative offsets before declaring parity |
-| `models.textureAlpha` | Texture transparency in face-pass classification | Add golden test cases for animated texture UV offset handling |
-| `textures.definitions` | Texture definitions, pixels, average-color fallback | Add real revision-240 texture and transparent-pixel fixtures |
-| `native.drawRanges` | Opaque/alpha draw ranges, batching, diagnostics | Add a synthetic multi-material plan and compare command ranges/draw calls |
-| `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Introduce a backend-neutral render-order key (model priority, face priority, depth mode, bias, facing); keep culling off until winding fixtures pass |
+| `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Software/native winding polarity is corrected to GL_CCW; validate model-only Client Front culling against an asymmetric real-cache model and wall/roof/bridge-heavy views. Terrain remains two-sided |
 
-P1-partial items worth picking up next, once the P0s are down: `scene.apiSurface`,
+P1-partial items worth picking up after this final P0 validation: `scene.apiSurface`,
 `terrain.bridge`, `scene.roofs`, `objects.wallTransforms`, `objects.decorations`,
 `objects.gameObjectFootprint`, `models.colors`, `models.contour`, `textures.animation`,
 `occlusion.visibility`.
@@ -88,28 +93,42 @@ in `runelite-client/cache/.../MapImageDumper.java` (`BLEND = 5`):
 
 ## Part 2 — Performance: faster tile-painting updates
 
-**The fix already exists and is untested-in-production, not unbuilt.**
-`Client/src/main/java/com/rspsi/editor/render/compiler/IncrementalSceneCompiler.java` is a
-real, working, unit-tested (`IncrementalSceneCompilerTest.java`, 69 lines, passing) "revision-driven
-incremental scene compiler over canonical 8x8 zones" - its own javadoc says terrain
-compilation is "bounded to dirty zones... unchanged terrain maps remain the exact immutable
-instances from the previous RenderScene." **It has zero production call sites.**
-`SessionSceneController` (the class actually wired to `SessionChangeListener`, i.e. the thing
-that reacts to every live edit) uses `RenderSceneBuilder` - a full rebuild - unconditionally.
+**The earlier roadmap description was stale and has been corrected against the live Studio path.**
+`IncrementalSceneCompiler` is real, tested, and still has no production caller, but
+`SessionSceneController` is **not** what Map Studio currently uses for live edits. The actual
+path is `Editor/src/main/java/com/rspsi/studio/StudioApplication.java`: a session change flips
+`sceneDirty`, then `rebuildMapScene` asynchronously rebuilds the complete
+`RenderWindowScene -> GpuScenePacket -> GpuUploadPlan`.
 
-This is validated independently by RuneLite's own GPU plugin fork (`runelite-client/.../plugins/gpu/Zone.java`,
-`GpuPlugin.invalidateZone`/`rebuild`): it partitions the world into **8x8-tile zones**, each
-with its own VBO, and a per-zone `invalidate` flag drives per-tick rebuild - untouched zones
-never re-upload. Our own compiler already uses the same 8x8 zone size. This is not a
-coincidence worth ignoring: it's the industry-standard chunk size for exactly this problem,
-and we already built the matching machinery.
+The GPU side is already more advanced than that old description implied.
+`OpenGlSceneRenderer` owns a `ZoneVboManager` that partitions the upload plan into canonical
+**8x8 world zones**, fingerprints each zone, and keeps unchanged VAO/VBO/IBO allocations
+resident. A changed plan therefore does **not** automatically mean every GPU zone is uploaded
+again. This matches the useful part of RuneLite's GPU architecture
+(`runelite-client/.../plugins/gpu/Zone.java` and `GpuPlugin.invalidateZone/rebuild`): dirty
+zones are the unit of GPU residency and rebuild.
 
-**Target**: wire `IncrementalSceneCompiler` into `SessionSceneController` in place of the
-unconditional `RenderSceneBuilder` call, falling back to a full rebuild only when the compiler
-reports it can't determine a bounded dirty set (e.g. a cache reload). Re-run
-`IncrementalSceneCompilerTest` plus a manual paint-latency check before/after. This is the
-single highest-leverage performance fix available right now - it's substitution, not new
-engineering.
+The remaining performance gap is primarily **upstream CPU derivation**: Map Studio still
+reconstructs the full world-window scene, scene packet, and flattened upload plan after an edit
+before the native zone manager can discover that most GPU zones are unchanged.
+
+**Target**:
+
+1. **Landed:** instrument `StudioApplication.buildMapScene` / `rebuildMapScene` by phase
+   (window scene compile, packet assembly, upload-plan flatten, compatibility `RenderScene`
+   build, vertices/indices/commands/textures, and estimated geometry KiB) so optimization is measured.
+2. Extend the incremental compiler concept to the **world-window path actually used by Studio**,
+   preserving the padded/stitching context that `RenderWindowSceneBuilder` supplies. Do not
+   replace that path with a single-region `RenderScene` shortcut that would regress edge
+   blending/stitching semantics.
+3. Rebuild only affected 8x8 scene zones and reuse unchanged packet/plan partitions.
+4. Let `ZoneVboManager` remain the native residency layer and verify that one-zone edits cause
+   only the expected zone uploads.
+5. Keep a conservative full-rebuild fallback for cache reloads, window topology changes, or any
+   mutation whose dependency radius cannot be bounded safely.
+
+This is still a high-leverage performance target, but it is **not** a one-line
+`SessionSceneController` substitution. The live pipeline has to be made incremental end to end.
 
 ---
 

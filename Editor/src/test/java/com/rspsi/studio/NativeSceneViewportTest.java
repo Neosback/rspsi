@@ -38,4 +38,19 @@ class NativeSceneViewportTest {
         assertEquals(-2100.0f, viewport.navigation().camera().y(), 0.001f);
         assertEquals(-400.0f, viewport.navigation().camera().z(), 0.001f);
     }
+
+    @Test
+    void mapsNeutralCullingValidationModesWithoutInitializingOpenGl() {
+        NativeSceneViewport viewport = new NativeSceneViewport();
+
+        viewport.setCullMode(com.rspsi.editor.render.BackfacePolicy.NativeCullingMode.TWO_SIDED);
+        assertEquals(com.rspsi.renderer.opengl.OpenGlSceneRenderer.CULL_OFF, viewport.cullMode());
+
+        viewport.setCullMode(com.rspsi.editor.render.BackfacePolicy.NativeCullingMode.CLIENT_FRONT);
+        assertEquals(com.rspsi.renderer.opengl.OpenGlSceneRenderer.CULL_FRONT_CCW, viewport.cullMode());
+
+        viewport.setCullMode(com.rspsi.editor.render.BackfacePolicy.NativeCullingMode.REVERSED_DEBUG);
+        assertEquals(com.rspsi.renderer.opengl.OpenGlSceneRenderer.CULL_FRONT_CW, viewport.cullMode());
+    }
+
 }

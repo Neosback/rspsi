@@ -3,6 +3,7 @@ package com.rspsi.studio;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.WorldTile;
+import com.rspsi.editor.render.BackfacePolicy;
 import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.picker.DdaScenePicker;
 import com.rspsi.editor.render.GpuUploadPlan;
@@ -62,6 +63,23 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     /** Back-face culling mode for model geometry; see the renderer. */
     public void setCullMode(int mode) {
         renderer.setCullMode(mode);
+    }
+
+    /** Applies the neutral validation mode without leaking OpenGL constants into Client. */
+    public void setCullMode(BackfacePolicy.NativeCullingMode mode) {
+        Objects.requireNonNull(mode, "mode");
+        int nativeMode = switch (mode) {
+            case TWO_SIDED -> OpenGlSceneRenderer.CULL_OFF;
+            case CLIENT_FRONT -> BackfacePolicy.nativeWinding()
+                    == BackfacePolicy.NativeWinding.COUNTER_CLOCKWISE
+                    ? OpenGlSceneRenderer.CULL_FRONT_CCW
+                    : OpenGlSceneRenderer.CULL_FRONT_CW;
+            case REVERSED_DEBUG -> BackfacePolicy.nativeWinding()
+                    == BackfacePolicy.NativeWinding.COUNTER_CLOCKWISE
+                    ? OpenGlSceneRenderer.CULL_FRONT_CW
+                    : OpenGlSceneRenderer.CULL_FRONT_CCW;
+        };
+        renderer.setCullMode(nativeMode);
     }
 
     public int cullMode() {

@@ -45,6 +45,17 @@ class OpenRuneCacheStoreTest {
     }
 
     @Test
+    void decodesRevisionFromOpenRuneVersionDatLayout() {
+        byte[] version = java.nio.ByteBuffer.allocate(6)
+                .putShort((short) 1)
+                .putInt(240)
+                .array();
+
+        assertEquals(240, OpenRuneCacheStore.revisionFromVersionData(version));
+        assertNull(OpenRuneCacheStore.revisionFromVersionData(new byte[]{0, 1, 2}));
+    }
+
+    @Test
     void exposesCacheIdentityThroughTheNeutralStoreBoundary() {
         try (CacheStore store = new OpenRuneCacheStore(new FakeCache())) {
             OsrsCacheMetadata metadata = store.metadata(240).orElseThrow();
