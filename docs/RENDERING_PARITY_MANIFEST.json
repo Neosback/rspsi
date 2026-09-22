@@ -366,14 +366,14 @@
       "id": "native.drawRanges",
       "domain": "native",
       "title": "Opaque/alpha draw ranges, batching, and diagnostics",
-      "status": "partial",
+      "status": "covered",
       "priority": "p0",
       "runelite": ["net.runelite.api.hooks.DrawCallbacks#PASS_OPAQUE", "net.runelite.api.hooks.DrawCallbacks#PASS_ALPHA"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java", "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"],
+      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java", "Client/src/main/java/com/rspsi/editor/render/GpuDrawBatchPlanner.java", "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"],
       "tsps": ["render/SceneBuffer.ts", "render/render/frame/RenderFrame.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"],
-      "reason": "Pass separation is present, but texture transparency and all TSPS draw-command partitions are not equivalent.",
-      "nextAction": "Add a synthetic multi-material plan and compare command ranges and draw calls."
+      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java", "Client/src/test/java/com/rspsi/editor/render/GpuDrawBatchPlannerTest.java"],
+      "reason": "Opaque/alpha separation and native draw-call grouping are now expressed by a backend-neutral planner. Synthetic fixtures verify material, depth-mode, priority-order, submission-pass, and 8x8 resident-zone boundaries without requiring a live GL context.",
+      "nextAction": "Keep the synthetic batching fixtures aligned with future render-state keys so incompatible draw ranges cannot silently merge."
     },
     {
       "id": "native.depthPriorityFacing",
