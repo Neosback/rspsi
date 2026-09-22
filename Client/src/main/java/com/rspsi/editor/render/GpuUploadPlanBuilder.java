@@ -238,7 +238,7 @@ public final class GpuUploadPlanBuilder {
                                       GameObjectSceneMetadata gameObjectSceneMetadata) {
         appendCommand(commands, tile, layer, pass, firstIndex, textureId, priority,
                 depthBias, objectId, renderMode, wallDecorationPresentation,
-                gameObjectSceneMetadata, ClientModelBounds.none());
+                gameObjectSceneMetadata, List.of());
     }
 
     private static void appendCommand(List<GpuDrawCommand> commands, SceneTileSnapshot tile,
@@ -247,7 +247,7 @@ public final class GpuUploadPlanBuilder {
                                       GpuDrawCommand.RenderMode renderMode,
                                       WallDecorationPresentation wallDecorationPresentation,
                                       GameObjectSceneMetadata gameObjectSceneMetadata,
-                                      ClientModelBounds clientModelBounds) {
+                                      List<ClientModelBounds> clientRenderableBounds) {
         if (!commands.isEmpty()) {
             int last = commands.size() - 1;
             GpuDrawCommand previous = commands.get(last);
@@ -305,8 +305,9 @@ public final class GpuUploadPlanBuilder {
             digest.update(counts);
 
             if (!commands.isEmpty()) {
-                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 160);
                 for (GpuDrawCommand cmd : commands) {
+                    ByteBuffer cmdBuffer = ByteBuffer.allocate(
+                            104 + cmd.clientRenderableBounds().size() * 60);
                     cmdBuffer.putInt(cmd.tile().plane())
                             .putInt(cmd.tile().worldX())
                             .putInt(cmd.tile().worldY())
@@ -332,24 +333,28 @@ public final class GpuUploadPlanBuilder {
                             .putInt(cmd.gameObjectSceneMetadata().maxTileY())
                             .putInt(cmd.gameObjectSceneMetadata().modelOrientation())
                             .putInt(cmd.gameObjectSceneMetadata().orientation())
-                            .putInt(cmd.clientModelBounds().present() ? 1 : 0)
-                            .putInt(cmd.clientModelBounds().height())
-                            .putInt(cmd.clientModelBounds().bottomY())
-                            .putInt(cmd.clientModelBounds().xzRadius())
-                            .putInt(cmd.clientModelBounds().radius())
-                            .putInt(cmd.clientModelBounds().diameter())
-                            .putInt(cmd.clientModelBounds().singleTile() ? 1 : 0)
-                            .putInt(cmd.clientModelBounds().drawAabb().present() ? 1 : 0)
-                            .putInt(cmd.clientModelBounds().drawAabb().orientation())
-                            .putInt(cmd.clientModelBounds().drawAabb().xMid())
-                            .putInt(cmd.clientModelBounds().drawAabb().yMid())
-                            .putInt(cmd.clientModelBounds().drawAabb().zMid())
-                            .putInt(cmd.clientModelBounds().drawAabb().xMidOffset())
-                            .putInt(cmd.clientModelBounds().drawAabb().yMidOffset())
-                            .putInt(cmd.clientModelBounds().drawAabb().zMidOffset());
+                            .putInt(cmd.clientRenderableBounds().size());
+                    for (ClientModelBounds bounds : cmd.clientRenderableBounds()) {
+                        ClientModelBounds.Aabb aabb = bounds.drawAabb();
+                        cmdBuffer.putInt(bounds.present() ? 1 : 0)
+                                .putInt(bounds.height())
+                                .putInt(bounds.bottomY())
+                                .putInt(bounds.xzRadius())
+                                .putInt(bounds.radius())
+                                .putInt(bounds.diameter())
+                                .putInt(bounds.singleTile() ? 1 : 0)
+                                .putInt(aabb.present() ? 1 : 0)
+                                .putInt(aabb.orientation())
+                                .putInt(aabb.xMid())
+                                .putInt(aabb.yMid())
+                                .putInt(aabb.zMid())
+                                .putInt(aabb.xMidOffset())
+                                .putInt(aabb.yMidOffset())
+                                .putInt(aabb.zMidOffset());
+                    }
+                    cmdBuffer.flip();
+                    digest.update(cmdBuffer);
                 }
-                cmdBuffer.flip();
-                digest.update(cmdBuffer);
             }
 
             if (indexCount > 0) {
