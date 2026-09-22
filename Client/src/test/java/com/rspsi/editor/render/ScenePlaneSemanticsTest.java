@@ -30,7 +30,7 @@ class ScenePlaneSemanticsTest {
     @Test
     void forcePlaneZeroFlagOverridesTheMinimumCullLevel() {
         ScenePlaneSemantics planes = ScenePlaneSemantics.resolve(
-                3, OsrsTileFlags.MINIMAP_BRIDGE, false);
+                3, OsrsTileFlags.VIS_BELOW, false);
 
         assertEquals(3, planes.authoredPlane());
         assertEquals(3, planes.scenePlane());
