@@ -412,6 +412,89 @@ class ModelPacketBuilderTest {
     }
 
     @Test
+    void straightAndDiagonalVariantsUseClientMirrorXorRule() {
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{32, 0, 16, 64, 0, 16, 32, 0, 64},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+
+        WorldDocument straightDocument = new WorldDocument(1, 1, 1);
+        WorldObject straight = new WorldObject(42, 0, 0, 0, 0, 0);
+        straightDocument.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(straight)));
+
+        ModelRenderPacket straightNormal = new ModelPacketBuilder(
+                typedDefinitions(0, 7, geometry, appearance(false)))
+                .build(straightDocument).get(0);
+        ModelRenderPacket straightRotated = new ModelPacketBuilder(
+                typedDefinitions(0, 7, geometry, appearance(true)))
+                .build(straightDocument).get(0);
+
+        assertEquals(96, straightNormal.vertices().get(0).x());
+        assertEquals(80, straightNormal.vertices().get(0).z());
+        assertEquals(96, straightRotated.vertices().get(0).x());
+        assertEquals(48, straightRotated.vertices().get(0).z());
+
+        WorldDocument diagonalDocument = new WorldDocument(1, 1, 1);
+        WorldObject diagonal = new WorldObject(42, 6, 0, 0, 0, 0);
+        diagonalDocument.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(diagonal)));
+
+        ModelRenderPacket diagonalNormal = new ModelPacketBuilder(
+                typedDefinitions(4, 7, geometry, appearance(false)))
+                .build(diagonalDocument).get(0);
+        ModelRenderPacket diagonalRotated = new ModelPacketBuilder(
+                typedDefinitions(4, 7, geometry, appearance(true)))
+                .build(diagonalDocument).get(0);
+
+        // Diagonal wall decorations pass rotation+4 into getModelData, so
+        // the client's mirror condition is isRotated XOR true.
+        assertEquals(128, diagonalNormal.vertices().get(0).x());
+        assertEquals(-23, diagonalNormal.vertices().get(0).z());
+        assertEquals(150, diagonalRotated.vertices().get(0).x());
+        assertEquals(-1, diagonalRotated.vertices().get(0).z());
+    }
+
+    @Test
+    void wallDecorationPacketInheritsSupportingWallDisplacement() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        WorldObject wall = new WorldObject(100, 0, 0, 0, 0, 0);
+        WorldObject decoration = new WorldObject(42, 5, 0, 0, 0, 0);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(wall, decoration)));
+        ModelGeometryView geometry = triangle(7, 100);
+
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                if (id == 100) {
+                    return Optional.of(new ObjectDefinitionView(id, "wall", 1, 1,
+                            List.of(), new int[0], new int[0], -1, false));
+                }
+                return Optional.of(new ObjectDefinitionView(id, "decor", 1, 1,
+                        List.of(), new int[]{7}, new int[]{4}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) {
+                return Optional.empty();
+            }
+            @Override public Optional<FloorDefinitionView> overlay(int id) {
+                return Optional.empty();
+            }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(id == 100 ? appearanceWithDisplacement(32)
+                        : ObjectAppearanceView.empty());
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(geometry);
+            }
+        };
+
+        List<ModelRenderPacket> packets = new ModelPacketBuilder(definitions).build(document);
+
+        assertEquals(1, packets.size());
+        assertEquals(96, packets.get(0).vertices().get(0).x());
+        assertEquals(64, packets.get(0).vertices().get(0).z());
+    }
+
+    @Test
     void mergesNormalsAcrossTheTwoModelsOfAnLWallBeforeLighting() {
         WorldDocument document = new WorldDocument(1, 1, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
@@ -538,6 +621,12 @@ class ModelPacketBuilderTest {
 
     private static DefinitionProvider typedDefinitions(int type, int modelId,
                                                        ModelGeometryView geometry) {
+        return typedDefinitions(type, modelId, geometry, ObjectAppearanceView.empty());
+    }
+
+    private static DefinitionProvider typedDefinitions(int type, int modelId,
+                                                       ModelGeometryView geometry,
+                                                       ObjectAppearanceView appearance) {
         return new DefinitionProvider() {
             @Override public Optional<ObjectDefinitionView> object(int id) {
                 return Optional.of(new ObjectDefinitionView(id, "test", 1, 1,
@@ -546,12 +635,24 @@ class ModelPacketBuilderTest {
             @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
             @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
             @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
-                return Optional.of(ObjectAppearanceView.empty());
+                return Optional.of(appearance);
             }
             @Override public Optional<ModelGeometryView> modelGeometry(int id) {
                 return Optional.of(geometry);
             }
         };
+    }
+
+    private static ObjectAppearanceView appearance(boolean rotated) {
+        return new ObjectAppearanceView(-1, rotated, 128, 128, 128,
+                0, 0, 0, Map.of(), Map.of(), true, false, false, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
+    }
+
+    private static ObjectAppearanceView appearanceWithDisplacement(int displacement) {
+        return new ObjectAppearanceView(-1, false, 128, 128, 128,
+                0, 0, 0, Map.of(), Map.of(), true, false, false, false,
+                0, 0, displacement, -1, 0, false, false, false, 0);
     }
 
     /** Like {@link #typedDefinitions}, but with opcode 22 (mergeNormals) set. */
