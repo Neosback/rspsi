@@ -7,34 +7,35 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BackfacePolicyTest {
     @Test
-    void concreteClientFrontTriangleMapsToClockwiseNativeWindowWinding() {
-        // Client screen coordinates use Y down. For A(0,0), B(1,0), C(0,1)
-        // Model.draw0's edge expression is -1, so the client accepts it.
-        float clientEdge = clientEdge(0, 0, 1, 0, 0, 1);
+    void concreteClientVisibleTriangleMapsToCounterClockwiseNativeWindowWinding() {
+        // Model.draw0 stores edge <= 0 in field3034, then only draws faces
+        // where !field3034. A real visible client face therefore has edge > 0.
+        float clientEdge = clientEdge(0, 0, 0, 1, 1, 0);
+        assertEquals(1.0f, clientEdge);
         assertTrue(BackfacePolicy.isFrontFacingSoftware(clientEdge));
-        assertEquals(-1.0f, clientEdge);
 
-        // Mapping the same displayed points into a Y-up OpenGL window gives
-        // A(0,1), B(1,1), C(0,0). Conventional signed area is -1: clockwise.
-        float nativeArea = conventionalArea(0, 1, 1, 1, 0, 0);
-        assertEquals(clientEdge, nativeArea);
+        // Software/client screen Y grows downward. Flip the same displayed
+        // points into OpenGL's Y-up window coordinates.
+        float nativeArea = conventionalArea(0, 0, 0, -1, 1, 0);
+        assertEquals(1.0f, nativeArea);
         assertEquals(nativeArea, BackfacePolicy.nativeWindowArea(clientEdge));
-        assertEquals(BackfacePolicy.NativeWinding.CLOCKWISE,
+        assertEquals(BackfacePolicy.NativeWinding.COUNTER_CLOCKWISE,
                 BackfacePolicy.nativeWinding());
     }
 
     @Test
-    void clientBackFaceMapsToCounterClockwiseNativeWindowWinding() {
-        float clientEdge = clientEdge(0, 0, 0, 1, 1, 0);
+    void clientCulledFaceMapsToClockwiseNativeWindowWinding() {
+        float clientEdge = clientEdge(0, 0, 1, 0, 0, 1);
 
+        assertEquals(-1.0f, clientEdge);
         assertTrue(!BackfacePolicy.isFrontFacingSoftware(clientEdge));
-        assertTrue(BackfacePolicy.nativeWindowArea(clientEdge) > 0.0f);
+        assertTrue(BackfacePolicy.nativeWindowArea(clientEdge) < 0.0f);
     }
 
     @Test
     void degenerateTrianglesRemainRejected() {
         assertTrue(!BackfacePolicy.isFrontFacingSoftware(0.0f));
-        assertTrue(!BackfacePolicy.isFrontFacingSoftware(-0.00001f));
+        assertTrue(!BackfacePolicy.isFrontFacingSoftware(0.00001f));
     }
 
     /** Exact projected-edge expression used by RuneLite-melxin Model.draw0. */
