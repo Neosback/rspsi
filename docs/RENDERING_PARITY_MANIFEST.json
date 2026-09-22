@@ -240,14 +240,14 @@
       "id": "models.textureAlpha",
       "domain": "blending",
       "title": "Texture transparency in face-pass classification",
-      "status": "partial",
+      "status": "covered",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Model#getFaceTextures", "net.runelite.api.Model#getTextureFaceIndices"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java", "Client/src/main/java/com/rspsi/editor/render/RenderTextureResource.java"],
+      "runelite": ["net.runelite.api.Model#getFaceTextures", "net.runelite.api.Model#getTextureFaceIndices", "RuneLite-melxin/runelite-client/src/main/resources/net/runelite/client/plugins/gpu/frag.glsl", "RuneLite-melxin/runelite-client/src/main/java/net/runelite/client/plugins/gpu/TextureManager.java#computeTextureAnimations"],
+      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java", "Client/src/main/java/com/rspsi/editor/render/RenderTextureResource.java", "Client/src/main/java/com/rspsi/editor/render/TextureAnimation.java", "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"],
       "tsps": ["render/SceneBuffer.ts", "render/render/textures/TextureLoader.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"],
-      "reason": "TSPS and OSRS shader conventions keep transparent-pixel textures in the opaque pass with alpha discard for depth testing; blended face alpha is routed to the alpha pass with sorted draw commands.",
-      "nextAction": "Add golden test cases for animated texture UV offset handling."
+      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java", "Client/src/test/java/com/rspsi/editor/render/TextureAnimationTest.java"],
+      "reason": "Model texture cutouts remain in the opaque/depth-writing pass, blended model-face alpha remains in the sorted alpha pass, the native shader now matches RuneLite's base-LOD rule by discarding any model texture texel below fully opaque alpha, and UV animation direction/speed is covered by RuneLite-referenced fixtures.",
+      "nextAction": "Keep the RuneLite GPU alpha cutoff and animation-vector fixtures as regression coverage when texture filtering or animation timing changes."
     },
     {
       "id": "models.renderModes",
