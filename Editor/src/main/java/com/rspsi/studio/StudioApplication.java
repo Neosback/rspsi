@@ -5,8 +5,10 @@ import com.rspsi.cache.workspace.CacheDecoderSummary;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.cache.workspace.OsrsCacheSessionService;
 import com.rspsi.cache.map.OsrsProjectSessionLoader;
+import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldRegion;
 import com.rspsi.editor.model.WorldRegionWindow;
+import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.assets.EmptyAssetRepository;
@@ -32,7 +34,9 @@ import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.RenderSceneBuilder;
 import com.rspsi.editor.render.RenderWindowScene;
 import com.rspsi.editor.render.RenderWindowSceneBuilder;
+import com.rspsi.editor.render.RenderChanges;
 import com.rspsi.editor.render.SceneWindow;
+import com.rspsi.editor.render.compiler.IncrementalRenderWindowSceneCompiler;
 import com.rspsi.editor.render.RenderSettingKeys;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.settings.SettingsJsonStore;
@@ -58,8 +62,10 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -101,6 +107,8 @@ public final class StudioApplication implements AutoCloseable {
         return thread;
     });
     private final AtomicBoolean sceneDirty = new AtomicBoolean(false);
+    private final Object sceneChangeLock = new Object();
+    private final Set<TileCoordinate> pendingSceneChanges = new LinkedHashSet<>();
     private CompletableFuture<LoadedMapScene> pendingScene;
     private CompletableFuture<LoadedMapScene> pendingSceneRebuild;
     private LoadedMapScene loadedScene;
@@ -280,7 +288,7 @@ public final class StudioApplication implements AutoCloseable {
                 plan.vertices().size(), plan.indices().size(), plan.commands().size(),
                 plan.textures().size());
         logSceneBuild("initial", regionX, regionY, metrics);
-        return new LoadedMapScene(opened, session, renderScene, packet, plan, settingsRevision,
+        return new LoadedMapScene(opened, session, scene, renderScene, packet, plan, settingsRevision,
                 new com.rspsi.editor.render.CameraState(
                 (float) centerX, -2400.0f, (float) centerZ - 4200.0f,
                 (float) -Math.toRadians(28.0), 0.0f));
@@ -294,7 +302,12 @@ public final class StudioApplication implements AutoCloseable {
             currentPlan = loadedScene.plan();
             renderedSettingsRevision = loadedScene.settingsRevision();
             initializePlugins(loadedScene);
-            loadedScene.session().addChangeListener(changedTiles -> sceneDirty.set(true));
+            loadedScene.session().addChangeListener(changedTiles -> {
+                synchronized (sceneChangeLock) {
+                    pendingSceneChanges.addAll(changedTiles);
+                }
+                sceneDirty.set(true);
+            });
             sceneStatus = "Region " + loadedScene.opened().region().regionX()
                     + "," + loadedScene.opened().region().regionY() + " ready.";
         } catch (RuntimeException failure) {
@@ -324,20 +337,42 @@ public final class StudioApplication implements AutoCloseable {
         if (sceneDirty.compareAndSet(true, false)) {
             if (loadedScene != null && cache != null) {
                 LoadedMapScene baseScene = loadedScene;
-                pendingSceneRebuild = CompletableFuture.supplyAsync(
-                        () -> rebuildMapScene(cache, baseScene), sceneExecutor);
+                Set<TileCoordinate> changedTiles = drainSceneChanges();
+                if (!changedTiles.isEmpty()) {
+                    pendingSceneRebuild = CompletableFuture.supplyAsync(
+                            () -> rebuildMapScene(cache, baseScene, changedTiles), sceneExecutor);
+                }
             }
         }
     }
 
-    private LoadedMapScene rebuildMapScene(LoadedOsrsCacheSession cache, LoadedMapScene baseScene) {
+    private Set<TileCoordinate> drainSceneChanges() {
+        synchronized (sceneChangeLock) {
+            Set<TileCoordinate> snapshot = Set.copyOf(pendingSceneChanges);
+            pendingSceneChanges.clear();
+            return snapshot;
+        }
+    }
+
+    private LoadedMapScene rebuildMapScene(LoadedOsrsCacheSession cache, LoadedMapScene baseScene,
+                                           Set<TileCoordinate> changedTiles) {
         long totalStart = System.nanoTime();
         WorldRegion region = baseScene.opened().worldRegion();
         WorldRegionWindow window = new WorldRegionWindow(region.regionX(), region.regionY(), 1, 1,
                 Map.of(region.regionId(), region));
+        Set<WorldTileAddress> changedWorldTiles = changedTiles.stream()
+                .map(tile -> WorldTileAddress.of(
+                        region.regionX() * WorldRegion.REGION_SIZE + tile.x(),
+                        region.regionY() * WorldRegion.REGION_SIZE + tile.y(),
+                        tile.plane()))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
         long windowStart = System.nanoTime();
-        RenderWindowScene scene = new RenderWindowSceneBuilder(cache.bundle().definitions()).build(window);
+        IncrementalRenderWindowSceneCompiler windowCompiler =
+                new IncrementalRenderWindowSceneCompiler(cache.bundle().definitions());
+        IncrementalRenderWindowSceneCompiler.UpdateResult windowUpdate =
+                windowCompiler.compile(baseScene.windowScene(), window, changedWorldTiles, 0);
+        RenderWindowScene scene = windowUpdate.scene();
         long windowNanos = System.nanoTime() - windowStart;
 
         SceneWindow sceneWindow = SceneWindow.from(window);
@@ -352,7 +387,8 @@ public final class StudioApplication implements AutoCloseable {
         long planNanos = System.nanoTime() - planStart;
 
         long renderSceneStart = System.nanoTime();
-        RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).build(region.document());
+        RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).update(
+                baseScene.renderScene(), new RenderChanges(changedTiles), 0);
         long renderSceneNanos = System.nanoTime() - renderSceneStart;
 
         SceneBuildMetrics metrics = new SceneBuildMetrics(
@@ -361,7 +397,11 @@ public final class StudioApplication implements AutoCloseable {
                 plan.vertices().size(), plan.indices().size(), plan.commands().size(),
                 plan.textures().size());
         logSceneBuild("edit", region.regionX(), region.regionY(), metrics);
-        return new LoadedMapScene(baseScene.opened(), baseScene.session(), renderScene, packet, plan,
+        LOGGER.info("Map scene edit window mode={}, reason={}, dirtyZones={}, compiledVisibleTiles={}",
+                windowUpdate.fullRebuild() ? "full" : "incremental",
+                windowUpdate.reason(), windowUpdate.dirtyZones().size(),
+                windowUpdate.compiledVisibleTiles());
+        return new LoadedMapScene(baseScene.opened(), baseScene.session(), scene, renderScene, packet, plan,
                 settingsRevision, baseScene.camera());
     }
 
@@ -526,6 +566,9 @@ public final class StudioApplication implements AutoCloseable {
         if (pendingSceneRebuild != null) pendingSceneRebuild.cancel(true);
         pendingSceneRebuild = null;
         sceneDirty.set(false);
+        synchronized (sceneChangeLock) {
+            pendingSceneChanges.clear();
+        }
     }
 
     private void closePluginLifecycle() {
@@ -588,6 +631,7 @@ public final class StudioApplication implements AutoCloseable {
 
     private record LoadedMapScene(OsrsProjectSessionLoader.OpenedProject opened,
                                   EditorSession session,
+                                  RenderWindowScene windowScene,
                                   RenderScene renderScene,
                                   GpuScenePacket packet,
                                   GpuUploadPlan plan,
