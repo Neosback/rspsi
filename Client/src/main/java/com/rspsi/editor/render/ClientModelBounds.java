@@ -55,8 +55,11 @@ public record ClientModelBounds(
                                               int drawOrientation,
                                               boolean singleTile) {
         Objects.requireNonNull(vertices, "vertices");
+        if (drawOrientation < 0 || drawOrientation >= 2048) {
+            throw new IllegalArgumentException("Model AABB orientation must be 0..2047");
+        }
         if (vertices.isEmpty()) return none();
-        int orientation = drawOrientation & 2047;
+        int orientation = drawOrientation;
 
         int height = 0;
         int bottomY = 0;
