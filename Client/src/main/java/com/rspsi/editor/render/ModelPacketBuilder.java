@@ -180,6 +180,8 @@ public final class ModelPacketBuilder {
             if (parts.clientBoundsVertices.size() > renderableBoundsStart) {
                 parts.clientRenderableRanges.add(new VertexRange(
                         renderableBoundsStart, parts.clientBoundsVertices.size()));
+                parts.clientRenderablePlacements.add(
+                        new ClientRenderablePlacement(variant.decorX(), variant.decorZ()));
             }
         }
         if (parts.vertices.isEmpty() || parts.triangles.isEmpty()) return Optional.empty();
@@ -206,7 +208,7 @@ public final class ModelPacketBuilder {
                 objectCenterHeight(document, object, resolved.footprintWidth(), resolved.footprintLength()),
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
                 GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata,
-                clientRenderableBounds, sceneObjectIdentity);
+                clientRenderableBounds, parts.clientRenderablePlacements, sceneObjectIdentity);
         return Optional.of(resolved.appearance().mergeNormals()
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }
@@ -691,7 +693,8 @@ public final class ModelPacketBuilder {
                 packet.maxZ(), packet.supportsAnimation(), packet.supportsParticles(),
                 packet.placementHeight(), packet.roofRelated(), packet.renderMode(),
                 packet.wallDecorationPresentation(), packet.gameObjectSceneMetadata(),
-                packet.clientRenderableBounds(), packet.sceneObjectIdentity());
+                packet.clientRenderableBounds(), packet.clientRenderablePlacements(),
+                packet.sceneObjectIdentity());
     }
 
     /**
@@ -1521,6 +1524,7 @@ public final class ModelPacketBuilder {
         private final List<ModelVertex> vertices = new ArrayList<>();
         private final List<ModelVertex> clientBoundsVertices = new ArrayList<>();
         private final List<VertexRange> clientRenderableRanges = new ArrayList<>();
+        private final List<ClientRenderablePlacement> clientRenderablePlacements = new ArrayList<>();
         private final List<ModelTriangle> triangles = new ArrayList<>();
         private final List<TextureTriangle> textureTriangles = new ArrayList<>();
         private final List<VertexRange> wallVariantRanges = new ArrayList<>();
