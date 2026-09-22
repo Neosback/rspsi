@@ -381,12 +381,31 @@
       "title": "Depth modes, face bias, priority ordering, and winding/facing",
       "status": "partial",
       "priority": "p0",
-      "runelite": ["net.runelite.api.Renderable#getRenderMode", "net.runelite.api.Model#getFaceBias", "net.runelite.api.Model#getFaceRenderPriorities", "net.runelite.api.hooks.DrawCallbacks#ZBUF"],
-      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java", "Client/src/main/java/com/rspsi/editor/render/RenderOrderKey.java", "Client/src/main/java/com/rspsi/editor/render/RsFaceOrderPlanner.java", "Client/src/main/java/com/rspsi/editor/render/BackfacePolicy.java", "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"],
-      "tsps": ["render/shaders/main.vert.glsl", "render/SceneBuffer.ts", "render/render/tick2.ts"],
-      "evidence": ["Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java", "Client/src/test/java/com/rspsi/editor/render/RenderOrderKeyTest.java"],
-      "reason": "Depth mode, scene/model category priority, face priority, face bias, and the current two-sided facing policy now meet in one backend-neutral RenderOrderKey used by native batching/state ordering. Exact camera-dependent facing and native winding are still intentionally unresolved, so culling remains disabled.",
-      "nextAction": "Add asymmetric-model and shaped-tile winding fixtures against RuneLite/client behavior, then decide whether any family can safely move from TWO_SIDED to verified native culling."
+      "runelite": [
+        "net.runelite.api.Renderable#getRenderMode",
+        "net.runelite.api.Model#getFaceBias",
+        "net.runelite.api.Model#getFaceRenderPriorities",
+        "net.runelite.api.hooks.DrawCallbacks#ZBUF"
+      ],
+      "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java",
+        "Client/src/main/java/com/rspsi/editor/render/RenderOrderKey.java",
+        "Client/src/main/java/com/rspsi/editor/render/RsFaceOrderPlanner.java",
+        "Client/src/main/java/com/rspsi/editor/render/BackfacePolicy.java",
+        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
+      ],
+      "tsps": [
+        "render/shaders/main.vert.glsl",
+        "render/SceneBuffer.ts",
+        "render/render/tick2.ts"
+      ],
+      "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/RenderOrderKeyTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/BackfacePolicyTest.java"
+      ],
+      "reason": "Depth mode, scene/model category priority, face priority, face bias, and the current facing policy meet in one backend-neutral RenderOrderKey. The software-to-native coordinate transform now proves that client-front triangles map to GL counter-clockwise window winding; the previous clockwise hint was incorrect. Native culling remains intentionally disabled until a real asymmetric cache model and shaped-tile fixture validate the corrected polarity end to end.",
+      "nextAction": "Validate GL_CCW against one asymmetric real-cache model and one shaped-tile fixture in the live viewport; if both agree with the software reference, enable verified culling selectively or globally as the evidence permits."
     },
     {
       "id": "native.picking",
