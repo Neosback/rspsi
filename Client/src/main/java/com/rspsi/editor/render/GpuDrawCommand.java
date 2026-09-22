@@ -240,6 +240,14 @@ public record GpuDrawCommand(
         boolean tileCompatible = tile.equals(nextTile)
                 || (layer == SceneLayer.Kind.TERRAIN && nextLayer == SceneLayer.Kind.TERRAIN
                     && tile.plane() == nextTile.plane() && sameWorldZone);
+        boolean modelMetadataCompatible = layer == SceneLayer.Kind.TERRAIN
+                || (wallDecorationPresentation.equals(nextWallDecorationPresentation)
+                    && gameObjectSceneMetadata.equals(nextGameObjectSceneMetadata)
+                    && clientRenderableBounds.equals(nextClientRenderableBounds)
+                    && sceneObjectIdentity.equals(nextSceneObjectIdentity)
+                    && placementHeight == nextPlacementHeight
+                    && modelAnchorX == nextModelAnchorX
+                    && modelAnchorY == nextModelAnchorY);
         return tileCompatible
                 && scenePlane == nextScenePlane
                 && planeCullLevel == nextPlaneCullLevel
@@ -248,13 +256,7 @@ public record GpuDrawCommand(
                 && depthBias == nextDepthBias
                 && objectId == nextObjectId
                 && renderMode == nextRenderMode
-                && wallDecorationPresentation.equals(nextWallDecorationPresentation)
-                && gameObjectSceneMetadata.equals(nextGameObjectSceneMetadata)
-                && clientRenderableBounds.equals(nextClientRenderableBounds)
-                && sceneObjectIdentity.equals(nextSceneObjectIdentity)
-                && placementHeight == nextPlacementHeight
-                && modelAnchorX == nextModelAnchorX
-                && modelAnchorY == nextModelAnchorY
+                && modelMetadataCompatible
                 && firstIndex + indexCount == nextFirstIndex;
     }
 
