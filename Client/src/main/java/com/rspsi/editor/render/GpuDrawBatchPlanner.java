@@ -72,9 +72,7 @@ public final class GpuDrawBatchPlanner {
 
     private static boolean sameDrawState(GpuDrawCommand first, GpuDrawCommand candidate) {
         return first.textureId() == candidate.textureId()
-                && first.layer() == candidate.layer()
-                && first.depthBias() == candidate.depthBias()
-                && first.renderMode() == candidate.renderMode();
+                && RenderOrderKey.from(first).sameNativeState(RenderOrderKey.from(candidate));
     }
 
     /** One native draw call, potentially containing several ordered command ranges. */
