@@ -499,6 +499,8 @@ class ModelPacketBuilderTest {
         // Shape 5 uses the full supporting wall displacement.
         assertEquals(96, packets.get(0).vertices().get(0).x());
         assertEquals(64, packets.get(0).vertices().get(0).z());
+        assertEquals(new ClientRenderablePlacement(32, 0),
+                packets.get(0).clientRenderablePlacements().get(0));
         // Shape 6 uses the same displacement halved on the diagonal vector.
         assertEquals(125, packets.get(1).vertices().get(0).x());
         assertEquals(3, packets.get(1).vertices().get(0).z());
@@ -514,6 +516,9 @@ class ModelPacketBuilderTest {
         assertEquals(packets.get(0).clientRenderableBounds(),
                 fallbackStraight.clientRenderableBounds(),
                 "wall-decoration displacement is Scene placement, not Model-local bounds");
+        assertEquals(new ClientRenderablePlacement(16, 0),
+                fallbackStraight.clientRenderablePlacements().get(0),
+                "fallback shape-5 placement must retain the client's 16-unit displacement");
     }
 
     @Test
@@ -621,6 +626,10 @@ class ModelPacketBuilderTest {
                 packets.get(0).wallDecorationPresentation().part());
         assertEquals(1, packets.get(0).clientRenderableBounds().size());
         assertEquals(1, packets.get(1).clientRenderableBounds().size());
+        assertEquals(new ClientRenderablePlacement(-8, -8),
+                packets.get(0).clientRenderablePlacements().get(0));
+        assertEquals(ClientRenderablePlacement.none(),
+                packets.get(1).clientRenderablePlacements().get(0));
         assertTrue(packets.get(0).sceneObjectIdentity().present());
         assertEquals(packets.get(0).sceneObjectIdentity(), packets.get(1).sceneObjectIdentity(),
                 "both shape-8 renderables belong to one placed scene object");
@@ -644,6 +653,10 @@ class ModelPacketBuilderTest {
                 compatibility.wallDecorationPresentation().part());
         assertEquals(2, compatibility.clientRenderableBounds().size(),
                 "compatibility flattening must still retain both client renderable bounds");
+        assertEquals(List.of(new ClientRenderablePlacement(-8, -8),
+                        ClientRenderablePlacement.none()),
+                compatibility.clientRenderablePlacements(),
+                "compatibility flattening must retain each renderable's placement offset");
     }
 
     @Test
