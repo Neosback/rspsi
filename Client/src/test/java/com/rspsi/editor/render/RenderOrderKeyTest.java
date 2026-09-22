@@ -4,44 +4,41 @@ import com.rspsi.editor.model.WorldTileAddress;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class RenderOrderKeyTest {
     @Test
-    void capturesLayerFacePriorityDepthModeAndBias() {
-        GpuDrawCommand command = new GpuDrawCommand(
-                WorldTileAddress.of(3200, 3200, 0),
-                SceneLayer.Kind.WALL_DECORATION,
-                GpuDrawCommand.SubmissionPass.OPAQUE,
-                0, 3, 7, 11, 23, 899,
-                GpuDrawCommand.RenderMode.SORTED_NO_DEPTH);
+    void priorityDoesNotSplitIdenticalNativeDrawState() {
+        GpuDrawCommand low = command(7, 1, 4, GpuDrawCommand.RenderMode.DEFAULT);
+        GpuDrawCommand high = command(7, 11, 4, GpuDrawCommand.RenderMode.DEFAULT);
 
-        RenderOrderKey key = RenderOrderKey.from(command);
-
-        assertEquals(SceneLayer.Kind.WALL_DECORATION.ordinal(), key.modelPriority());
-        assertEquals(11, key.facePriority());
-        assertEquals(GpuDrawCommand.RenderMode.SORTED_NO_DEPTH, key.depthMode());
-        assertEquals(23, key.faceBias());
+        assertEquals(RenderOrderKey.nativeState(low), RenderOrderKey.nativeState(high));
     }
 
     @Test
-    void facePriorityChangesOrderingWithoutForcingANewNativeStateBatch() {
-        RenderOrderKey low = RenderOrderKey.from(command(1, 4, GpuDrawCommand.RenderMode.DEFAULT));
-        RenderOrderKey high = RenderOrderKey.from(command(11, 4, GpuDrawCommand.RenderMode.DEFAULT));
-        RenderOrderKey differentBias = RenderOrderKey.from(command(11, 5, GpuDrawCommand.RenderMode.DEFAULT));
-        RenderOrderKey differentDepth = RenderOrderKey.from(command(11, 4, GpuDrawCommand.RenderMode.SORTED_NO_DEPTH));
+    void materialLayerBiasAndDepthModeChangeNativeState() {
+        GpuDrawCommand base = command(7, 1, 4, GpuDrawCommand.RenderMode.DEFAULT);
+        GpuDrawCommand texture = command(9, 1, 4, GpuDrawCommand.RenderMode.DEFAULT);
+        GpuDrawCommand bias = command(7, 1, 5, GpuDrawCommand.RenderMode.DEFAULT);
+        GpuDrawCommand depth = command(7, 1, 4, GpuDrawCommand.RenderMode.SORTED_NO_DEPTH);
+        GpuDrawCommand layer = new GpuDrawCommand(
+                WorldTileAddress.of(3200, 3200, 0),
+                SceneLayer.Kind.WALL_DECORATION,
+                GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, 7, 1, 4, 1, GpuDrawCommand.RenderMode.DEFAULT);
 
-        assertTrue(low.sameNativeState(high));
-        assertFalse(low.sameNativeState(differentBias));
-        assertFalse(low.sameNativeState(differentDepth));
+        assertNotEquals(RenderOrderKey.nativeState(base), RenderOrderKey.nativeState(texture));
+        assertNotEquals(RenderOrderKey.nativeState(base), RenderOrderKey.nativeState(bias));
+        assertNotEquals(RenderOrderKey.nativeState(base), RenderOrderKey.nativeState(depth));
+        assertNotEquals(RenderOrderKey.nativeState(base), RenderOrderKey.nativeState(layer));
     }
 
-    private static GpuDrawCommand command(int priority, int bias, GpuDrawCommand.RenderMode mode) {
+    private static GpuDrawCommand command(int textureId, int priority, int bias,
+                                          GpuDrawCommand.RenderMode mode) {
         return new GpuDrawCommand(
                 WorldTileAddress.of(3200, 3200, 0),
                 SceneLayer.Kind.GROUND_OBJECT,
                 GpuDrawCommand.SubmissionPass.OPAQUE,
-                0, 3, -1, priority, bias, 1, mode);
+                0, 3, textureId, priority, bias, 1, mode);
     }
 }
