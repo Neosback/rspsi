@@ -94,11 +94,6 @@ public final class OpenRuneCacheStore implements CacheStore {
         return false;
     }
 
-    private static int configuredRevision() {
-        Integer configured = explicitConfiguredRevision();
-        return configured == null ? DEFAULT_OSRS_REVISION : configured;
-    }
-
     private static Integer explicitConfiguredRevision() {
         String configured = System.getProperty("rspsi.osrs.revision");
         if (configured == null || configured.isBlank()) {
