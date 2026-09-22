@@ -1,6 +1,10 @@
 package com.rspsi.editor.render;
 
+import com.rspsi.editor.model.ObjectCategory;
+import com.rspsi.editor.model.TileCoordinate;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -23,6 +27,25 @@ class GameObjectSceneMetadataTest {
         assertEquals(0, world.modelOrientation());
         assertEquals(1, world.rotation());
         assertTrue(world.contains(3206, 6408));
+    }
+
+    @Test
+    void modelPacketAnchorRebaseMovesSceneBoundsWithTheObject() {
+        ModelRenderPacket packet = new ModelRenderPacket(
+                new TileCoordinate(0, 1, 1), 42, ObjectCategory.GROUND,
+                List.of(), List.of(), List.of(), -1,
+                0, 0, 0, 0, 0, 0, false, false)
+                .withGameObjectSceneMetadata(
+                        GameObjectSceneMetadata.of(1, 1, 2, 3, 0, 0));
+
+        ModelRenderPacket world = packet.withAnchor(new TileCoordinate(0, 3200, 6400));
+
+        assertEquals(3200, world.gameObjectSceneMetadata().minTileX());
+        assertEquals(6400, world.gameObjectSceneMetadata().minTileY());
+        assertEquals(3201, world.gameObjectSceneMetadata().maxTileX());
+        assertEquals(6402, world.gameObjectSceneMetadata().maxTileY());
+        assertEquals(2, world.gameObjectSceneMetadata().sizeX());
+        assertEquals(3, world.gameObjectSceneMetadata().sizeY());
     }
 
     @Test
