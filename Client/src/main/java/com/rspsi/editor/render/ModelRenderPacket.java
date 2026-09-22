@@ -139,7 +139,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata.translated(deltaX, deltaY),
-                clientModelBounds);
+                clientRenderableBounds);
     }
 
     /** Returns this packet with an explicit RuneLite-compatible render mode. */
@@ -148,7 +148,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 newRenderMode, wallDecorationPresentation, gameObjectSceneMetadata,
-                clientModelBounds);
+                clientRenderableBounds);
     }
 
     /** Returns this packet with explicit wall-decoration renderable identity. */
@@ -167,7 +167,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, Objects.requireNonNull(metadata, "metadata"),
-                clientModelBounds);
+                clientRenderableBounds);
     }
 
     /** Returns this packet with one client-local bounds entry per client renderable. */
