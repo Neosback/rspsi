@@ -108,14 +108,8 @@ public final class ModelPacketBuilder {
             return List.copyOf(result);
         }
 
-        WallDecorationPresentation presentation = WallDecorationPresentation.none();
-        if (object.category() == com.rspsi.editor.model.ObjectCategory.WALL_DECOR
-                && variants.size() == 1) {
-            ModelVariant variant = variants.get(0);
-            presentation = WallDecorationPresentation.single(
-                    variant.decorX(), variant.decorZ(), object.rotation());
-        }
-        return buildResolvedPacket(object, document, resolved, variants, presentation)
+        return buildResolvedPacket(object, document, resolved, variants,
+                WallDecorationPresentation.none())
                 .map(List::of).orElseGet(List::of);
     }
 
