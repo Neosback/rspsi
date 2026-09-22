@@ -32,6 +32,28 @@ class GpuZonedUploadPlanBuilderTest {
         assertEquals(0, second.localFirstIndex());
     }
 
+    @Test
+    void everyZonedCommandReferencesTheSameGeometryAsTheFlatCommand() {
+        GpuUploadPlan flat = flatPlan();
+        GpuZonedUploadPlan zoned = new GpuZonedUploadPlanBuilder().build(flat);
+
+        for (int commandIndex = 0; commandIndex < flat.commands().size(); commandIndex++) {
+            GpuDrawCommand flatCommand = flat.commands().get(commandIndex);
+            GpuZonedDrawCommand ref = zoned.commandRefs().get(commandIndex);
+            GpuZoneUpload zone = zoned.zones().get(ref.zone());
+
+            List<GpuSceneVertex> flatVertices = new java.util.ArrayList<>();
+            List<GpuSceneVertex> zonedVertices = new java.util.ArrayList<>();
+            for (int offset = 0; offset < flatCommand.indexCount(); offset++) {
+                int flatIndex = flat.indices().get(flatCommand.firstIndex() + offset);
+                int localIndex = zone.indices().get(ref.localFirstIndex() + offset);
+                flatVertices.add(flat.vertices().get(flatIndex));
+                zonedVertices.add(zone.vertices().get(localIndex));
+            }
+            assertEquals(flatVertices, zonedVertices);
+        }
+    }
+
     private static GpuUploadPlan flatPlan() {
         GpuSceneVertex a = vertex(7, 4, 0);
         GpuSceneVertex b = vertex(7, 4, 1);
