@@ -14,6 +14,8 @@ class GpuDrawCommandTest {
         GpuDrawCommand unsortedNoDepth = command(GpuDrawCommand.RenderMode.UNSORTED_NO_DEPTH);
 
         assertFalse(defaultCommand.renderMode().noDepth());
+        assertTrue(defaultCommand.scenePlane() == defaultCommand.tile().plane());
+        assertTrue(defaultCommand.planeCullLevel() == defaultCommand.tile().plane());
         assertTrue(sortedNoDepth.renderMode().noDepth());
         assertTrue(unsortedNoDepth.renderMode().noDepth());
     }

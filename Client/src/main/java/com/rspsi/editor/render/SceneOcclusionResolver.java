@@ -131,7 +131,7 @@ public final class SceneOcclusionResolver {
         Objects.requireNonNull(occluders, "occluders");
         if (occluders.isEmpty()) return false;
         for (SceneOccluder occluder : occluders) {
-            if (!occluderPlaneMatches(command.tile(), occluder)) continue;
+            if (!occluderPlaneMatches(command, occluder)) continue;
             if (occludesAllCorners(bounds, camera, occluder)) return true;
         }
         return false;
@@ -160,7 +160,7 @@ public final class SceneOcclusionResolver {
         Objects.requireNonNull(camera, "camera");
         Objects.requireNonNull(occluders, "occluders");
         for (SceneOccluder occluder : occluders) {
-            if (!occluderPlaneMatches(command.tile(), occluder)) continue;
+            if (!occluderPlaneMatches(command, occluder)) continue;
             if (occludesPoint(first.x(), first.y(), first.z(), camera, occluder)
                     && occludesPoint(second.x(), second.y(), second.z(), camera, occluder)
                     && occludesPoint(third.x(), third.y(), third.z(), camera, occluder)) {
@@ -170,8 +170,9 @@ public final class SceneOcclusionResolver {
         return false;
     }
 
-    private static boolean occluderPlaneMatches(WorldTileAddress tile, SceneOccluder occluder) {
-        return tile.plane() >= occluder.minPlane() && tile.plane() <= occluder.maxPlane();
+    private static boolean occluderPlaneMatches(GpuDrawCommand command, SceneOccluder occluder) {
+        return command.scenePlane() >= occluder.minPlane()
+                && command.scenePlane() <= occluder.maxPlane();
     }
 
     private static boolean occludesPoint(float px, float py, float pz, CameraState camera,

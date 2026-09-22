@@ -57,6 +57,23 @@ class SceneOcclusionResolverTest {
     }
 
     @Test
+    void bridgeShiftedCommandUsesCurrentScenePlaneForOcclusion() {
+        WorldTileAddress authoredTile = WorldTileAddress.of(2, 0, 1);
+        GpuDrawCommand command = new GpuDrawCommand(
+                authoredTile, 0, 0,
+                SceneLayer.Kind.GROUND_OBJECT, GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, -1, 0, 0, 1, GpuDrawCommand.RenderMode.DEFAULT,
+                WallDecorationPresentation.none());
+        SceneOccluder lowerPlaneWall = new SceneOccluder(1, 1, 1, 0, 0, 0, 0,
+                128, 128, 0, 128, 0, 128);
+        CameraState camera = new CameraState(0, 64, 0, 0, 0);
+
+        assertTrue(SceneOcclusionResolver.occludesTriangle(command,
+                vertex(256, 32, 32), vertex(256, 32, 96), vertex(256, 96, 64),
+                camera, List.of(lowerPlaneWall)));
+    }
+
+    @Test
     void occludesCommandIsFalseWithNoOccluders() {
         WorldTileAddress tile = WorldTileAddress.of(2, 0, 0);
         List<GpuSceneVertex> vertices = List.of(
