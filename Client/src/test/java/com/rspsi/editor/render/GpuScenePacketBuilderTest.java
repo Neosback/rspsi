@@ -5,7 +5,9 @@ import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.model.OsrsTileFlags;
+import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldRegion;
@@ -24,6 +26,34 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GpuScenePacketBuilderTest {
+    @Test
+    void localRenderSceneFootprintMetadataIsWorldRebasedWithTheSceneWindow() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        TileCoordinate local = new TileCoordinate(0, 0, 0);
+        ModelRenderPacket model = new ModelRenderPacket(
+                local, 42, ObjectCategory.GROUND,
+                List.of(), List.of(), List.of(), -1,
+                0, 0, 0, 0, 0, 0, false, false)
+                .withGameObjectSceneMetadata(
+                        GameObjectSceneMetadata.of(0, 0, 2, 3, 1, 0));
+        RenderScene scene = new RenderScene(
+                document, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(),
+                LightingProfile.osrs(), Map.of(), List.of(), List.of(),
+                List.of(model), List.of(), Map.of());
+        SceneWindow window = new SceneWindow(
+                new WorldRegionWindow(50, 100, 1, 1, Map.of()),
+                3200, 6400, 1, 0, java.util.Set.of(), List.of());
+
+        GpuScenePacket packet = new GpuScenePacketBuilder().build(window, scene);
+        ModelRenderPacket projected = packet.tiles().get(0).models().get(0);
+
+        assertEquals(3200, projected.gameObjectSceneMetadata().minTileX());
+        assertEquals(6400, projected.gameObjectSceneMetadata().minTileY());
+        assertEquals(3201, projected.gameObjectSceneMetadata().maxTileX());
+        assertEquals(6402, projected.gameObjectSceneMetadata().maxTileY());
+        assertEquals(512, projected.gameObjectSceneMetadata().orientation());
+    }
+
     @Test
     void assemblesWorldTilesInStableOrderAndPreservesBridgeVisibility() {
         WorldDocument document = new WorldDocument(64, 64, 4);
