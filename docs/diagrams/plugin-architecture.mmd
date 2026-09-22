@@ -1,0 +1,25 @@
+flowchart TB
+    User[User] --> Frontend[JavaFX or Dear ImGui adapter]
+    Frontend --> Shell[Studio shell\nwindow, docking, workspaces, hosts]
+    Shell --> Contributions[ContributionRegistry\ntools, commands, panels, inspectors, overlays]
+    Runtime[Plugin runtime\ndescriptor, lifecycle, ownership] --> Contributions
+    Contributions --> Features[Vertical feature plugins]
+    Features --> Height[Height\nstate, tool, commands, inspector, overlay]
+    Features --> Paint[Paint\nstate, tool, commands, context UI, overlay]
+    Features --> Objects[Objects\ntool, assets, inspector, commands]
+    Features --> Collision[Collision\noverlay, inspector, route tools]
+    Features --> Assets[Asset providers\nobjects, floors, models, sprites]
+    Features --> Core[Core services\nWorldDocument, session, history, selection]
+    Core --> Scene[Neutral scene pipeline\nterrain, objects, bridges, collision, minimap]
+    Core --> Store[Neutral asset facade\nAssetRepository typed lazy views]
+    Scene --> Frontend
+    Store --> Frontend
+
+    classDef shell fill:#4ECDC4,stroke:#0B7285,color:#fff
+    classDef plugin fill:#FFE66D,stroke:#F08C00,color:#000
+    classDef core fill:#A8DADC,stroke:#1864AB,color:#000
+    classDef frontend fill:#95E1D3,stroke:#087F5B,color:#000
+    class Frontend frontend
+    class Shell,Contributions,Runtime shell
+    class Features,Height,Paint,Objects,Collision,Assets plugin
+    class Core,Scene,Store core

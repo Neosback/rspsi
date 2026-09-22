@@ -11,23 +11,14 @@ the JavaFX desktop application accidentally.
 
 ## Start here
 
-- [Roadmap and progress ledger](docs/ROADMAP.md)
-- [Product design](docs/PRODUCT_DESIGN.md)
-- [UI/UX foundation](docs/UI_UX_FOUNDATION.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Resource catalog and provenance](docs/RESOURCE_CATALOG.md)
-- [OpenRune compatibility evidence](docs/OPENRUNE_COMPATIBILITY.md)
-- [External cache verification record](docs/EXTERNAL_CACHE_VERIFICATION_2026-09-17.md)
-- [Manual smoke checklist](docs/MANUAL_SMOKE_TEST.md)
-- [Scene semantics and frontend/plugin contract](docs/SCENE_SEMANTICS.md)
-- [OSRS scene pipeline and plugin attachment points](docs/OSRS_SCENE_PIPELINE.md)
-- [RuneLite scene reference for Studio tooling](docs/RUNELITE_SCENE_REFERENCE.md)
-- [Scene rendering cross-reference: RuneLite, TSPS, and Environment Exporter](docs/SCENE_RENDERING_CROSS_REFERENCE.md)
-- [OSRS Environment Exporter scene/render reference](docs/OSRS_ENVIRONMENT_EXPORTER_REFERENCE.md)
-- [Vertical feature/plugin architecture](docs/PLUGIN_ARCHITECTURE.md)
-- [Dear ImGui adapter boundary](docs/IMGUI_ADAPTER.md)
-- [Foundation completion audit](docs/FOUNDATION_AUDIT_2026-09-17.md)
-- [Ideas and future feature possibilities](docs/IDEAS.md)
+- [Agent/contributor orientation - module layout, build commands, conventions](AGENTS.md)
+- [Roadmap and current priorities](docs/ROADMAP.md)
+- [Rendering parity tracker (machine-readable gap list)](docs/RENDERING_PARITY_MANIFEST.json)
+- [Terraini reference notes (algorithms, not vendored source)](docs/TERRAINI_REFERENCE.md)
+
+The `docs/` folder was reset to a single living roadmap on 2026-09-21 - the previous
+audit-trail documents were retired rather than kept as a growing pile of point-in-time
+snapshots. `docs/ROADMAP.md` is meant to be edited in place as work lands.
 
 ## Verification
 
@@ -51,9 +42,12 @@ RSPSI_OSRS_INSTANCE_FIXTURE=/tmp/instance.json RSPSI_OSRS_REVISION=240 \\
 ./gradlew verifyOsrsInstance
 ```
 
-Real caches and external research checkouts stay outside the repository. No
-external project becomes the RSPSi base, and resources marked for license
-review are not bundled or added as runtime dependencies.
+Real caches stay outside the repository. `RuneLite-melxin/` at the repo root is a genuine,
+BSD 2-Clause-licensed reference source tree (see `AGENTS.md`) kept for verifying OSRS-accurate
+behavior - it is not a build dependency and no external project becomes the RSPSi base.
+Resources with unclear licensing (e.g. decompiled third-party output) are deliberately kept
+out of the repository even for reference - see `docs/TERRAINI_REFERENCE.md` for how that's
+handled instead (written notes, not vendored files).
 
 `foundationGate` is the required local/CI baseline. Without
 `RSPSI_OSRS_CACHE`, it runs the deterministic fixture suite and reports real

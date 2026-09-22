@@ -240,16 +240,43 @@ Still open, in the user's own words - "still needs work," "tones more work":
 
 ---
 
-## Part 6 — New feature: path/road generation (Terraini-informed)
+## Part 6 — Path/road painting: extend what already exists, not build from scratch
 
-Terraini's road toolkit was researched in real depth this pass (not just class names) and
-gives a genuine implementable blueprint, sitting on top of OpenRune's own currently-inert
-`Client/src/main/java/com/rspsi/editor/generation/` package (`Generator`, `GeneratorService`,
-`GenerationSchema` - has an unused `ROAD` preset already waiting).
+**Correction from the first draft of this document**: `Client/src/main/java/com/rspsi/editor/tool/SplinePathTool.java`
+(427 lines, wired to a real `PathToolPlugin`) already exists and already does real autotiling -
+`SplinePath.neighbourMask(footprint, x, y)` computes an 8-bit neighbor mask per tile,
+`style.shape(mask)`/`style.rotation(mask)` picks the tile shape/rotation from it (its own
+comment literally says "Apply autotiled material shapes and rotations"), and it already
+supports a height-ramping brush style that interpolates terrain height along the curve via
+`TerrainVertexLattice`, committed as one atomic `CompositeEditCommand`. This was found by
+grepping for autotiling infrastructure while researching the questions in this session's
+follow-up, after Terraini's road toolkit had already been written up below as a "new feature
+to build." It isn't - **the actual task is a gap analysis of the existing tool against
+Terraini's more sophisticated techniques**, not new construction. Terraini's road toolkit was
+researched in real depth (not just class names) and gives a genuine blueprint for closing that
+gap, sitting on top of OpenRune's own currently-inert `Client/src/main/java/com/rspsi/editor/generation/`
+package (`Generator`, `GeneratorService`, `GenerationSchema` - has an unused `ROAD` preset) if a
+more general procedural entry point is ever wanted alongside the interactive tool.
 
-### 6.1 The actual algorithm (from Terraini, adaptable, not a straight port - it's decompiled
-### bytecode from a commercial competitor's product for the *pieces we'd reimplement clean*,
-### but the *algorithm shape* is fair game the same way a published technique is)
+### 6.0 What `SplinePathTool` has vs. what Terraini's toolkit adds
+
+| Capability | `SplinePathTool` today | Terraini |
+|---|---|---|
+| Autotile shape/rotation from neighbor mask | Yes (`SplinePath.neighbourMask` + `style.shape/rotation`) | Yes, but via 48-canonical-case weighted lookup (adds visual variety, avoids mechanical repetition) |
+| Height along the path | Yes (`RAMP` brush style, linear interpolation) | Not researched this pass |
+| Obstacle avoidance / auto-reroute around existing objects | **No** - the user draws the exact path | Yes (`ObstacleRouter`, local A* reroute of only the blocked span) |
+| Curve smoothing | Path is rasterized directly (`path.rasterize(0.4f)`) - not researched whether it's already spline-smoothed upstream | Turn-angle-adaptive Catmull-Rom (sharp corners preserved, gentle turns smoothed) |
+| Tile fit quality | Neighbor-mask lookup (boolean per-tile) | Sub-tile coverage supersampling + Hamming-distance shape fit with edge-portal-mismatch penalty (smoother junctions) |
+| Junction variety | Not researched | Weighted-random among topologically-valid candidates |
+
+The two rows worth prioritizing: **obstacle avoidance** (a real missing capability, not a
+polish item - right now painting a path through a wall just paints through it) and **sub-tile
+coverage fitting** (would visibly improve junction quality). Curve smoothing and junction
+variety are polish, worth doing after the two functional gaps.
+
+### 6.1 The actual algorithm (from Terraini, adaptable, not a straight port - see
+### `docs/TERRAINI_REFERENCE.md` and `AGENTS.md` for why Terraini's source itself isn't
+### vendored here; the algorithm *shape* below is original-wording analysis, not copied code)
 
 1. **Routing is local reroute, not global pathfinding.** Don't build a full A*/Dijkstra
    network solver. Take the user's drawn/desired polyline as ground truth; only run A* to
@@ -342,6 +369,158 @@ seeing whether real friction remains once that's written down. Module-count chan
 one-way door in a Gradle project of this size (build script churn, IDE reindexing, every
 existing import path changes) - worth being sure the two-module split is actually the problem
 before restructuring it.
+
+---
+
+## Part 10 — Cache/Filestore: we're sitting on more than we use
+
+Both cache backends are real Gradle dependencies, deliberately walled off behind an explicit
+adapter boundary (`Client/build.gradle`'s `verifyCacheBackendBoundary` task - `com.displee.`/
+`dev.openrune.` imports are forbidden everywhere except ~9 named adapter files, e.g.
+`OpenRuneCacheStore`, `OpenRuneDefinitionProvider`, `OpenRuneCacheInspector`,
+`LegacyDispleeCacheStore`). This is good architecture (no vendor lock-in leaking through the
+codebase) and should stay - "make more use of Filestore" means using more of what the adapter
+layer exposes, not loosening the boundary.
+
+**The concrete gap**: `dev.or2:opcode` (bundled at the pinned `openruneFileStoreVersion`, see
+`gradle.properties`) ships a genuine **opcode-to-property reflection system** -
+`dev.openrune.definition.opcode.DefinitionOpcode`/`DefinitionOpcodeProperty` map every
+definition field to its raw cache opcode number with generic get/set access, plus
+`BufferSerializer` for round-tripping. `OpenRuneDefinitionProvider`
+(`Client/src/main/java/com/rspsi/cache/store/OpenRuneDefinitionProvider.java`, 997 lines) wraps
+this into ~20 hand-curated getter methods (`object()`, `underlay()`, `texture()`, `model()`,
+etc.) - none of the generic opcode-level introspection is exposed. Two concrete consequences:
+
+- **The long-standing "objects named Null" problem** is this gap in practice: opcode 249
+  (custom key-value params, exposed by the library's `Parameterized` interface) isn't surfaced
+  through `ObjectDefinitionView` at all, so an object with no name but real opcode-249 data has
+  no path to showing anything more useful than "Null" in the UI today.
+- **A real per-field definition editor is more buildable than it looks.** "RuneLite-like bit
+  reading for editing objects" doesn't need to be built from raw byte-buffer parsing - the
+  opcode-property reflection is already there. A generic "show every opcode this definition
+  type carries, with its raw value, editable" panel is a matter of exposing
+  `DefinitionOpcode`/`DefinitionOpcodeProperty` through a new `DefinitionProvider` method (or a
+  parallel raw-access interface for tooling, since `DefinitionProvider`'s curated views are the
+  right thing for rendering code to depend on), not inventing opcode parsing from scratch.
+
+**Target**: add a `DefinitionProvider` (or sibling) method exposing the raw opcode map for a
+definition, surface opcode-249 params specifically to close the "Null" object gap, and scope a
+generic opcode-editor panel as the concrete "bit-level object editing" feature - building on the
+Object Viewer panel that already exists rather than a new standalone window.
+
+---
+
+## Part 11 — Region stitching: what's actually handled vs. assumed
+
+The user's question - "doesn't OSRS stitch regions together, don't we need to handle height at
+region boundaries?" - has a real, partially-answered infrastructure already in place:
+
+- `Client/src/main/java/com/rspsi/editor/model/RegionNeighborhood.java` is a genuine "loaded
+  3x3 OSRS region neighborhood" abstraction whose own javadoc states the design intent
+  explicitly: "World-coordinate lookups never clamp or fabricate neighboring data. Missing
+  adjacent regions remain absent so blending, stitching and diagnostics can distinguish an
+  unloaded seam from authored terrain." This is exactly the right instinct (don't silently
+  paper over a missing neighbor with fabricated data).
+- `FloorBlendRules` has a documented world-coordinate variant that blends underlay color
+  "across loaded adjacent regions" - so the radius-5 color blend (Part 1) is confirmed to
+  already cross region boundaries correctly, not just blend within one region and stop dead at
+  the edge.
+- **What's genuinely unverified this pass**: height-grid continuity specifically (not color).
+  OSRS shares corner heights at region boundaries by construction (a corner belongs to up to 4
+  tiles, and adjacent regions' edge tiles reference the same world-coordinate corners) - whether
+  our own terrain height storage/lookup actually guarantees this sharing, or whether it's
+  possible for two loaded-independently regions to disagree at their shared edge, was not
+  checked this pass. `terrain.bridge` (partial, P1) and `scene.extendedTiles` (partial,
+  "Extended tile border context") in the parity manifest are the closest tracked items but
+  don't explicitly name height-seam continuity as their target.
+
+**Target**: a focused fixture/test that loads two adjacent regions independently and asserts
+their shared-edge corner heights match exactly (not just "close enough" from independent
+computation) - this is cheap to write and either confirms the seam is already solid or finds a
+real bug. Do this before spending effort on anything more elaborate around region boundaries.
+
+**Housekeeping note**: the parity manifest's `evidence` fields for `scene.extendedTiles` and
+`terrain.bridge` point at `docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md`, and
+`terrain.heights`'s evidence points at `docs/TERRAIN_PARITY.md` - both retired in the
+2026-09-21 doc reset. The test-file evidence entries are still valid; the doc-file ones are now
+dangling and should either be removed from the manifest or have their underlying findings
+re-captured somewhere before the pointer is lost entirely.
+
+---
+
+## Part 12 — Tool rail/panel workflow: formalizing what's already the shape
+
+This is the intended, working information architecture - written down explicitly so new tool
+plugins get placed correctly without re-deriving it each time:
+
+- **Left Tool Rail = Brush Tool Rail, brush tools only.** Already enforced by
+  `StudioToolPlugin.isBrushTool()` (Part 4.1) - a tool paints/sculpts with a brush footprint, or
+  it doesn't belong here. "Other things that are similar" means other brush-shaped tools (e.g. a
+  future erase-brush, a stamp-brush per Part 8's paste system if it ends up brush-driven) - the
+  test is "does it have a brush footprint/radius/falloff," not "is it terrain-related."
+- **Floating Tool Rail = selection tools.** Single/Multi tile select, Single/Multi object
+  select - already there, already consolidated into one plugin family (Part 4.1, and see Part 13
+  for finishing that consolidation).
+- **Right panel = settings/inspection primarily, with room to grow into light editing.** Tile
+  Inspector, Plugin Manager/settings, Object Viewer preview - the user's own framing ("mostly
+  settings and inspection... but we may add more tools that are actual editing tools") means this
+  panel isn't reserved as read-only; an editing feature belongs here specifically when it's
+  about *one selected/inspected thing* (e.g. the opcode editor from Part 10 is a natural fit
+  here - it's inspecting-and-editing one definition, not a paint operation).
+- **Bottom bar/drawer = the actual editing tools.** Tile Painter, Height Sculptor, Path Builder,
+  Object Placement - tools that make changes across the scene as their primary job, not tools
+  that inspect one thing. This is already where most editing tools live; keep new
+  scene-modifying tools here by default.
+
+This is a workflow the user explicitly said they like ("keeps it organized and gives a decent
+amount of workspace") - the target isn't to change it, it's to keep enforcing it as new tools
+get added, the same way `isBrushTool()` turned an implicit rule into a checked one for the left
+rail.
+
+---
+
+## Part 13 — Plugin consolidation: concrete next targets
+
+Part 4.1 already nested the object-select tool buttons inside `SelectionOverlayPlugin` since
+they only exist to feed its selection. **That consolidation is half-finished**:
+`SingleSelectToolPlugin`/`MultiSelectToolPlugin` (the *tile*-select equivalents) are still
+separate top-level files in `Editor/src/main/java/com/rspsi/studio/plugin/builtin/tool/`, even
+though they're the exact same pattern - `StudioPluginManager.discoverPlugins()` currently
+registers four selection-family plugins where the object ones already live nested and the tile
+ones don't yet.
+
+**Target**: fold `SingleSelectToolPlugin`/`MultiSelectToolPlugin` into `SelectionOverlayPlugin`
+as nested classes too, matching `SingleObjectSelectToolPlugin`/`MultiObjectSelectToolPlugin`
+exactly. This is the most concrete, lowest-risk item in this whole document - the pattern is
+already proven, it's the same file, same registration mechanism, no design decision left to
+make. After this, `SelectionOverlayPlugin.java` is the one file owning "what selection means and
+how it's shown" end to end: four tool buttons plus the overlay that visualizes whatever they
+select.
+
+No other clear same-file-worth candidates were found this pass among the remaining plugins
+(`TilePainterToolPlugin`, `HeightSculptorToolPlugin`, `PathToolPlugin`,
+`ObjectPlacementToolPlugin`, `BrushSettingsHud` each have distinct enough responsibilities that
+merging would just make one file do unrelated things) - but re-check this list after Part 10's
+opcode-editor panel and Part 6's path-tool work land, since new plugins are exactly when this
+question should get asked again rather than assumed answered.
+
+---
+
+## Part 14 — Rendering: FPS/memory posture (not yet audited)
+
+Everything in Part 1 is about *correctness* against real OSRS rules. The user also asked for
+"good FPS/memory," which is a distinct question this pass didn't investigate - no profiling was
+done, no allocation-hotspot analysis, no draw-call-count budget was checked against a target
+frame time. Flagging as explicitly not covered rather than guessing:
+
+**Target for a future pass**: profile `OpenGlSceneRenderer` and `SessionSceneController` under
+a real large-region load (the run logs seen throughout this project session consistently report
+"source=709419 vertices... draws=1473" for a loaded scene - worth establishing whether that draw
+call count is already batched well or has obvious merge opportunities), and separately profile
+steady-state memory (texture cache growth, whether `RenderTextureResource`/definition caches
+have any eviction policy or grow unbounded across a long editing session). Part 2's incremental
+compiler wiring is the one performance item already scoped with evidence; this is the header for
+"there's probably more, nobody's looked yet."
 
 ---
 
