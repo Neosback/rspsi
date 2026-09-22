@@ -35,7 +35,9 @@ class GpuScenePacketBuilderTest {
                 List.of(), List.of(), List.of(), -1,
                 0, 0, 0, 0, 0, 0, false, false)
                 .withGameObjectSceneMetadata(
-                        GameObjectSceneMetadata.of(0, 0, 2, 3, 1, 0));
+                        GameObjectSceneMetadata.of(0, 0, 2, 3, 1, 0))
+                .withSceneObjectIdentity(SceneObjectIdentity.of(
+                        new WorldObject(42, 10, 1, 0, 0, 0), 2, 3));
         RenderScene scene = new RenderScene(
                 document, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(),
                 LightingProfile.osrs(), Map.of(), List.of(), List.of(),
@@ -52,6 +54,18 @@ class GpuScenePacketBuilderTest {
         assertEquals(3201, projected.gameObjectSceneMetadata().maxTileX());
         assertEquals(6402, projected.gameObjectSceneMetadata().maxTileY());
         assertEquals(512, projected.gameObjectSceneMetadata().orientation());
+        assertEquals(3200, projected.sceneObjectIdentity().anchorX());
+        assertEquals(6400, projected.sceneObjectIdentity().anchorY());
+        assertEquals(local, projected.anchor(),
+                "legacy RenderScene geometry must retain its local render anchor");
+
+        GpuUploadPlan upload = new GpuUploadPlanBuilder().build(packet);
+        if (!upload.commands().isEmpty()) {
+            assertEquals(3200, upload.commands().get(0).sceneObjectIdentity().anchorX());
+            assertEquals(6400, upload.commands().get(0).sceneObjectIdentity().anchorY());
+            assertEquals(0, upload.commands().get(0).modelAnchorX());
+            assertEquals(0, upload.commands().get(0).modelAnchorY());
+        }
     }
 
     @Test
