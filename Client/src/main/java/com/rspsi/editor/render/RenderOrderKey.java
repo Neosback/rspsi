@@ -3,45 +3,30 @@ package com.rspsi.editor.render;
 import java.util.Objects;
 
 /**
- * Backend-neutral render-order state carried by one GPU draw command.
+ * Backend-neutral native draw-state key.
  *
- * <p>This key contains only state that actually affects command ordering or
- * native batching. Back-face culling is a viewport-level validation mode and
- * is intentionally not encoded here.</p>
+ * <p>Face priority controls submission order and is deliberately not part of
+ * this key. Commands with different priorities may still share one ordered
+ * multi-draw when their actual GPU state is identical.</p>
  */
-public record RenderOrderKey(
-        int modelPriority,
-        int facePriority,
-        GpuDrawCommand.RenderMode depthMode,
-        int faceBias
-) {
-    public RenderOrderKey {
-        depthMode = Objects.requireNonNull(depthMode, "depthMode");
-        if (modelPriority < 0 || modelPriority > 255
-                || facePriority < 0 || facePriority > 255
-                || faceBias < 0 || faceBias > 255) {
-            throw new IllegalArgumentException("Invalid render-order key");
-        }
-    }
-
-    public static RenderOrderKey from(GpuDrawCommand command) {
-        Objects.requireNonNull(command, "command");
-        return new RenderOrderKey(
-                command.layer().ordinal(),
-                command.priority(),
-                command.renderMode(),
-                command.depthBias());
+public final class RenderOrderKey {
+    private RenderOrderKey() {
     }
 
     /**
-     * Returns whether two commands may share native draw state after material
-     * identity is checked separately. Face priority is intentionally excluded:
-     * it controls ordering, not GL state, and ordered multi-draw preserves it.
+     * Packs the command state that must remain identical inside one native
+     * draw batch. GpuDrawCommand validates the component ranges.
      */
-    public boolean sameNativeState(RenderOrderKey other) {
-        Objects.requireNonNull(other, "other");
-        return modelPriority == other.modelPriority
-                && depthMode == other.depthMode
-                && faceBias == other.faceBias;
+    public static long nativeState(GpuDrawCommand command) {
+        Objects.requireNonNull(command, "command");
+        long key = command.textureId() + 1L;
+        key = key * 17L + command.layer().ordinal();
+        key = key * 257L + command.depthBias();
+        key = key * 8L + command.renderMode().ordinal();
+        return key;
+    }
+
+    public static boolean sameNativeState(GpuDrawCommand first, GpuDrawCommand second) {
+        return nativeState(first) == nativeState(second);
     }
 }
