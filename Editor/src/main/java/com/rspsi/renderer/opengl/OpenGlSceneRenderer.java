@@ -11,6 +11,7 @@ import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.GpuColorEncoding;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
 import com.rspsi.editor.render.RenderPresentation;
+import com.rspsi.editor.render.RenderOrderKey;
 import com.rspsi.editor.render.SceneFog;
 import com.rspsi.editor.render.SceneOcclusionResolver;
 import com.rspsi.editor.render.TextureAnimation;
@@ -668,10 +669,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     private static long drawStateKey(GpuDrawCommand command, boolean alpha) {
+        RenderOrderKey order = RenderOrderKey.from(command);
         long key = command.textureId() + 1L;
-        key = key * 17L + command.layer().ordinal();
-        key = key * 257L + command.depthBias();
-        key = key * 8L + command.renderMode().ordinal();
+        key = key * 17L + order.modelPriority();
+        key = key * 257L + order.faceBias();
+        key = key * 8L + order.depthMode().ordinal();
+        key = key * 4L + order.facingPolicy().ordinal();
         return key * 2L + (alpha ? 1L : 0L);
     }
 
