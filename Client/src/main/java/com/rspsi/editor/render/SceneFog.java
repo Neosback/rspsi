@@ -11,20 +11,20 @@ public final class SceneFog {
     private SceneFog() {
     }
 
-    public static Bounds bounds(GpuUploadPlan plan) {
-        Objects.requireNonNull(plan, "plan");
-        if (plan.vertices().isEmpty()) return new Bounds(0, 0, 0, 0);
-        float minX = Float.POSITIVE_INFINITY;
-        float maxX = Float.NEGATIVE_INFINITY;
-        float minZ = Float.POSITIVE_INFINITY;
-        float maxZ = Float.NEGATIVE_INFINITY;
-        for (GpuSceneVertex vertex : plan.vertices()) {
-            minX = Math.min(minX, vertex.x());
-            maxX = Math.max(maxX, vertex.x());
-            minZ = Math.min(minZ, vertex.z());
-            maxZ = Math.max(maxZ, vertex.z());
-        }
-        return new Bounds(minX, maxX, minZ, maxZ);
+    public static Bounds bounds(GpuCommandGeometry geometry) {
+        Objects.requireNonNull(geometry, "geometry");
+        if (geometry.vertexCount() == 0) return new Bounds(0, 0, 0, 0);
+        float[] bounds = {
+                Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY,
+                Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY
+        };
+        geometry.forEachUniqueVertex(vertex -> {
+            bounds[0] = Math.min(bounds[0], vertex.x());
+            bounds[1] = Math.max(bounds[1], vertex.x());
+            bounds[2] = Math.min(bounds[2], vertex.z());
+            bounds[3] = Math.max(bounds[3], vertex.z());
+        });
+        return new Bounds(bounds[0], bounds[1], bounds[2], bounds[3]);
     }
 
     public static float amount(float worldX, float worldZ, Bounds bounds, int depthTiles) {
