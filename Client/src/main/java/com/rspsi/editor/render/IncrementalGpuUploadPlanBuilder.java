@@ -77,9 +77,13 @@ public final class IncrementalGpuUploadPlanBuilder {
     }
 
     private TileFragment flattenTile(GpuScenePacket packet, SceneTileSnapshot tile) {
+        // Fragment geometry only depends on the immutable tile snapshot.
+        // Texture pixels/resources are attached once to the final global plan,
+        // so hashing the full texture repository for every dirty tile would
+        // turn a local rebuild back into O(tiles * textures) work.
         GpuScenePacket singleTile = new GpuScenePacket(
                 packet.window(), List.of(tile), packet.lightingProfile(),
-                "tile:" + tile.worldAddress() + ":" + tile.hashCode(), packet.textures());
+                "tile:" + tile.worldAddress() + ":" + tile.hashCode(), Map.of());
         return new TileFragment(tile, fullBuilder.build(singleTile));
     }
 
