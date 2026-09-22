@@ -81,8 +81,8 @@
         "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md",
         "docs/RENDERING_PARITY_INDEX.md"
       ],
-      "reason": "The tracked RuneLite Scene API surface is explicitly classified as semantic, presentation-only, mutation, or deferred, with base coordinates, map regions, instance identity, world-view identity, and minimum render level carried by SceneContract. Client-like plane projections now apply SceneContract.minimumRenderLevel to the current scene plane before plane selection, while editor/all-plane projections deliberately preserve every loaded plane. Tile planeCullLevel remains separate for the later camera-plane acceptance gate. Extended scene arrays, roofs, and mutation APIs remain intentionally outside the neutral semantic core until a concrete editor consumer requires them.",
-      "nextAction": "Move camera/roof traversal and tile planeCullLevel acceptance into the focused follow-up; keep deferred extended-scene and mutation surfaces out of renderer contracts until needed."
+      "reason": "The tracked RuneLite Scene API surface is explicitly classified as semantic, presentation-only, mutation, or deferred. Base coordinates, map regions, instance identity, world-view identity, scene minimum render level, current scene plane, render level, and physical/cull level are first-class and are now consumed by the client traversal and occlusion paths. Extended scene arrays, connected roof-region data, roof-removal-mode mutation, and other mutation APIs remain intentionally outside the neutral semantic core until a concrete editor consumer requires them.",
+      "nextAction": "Keep the core SceneContract stable; add connected roof-region/removal-mode state only with a concrete Map Studio consumer, and keep extended-scene/mutation surfaces deferred until needed."
     },
     {
       "id": "scene.extendedTiles",
@@ -231,10 +231,11 @@
       ],
       "evidence": [
         "Client/src/test/java/com/rspsi/editor/render/SceneVisibilityPolicyTest.java",
-        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+        "Client/src/test/java/com/rspsi/editor/render/RenderConfigCompilerTest.java",
+        "RuneLite-melxin/runelite-mixins/src/main/java/net/runelite/mixins/RSSceneMixin.java#buildRoofs"
       ],
-      "reason": "Roof metadata filtering exists and the prerequisite authored/render/cull plane fields plus scene minimum render level are now first-class. Exact camera-dependent roof traversal and roof-removal-mode behavior still need fixtures.",
-      "nextAction": "Add client-like camera/min-level roof visibility fixtures using SceneContract.minimumRenderLevel and SceneTileSnapshot.planeCullLevel."
+      "reason": "The vanilla camera traversal prerequisite is now implemented: SceneContract.minimumRenderLevel gates current scene planes and SceneTileSnapshot.planeCullLevel gates them against the active scene/camera plane, matching the client distinction between Scene.minPlane and Tile.minPlane. Static roof-geometry hiding also remains available as an editor presentation choice. Full RuneLite roof-removal parity is still incomplete because RSSceneMixin builds connected 0x4 roof-region IDs and selectively removes regions for position, hovered tile, destination, and camera-to-player BETWEEN tracing.",
+      "nextAction": "Model RuneLite's connected 0x4 roof-region map and POSITION/HOVERED/DESTINATION/BETWEEN removal state if Map Studio needs plugin-style dynamic roof removal; do not conflate that feature with the now-covered vanilla min/cull traversal."
     },
     {
       "id": "scene.instances",
@@ -693,25 +694,36 @@
       "id": "occlusion.visibility",
       "domain": "occlusion",
       "title": "Scene visibility and effective-plane filtering",
-      "status": "partial",
+      "status": "covered",
       "priority": "p1",
       "runelite": [
         "net.runelite.api.Scene",
+        "net.runelite.api.Scene#getMinLevel",
+        "net.runelite.api.Tile#getPlane",
+        "net.runelite.api.Tile#getPhysicalLevel",
         "net.runelite.api.Tile#getRenderLevel"
       ],
       "rspsi": [
         "Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java",
-        "Client/src/main/java/com/rspsi/editor/render/OsrsSceneResolver.java"
+        "Client/src/main/java/com/rspsi/editor/render/SceneContract.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuScenePacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/SceneOcclusionResolver.java"
       ],
       "tsps": [
         "render/render/camera/roof.ts",
         "rs/scene/Scene.ts"
       ],
       "evidence": [
-        "Client/src/test/java/com/rspsi/editor/render/SceneVisibilityPolicyTest.java"
+        "Client/src/test/java/com/rspsi/editor/render/SceneVisibilityPolicyTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/RenderConfigCompilerTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuScenePacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/SceneOcclusionResolverTest.java"
       ],
-      "reason": "Static visibility and occluder inputs exist, and authored/render/cull plane semantics are now explicit. Camera/runtime traversal still does not consume the minimum/cull level exactly like the client.",
-      "nextAction": "Tie camera visibility to SceneContract.minimumRenderLevel and SceneTileSnapshot.planeCullLevel, then add roof-state/occlusion fixtures."
+      "reason": "Client traversal now consumes the scene-wide minimum level and the per-tile physical/cull level as separate gates instead of equating visibility with authored or current-plane equality. The vanilla render profile uses CLIENT_TRAVERSAL; explicit authored/effective projections remain diagnostics. Current scene plane and cull level survive RenderConfig filtering, flow into GPU draw commands and fingerprints, prevent invalid terrain-range merging, and drive plane-correct occluder acceptance. Bridge-linked wall occluders are emitted on the shifted current scene plane, with fixtures covering visibility-below and bridge-shifted occlusion.",
+      "nextAction": "Retain the traversal, bridge, command-metadata, and occlusion fixtures as regressions while roof-region removal modes and future occluder sources are added."
     },
     {
       "id": "native.openglState",

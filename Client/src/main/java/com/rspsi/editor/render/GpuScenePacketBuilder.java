@@ -118,10 +118,11 @@ public final class GpuScenePacketBuilder {
             TerrainRenderPacket terrain = scene.terrainPackets().get(address);
             List<ModelRenderPacket> models = scene.modelPackets().getOrDefault(address, List.of());
             List<SceneLayer> layers = layers(terrain, models, scene.textures());
-            List<SceneOccluder> occluders = occluders(address, scene, models);
             int tileFlags = scene.tileFlags().getOrDefault(address, 0);
             ScenePlaneSemantics planes = ScenePlaneSemantics.resolve(
                     address.plane(), tileFlags, bridge.isPresent());
+            List<SceneOccluder> occluders = occluders(
+                    address, scene, models, planes.scenePlane());
             boolean roofRelated = scene.objects().stream()
                     .filter(value -> value.address().equals(address))
                     .map(value -> value.object().shape().map(shape -> shape.id() >= 12 && shape.id() <= 21)
@@ -252,7 +253,7 @@ public final class GpuScenePacketBuilder {
 
     /** Emits only explicit definition-backed occluders; movement blocking alone is not visual occlusion. */
     private static List<SceneOccluder> occluders(WorldTileAddress address, RenderWindowScene scene,
-                                                 List<ModelRenderPacket> models) {
+                                                 List<ModelRenderPacket> models, int scenePlane) {
         List<SceneOccluder> result = new ArrayList<>();
         for (WorldRenderObject worldObject : scene.objects()) {
             if (!worldObject.address().equals(address)) {
@@ -273,7 +274,7 @@ public final class GpuScenePacketBuilder {
                     result.add(new SceneOccluder(
                             wall.type(), wall.minTileX(address), wall.maxTileX(address),
                             wall.minTileY(address), wall.maxTileY(address),
-                            address.plane(), address.plane(),
+                            scenePlane, scenePlane,
                             wall.minWorldX(address), wall.maxWorldX(address),
                             wall.minWorldY(address), wall.maxWorldY(address),
                             height - 240, height));

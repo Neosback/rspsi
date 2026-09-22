@@ -41,6 +41,67 @@ class SceneVisibilityPolicyTest {
     }
 
     @Test
+    void clientTraversalKeepsLinkedBelowAndShiftedBridgeAtActivePlaneZero() {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        document.tile(1, 2, 3).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, OsrsTileFlags.BRIDGE, java.util.List.of()));
+        WorldRegion region = new WorldRegion(10, 20, document);
+        WorldRegionWindow window = new WorldRegionWindow(10, 20, 1, 1,
+                Map.of(region.regionId(), region));
+        RenderWindowScene scene = new RenderWindowSceneBuilder().build(window);
+
+        GpuScenePacket client = new GpuScenePacketBuilder().build(
+                SceneWindow.from(window), scene, SceneVisibilityPolicy.clientTraversal(0));
+
+        assertEquals(64 * 64 + 1, client.tiles().size());
+        long bridgeColumnTiles = client.tiles().stream()
+                .filter(tile -> tile.worldAddress().worldX() == 642
+                        && tile.worldAddress().worldY() == 1283)
+                .count();
+        assertEquals(2, bridgeColumnTiles);
+        assertTrue(client.tiles().stream().anyMatch(tile ->
+                tile.authoredPlane() == 0
+                        && tile.worldAddress().worldX() == 642
+                        && tile.worldAddress().worldY() == 1283
+                        && tile.effectivePlane() == 0));
+        assertTrue(client.tiles().stream().anyMatch(tile ->
+                tile.authoredPlane() == 1
+                        && tile.worldAddress().worldX() == 642
+                        && tile.worldAddress().worldY() == 1283
+                        && tile.effectivePlane() == 0));
+        assertTrue(client.tiles().stream().noneMatch(tile ->
+                tile.authoredPlane() >= 2
+                        && tile.worldAddress().worldX() == 642
+                        && tile.worldAddress().worldY() == 1283));
+    }
+
+    @Test
+    void clientTraversalUsesPhysicalCullLevelInsteadOfCurrentPlaneEquality() {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        document.tile(2, 5, 6).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, OsrsTileFlags.VIS_BELOW, java.util.List.of()));
+        WorldRegion region = new WorldRegion(10, 20, document);
+        WorldRegionWindow window = new WorldRegionWindow(10, 20, 1, 1,
+                Map.of(region.regionId(), region));
+        RenderWindowScene scene = new RenderWindowSceneBuilder().build(window);
+        SceneWindow sceneWindow = SceneWindow.from(window);
+        GpuScenePacketBuilder builder = new GpuScenePacketBuilder();
+
+        GpuScenePacket effective = builder.build(
+                sceneWindow, scene, SceneVisibilityPolicy.effectivePlane(0));
+        GpuScenePacket client = builder.build(
+                sceneWindow, scene, SceneVisibilityPolicy.clientTraversal(0));
+
+        assertEquals(64 * 64, effective.tiles().size());
+        assertEquals(64 * 64 + 1, client.tiles().size());
+        SceneTileSnapshot visibleBelow = client.tiles().stream()
+                .filter(tile -> tile.authoredPlane() == 2)
+                .findFirst().orElseThrow();
+        assertEquals(2, visibleBelow.effectivePlane());
+        assertEquals(0, visibleBelow.planeCullLevel());
+    }
+
+    @Test
     void clientProjectionHonorsSceneMinimumBeforeTilePlaneSelection() {
         WorldDocument document = new WorldDocument(64, 64, 4);
         document.tile(1, 2, 3).restore(new TileSnapshot(0, 0, 0, 0,
@@ -63,9 +124,9 @@ class SceneVisibilityPolicyTest {
         GpuScenePacketBuilder builder = new GpuScenePacketBuilder();
         GpuScenePacket editor = builder.build(window, scene);
         GpuScenePacket belowMinimum = builder.build(
-                window, scene, SceneVisibilityPolicy.effectivePlane(0));
+                window, scene, SceneVisibilityPolicy.clientTraversal(0));
         GpuScenePacket atMinimum = builder.build(
-                window, scene, SceneVisibilityPolicy.effectivePlane(1));
+                window, scene, SceneVisibilityPolicy.clientTraversal(1));
 
         assertEquals(64 * 64 * 4, editor.tiles().size());
         assertTrue(belowMinimum.tiles().isEmpty());

@@ -80,6 +80,33 @@ class GpuScenePacketBuilderTest {
     }
 
     @Test
+    void bridgeLinkedWallOccluderUsesCurrentScenePlane() {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        document.tile(1, 2, 3).restore(new TileSnapshot(100, 100, 100, 100,
+                1, 0, 0, 0, OsrsTileFlags.BRIDGE,
+                List.of(new WorldObject(99, 0, 0, 1, 2, 3))));
+        WorldRegion region = new WorldRegion(10, 20, document);
+        WorldRegionWindow window = new WorldRegionWindow(10, 20, 1, 1,
+                Map.of(region.regionId(), region));
+
+        RenderWindowScene scene = new RenderWindowSceneBuilder(clippedWallDefinitions()).build(window);
+        GpuScenePacket packet = new GpuScenePacketBuilder().build(SceneWindow.from(window), scene);
+        WorldTileAddress authoredAddress = WorldTileAddress.of(642, 1283, 1);
+
+        SceneTileSnapshot bridgeTile = packet.tiles().stream()
+                .filter(tile -> tile.worldAddress().equals(authoredAddress))
+                .findFirst().orElseThrow();
+        SceneOccluder occluder = bridgeTile.occluders().stream()
+                .filter(value -> value.type() == 1)
+                .findFirst().orElseThrow();
+
+        assertEquals(0, bridgeTile.effectivePlane());
+        assertEquals(1, bridgeTile.authoredPlane());
+        assertEquals(0, occluder.minPlane());
+        assertEquals(0, occluder.maxPlane());
+    }
+
+    @Test
     void emitsClientWallOccluderInputsForModelClippedStraightWalls() {
         WorldDocument document = new WorldDocument(64, 64, 1);
         document.tile(0, 2, 3).restore(new TileSnapshot(100, 100, 100, 100,

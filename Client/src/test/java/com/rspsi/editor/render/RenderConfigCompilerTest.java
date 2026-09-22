@@ -7,6 +7,9 @@ import com.rspsi.editor.settings.SettingsSnapshot;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -22,7 +25,7 @@ class RenderConfigCompilerTest {
         assertTrue(config.terrainVisible());
         assertTrue(config.objectsVisible());
         assertTrue(config.roofsVisible());
-        assertEquals(SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE, config.planeSelection());
+        assertEquals(SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL, config.planeSelection());
         // 4 is the registry default now that MSAA is implemented end-to-end
         // (GlFramebuffer); it was 0 only while the setting was clamped
         // unavailable pending the FBO acceptance gate.
@@ -35,7 +38,7 @@ class RenderConfigCompilerTest {
         SettingsSnapshot snapshot = registry.defaults()
                 .with(RenderSettingKeys.ACTIVE_PLANE, 2)
                 .with(RenderSettingKeys.PLANE_SELECTION,
-                        SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE)
+                        SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL)
                 .with(RenderSettingKeys.ROOFS_VISIBLE, false)
                 .with(RenderSettingKeys.BRIDGE_TILES_VISIBLE, false)
                 .with(RenderSettingKeys.EXPOSURE, 1.25);
@@ -46,11 +49,54 @@ class RenderConfigCompilerTest {
         assertEquals(1.25, config.exposure());
         assertFalse(config.roofsVisible());
         assertFalse(config.bridgeTilesVisible());
-        assertEquals(SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
+        assertEquals(SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL,
                 config.visibilityPolicy().planeSelection());
         assertEquals(2, config.visibilityPolicy().selectedPlane());
         assertTrue(config.visibilityPolicy().hideRoofGeometry());
         assertTrue(config.visibilityPolicy().hideBridgeUpperGeometry());
+    }
+
+    @Test
+    void renderConfigFilteringPreservesExplicitScenePlaneTuple() {
+        com.rspsi.editor.model.TileCoordinate coordinate =
+                new com.rspsi.editor.model.TileCoordinate(2, 3200, 3200);
+        com.rspsi.editor.model.WorldTileAddress address =
+                com.rspsi.editor.model.WorldTileAddress.of(3200, 3200, 2);
+        TerrainRenderPacket terrain = new TerrainRenderPacket(coordinate,
+                List.of(new TerrainRenderVertex(0, 0, 12, 100, 0, 0),
+                        new TerrainRenderVertex(128, 0, 12, 101, 128, 0),
+                        new TerrainRenderVertex(0, 128, 16, 102, 0, 128)),
+                List.of(new TerrainRenderFace(0, 1, 2, 0, -1, 255, 0)),
+                0, 0, -1, 100, -1, false, false, -1);
+        SceneTileSnapshot sourceTile = new SceneTileSnapshot(
+                coordinate, address, 0,
+                1, 2, 2, 0,
+                Optional.empty(), Optional.of(terrain), List.of(),
+                List.of(new SceneLayer(SceneLayer.Kind.TERRAIN, List.of())),
+                List.of(), false, true);
+        SceneWindow window = new SceneWindow(
+                new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1, Map.of()),
+                3200, 3200, 4, 0, java.util.Set.of(), List.of());
+        GpuScenePacket packet = new GpuScenePacket(
+                window, List.of(sourceTile), LightingProfile.osrs(),
+                "render-config-plane-semantics", Map.of());
+
+        RenderConfig config = new RenderConfigCompiler().compile(
+                RenderSettingKeys.registry().defaults()
+                        .with(RenderSettingKeys.ACTIVE_PLANE, 0)
+                        .with(RenderSettingKeys.PLANE_SELECTION,
+                                SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL)
+                        .with(RenderSettingKeys.TERRAIN_VISIBLE, false));
+
+        GpuScenePacket filtered = config.apply(packet);
+
+        assertEquals(1, filtered.tiles().size());
+        SceneTileSnapshot result = filtered.tiles().get(0);
+        assertFalse(result.terrain().isPresent());
+        assertEquals(2, result.authoredPlane());
+        assertEquals(1, result.effectivePlane());
+        assertEquals(2, result.renderLevel());
+        assertEquals(0, result.planeCullLevel());
     }
 
     @Test

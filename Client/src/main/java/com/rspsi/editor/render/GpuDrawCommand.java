@@ -7,6 +7,8 @@ import java.util.Objects;
 /** Ordered material submission range in a backend-neutral upload plan. */
 public record GpuDrawCommand(
         WorldTileAddress tile,
+        int scenePlane,
+        int planeCullLevel,
         SceneLayer.Kind layer,
         SubmissionPass pass,
         int firstIndex,
@@ -43,11 +45,23 @@ public record GpuDrawCommand(
         renderMode = Objects.requireNonNull(renderMode, "renderMode");
         wallDecorationPresentation = Objects.requireNonNull(
                 wallDecorationPresentation, "wallDecorationPresentation");
+        if (scenePlane < 0 || scenePlane > 3 || planeCullLevel < 0 || planeCullLevel > 3) {
+            throw new IllegalArgumentException("Invalid scene-plane command metadata");
+        }
         if (firstIndex < 0 || indexCount <= 0 || textureId < -1
                 || priority < 0 || priority > 255 || depthBias < 0 || depthBias > 255
                 || objectId < -1) {
             throw new IllegalArgumentException("Invalid GPU draw command");
         }
+    }
+
+    /** Compatibility constructor before scene-plane metadata was explicit. */
+    public GpuDrawCommand(WorldTileAddress tile, SceneLayer.Kind layer, SubmissionPass pass,
+                          int firstIndex, int indexCount, int textureId, int priority,
+                          int depthBias, int objectId, RenderMode renderMode,
+                          WallDecorationPresentation wallDecorationPresentation) {
+        this(tile, tile.plane(), tile.plane(), layer, pass, firstIndex, indexCount,
+                textureId, priority, depthBias, objectId, renderMode, wallDecorationPresentation);
     }
 
     /** Compatibility constructor before wall-decoration presentation metadata. */
@@ -77,17 +91,18 @@ public record GpuDrawCommand(
     boolean canMerge(WorldTileAddress nextTile, SceneLayer.Kind nextLayer,
                      SubmissionPass nextPass, int nextTextureId,
                      int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex) {
-        return canMerge(nextTile, nextLayer, nextPass, nextTextureId, nextPriority,
-                nextDepthBias, nextObjectId, nextFirstIndex, RenderMode.DEFAULT);
+        return canMerge(nextTile, nextTile.plane(), nextTile.plane(), nextLayer, nextPass,
+                nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
+                RenderMode.DEFAULT, WallDecorationPresentation.none());
     }
 
     boolean canMerge(WorldTileAddress nextTile, SceneLayer.Kind nextLayer,
                      SubmissionPass nextPass, int nextTextureId,
                      int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex,
                      RenderMode nextRenderMode) {
-        return canMerge(nextTile, nextLayer, nextPass, nextTextureId, nextPriority,
-                nextDepthBias, nextObjectId, nextFirstIndex, nextRenderMode,
-                WallDecorationPresentation.none());
+        return canMerge(nextTile, nextTile.plane(), nextTile.plane(), nextLayer, nextPass,
+                nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
+                nextRenderMode, WallDecorationPresentation.none());
     }
 
     boolean canMerge(WorldTileAddress nextTile, SceneLayer.Kind nextLayer,
@@ -95,10 +110,23 @@ public record GpuDrawCommand(
                      int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex,
                      RenderMode nextRenderMode,
                      WallDecorationPresentation nextWallDecorationPresentation) {
+        return canMerge(nextTile, nextTile.plane(), nextTile.plane(), nextLayer, nextPass,
+                nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
+                nextRenderMode, nextWallDecorationPresentation);
+    }
+
+    boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
+                     SceneLayer.Kind nextLayer, SubmissionPass nextPass, int nextTextureId,
+                     int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex,
+                     RenderMode nextRenderMode,
+                     WallDecorationPresentation nextWallDecorationPresentation) {
         boolean tileCompatible = tile.equals(nextTile)
                 || (layer == SceneLayer.Kind.TERRAIN && nextLayer == SceneLayer.Kind.TERRAIN
                     && tile.plane() == nextTile.plane());
-        return tileCompatible && layer == nextLayer && pass == nextPass
+        return tileCompatible
+                && scenePlane == nextScenePlane
+                && planeCullLevel == nextPlaneCullLevel
+                && layer == nextLayer && pass == nextPass
                 && textureId == nextTextureId && priority == nextPriority
                 && depthBias == nextDepthBias
                 && objectId == nextObjectId
@@ -108,7 +136,7 @@ public record GpuDrawCommand(
     }
 
     GpuDrawCommand extend(int additionalIndices) {
-        return new GpuDrawCommand(tile, layer, pass, firstIndex,
+        return new GpuDrawCommand(tile, scenePlane, planeCullLevel, layer, pass, firstIndex,
                 indexCount + additionalIndices, textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation);
     }

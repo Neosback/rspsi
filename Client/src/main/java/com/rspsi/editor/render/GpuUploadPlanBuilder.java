@@ -37,7 +37,7 @@ public final class GpuUploadPlanBuilder {
                     indices.add(base);
                     indices.add(base + 1);
                     indices.add(base + 2);
-                    appendCommand(commands, tile.worldAddress(), SceneLayer.Kind.TERRAIN,
+                    appendCommand(commands, tile, SceneLayer.Kind.TERRAIN,
                             terrainPass(face),
                             first, face.textureId(), face.priority(),
                             terrainDepthBias(face), -1, GpuDrawCommand.RenderMode.DEFAULT);
@@ -161,7 +161,7 @@ public final class GpuUploadPlanBuilder {
                 indices.add(base);
                 indices.add(base + 1);
                 indices.add(base + 2);
-                appendCommand(commands, tile.worldAddress(), layer.kind(), pass,
+                appendCommand(commands, tile, layer.kind(), pass,
                         first, face.textureId(), submissionPriority(layer.kind(), face.priority()),
                         submissionDepthBias(layer.kind(), face.priority(), face.depthBias()), model.objectId(),
                         model.renderMode(), model.wallDecorationPresentation());
@@ -211,7 +211,7 @@ public final class GpuUploadPlanBuilder {
         return Math.min(255, Math.max(1, faceBias) + facePriority);
     }
 
-    private static void appendCommand(List<GpuDrawCommand> commands, WorldTileAddress tile,
+    private static void appendCommand(List<GpuDrawCommand> commands, SceneTileSnapshot tile,
                                       SceneLayer.Kind layer, GpuDrawCommand.SubmissionPass pass,
                                       int firstIndex, int textureId, int priority, int depthBias, int objectId,
                                       GpuDrawCommand.RenderMode renderMode) {
@@ -219,7 +219,7 @@ public final class GpuUploadPlanBuilder {
                 depthBias, objectId, renderMode, WallDecorationPresentation.none());
     }
 
-    private static void appendCommand(List<GpuDrawCommand> commands, WorldTileAddress tile,
+    private static void appendCommand(List<GpuDrawCommand> commands, SceneTileSnapshot tile,
                                       SceneLayer.Kind layer, GpuDrawCommand.SubmissionPass pass,
                                       int firstIndex, int textureId, int priority, int depthBias, int objectId,
                                       GpuDrawCommand.RenderMode renderMode,
@@ -231,13 +231,15 @@ public final class GpuUploadPlanBuilder {
             // alpha path orders faces by depth; merging them into one draw
             // range would make the native backend blend them in source order.
             if (pass != GpuDrawCommand.SubmissionPass.ALPHA
-                    && previous.canMerge(tile, layer, pass, textureId, priority, depthBias,
+                    && previous.canMerge(tile.worldAddress(), tile.effectivePlane(),
+                    tile.planeCullLevel(), layer, pass, textureId, priority, depthBias,
                     objectId, firstIndex, renderMode, wallDecorationPresentation)) {
                 commands.set(last, previous.extend(3));
                 return;
             }
         }
-        commands.add(new GpuDrawCommand(tile, layer, pass, firstIndex, 3,
+        commands.add(new GpuDrawCommand(tile.worldAddress(), tile.effectivePlane(),
+                tile.planeCullLevel(), layer, pass, firstIndex, 3,
                 textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation));
     }
@@ -258,11 +260,13 @@ public final class GpuUploadPlanBuilder {
             digest.update(counts);
 
             if (!commands.isEmpty()) {
-                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 64);
+                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 72);
                 for (GpuDrawCommand cmd : commands) {
                     cmdBuffer.putInt(cmd.tile().plane())
                             .putInt(cmd.tile().worldX())
                             .putInt(cmd.tile().worldY())
+                            .putInt(cmd.scenePlane())
+                            .putInt(cmd.planeCullLevel())
                             .putInt(cmd.layer().ordinal())
                             .putInt(cmd.pass().ordinal())
                             .putInt(cmd.firstIndex())

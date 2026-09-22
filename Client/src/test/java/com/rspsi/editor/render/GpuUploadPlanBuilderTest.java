@@ -78,6 +78,34 @@ class GpuUploadPlanBuilderTest {
     }
 
     @Test
+    void drawCommandsCarryCurrentSceneAndCullPlanes() {
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 2);
+        TileCoordinate coordinate = new TileCoordinate(2, 3200, 3200);
+        TerrainRenderPacket terrain = new TerrainRenderPacket(coordinate,
+                List.of(new TerrainRenderVertex(0, 0, 12, 100, 0, 0),
+                        new TerrainRenderVertex(128, 0, 12, 101, 128, 0),
+                        new TerrainRenderVertex(0, 128, 16, 102, 0, 128)),
+                List.of(new TerrainRenderFace(0, 1, 2, 0, -1, 255, 0)),
+                0, 0, -1, 100, -1, false, false, -1);
+        SceneTileSnapshot tile = new SceneTileSnapshot(
+                coordinate, address, 8,
+                2, 2, 2, 0,
+                Optional.empty(), Optional.of(terrain), List.of(),
+                List.of(new SceneLayer(SceneLayer.Kind.TERRAIN, List.of())),
+                List.of(), false, false);
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
+                        Map.of()), 3200, 3200, 4, 0, java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "scene-plane-command", Map.of());
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(1, plan.commands().size());
+        assertEquals(2, plan.commands().get(0).scenePlane());
+        assertEquals(0, plan.commands().get(0).planeCullLevel());
+    }
+
+    @Test
     void everyVertexCarriesItsTileOrObjectsPickerPayloadBroadcast() {
         WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
         TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
@@ -383,6 +411,48 @@ class GpuUploadPlanBuilderTest {
         // Both tiles merged into exactly ONE draw command
         assertEquals(1, plan.commands().size());
         assertEquals(6, plan.commands().get(0).indexCount());
+    }
+
+    @Test
+    void terrainCommandsDoNotMergeAcrossScenePlaneSemantics() {
+        WorldTileAddress a1 = WorldTileAddress.of(3200, 3200, 1);
+        TileCoordinate c1 = new TileCoordinate(1, 3200, 3200);
+        TerrainRenderPacket t1 = new TerrainRenderPacket(c1,
+                List.of(new TerrainRenderVertex(0, 0, 12, 100, 0, 0),
+                        new TerrainRenderVertex(128, 0, 12, 101, 128, 0),
+                        new TerrainRenderVertex(0, 128, 16, 102, 0, 128)),
+                List.of(new TerrainRenderFace(0, 1, 2, 0, -1, 255, 0)),
+                0, 0, -1, 100, -1, false, false, -1);
+        SceneTileSnapshot linked = new SceneTileSnapshot(
+                c1, a1, 0, 0, 1, 1, 0,
+                Optional.empty(), Optional.of(t1), List.of(),
+                List.of(new SceneLayer(SceneLayer.Kind.TERRAIN, List.of())),
+                List.of(), false, true);
+
+        WorldTileAddress a2 = WorldTileAddress.of(3201, 3200, 1);
+        TileCoordinate c2 = new TileCoordinate(1, 3201, 3200);
+        TerrainRenderPacket t2 = new TerrainRenderPacket(c2,
+                List.of(new TerrainRenderVertex(0, 0, 12, 100, 0, 0),
+                        new TerrainRenderVertex(128, 0, 12, 101, 128, 0),
+                        new TerrainRenderVertex(0, 128, 16, 102, 0, 128)),
+                List.of(new TerrainRenderFace(0, 1, 2, 0, -1, 255, 0)),
+                0, 0, -1, 100, -1, false, false, -1);
+        SceneTileSnapshot normal = new SceneTileSnapshot(
+                c2, a2, 0, 1, 1, 1, 1,
+                Optional.empty(), Optional.of(t2), List.of(),
+                List.of(new SceneLayer(SceneLayer.Kind.TERRAIN, List.of())),
+                List.of(), false, false);
+
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
+                        Map.of()), 3200, 3200, 4, 0, java.util.Set.of(), List.of()),
+                List.of(linked, normal), LightingProfile.osrs(), "semantic-merge-boundary", Map.of());
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(2, plan.commands().size());
+        assertEquals(0, plan.commands().get(0).scenePlane());
+        assertEquals(1, plan.commands().get(1).scenePlane());
     }
 
     @Test
