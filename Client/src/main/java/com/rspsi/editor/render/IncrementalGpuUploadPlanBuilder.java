@@ -54,7 +54,7 @@ public final class IncrementalGpuUploadPlanBuilder {
                 reused++;
             }
             nextCache.put(tile.worldAddress(), fragment);
-            append(fragment.plan(), vertices, indices, commands, textureTriangles, occluders);
+            append(fragment, vertices, indices, commands, textureTriangles, occluders);
         }
 
         cache.clear();
@@ -87,20 +87,21 @@ public final class IncrementalGpuUploadPlanBuilder {
         return cached == current || cached.equals(current);
     }
 
-    private static void append(GpuUploadPlan fragment,
+    private static void append(TileFragment fragment,
                                List<GpuSceneVertex> vertices,
                                List<Integer> indices,
                                List<GpuDrawCommand> commands,
                                List<GpuTextureTriangle> textureTriangles,
                                LinkedHashSet<SceneOccluder> occluders) {
+        GpuUploadPlan plan = fragment.plan();
         int vertexBase = vertices.size();
         int indexBase = indices.size();
 
-        vertices.addAll(fragment.vertices());
-        for (int index : fragment.indices()) {
+        vertices.addAll(plan.vertices());
+        for (int index : plan.indices()) {
             indices.add(vertexBase + index);
         }
-        for (GpuDrawCommand command : fragment.commands()) {
+        for (GpuDrawCommand command : plan.commands()) {
             GpuDrawCommand shifted = new GpuDrawCommand(
                     command.tile(), command.scenePlane(), command.planeCullLevel(),
                     command.layer(), command.pass(),
@@ -109,8 +110,8 @@ public final class IncrementalGpuUploadPlanBuilder {
                     command.objectId(), command.renderMode(), command.wallDecorationPresentation());
             appendCommand(commands, shifted);
         }
-        textureTriangles.addAll(fragment.textureTriangles());
-        occluders.addAll(fragment.occluders());
+        textureTriangles.addAll(plan.textureTriangles());
+        occluders.addAll(fragment.source().occluders());
     }
 
     private static void appendCommand(List<GpuDrawCommand> commands, GpuDrawCommand command) {
