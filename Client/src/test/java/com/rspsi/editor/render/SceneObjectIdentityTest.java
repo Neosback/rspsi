@@ -22,6 +22,19 @@ class SceneObjectIdentityTest {
     }
 
     @Test
+    void duplicatePlacementsUseOccurrenceToStayDistinct() {
+        WorldObject duplicate = new WorldObject(1327, 10, 0, 0, 5, 6);
+
+        SceneObjectIdentity first = SceneObjectIdentity.of(duplicate, 1, 1, 0);
+        SceneObjectIdentity second = SceneObjectIdentity.of(duplicate, 1, 1, 1);
+
+        assertNotEquals(first, second);
+        assertNotEquals(first.stableId(), second.stableId());
+        assertEquals(0, first.occurrence());
+        assertEquals(1, second.occurrence());
+    }
+
+    @Test
     void placementChangesProduceDifferentIdentity() {
         SceneObjectIdentity original =
                 SceneObjectIdentity.of(new WorldObject(1327, 10, 0, 0, 5, 6), 2, 3);
