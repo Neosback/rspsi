@@ -628,7 +628,8 @@
         "Client/src/main/java/com/rspsi/editor/render/ClientModelBounds.java",
         "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
         "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java",
-        "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java"
+        "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java",
+        "Client/src/main/java/com/rspsi/editor/render/PickResult.java"
       ],
       "tsps": [
         "rs/model/ModelData.ts",
@@ -637,12 +638,14 @@
       "evidence": [
         "RuneLite-melxin/runescape-client/src/main/java/Model.java#calculateBoundsCylinder",
         "RuneLite-melxin/runescape-client/src/main/java/Model.java#calculateBoundingBox",
+        "RuneLite-melxin/runescape-client/src/main/java/Scene.java#draw",
         "Client/src/test/java/com/rspsi/editor/render/ClientModelBoundsTest.java",
         "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
-        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuPlanPickerTest.java"
       ],
-      "reason": "Client model bounds are now a first-class model-local contract: height, bottomY, xzRadius, radius, diameter, single-tile padding semantics, and orientation-specific AABB midpoint/half-extents reproduce the vendored client formulas. Bounds are calculated after model transforms and contouring but before scene footprint/decor placement translation, remain unchanged by local-to-world anchor rebasing, retain one entry per client renderable for flattened multi-renderable shapes such as type-2 walls and compatibility shape-8 packets, propagate through GPU draw commands, and participate in upload fingerprints.",
-      "nextAction": "Keep cylinder/AABB, transform, contour, placement-separation, multi-renderable, rebase, and GPU propagation fixtures as regressions. Picking/culling consumers are tracked separately."
+      "reason": "Client model bounds are now a first-class model-local contract: height, bottomY, xzRadius, radius, diameter, single-tile padding semantics, and orientation-specific AABB midpoint/half-extents reproduce the vendored client formulas. Bounds are calculated after model transforms and contouring but before scene footprint/decor placement translation, use the same draw orientation as client Scene traversal, remain unchanged by local-to-world anchor rebasing, retain one entry per client renderable for flattened multi-renderable shapes such as type-2 walls and compatibility shape-8 packets, propagate through GPU draw commands/fingerprints, and are exposed on PickResult without changing ray-selection behavior.",
+      "nextAction": "Keep cylinder/AABB, transform, contour, placement-separation, multi-renderable, rebase, GPU propagation, and picker-metadata fixtures as regressions. Native picking/culling behavior remains tracked separately."
     },
     {
       "id": "textures.definitions",
