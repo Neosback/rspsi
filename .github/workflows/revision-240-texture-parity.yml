@@ -69,32 +69,14 @@ jobs:
           test -s "${FIXTURE_DIR}/textures.json"
           cat "${FIXTURE_DIR}/textures.json"
 
-      - name: Prepare RSPSi parity fixture
-        shell: bash
-        run: |
-          set -euo pipefail
-          FIXTURE_DIR="${RUNNER_TEMP}/revision240-fixture"
-          cat > "${FIXTURE_DIR}/fixture.properties" <<'EOF'
-          region.x=50
-          region.y=50
-          revision=240
-          EOF
-          echo "RSPSI_OSRS_PARITY_FIXTURE=${FIXTURE_DIR}" >> "${GITHUB_ENV}"
-
       - name: Verify RuneLite fixture through RSPSi
         shell: bash
-        env:
-          RSPSI_OSRS_REVISION: '240'
-          RSPSI_OSRS_REGION_X: '50'
-          RSPSI_OSRS_REGION_Y: '50'
         run: |
           set -euo pipefail
           RSPSI_OSRS_CACHE="${RSPSI_REFERENCE_CACHE}" \
-          RSPSI_OSRS_PARITY_FIXTURE="${RSPSI_OSRS_PARITY_FIXTURE}" \
+          RSPSI_OSRS_TEXTURE_FIXTURE="${RSPSI_TEXTURE_FIXTURE_OUT}" \
           RSPSI_OSRS_REVISION=240 \
-          RSPSI_OSRS_REGION_X=50 \
-          RSPSI_OSRS_REGION_Y=50 \
-            gradle --no-daemon verifyOsrsRevision
+            gradle --no-daemon verifyOsrsTextures
 
       - name: Upload texture parity evidence
         if: always()
@@ -103,5 +85,4 @@ jobs:
           name: revision-240-texture-parity
           path: |
             ${{ runner.temp }}/revision240-fixture/textures.json
-            ${{ runner.temp }}/revision240-fixture/fixture.properties
           if-no-files-found: warn
