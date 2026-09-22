@@ -203,7 +203,8 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
-                List.copyOf(Objects.requireNonNull(bounds, "bounds")), sceneObjectIdentity);
+                List.copyOf(Objects.requireNonNull(bounds, "bounds")),
+                defaultPlacements(bounds), sceneObjectIdentity);
     }
 
     /** Returns this packet with per-renderable scene placement offsets. */
@@ -227,7 +228,8 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
-                clientRenderableBounds, Objects.requireNonNull(identity, "identity"));
+                clientRenderableBounds, clientRenderablePlacements,
+                Objects.requireNonNull(identity, "identity"));
     }
 
     private static List<ClientRenderablePlacement> defaultPlacements(
