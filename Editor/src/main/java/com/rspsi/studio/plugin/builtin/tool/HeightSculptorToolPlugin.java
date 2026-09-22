@@ -88,6 +88,11 @@ public final class HeightSculptorToolPlugin implements StudioToolPlugin {
     }
 
     @Override
+    public boolean isBrushTool() {
+        return true;
+    }
+
+    @Override
     public boolean isConfigurable() {
         return true;
     }

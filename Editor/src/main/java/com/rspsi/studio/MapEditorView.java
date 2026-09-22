@@ -318,12 +318,29 @@ public final class MapEditorView {
                                 plan.fingerprint(), 0L));
             }
 
+            // Resolve a ray-picked (tile, objectId) pair into the real placed WorldObject -
+            // wired here (not inside NativeSceneViewport) since only Studio holds the live
+            // session/world document a tile+id pair needs to become an actual object.
+            viewport.setObjectResolver((objectTile, objectId) -> {
+                if (pluginLifecycle == null || pluginLifecycle.host() == null) return java.util.Optional.empty();
+                var session = pluginLifecycle.host().context().session();
+                if (session == null) return java.util.Optional.empty();
+                return session.coordinates().toLocal(objectTile)
+                        .map(local -> session.world().tile(local).snapshot())
+                        .flatMap(snapshot -> snapshot.objects().stream()
+                                .filter(o -> o.id() == objectId)
+                                .findFirst());
+            });
+
             // Feed real mouse input to the active EditorTool (selection, tile-painter brush,
             // height sculptor, etc). Must run before any other ImGui widget call this frame so
             // isItemHovered() still refers to the scene image.
             viewport.dispatchToolInput(toolController);
 
             viewport.renderOverlays(toolController.activeTool(), pluginLifecycle);
+            // SelectionOverlayPlugin (the object/tile selection hull highlight) is
+            // dispatched here now, alongside every other Studio plugin's overlay -
+            // no more hardcoded field/call wiring it in specially.
             studioPluginManager.renderOverlays(ImGui.getWindowDrawList(), panelContext);
 
             if (spawns != null && showServerSpawns) {

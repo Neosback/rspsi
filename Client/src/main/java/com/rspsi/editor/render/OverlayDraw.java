@@ -30,6 +30,12 @@ public interface OverlayDraw {
     }
 
     /**
+     * Fills the specified tile quad with the default selection fill color/opacity.
+     */
+    default void tileFilled(WorldTile tile) {
+    }
+
+    /**
      * Draws a 3D line between two world-space coordinates with custom thickness.
      */
     default void line(float x1, float y1, float z1, float x2, float y2, float z2, int colorRgba, float thickness) {
@@ -118,6 +124,55 @@ public interface OverlayDraw {
      * Draws a 2D rectangle in viewport screen coordinates.
      */
     default void screenRect(float minX, float minY, float maxX, float maxY, int colorRgba, boolean filled) {
+    }
+
+    /**
+     * Draws a convex polygon already in 2D screen-space coordinates (e.g. the
+     * output of {@link #modelHull}). Points are absolute screen coordinates,
+     * with a default 2px outline stroke.
+     */
+    default void screenPolygon(java.util.List<float[]> screenPoints, int colorRgba, boolean filled) {
+        screenPolygon(screenPoints, colorRgba, filled, 2.0f);
+    }
+
+    /**
+     * Same as {@link #screenPolygon(java.util.List, int, boolean)}, with an explicit outline thickness.
+     */
+    default void screenPolygon(java.util.List<float[]> screenPoints, int colorRgba, boolean filled, float thickness) {
+    }
+
+    /**
+     * Projects a set of 3D world-space points - typically a model's own
+     * vertices - to screen space, computes their 2D convex hull, and draws
+     * it. This hugs the object's actual silhouette instead of a generic
+     * bounding box, the same technique RuneLite uses to highlight game
+     * objects (project every vertex, then wrap a hull around the resulting
+     * screen-space point cloud). Points behind the camera are dropped before
+     * the hull is computed; nothing is drawn if fewer than 3 points remain
+     * visible.
+     */
+    default void modelHull(java.util.List<float[]> worldPoints, int colorRgba, boolean filled) {
+        modelHull(worldPoints, colorRgba, filled, 2.0f);
+    }
+
+    /**
+     * Same as {@link #modelHull(java.util.List, int, boolean)}, with an explicit outline thickness -
+     * e.g. to draw a second, wider, lower-alpha pass behind the crisp outline for a
+     * softer "painted edge" look instead of a thin wireframe line.
+     */
+    default void modelHull(java.util.List<float[]> worldPoints, int colorRgba, boolean filled, float thickness) {
+        java.util.List<float[]> screen = new java.util.ArrayList<>(worldPoints.size());
+        for (float[] p : worldPoints) {
+            ScreenPoint sp = worldToScreen(p[0], p[1], p[2]);
+            if (sp.visible()) screen.add(new float[]{sp.x(), sp.y()});
+        }
+        java.util.List<float[]> hull = ConvexHull2D.compute(screen);
+        if (hull.size() >= 3) screenPolygon(hull, colorRgba, filled, thickness);
+    }
+
+    /** Draws only the hull outline (no fill) at the given thickness - see {@link #modelHull}. */
+    default void modelHullOutline(java.util.List<float[]> worldPoints, int colorRgba, float thickness) {
+        modelHull(worldPoints, colorRgba, false, thickness);
     }
 
     /**

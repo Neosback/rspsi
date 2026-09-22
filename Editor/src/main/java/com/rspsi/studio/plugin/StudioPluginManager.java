@@ -78,13 +78,17 @@ public final class StudioPluginManager {
         // Core built-in Studio modal tool projections.
         register(new com.rspsi.studio.plugin.builtin.tool.SingleSelectToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.MultiSelectToolPlugin());
-        register(new com.rspsi.studio.plugin.builtin.tool.SingleObjectSelectToolPlugin());
-        register(new com.rspsi.studio.plugin.builtin.tool.MultiObjectSelectToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.TilePainterToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.HeightSculptorToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.PathToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.ObjectPlacementToolPlugin());
         register(new com.rspsi.studio.ui.hud.BrushSettingsHud());
+        // Object selection buttons are nested inside SelectionOverlayPlugin - they exist
+        // only to feed the selection that plugin then highlights, so they're registered
+        // and maintained together instead of as separate top-level plugin files.
+        register(new com.rspsi.studio.ui.SelectionOverlayPlugin());
+        register(new com.rspsi.studio.ui.SelectionOverlayPlugin.SingleObjectSelectToolPlugin());
+        register(new com.rspsi.studio.ui.SelectionOverlayPlugin.MultiObjectSelectToolPlugin());
     }
 
     public synchronized void register(StudioPlugin plugin) {

@@ -73,6 +73,19 @@ public interface StudioToolPlugin extends StudioPlugin {
     }
 
     /**
+     * Whether this tool paints or sculpts with a brush (Tile Painter, Height
+     * Sculptor) and is therefore eligible for the {@code TOOL_RAIL} surface.
+     * The Left Tool Rail exists for exactly one reason - surfacing Brush
+     * Settings while a brush tool is active (see {@code LeftBrushRail}) - so
+     * a non-brush tool has nothing to do there even if a user tries to
+     * enable it from the Plugin Manager's placement override. Every other
+     * surface stays open to any tool; only this one is reserved.
+     */
+    default boolean isBrushTool() {
+        return false;
+    }
+
+    /**
      * Whether this tool's button should appear in the bottom activity bar. Convenience view
      * onto {@link #surfaces()} - kept because most callers only ever care about this one surface.
      */

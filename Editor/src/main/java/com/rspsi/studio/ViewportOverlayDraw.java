@@ -5,6 +5,7 @@ import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.OverlayDraw;
 import com.rspsi.editor.render.SceneCameraProjection;
 import com.rspsi.editor.render.ScreenPoint;
+import com.rspsi.studio.ui.SelectionOverlayStyle;
 import imgui.ImDrawList;
 import imgui.ImGui;
 import imgui.ImVec2;
@@ -110,7 +111,9 @@ public final class ViewportOverlayDraw implements OverlayDraw {
 
     @Override
     public void tileOutline(WorldTile tile) {
-        tileOutline(tile, 0x40E0D0FF); // Vibrant turquoise/cyan
+        // Reads the live setting each call (not cached) - Selection Overlay's
+        // settings panel can change this color while the app is running.
+        tileOutline(tile, SelectionOverlayStyle.shared().tileOutlineColor());
     }
 
     @Override
@@ -141,6 +144,12 @@ public final class ViewportOverlayDraw implements OverlayDraw {
             int col = toImGuiColor(colorRgba);
             drawList.addQuad(p0.x(), p0.y(), p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y(), col, 2.0f);
         }
+    }
+
+    @Override
+    public void tileFilled(WorldTile tile) {
+        SelectionOverlayStyle style = SelectionOverlayStyle.shared();
+        tileFilled(tile, (style.tileOutlineColor() & 0xFFFFFF00) | style.tileFillAlpha());
     }
 
     @Override
@@ -306,6 +315,24 @@ public final class ViewportOverlayDraw implements OverlayDraw {
         drawList.addRectFilled(x0, y0, x1, y1, toImGuiColor(bgColorRgba), 3.0f);
         drawList.addRect(x0, y0, x1, y1, toImGuiColor((textColorRgba & 0xFFFFFF00) | 0x44), 3.0f, 0, 1.0f);
         drawList.addText(screenX, screenY, toImGuiColor(textColorRgba), text);
+    }
+
+    @Override
+    public void screenPolygon(java.util.List<float[]> screenPoints, int colorRgba, boolean filled, float thickness) {
+        if (screenPoints == null || screenPoints.size() < 3) return;
+        int n = screenPoints.size();
+        ImVec2[] points = new ImVec2[n];
+        for (int i = 0; i < n; i++) {
+            float[] p = screenPoints.get(i);
+            points[i] = new ImVec2(p[0], p[1]);
+        }
+        if (filled) {
+            // colorRgba already carries the caller's configured fill alpha (see
+            // SelectionOverlayStyle.fillColor) - no separate hardcoded alpha here.
+            drawList.addConvexPolyFilled(points, n, toImGuiColor(colorRgba));
+        } else {
+            drawList.addPolyline(points, n, toImGuiColor(colorRgba), imgui.flag.ImDrawFlags.Closed, thickness);
+        }
     }
 
     @Override

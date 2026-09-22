@@ -81,6 +81,11 @@ public final class TilePainterToolPlugin implements StudioToolPlugin {
     }
 
     @Override
+    public boolean isBrushTool() {
+        return true;
+    }
+
+    @Override
     public boolean isConfigurable() {
         return true;
     }

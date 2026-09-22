@@ -332,6 +332,13 @@ public final class PluginManagerPanel implements StudioPanel {
 
             boolean changed = false;
             for (var surface : com.rspsi.studio.plugin.StudioToolPlugin.ToolSurface.values()) {
+                // The Left Tool Rail exists only to surface Brush Settings while a brush
+                // tool is active - offering it as a placement option for anything else
+                // would let a user "enable" it and get nothing but an empty rail.
+                if (surface == com.rspsi.studio.plugin.StudioToolPlugin.ToolSurface.TOOL_RAIL
+                        && !toolPlugin.isBrushTool()) {
+                    continue;
+                }
                 ImBoolean surfaceToggle = new ImBoolean(active.contains(surface));
                 if (ImGui.checkbox(surfaceLabel(surface) + "##surf-" + pluginId + "-" + surface, surfaceToggle)) {
                     if (surfaceToggle.get()) active.add(surface); else active.remove(surface);

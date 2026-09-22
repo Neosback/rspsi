@@ -39,17 +39,21 @@ public final class LeftBrushRail {
             | ImGuiWindowFlags.NoSavedSettings;
 
     /**
-     * True when the active tool is one this rail cares about (currently
-     * anything still registered on the {@code TOOL_RAIL} surface - Tile
-     * Painter, Height Sculptor). Shared between the rail itself and the
-     * layout pass that decides whether to reserve screen space for it, so
-     * the two never disagree about whether something is showing.
+     * True when the active tool is one this rail cares about - a real brush
+     * tool (Tile Painter, Height Sculptor), per {@link StudioToolPlugin#isBrushTool()}.
+     * Checked against that explicit capability rather than current TOOL_RAIL
+     * surface membership, so a user overriding a non-brush tool's placement
+     * onto the rail from the Plugin Manager can never make this rail treat
+     * it as a brush tool - the placement override changes where a button
+     * appears, not what the tool actually is. Shared between the rail itself
+     * and the layout pass that decides whether to reserve screen space for
+     * it, so the two never disagree about whether something is showing.
      */
     public static boolean isBrushToolActive(StudioPluginManager plugins, String activeToolId) {
         if (plugins == null || activeToolId == null) return false;
         for (StudioToolPlugin tool : plugins.toolPlugins()) {
-            boolean onRail = plugins.effectiveSurfaces(tool).contains(StudioToolPlugin.ToolSurface.TOOL_RAIL);
-            if (onRail && (tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId))) {
+            if (!tool.isBrushTool()) continue;
+            if (tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId)) {
                 return true;
             }
         }

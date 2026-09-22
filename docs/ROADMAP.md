@@ -1,610 +1,358 @@
-# OpenRune Studio — Completion Roadmap
-
-This is the one execution roadmap for turning RSPSi into OpenRune Studio.
-It replaces the previous progress ledger and deliberately starts a new track.
-The objective is to finish a coherent product instead of continuing to add
-parallel partial systems.
-
-The roadmap is ordered. Work may be parallelized inside a phase, but a later
-phase does not become active until the current phase's exit gate passes.
-
-## Product commitment
-
-OpenRune Studio is one desktop application with one source of truth:
-
-```text
-Native GLFW window
-    ↓
-OpenGL 3.3 core context
-    ↓
-Dear ImGui shell
-    ↓
-Application services
-    ├── SettingsService
-    ├── CacheSessionService
-    ├── WorkspaceManager
-    ├── PluginManager
-    ├── TaskService
-    ├── NotificationService
-    └── LiveClientBridge
-    ↓
-Workspaces
-    └── Map Editor first
-        ├── EditorSession / WorldDocument
-        ├── OSRS scene resolver
-        ├── Render planner
-        ├── Software reference renderer
-        ├── OpenGL renderer
-        ├── tools and inspectors
-        └── first-party plugins
-```
-
-The following decisions are locked for this track:
-
-- One application window and one OpenGL context for the whole session.
-- Dear ImGui docking is enabled; multi-viewport windows are deferred.
-- Map rendering goes to a viewport FBO and is displayed as an ImGui image.
-- `WorldDocument`, `EditorSession`, commands/history, selection, FileStore
-  adapters, scene resolution, render planning, and the software renderer stay.
-- OSRS semantics live above OpenGL. OpenGL consumes resolved scene data and is
-  never allowed to become a second world model.
-- OpenRune FileStore is the cache/asset backend. It is not the editor, plugin
-  system, world model, or renderer.
-- The typed settings registry is the only settings system.
-- Plugins contribute through neutral Studio APIs and never receive a mutable
-  world-model back door or direct cache ownership.
-- The software renderer remains the deterministic reference implementation.
-- JavaFX, Swing, AWTGLCanvas, FXML, legacy static settings, and legacy plugin
-  launch paths are transitional and have a removal gate.
-
-## How we keep ourselves on track
-
-Every roadmap item is either a concrete implementation task, a test/fixture,
-or an acceptance/documentation task. A task is complete only when its code,
-automated coverage, and acceptance evidence exist.
-
-Use these statuses:
-
-- `queued` — planned, not active.
-- `active` — current phase work.
-- `verified` — implementation and exit evidence pass.
-- `blocked` — an external dependency or decision is genuinely required.
-- `deferred` — intentionally outside the current completion track.
-
-Rules for the repository:
-
-1. Only one phase is `active`.
-2. New feature work must use the locked neutral APIs. If an API is missing,
-   fix the API in the current phase before adding a legacy bridge.
-3. A phase cannot close on compilation alone. It needs the listed gate.
-4. A failed gate reopens the owning phase; it does not get worked around by
-   marking the feature complete.
-5. New ideas go into the deferred section until they are explicitly placed in
-   the sequence.
-6. Every renderer or cache claim must identify its source of truth and fixture.
-7. No second cache, renderer, scene graph, history system, or settings store
-   may be introduced.
-
-The normal verification ladder is:
-
-```text
-./gradlew test
-./gradlew check
-./gradlew foundationGate
-./gradlew parityGate       # explicit external fixtures/caches
-./gradlew platformGate     # release/platform matrix
-```
-
-`foundationGate`, `parityGate`, and `platformGate` are part of the roadmap,
-not optional polish.
-
-## Protected foundation — do not restart
-
-These pieces already exist in the repository and must be extended or repaired,
-not replaced by another architecture:
-
-- `WorldDocument`, `EditorSession`, `EditorCommand`, command history, undo/redo,
-  selection, dirty regions, and autosave/session concepts.
-- OpenRune FileStore cache/session adapters and the neutral definition/asset
-  facade.
-- `OsrsSceneResolver`, `ResolvedScene`, `OsrsRenderPlanner`,
-  `GpuScenePacket`, and `GpuUploadPlan`.
-- Software/reference rendering and the existing render-parity harness.
-- Terrain topology, OSRS coordinates, bridges/effective planes, collision,
-  route/LOS preview, and neutral validation contracts.
-- Typed settings keys/registry/store and the first-party plugin registry,
-  lifecycle, dependency handling, and contribution contracts.
-- The current JavaFX shell as a compatibility/reference surface while the
-  native shell is built.
-
-The compatibility surface is allowed to remain temporarily. It is not allowed
-to grow new product features after the native track begins.
-
-## Phase 0 — Lock the foundation and build the gates
-
-**Status: active**
-
-This is the reset point for the new track. Establish the boundaries before
-building more UI or renderer features.
-
-### Work
-
-- [x] Record the locked architecture and ownership rules in code/package
-  checks where practical.
-- [x] Add `verifySettingsContract` to the foundation gate.
-- [x] Validate that every registered setting has a declared consumer and that
-  every renderer/tool consumer resolves a registered key.
-- [x] Remove callback-backed `EditorSetting` state from new code; keep only a
-  compatibility adapter until migration is complete.
-- [x] Mark unsupported renderer settings honestly. For example, MSAA remains
-  unavailable until the complete FBO/MSAA acceptance gate passes.
-- [x] Add package/import checks that prevent new renderer code from using the
-  retired plugin package or raw cache backends.
-- [x] Split verification into deterministic foundation checks and explicit
-  external parity checks.
-- [ ] Freeze representative fixtures: plain terrain, shaped overlays, water,
-  bridges, roofs, walls, alpha models, animated objects, and region boundaries.
-- [ ] Add a short acceptance record for each gate so green tests cannot hide a
-  missing interactive workflow.
-
-### Exit gate
-
-`foundationGate` passes with no new legacy imports, the settings contract is
-validated, representative fixtures are versioned/identified, and the next
-phase can be implemented without inventing another state system.
-
-## Phase 1 — OSRS semantics and renderer correctness
-
-**Status: queued**
-
-Fix correctness issues that would otherwise be baked into the native renderer.
-This phase is intentionally before the large UI migration.
-
-### Cache and definition semantics
-
-- [ ] Correct FileStore object semantics for `clipped`, `clipType`, shadow
-  behavior, contouring, opcode 22 merge-normal behavior, and object contrast.
-- [ ] Preserve object morphs/transforms through the neutral definition model,
-  including varbit/varp-driven state.
-- [ ] Add an upstream/live fixture for animation-start behavior and explicitly
-  track unsupported modern animation fields.
-- [ ] Rename “revision detection” to capability/profile selection. Show the
-  selected profile and evidence in the dashboard rather than implying a
-  stronger detection guarantee than the code provides.
-- [ ] Keep FileStore 3.0.2 pinned until the adapter and parity gates justify an
-  upgrade.
-- [ ] Preserve source-cache read-only behavior and make staged/direct output
-  capability visible to the user.
-
-### Vanilla-compatible rendering corrections
-
-- [x] Remove synthetic priority-to-NDC depth bands from vanilla mode. Keep
-  them only as an explicit debug visualization if useful. (`GpuPriority` and
-  `OpenGlSceneRenderer`'s vertex shader now apply only the true client
-  face-bias byte, matching RuneLite's `vert.glsl`
-  `screenPos.z += float(bias) / 128.0`; verified against a real revision-240
-  cache render with `foundationGate` and the full render test suite passing.)
-- [x] Implement the real face bias convention and CPU-side priority ordering,
-  including the 12 priority groups and special interleave behavior. (Alpha
-  ordering already matched via `RsFaceOrderPlanner`; removing the depth bias
-  also required adding priority-descending opaque draw ordering in both
-  `SoftwareSceneRenderer` and `OpenGlSceneRenderer` so exactly-coplanar
-  opaque faces, e.g. a decal on the terrain height it decorates, resolve by
-  draw order rather than a synthetic depth offset, matching RuneLite's
-  "priority affects order, never depth" behavior. Render modes
-  `SORTED`/`SORTED_NO_DEPTH`/`UNSORTED`/`UNSORTED_NO_DEPTH` below remain
-  unimplemented.)
-- [ ] Add explicit render modes: `DEFAULT`, `SORTED`, `SORTED_NO_DEPTH`,
-  `UNSORTED`, and `UNSORTED_NO_DEPTH`.
-- [ ] Match RuneLite/OSRS projection and reversed-depth behavior in
-  `OSRS_CLIENT` mode; keep editor perspective, orthographic, and top-down
-  projections separate.
-- [ ] Match compatibility blending state, including framebuffer alpha behavior.
-- [ ] Implement RuneLite-style per-model alpha metadata and camera-relative
-  alpha/model sorting instead of scene-global average-depth ordering.
-- [ ] Model roofs as explicit groups/ranges and implement authored/effective
-  plane, bridge-upper, roof, and below-bridge visibility rules.
-- [ ] Replace approximate occlusion activation with a client-compatible,
-  fixture-backed visibility/occluder traversal.
-- [ ] Make terrain color randomization explicit and deterministic by default.
-- [ ] Report missing textures as renderer diagnostics and implement the actual
-  compatibility fallback; do not silently turn missing assets gray.
-
-### Exit gate
-
-The software render plan matches the semantic fixtures for terrain, objects,
-priorities, alpha, depth, blend, roofs, bridges, and occluders. The native
-renderer has no known camera-upload regression. Any remaining divergence is
-named, fixture-backed, and explicitly accepted as deferred.
-
-## Phase 2 — Native application vertical slice
-
-**Status: queued**
-
-Build the smallest complete OpenRune Studio: boot, load, switch workspace,
-render one map, and return home without creating a second window or context.
-
-### Native host
-
-- [x] Finalize `StudioMain`, `NativeWindow`, `ImGuiHost`, `StudioApplication`,
-  and `WorkspaceManager` around GLFW, OpenGL 3.3 core, and Dear ImGui.
-- [x] Enable docking and keep multi-viewport disabled.
-- [x] Establish the single application loop: poll events, update services,
-  begin ImGui frame, render workspace, render ImGui, swap buffers.
-- [x] Ensure all OpenGL resource creation/destruction happens on the render
-  thread.
-
-### Startup and cache session
-
-- [x] Reuse `OsrsCacheSessionService` and expose explicit startup phases:
-  `EMPTY`, `DISCOVERING`, `LOADING`, `READY`, `FAILED`, and `CLOSING`.
-- [ ] Add task progress, cancellation, notifications, and actionable errors.
-- [x] Persist recent cache/project selection without making a cache global.
-- [x] Keep the cache session alive when navigating Dashboard ↔ workspace.
-- [x] Block Map Editor until the session is genuinely `READY`.
-
-### First vertical slice
-
-- [x] Blank Dashboard appears in the native window with cache validation.
-- [x] A selected cache loads asynchronously and reports profile, backend,
-  capabilities, and comprehensive FileStore decoder counts (18 decoders).
-- [x] Map Editor opens in the same window.
-- [x] An existing `GpuUploadPlan` renders one opened region.
-- [x] Orbit, pan, zoom, and home/dashboard navigation work.
-- [ ] A dirty session prompts Save/Discard/Cancel before it is closed.
-
-### Exit gate
-
-The complete vertical slice works on the supported development platform with a
-real or explicit external cache fixture, and the native app owns the workflow.
-No second Stage, Swing/AWT viewport, or duplicate cache prompt is involved.
-
-## Phase 3 — FBO renderer and incremental GPU resources
-
-**Status: queued**
-
-Make the renderer a proper viewport backend before adding the full editor shell.
-
-### Renderer decomposition
-
-- [ ] Split `OpenGlSceneRenderer` into focused components:
-  `GlDevice`, `GlShaderProgram`, `GlSceneResources`, `GlTextureRepository`,
-  `GlFramebuffer`, `GlWorldRenderer`, `GlPickingPass`, `GlOverlayRenderer`,
-  and `GlRendererStats`. (`GlFramebuffer` already extracted and in production.)
-- [x] Render the world into a scene FBO with color, depth/stencil, optional
-  MSAA attachments, resolved color, and picking attachment. Implemented in
-  `GlFramebuffer`, with MSAA samples clamped to driver `GL_MAX_SAMPLES`.
-- [x] Display the resolved color texture through `ImGui.image(...)`.
-- [x] Support viewport resize, render scale, screenshots, and future 2D/3D/
-  split views through the same framebuffer boundary.
-
-### Resource lifetime and invalidation
-
-- [ ] Make textures cache-session resources with stable OSRS texture-ID to
-  texture-array-layer mapping and lazy upload.
-- [ ] Separate topology, geometry, texture, material, visibility, and
-  animation generations/fingerprints.
-- [x] Make camera movement update uniforms/visibility/order only; it must never
-  rebuild scene VBOs/EBOs or recreate the texture array. (Fixed:
-  `OcclusionPlanFilter` camera-fingerprint embedding removed; replaced with
-  `GpuCommandVisibility` per-frame BitSet over static uploaded plan geometry.
-  `OpenGlSceneRenderer.draw()` gates upload on camera-independent plan
-  fingerprint.)
-- [ ] Use 8×8 zones/chunks as GPU ownership and invalidation units with opaque
-  geometry, alpha geometry, object metadata, roof ranges, pick IDs, and bounds.
-- [ ] Invalidate neighboring chunks only for real seam/lighting dependencies.
-- [ ] Update animated objects locally. Texture animation uses a cycle/uniform;
-  static terrain and static objects do not rebuild every frame.
-
-### Picking and diagnostics
-
-- [ ] Add a GPU ID-buffer picking pass with stable object/tile/vertex IDs.
-  (`GpuPlanPicker` retained as deterministic reference fallback.)
-- [x] Add renderer statistics for uploads, chunk rebuilds, texture misses,
-  draw calls, visible zones, and frame time. (`OpenGlSceneRenderer.Statistics`
-  now reports per-frame `geometryUploaded`, `textureUploaded`, and `drawCalls`,
-  surfaced live in the Map Editor viewport panel.)
-- [ ] Keep software and native render plans comparable for the same scene.
-
-### Exit gate
-
-Camera movement produces zero geometry/texture uploads in the steady state;
-localized edits rebuild only affected zones; FBO resize/MSAA/picking work;
-software-vs-native fixture comparisons remain within the defined tolerance.
-
-## Phase 4 — Map Editor shell and input migration
-
-**Status: queued**
-
-Port the concepts of the existing controlled shell to ImGui. Do not copy the
-JavaFX implementation or recreate every old button.
-
-Progress note: `DashboardView` and `MapEditorView` use the production
-`StudioTheme` dark palette. `MapEditorView` hosts a real `ImGui.dockSpace`
-with default `Tools | Viewport | Inspector` split plus bottom utility drawer,
-built via DockBuilder with layout reset support. `CommandPaletteModal` exists
-and consumes actual registered plugin commands.
-
-### Input and viewport
-
-- [ ] Route GLFW keyboard/mouse events through `EditorInputRouter`.
-- [ ] Add a neutral `ViewportController` for orbit, pan, zoom, focus, camera
-  modes, and viewport-to-world picking.
-- [ ] Remove camera logic from AWT/Swing listeners.
-- [ ] Support 3D perspective, top-down, orthographic, and future split views
-  through the same viewport controller.
-
-### Default Map Editor layout
-
-- [ ] Compact left tool rail: Select, Terrain, Objects, Path, Water,
-  Structures, Scatter, Regions, Collision, Markers, and Audio.
-- [ ] Context toolbar with Mode → Tool → Context levels so advanced controls
-  do not overwhelm the active task.
-- [ ] Large center viewport with plane, roof, bridge, grid, collision, and
-  Vanilla/Editor/Debug view controls.
-- [ ] Right Outliner above contextual Inspector.
-- [ ] Bottom drawers for Assets, History, Validation, Console, Tasks,
-  Selection, Minimap, and Live Client.
-- [ ] Persistent status bar showing profile, region, plane, world/local
-  coordinates, FPS, cache capability, and task/error state.
-- [x] Save/reset workspace layouts and provide strong defaults; layout reset
-  rebuilds default dock structure cleanly.
-
-### Core interaction surfaces
-
-- [x] Command palette with plugin-contributed commands.
-- [ ] Global task center and notification center.
-- [ ] Contextual inspector for tiles, objects, vertices, groups, and selections.
-- [ ] Outliner with editor-only groups that can contain terrain, objects,
-  markers, audio, and other authored elements.
-- [ ] Eyedropper/Selection Peek for “what is this?” inspection without leaving
-  the viewport.
-- [ ] Interactive minimap with camera, selection, dirty areas, bookmarks,
-  collision, and loaded-region state.
-- [ ] Original/Edited/Split/Ghost/Difference comparison modes.
-
-### Exit gate
-
-A user can open a region, inspect a tile/object, change camera/view controls,
-select and undo an edit, use the command palette, see async task/error state,
-and save/reset the layout without touching JavaFX/AWT input paths.
-
-## Phase 5 — Complete the Map Editor workflow
-
-**Status: queued**
-
-Finish the useful editor before expanding to other workspaces.
-
-### Editing fundamentals
-
-- [ ] Complete neutral session binding for terrain, object, selection,
-  inspector, history, autosave, save, and recovery.
-- [ ] Finish terrain tools: paint, height, slope, smooth, flatten, noise,
-  shapes, blending, flags, and neighbor-aware seam handling.
-- [ ] Finish object tools: place, move, rotate, duplicate, delete, replace,
-  multi-select, snap-to-tile/wall, collision preview, and definition actions.
-- [ ] Keep every edit command-backed, grouped where appropriate, and fully
-  undoable.
-- [ ] Finish tile/object/vertex/lasso/area/fragment selection behavior.
-- [ ] Finish live collision, route, LOS, reachability, bridge, roof, and grid
-  overlays.
-- [ ] Finish validation for tile seams, steep height changes, object overlap,
-  invalid flags, missing definitions, collision, and region boundaries.
-
-### Asset and reuse workflow
-
-- [ ] Asset browser supports Nearby, Favorites, Recent, Objects, Models,
-  Materials, Prefabs, and Similar views.
-- [ ] Drag/drop assets into the viewport with contextual placement behavior.
-- [ ] Add working palettes that can contain materials, objects, prefabs,
-  tools, and colors.
-- [ ] Add region palette analysis with usage counts, thumbnails, IDs, Use,
-  Find, and Favorite actions.
-- [ ] Add connected-structure detection and prefab creation without changing
-  the legal OSRS output representation.
-- [ ] Add bookmarks and reliable navigation between world, region, and local
-  views.
-
-### Procedural and authoring tools
-
-- [ ] Path tool with auto-shape, auto-rotate, material blend, shoulders,
-  smoothing, collision preview, and route diagnostics.
-- [ ] Water tool with river/pool/shore/flow controls, banks, bridge clearance,
-  and legal tile-shape output.
-- [ ] Scatter tool with weighted assets, spacing, slope/collision constraints,
-  deterministic seed, preview ghosts, and regenerate.
-- [ ] Structure/prefab workflows for rooms, buildings, bridges, and grouped
-  authored content.
-- [ ] New-region templates: blank, flat, neighboring terrain, island, and
-  underground/dungeon setup.
-- [ ] Dungeon generator presented as a user-level generator with rooms,
-  tunnels, water, elevation, seed, preview, accept, and cancel. WFC/local
-  grammar remains an implementation detail unless Advanced is opened.
-- [ ] Every procedural operation uses a nondestructive preview layer and only
-  becomes normal editable content on Accept.
-- [ ] Add spatial audio regions and map/world markers as editor-visible
-  authored elements where the target output format supports them.
-- [ ] Add “Explain this tile” and “Diagnose tile” reports that teach the OSRS
-  representation instead of hiding it.
-
-### Exit gate
-
-The Map Editor supports the complete edit → inspect → validate → preview →
-accept → undo → save/recover loop on representative regions, including a
-terrain/object workflow and a procedural preview workflow. This is the first
-product-complete milestone.
-
-## Phase 6 — Plugin platform and Live Client integration
-
-**Status: queued**
-
-Stabilize extension points only after the native shell and Map Editor use them.
-
-### Plugin API
-
-- [ ] Add settings, task, notification, event-bus, safe overlay, and neutral UI
-  contribution services to `EditorPluginContext`.
-- [ ] Version the plugin API and reject incompatible plugins with actionable
-  diagnostics.
-- [ ] Give each external plugin an isolated classloader and deterministic
-  lifecycle cleanup.
-- [ ] Remove active/inactive JAR moving. Enable/disable is persisted intent;
-  dependency cascades are derived state.
-- [ ] Add capabilities/permissions before allowing external code to access
-  files, network, server roots, live-client control, or process execution.
-- [ ] Add safe mode for repeatedly crashing plugins.
-- [ ] Expose a versioned neutral Studio UI API; plugins do not receive ImGui
-  internals.
-- [ ] Add Plugin Hub metadata, reproducible dependency rules, hashes/signing,
-  CI validation, and review workflow only after the local API is stable.
-
-### Live Client / Developer Tools
-
-- [ ] Add a neutral `LiveClientBridge` with read-only inspection first.
-- [ ] Negotiate Developer Tools schema/version/capabilities instead of relying
-  on hard-coded commands.
-- [ ] Add structured scene-reference capture, tile/object/model/texture
-  inspection, camera/projection state, render-mode state, and screenshot/
-  pixel-reference commands.
-- [ ] Add a local pairing/authorization token before Studio can control a
-  client or request mutating operations.
-- [ ] Rename or isolate old Flux naming in the Developer Tools protocol.
-- [ ] Make live-client fixtures usable by `parityGate` without making the live
-  client a runtime dependency of the editor.
-
-### Exit gate
-
-First-party and external plugin lifecycle tests pass, a deliberately limited
-sample plugin can contribute a tool/panel/setting/command, safe mode works,
-and read-only Live Client capture produces repeatable renderer-reference data.
-
-## Phase 7 — Source project and build pipeline
-
-**Status: queued**
-
-Move from transitional cache/output workflows to reproducible semantic projects.
-
-- [ ] Define a versioned source manifest containing base-cache identity,
-  project settings, semantic edits, dependencies, and output policy.
-- [ ] Keep the base cache immutable; store Git-controlled semantic sources and
-  disposable built-cache output separately.
-- [ ] Implement deterministic source loading/writing and round-trip fixtures.
-- [ ] Add `WorldCompiler`, `BuildReport`, `SemanticDiff`, and revision-audit
-  outputs that reuse the canonical world/validator/asset layers.
-- [ ] Turn FileStore incremental packing into a Studio `BuildPackService` with
-  task progress, cancellation, diagnostics, and explicit output capabilities.
-- [ ] Never start with opaque cache-file diffs or incremental packing rules
-  that bypass the semantic source format.
-- [ ] Add project open/save/recovery migration for existing `project.json`,
-  autosave, staged output, and legacy projects.
-
-### Exit gate
-
-Two identical builds from the same source produce equivalent output and
-reports; semantic diff explains changes; a project can be cloned, reopened,
-rebuilt, and recovered without mutating its source cache.
-
-## Phase 8 — Additional workspaces
-
-**Status: queued**
-
-Only start these once the Map Editor exit gate and source/build contracts pass.
-They reuse the same shell, services, asset facade, plugin API, scene/runtime
-state, settings, and task center.
-
-- [ ] Object Studio: definition search, placement/model preview, variants,
-  morphs, animation, collision, recolor/retexture, and “open from map”.
-- [ ] Model Studio: model hierarchy/parts, materials, transforms, animation,
-  lighting, and cache-definition inspection.
-- [ ] World Map: local/region/world zoom levels, loaded/dirty/custom region
-  status, search, bookmarks, and jump-to-local editing.
-- [ ] Interface Studio: widget hierarchy, preview, properties, CS2/events,
-  variables, and live-client reference capture.
-- [ ] Build/Validation workspace: project graph, reports, semantic diff,
-  revision checks, pack tasks, and output preview.
-- [ ] Procedural workspace only when the nondestructive generator contracts
-  prove insufficient for advanced users; do not require a node graph for the
-  ordinary map workflow.
-
-## Phase 9 — Remove the transitional architecture and release harden
-
-**Status: queued**
-
-Deletion is a deliverable, but only after the native acceptance gates pass.
-
-- [ ] Migrate all production startup to the native application.
-- [ ] Remove `LauncherWindow`, `MainWindow`, JavaFX/FXML production screens,
-  `ControlledWorkspaceShell`, `SwingNode`, `AWTGLCanvas`, and
-  `EmbeddedOpenGlViewport`.
-- [ ] Remove `Options.*`, `LegacyRenderSettingsAdapter`, and callback-backed
-  settings state after all consumers use the registry.
-- [ ] Remove legacy plugin launcher/discovery and compatibility-only active/
-  inactive JAR behavior.
-- [ ] Keep JavaFX only if a deliberately retained diagnostic/test surface is
-  still justified; otherwise remove its dependencies and runtime modules.
-- [ ] Update README, architecture docs, packaging, and troubleshooting for
-  OpenRune Studio rather than RSPSi transitional paths.
-- [ ] Add `platformGate` for macOS Intel/ARM, Windows x64, and Linux x64,
-  including native library loading, input, FBO, fonts, packaging, and a
-  bounded smoke test.
-- [ ] Verify clean startup, cache load failure, cancellation, dirty close,
-  recovery, plugin crash/safe mode, missing assets, and renderer diagnostics.
-
-### Exit gate
-
-The native OpenRune Studio workflow is the only production path, the old paths
-are deleted or explicitly quarantined as tests, and the platform matrix passes.
-
-## Explicitly deferred until the gates are green
-
-These are valid ideas, but they must not interrupt Phases 0–5:
-
-- Modern skeletal/advanced animation formats beyond the supported fixture set.
-- Runtime entities, particles, projectiles, and advanced effects.
-- Full third-party Plugin Hub ecosystem and broad remote distribution.
-- Server source application and runtime bridge beyond the read-only/declared
-  task adapter.
-- Multi-viewport native ImGui windows.
-- Arbitrary node-graph procedural authoring.
-- Large-scale interface/client simulation before the core source/build model
-  is stable.
-
-## Completion definition
-
-OpenRune Studio is considered complete for this track when:
-
-1. The native application vertical slice and Map Editor exit gates pass.
-2. The semantic/render parity gates pass for the declared supported revision
-   and external fixture set.
-3. Editing is command-backed, undoable, validatable, recoverable, and saved via
-   the semantic project/build path.
-4. Camera movement and local edits do not cause avoidable full-scene or full-
-   texture GPU rebuilds.
-5. The plugin and Live Client boundaries are versioned, permissioned, and
-   testable.
-6. The legacy production paths have been removed or are provably isolated as
-   diagnostics/tests.
-7. The supported platform smoke matrix passes.
-
- The next implementation target is Phase 0. The first three concrete tasks are:
-
-1. Finish and enforce the settings-consumer contract.
-2. Add the missing semantic/render correctness fixtures that will drive the P0
-   corrections in Phase 1.
-3. Make the native GLFW + Dear ImGui dashboard vertical slice the only new
-   frontend work, with no new JavaFX product features.
-
-Reference documents remain useful as design and research records, but this
-file is the sequence that decides what we do next:
-
-- [`PHASE0_ACCEPTANCE.md`](PHASE0_ACCEPTANCE.md)
-- [`PHASE0_PARITY_MANIFEST.example.json`](PHASE0_PARITY_MANIFEST.example.json)
-
-- [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- [`PLUGIN_ARCHITECTURE.md`](PLUGIN_ARCHITECTURE.md)
-- [`IMGUI_ADAPTER.md`](IMGUI_ADAPTER.md)
-- [`OPENRUNE_FILESTORE_ADOPTION.md`](OPENRUNE_FILESTORE_ADOPTION.md)
-- [`RENDERING_SYSTEM_AUDIT_2026-09-18.md`](RENDERING_SYSTEM_AUDIT_2026-09-18.md)
-- [`RUNELITE_GPU_PIPELINE.md`](RUNELITE_GPU_PIPELINE.md)
-- [`STUDIO_DIRECTION.md`](STUDIO_DIRECTION.md)
-- [`SMART_MAP_TOOLS.md`](SMART_MAP_TOOLS.md)
+# OpenRune Studio Roadmap
+
+_Started fresh 2026-09-21. The previous 43-file `docs/` audit trail was retired - this
+single document is the new source of truth for direction. It is meant to be edited in
+place as work lands, not archived-and-replaced like the old one._
+
+## How to read this
+
+Every claim below is grounded in something checked against the actual repository or a
+real reference client (RuneLite) or a real sibling map editor (Terraini), not general
+knowledge. Where a claim is "confirmed," it was verified by reading the cited file.
+Where it's a "target," it's a gap with a concrete next action, not a vague aspiration.
+
+---
+
+## Part 1 — Rendering engine: real OSRS rules
+
+### 1.1 What's already correct (confirmed this pass)
+
+- **Underlay blending is genuinely correct.** `FloorBlendRules.blendUnderlay` (`Client/src/main/java/com/rspsi/osrs/rules/terrain/FloorBlendRules.java`)
+  implements the real client's radius-5 (11x11 tile window) weighted hue/saturation/luminance
+  average - `hue = weightedHue*256/chroma`, `sat = saturation/count`, `luminance = luminance/count` -
+  which matches OSRS's own `class470.method9712` (see 1.3) formula field-for-field. This was
+  worth verifying rather than assuming; it holds up.
+- **Tile shapes, heights, and lighting are marked `covered`** in `docs/RENDERING_PARITY_MANIFEST.json`
+  (`terrain.shapes`, `terrain.heights`, `terrain.lighting`, `models.normals`, `models.alpha`,
+  `models.renderModes`, `native.openglState`, `occlusion.planes`, `objects.wallOrientation`,
+  `objects.ground`). Eleven of thirty-seven tracked parity entries are done. Don't re-litigate
+  these without new evidence they've regressed.
+- **Backface culling is deliberately off for models** (`BackfacePolicy` javadoc) because cache
+  models aren't reliably wound - this was re-confirmed this cycle when the object-preview
+  renderer's own culling produced a "transparent fountain" bug that the real (no-cull) native
+  renderer doesn't have. Leave this alone until every model has verified winding.
+
+### 1.2 What's not correct yet - the tracked backlog
+
+`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 22 "partial," 4 "deferred." Six are
+P0-and-partial, each with an already-written `nextAction` - this is the actual near-term
+rendering roadmap, not something to re-derive:
+
+| id | title | next action |
+|---|---|---|
+| `objects.wallNormalMerge` | Wall neighbor normal merge / L-wall pair merge | Implement extended multi-region neighbor traversal for world-chunk boundary wall joins |
+| `objects.wallDecorationOffsets` | Wall-decoration offsets, dual renderables, wall-width compensation | Carry both decoration renderables and wall-relative offsets before declaring parity |
+| `models.textureAlpha` | Texture transparency in face-pass classification | Add golden test cases for animated texture UV offset handling |
+| `textures.definitions` | Texture definitions, pixels, average-color fallback | Add real revision-240 texture and transparent-pixel fixtures |
+| `native.drawRanges` | Opaque/alpha draw ranges, batching, diagnostics | Add a synthetic multi-material plan and compare command ranges/draw calls |
+| `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Introduce a backend-neutral render-order key (model priority, face priority, depth mode, bias, facing); keep culling off until winding fixtures pass |
+
+P1-partial items worth picking up next, once the P0s are down: `scene.apiSurface`,
+`terrain.bridge`, `scene.roofs`, `objects.wallTransforms`, `objects.decorations`,
+`objects.gameObjectFootprint`, `models.colors`, `models.contour`, `textures.animation`,
+`occlusion.visibility`.
+
+### 1.3 Ground-truth reference (RuneLite, verified this pass)
+
+For anyone implementing the above, this is the actual algorithm to match, read from
+`runescape-client/.../class470.java:method9712` (obfuscated) and its clean re-implementation
+in `runelite-client/cache/.../MapImageDumper.java` (`BLEND = 5`):
+
+- **Underlay blend**: separable box blur, radius 5, done with a running-sum (add the
+  column/row entering the window, subtract the one leaving) rather than a re-sum per tile -
+  our own `FloorBlendRules` is correct in *result* but does a naive O(25) re-scan per tile
+  instead of the O(1)-amortized running sum. Worth optimizing once the incremental compiler
+  (Part 2) is wired in, since that's the same "stop redoing full-window work on every tile"
+  problem from two angles.
+- **Lighting**: normals come from a **height gradient**, not real surface normals -
+  `dx = height[x+1][y]-height[x-1][y]`, `dy = height[x][y+1]-height[x][y-1]`,
+  `len = sqrt(dx² + dy² + 65536)` (fixed dz = 256), normalized. Light vector is
+  hard-coded `(-50, -50, -10)` (`|v| = sqrt(5100) ≈ 71.4`), and
+  `intensity = dot(normal, light) / (|v| * 3) + 96` (96 = flat ambient). Applying it
+  (`class212.method4685`): **only luminance is modulated** - `newLuminance = clamp((hsl&127)*intensity/128, 2, 126)`,
+  hue/saturation pass through untouched - then the result indexes a precomputed
+  65536-entry HSL->RGB palette with a gamma pass. If our own lighting ever looks
+  subtly wrong, check this exact formula first (spot-check target, since the parity
+  manifest already claims `terrain.lighting: covered` - this is the "grade the
+  homework" reference, not a known bug).
+- **Tile shapes**: `SceneTileModel`'s static `triangleTextureIndices[13][]` /
+  `faceIndices[13][]` define all 13 shapes' triangulation; rotation remaps vertex
+  indices mod 4/8/12/16. Shape 0 -> `SceneTilePaint` (4 corner colors, no model);
+  shapes 1-12 -> `SceneTileModel` (2-4 triangles).
+- **Base terrain height** (when not authored): `HeightCalc.java` - a Jagex-specific
+  **value-noise** function (not Perlin), 3 octaves at frequencies 4/2/1, remapped to
+  `[10, 60]`. Relevant if/when procedural terrain generation (Part 6) needs a
+  game-accurate default height field to seed from.
+
+---
+
+## Part 2 — Performance: faster tile-painting updates
+
+**The fix already exists and is untested-in-production, not unbuilt.**
+`Client/src/main/java/com/rspsi/editor/render/compiler/IncrementalSceneCompiler.java` is a
+real, working, unit-tested (`IncrementalSceneCompilerTest.java`, 69 lines, passing) "revision-driven
+incremental scene compiler over canonical 8x8 zones" - its own javadoc says terrain
+compilation is "bounded to dirty zones... unchanged terrain maps remain the exact immutable
+instances from the previous RenderScene." **It has zero production call sites.**
+`SessionSceneController` (the class actually wired to `SessionChangeListener`, i.e. the thing
+that reacts to every live edit) uses `RenderSceneBuilder` - a full rebuild - unconditionally.
+
+This is validated independently by RuneLite's own GPU plugin fork (`runelite-client/.../plugins/gpu/Zone.java`,
+`GpuPlugin.invalidateZone`/`rebuild`): it partitions the world into **8x8-tile zones**, each
+with its own VBO, and a per-zone `invalidate` flag drives per-tick rebuild - untouched zones
+never re-upload. Our own compiler already uses the same 8x8 zone size. This is not a
+coincidence worth ignoring: it's the industry-standard chunk size for exactly this problem,
+and we already built the matching machinery.
+
+**Target**: wire `IncrementalSceneCompiler` into `SessionSceneController` in place of the
+unconditional `RenderSceneBuilder` call, falling back to a full rebuild only when the compiler
+reports it can't determine a bounded dirty set (e.g. a cache reload). Re-run
+`IncrementalSceneCompilerTest` plus a manual paint-latency check before/after. This is the
+single highest-leverage performance fix available right now - it's substitution, not new
+engineering.
+
+---
+
+## Part 3 — Plugin API refinement
+
+### 3.1 Current state: two parallel plugin systems
+
+- **`EditorPlugin`** (`Client/src/main/java/com/rspsi/editor/plugin/`) - cache-agnostic,
+  engine-level. `EditorPluginContext` has no `DefinitionProvider`/cache access at all (checked
+  this cycle while building the selection overlay - confirmed by reading the full field list
+  of the context record).
+- **`StudioPlugin`** (`Editor/src/main/java/com/rspsi/studio/plugin/`) - ImGui/UI-level,
+  cache-aware via `StudioPanelContext.cache()`. Anything needing model geometry, object
+  definitions, or textures has to live here, not in `EditorPlugin`.
+
+This split isn't necessarily wrong (engine-level extensions arguably *shouldn't* need cache
+access), but it's undocumented as a deliberate boundary, which cost real time this cycle
+figuring out which system a new feature belonged in. **Target**: write down the actual rule
+("if it needs `DefinitionProvider`, it's a `StudioPlugin`; if it's pure document/session logic
+usable headless, it's an `EditorPlugin`") somewhere a plugin author will see it before writing
+code, not after.
+
+### 3.2 What RuneLite does that's worth adopting: declarative settings
+
+RuneLite plugins never hand-register individual settings. A plugin defines a config
+*interface* (`@ConfigGroup("name")`), each getter is `@ConfigItem(keyName=..., name=...,
+description=..., section=...)`, and `ConfigManager` reflects over it at runtime to both persist
+values *and* auto-generate the settings panel widget for each field's type. No plugin author
+ever writes `ImGui.checkbox(...)`/`ImGui.sliderFloat(...)` by hand for a setting.
+
+Compare our own pattern, used repeatedly this cycle (`BrushSettingsHud.renderSettings`,
+`SelectionOverlayPlugin.renderSettings`): every setting is a hand-written pair of "read the
+field, draw the ImGui widget, write the field back" - correct, but it's boilerplate that scales
+linearly with settings count and gives every plugin author a chance to get the widget-to-type
+mapping subtly wrong (as happened this cycle with `sliderFloat`'s missing `int` overload and
+`checkbox`'s return-value-not-out-param signature - both real compile errors this session).
+
+**Target**: a declarative settings layer - an annotation (or a small builder DSL, given we
+don't have Guice) on a plain settings class/interface that a shared renderer turns into ImGui
+widgets automatically, keyed by field type (bool -> checkbox, float in a range -> slider, packed
+color -> `colorEdit4`, enum -> combo). This wouldn't replace `SettingsService`/`SettingsStore`
+(the persistence layer is fine) - it would replace the per-plugin `renderSettings()` boilerplate
+that currently sits on top of it. Worth scoping as its own small project rather than bolting on
+piecemeal.
+
+### 3.3 What RuneLite validates about our existing shape
+
+RuneLite plugins touch a small, fixed set of injectable UI managers (`ClientToolbar`/
+`NavigationButton`, `OverlayManager`, `KeyManager`, `MenuManager`, `ConfigManager` - roughly
+6-8 total). Our own `StudioPlugin` interface already has an equivalent small fixed set
+(`renderOverlay`, `renderHUD`, `renderFloating`, `renderSidePanel`, `renderToolShelf`,
+`renderSettings`, `renderContextDrawer` for tools). This is good validation that the *shape* of
+our extension-point design matches a client with a decade of real plugin authors behind it -
+the settings boilerplate (3.2) is the actual gap, not the surface area.
+
+RuneLite also has `@PluginDependency` with cycle detection and topological sort, letting one
+plugin `@Inject` another. We have nothing like this - if a future plugin genuinely needs to
+depend on another plugin's state, that's worth building deliberately rather than ad hoc, but
+there's no evidence yet that we need it (no current plugin depends on another).
+
+---
+
+## Part 4 — Layout / UI / UX flow
+
+### 4.1 What's now established (this cycle's work, don't re-litigate)
+
+- **Left Tool Rail is now formally the Brush Tool Rail**, not a generic tool dock. It shows
+  only when a real brush tool is active, gated by an explicit `StudioToolPlugin.isBrushTool()`
+  capability (not inferred from current surface placement - that was circular and let a user
+  "place" a non-brush tool there from Plugin Manager settings with no effect). Only Tile
+  Painter and Height Sculptor return `true`. The Plugin Manager's placement UI now hides the
+  "Left Tool Rail" checkbox entirely for anything that isn't a brush tool.
+- **Floating toolbar** hosts tile/object selection tools; **bottom bar** hosts everything else
+  (Tile Painter, Height Sculptor, Path Builder, Object Placement).
+- **Tightly-coupled plugin pieces are co-located, not scattered.** The object-select tool
+  buttons live as nested classes inside `SelectionOverlayPlugin` now, since they exist only to
+  feed the selection that plugin highlights - this is the pattern to keep applying: if a small
+  plugin's only reason to exist is to drive a bigger one, nest it there instead of giving it its
+  own top-level file.
+
+### 4.2 Direction: shared tooling over bespoke UI
+
+The stated goal going forward: most tools should not need to build their own brush-settings UI
+or standalone tool chrome - they should reach for `BrushSettingsHud` and friends first, and
+only build bespoke UI when they genuinely need workspace room beyond what the shared surfaces
+offer. This isn't a rule to enforce mechanically (a tool that needs a real custom workspace -
+e.g. a future path/spline editor, see Part 6 - should still get one), but new tool plugins
+should be reviewed against "does this duplicate settings that already exist on a shared
+surface?" before adding their own.
+
+### 4.3 Icon audit - open, not closed
+
+An icon-glyph audit this cycle found no static-analysis-detectable cause for reported "?"
+glyphs: every codepoint constant in `StudioIcons.java` was checked against the actual shipped
+`MaterialIcons-Regular.ttf`'s cmap (via `fontTools`) and all 93 resolved to real glyphs; no raw
+unrouted unicode escapes exist outside `StudioIcons.java`; no literal `"?"` fallback strings
+exist in settings/plugin UI code. This needs a live repro (screenshot or in-app pointer to
+where it appears) to actually fix - flagging as open rather than closed.
+
+---
+
+## Part 5 — Selection overlay & painting system: what's still missing
+
+Shipped this cycle: a real convex-hull object outline (ported from RuneLite's
+`Model.getConvexHull()` technique), a fixed coordinate-space bug that made the whole system
+render nothing (`ModelPacketBuilder`'s local-document-space anchor vs. the camera's absolute
+world-space - see the fix in `SelectionOverlayPlugin`), precise single-object picking through
+the previously-unused `Viewport.objectAt()` hook, and a real settings-backed plugin
+(`SelectionOverlayStyle`) with per-category colors, configurable fill opacity (RuneLite's own
+"transparency" trick, confirmed - its renderer has no true per-triangle tint hook either, every
+"highlighted" object there is the same alpha-blended-hull-fill trick we now have), and a
+"painted edge" double-stroke.
+
+Still open, in the user's own words - "still needs work," "tones more work":
+
+- **True per-triangle transparency**, if wanted, is a materially different and larger task:
+  it would mean the native OpenGL renderer accepting a per-object tint/alpha uniform on the
+  actual draw call, not a 2D overlay trick. RuneLite doesn't do this either (confirmed - its
+  renderer has no hook for it), so there's no reference implementation to lean on; this would
+  be original engineering against `OpenGlSceneRenderer` if pursued.
+- **Tile-blending-aware painting UX** - Terraini's road rasterizer (Part 6) does real sub-tile
+  coverage supersampling for edge quality; our own tile paint tool doesn't have an equivalent
+  soft-edge story yet even for plain brush strokes.
+- **Dev-info overlay is a first pass, not feature-complete** - shows id/name/category; RuneLite's
+  Dev Tools overlay additionally shows animation IDs, distance, and per-type extras (combat
+  level for NPCs, quantity for ground items) - our equivalent for objects could grow similarly
+  (e.g. animation id, wall orientation, footprint dimensions) if it proves useful in practice.
+
+---
+
+## Part 6 — New feature: path/road generation (Terraini-informed)
+
+Terraini's road toolkit was researched in real depth this pass (not just class names) and
+gives a genuine implementable blueprint, sitting on top of OpenRune's own currently-inert
+`Client/src/main/java/com/rspsi/editor/generation/` package (`Generator`, `GeneratorService`,
+`GenerationSchema` - has an unused `ROAD` preset already waiting).
+
+### 6.1 The actual algorithm (from Terraini, adaptable, not a straight port - it's decompiled
+### bytecode from a commercial competitor's product for the *pieces we'd reimplement clean*,
+### but the *algorithm shape* is fair game the same way a published technique is)
+
+1. **Routing is local reroute, not global pathfinding.** Don't build a full A*/Dijkstra
+   network solver. Take the user's drawn/desired polyline as ground truth; only run A* to
+   patch the specific blocked span(s), inside a bounding box expanded by a small corridor
+   (Terraini's default: 10 tiles) around the affected points. Cost function per edge:
+   `traversal_cost(tile) * (√2 if diagonal else 1) + slope_penalty + distance_from_original_stroke * weight`
+   - that last term is what keeps a reroute hugging the user's intent instead of taking an
+   arbitrary shortest path. Reject diagonal moves that would cut a blocked corner. Heuristic:
+   Chebyshev-with-diagonal-discount (`max(dx,dy) + (√2-1)*min(dx,dy)`).
+2. **Smooth the result with a turn-angle-adaptive spline**, not a uniform one: a
+   Catmull-Rom-style centripetal spline (weights `√distance` between consecutive points) whose
+   *smoothing strength itself* is locally modulated by the turn angle at each vertex - sharp
+   corners (>120°) get near-zero smoothing so real intersections stay crisp, gentle turns
+   (<30°) get full smoothing, blended with a smoothstep in between. Then resample at fixed
+   arc-length spacing for a uniform tile-placement cadence.
+3. **Rasterize with real sub-tile coverage, not per-tile boolean paint.** Terraini precomputes,
+   for each of OSRS's native tile shapes x 4 rotations, a supersampled coverage mask (2-16x
+   supersample) via point-in-triangle tests against the actual triangulation. The swept
+   road-width polygon accumulates real coverage per touched tile; shape/orientation is chosen
+   by minimizing Hamming distance to that coverage mask, **with an explicit penalty for
+   mismatched edge "portal" bits** so adjoining tiles' open/closed edges stay consistent (this
+   is what makes junctions look continuous instead of tile-by-tile arbitrary). Below a small
+   coverage threshold (~0.135), bucket separately for softer edge treatment.
+4. **Junction shape selection is a lookup table, not a rule engine** despite the name
+   ("RoadShapeGrammar") - reduce the 8-bit "which neighbors are also road" mask to 48 canonical
+   cases by folding 90-degree rotations, and map each to a pre-authored, topology-filtered,
+   *weighted* list of shape/orientation candidates (so identical junctions can render with
+   slight variety instead of mechanical repetition).
+
+### 6.2 Where this plugs in
+
+`GenerationSchema.ROAD` already exists as an unused preset - this is the natural landing spot.
+`CostGrid` in Terraini is an interface with pluggable occupancy/traversal-cost/slope/edge-block
+methods, deliberately decoupled from any specific terrain backing store - our own
+`WorldDocument`/collision data (`CollisionMap`, `OsrsCollisionBuilder`) is the natural backing
+implementation. Scope as its own phase: routing engine first (testable headless, no rendering
+dependency), then the spline/resample layer, then the coverage-based rasterizer last (it's the
+part that touches the terrain-paint pipeline and benefits most from Part 2's incremental
+compiler being wired in first, since a road stroke touching many tiles is exactly the paint
+workload that should not trigger full scene rebuilds).
+
+---
+
+## Part 7 — Procedural terrain generation (lower priority, noted for later)
+
+Terraini's island generator is a real, well-designed system - ten independent seeded Perlin
+noise channels (fbm/ridged/billow combinations, each octave rotated ~28.65 degrees and offset
+to hide grid artifacts, domain-warped by dedicated warp channels), Worley/Voronoi hashing for
+island "lobes," and a library of 128-sample radial templates *digitized from real OSRS islands*
+that get warped by noise rather than used rigidly. This is a substantial, self-contained
+feature (island/landmass generation from a seed) rather than a natural extension of anything
+we have today - noted as a real capability gap, not scheduled against Part 6's road generator,
+which is the higher-value near-term target since it has an existing landing spot
+(`GenerationSchema.ROAD`) and a clearer connection to "stronger editing features."
+
+---
+
+## Part 8 — Other Terraini ideas (lower priority)
+
+- **Stamp/prefab paste system** (`StampPlan`/`StampAnchor`/`StampConflictPolicy`/`StampHeightMode`):
+  capture a region, transform it (mirror/rotate/recenter), paste elsewhere with explicit
+  policies for how heights blend into existing terrain and how object conflicts resolve. Real
+  gap in our own object/tile tooling (no "paste onto uneven terrain" story today) but the
+  actual merge/conflict math lives in Terraini code that wasn't opened this pass - would need
+  designing from the policy *names* and OSRS's own terrain-height rules, not copied.
+- **Layer system** (`LayerManager`/`LayerCompositor`): Photoshop-style tile/object layers,
+  each visible layer's per-field changes replayed in order onto a snapshot of the base region
+  (later layers win per-field, not per-tile; hidden layers contribute nothing). No diff/undo
+  machinery of its own - would need to integrate with our existing history system, not bring
+  its own.
+- **Region thumbnail world-map browser**: two-tier (64px/256px) box-downsampled PNG cache,
+  disk-backed, capped by size/count rather than true LRU, generated via a throwaway scene
+  render per region. A plausible "world overview to jump into a region" panel if our own
+  navigation ever needs one - not urgent.
+
+---
+
+## Part 9 — Modularization: modules and plugins
+
+Current Gradle module split is exactly two: `Client` (engine, cache, rendering-neutral) and
+`Editor` (Dear ImGui/native shell, Studio plugins). The dual plugin system (Part 3.1) is the
+most concrete symptom of needing clearer module boundaries - it wasn't designed as two systems
+on purpose, it grew that way because cache access is Editor-side and engine logic is
+Client-side, and nobody has drawn the line explicitly.
+
+Before splitting into more Gradle modules (a real option worth considering - e.g. isolating a
+`Rendering` module from `Client`, or a `PluginApi` module shared by both), the higher-value,
+lower-risk step is documenting the *existing* two-module boundary's actual rule (3.1) and
+seeing whether real friction remains once that's written down. Module-count changes are a
+one-way door in a Gradle project of this size (build script churn, IDE reindexing, every
+existing import path changes) - worth being sure the two-module split is actually the problem
+before restructuring it.
+
+---
+
+## Explicitly deferred (not in this roadmap's near-term scope)
+
+- True GPU-level per-object transparency (Part 5) - real engineering against the native
+  renderer, no reference implementation to lean on from either RuneLite or Terraini.
+- Procedural island/terrain generation (Part 7) - real feature, lower priority than the road
+  generator.
+- Stamp/paste and layer systems (Part 8) - real gaps, no existing landing spot in our codebase
+  the way `GenerationSchema.ROAD` gives the road generator one.
+- Further Gradle module splitting (Part 9) - revisit only after the two-module boundary is
+  actually documented and shown to still cause friction.
+- `@PluginDependency`-style plugin-to-plugin dependency graph - no current plugin needs it.

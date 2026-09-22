@@ -77,6 +77,42 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         return pickAt(x, y).map(hit -> hit.objectHit() && hit.objectTile() != null ? hit.objectTile() : hit.tile());
     }
 
+    /**
+     * Resolves the specific {@link com.rspsi.editor.model.WorldObject} a ray-picked
+     * tile/id pair refers to. This viewport only speaks {@link PickResult} (a tile plus
+     * a raw cache object id); it holds no {@code EditorSession}/world document to turn
+     * that into a real placed object (type, rotation), so Studio wires this in once it
+     * has one. Left unset, {@link #objectAt} degrades to {@code Optional.empty()} - the
+     * same "legacy viewport" fallback {@link Viewport#objectAt} already documents.
+     */
+    @FunctionalInterface
+    public interface WorldObjectResolver {
+        java.util.Optional<com.rspsi.editor.model.WorldObject> resolve(WorldTile objectTile, int objectId);
+    }
+
+    private WorldObjectResolver objectResolver;
+
+    public void setObjectResolver(WorldObjectResolver resolver) {
+        this.objectResolver = resolver;
+    }
+
+    /**
+     * Precise "what object is actually under the cursor" pick, in the spirit of
+     * RuneLite's clickbox hit test - resolves to the one specific object the ray hit,
+     * not every object present on that tile. {@link #tileAt} still exists for
+     * tile-target tools; this is the object-target counterpart {@link BoxSelectTool}
+     * needs so a single click on a tile stacked with a wall, a wall decoration, and a
+     * ground object doesn't select all three at once.
+     */
+    @Override
+    public java.util.Optional<com.rspsi.editor.model.WorldObject> objectAt(float x, float y) {
+        if (objectResolver == null) return java.util.Optional.empty();
+        return pickAt(x, y)
+                .filter(PickResult::objectHit)
+                .flatMap(hit -> objectResolver.resolve(
+                        hit.objectTile() != null ? hit.objectTile() : hit.tile(), hit.objectId()));
+    }
+
     private Integer pickPlaneRestriction;
 
     /**
