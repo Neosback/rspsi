@@ -373,18 +373,14 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             glFrontFace(cullMode == CULL_FRONT_CW ? GL_CW : GL_CCW);
             glCullFace(GL_BACK);
         }
-        // Two-sided by default.
+        // Begin each frame two-sided. applyDrawState() may enable culling for
+        // non-terrain commands when the validation mode is active, and turns
+        // it back off for terrain. Normal editing keeps cullMode=CULL_OFF.
         //
-        // A previous experiment enabling global GL_CW back-face culling made
-        // walls see-through from some angles, hid roofs, darkened the scene,
-        // and broke bridges. RuneLite-melxin Model.draw0 now explains why:
-        // edge <= 0 is the client's CULLED flag, so visible faces have edge > 0.
-        // With the software Y-down to native Y-up conversion that maps to
-        // GL_CCW, not the GL_CW polarity used by that failed experiment.
-        // Keep native culling disabled until an asymmetric real-cache model
-        // and shaped-tile fixture validate GL_CCW end to end.
-        // Culling also cannot fix coincident wall-decoration faces because
-        // coplanar layers may share the same winding.
+        // The earlier global GL_CW experiment produced see-through walls,
+        // missing roofs and bridge regressions. RuneLite-melxin Model.draw0
+        // shows that visible client faces use edge > 0, which maps to GL_CCW
+        // after the Y-down software viewport -> Y-up OpenGL conversion.
         glDisable(GL_CULL_FACE);
         glPolygonMode(GL_FRONT_AND_BACK, presentation.wireframe() ? GL_LINE : GL_FILL);
         glClearDepth(0.0);
@@ -513,18 +509,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     /**
-     * Selects back-face culling for model geometry.
+     * Selects validation-only back-face culling for non-terrain geometry.
      *
-     * <p>The scene's true front-face winding has never been verified against
-     * a known asymmetric model. {@code BackfacePolicy} documents clockwise,
-     * but enabling that produced see-through walls, missing roofs and a
-     * darker scene - the signature of drawing back faces - so the documented
-     * value is suspect. Culling matters because thin decorations (a hanging
-     * banner's cloth and its backing sit about 1.4 units apart) draw both
-     * skins without it and shimmer where they nearly touch.</p>
-     *
-     * <p>Terrain is never culled here: shaped-tile winding is a separate
-     * unverified question and getting it wrong drops whole tiles.</p>
+     * <p>{@link #applyDrawState(GpuUploadPlan, GpuDrawCommand, boolean, int)}
+     * enables culling only for non-terrain commands and disables it again for
+     * terrain. The default is {@link #CULL_OFF}. Client-front validation uses
+     * GL_CCW via {@code BackfacePolicy}; the opposite winding exists only as a
+     * comparison mode for acceptance testing.</p>
      */
     public void setCullMode(int mode) {
         cullMode = mode < CULL_OFF || mode > CULL_FRONT_CW ? CULL_OFF : mode;
