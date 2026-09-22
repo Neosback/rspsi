@@ -126,7 +126,7 @@ public final class OsrsStudioProject implements AutoCloseable {
         try {
             DefinitionProvider definitions = base.definitionProvider(project.cacheRevision());
             AssetRepository assets = new DefinitionAssetRepository(definitions,
-                    base.symbolicNameProvider());
+                    base.symbolicNameProvider(project.cacheRevision()));
             return new OsrsStudioProject(base, base,
                     new OsrsMapService(base, project.cacheRevision()),
                     definitions, assets, project);
@@ -159,7 +159,7 @@ public final class OsrsStudioProject implements AutoCloseable {
             outputStore = CacheStoreFactory.openRuneWithDispleeOutput(basePath, outputPath);
             DefinitionProvider definitions = definitionsBase.definitionProvider(project.cacheRevision());
             AssetRepository assets = new DefinitionAssetRepository(definitions,
-                    definitionsBase.symbolicNameProvider());
+                    definitionsBase.symbolicNameProvider(project.cacheRevision()));
             return new OsrsStudioProject(outputStore, definitionsBase, definitionsBase,
                     new OsrsMapService(outputStore, project.cacheRevision()),
                     definitions, assets, project);
