@@ -27,6 +27,8 @@ public final class RenderSettingKeys {
     public static final SettingKey<Boolean> HIDDEN_TILES_VISIBLE = bool("viewport.scene.hidden-tiles.visible");
     public static final SettingKey<Boolean> COLLISION_VISIBLE = bool("viewport.debug.collision.visible");
     public static final SettingKey<Boolean> WIREFRAME = bool("viewport.debug.wireframe");
+    public static final SettingKey<BackfacePolicy.NativeCullingMode> NATIVE_CULLING_MODE =
+            new SettingKey<>("viewport.debug.native-culling", BackfacePolicy.NativeCullingMode.class);
     public static final SettingKey<Integer> ACTIVE_PLANE =
             new SettingKey<>("viewport.scene.active-plane", Integer.class);
     public static final SettingKey<SceneVisibilityPolicy.PlaneSelection> PLANE_SELECTION =
@@ -73,6 +75,14 @@ public final class RenderSettingKeys {
                 "Show collision diagnostics.", Set.of(SettingInvalidation.REDRAW)));
         registry.register(SettingSpec.of(WIREFRAME, false, SettingScope.VIEWPORT, "Wireframe",
                 "Show renderer geometry edges.", Set.of(SettingInvalidation.REDRAW)));
+        registry.register(SettingSpec.enumeration(NATIVE_CULLING_MODE,
+                BackfacePolicy.NativeCullingMode.TWO_SIDED,
+                List.of(BackfacePolicy.NativeCullingMode.values()), SettingScope.VIEWPORT,
+                "Native back-face culling",
+                "Validation-only native culling mode. Keep Two Sided for normal editing; "
+                        + "Client Front tests the verified RuneLite edge/winding mapping and "
+                        + "Reversed Debug provides an explicit comparison against the opposite winding.",
+                Set.of(SettingInvalidation.REDRAW)));
         registry.register(SettingSpec.integer(ACTIVE_PLANE, 0, 0, 3, SettingScope.VIEWPORT,
                 "Active plane", "Plane used by authored/effective plane projections.", visibility));
         registry.register(SettingSpec.enumeration(PLANE_SELECTION, SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
@@ -112,6 +122,7 @@ public final class RenderSettingKeys {
                 HIDDEN_TILES_VISIBLE, COLLISION_VISIBLE, WIREFRAME, ACTIVE_PLANE,
                 PLANE_SELECTION, BRIGHTNESS, EXPOSURE, MSAA_SAMPLES, FOG_DEPTH_TILES,
                 FOG_COLOR);
+        consumers.register("native-viewport-validation", NATIVE_CULLING_MODE);
         consumers.register("map-studio-viewport-hud", HUD_TILE_INSPECTOR_VISIBLE, HUD_TOOL_CONTROLS_VISIBLE);
         return consumers;
     }
