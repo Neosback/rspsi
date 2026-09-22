@@ -373,7 +373,7 @@
         "Client/src/test/java/com/rspsi/cache/verify/OsrsParityFixtureTest.java",
         "docs/TEXTURE_PARITY_FIXTURE.md",
         "Client/src/main/java/com/rspsi/cache/verify/OsrsTextureRevisionVerifier.java",
-        "RuneLite-melxin/cache/src/test/java/net/runelite/cache/Revision240TextureParityExporterTest.java",
+        ".github/tools/Revision240TextureParityExporterTest.java",
         ".github/workflows/revision-240-texture-parity.yml",
         "GitHub Actions Revision 240 Texture Acceptance run 35718110830"
       ],
