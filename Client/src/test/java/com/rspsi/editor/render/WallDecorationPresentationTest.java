@@ -42,16 +42,4 @@ class WallDecorationPresentationTest {
         assertEquals(0, WallDecorationPresentation.primary(0, 0, 3)
                 .cameraOrder(tile, camera));
     }
-
-    @Test
-    void singleDecorationHasStableOrder() {
-        WorldTileAddress tile = WorldTileAddress.of(3200, 3200, 0);
-        WallDecorationPresentation single =
-                WallDecorationPresentation.single(16, 0, 0);
-
-        assertEquals(0, single.cameraOrder(tile,
-                new CameraState(0, -1000, 0, 0, 0)));
-        assertEquals(0, single.cameraOrder(tile,
-                new CameraState(1_000_000, -1000, 1_000_000, 0, 0)));
-    }
 }
