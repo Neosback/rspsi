@@ -85,6 +85,16 @@ public record GpuDrawCommand(
                      SubmissionPass nextPass, int nextTextureId,
                      int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex,
                      RenderMode nextRenderMode) {
+        return canMerge(nextTile, nextLayer, nextPass, nextTextureId, nextPriority,
+                nextDepthBias, nextObjectId, nextFirstIndex, nextRenderMode,
+                WallDecorationPresentation.none());
+    }
+
+    boolean canMerge(WorldTileAddress nextTile, SceneLayer.Kind nextLayer,
+                     SubmissionPass nextPass, int nextTextureId,
+                     int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex,
+                     RenderMode nextRenderMode,
+                     WallDecorationPresentation nextWallDecorationPresentation) {
         boolean tileCompatible = tile.equals(nextTile)
                 || (layer == SceneLayer.Kind.TERRAIN && nextLayer == SceneLayer.Kind.TERRAIN
                     && tile.plane() == nextTile.plane());
@@ -93,6 +103,7 @@ public record GpuDrawCommand(
                 && depthBias == nextDepthBias
                 && objectId == nextObjectId
                 && renderMode == nextRenderMode
+                && wallDecorationPresentation.equals(nextWallDecorationPresentation)
                 && firstIndex + indexCount == nextFirstIndex;
     }
 
