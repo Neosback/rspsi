@@ -375,18 +375,16 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
         // Two-sided by default.
         //
-        // Culling model back faces with the previously assumed GL_CW front
-        // winding was tried and reverted: it made
+        // A previous experiment enabling global GL_CW back-face culling made
         // walls see-through from some angles, hid roofs, darkened the scene,
-        // and broke bridges - all symptoms of the scene being drawn from its
-        // back faces, i.e. the documented winding does not match what this
-        // projection actually produces. It also did NOT stop a flat banner
-        // from z-fighting itself, which means that decoration's coincident
-        // faces share a winding and culling could never have separated them.
-        // BackfacePolicy now proves the coordinate-system polarity is GL_CCW
-        // (software screen Y grows down, native window Y grows up), but keep
-        // native culling disabled until an asymmetric real-cache model and
-        // shaped-tile fixture have visually validated that corrected polarity.
+        // and broke bridges. That proves a single global cull switch is not yet
+        // safe for every geometry family; it does not by itself disprove the
+        // projected winding sign. BackfacePolicy's concrete edge-function
+        // mapping identifies client-front projected triangles as GL_CW, but
+        // keep native culling disabled until an asymmetric real-cache model
+        // and shaped-tile fixture validate the full geometry/projection path.
+        // Culling also cannot fix coincident wall-decoration faces because
+        // coplanar layers may share the same winding.
         glDisable(GL_CULL_FACE);
         glPolygonMode(GL_FRONT_AND_BACK, presentation.wireframe() ? GL_LINE : GL_FILL);
         glClearDepth(0.0);
