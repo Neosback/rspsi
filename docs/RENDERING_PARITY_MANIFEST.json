@@ -357,33 +357,12 @@
       "title": "Wall-decoration offsets, dual renderables, and wall-width compensation",
       "status": "covered",
       "priority": "p0",
-      "runelite": [
-        "RuneLite-melxin/runescape-client/src/main/java/Scene.java#newWallDecoration",
-        "RuneLite-melxin/runescape-client/src/main/java/Scene.java orientation == 256 wall-decoration draw order",
-        "RuneLite-melxin/runelite-client/src/main/java/net/runelite/client/plugins/gpu/SceneUploader.java",
-        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/DecorativeObject.java",
-        "RuneLite-melxin/runelite-mixins/src/main/java/net/runelite/mixins/RSWallDecorationMixin.java"
-      ],
-      "rspsi": [
-        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
-        "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java",
-        "Client/src/main/java/com/rspsi/editor/render/WallDecorationPresentation.java",
-        "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java",
-        "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java",
-        "Client/src/main/java/com/rspsi/editor/render/SoftwareSceneRenderer.java",
-        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
-      ],
-      "tsps": [
-        "rs/scene/Scene.ts",
-        "rs/config/loctype/LocModelLoader.ts"
-      ],
-      "evidence": [
-        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
-        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
-        "Client/src/test/java/com/rspsi/editor/render/WallDecorationPresentationTest.java"
-      ],
-      "reason": "Scene rendering now preserves shape-8 wall-decoration renderable 1 and renderable 2 as distinct model packets. Primary geometry retains the wall-relative displacement while secondary geometry remains at the bare tile position, matching RuneLite SceneUploader and RSWallDecorationMixin. Backend-neutral camera ordering reproduces the client's orientation-256 primary/secondary submission order, and GPU plan construction prevents the two renderables from being merged back into one range.",
-      "nextAction": "Keep primary/secondary packet identity and camera-order fixtures as regression coverage when wall rendering or scene sorting changes."
+      "runelite": ["net.runelite.api.DecorativeObject#getXOffset", "net.runelite.api.DecorativeObject#getYOffset", "net.runelite.api.DecorativeObject#getRenderable", "net.runelite.api.DecorativeObject#getRenderable2", "RuneLite-melxin/runescape-client/src/main/java/Scene.java#newWallDecoration", "RuneLite-melxin/runelite-mixins/src/main/java/net/runelite/mixins/RSWallDecorationMixin.java#getClickbox"],
+      "rspsi": ["Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java", "Client/src/main/java/com/rspsi/editor/render/WallDecorationPresentation.java", "Client/src/main/java/com/rspsi/osrs/rules/loc/WallDecorationRules.java", "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java"],
+      "tsps": ["rs/scene/Scene.ts", "rs/config/loctype/LocModelLoader.ts"],
+      "evidence": ["Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java", "Client/src/test/java/com/rspsi/editor/render/WallDecorationPresentationTest.java", "Client/src/test/java/com/rspsi/osrs/rules/loc/WallDecorationRulesTest.java", "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"],
+      "reason": "Shape-8 wall decorations are preserved as distinct primary and secondary neutral model packets; primary carries the inherited wall-relative offset while secondary remains at the bare tile position, matching RuneLite's clickbox and Scene representation. Camera-side orientation-256 ordering is retained as renderer-neutral metadata and consumed by software/native ordering. Shapes 5/6/8 inherit supporting-wall displacement with the client's fallback of 16 when no wall is available.",
+      "nextAction": "Keep the shape-8 camera-order, supporting-wall displacement, fallback-16, and GPU-command propagation fixtures as regression coverage."
     },
     {
       "id": "objects.gameObjectFootprint",
