@@ -635,6 +635,24 @@ class ModelPacketBuilderTest {
     }
 
     @Test
+    void rotatedFootprintCanEndExactlyOnTheDocumentBoundary() {
+        WorldDocument document = new WorldDocument(8, 8, 1);
+        DefinitionProvider definitions = sizedDefinitions(2, 3, 10, 7, triangle(7, 100));
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions)
+                .build(new WorldObject(42, 10, 1, 0, 5, 6), document)
+                .orElseThrow();
+        GameObjectSceneMetadata metadata = packet.gameObjectSceneMetadata();
+
+        assertEquals(3, metadata.sizeX());
+        assertEquals(2, metadata.sizeY());
+        assertEquals(5, metadata.minTileX());
+        assertEquals(6, metadata.minTileY());
+        assertEquals(7, metadata.maxTileX());
+        assertEquals(7, metadata.maxTileY());
+    }
+
+    @Test
     void diagonalGameObjectCarriesSeparateClientModelOrientation() {
         WorldDocument document = new WorldDocument(8, 8, 1);
         DefinitionProvider definitions = sizedDefinitions(2, 3, 10, 7, triangle(7, 100));
