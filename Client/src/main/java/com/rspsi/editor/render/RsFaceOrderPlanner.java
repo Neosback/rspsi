@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.ToDoubleFunction;
+import java.util.function.ToIntFunction;
 
 /**
  * Reproduces the legacy model face-priority interleave used by the OSRS
@@ -21,8 +22,19 @@ public final class RsFaceOrderPlanner {
 
     public static List<GpuDrawCommand> orderAlpha(List<GpuDrawCommand> commands,
                                                    ToDoubleFunction<GpuDrawCommand> depth) {
+        return orderAlpha(commands, depth, ignored -> 0);
+    }
+
+    /**
+     * Orders alpha ranges with a stable backend-neutral tie breaker for scene
+     * rules such as shape-8 wall-decoration primary/secondary ordering.
+     */
+    public static List<GpuDrawCommand> orderAlpha(List<GpuDrawCommand> commands,
+                                                   ToDoubleFunction<GpuDrawCommand> depth,
+                                                   ToIntFunction<GpuDrawCommand> tieBreaker) {
         Objects.requireNonNull(commands, "commands");
         Objects.requireNonNull(depth, "depth");
+        Objects.requireNonNull(tieBreaker, "tieBreaker");
         if (commands.size() < 2) return List.copyOf(commands);
 
         List<List<GpuDrawCommand>> groups = new ArrayList<>(12);
@@ -34,6 +46,7 @@ public final class RsFaceOrderPlanner {
         Comparator<GpuDrawCommand> farToNear = Comparator
                 .comparingDouble((GpuDrawCommand command) -> depth.applyAsDouble(command))
                 .reversed()
+                .thenComparingInt(tieBreaker)
                 .thenComparingInt(GpuDrawCommand::firstIndex);
         for (List<GpuDrawCommand> group : groups) group.sort(farToNear);
 
