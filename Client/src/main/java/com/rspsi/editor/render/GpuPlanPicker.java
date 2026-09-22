@@ -122,14 +122,19 @@ public final class GpuPlanPicker {
             return true;
         }
         SceneObjectIdentity identity = command.sceneObjectIdentity();
-        float translateX = command.modelAnchorX() * 128.0f + identity.centerOffsetX()
-                + command.wallDecorationPresentation().offsetX();
+        float baseX = command.modelAnchorX() * 128.0f + identity.centerOffsetX();
         float translateY = command.placementHeight();
-        float translateZ = command.modelAnchorY() * 128.0f + identity.centerOffsetZ()
-                + command.wallDecorationPresentation().offsetZ();
+        float baseZ = command.modelAnchorY() * 128.0f + identity.centerOffsetZ();
 
-        for (ClientModelBounds bounds : command.clientRenderableBounds()) {
+        for (int renderableIndex = 0;
+             renderableIndex < command.clientRenderableBounds().size();
+             renderableIndex++) {
+            ClientModelBounds bounds = command.clientRenderableBounds().get(renderableIndex);
+            ClientRenderablePlacement placement =
+                    command.clientRenderablePlacements().get(renderableIndex);
             ClientModelBounds.Aabb aabb = bounds.drawAabb();
+            float translateX = baseX + placement.offsetX();
+            float translateZ = baseZ + placement.offsetZ();
             if (intersectsAabb(ray,
                     translateX + aabb.minX(), translateY + aabb.minY(),
                     translateZ + aabb.minZ(),
