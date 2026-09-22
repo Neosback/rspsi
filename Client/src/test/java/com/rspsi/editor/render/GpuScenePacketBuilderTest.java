@@ -32,8 +32,12 @@ class GpuScenePacketBuilderTest {
         TileCoordinate local = new TileCoordinate(0, 0, 0);
         ModelRenderPacket model = new ModelRenderPacket(
                 local, 42, ObjectCategory.GROUND,
-                List.of(), List.of(), List.of(), -1,
-                0, 0, 0, 0, 0, 0, false, false)
+                List.of(new ModelVertex(0, 0, 0, 0, 0, 0, 1, 0, 0),
+                        new ModelVertex(64, 0, 0, 0, 0, 0, 1, 0, 0),
+                        new ModelVertex(0, 0, 64, 0, 0, 0, 1, 0, 0)),
+                List.of(new ModelTriangle(0, 1, 2, 100, 100, 100,
+                        -1, 0, 0, 0)), List.of(), -1,
+                0, 0, 0, 64, 0, 64, false, false)
                 .withGameObjectSceneMetadata(
                         GameObjectSceneMetadata.of(0, 0, 2, 3, 1, 0))
                 .withSceneObjectIdentity(SceneObjectIdentity.of(
@@ -60,12 +64,11 @@ class GpuScenePacketBuilderTest {
                 "legacy RenderScene geometry must retain its local render anchor");
 
         GpuUploadPlan upload = new GpuUploadPlanBuilder().build(packet);
-        if (!upload.commands().isEmpty()) {
-            assertEquals(3200, upload.commands().get(0).sceneObjectIdentity().anchorX());
-            assertEquals(6400, upload.commands().get(0).sceneObjectIdentity().anchorY());
-            assertEquals(0, upload.commands().get(0).modelAnchorX());
-            assertEquals(0, upload.commands().get(0).modelAnchorY());
-        }
+        assertEquals(1, upload.commands().size());
+        assertEquals(3200, upload.commands().get(0).sceneObjectIdentity().anchorX());
+        assertEquals(6400, upload.commands().get(0).sceneObjectIdentity().anchorY());
+        assertEquals(0, upload.commands().get(0).modelAnchorX());
+        assertEquals(0, upload.commands().get(0).modelAnchorY());
     }
 
     @Test
