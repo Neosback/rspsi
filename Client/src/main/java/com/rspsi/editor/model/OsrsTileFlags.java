@@ -24,6 +24,10 @@ public final class OsrsTileFlags {
         return (flags & REMOVE_ROOFS) != 0;
     }
 
+    public static boolean visibleBelow(int flags) {
+        return (flags & VIS_BELOW) != 0;
+    }
+
     public static boolean isBlocked(int flags) {
         return (flags & BLOCK_MAP_SQUARE) != 0;
     }
