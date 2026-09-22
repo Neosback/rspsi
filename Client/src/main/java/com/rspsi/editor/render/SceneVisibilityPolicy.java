@@ -24,7 +24,8 @@ public record SceneVisibilityPolicy(
     public enum PlaneSelection {
         ALL,
         AUTHORED_PLANE,
-        EFFECTIVE_PLANE
+        EFFECTIVE_PLANE,
+        CLIENT_TRAVERSAL
     }
 
     public SceneVisibilityPolicy {
@@ -44,9 +45,18 @@ public record SceneVisibilityPolicy(
         return new SceneVisibilityPolicy(PlaneSelection.AUTHORED_PLANE, plane, false, false);
     }
 
-    /** Client-like projection keyed by bridge-resolved effective plane. */
+    /** Diagnostic projection keyed by bridge-resolved current scene plane. */
     public static SceneVisibilityPolicy effectivePlane(int plane) {
         return new SceneVisibilityPolicy(PlaneSelection.EFFECTIVE_PLANE, plane, false, false);
+    }
+
+    /**
+     * Client traversal projection. The selected plane is the active client
+     * scene/camera plane; tiles from any current scene plane may participate
+     * when their physical/cull level is at or below it.
+     */
+    public static SceneVisibilityPolicy clientTraversal(int activePlane) {
+        return new SceneVisibilityPolicy(PlaneSelection.CLIENT_TRAVERSAL, activePlane, false, false);
     }
 
     public SceneVisibilityPolicy withBridgeUpperGeometry(boolean hidden) {
@@ -66,6 +76,10 @@ public record SceneVisibilityPolicy(
         }
         if (planeSelection == PlaneSelection.EFFECTIVE_PLANE
                 && tile.effectivePlane() != selectedPlane) {
+            return false;
+        }
+        if (planeSelection == PlaneSelection.CLIENT_TRAVERSAL
+                && tile.planeCullLevel() > selectedPlane) {
             return false;
         }
         if (hideBridgeUpperGeometry && tile.visibleBelow()) {
@@ -107,6 +121,10 @@ public record SceneVisibilityPolicy(
         }
         if (planeSelection == PlaneSelection.EFFECTIVE_PLANE
                 && tile.effectivePlane() != selectedPlane) {
+            return false;
+        }
+        if (planeSelection == PlaneSelection.CLIENT_TRAVERSAL
+                && tile.planeCullLevel() > selectedPlane) {
             return false;
         }
         return !hideBridgeUpperGeometry || !tile.visibleBelow();

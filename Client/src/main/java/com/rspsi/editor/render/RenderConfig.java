@@ -69,6 +69,7 @@ public record RenderConfig(
             case ALL -> SceneVisibilityPolicy.editor();
             case AUTHORED_PLANE -> SceneVisibilityPolicy.authoredPlane(activePlane);
             case EFFECTIVE_PLANE -> SceneVisibilityPolicy.effectivePlane(activePlane);
+            case CLIENT_TRAVERSAL -> SceneVisibilityPolicy.clientTraversal(activePlane);
         };
         return policy.withBridgeUpperGeometry(!bridgeTilesVisible)
                 .withRoofGeometry(!roofsVisible);
@@ -118,7 +119,8 @@ public record RenderConfig(
             if (!all.isEmpty()) layers.add(new SceneLayer(layer.kind(), all, opaque, transparent));
         }
         return new SceneTileSnapshot(tile.coordinate(), tile.worldAddress(), tile.tileFlags(),
-                tile.effectivePlane(), tile.bridge(), terrainVisible ? tile.terrain()
+                tile.effectivePlane(), tile.authoredPlane(), tile.renderLevel(),
+                tile.planeCullLevel(), tile.bridge(), terrainVisible ? tile.terrain()
                         : java.util.Optional.empty(), models, layers,
                 objectsVisible ? tile.occluders() : List.of(), tile.roofRelated(), tile.visibleBelow());
     }
@@ -168,7 +170,7 @@ public record RenderConfig(
     public static RenderConfig vanillaDefault() {
         return new RenderConfig(RenderProfile.VANILLA_COMPATIBILITY,
                 true, true, true, true, true, true, true, true, false,
-                false, false, 0, SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
+                false, false, 0, SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL,
                 1.0, 0.0, 0, 0, 0x101827);
     }
 }

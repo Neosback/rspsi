@@ -22,7 +22,7 @@ class RenderConfigCompilerTest {
         assertTrue(config.terrainVisible());
         assertTrue(config.objectsVisible());
         assertTrue(config.roofsVisible());
-        assertEquals(SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE, config.planeSelection());
+        assertEquals(SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL, config.planeSelection());
         // 4 is the registry default now that MSAA is implemented end-to-end
         // (GlFramebuffer); it was 0 only while the setting was clamped
         // unavailable pending the FBO acceptance gate.
@@ -35,7 +35,7 @@ class RenderConfigCompilerTest {
         SettingsSnapshot snapshot = registry.defaults()
                 .with(RenderSettingKeys.ACTIVE_PLANE, 2)
                 .with(RenderSettingKeys.PLANE_SELECTION,
-                        SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE)
+                        SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL)
                 .with(RenderSettingKeys.ROOFS_VISIBLE, false)
                 .with(RenderSettingKeys.BRIDGE_TILES_VISIBLE, false)
                 .with(RenderSettingKeys.EXPOSURE, 1.25);
@@ -46,7 +46,7 @@ class RenderConfigCompilerTest {
         assertEquals(1.25, config.exposure());
         assertFalse(config.roofsVisible());
         assertFalse(config.bridgeTilesVisible());
-        assertEquals(SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
+        assertEquals(SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL,
                 config.visibilityPolicy().planeSelection());
         assertEquals(2, config.visibilityPolicy().selectedPlane());
         assertTrue(config.visibilityPolicy().hideRoofGeometry());

@@ -84,10 +84,12 @@ public final class RenderSettingKeys {
                         + "Reversed Debug provides an explicit comparison against the opposite winding.",
                 Set.of(SettingInvalidation.REDRAW)));
         registry.register(SettingSpec.integer(ACTIVE_PLANE, 0, 0, 3, SettingScope.VIEWPORT,
-                "Active plane", "Plane used by authored/effective plane projections.", visibility));
-        registry.register(SettingSpec.enumeration(PLANE_SELECTION, SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
+                "Active plane", "Plane used by authored, effective, or client traversal projections.", visibility));
+        registry.register(SettingSpec.enumeration(PLANE_SELECTION, SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL,
                 List.of(SceneVisibilityPolicy.PlaneSelection.values()), SettingScope.VIEWPORT,
-                "Plane selection", "Choose all, authored, or bridge-effective plane projection.", visibility));
+                "Plane selection",
+                "Choose client traversal, all planes, authored plane, or bridge-effective plane projection.",
+                visibility));
         registry.register(SettingSpec.decimal(BRIGHTNESS, 1.0, 0.0, 4.0, SettingScope.VIEWPORT,
                 "Brightness", "Frontend exposure multiplier; does not alter authored colors.",
                 Set.of(SettingInvalidation.REDRAW)));

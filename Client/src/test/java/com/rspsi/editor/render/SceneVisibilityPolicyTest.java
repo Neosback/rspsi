@@ -41,6 +41,32 @@ class SceneVisibilityPolicyTest {
     }
 
     @Test
+    void clientTraversalUsesPhysicalCullLevelInsteadOfCurrentPlaneEquality() {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        document.tile(2, 5, 6).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, OsrsTileFlags.VIS_BELOW, java.util.List.of()));
+        WorldRegion region = new WorldRegion(10, 20, document);
+        WorldRegionWindow window = new WorldRegionWindow(10, 20, 1, 1,
+                Map.of(region.regionId(), region));
+        RenderWindowScene scene = new RenderWindowSceneBuilder().build(window);
+        SceneWindow sceneWindow = SceneWindow.from(window);
+        GpuScenePacketBuilder builder = new GpuScenePacketBuilder();
+
+        GpuScenePacket effective = builder.build(
+                sceneWindow, scene, SceneVisibilityPolicy.effectivePlane(0));
+        GpuScenePacket client = builder.build(
+                sceneWindow, scene, SceneVisibilityPolicy.clientTraversal(0));
+
+        assertEquals(64 * 64, effective.tiles().size());
+        assertEquals(64 * 64 + 1, client.tiles().size());
+        SceneTileSnapshot visibleBelow = client.tiles().stream()
+                .filter(tile -> tile.authoredPlane() == 2)
+                .findFirst().orElseThrow();
+        assertEquals(2, visibleBelow.effectivePlane());
+        assertEquals(0, visibleBelow.planeCullLevel());
+    }
+
+    @Test
     void clientProjectionHonorsSceneMinimumBeforeTilePlaneSelection() {
         WorldDocument document = new WorldDocument(64, 64, 4);
         document.tile(1, 2, 3).restore(new TileSnapshot(0, 0, 0, 0,
