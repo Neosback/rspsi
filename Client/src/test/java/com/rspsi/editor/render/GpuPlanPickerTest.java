@@ -147,6 +147,40 @@ class GpuPlanPickerTest {
     }
 
     @Test
+    void displacedWallDecorationUsesPerRenderablePlacementForBroadPhase() {
+        ClientModelBounds bounds = boundsForTriangle(
+                -10, -20, 36, 10, -20, 36, 0, 20, 36);
+        SceneObjectIdentity identity = SceneObjectIdentity.of(
+                new WorldObject(11, 5, 0, 0, 0, 0), 1, 1);
+        GpuDrawCommand command = new GpuDrawCommand(
+                WorldTileAddress.of(0, 0, 0), 0, 0,
+                SceneLayer.Kind.WALL_DECORATION,
+                GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, -1, 0, 0, 11,
+                GpuDrawCommand.RenderMode.DEFAULT,
+                WallDecorationPresentation.none(),
+                GameObjectSceneMetadata.none(),
+                List.of(bounds),
+                List.of(new ClientRenderablePlacement(64, 0)),
+                identity, 0, 0, 0);
+        GpuUploadPlan plan = new GpuUploadPlan(
+                List.of(
+                        vertex(118, -20, 100, 0x1200),
+                        vertex(138, -20, 100, 0x1200),
+                        vertex(128, 20, 100, 0x1200)),
+                List.of(0, 1, 2),
+                List.of(command),
+                List.of(), Map.of(), "decor-placement");
+
+        PickResult result = new GpuPlanPicker().pick(plan,
+                new CameraState(128, 0, 0, 0, 0),
+                100, 100, 50, 50).orElseThrow();
+
+        assertEquals(11, result.objectId());
+        assertEquals(identity, result.sceneObjectIdentity());
+    }
+
+    @Test
     void picksCorrectTileInMergedTerrainCommand() {
         // A single merged draw command covering tile (3200, 3200) and (3201, 3200)
         // Tile 3200, 3200: X in [3200*128, 3201*128]
