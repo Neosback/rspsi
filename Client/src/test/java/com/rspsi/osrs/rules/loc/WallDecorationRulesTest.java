@@ -47,6 +47,28 @@ class WallDecorationRulesTest {
         assertEquals(-16, WallDecorationRules.diagonalOffsetZ(1, displacement));
     }
 
+    @Test
+    void straightAndDiagonalOffsetVectorsCoverAllFourRotations() {
+        int displacement = 32;
+        int[][] straight = {
+                {32, 0}, {0, -32}, {-32, 0}, {0, 32}
+        };
+        int[][] diagonal = {
+                {16, -16}, {-16, -16}, {-16, 16}, {16, 16}
+        };
+
+        for (int rotation = 0; rotation < 4; rotation++) {
+            assertEquals(straight[rotation][0],
+                    WallDecorationRules.straightOffsetX(rotation, displacement));
+            assertEquals(straight[rotation][1],
+                    WallDecorationRules.straightOffsetZ(rotation, displacement));
+            assertEquals(diagonal[rotation][0],
+                    WallDecorationRules.diagonalOffsetX(rotation, displacement));
+            assertEquals(diagonal[rotation][1],
+                    WallDecorationRules.diagonalOffsetZ(rotation, displacement));
+        }
+    }
+
     private static ObjectAppearanceView appearance(int displacement) {
         return new ObjectAppearanceView(-1, false, 128, 128, 128,
                 0, 0, 0, Map.of(), Map.of(), true, false, false, false,
