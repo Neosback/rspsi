@@ -65,7 +65,8 @@ public final class IncrementalGpuUploadPlanBuilder {
                 packet.textures(), mergedOccluders,
                 GpuUploadPlanBuilder.fingerprint(packet.fingerprint(), vertices, indices, commands,
                         textureTriangles, packet.textures(), mergedOccluders));
-        return new BuildResult(plan, rebuilt, reused);
+        GpuZonedUploadPlan zonedPlan = new GpuZonedUploadPlanBuilder().build(plan);
+        return new BuildResult(plan, zonedPlan, rebuilt, reused);
     }
 
     /** Creates an isolated cache snapshot for an asynchronous rebuild transaction. */
@@ -151,9 +152,11 @@ public final class IncrementalGpuUploadPlanBuilder {
         }
     }
 
-    public record BuildResult(GpuUploadPlan plan, int rebuiltTiles, int reusedTiles) {
+    public record BuildResult(GpuUploadPlan plan, GpuZonedUploadPlan zonedPlan,
+                              int rebuiltTiles, int reusedTiles) {
         public BuildResult {
             plan = Objects.requireNonNull(plan, "plan");
+            zonedPlan = Objects.requireNonNull(zonedPlan, "zonedPlan");
             if (rebuiltTiles < 0 || reusedTiles < 0) {
                 throw new IllegalArgumentException("Tile counts cannot be negative");
             }
