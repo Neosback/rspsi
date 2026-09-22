@@ -34,7 +34,9 @@ class GpuUploadPlanBuilderTest {
                         new ModelTriangle(0, 1, 2, 7, 8, -1, -1, 255, 2, 1,
                         0, 0, 1, 0, 0, 1, 7, 23)), List.of(), -1,
                 0, 0, 0, 128, 32, 128, false, false)
-                .withRenderMode(GpuDrawCommand.RenderMode.SORTED_NO_DEPTH);
+                .withRenderMode(GpuDrawCommand.RenderMode.SORTED_NO_DEPTH)
+                .withWallDecorationPresentation(
+                        WallDecorationPresentation.primary(8, -8, 1));
         SceneLayer terrainLayer = new SceneLayer(SceneLayer.Kind.TERRAIN, List.of());
         SceneLayer objectLayer = new SceneLayer(SceneLayer.Kind.WALL_DECORATION, List.of(0));
         SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
@@ -67,6 +69,11 @@ class GpuUploadPlanBuilderTest {
                 "wall decorations preserve authored model face priority");
         assertEquals(GpuDrawCommand.RenderMode.SORTED_NO_DEPTH,
                 plan.commands().get(1).renderMode());
+        assertEquals(WallDecorationPresentation.Part.PRIMARY,
+                plan.commands().get(1).wallDecorationPresentation().part());
+        assertEquals(8, plan.commands().get(1).wallDecorationPresentation().offsetX());
+        assertEquals(-8, plan.commands().get(1).wallDecorationPresentation().offsetZ());
+        assertEquals(1, plan.commands().get(1).wallDecorationPresentation().orientation());
         assertFalse(plan.fingerprint().isBlank());
     }
 
