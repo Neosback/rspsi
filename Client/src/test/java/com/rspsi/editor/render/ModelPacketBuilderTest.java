@@ -502,6 +502,18 @@ class ModelPacketBuilderTest {
         // Shape 6 uses the same displacement halved on the diagonal vector.
         assertEquals(125, packets.get(1).vertices().get(0).x());
         assertEquals(3, packets.get(1).vertices().get(0).z());
+
+        WorldDocument fallback = new WorldDocument(1, 1, 1);
+        fallback.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(straightDecoration)));
+        ModelRenderPacket fallbackStraight =
+                new ModelPacketBuilder(definitions).build(fallback).get(0);
+        assertTrue(packets.get(0).vertices().get(0).x()
+                        != fallbackStraight.vertices().get(0).x(),
+                "supporting-wall displacement must change scene placement");
+        assertEquals(packets.get(0).clientRenderableBounds(),
+                fallbackStraight.clientRenderableBounds(),
+                "wall-decoration displacement is Scene placement, not Model-local bounds");
     }
 
     @Test
