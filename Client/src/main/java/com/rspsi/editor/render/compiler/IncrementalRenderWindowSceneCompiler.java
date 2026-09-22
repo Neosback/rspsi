@@ -15,6 +15,7 @@ import com.rspsi.editor.render.RenderWindowSceneBuilder;
 import com.rspsi.editor.render.TerrainMaterial;
 import com.rspsi.editor.render.TerrainPacketBuilder;
 import com.rspsi.editor.render.TerrainRenderPacket;
+import com.rspsi.editor.render.WorldZoneCoordinate;
 import com.rspsi.editor.terrain.CompiledTerrainTile;
 import com.rspsi.editor.terrain.TerrainSceneCompiler;
 import com.rspsi.osrs.rules.terrain.FloorBlendRules;
@@ -66,7 +67,7 @@ public final class IncrementalRenderWindowSceneCompiler {
         Objects.requireNonNull(changedTiles, "changedTiles");
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         if (changedTiles.isEmpty()) {
-            return new UpdateResult(previous, false, 0, Set.of(), "no changes");
+            return new UpdateResult(previous, false, 0, Set.of(), Set.of(), "no changes");
         }
         if (!sameTopology(previous.window(), source)) {
             return full(source, clientCycle, "window topology changed");
@@ -106,7 +107,7 @@ public final class IncrementalRenderWindowSceneCompiler {
         if (underlayChanges.isEmpty() && overlayChanges.isEmpty()) {
             // A changedTiles notification can be broader than the actual persisted delta
             // after undo/redo coalescing. Preserve exact object identity in that case.
-            return new UpdateResult(previous, false, 0, Set.of(), "no render delta");
+            return new UpdateResult(previous, false, 0, Set.of(), Set.of(), "no render delta");
         }
 
         var paddedDocument = prepared.materializePaddedWorldDocument(TERRAIN_CONTEXT_BORDER);
@@ -134,6 +135,7 @@ public final class IncrementalRenderWindowSceneCompiler {
                 new LinkedHashMap<>(previous.terrainPackets());
 
         int compiledVisibleTiles = 0;
+        Set<WorldZoneCoordinate> dirtyWorldZones = new LinkedHashSet<>();
         for (Map.Entry<TileCoordinate, CompiledTerrainTile> entry : compiled.entrySet()) {
             WorldTileAddress address = worldAddress(prepared, entry.getKey());
             if (address == null || prepared.tile(address.plane(), address.worldX(), address.worldY()).isEmpty()) {
@@ -150,6 +152,7 @@ public final class IncrementalRenderWindowSceneCompiler {
             packets.put(address, packetBuilder.build(
                     new TileCoordinate(address.plane(), address.regionLocalX(), address.regionLocalY()),
                     tile.mesh(), tile.appearance(), tile.lighting()));
+            dirtyWorldZones.add(WorldZoneCoordinate.from(address));
             compiledVisibleTiles++;
         }
 
@@ -175,12 +178,12 @@ public final class IncrementalRenderWindowSceneCompiler {
                 textures);
 
         return new UpdateResult(scene, false, compiledVisibleTiles,
-                Set.copyOf(dirtyZones), "incremental terrain");
+                Set.copyOf(dirtyZones), Set.copyOf(dirtyWorldZones), "incremental terrain");
     }
 
     private UpdateResult full(WorldRegionWindow source, int clientCycle, String reason) {
         RenderWindowScene scene = fullBuilder.build(source, clientCycle);
-        return new UpdateResult(scene, true, scene.terrainPackets().size(), Set.of(), reason);
+        return new UpdateResult(scene, true, scene.terrainPackets().size(), Set.of(), Set.of(), reason);
     }
 
     private static boolean sameTopology(WorldRegionWindow previous, WorldRegionWindow current) {
@@ -238,11 +241,13 @@ public final class IncrementalRenderWindowSceneCompiler {
             boolean fullRebuild,
             int compiledVisibleTiles,
             Set<InvalidationGraph.ZoneCoordinate> dirtyZones,
+            Set<WorldZoneCoordinate> dirtyWorldZones,
             String reason
     ) {
         public UpdateResult {
             scene = Objects.requireNonNull(scene, "scene");
             dirtyZones = Set.copyOf(Objects.requireNonNull(dirtyZones, "dirtyZones"));
+            dirtyWorldZones = Set.copyOf(Objects.requireNonNull(dirtyWorldZones, "dirtyWorldZones"));
             reason = Objects.requireNonNull(reason, "reason");
             if (compiledVisibleTiles < 0) {
                 throw new IllegalArgumentException("Compiled tile count cannot be negative");

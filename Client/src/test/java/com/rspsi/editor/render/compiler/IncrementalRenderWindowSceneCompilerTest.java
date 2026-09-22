@@ -60,6 +60,10 @@ class IncrementalRenderWindowSceneCompilerTest {
         assertTrue(update.compiledVisibleTiles() > 0);
         assertTrue(update.compiledVisibleTiles() < initial.terrainPackets().size());
         assertTrue(!update.dirtyZones().isEmpty());
+        assertTrue(update.dirtyWorldZones().contains(
+                com.rspsi.editor.render.WorldZoneCoordinate.from(edited)));
+        assertTrue(update.dirtyWorldZones().contains(
+                com.rspsi.editor.render.WorldZoneCoordinate.from(affectedAcrossBoundary)));
 
         assertEquals(expected.terrainMeshes(), actual.terrainMeshes());
         assertEquals(expected.terrainMaterials(), actual.terrainMaterials());
