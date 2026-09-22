@@ -2,6 +2,7 @@ package com.rspsi.editor.render;
 
 import com.rspsi.editor.model.WorldTile;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -14,7 +15,8 @@ import java.util.Objects;
  */
 public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int objectId, float distance,
                          SceneLayer.Kind layer, int priority, int depthBias, int textureId,
-                         GameObjectSceneMetadata gameObjectSceneMetadata) {
+                         GameObjectSceneMetadata gameObjectSceneMetadata,
+                         List<ClientModelBounds> clientRenderableBounds) {
     /** Compatibility constructor for tile-only legacy viewport picking. */
     public PickResult(WorldTile tile, int plane) {
         this(tile, null, plane, -1, Float.NaN, null, 0, 0, -1,
@@ -44,6 +46,11 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
     public PickResult {
         gameObjectSceneMetadata = Objects.requireNonNull(
                 gameObjectSceneMetadata, "gameObjectSceneMetadata");
+        clientRenderableBounds = List.copyOf(Objects.requireNonNull(
+                clientRenderableBounds, "clientRenderableBounds"));
+        if (clientRenderableBounds.stream().anyMatch(value -> value == null || !value.present())) {
+            throw new IllegalArgumentException("Client renderable bounds must be present");
+        }
         if (tile == null || plane < 0 || plane != tile.plane() || objectId < -1
                 || (!Float.isNaN(distance) && (!Float.isFinite(distance) || distance < 0.0f))
                 || priority < 0 || depthBias < 0 || textureId < -1) {
@@ -54,6 +61,9 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
         }
         if (gameObjectSceneMetadata.present() && objectId < 0) {
             throw new IllegalArgumentException("Terrain picks cannot carry game-object scene metadata");
+        }
+        if (!clientRenderableBounds.isEmpty() && objectId < 0) {
+            throw new IllegalArgumentException("Terrain picks cannot carry client model bounds");
         }
     }
 
@@ -68,6 +78,10 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
 
     public boolean hasGameObjectSceneMetadata() {
         return gameObjectSceneMetadata.present();
+    }
+
+    public boolean hasClientModelBounds() {
+        return !clientRenderableBounds.isEmpty();
     }
 
     /** RuneLite-compatible minimum occupied scene tile for the picked game object. */
