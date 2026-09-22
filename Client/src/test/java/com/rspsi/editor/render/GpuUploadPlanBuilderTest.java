@@ -436,4 +436,50 @@ class GpuUploadPlanBuilderTest {
         assertEquals(-1, plan.commands().get(2).textureId());
         assertEquals(4, plan.commands().get(2).depthBias(), "crest (priority 3) sits above trim, not tied with it");
     }
+
+    @Test
+    void keepsShapeEightDecorationRenderablesInSeparateGpuRanges() {
+        TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
+        List<ModelVertex> vertices = List.of(
+                new ModelVertex(0, 0, 0, 1, 0, 0, 1, 0, 0),
+                new ModelVertex(64, 0, 0, 1, 0, 0, 1, 1, 0),
+                new ModelVertex(0, 64, 0, 1, 0, 0, 1, 0, 1));
+        List<ModelTriangle> faces = List.of(
+                new ModelTriangle(0, 1, 2, 100, 100, 100, -1, 0, 0, 0));
+
+        ModelRenderPacket primary = new ModelRenderPacket(
+                coordinate, 42, ObjectCategory.WALL_DECOR, vertices, faces, List.of(), -1,
+                0, 0, 0, 64, 64, 0, false, false)
+                .withWallDecorationPresentation(
+                        WallDecorationPresentation.primary(-8, -8, 1));
+        ModelRenderPacket secondary = new ModelRenderPacket(
+                coordinate, 42, ObjectCategory.WALL_DECOR, vertices, faces, List.of(), -1,
+                0, 0, 0, 64, 64, 0, false, false)
+                .withWallDecorationPresentation(
+                        WallDecorationPresentation.secondary(1));
+
+        SceneTileSnapshot tile = new SceneTileSnapshot(
+                coordinate, address, 0, 0, Optional.empty(), Optional.empty(),
+                List.of(primary, secondary),
+                List.of(new SceneLayer(SceneLayer.Kind.WALL_DECORATION, List.of(0, 1))),
+                List.of(), false, false);
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(
+                        50, 50, 1, 1, Map.of()), 3200, 3200, 1, 0,
+                        java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "shape-8-decoration", Map.of());
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(2, plan.commands().size(),
+                "primary and secondary decoration renderables must never merge");
+        assertEquals(WallDecorationPresentation.Part.PRIMARY,
+                plan.commands().get(0).wallDecorationPresentation().part());
+        assertEquals(WallDecorationPresentation.Part.SECONDARY,
+                plan.commands().get(1).wallDecorationPresentation().part());
+        assertEquals(-8, plan.commands().get(0).wallDecorationPresentation().offsetX());
+        assertEquals(0, plan.commands().get(1).wallDecorationPresentation().offsetX());
+    }
+
 }
