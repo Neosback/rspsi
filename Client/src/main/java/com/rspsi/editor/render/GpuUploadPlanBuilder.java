@@ -165,7 +165,8 @@ public final class GpuUploadPlanBuilder {
                         first, face.textureId(), submissionPriority(layer.kind(), face.priority()),
                         submissionDepthBias(layer.kind(), face.priority(), face.depthBias()), model.objectId(),
                         model.renderMode(), model.wallDecorationPresentation(),
-                        model.gameObjectSceneMetadata(), model.clientRenderableBounds());
+                        model.gameObjectSceneMetadata(), model.clientRenderableBounds(),
+                        model.sceneObjectIdentity(), model.placementHeight());
             }
         }
     }
@@ -248,6 +249,20 @@ public final class GpuUploadPlanBuilder {
                                       WallDecorationPresentation wallDecorationPresentation,
                                       GameObjectSceneMetadata gameObjectSceneMetadata,
                                       List<ClientModelBounds> clientRenderableBounds) {
+        appendCommand(commands, tile, layer, pass, firstIndex, textureId, priority,
+                depthBias, objectId, renderMode, wallDecorationPresentation,
+                gameObjectSceneMetadata, clientRenderableBounds, SceneObjectIdentity.none(), 0);
+    }
+
+    private static void appendCommand(List<GpuDrawCommand> commands, SceneTileSnapshot tile,
+                                      SceneLayer.Kind layer, GpuDrawCommand.SubmissionPass pass,
+                                      int firstIndex, int textureId, int priority, int depthBias, int objectId,
+                                      GpuDrawCommand.RenderMode renderMode,
+                                      WallDecorationPresentation wallDecorationPresentation,
+                                      GameObjectSceneMetadata gameObjectSceneMetadata,
+                                      List<ClientModelBounds> clientRenderableBounds,
+                                      SceneObjectIdentity sceneObjectIdentity,
+                                      int placementHeight) {
         if (!commands.isEmpty()) {
             int last = commands.size() - 1;
             GpuDrawCommand previous = commands.get(last);
@@ -258,7 +273,8 @@ public final class GpuUploadPlanBuilder {
                     && previous.canMerge(tile.worldAddress(), tile.effectivePlane(),
                     tile.planeCullLevel(), layer, pass, textureId, priority, depthBias,
                     objectId, firstIndex, renderMode, wallDecorationPresentation,
-                    gameObjectSceneMetadata, clientRenderableBounds)) {
+                    gameObjectSceneMetadata, clientRenderableBounds,
+                    sceneObjectIdentity, placementHeight)) {
                 commands.set(last, previous.extend(3));
                 return;
             }
@@ -266,7 +282,8 @@ public final class GpuUploadPlanBuilder {
         commands.add(new GpuDrawCommand(tile.worldAddress(), tile.effectivePlane(),
                 tile.planeCullLevel(), layer, pass, firstIndex, 3,
                 textureId, priority, depthBias, objectId, renderMode,
-                wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds));
+                wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
+                sceneObjectIdentity, placementHeight));
     }
 
     static String fingerprint(String packetFingerprint, List<GpuSceneVertex> vertices,
@@ -307,7 +324,7 @@ public final class GpuUploadPlanBuilder {
             if (!commands.isEmpty()) {
                 for (GpuDrawCommand cmd : commands) {
                     ByteBuffer cmdBuffer = ByteBuffer.allocate(
-                            104 + cmd.clientRenderableBounds().size() * 60);
+                            140 + cmd.clientRenderableBounds().size() * 60);
                     cmdBuffer.putInt(cmd.tile().plane())
                             .putInt(cmd.tile().worldX())
                             .putInt(cmd.tile().worldY())
@@ -333,6 +350,17 @@ public final class GpuUploadPlanBuilder {
                             .putInt(cmd.gameObjectSceneMetadata().maxTileY())
                             .putInt(cmd.gameObjectSceneMetadata().modelOrientation())
                             .putInt(cmd.gameObjectSceneMetadata().orientation())
+                            .putInt(cmd.sceneObjectIdentity().present() ? 1 : 0)
+                            .putInt(cmd.sceneObjectIdentity().objectId())
+                            .putInt(cmd.sceneObjectIdentity().category().ordinal())
+                            .putInt(cmd.sceneObjectIdentity().shape())
+                            .putInt(cmd.sceneObjectIdentity().rotation())
+                            .putInt(cmd.sceneObjectIdentity().authoredPlane())
+                            .putInt(cmd.sceneObjectIdentity().anchorX())
+                            .putInt(cmd.sceneObjectIdentity().anchorY())
+                            .putInt(cmd.sceneObjectIdentity().footprintWidth())
+                            .putInt(cmd.sceneObjectIdentity().footprintLength())
+                            .putInt(cmd.placementHeight())
                             .putInt(cmd.clientRenderableBounds().size());
                     for (ClientModelBounds bounds : cmd.clientRenderableBounds()) {
                         ClientModelBounds.Aabb aabb = bounds.drawAabb();
