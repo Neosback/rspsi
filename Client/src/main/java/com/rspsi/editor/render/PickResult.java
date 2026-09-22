@@ -21,27 +21,27 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
     /** Compatibility constructor for tile-only legacy viewport picking. */
     public PickResult(WorldTile tile, int plane) {
         this(tile, null, plane, -1, Float.NaN, null, 0, 0, -1,
-                GameObjectSceneMetadata.none(), List.of());
+                GameObjectSceneMetadata.none(), List.of(), SceneObjectIdentity.none());
     }
 
     /** Compatibility constructor from before submission metadata was carried. */
     public PickResult(WorldTile tile, int plane, int objectId, float distance) {
         this(tile, null, plane, objectId, distance, null, 0, 0, -1,
-                GameObjectSceneMetadata.none(), List.of());
+                GameObjectSceneMetadata.none(), List.of(), SceneObjectIdentity.none());
     }
 
     /** Compatibility constructor from before objectTile was carried. */
     public PickResult(WorldTile tile, int plane, int objectId, float distance,
                       SceneLayer.Kind layer, int priority, int depthBias, int textureId) {
         this(tile, null, plane, objectId, distance, layer, priority, depthBias, textureId,
-                GameObjectSceneMetadata.none(), List.of());
+                GameObjectSceneMetadata.none(), List.of(), SceneObjectIdentity.none());
     }
 
     /** Compatibility constructor from before game-object scene metadata was carried. */
     public PickResult(WorldTile tile, WorldTile objectTile, int plane, int objectId, float distance,
                       SceneLayer.Kind layer, int priority, int depthBias, int textureId) {
         this(tile, objectTile, plane, objectId, distance, layer, priority, depthBias, textureId,
-                GameObjectSceneMetadata.none(), List.of());
+                GameObjectSceneMetadata.none(), List.of(), SceneObjectIdentity.none());
     }
 
     /** Compatibility constructor from before client model bounds were carried. */
