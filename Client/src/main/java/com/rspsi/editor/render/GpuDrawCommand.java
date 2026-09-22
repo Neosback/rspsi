@@ -127,7 +127,7 @@ public record GpuDrawCommand(
                      WallDecorationPresentation nextWallDecorationPresentation) {
         return canMerge(nextTile, nextTile.plane(), nextTile.plane(), nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
-                nextRenderMode, nextWallDecorationPresentation, GameObjectSceneMetadata.none());
+                nextRenderMode, nextWallDecorationPresentation, gameObjectSceneMetadata);
     }
 
     boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
