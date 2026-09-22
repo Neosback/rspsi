@@ -604,6 +604,65 @@ class ModelPacketBuilderTest {
                 compatibility.wallDecorationPresentation().part());
     }
 
+    @Test
+    void gameObjectSceneFootprintRotatesDefinitionDimensionsIndependentlyOfGeometryBounds() {
+        WorldDocument document = new WorldDocument(8, 8, 1);
+        ModelGeometryView tinyGeometry = triangle(7, 100);
+        DefinitionProvider definitions = sizedDefinitions(2, 3, 10, 7, tinyGeometry);
+
+        for (int rotation = 0; rotation < 4; rotation++) {
+            WorldObject object = new WorldObject(42, 10, rotation, 0, 2, 3);
+            ModelRenderPacket packet = new ModelPacketBuilder(definitions)
+                    .build(object, document).orElseThrow();
+            GameObjectSceneMetadata metadata = packet.gameObjectSceneMetadata();
+
+            int expectedSizeX = rotation % 2 == 0 ? 2 : 3;
+            int expectedSizeY = rotation % 2 == 0 ? 3 : 2;
+            assertTrue(metadata.present());
+            assertEquals(2, metadata.minTileX());
+            assertEquals(3, metadata.minTileY());
+            assertEquals(2 + expectedSizeX - 1, metadata.maxTileX());
+            assertEquals(3 + expectedSizeY - 1, metadata.maxTileY());
+            assertEquals(expectedSizeX, metadata.sizeX());
+            assertEquals(expectedSizeY, metadata.sizeY());
+            assertEquals(rotation, metadata.rotation());
+            assertEquals(rotation * 512, metadata.orientation());
+            assertEquals(0, metadata.modelOrientation());
+
+            // Scene occupancy is definition-driven, not inferred from this tiny model AABB.
+            assertTrue(packet.maxX() - packet.minX() < expectedSizeX * 128);
+        }
+    }
+
+    @Test
+    void diagonalGameObjectCarriesSeparateClientModelOrientation() {
+        WorldDocument document = new WorldDocument(8, 8, 1);
+        DefinitionProvider definitions = sizedDefinitions(2, 3, 10, 7, triangle(7, 100));
+
+        for (int rotation = 0; rotation < 4; rotation++) {
+            ModelRenderPacket packet = new ModelPacketBuilder(definitions)
+                    .build(new WorldObject(42, 11, rotation, 0, 1, 2), document)
+                    .orElseThrow();
+            GameObjectSceneMetadata metadata = packet.gameObjectSceneMetadata();
+
+            assertTrue(metadata.present());
+            assertEquals(256, metadata.modelOrientation());
+            assertEquals((rotation * 512 + 256) & 2047, metadata.orientation());
+            assertEquals(rotation, metadata.rotation());
+        }
+    }
+
+    @Test
+    void nonGameObjectLayersDoNotPretendToHaveGameObjectSceneBounds() {
+        WorldDocument document = new WorldDocument(2, 2, 1);
+        ModelRenderPacket packet = new ModelPacketBuilder(
+                sizedDefinitions(1, 1, 22, 7, triangle(7, 100)))
+                .build(new WorldObject(42, 22, 0, 0, 0, 0), document)
+                .orElseThrow();
+
+        assertTrue(!packet.gameObjectSceneMetadata().present());
+    }
+
     private static ModelGeometryView triangle(int id, int color) {
         return new ModelGeometryView(id,
                 new int[]{0, 0, 0, 64, 0, 0, 0, 0, 64},
@@ -659,6 +718,24 @@ class ModelPacketBuilderTest {
         return new ObjectAppearanceView(-1, false, 128, 128, 128,
                 0, 0, 0, Map.of(), Map.of(), true, false, false, false,
                 0, 0, displacement, -1, 0, false, false, false, 0);
+    }
+
+    private static DefinitionProvider sizedDefinitions(int width, int length, int type,
+                                                       int modelId, ModelGeometryView geometry) {
+        return new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return Optional.of(new ObjectDefinitionView(id, "sized", width, length,
+                        List.of(), new int[]{modelId}, new int[]{type}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(ObjectAppearanceView.empty());
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(geometry);
+            }
+        };
     }
 
     /** Like {@link #typedDefinitions}, but with opcode 22 (mergeNormals) set. */
