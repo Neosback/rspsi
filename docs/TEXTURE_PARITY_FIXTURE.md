@@ -1,12 +1,13 @@
 # Revision texture parity fixture
 
 OpenRune Studio keeps real OSRS cache data outside the repository. Texture parity uses an
-optional `textures.json` file inside the same external parity-fixture directory consumed by
-`OsrsRevisionVerifier`.
+external `textures.json` file consumed by the focused
+`OsrsTextureRevisionVerifier`. The same file may also be placed in the broader parity-fixture
+directory for full region verification.
 
-The fixture should be produced from an independent reference implementation or independently
-verified cache export. Do not generate the expected values with OpenRune Studio itself and then
-treat that as independent parity evidence.
+The fixture must be produced from an independent reference implementation or independently
+verified cache export. Do not generate expected values with OpenRune Studio itself and then
+treat those values as independent parity evidence.
 
 ## File format
 
@@ -19,22 +20,23 @@ treat that as independent parity evidence.
   "textures": [
     {
       "id": 17,
-      "fileId": 300,
-      "transparent": true,
-      "averageRgb": 13398,
+      "fileId": 463,
+      "transparent": false,
+      "averageRgb": 39640,
       "lowDetail": false,
-      "animationDirection": 4,
-      "animationSpeed": 9,
+      "animationDirection": 1,
+      "animationSpeed": 2,
       "pixelCount": 16384,
       "pixelSha256": "<64-character SHA-256 hex>",
-      "zeroRgbPixels": 127,
+      "zeroRgbPixels": 15499,
       "partialAlphaPixels": 0
     }
   ]
 }
 ```
 
-The numeric values above are schema examples only, not checked-in OSRS reference values.
+The structure above is the accepted schema. Cutout transparency is proven from decoded pixels;
+the post-233 seven-byte texture record itself has no material-alpha field.
 
 ## Pixel digest
 
@@ -46,48 +48,52 @@ big-endian order before SHA-256 is calculated. The verifier also compares:
 - partial-alpha count, where the top byte is between 1 and 254.
 
 The hash is the authoritative full-pixel comparison. The counts make failures easier to
-diagnose, especially when a texture has cutout or alpha semantics.
+diagnose, especially for cutout semantics.
 
-## Verification
+## Focused verification
 
-Place `textures.json` next to the other external parity files:
-
-```text
-fixture/
-  fixture.properties
-  terrain-semantics.json
-  locations.json
-  scene-geometry.json
-  collision.json
-  textures.json
-  minimap-plane-0.png
-  ...
-```
-
-Then run the existing real-cache verification path:
+Run the texture-only gate so unrelated maps, collision, minimaps, or scene geometry cannot
+affect this result:
 
 ```bash
 RSPSI_OSRS_CACHE=/path/to/cache \
-RSPSI_OSRS_PARITY_FIXTURE=/path/to/fixture \
-RSPSI_OSRS_REGION_X=16 \
-RSPSI_OSRS_REGION_Y=33 \
+RSPSI_OSRS_TEXTURE_FIXTURE=/path/to/textures.json \
 RSPSI_OSRS_REVISION=240 \
-./gradlew verifyOsrsRevision
+./gradlew verifyOsrsTextures
 ```
 
-The report includes a `texture.parity` check. A supplied texture fixture fails verification
-when definition metadata, decoded pixel availability, pixel count, SHA-256, cutout count, or
-partial-alpha count differs.
+A mismatch in revision, definition metadata, decoded pixel availability, pixel count, SHA-256,
+cutout count, or partial-alpha count fails the task.
+
+The repository also contains the manual GitHub Actions workflow
+`Revision 240 Texture Acceptance`. It downloads the pinned public reference cache, generates
+the independent fixture with the vendored RuneLite cache implementation, runs
+`verifyOsrsTextures`, and uploads the generated metadata/hashes as an artifact. The workflow is
+manual-only because the reference cache is about 182 MiB.
+
+## Recorded revision-240 acceptance
+
+PR #6 recorded a passing independent acceptance run against OpenRS2 archive 2710:
+
+- game/environment/language: oldschool / live / en;
+- build: 240;
+- Jagex source timestamp: 2026-09-16 10:30:13;
+- RuneLite-selected texture 0: opaque, 128x128, zero RGB pixels = 0;
+- RuneLite-selected texture 7: cutout, 128x128, zero RGB pixels = 6984;
+- RuneLite-selected texture 17: animated direction 1 / speed 2, 128x128;
+- focused RSPSi result: detected revision 240, 3 textures compared, 0 differences,
+  `texture.parity: PASS`;
+- GitHub Actions run: 35718110830;
+- evidence artifact: `revision-240-texture-parity`.
 
 ## Reference guidance
 
-For revision-240 evidence, capture a small but representative set rather than every texture.
-At minimum include:
+When adding a new revision or expanding the fixture, prefer a small representative set rather
+than every texture. At minimum include:
 
 1. one ordinary opaque RGB texture;
 2. one texture containing RGB-zero cutout pixels;
 3. one animated texture with a non-zero animation direction and speed;
-4. one texture that exercises alpha-channel handling when the reference cache contains one.
+4. an alpha-bearing case if the selected reference implementation/cache actually exposes one.
 
-Record the cache fingerprint and revision in `fixture.properties` as usual so fixture values
-cannot silently be reused against a different cache.
+Keep the cache itself external to the repository. Retain only metadata/hashes and provenance.
