@@ -13,11 +13,12 @@ import java.util.Set;
 /**
  * Incremental flattener that caches immutable per-tile GPU fragments.
  *
- * <p>The public {@link GpuUploadPlan} remains globally ordered for software and
- * native renderer compatibility, but expensive terrain/model face expansion is
- * only repeated for tiles in dirty world zones. Final assembly only offsets
- * already-flattened indices/commands and re-applies the same cross-tile command
- * merge rules as {@link GpuUploadPlanBuilder}.</p>
+ * <p>Dirty tiles still pay the face-expansion cost, but the production native
+ * path no longer concatenates every fragment into giant scene-wide
+ * vertex/index arrays. Instead it keeps an ordered lazy compatibility view,
+ * derives the 8x8 zoned plan through non-materializing indexed access, and
+ * preserves the exact global command/fingerprint contract for callers that
+ * still require flat geometry.</p>
  */
 public final class IncrementalGpuUploadPlanBuilder {
     private static final GpuUploadPlan EMPTY_GEOMETRY = new GpuUploadPlan(
@@ -38,8 +39,7 @@ public final class IncrementalGpuUploadPlanBuilder {
         Objects.requireNonNull(packet, "packet");
         Objects.requireNonNull(dirtyZones, "dirtyZones");
 
-        List<GpuSceneVertex> vertices = new ArrayList<>();
-        List<Integer> indices = new ArrayList<>();
+        List<GpuUploadPlan> flatFragments = new ArrayList<>();
         List<GpuDrawCommand> commands = new ArrayList<>();
         List<GpuTextureTriangle> textureTriangles = new ArrayList<>();
         LinkedHashSet<SceneOccluder> occluders = new LinkedHashSet<>();
@@ -47,6 +47,7 @@ public final class IncrementalGpuUploadPlanBuilder {
 
         int rebuilt = 0;
         int reused = 0;
+        int indexBase = 0;
         for (SceneTileSnapshot tile : packet.tiles()) {
             TileFragment fragment = cache.get(tile.worldAddress());
             boolean dirty = dirtyZones.contains(WorldZoneCoordinate.from(tile.worldAddress()));
@@ -57,19 +58,25 @@ public final class IncrementalGpuUploadPlanBuilder {
                 reused++;
             }
             nextCache.put(tile.worldAddress(), fragment);
-            append(fragment, vertices, indices, commands, textureTriangles, occluders);
+            GpuUploadPlan fragmentPlan = fragment.plan();
+            flatFragments.add(fragmentPlan);
+            append(fragment, indexBase, commands, textureTriangles, occluders);
+            indexBase = Math.addExact(indexBase, fragmentPlan.indexCount());
         }
 
         cache.clear();
         cache.putAll(nextCache);
 
         List<SceneOccluder> mergedOccluders = SceneOccluderMerger.merge(List.copyOf(occluders));
-        GpuUploadPlan plan = new GpuUploadPlan(vertices, indices, commands, textureTriangles,
-                packet.textures(), mergedOccluders,
-                GpuUploadPlanBuilder.fingerprint(packet.fingerprint(), vertices, indices, commands,
-                        textureTriangles, packet.textures(), mergedOccluders));
+        LazyGpuFlatGeometry flatGeometry = new LazyGpuFlatGeometry(flatFragments);
+        String fingerprint = GpuUploadPlanBuilder.fingerprint(
+                packet.fingerprint(), flatGeometry, commands, textureTriangles,
+                packet.textures(), mergedOccluders);
+        GpuUploadPlan plan = GpuUploadPlan.lazy(flatGeometry, commands, textureTriangles,
+                packet.textures(), mergedOccluders, fingerprint);
         GpuZonedUploadPlan zonedPlan = zonedBuilder.build(plan, dirtyZones);
-        return new BuildResult(plan, zonedPlan, rebuilt, reused);
+        return new BuildResult(plan, zonedPlan, rebuilt, reused,
+                zonedBuilder.lastRebuiltZoneCount(), zonedBuilder.lastReusedZoneCount());
     }
 
     /** Creates an isolated cache snapshot for an asynchronous rebuild transaction. */
@@ -108,20 +115,11 @@ public final class IncrementalGpuUploadPlanBuilder {
         return cached == current || cached.equals(current);
     }
 
-    private static void append(TileFragment fragment,
-                               List<GpuSceneVertex> vertices,
-                               List<Integer> indices,
+    private static void append(TileFragment fragment, int indexBase,
                                List<GpuDrawCommand> commands,
                                List<GpuTextureTriangle> textureTriangles,
                                LinkedHashSet<SceneOccluder> occluders) {
         GpuUploadPlan plan = fragment.plan();
-        int vertexBase = vertices.size();
-        int indexBase = indices.size();
-
-        vertices.addAll(plan.vertices());
-        for (int index : plan.indices()) {
-            indices.add(vertexBase + index);
-        }
         for (GpuDrawCommand command : plan.commands()) {
             GpuDrawCommand shifted = new GpuDrawCommand(
                     command.tile(), command.scenePlane(), command.planeCullLevel(),
@@ -158,12 +156,13 @@ public final class IncrementalGpuUploadPlanBuilder {
     }
 
     public record BuildResult(GpuUploadPlan plan, GpuZonedUploadPlan zonedPlan,
-                              int rebuiltTiles, int reusedTiles) {
+                              int rebuiltTiles, int reusedTiles,
+                              int rebuiltZones, int reusedZones) {
         public BuildResult {
             plan = Objects.requireNonNull(plan, "plan");
             zonedPlan = Objects.requireNonNull(zonedPlan, "zonedPlan");
-            if (rebuiltTiles < 0 || reusedTiles < 0) {
-                throw new IllegalArgumentException("Tile counts cannot be negative");
+            if (rebuiltTiles < 0 || reusedTiles < 0 || rebuiltZones < 0 || reusedZones < 0) {
+                throw new IllegalArgumentException("Incremental build counts cannot be negative");
             }
         }
     }

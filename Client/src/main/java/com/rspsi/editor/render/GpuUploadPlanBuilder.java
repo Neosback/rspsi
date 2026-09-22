@@ -245,7 +245,27 @@ public final class GpuUploadPlanBuilder {
     }
 
     static String fingerprint(String packetFingerprint, List<GpuSceneVertex> vertices,
-                                      List<Integer> indices, List<GpuDrawCommand> commands,
+                              List<Integer> indices, List<GpuDrawCommand> commands,
+                              List<GpuTextureTriangle> textureTriangles,
+                              java.util.Map<Integer, RenderTextureResource> textures,
+                              List<SceneOccluder> occluders) {
+        return fingerprint(packetFingerprint, vertices.size(), indices.size(), indices::get,
+                commands, textureTriangles, textures, occluders);
+    }
+
+    static String fingerprint(String packetFingerprint, LazyGpuFlatGeometry geometry,
+                              List<GpuDrawCommand> commands,
+                              List<GpuTextureTriangle> textureTriangles,
+                              java.util.Map<Integer, RenderTextureResource> textures,
+                              List<SceneOccluder> occluders) {
+        Objects.requireNonNull(geometry, "geometry");
+        return fingerprint(packetFingerprint, geometry.vertexCount(), geometry.indexCount(),
+                geometry::directIndex, commands, textureTriangles, textures, occluders);
+    }
+
+    private static String fingerprint(String packetFingerprint, int vertexCount, int indexCount,
+                                      java.util.function.IntUnaryOperator indexAt,
+                                      List<GpuDrawCommand> commands,
                                       List<GpuTextureTriangle> textureTriangles,
                                       java.util.Map<Integer, RenderTextureResource> textures,
                                       List<SceneOccluder> occluders) {
@@ -253,7 +273,7 @@ public final class GpuUploadPlanBuilder {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             digest.update(packetFingerprint.getBytes(StandardCharsets.UTF_8));
             ByteBuffer counts = ByteBuffer.allocate(32);
-            counts.putInt(vertices.size()).putInt(indices.size())
+            counts.putInt(vertexCount).putInt(indexCount)
                     .putInt(commands.size()).putInt(textureTriangles.size())
                     .putInt(occluders.size()).putInt(textures.size());
             counts.flip();
@@ -285,12 +305,12 @@ public final class GpuUploadPlanBuilder {
                 digest.update(cmdBuffer);
             }
 
-            if (!indices.isEmpty()) {
-                int sampleCount = Math.min(indices.size(), 256);
+            if (indexCount > 0) {
+                int sampleCount = Math.min(indexCount, 256);
                 ByteBuffer idxBuffer = ByteBuffer.allocate(sampleCount * Integer.BYTES);
-                int stride = Math.max(1, indices.size() / sampleCount);
-                for (int i = 0; i < indices.size() && idxBuffer.hasRemaining(); i += stride) {
-                    idxBuffer.putInt(indices.get(i));
+                int stride = Math.max(1, indexCount / sampleCount);
+                for (int i = 0; i < indexCount && idxBuffer.hasRemaining(); i += stride) {
+                    idxBuffer.putInt(indexAt.applyAsInt(i));
                 }
                 idxBuffer.flip();
                 digest.update(idxBuffer);
@@ -315,4 +335,5 @@ public final class GpuUploadPlanBuilder {
             throw new AssertionError(exception);
         }
     }
+
 }

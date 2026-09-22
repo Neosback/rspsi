@@ -11,7 +11,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IncrementalGpuUploadPlanBuilderTest {
     @Test
@@ -24,6 +26,10 @@ class IncrementalGpuUploadPlanBuilderTest {
         var seeded = incremental.buildInitial(initial);
         assertEquals(2, seeded.rebuiltTiles());
         assertEquals(0, seeded.reusedTiles());
+        assertEquals(2, seeded.rebuiltZones());
+        assertEquals(0, seeded.reusedZones());
+        assertEquals(0, seeded.plan().flatMaterializationCount());
+        assertFalse(seeded.plan().flatMaterialized());
 
         SceneTileSnapshot changedSecond = terrainTile(8, 4, 300);
         GpuScenePacket changed = packet(List.of(first, changedSecond), "changed");
@@ -35,12 +41,18 @@ class IncrementalGpuUploadPlanBuilderTest {
 
         assertEquals(1, update.rebuiltTiles());
         assertEquals(1, update.reusedTiles());
+        assertEquals(1, update.rebuiltZones());
+        assertEquals(1, update.reusedZones());
+        assertEquals(0, update.plan().flatMaterializationCount());
+        assertFalse(update.plan().flatMaterialized());
         assertEquals(expected.vertices(), update.plan().vertices());
         assertEquals(expected.indices(), update.plan().indices());
         assertEquals(expected.commands(), update.plan().commands());
         assertEquals(expected.textureTriangles(), update.plan().textureTriangles());
         assertEquals(expected.occluders(), update.plan().occluders());
         assertEquals(expected.fingerprint(), update.plan().fingerprint());
+        assertEquals(1, update.plan().flatMaterializationCount());
+        assertTrue(update.plan().flatMaterialized());
         assertNotEquals(seeded.plan().fingerprint(), update.plan().fingerprint());
     }
 

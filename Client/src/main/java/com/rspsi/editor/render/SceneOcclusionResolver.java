@@ -18,18 +18,18 @@ public final class SceneOcclusionResolver {
      */
     public record CommandBounds(float minX, float maxX, float minY, float maxY,
                                 float minZ, float maxZ) {
-        public static CommandBounds of(GpuDrawCommand command, GpuUploadPlan plan) {
+        public static CommandBounds of(int commandIndex, GpuDrawCommand command,
+                                       GpuCommandGeometry geometry) {
             Objects.requireNonNull(command, "command");
-            Objects.requireNonNull(plan, "plan");
+            Objects.requireNonNull(geometry, "geometry");
             float minX = Float.POSITIVE_INFINITY;
             float maxX = Float.NEGATIVE_INFINITY;
             float minY = Float.POSITIVE_INFINITY;
             float maxY = Float.NEGATIVE_INFINITY;
             float minZ = Float.POSITIVE_INFINITY;
             float maxZ = Float.NEGATIVE_INFINITY;
-            for (int offset = command.firstIndex();
-                 offset < command.firstIndex() + command.indexCount(); offset++) {
-                GpuSceneVertex vertex = plan.vertices().get(plan.indices().get(offset));
+            for (int offset = 0; offset < command.indexCount(); offset++) {
+                GpuSceneVertex vertex = geometry.indexedVertex(commandIndex, offset);
                 minX = Math.min(minX, vertex.x());
                 maxX = Math.max(maxX, vertex.x());
                 minY = Math.min(minY, vertex.y());
@@ -38,6 +38,17 @@ public final class SceneOcclusionResolver {
                 maxZ = Math.max(maxZ, vertex.z());
             }
             return new CommandBounds(minX, maxX, minY, maxY, minZ, maxZ);
+        }
+
+        /** Compatibility helper for callers that only carry the command object. */
+        public static CommandBounds of(GpuDrawCommand command, GpuCommandGeometry geometry) {
+            for (int index = 0; index < geometry.commandCount(); index++) {
+                GpuDrawCommand candidate = geometry.command(index);
+                if (candidate == command || candidate.equals(command)) {
+                    return of(index, command, geometry);
+                }
+            }
+            throw new IllegalArgumentException("Command is not present in geometry");
         }
 
         /** Depth-sort key for alpha ordering: the bounds' center, camera-relative. */
@@ -77,24 +88,25 @@ public final class SceneOcclusionResolver {
      * bounded to the most recent plans below rather than retaining every
      * scene ever opened.
      */
-    private static final java.util.Map<GpuUploadPlan, CommandBounds[]> BOUNDS_CACHE =
+    private static final java.util.Map<GpuCommandGeometry, CommandBounds[]> BOUNDS_CACHE =
             java.util.Collections.synchronizedMap(new java.util.IdentityHashMap<>());
     private static final int MAX_CACHED_PLANS = 4;
 
-    public static CommandBounds boundsOf(int commandIndex, GpuDrawCommand command, GpuUploadPlan plan) {
+    public static CommandBounds boundsOf(int commandIndex, GpuDrawCommand command,
+                                         GpuCommandGeometry geometry) {
         Objects.requireNonNull(command, "command");
-        Objects.requireNonNull(plan, "plan");
-        CommandBounds[] cached = BOUNDS_CACHE.computeIfAbsent(plan, p -> {
-            CommandBounds[] array = new CommandBounds[p.commands().size()];
-            for (int i = 0; i < p.commands().size(); i++) {
-                array[i] = CommandBounds.of(p.commands().get(i), p);
+        Objects.requireNonNull(geometry, "geometry");
+        CommandBounds[] cached = BOUNDS_CACHE.computeIfAbsent(geometry, value -> {
+            CommandBounds[] array = new CommandBounds[value.commandCount()];
+            for (int i = 0; i < value.commandCount(); i++) {
+                array[i] = CommandBounds.of(i, value.command(i), value);
             }
             return array;
         });
         if (BOUNDS_CACHE.size() > MAX_CACHED_PLANS) {
             synchronized (BOUNDS_CACHE) {
                 while (BOUNDS_CACHE.size() > MAX_CACHED_PLANS) {
-                    java.util.Iterator<GpuUploadPlan> iterator = BOUNDS_CACHE.keySet().iterator();
+                    java.util.Iterator<GpuCommandGeometry> iterator = BOUNDS_CACHE.keySet().iterator();
                     if (!iterator.hasNext()) break;
                     iterator.next();
                     iterator.remove();
@@ -104,22 +116,23 @@ public final class SceneOcclusionResolver {
         if (commandIndex >= 0 && commandIndex < cached.length) {
             return cached[commandIndex];
         }
-        return CommandBounds.of(command, plan);
+        return CommandBounds.of(command, geometry);
     }
 
-    public static boolean occludesCommand(int commandIndex, GpuDrawCommand command, GpuUploadPlan plan,
+    public static boolean occludesCommand(int commandIndex, GpuDrawCommand command,
+                                          GpuCommandGeometry geometry,
                                           CameraState camera, List<SceneOccluder> occluders) {
         Objects.requireNonNull(command, "command");
-        Objects.requireNonNull(plan, "plan");
+        Objects.requireNonNull(geometry, "geometry");
         Objects.requireNonNull(camera, "camera");
         Objects.requireNonNull(occluders, "occluders");
         if (occluders.isEmpty()) return false;
-        return occludesBounds(command, boundsOf(commandIndex, command, plan), camera, occluders);
+        return occludesBounds(command, boundsOf(commandIndex, command, geometry), camera, occluders);
     }
 
-    public static boolean occludesCommand(GpuDrawCommand command, GpuUploadPlan plan,
+    public static boolean occludesCommand(GpuDrawCommand command, GpuCommandGeometry geometry,
                                           CameraState camera, List<SceneOccluder> occluders) {
-        return occludesCommand(-1, command, plan, camera, occluders);
+        return occludesBounds(command, CommandBounds.of(command, geometry), camera, occluders);
     }
 
     /** Bounds-based counterpart of {@link #occludesCommand} for a precomputed box. */

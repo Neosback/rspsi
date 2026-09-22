@@ -33,7 +33,7 @@ public final class GpuZonedUploadPlanBuilder {
                                    List<Integer> commandIndices) {
         MutableZone target = new MutableZone(zone);
         for (int commandIndex : commandIndices) {
-            target.append(plan, plan.commands().get(commandIndex));
+            target.append(plan, commandIndex, plan.commands().get(commandIndex));
         }
         return target.freeze();
     }
@@ -98,13 +98,14 @@ public final class GpuZonedUploadPlanBuilder {
             this.zone = zone;
         }
 
-        private int append(GpuUploadPlan plan, GpuDrawCommand command) {
+        private int append(GpuUploadPlan plan, int commandIndex, GpuDrawCommand command) {
             int localFirst = indices.size();
             for (int offset = 0; offset < command.indexCount(); offset++) {
-                int globalIndex = plan.indices().get(command.firstIndex() + offset);
+                int globalIndex = plan.indexedVertexIndex(commandIndex, offset);
+                int currentOffset = offset;
                 int localIndex = globalToLocal.computeIfAbsent(globalIndex, ignored -> {
                     int next = vertices.size();
-                    vertices.add(plan.vertices().get(globalIndex));
+                    vertices.add(plan.indexedVertex(commandIndex, currentOffset));
                     return next;
                 });
                 indices.add(localIndex);

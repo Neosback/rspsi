@@ -41,22 +41,30 @@ public final class GpuCommandVisibility {
 
     public static GpuCommandVisibility of(GpuUploadPlan plan, CameraState camera) {
         Objects.requireNonNull(plan, "plan");
+        return of(plan, camera, plan.occluders());
+    }
+
+    public static GpuCommandVisibility of(GpuCommandGeometry geometry, CameraState camera,
+                                          List<SceneOccluder> occluders) {
+        Objects.requireNonNull(geometry, "geometry");
         Objects.requireNonNull(camera, "camera");
-        List<GpuDrawCommand> commands = plan.commands();
-        BitSet occluded = new BitSet(commands.size());
-        long estimatedTests = (long) commands.size() * plan.occluders().size();
-        boolean occlusionApplied = !plan.occluders().isEmpty()
-                && commands.size() <= MAX_OCCLUSION_COMMANDS
+        Objects.requireNonNull(occluders, "occluders");
+        int commandCount = geometry.commandCount();
+        BitSet occluded = new BitSet(commandCount);
+        long estimatedTests = (long) commandCount * occluders.size();
+        boolean occlusionApplied = !occluders.isEmpty()
+                && commandCount <= MAX_OCCLUSION_COMMANDS
                 && estimatedTests <= MAX_OCCLUSION_TESTS;
         if (occlusionApplied) {
-            for (int index = 0; index < commands.size(); index++) {
-                if (SceneOcclusionResolver.occludesCommand(index, commands.get(index), plan, camera,
-                        plan.occluders())) {
+            for (int index = 0; index < commandCount; index++) {
+                GpuDrawCommand command = geometry.command(index);
+                if (SceneOcclusionResolver.occludesCommand(
+                        index, command, geometry, camera, occluders)) {
                     occluded.set(index);
                 }
             }
         }
-        return new GpuCommandVisibility(occluded, commands.size(), occlusionApplied);
+        return new GpuCommandVisibility(occluded, commandCount, occlusionApplied);
     }
 
     /** True when the camera-dependent occluder resolver ran for this frame. */
