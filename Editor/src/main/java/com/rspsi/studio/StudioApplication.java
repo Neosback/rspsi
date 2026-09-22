@@ -28,6 +28,8 @@ import com.rspsi.editor.render.GpuScenePacket;
 import com.rspsi.editor.render.GpuScenePacketBuilder;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.GpuUploadPlanBuilder;
+import com.rspsi.editor.render.GpuZonedUploadPlan;
+import com.rspsi.editor.render.GpuZonedUploadPlanBuilder;
 import com.rspsi.editor.render.IncrementalGpuUploadPlanBuilder;
 import com.rspsi.editor.render.RenderConfig;
 import com.rspsi.editor.render.RenderConfigCompiler;
@@ -116,6 +118,7 @@ public final class StudioApplication implements AutoCloseable {
     private LoadedMapScene loadedScene;
     private EditorPluginLifecycleManager pluginLifecycle;
     private GpuUploadPlan currentPlan;
+    private GpuZonedUploadPlan currentZonedPlan;
     private long renderedSettingsRevision = -1L;
     private String sceneStatus = "Choose a region to build the scene.";
     private Path lastReadyCache;
@@ -186,8 +189,10 @@ public final class StudioApplication implements AutoCloseable {
                 if (loadedScene != null && renderedSettingsRevision != renderSettings.revision()) {
                     RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
                     currentPlan = new GpuUploadPlanBuilder().build(config.apply(loadedScene.packet()));
+                    currentZonedPlan = new GpuZonedUploadPlanBuilder().build(currentPlan);
                     renderedSettingsRevision = renderSettings.revision();
                 }
+                sceneViewport.setZonedPlan(currentZonedPlan);
                 mapEditor.render(cache, currentPlan, sceneViewport, sceneStatus,
                         this::openDashboard, renderSettings, pluginLifecycle,
                         loadedScene != null && loadedScene.session().isDirty(),
@@ -232,6 +237,7 @@ public final class StudioApplication implements AutoCloseable {
         closePluginLifecycle();
         loadedScene = null;
         currentPlan = null;
+        currentZonedPlan = null;
         renderedSettingsRevision = -1L;
         cancelPendingScene();
         sceneStatus = "Loading terrain, objects, and GPU buffers...";
@@ -295,7 +301,7 @@ public final class StudioApplication implements AutoCloseable {
                 plan.textures().size());
         logSceneBuild("initial", regionX, regionY, metrics);
         return new LoadedMapScene(opened, session, scene, renderScene, packet, plan,
-                incrementalPlanBuilder, settingsRevision,
+                initialPlan.zonedPlan(), incrementalPlanBuilder, settingsRevision,
                 new com.rspsi.editor.render.CameraState(
                 (float) centerX, -2400.0f, (float) centerZ - 4200.0f,
                 (float) -Math.toRadians(28.0), 0.0f));
@@ -307,6 +313,7 @@ public final class StudioApplication implements AutoCloseable {
             loadedScene = pendingScene.join();
             sceneViewport.setCamera(loadedScene.camera());
             currentPlan = loadedScene.plan();
+            currentZonedPlan = loadedScene.zonedPlan();
             renderedSettingsRevision = loadedScene.settingsRevision();
             initializePlugins(loadedScene);
             loadedScene.session().addChangeListener(changedTiles -> {
@@ -334,6 +341,7 @@ public final class StudioApplication implements AutoCloseable {
             try {
                 loadedScene = pendingSceneRebuild.join();
                 currentPlan = loadedScene.plan();
+                currentZonedPlan = loadedScene.zonedPlan();
                 renderedSettingsRevision = loadedScene.settingsRevision();
                 pendingRebuildChanges = Set.of();
             } catch (RuntimeException failure) {
@@ -440,7 +448,7 @@ public final class StudioApplication implements AutoCloseable {
                 packetUpdate.rebuiltTiles(), packetUpdate.reusedTiles(),
                 planUpdate.rebuiltTiles(), planUpdate.reusedTiles());
         return new LoadedMapScene(baseScene.opened(), baseScene.session(), scene, renderScene, packet, plan,
-                incrementalPlanBuilder, settingsRevision, baseScene.camera());
+                planUpdate.zonedPlan(), incrementalPlanBuilder, settingsRevision, baseScene.camera());
     }
 
     private static int[] parseRegion(String value) {
@@ -564,6 +572,8 @@ public final class StudioApplication implements AutoCloseable {
         cancelPendingScene();
         loadedScene = null;
         currentPlan = null;
+        currentZonedPlan = null;
+        sceneViewport.setZonedPlan(null);
         closePrompt = false;
         workspaces.close(WorkspaceManager.Workspace.MAP_EDITOR);
     }
@@ -674,6 +684,7 @@ public final class StudioApplication implements AutoCloseable {
                                   RenderScene renderScene,
                                   GpuScenePacket packet,
                                   GpuUploadPlan plan,
+                                  GpuZonedUploadPlan zonedPlan,
                                   IncrementalGpuUploadPlanBuilder planBuilder,
                                   long settingsRevision,
                                   com.rspsi.editor.render.CameraState camera) { }
