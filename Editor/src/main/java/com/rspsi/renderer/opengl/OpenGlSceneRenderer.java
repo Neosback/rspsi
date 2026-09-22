@@ -1128,10 +1128,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                             // is mixed toward the tile's own flat colour and
                             // written opaquely (see below).
                             if (texel0.a <= 0.0) discard;
-                        } else if (texel0.a < 0.5) {
-                            // Model cutouts stay in the opaque stream so their
-                            // visible texels keep depth ownership and do not
-                            // fight their own backing faces.
+                        } else if (texel0.a < 1.0) {
+                            // RuneLite GPU frag.glsl rejects any model texture
+                            // texel whose base-LOD alpha is not fully opaque.
+                            // Keep cutouts in the opaque stream for depth
+                            // ownership, but do not let partially transparent
+                            // texels survive as opaque model fragments.
                             discard;
                         }
 
