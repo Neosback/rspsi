@@ -23,7 +23,9 @@ public record GpuDrawCommand(
         GameObjectSceneMetadata gameObjectSceneMetadata,
         List<ClientModelBounds> clientRenderableBounds,
         SceneObjectIdentity sceneObjectIdentity,
-        int placementHeight
+        int placementHeight,
+        int modelAnchorX,
+        int modelAnchorY
 ) {
     public enum SubmissionPass {
         OPAQUE,
@@ -68,6 +70,22 @@ public record GpuDrawCommand(
         }
     }
 
+    /** Compatibility constructor before render-space model anchors were explicit. */
+    public GpuDrawCommand(WorldTileAddress tile, int scenePlane, int planeCullLevel,
+                          SceneLayer.Kind layer, SubmissionPass pass,
+                          int firstIndex, int indexCount, int textureId, int priority,
+                          int depthBias, int objectId, RenderMode renderMode,
+                          WallDecorationPresentation wallDecorationPresentation,
+                          GameObjectSceneMetadata gameObjectSceneMetadata,
+                          List<ClientModelBounds> clientRenderableBounds,
+                          SceneObjectIdentity sceneObjectIdentity,
+                          int placementHeight) {
+        this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
+                textureId, priority, depthBias, objectId, renderMode,
+                wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
+                sceneObjectIdentity, placementHeight, tile.worldX(), tile.worldY());
+    }
+
     /** Compatibility constructor before stable scene identity and placement height were explicit. */
     public GpuDrawCommand(WorldTileAddress tile, int scenePlane, int planeCullLevel,
                           SceneLayer.Kind layer, SubmissionPass pass,
@@ -79,7 +97,7 @@ public record GpuDrawCommand(
         this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
                 textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                SceneObjectIdentity.none(), 0);
+                SceneObjectIdentity.none(), 0, tile.worldX(), tile.worldY());
     }
 
     /** Compatibility constructor before client model bounds were explicit. */
@@ -202,7 +220,8 @@ public record GpuDrawCommand(
         return canMerge(nextTile, nextScenePlane, nextPlaneCullLevel, nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
                 nextRenderMode, nextWallDecorationPresentation, nextGameObjectSceneMetadata,
-                nextClientRenderableBounds, sceneObjectIdentity, placementHeight);
+                nextClientRenderableBounds, sceneObjectIdentity, placementHeight,
+                modelAnchorX, modelAnchorY);
     }
 
     boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
@@ -213,7 +232,9 @@ public record GpuDrawCommand(
                      GameObjectSceneMetadata nextGameObjectSceneMetadata,
                      List<ClientModelBounds> nextClientRenderableBounds,
                      SceneObjectIdentity nextSceneObjectIdentity,
-                     int nextPlacementHeight) {
+                     int nextPlacementHeight,
+                     int nextModelAnchorX,
+                     int nextModelAnchorY) {
         boolean sameWorldZone = (tile.worldX() >> 3) == (nextTile.worldX() >> 3)
                 && (tile.worldY() >> 3) == (nextTile.worldY() >> 3);
         boolean tileCompatible = tile.equals(nextTile)
@@ -232,6 +253,8 @@ public record GpuDrawCommand(
                 && clientRenderableBounds.equals(nextClientRenderableBounds)
                 && sceneObjectIdentity.equals(nextSceneObjectIdentity)
                 && placementHeight == nextPlacementHeight
+                && modelAnchorX == nextModelAnchorX
+                && modelAnchorY == nextModelAnchorY
                 && firstIndex + indexCount == nextFirstIndex;
     }
 
@@ -239,6 +262,6 @@ public record GpuDrawCommand(
         return new GpuDrawCommand(tile, scenePlane, planeCullLevel, layer, pass, firstIndex,
                 indexCount + additionalIndices, textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                sceneObjectIdentity, placementHeight);
+                sceneObjectIdentity, placementHeight, modelAnchorX, modelAnchorY);
     }
 }
