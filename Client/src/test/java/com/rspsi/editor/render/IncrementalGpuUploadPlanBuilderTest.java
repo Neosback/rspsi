@@ -45,6 +45,24 @@ class IncrementalGpuUploadPlanBuilderTest {
     }
 
     @Test
+    void forkKeepsLiveCacheIsolatedFromBackgroundRebuild() {
+        SceneTileSnapshot first = terrainTile(1, 1, 100);
+        SceneTileSnapshot second = terrainTile(16, 1, 200);
+        IncrementalGpuUploadPlanBuilder live = new IncrementalGpuUploadPlanBuilder();
+        live.buildInitial(packet(List.of(first, second), "initial"));
+
+        IncrementalGpuUploadPlanBuilder background = live.fork();
+        SceneTileSnapshot changedSecond = terrainTile(16, 1, 300);
+        background.build(packet(List.of(first, changedSecond), "background"),
+                Set.of(WorldZoneCoordinate.from(changedSecond.worldAddress())));
+
+        assertEquals(2, live.cachedTileCount());
+        var liveReuse = live.build(packet(List.of(first, second), "live"), Set.of());
+        assertEquals(0, liveReuse.rebuiltTiles());
+        assertEquals(2, liveReuse.reusedTiles());
+    }
+
+    @Test
     void cachePrunesTilesRemovedByVisibilityProjection() {
         SceneTileSnapshot first = terrainTile(1, 1, 100);
         SceneTileSnapshot second = terrainTile(2, 1, 100);
