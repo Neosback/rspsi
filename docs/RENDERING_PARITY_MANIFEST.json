@@ -407,26 +407,39 @@
       "id": "objects.gameObjectFootprint",
       "domain": "objects",
       "title": "Object footprint, orientation, and scene bounds",
-      "status": "partial",
+      "status": "covered",
       "priority": "p1",
       "runelite": [
+        "net.runelite.api.GameObject#sizeX",
+        "net.runelite.api.GameObject#sizeY",
         "net.runelite.api.GameObject#getSceneMinLocation",
         "net.runelite.api.GameObject#getSceneMaxLocation",
+        "net.runelite.api.GameObject#getOrientation",
         "net.runelite.api.GameObject#getModelOrientation"
       ],
       "rspsi": [
-        "Client/src/main/java/com/rspsi/editor/render/RenderObject.java",
-        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java"
+        "Client/src/main/java/com/rspsi/editor/render/GameObjectSceneMetadata.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java",
+        "Client/src/main/java/com/rspsi/editor/render/PickResult.java"
       ],
       "tsps": [
         "rs/scene/SceneLocs.ts",
         "rs/config/loctype/LocModelLoader.ts"
       ],
       "evidence": [
-        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/GameObject.java",
+        "RuneLite-melxin/runelite-mixins/src/main/java/net/runelite/mixins/RSGameObjectMixin.java",
+        "RuneLite-melxin/runescape-client/src/main/java/Scene.java#newGameObject",
+        "Client/src/test/java/com/rspsi/editor/render/GameObjectSceneMetadataTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuScenePacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuPlanPickerTest.java"
       ],
-      "reason": "Static placement is available, but runtime scene min/max identity and model orientation are not separate packet metadata.",
-      "nextAction": "Carry scene bounds and original model orientation into the neutral packet."
+      "reason": "Game-object scene occupancy is now explicit and independent from renderable geometry bounds. Rotated definition footprints produce inclusive min/max occupied tiles and sizeX/sizeY; RuneLite-style object orientation is retained separately from model orientation, including shape 11's 256-JAU model orientation. Multilocs keep the placed definition's scene size even when a different fallback definition supplies the visible model. Metadata rebases with local-to-world scene projection, survives GPU command flattening and fingerprints, and is returned by picking alongside the exact ray-hit tile and object anchor.",
+      "nextAction": "Keep rotation, scene-edge, multiloc, world-rebase, GPU propagation, and picker fixtures as regressions; orientation-aware model AABB/radius remains tracked separately under models.bounds and native.picking."
     },
     {
       "id": "objects.ground",

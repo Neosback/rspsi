@@ -117,15 +117,19 @@ public final class ModelPacketBuilder {
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         Optional<ObjectDefinitionView> definition = definitions.object(object.id());
         if (definition.isEmpty()) return null;
-        ObjectDefinitionView objectDefinition = resolveDisplayDefinition(definition.orElseThrow());
+        ObjectDefinitionView placementDefinition = definition.orElseThrow();
+        ObjectDefinitionView objectDefinition = resolveDisplayDefinition(placementDefinition);
         ObjectAppearanceView appearance = definitions.objectAppearance(object.id())
                 .orElseGet(ObjectAppearanceView::empty);
         Optional<AnimationFrameView> animation = animationFrame(appearance.animationId(), clientCycle);
         int decorDisplacement = wallDecorationDisplacement(object, appearance, document);
+        // Scene occupancy belongs to the placed/base loc definition. A multiloc may
+        // resolve to another definition for its visible model, but the client creates
+        // the GameObject start/end tile rectangle before that runtime transform.
         int footprintWidth = object.rotation() % 2 == 0
-                ? objectDefinition.width() : objectDefinition.length();
+                ? placementDefinition.width() : placementDefinition.length();
         int footprintLength = object.rotation() % 2 == 0
-                ? objectDefinition.length() : objectDefinition.width();
+                ? placementDefinition.length() : placementDefinition.width();
         return new ResolvedModelBuild(objectDefinition, appearance, animation,
                 decorDisplacement, footprintWidth, footprintLength);
     }
@@ -161,6 +165,12 @@ public final class ModelPacketBuilder {
         }
         if (parts.vertices.isEmpty() || parts.triangles.isEmpty()) return Optional.empty();
         int[] bounds = bounds(parts.vertices);
+        GameObjectSceneMetadata sceneMetadata = object.category()
+                == com.rspsi.editor.model.ObjectCategory.GROUND
+                ? GameObjectSceneMetadata.of(object.x(), object.y(),
+                        resolved.footprintWidth(), resolved.footprintLength(),
+                        object.rotation(), object.type() == 11 ? 256 : 0)
+                : GameObjectSceneMetadata.none();
         ModelRenderPacket packet = new ModelRenderPacket(
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
@@ -168,7 +178,7 @@ public final class ModelPacketBuilder {
                 bounds[3], bounds[4], bounds[5], resolved.animation().isPresent(), false,
                 objectCenterHeight(document, object, resolved.footprintWidth(), resolved.footprintLength()),
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
-                GpuDrawCommand.RenderMode.DEFAULT, presentation);
+                GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata);
         return Optional.of(resolved.appearance().mergeNormals()
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }

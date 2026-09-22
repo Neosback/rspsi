@@ -62,6 +62,11 @@ public final class GpuScenePacketBuilder {
             TerrainRenderPacket terrain = scene.terrainPackets().get(local);
             List<ModelRenderPacket> models = scene.modelPackets().stream()
                     .filter(value -> value.anchor().equals(local))
+                    .map(value -> value.gameObjectSceneMetadata().present()
+                            ? value.withGameObjectSceneMetadata(
+                                    value.gameObjectSceneMetadata().translated(
+                                            window.sceneBaseX(), window.sceneBaseY()))
+                            : value)
                     .toList();
             Optional<com.rspsi.editor.model.BridgeLink> bridge = scene.bridges().stream()
                     .filter(value -> value.upper().equals(local))

@@ -83,7 +83,8 @@ public final class GpuPlanPicker {
                 : hitTile;
         return Optional.of(new PickResult(hitTile, objectTile, address.plane(), best.command.objectId(),
                 best.distance, best.command.layer(), best.command.priority(),
-                best.command.depthBias(), best.command.textureId()));
+                best.command.depthBias(), best.command.textureId(),
+                best.command.gameObjectSceneMetadata()));
     }
 
     private static Ray ray(CameraState camera, int width, int height,

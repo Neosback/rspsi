@@ -23,8 +23,11 @@ class GpuPlanPickerTest {
                 List.of(nearA, nearB, nearC, farA, farB, farC),
                 List.of(0, 1, 2, 3, 4, 5),
                 List.of(
-                        new GpuDrawCommand(tile, SceneLayer.Kind.GROUND_OBJECT,
-                                GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 11),
+                        new GpuDrawCommand(tile, 0, 0, SceneLayer.Kind.GROUND_OBJECT,
+                                GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 0, 11,
+                                GpuDrawCommand.RenderMode.DEFAULT,
+                                WallDecorationPresentation.none(),
+                                GameObjectSceneMetadata.of(3200, 3200, 3, 2, 1, 0)),
                         new GpuDrawCommand(tile, SceneLayer.Kind.GROUND_OBJECT,
                                 GpuDrawCommand.SubmissionPass.OPAQUE, 3, 3, -1, 0, 22)),
                 List.of(), Map.of(), "picker-test");
@@ -38,6 +41,13 @@ class GpuPlanPickerTest {
         assertEquals(tile.worldY(), result.objectTile().y());
         assertEquals(0, result.tile().x());
         assertEquals(0, result.tile().y());
+        assertTrue(result.hasGameObjectSceneMetadata());
+        assertEquals(3200, result.objectSceneMinTile().x());
+        assertEquals(3200, result.objectSceneMinTile().y());
+        assertEquals(3202, result.objectSceneMaxTile().x());
+        assertEquals(3201, result.objectSceneMaxTile().y());
+        assertEquals(1, result.gameObjectSceneMetadata().rotation());
+        assertEquals(512, result.gameObjectSceneMetadata().orientation());
     }
 
     @Test

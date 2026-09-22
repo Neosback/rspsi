@@ -78,6 +78,55 @@ class GpuUploadPlanBuilderTest {
     }
 
     @Test
+    void modelSceneFootprintSurvivesGpuCommandFlattening() {
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
+        TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
+        GameObjectSceneMetadata metadata =
+                GameObjectSceneMetadata.of(3200, 3200, 2, 3, 1, 0);
+        ModelRenderPacket model = new ModelRenderPacket(coordinate, 42, ObjectCategory.GROUND,
+                List.of(new ModelVertex(0, 0, 0, 0, 0, 0, 1, 0, 0),
+                        new ModelVertex(64, 0, 0, 0, 0, 0, 1, 0, 0),
+                        new ModelVertex(0, 0, 64, 0, 0, 0, 1, 0, 0)),
+                List.of(new ModelTriangle(0, 1, 2, 100, 100, 100,
+                        -1, 0, 0, 0)), List.of(), -1,
+                0, 0, 0, 64, 0, 64, false, false)
+                .withGameObjectSceneMetadata(metadata);
+        SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
+                Optional.empty(), Optional.empty(), List.of(model),
+                List.of(new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0))),
+                List.of(), false, false);
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
+                        Map.of()), 3200, 3200, 1, 0, java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "game-object-footprint", Map.of());
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(1, plan.commands().size());
+        assertEquals(metadata, plan.commands().get(0).gameObjectSceneMetadata());
+    }
+
+    @Test
+    void uploadFingerprintChangesWhenOnlyGameObjectSceneMetadataChanges() {
+        WorldTileAddress tile = WorldTileAddress.of(3200, 3200, 0);
+        GpuDrawCommand first = new GpuDrawCommand(tile, 0, 0, SceneLayer.Kind.GROUND_OBJECT,
+                GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 0, 42,
+                GpuDrawCommand.RenderMode.DEFAULT, WallDecorationPresentation.none(),
+                GameObjectSceneMetadata.of(3200, 3200, 2, 3, 0, 0));
+        GpuDrawCommand second = new GpuDrawCommand(tile, 0, 0, SceneLayer.Kind.GROUND_OBJECT,
+                GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 0, 42,
+                GpuDrawCommand.RenderMode.DEFAULT, WallDecorationPresentation.none(),
+                GameObjectSceneMetadata.of(3200, 3200, 3, 2, 1, 0));
+
+        String firstFingerprint = GpuUploadPlanBuilder.fingerprint(
+                "same", List.of(), List.of(), List.of(first), List.of(), Map.of(), List.of());
+        String secondFingerprint = GpuUploadPlanBuilder.fingerprint(
+                "same", List.of(), List.of(), List.of(second), List.of(), Map.of(), List.of());
+
+        assertNotEquals(firstFingerprint, secondFingerprint);
+    }
+
+    @Test
     void drawCommandsCarryCurrentSceneAndCullPlanes() {
         WorldTileAddress address = WorldTileAddress.of(3200, 3200, 2);
         TileCoordinate coordinate = new TileCoordinate(2, 3200, 3200);
