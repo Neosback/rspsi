@@ -122,10 +122,10 @@ public final class GpuPlanPicker {
             return true;
         }
         SceneObjectIdentity identity = command.sceneObjectIdentity();
-        float translateX = identity.anchorX() * 128.0f + identity.centerOffsetX()
+        float translateX = command.modelAnchorX() * 128.0f + identity.centerOffsetX()
                 + command.wallDecorationPresentation().offsetX();
         float translateY = command.placementHeight();
-        float translateZ = identity.anchorY() * 128.0f + identity.centerOffsetZ()
+        float translateZ = command.modelAnchorY() * 128.0f + identity.centerOffsetZ()
                 + command.wallDecorationPresentation().offsetZ();
 
         for (ClientModelBounds bounds : command.clientRenderableBounds()) {
