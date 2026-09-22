@@ -161,6 +161,12 @@ public final class ModelPacketBuilder {
         }
         if (parts.vertices.isEmpty() || parts.triangles.isEmpty()) return Optional.empty();
         int[] bounds = bounds(parts.vertices);
+        GameObjectSceneMetadata sceneMetadata = object.category()
+                == com.rspsi.editor.model.ObjectCategory.GROUND
+                ? GameObjectSceneMetadata.of(object.x(), object.y(),
+                        resolved.footprintWidth(), resolved.footprintLength(),
+                        object.rotation(), object.type() == 11 ? 256 : 0)
+                : GameObjectSceneMetadata.none();
         ModelRenderPacket packet = new ModelRenderPacket(
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
@@ -168,7 +174,7 @@ public final class ModelPacketBuilder {
                 bounds[3], bounds[4], bounds[5], resolved.animation().isPresent(), false,
                 objectCenterHeight(document, object, resolved.footprintWidth(), resolved.footprintLength()),
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
-                GpuDrawCommand.RenderMode.DEFAULT, presentation);
+                GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata);
         return Optional.of(resolved.appearance().mergeNormals()
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }
