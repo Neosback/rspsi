@@ -16,7 +16,8 @@ import java.util.Objects;
 public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int objectId, float distance,
                          SceneLayer.Kind layer, int priority, int depthBias, int textureId,
                          GameObjectSceneMetadata gameObjectSceneMetadata,
-                         List<ClientModelBounds> clientRenderableBounds) {
+                         List<ClientModelBounds> clientRenderableBounds,
+                         SceneObjectIdentity sceneObjectIdentity) {
     /** Compatibility constructor for tile-only legacy viewport picking. */
     public PickResult(WorldTile tile, int plane) {
         this(tile, null, plane, -1, Float.NaN, null, 0, 0, -1,
@@ -48,7 +49,16 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
                       SceneLayer.Kind layer, int priority, int depthBias, int textureId,
                       GameObjectSceneMetadata gameObjectSceneMetadata) {
         this(tile, objectTile, plane, objectId, distance, layer, priority, depthBias, textureId,
-                gameObjectSceneMetadata, List.of());
+                gameObjectSceneMetadata, List.of(), SceneObjectIdentity.none());
+    }
+
+    /** Compatibility constructor from before stable scene-object identity was carried. */
+    public PickResult(WorldTile tile, WorldTile objectTile, int plane, int objectId, float distance,
+                      SceneLayer.Kind layer, int priority, int depthBias, int textureId,
+                      GameObjectSceneMetadata gameObjectSceneMetadata,
+                      List<ClientModelBounds> clientRenderableBounds) {
+        this(tile, objectTile, plane, objectId, distance, layer, priority, depthBias, textureId,
+                gameObjectSceneMetadata, clientRenderableBounds, SceneObjectIdentity.none());
     }
 
     public PickResult {
@@ -56,6 +66,7 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
                 gameObjectSceneMetadata, "gameObjectSceneMetadata");
         clientRenderableBounds = List.copyOf(Objects.requireNonNull(
                 clientRenderableBounds, "clientRenderableBounds"));
+        sceneObjectIdentity = Objects.requireNonNull(sceneObjectIdentity, "sceneObjectIdentity");
         if (clientRenderableBounds.stream().anyMatch(value -> value == null || !value.present())) {
             throw new IllegalArgumentException("Client renderable bounds must be present");
         }
@@ -72,6 +83,12 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
         }
         if (!clientRenderableBounds.isEmpty() && objectId < 0) {
             throw new IllegalArgumentException("Terrain picks cannot carry client model bounds");
+        }
+        if (sceneObjectIdentity.present() && objectId < 0) {
+            throw new IllegalArgumentException("Terrain picks cannot carry scene object identity");
+        }
+        if (sceneObjectIdentity.present() && sceneObjectIdentity.objectId() != objectId) {
+            throw new IllegalArgumentException("Picked object ID must match scene identity");
         }
     }
 
@@ -90,6 +107,14 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
 
     public boolean hasClientModelBounds() {
         return !clientRenderableBounds.isEmpty();
+    }
+
+    public boolean hasSceneObjectIdentity() {
+        return sceneObjectIdentity.present();
+    }
+
+    public String sceneInstanceId() {
+        return sceneObjectIdentity.stableId();
     }
 
     /** RuneLite-compatible minimum occupied scene tile for the picked game object. */
