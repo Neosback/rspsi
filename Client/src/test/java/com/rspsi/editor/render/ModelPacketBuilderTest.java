@@ -455,12 +455,14 @@ class ModelPacketBuilderTest {
     }
 
     @Test
-    void wallDecorationPacketInheritsSupportingWallDisplacement() {
+    void wallDecorationPacketsInheritStraightAndDiagonalWallDisplacement() {
         WorldDocument document = new WorldDocument(1, 1, 1);
         WorldObject wall = new WorldObject(100, 0, 0, 0, 0, 0);
-        WorldObject decoration = new WorldObject(42, 5, 0, 0, 0, 0);
+        WorldObject straightDecoration = new WorldObject(42, 5, 0, 0, 0, 0);
+        WorldObject diagonalDecoration = new WorldObject(43, 6, 0, 0, 0, 0);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
-                0, 0, 0, 0, 0, List.of(wall, decoration)));
+                0, 0, 0, 0, 0,
+                List.of(wall, straightDecoration, diagonalDecoration)));
         ModelGeometryView geometry = triangle(7, 100);
 
         DefinitionProvider definitions = new DefinitionProvider() {
@@ -489,9 +491,13 @@ class ModelPacketBuilderTest {
 
         List<ModelRenderPacket> packets = new ModelPacketBuilder(definitions).build(document);
 
-        assertEquals(1, packets.size());
+        assertEquals(2, packets.size());
+        // Shape 5 uses the full supporting wall displacement.
         assertEquals(96, packets.get(0).vertices().get(0).x());
         assertEquals(64, packets.get(0).vertices().get(0).z());
+        // Shape 6 uses the same displacement halved on the diagonal vector.
+        assertEquals(125, packets.get(1).vertices().get(0).x());
+        assertEquals(3, packets.get(1).vertices().get(0).z());
     }
 
     @Test
