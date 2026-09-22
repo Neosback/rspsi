@@ -11,6 +11,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.osrs.rules.loc.WallRules;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,11 +30,6 @@ import java.util.Optional;
  * vertex heights afterwards).</p>
  */
 public final class ModelPacketBuilder {
-    private static final int[] DECOR_DISPLACEMENT_X = {1, 0, -1, 0};
-    private static final int[] DECOR_DISPLACEMENT_Z = {0, -1, 0, 1};
-    private static final int[] DIAGONAL_DISPLACEMENT_X = {1, -1, -1, 1};
-    private static final int[] DIAGONAL_DISPLACEMENT_Z = {-1, -1, 1, 1};
-
     private final DefinitionProvider definitions;
     private final LightingProfile lighting;
 
@@ -85,18 +81,19 @@ public final class ModelPacketBuilder {
 
     /**
      * Scene rendering keeps shape-8 wall decoration renderables distinct.
-     * The compatibility single-object API above still returns the historical
-     * flattened packet, but the scene path preserves RuneLite's two
-     * renderables so camera-dependent submission order is not lost.
+     * The normal client traversal can submit the two sides in different tile
+     * phases, with camera position deciding which side is submitted first.
+     * The compatibility single-object API above remains flattened, while the
+     * scene path preserves both renderables and their camera-order metadata.
      */
     private List<ModelRenderPacket> buildScenePackets(WorldObject object, WorldDocument document,
                                                        int clientCycle) {
         ResolvedModelBuild resolved = resolveBuild(object, document, clientCycle);
         if (resolved == null) return List.of();
-        List<ModelVariant> variants = variantsFor(object, resolved.decorDisplacement());
+        List<WallRules.LocModelVariant> variants = variantsFor(object, resolved.decorDisplacement());
         if (object.type() == 8 && variants.size() == 2) {
-            ModelVariant primaryVariant = variants.get(0);
-            ModelVariant secondaryVariant = variants.get(1);
+            WallRules.LocModelVariant primaryVariant = variants.get(0);
+            WallRules.LocModelVariant secondaryVariant = variants.get(1);
             List<ModelRenderPacket> result = new ArrayList<>(2);
             buildResolvedPacket(object, document, resolved, List.of(primaryVariant),
                     WallDecorationPresentation.primary(
@@ -137,10 +134,10 @@ public final class ModelPacketBuilder {
             WorldObject object,
             WorldDocument document,
             ResolvedModelBuild resolved,
-            List<ModelVariant> variants,
+            List<WallRules.LocModelVariant> variants,
             WallDecorationPresentation presentation) {
         PacketParts parts = new PacketParts();
-        for (ModelVariant variant : variants) {
+        for (WallRules.LocModelVariant variant : variants) {
             for (int modelId : modelIdsFor(resolved.objectDefinition(), variant.sourceType())) {
                 Optional<ModelGeometryView> geometry = definitions.modelGeometry(modelId);
                 if (geometry.isEmpty()) continue;
@@ -235,45 +232,13 @@ public final class ModelPacketBuilder {
     }
 
     /**
-     * Expands one map location into the model variants the client creates for
-     * that location shape. Wall corners and the diagonal wall decorations are
-     * deliberately represented as multiple model parts; collapsing them into
-     * one quarter-turned model is a common source of visibly wrong scenes.
+     * Delegates location variant decomposition to the formal OSRS rule layer.
+     * Renderer code must consume these rules rather than maintain a second
+     * shape/rotation/displacement switch.
      */
-    private static List<ModelVariant> variantsFor(WorldObject object, int decorDisplacement) {
-        int rotation = object.rotation();
-        int displacement = decorDisplacement;
-        return switch (object.type()) {
-            case 2 -> List.of(new ModelVariant(2, rotation + 4, 0, 0, false),
-                    new ModelVariant(2, (rotation + 1) & 3, 0, 0, false));
-            case 4 -> List.of(new ModelVariant(4, rotation, 0, 0, false));
-            case 5 -> List.of(new ModelVariant(4, rotation,
-                    DECOR_DISPLACEMENT_X[rotation] * displacement,
-                    DECOR_DISPLACEMENT_Z[rotation] * displacement, false));
-            case 6 -> List.of(new ModelVariant(4, rotation + 4,
-                    DIAGONAL_DISPLACEMENT_X[rotation] * (displacement / 2),
-                    DIAGONAL_DISPLACEMENT_Z[rotation] * (displacement / 2), false));
-            case 7 -> List.of(new ModelVariant(4, ((rotation + 2) & 3) + 4,
-                    0, 0, false));
-            // Shape 8 builds the client's two-renderable wall decoration.
-            // Only renderable1 is placed with the diagonal displacement
-            // (drawn at x*4096 + xOffset, y*64 + zOffset); renderable2 is
-            // drawn at the bare tile position with NO offset. Giving both
-            // the same displacement stacks two near-coplanar decoration
-            // models on one another, which z-fights.
-            //
-            // NOTE: the client also draws exactly ONE of these two per
-            // frame, choosing by which side of the decoration the camera is
-            // on (Scene: orientation == 256 -> compare transformed dx/dz,
-            // then renderable1 else renderable2). That camera-dependent
-            // selection is not implemented here yet, so both still render.
-            case 8 -> List.of(new ModelVariant(4, rotation + 4,
-                    DIAGONAL_DISPLACEMENT_X[rotation] * (displacement / 2),
-                    DIAGONAL_DISPLACEMENT_Z[rotation] * (displacement / 2), false),
-                    new ModelVariant(4, ((rotation + 2) & 3) + 4, 0, 0, false));
-            case 11 -> List.of(new ModelVariant(10, rotation + 4, 0, 0, true));
-            default -> List.of(new ModelVariant(object.type(), rotation, 0, 0, false));
-        };
+    private static List<WallRules.LocModelVariant> variantsFor(
+            WorldObject object, int decorDisplacement) {
+        return WallRules.expandVariants(object, decorDisplacement);
     }
 
     /**
@@ -318,7 +283,7 @@ public final class ModelPacketBuilder {
 
     private void append(PacketParts parts, WorldObject object, ObjectAppearanceView appearance,
                         ModelGeometryView geometry,
-        WorldDocument document, ModelVariant variant,
+        WorldDocument document, WallRules.LocModelVariant variant,
                         int footprintWidth, int footprintLength) {
         int vertexOffset = parts.vertices.size();
         int[] positions = geometry.vertexPositions();
@@ -1520,10 +1485,6 @@ public final class ModelPacketBuilder {
     }
 
     private record RawVertex(int x, int y, int z) {
-    }
-
-    private record ModelVariant(int sourceType, int rotation, int decorX, int decorZ,
-                                boolean rotateAfterScale) {
     }
 
     private record Normal(int x, int y, int z, int magnitude) {
