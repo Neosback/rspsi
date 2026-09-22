@@ -72,12 +72,3 @@ tasks {
         }
     }
 }
-
-
-tasks.register<JavaExec>("exportRevision240TextureParity") {
-    group = "verification"
-    description = "Exports the independent revision-240 texture parity fixture."
-    dependsOn(tasks.named("testClasses"))
-    classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("net.runelite.cache.Revision240TextureParityExporterTest")
-}
