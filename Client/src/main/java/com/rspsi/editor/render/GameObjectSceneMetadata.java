@@ -25,8 +25,8 @@ public record GameObjectSceneMetadata(
                 throw new IllegalArgumentException("Invalid game-object scene footprint");
             }
             if (modelOrientation < 0 || modelOrientation >= 2048
-                    || orientation < 0 || orientation >= 2048) {
-                throw new IllegalArgumentException("Game-object orientations must be JAU values");
+                    || orientation < 0 || orientation >= 4096) {
+                throw new IllegalArgumentException("Game-object orientations must be valid JAU values");
             }
         }
     }
@@ -52,7 +52,7 @@ public record GameObjectSceneMetadata(
         if (rotation < 0 || rotation > 3) {
             throw new IllegalArgumentException("Game-object rotation must be 0..3");
         }
-        int orientation = (rotation * 512 + modelOrientation) & 2047;
+        int orientation = rotation * 512 + modelOrientation;
         return new GameObjectSceneMetadata(true, minTileX, minTileY,
                 minTileX + sizeX - 1, minTileY + sizeY - 1,
                 modelOrientation, orientation);
@@ -68,7 +68,7 @@ public record GameObjectSceneMetadata(
 
     /** Map placement rotation (0..3), separated from the model's own JAU orientation. */
     public int rotation() {
-        return present ? ((orientation - modelOrientation) & 2047) / 512 : 0;
+        return present ? (orientation - modelOrientation) / 512 : 0;
     }
 
     public boolean contains(int tileX, int tileY) {
