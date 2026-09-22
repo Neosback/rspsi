@@ -614,26 +614,35 @@
       "id": "models.bounds",
       "domain": "picking",
       "title": "Model bounds, radius, diameter, and bottom height",
-      "status": "partial",
+      "status": "covered",
       "priority": "p2",
       "runelite": [
         "net.runelite.api.Model#getAABB",
         "net.runelite.api.Model#getRadius",
-        "net.runelite.api.Model#getBottomY"
+        "net.runelite.api.Model#getDiameter",
+        "net.runelite.api.Model#getBottomY",
+        "net.runelite.api.Model#getXYZMag",
+        "net.runelite.api.Model#useBoundingBox"
       ],
       "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ClientModelBounds.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
         "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java",
-        "Client/src/main/java/com/rspsi/editor/render/GpuPlanPicker.java"
+        "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java"
       ],
       "tsps": [
         "rs/model/ModelData.ts",
         "render/render/interact/ModelHashBuffer.ts"
       ],
       "evidence": [
-        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+        "RuneLite-melxin/runescape-client/src/main/java/Model.java#calculateBoundsCylinder",
+        "RuneLite-melxin/runescape-client/src/main/java/Model.java#calculateBoundingBox",
+        "Client/src/test/java/com/rspsi/editor/render/ClientModelBoundsTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java"
       ],
-      "reason": "Conservative packet bounds exist, but orientation-aware client bounds and radius are not retained as a public contract.",
-      "nextAction": "Carry model bounds metadata into picking and culling fixtures."
+      "reason": "Client model bounds are now a first-class model-local contract: height, bottomY, xzRadius, radius, diameter, single-tile padding semantics, and orientation-specific AABB midpoint/half-extents reproduce the vendored client formulas. Bounds are calculated after model transforms and contouring but before scene footprint/decor placement translation, remain unchanged by local-to-world anchor rebasing, retain one entry per client renderable for flattened multi-renderable shapes such as type-2 walls and compatibility shape-8 packets, propagate through GPU draw commands, and participate in upload fingerprints.",
+      "nextAction": "Keep cylinder/AABB, transform, contour, placement-separation, multi-renderable, rebase, and GPU propagation fixtures as regressions. Picking/culling consumers are tracked separately."
     },
     {
       "id": "textures.definitions",
@@ -850,8 +859,8 @@
       "evidence": [
         "Client/src/test/java/com/rspsi/editor/render/GpuPlanPickerTest.java"
       ],
-      "reason": "Picking exists, but object identity and orientation-aware model bounds are incomplete.",
-      "nextAction": "Carry stable scene-instance IDs and model bounds through the packet."
+      "reason": "Triangle picking and game-object footprint identity exist, and orientation-aware client model bounds are now carried through the neutral/GPU packet. Stable per-scene object-instance identity and bounds-aware coarse selection/culling are still incomplete.",
+      "nextAction": "Carry stable scene-instance IDs through draw commands and pick results, then consume client model bounds for coarse object selection/culling while retaining exact triangle-hit results."
     },
     {
       "id": "dynamic.actors",
