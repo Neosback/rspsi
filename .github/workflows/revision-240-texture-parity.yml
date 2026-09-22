@@ -55,11 +55,15 @@ jobs:
           mkdir -p "${FIXTURE_DIR}"
           echo "RSPSI_TEXTURE_FIXTURE_OUT=${FIXTURE_DIR}/textures.json" >> "${GITHUB_ENV}"
 
+          cp ".github/tools/Revision240TextureParityExporterTest.java" \
+            "RuneLite-melxin/cache/src/test/java/net/runelite/cache/Revision240TextureParityExporterTest.java"
+
           cd RuneLite-melxin
           chmod +x gradlew
           RSPSI_REFERENCE_CACHE="${RSPSI_REFERENCE_CACHE}" \
           RSPSI_TEXTURE_FIXTURE_OUT="${FIXTURE_DIR}/textures.json" \
-            ./gradlew --no-daemon :cache:exportRevision240TextureParity
+            ./gradlew --no-daemon :cache:test \
+              --tests net.runelite.cache.Revision240TextureParityExporterTest
 
           test -s "${FIXTURE_DIR}/textures.json"
           cat "${FIXTURE_DIR}/textures.json"
