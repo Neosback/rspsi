@@ -675,7 +675,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         key = key * 17L + order.modelPriority();
         key = key * 257L + order.faceBias();
         key = key * 8L + order.depthMode().ordinal();
-        key = key * 4L + order.facingPolicy().ordinal();
         return key * 2L + (alpha ? 1L : 0L);
     }
 
