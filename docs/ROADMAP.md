@@ -110,8 +110,9 @@ before the native zone manager can discover that most GPU zones are unchanged.
 
 **Target**:
 
-1. Instrument `StudioApplication.rebuildMapScene` by phase (window scene compile, packet
-   assembly, upload-plan flatten, bytes/vertices/commands produced) so optimization is measured.
+1. **Landed:** instrument `StudioApplication.buildMapScene` / `rebuildMapScene` by phase
+   (window scene compile, packet assembly, upload-plan flatten, compatibility `RenderScene`
+   build, vertices/indices/commands/textures, and estimated geometry KiB) so optimization is measured.
 2. Extend the incremental compiler concept to the **world-window path actually used by Studio**,
    preserving the padded/stitching context that `RenderWindowSceneBuilder` supplies. Do not
    replace that path with a single-region `RenderScene` shortcut that would regress edge
