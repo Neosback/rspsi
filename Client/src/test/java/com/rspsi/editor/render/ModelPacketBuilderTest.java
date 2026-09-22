@@ -324,6 +324,10 @@ class ModelPacketBuilderTest {
         assertEquals(0, packet.vertices().get(0).y());
         assertEquals(-64, packet.vertices().get(1).y());
         assertEquals(-32, packet.vertices().get(2).y());
+        ClientModelBounds contouredBounds = packet.clientRenderableBounds().get(0);
+        assertEquals(64, contouredBounds.height(),
+                "client cylinder bounds must be recalculated from the contoured model");
+        assertEquals(0, contouredBounds.bottomY());
     }
 
     @Test
