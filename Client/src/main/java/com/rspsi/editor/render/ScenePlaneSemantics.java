@@ -41,7 +41,7 @@ public record ScenePlaneSemantics(
 
         // The client render-plane rule forces bit 0x8 tiles to minimum level
         // zero; otherwise a linked bridge column inherits the shifted plane.
-        int planeCullLevel = (tileFlags & OsrsTileFlags.VIS_BELOW) != 0
+        int planeCullLevel = OsrsTileFlags.visibleBelow(tileFlags)
                 ? 0 : scenePlane;
 
         return new ScenePlaneSemantics(
