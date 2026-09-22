@@ -28,11 +28,6 @@ public class Revision240TextureParityExporterTest
     private static final int TEXTURE_SIZE = 128;
     private static final double BRIGHTNESS = 0.6D;
 
-    public static void main(String[] args) throws Exception
-    {
-        new Revision240TextureParityExporterTest().exportIndependentFixture();
-    }
-
     @Test
     public void exportIndependentFixture() throws Exception
     {
