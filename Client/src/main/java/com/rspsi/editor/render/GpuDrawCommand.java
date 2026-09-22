@@ -108,7 +108,7 @@ public record GpuDrawCommand(
                      int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex) {
         return canMerge(nextTile, nextTile.plane(), nextTile.plane(), nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
-                RenderMode.DEFAULT, WallDecorationPresentation.none(), GameObjectSceneMetadata.none());
+                RenderMode.DEFAULT, WallDecorationPresentation.none(), gameObjectSceneMetadata);
     }
 
     boolean canMerge(WorldTileAddress nextTile, SceneLayer.Kind nextLayer,
@@ -117,7 +117,7 @@ public record GpuDrawCommand(
                      RenderMode nextRenderMode) {
         return canMerge(nextTile, nextTile.plane(), nextTile.plane(), nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
-                nextRenderMode, WallDecorationPresentation.none(), GameObjectSceneMetadata.none());
+                nextRenderMode, WallDecorationPresentation.none(), gameObjectSceneMetadata);
     }
 
     boolean canMerge(WorldTileAddress nextTile, SceneLayer.Kind nextLayer,
@@ -137,7 +137,7 @@ public record GpuDrawCommand(
                      WallDecorationPresentation nextWallDecorationPresentation) {
         return canMerge(nextTile, nextScenePlane, nextPlaneCullLevel, nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
-                nextRenderMode, nextWallDecorationPresentation, GameObjectSceneMetadata.none());
+                nextRenderMode, nextWallDecorationPresentation, gameObjectSceneMetadata);
     }
 
     boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
