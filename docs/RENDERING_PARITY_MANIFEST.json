@@ -609,7 +609,7 @@
       "id": "textures.definitions",
       "domain": "textures",
       "title": "Texture definitions, pixels, and average-color fallback",
-      "status": "partial",
+      "status": "covered",
       "priority": "p0",
       "runelite": [
         "net.runelite.api.Model#getFaceTextures"
@@ -627,10 +627,14 @@
         "Client/src/test/java/com/rspsi/cache/store/OpenRuneTextureDefinitionDecoderTest.java",
         "Client/src/test/java/com/rspsi/cache/verify/OsrsTextureSemanticFixtureTest.java",
         "Client/src/test/java/com/rspsi/cache/verify/OsrsParityFixtureTest.java",
-        "docs/TEXTURE_PARITY_FIXTURE.md"
+        "docs/TEXTURE_PARITY_FIXTURE.md",
+        "Client/src/main/java/com/rspsi/cache/verify/OsrsTextureRevisionVerifier.java",
+        "RuneLite-melxin/cache/src/test/java/net/runelite/cache/Revision240TextureParityExporterTest.java",
+        ".github/workflows/revision-240-texture-parity.yml",
+        "GitHub Actions Revision 240 Texture Acceptance run 35718110830"
       ],
-      "reason": "Revision-240 texture-record decoding, neutral texture resources, decoded-pixel diagnostics, average-color fallback, and an external provenance-controlled textures.json parity format are implemented. Deterministic tests cover metadata, pixel SHA-256, RGB-zero cutout counts, and partial-alpha counts; one independently exported real revision-240 texture fixture still needs to be run before declaring cache-backed pixel parity complete.",
-      "nextAction": "Run docs/TEXTURE_PARITY_FIXTURE.md against an independently exported real revision-240 cache fixture covering opaque, RGB-zero cutout, animated, and alpha-bearing textures, then record the passing evidence."
+      "reason": "Real revision-240 texture parity is now verified against OpenRS2 archive 2710 (oldschool/live/en build 240) using an independent RuneLite-melxin TextureLoader/SpriteManager exporter. The reference fixture selected texture 0 (opaque), 7 (RGB-zero cutout), and 17 (animated), each at 128x128 and brightness 0.6. The focused OsrsTextureRevisionVerifier detected revision 240, compared all 3 definitions/pixel rasters, and reported 0 differences with texture.parity PASS. The workflow artifact retains the generated metadata and SHA-256 pixel evidence without checking cache assets into the repository.",
+      "nextAction": "Keep the revision-240 acceptance workflow manual and rerun it when the supported revision, texture record decoder, sprite decode path, or texture pixel semantics change."
     },
     {
       "id": "textures.animation",
