@@ -66,13 +66,16 @@ public final class GpuScenePacketBuilder {
             Optional<com.rspsi.editor.model.BridgeLink> bridge = scene.bridges().stream()
                     .filter(value -> value.upper().equals(local))
                     .findFirst();
-            int effectivePlane = bridge.map(value -> value.lower().plane()).orElse(address.plane());
             int flags = scene.document().tile(local.plane(), local.x(), local.y()).snapshot().flags();
+            ScenePlaneSemantics planes = ScenePlaneSemantics.resolve(
+                    address.plane(), flags, bridge.isPresent());
             List<SceneLayer> layers = layers(terrain, models, scene.textures());
             boolean roofRelated = localObjects.roofRelated(local);
-            tiles.add(new SceneTileSnapshot(addressToCoordinate(address), address, flags, effectivePlane,
-                    bridge, Optional.ofNullable(terrain), models, layers, List.of(), roofRelated,
-                    effectivePlane < address.plane()));
+            tiles.add(new SceneTileSnapshot(addressToCoordinate(address), address, flags,
+                    planes.scenePlane(), planes.authoredPlane(), planes.renderLevel(),
+                    planes.planeCullLevel(), bridge, Optional.ofNullable(terrain), models,
+                    layers, List.of(), roofRelated,
+                    planes.scenePlane() < planes.authoredPlane()));
         }
         return new GpuScenePacket(window, tiles, scene.lightingProfile(),
                 fingerprint(window, tiles, scene.textures()), scene.textures());
@@ -106,11 +109,9 @@ public final class GpuScenePacketBuilder {
                 .thenComparingInt(WorldTileAddress::worldY));
         List<SceneTileSnapshot> tiles = new ArrayList<>(addresses.size());
         for (WorldTileAddress address : addresses) {
-            int effectivePlane = address.plane();
             Optional<WorldBridgeLink> worldBridge = scene.bridges().stream()
                     .filter(value -> value.authored().equals(address))
                     .findFirst();
-            if (worldBridge.isPresent()) effectivePlane = worldBridge.orElseThrow().effective().plane();
             Optional<BridgeLink> bridge = worldBridge.map(value -> new BridgeLink(
                     new TileCoordinate(value.authored().plane(), value.authored().worldX(), value.authored().worldY()),
                     new TileCoordinate(value.effective().plane(), value.effective().worldX(), value.effective().worldY())));
@@ -119,14 +120,18 @@ public final class GpuScenePacketBuilder {
             List<SceneLayer> layers = layers(terrain, models, scene.textures());
             List<SceneOccluder> occluders = occluders(address, scene, models);
             int tileFlags = scene.tileFlags().getOrDefault(address, 0);
+            ScenePlaneSemantics planes = ScenePlaneSemantics.resolve(
+                    address.plane(), tileFlags, bridge.isPresent());
             boolean roofRelated = scene.objects().stream()
                     .filter(value -> value.address().equals(address))
                     .map(value -> value.object().shape().map(shape -> shape.id() >= 12 && shape.id() <= 21)
                             .orElse(false))
                     .anyMatch(Boolean::booleanValue);
-            tiles.add(new SceneTileSnapshot(addressToCoordinate(address), address, tileFlags, effectivePlane, bridge,
-                    Optional.ofNullable(terrain), models, layers, occluders, roofRelated,
-                    effectivePlane < address.plane()));
+            tiles.add(new SceneTileSnapshot(addressToCoordinate(address), address, tileFlags,
+                    planes.scenePlane(), planes.authoredPlane(), planes.renderLevel(),
+                    planes.planeCullLevel(), bridge, Optional.ofNullable(terrain), models,
+                    layers, occluders, roofRelated,
+                    planes.scenePlane() < planes.authoredPlane()));
         }
         return new GpuScenePacket(window, tiles, scene.lightingProfile(), fingerprint(window, tiles, scene.textures()),
                 scene.textures());
@@ -162,11 +167,19 @@ public final class GpuScenePacketBuilder {
                                       java.util.Map<Integer, RenderTextureResource> textures) {
         StringBuilder value = new StringBuilder();
         value.append(window.sceneBaseX()).append(':').append(window.sceneBaseY()).append(':')
-                .append(window.planes()).append(':').append(window.border()).append(';');
+                .append(window.planes()).append(':').append(window.border()).append(':')
+                .append(window.minimumRenderLevel()).append(':').append(window.worldViewId()).append(':')
+                .append(window.instance()).append('|');
+        window.sourceRegionIds().stream().sorted()
+                .forEach(regionId -> value.append(regionId).append(','));
+        value.append(';');
         for (SceneTileSnapshot tile : tiles) {
             value.append(tile.coordinate()).append('|').append(tile.worldAddress()).append('|')
                     .append(tile.tileFlags()).append('|')
-                    .append(tile.effectivePlane())
+                    .append(tile.effectivePlane()).append('|')
+                    .append(tile.authoredPlane()).append('|')
+                    .append(tile.renderLevel()).append('|')
+                    .append(tile.planeCullLevel())
                     .append('|').append(tile.terrain()).append('|').append(tile.models())
                     .append('|').append(tile.layers()).append('|').append(tile.occluders())
                     .append('|').append(tile.bridge()).append('|').append(tile.roofRelated())

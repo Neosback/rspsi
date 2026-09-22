@@ -17,6 +17,9 @@ public record SceneTileSnapshot(
         WorldTileAddress worldAddress,
         int tileFlags,
         int effectivePlane,
+        int authoredPlane,
+        int renderLevel,
+        int planeCullLevel,
         Optional<BridgeLink> bridge,
         Optional<TerrainRenderPacket> terrain,
         List<ModelRenderPacket> models,
@@ -44,6 +47,32 @@ public record SceneTileSnapshot(
         if (effectivePlane < -1) {
             throw new IllegalArgumentException("Effective plane must be -1 or greater");
         }
+        if (authoredPlane != coordinate.plane()) {
+            throw new IllegalArgumentException("Authored plane must match the source coordinate plane");
+        }
+        if (renderLevel < 0 || planeCullLevel < 0) {
+            throw new IllegalArgumentException("Render and plane-cull levels cannot be negative");
+        }
+    }
+
+    /**
+     * Compatibility constructor for the pre-plane-semantics packet shape.
+     * The old effective plane becomes both scene and cull level.
+     */
+    public SceneTileSnapshot(TileCoordinate coordinate,
+                             WorldTileAddress worldAddress,
+                             int tileFlags,
+                             int effectivePlane,
+                             Optional<BridgeLink> bridge,
+                             Optional<TerrainRenderPacket> terrain,
+                             List<ModelRenderPacket> models,
+                             List<SceneLayer> layers,
+                             List<SceneOccluder> occluders,
+                             boolean roofRelated,
+                             boolean visibleBelow) {
+        this(coordinate, worldAddress, tileFlags, effectivePlane,
+                coordinate.plane(), coordinate.plane(), Math.max(0, effectivePlane),
+                bridge, terrain, models, layers, occluders, roofRelated, visibleBelow);
     }
 
     /** Compatibility constructor before explicit tile draw ordering was exposed. */
@@ -51,7 +80,8 @@ public record SceneTileSnapshot(
                              Optional<TerrainRenderPacket> terrain, List<ModelRenderPacket> models,
                              List<SceneOccluder> occluders, boolean roofRelated, boolean visibleBelow) {
         this(coordinate, WorldTileAddress.of(coordinate.x(), coordinate.y(), coordinate.plane()),
-                0, effectivePlane, bridge, terrain, models, List.of(), occluders,
+                0, effectivePlane, coordinate.plane(), coordinate.plane(),
+                Math.max(0, effectivePlane), bridge, terrain, models, List.of(), occluders,
                 roofRelated, visibleBelow);
     }
 }

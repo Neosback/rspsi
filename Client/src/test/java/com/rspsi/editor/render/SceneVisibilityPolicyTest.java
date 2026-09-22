@@ -29,9 +29,49 @@ class SceneVisibilityPolicyTest {
                 SceneWindow.from(window), scene, SceneVisibilityPolicy.effectivePlane(0));
 
         assertEquals(64 * 64 + 1, selected.tiles().size());
-        assertTrue(selected.tiles().stream().anyMatch(tile -> tile.visibleBelow()
-                && tile.effectivePlane() == 0));
+        SceneTileSnapshot bridgeTile = selected.tiles().stream()
+                .filter(SceneTileSnapshot::visibleBelow)
+                .filter(tile -> tile.authoredPlane() == 1)
+                .findFirst().orElseThrow();
+        assertEquals(0, bridgeTile.effectivePlane());
+        assertEquals(1, bridgeTile.authoredPlane());
+        assertEquals(1, bridgeTile.renderLevel());
+        assertEquals(0, bridgeTile.planeCullLevel());
         assertNotEquals(all.fingerprint(), selected.fingerprint());
+    }
+
+    @Test
+    void clientProjectionHonorsSceneMinimumBeforeTilePlaneSelection() {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        document.tile(1, 2, 3).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, OsrsTileFlags.BRIDGE, java.util.List.of()));
+        WorldRegion region = new WorldRegion(10, 20, document);
+        WorldRegionWindow source = new WorldRegionWindow(10, 20, 1, 1,
+                Map.of(region.regionId(), region));
+        RenderWindowScene scene = new RenderWindowSceneBuilder().build(source);
+        SceneWindow window = new SceneWindow(
+                source,
+                source.worldWindow().originX(),
+                source.worldWindow().originY(),
+                4,
+                1,
+                1,
+                -1,
+                source.regions().keySet(),
+                java.util.List.of());
+
+        GpuScenePacketBuilder builder = new GpuScenePacketBuilder();
+        GpuScenePacket editor = builder.build(window, scene);
+        GpuScenePacket belowMinimum = builder.build(
+                window, scene, SceneVisibilityPolicy.effectivePlane(0));
+        GpuScenePacket atMinimum = builder.build(
+                window, scene, SceneVisibilityPolicy.effectivePlane(1));
+
+        assertEquals(64 * 64 * 4, editor.tiles().size());
+        assertTrue(belowMinimum.tiles().isEmpty());
+        assertTrue(!atMinimum.tiles().isEmpty());
+        assertTrue(atMinimum.tiles().stream()
+                .allMatch(tile -> tile.effectivePlane() >= window.minimumRenderLevel()));
     }
 
     @Test

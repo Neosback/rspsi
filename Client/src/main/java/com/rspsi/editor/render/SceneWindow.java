@@ -22,13 +22,30 @@ public record SceneWindow(
         int sceneBaseY,
         int planes,
         int border,
+        int minimumRenderLevel,
+        int worldViewId,
         Set<Integer> sourceRegionIds,
         List<InstanceChunkTemplate> instanceTemplates
 ) {
+    /** Compatibility constructor before scene-level min-level/world-view state was explicit. */
+    public SceneWindow(WorldRegionWindow sourceRegions,
+                       int sceneBaseX,
+                       int sceneBaseY,
+                       int planes,
+                       int border,
+                       Set<Integer> sourceRegionIds,
+                       List<InstanceChunkTemplate> instanceTemplates) {
+        this(sourceRegions, sceneBaseX, sceneBaseY, planes, border, 0, -1,
+                sourceRegionIds, instanceTemplates);
+    }
+
     public SceneWindow {
         sourceRegions = Objects.requireNonNull(sourceRegions, "sourceRegions");
         if (sceneBaseX < 0 || sceneBaseY < 0 || planes <= 0 || border < 0) {
             throw new IllegalArgumentException("Invalid scene window coordinates or dimensions");
+        }
+        if (minimumRenderLevel < 0 || minimumRenderLevel >= planes) {
+            throw new IllegalArgumentException("Minimum render level must be inside the scene plane range");
         }
         Set<Integer> ids = new LinkedHashSet<>(Objects.requireNonNull(sourceRegionIds, "sourceRegionIds"));
         if (ids.stream().anyMatch(id -> id == null || id < 0 || id > 0xFFFF)) {
@@ -45,6 +62,8 @@ public record SceneWindow(
                 sourceRegions.worldWindow().originY(),
                 4,
                 1,
+                0,
+                -1,
                 sourceRegions.regions().keySet(),
                 List.of());
     }
@@ -55,5 +74,9 @@ public record SceneWindow(
 
     public boolean completeSourceWindow() {
         return sourceRegions.complete();
+    }
+
+    public SceneContract contract() {
+        return SceneContract.from(this);
     }
 }

@@ -34,7 +34,7 @@ Where it's a "target," it's a gap with a concrete next action, not a vague aspir
 
 ### 1.2 What's not correct yet - the tracked backlog
 
-`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 17 "partial," 4 "deferred." Only one
+`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 16 "partial," 4 "deferred." Only one
 P0 item remains partial.
 
 This foundation PR has now moved five P0 items to covered:
@@ -52,8 +52,12 @@ This foundation PR has now moved five P0 items to covered:
 |---|---|---|
 | `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Software/native winding polarity is corrected to GL_CCW; validate model-only Client Front culling against an asymmetric real-cache model and wall/roof/bridge-heavy views. Terrain remains two-sided |
 
+`terrain.bridge` is now covered on the scene-plane semantics branch: authored/source plane,
+current scene plane, original/render level, and minimum/cull level are distinct packet fields,
+with bridge and visibility-below fixtures.
+
 P1-partial items worth picking up after this final P0 validation: `scene.apiSurface`,
-`terrain.bridge`, `scene.roofs`, `objects.wallTransforms`, `objects.decorations`,
+`scene.roofs`, `objects.wallTransforms`, `objects.decorations`,
 `objects.gameObjectFootprint`, `models.colors`, `models.contour`, `textures.animation`,
 `occlusion.visibility`.
 
