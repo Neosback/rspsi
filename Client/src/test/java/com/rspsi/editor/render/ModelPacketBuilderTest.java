@@ -744,6 +744,22 @@ class ModelPacketBuilderTest {
     }
 
     @Test
+    void lWallRetainsSeparateBoundsForItsTwoClientRenderables() {
+        WorldDocument document = new WorldDocument(4, 4, 1);
+        DefinitionProvider definitions = typedDefinitions(2, 7, triangle(7, 100));
+
+        ModelRenderPacket packet = new ModelPacketBuilder(definitions)
+                .build(new WorldObject(42, 2, 0, 0, 1, 1), document)
+                .orElseThrow();
+
+        assertEquals(2, packet.clientRenderableBounds().size());
+        assertTrue(packet.clientRenderableBounds().get(0).present());
+        assertTrue(packet.clientRenderableBounds().get(1).present());
+        assertEquals(0, packet.clientRenderableBounds().get(0).drawAabb().orientation());
+        assertEquals(0, packet.clientRenderableBounds().get(1).drawAabb().orientation());
+    }
+
+    @Test
     void shapeElevenCarriesClientDrawAabbOrientationSeparatelyFromPlacementRotation() {
         WorldDocument document = new WorldDocument(8, 8, 1);
         DefinitionProvider definitions = sizedDefinitions(2, 3, 10, 7, triangle(7, 100));
