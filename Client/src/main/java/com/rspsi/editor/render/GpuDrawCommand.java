@@ -22,6 +22,7 @@ public record GpuDrawCommand(
         WallDecorationPresentation wallDecorationPresentation,
         GameObjectSceneMetadata gameObjectSceneMetadata,
         List<ClientModelBounds> clientRenderableBounds,
+        List<ClientRenderablePlacement> clientRenderablePlacements,
         SceneObjectIdentity sceneObjectIdentity,
         int placementHeight,
         int modelAnchorX,
@@ -56,9 +57,15 @@ public record GpuDrawCommand(
                 gameObjectSceneMetadata, "gameObjectSceneMetadata");
         clientRenderableBounds = List.copyOf(Objects.requireNonNull(
                 clientRenderableBounds, "clientRenderableBounds"));
+        clientRenderablePlacements = List.copyOf(Objects.requireNonNull(
+                clientRenderablePlacements, "clientRenderablePlacements"));
         sceneObjectIdentity = Objects.requireNonNull(sceneObjectIdentity, "sceneObjectIdentity");
         if (clientRenderableBounds.stream().anyMatch(value -> value == null || !value.present())) {
             throw new IllegalArgumentException("Client renderable bounds must be present");
+        }
+        if (clientRenderablePlacements.size() != clientRenderableBounds.size()
+                || clientRenderablePlacements.stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("Client renderable placements must match bounds");
         }
         if (scenePlane < 0 || scenePlane > 3 || planeCullLevel < 0 || planeCullLevel > 3) {
             throw new IllegalArgumentException("Invalid scene-plane command metadata");
@@ -83,7 +90,8 @@ public record GpuDrawCommand(
         this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
                 textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                sceneObjectIdentity, placementHeight, tile.worldX(), tile.worldY());
+                defaultPlacements(clientRenderableBounds), sceneObjectIdentity,
+                placementHeight, tile.worldX(), tile.worldY());
     }
 
     /** Compatibility constructor before stable scene identity and placement height were explicit. */
@@ -97,7 +105,8 @@ public record GpuDrawCommand(
         this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
                 textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                SceneObjectIdentity.none(), 0, tile.worldX(), tile.worldY());
+                defaultPlacements(clientRenderableBounds), SceneObjectIdentity.none(), 0,
+                tile.worldX(), tile.worldY());
     }
 
     /** Compatibility constructor before client model bounds were explicit. */
@@ -220,8 +229,8 @@ public record GpuDrawCommand(
         return canMerge(nextTile, nextScenePlane, nextPlaneCullLevel, nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
                 nextRenderMode, nextWallDecorationPresentation, nextGameObjectSceneMetadata,
-                nextClientRenderableBounds, sceneObjectIdentity, placementHeight,
-                modelAnchorX, modelAnchorY);
+                nextClientRenderableBounds, clientRenderablePlacements,
+                sceneObjectIdentity, placementHeight, modelAnchorX, modelAnchorY);
     }
 
     boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
@@ -231,10 +240,13 @@ public record GpuDrawCommand(
                      WallDecorationPresentation nextWallDecorationPresentation,
                      GameObjectSceneMetadata nextGameObjectSceneMetadata,
                      List<ClientModelBounds> nextClientRenderableBounds,
+                     List<ClientRenderablePlacement> nextClientRenderablePlacements,
                      SceneObjectIdentity nextSceneObjectIdentity,
                      int nextPlacementHeight,
                      int nextModelAnchorX,
                      int nextModelAnchorY) {
+
+
         boolean sameWorldZone = (tile.worldX() >> 3) == (nextTile.worldX() >> 3)
                 && (tile.worldY() >> 3) == (nextTile.worldY() >> 3);
         boolean tileCompatible = tile.equals(nextTile)
@@ -244,6 +256,7 @@ public record GpuDrawCommand(
                 || (wallDecorationPresentation.equals(nextWallDecorationPresentation)
                     && gameObjectSceneMetadata.equals(nextGameObjectSceneMetadata)
                     && clientRenderableBounds.equals(nextClientRenderableBounds)
+                    && clientRenderablePlacements.equals(nextClientRenderablePlacements)
                     && sceneObjectIdentity.equals(nextSceneObjectIdentity)
                     && placementHeight == nextPlacementHeight
                     && modelAnchorX == nextModelAnchorX
@@ -260,10 +273,19 @@ public record GpuDrawCommand(
                 && firstIndex + indexCount == nextFirstIndex;
     }
 
+    private static List<ClientRenderablePlacement> defaultPlacements(
+            List<ClientModelBounds> bounds) {
+        Objects.requireNonNull(bounds, "bounds");
+        return java.util.stream.IntStream.range(0, bounds.size())
+                .mapToObj(ignored -> ClientRenderablePlacement.none())
+                .toList();
+    }
+
     GpuDrawCommand extend(int additionalIndices) {
         return new GpuDrawCommand(tile, scenePlane, planeCullLevel, layer, pass, firstIndex,
                 indexCount + additionalIndices, textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                sceneObjectIdentity, placementHeight, modelAnchorX, modelAnchorY);
+                clientRenderablePlacements, sceneObjectIdentity, placementHeight,
+                modelAnchorX, modelAnchorY);
     }
 }
