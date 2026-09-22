@@ -713,7 +713,7 @@ class ModelPacketBuilderTest {
                 .build(new WorldObject(42, 10, 0, 0, 2, 3), document)
                 .orElseThrow();
 
-        ClientModelBounds bounds = packet.clientModelBounds();
+        ClientModelBounds bounds = packet.clientRenderableBounds().get(0);
         assertTrue(bounds.present());
         assertEquals(20, bounds.height());
         assertEquals(40, bounds.bottomY());
@@ -749,7 +749,7 @@ class ModelPacketBuilderTest {
                 .build(new WorldObject(42, 10, 0, 0, 1, 1), document)
                 .orElseThrow();
 
-        ClientModelBounds bounds = packet.clientModelBounds();
+        ClientModelBounds bounds = packet.clientRenderableBounds().get(0);
         assertEquals(15, bounds.height());
         assertEquals(15, bounds.bottomY());
         assertEquals(140, bounds.xzRadius());
@@ -788,7 +788,7 @@ class ModelPacketBuilderTest {
                 .build(new WorldObject(42, 11, 3, 0, 1, 2), document)
                 .orElseThrow();
 
-        assertEquals(256, packet.clientModelBounds().drawAabb().orientation());
+        assertEquals(256, packet.clientRenderableBounds().get(0).drawAabb().orientation());
         assertEquals(256, packet.gameObjectSceneMetadata().modelOrientation());
         assertEquals(3 * 512 + 256, packet.gameObjectSceneMetadata().orientation());
     }
