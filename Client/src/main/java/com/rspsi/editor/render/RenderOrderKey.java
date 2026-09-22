@@ -19,7 +19,7 @@ public record RenderOrderKey(
 ) {
     public enum FacingPolicy {
         TWO_SIDED,
-        CULL_CLOCKWISE
+        CULL_COUNTER_CLOCKWISE
     }
 
     public RenderOrderKey {
