@@ -32,7 +32,8 @@ class GpuPlanPickerTest {
                                 GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 0, 11,
                                 GpuDrawCommand.RenderMode.DEFAULT,
                                 WallDecorationPresentation.none(),
-                                GameObjectSceneMetadata.of(3200, 3200, 3, 2, 1, 0)),
+                                GameObjectSceneMetadata.of(3200, 3200, 3, 2, 1, 0),
+                                List.of(clientBounds)),
                         new GpuDrawCommand(tile, SceneLayer.Kind.GROUND_OBJECT,
                                 GpuDrawCommand.SubmissionPass.OPAQUE, 3, 3, -1, 0, 22)),
                 List.of(), Map.of(), "picker-test");
