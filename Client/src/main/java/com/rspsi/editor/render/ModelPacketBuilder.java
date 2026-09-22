@@ -60,7 +60,7 @@ public final class ModelPacketBuilder {
             for (int x = 0; x < document.width(); x++) {
                 for (int y = 0; y < document.length(); y++) {
                     for (WorldObject object : document.tile(plane, x, y).objects()) {
-                        build(object, document, clientCycle).ifPresent(packets::add);
+                        packets.addAll(buildScenePackets(object, document, clientCycle));
                     }
                 }
             }
@@ -76,41 +76,94 @@ public final class ModelPacketBuilder {
     /** Builds one model packet using the sequence frame active at clientCycle. */
     public Optional<ModelRenderPacket> build(WorldObject object, WorldDocument document,
                                              int clientCycle) {
+        ResolvedModelBuild resolved = resolveBuild(object, document, clientCycle);
+        if (resolved == null) return Optional.empty();
+        return buildResolvedPacket(object, document, resolved,
+                variantsFor(object, resolved.decorDisplacement()),
+                WallDecorationPresentation.none());
+    }
+
+    /**
+     * Scene rendering keeps shape-8 wall decoration renderables distinct.
+     * The compatibility single-object API above still returns the historical
+     * flattened packet, but the scene path preserves RuneLite's two
+     * renderables so camera-dependent submission order is not lost.
+     */
+    private List<ModelRenderPacket> buildScenePackets(WorldObject object, WorldDocument document,
+                                                       int clientCycle) {
+        ResolvedModelBuild resolved = resolveBuild(object, document, clientCycle);
+        if (resolved == null) return List.of();
+        List<ModelVariant> variants = variantsFor(object, resolved.decorDisplacement());
+        if (object.type() == 8 && variants.size() == 2) {
+            ModelVariant primaryVariant = variants.get(0);
+            ModelVariant secondaryVariant = variants.get(1);
+            List<ModelRenderPacket> result = new ArrayList<>(2);
+            buildResolvedPacket(object, document, resolved, List.of(primaryVariant),
+                    WallDecorationPresentation.primary(
+                            primaryVariant.decorX(), primaryVariant.decorZ(), object.rotation()))
+                    .ifPresent(result::add);
+            buildResolvedPacket(object, document, resolved, List.of(secondaryVariant),
+                    WallDecorationPresentation.secondary(object.rotation()))
+                    .ifPresent(result::add);
+            return List.copyOf(result);
+        }
+
+        WallDecorationPresentation presentation = WallDecorationPresentation.none();
+        if (object.category() == com.rspsi.editor.model.ObjectCategory.WALL_DECOR
+                && variants.size() == 1) {
+            ModelVariant variant = variants.get(0);
+            presentation = WallDecorationPresentation.single(
+                    variant.decorX(), variant.decorZ(), object.rotation());
+        }
+        return buildResolvedPacket(object, document, resolved, variants, presentation)
+                .map(List::of).orElseGet(List::of);
+    }
+
+    private ResolvedModelBuild resolveBuild(WorldObject object, WorldDocument document,
+                                            int clientCycle) {
         Objects.requireNonNull(object, "object");
         Objects.requireNonNull(document, "document");
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         Optional<ObjectDefinitionView> definition = definitions.object(object.id());
-        if (definition.isEmpty()) return Optional.empty();
+        if (definition.isEmpty()) return null;
         ObjectDefinitionView objectDefinition = resolveDisplayDefinition(definition.orElseThrow());
         ObjectAppearanceView appearance = definitions.objectAppearance(object.id())
                 .orElseGet(ObjectAppearanceView::empty);
         Optional<AnimationFrameView> animation = animationFrame(appearance.animationId(), clientCycle);
         int decorDisplacement = wallDecorationDisplacement(object, appearance, document);
-        PacketParts parts = new PacketParts();
         int footprintWidth = object.rotation() % 2 == 0
                 ? objectDefinition.width() : objectDefinition.length();
         int footprintLength = object.rotation() % 2 == 0
                 ? objectDefinition.length() : objectDefinition.width();
-        for (ModelVariant variant : variantsFor(object, decorDisplacement)) {
-            for (int modelId : modelIdsFor(objectDefinition, variant.sourceType())) {
+        return new ResolvedModelBuild(objectDefinition, appearance, animation,
+                decorDisplacement, footprintWidth, footprintLength);
+    }
+
+    private Optional<ModelRenderPacket> buildResolvedPacket(
+            WorldObject object,
+            WorldDocument document,
+            ResolvedModelBuild resolved,
+            List<ModelVariant> variants,
+            WallDecorationPresentation presentation) {
+        PacketParts parts = new PacketParts();
+        for (ModelVariant variant : variants) {
+            for (int modelId : modelIdsFor(resolved.objectDefinition(), variant.sourceType())) {
                 Optional<ModelGeometryView> geometry = definitions.modelGeometry(modelId);
                 if (geometry.isEmpty()) continue;
                 ModelGeometryView animatedGeometry = geometry.orElseThrow();
-                if (animation.isPresent()) {
-                    AnimationFrameView frame = animation.orElseThrow();
+                if (resolved.animation().isPresent()) {
+                    AnimationFrameView frame = resolved.animation().orElseThrow();
                     Optional<SkeletonDefinitionView> skeleton = definitions.skeleton(frame.skeletonId());
                     if (skeleton.isPresent()) {
                         animatedGeometry = ModelAnimation.apply(animatedGeometry, frame, skeleton.orElseThrow());
                     }
                 }
                 int variantStart = parts.vertices.size();
-                append(parts, object, appearance, animatedGeometry, document,
-                        variant, footprintWidth, footprintLength);
+                append(parts, object, resolved.appearance(), animatedGeometry, document,
+                        variant, resolved.footprintWidth(), resolved.footprintLength());
                 if (variant.sourceType() == 2 && parts.vertices.size() > variantStart) {
                     // TSPS keeps the two type-2 L-wall models separate until
                     // ModelData.mergeNormals(model0, model1, 0, 0, 0, false).
-                    // The neutral packet flattens them, so retain the ranges
-                    // long enough to reproduce that pre-lighting merge.
                     parts.wallVariantRanges.add(new VertexRange(variantStart, parts.vertices.size()));
                 }
             }
@@ -120,20 +173,21 @@ public final class ModelPacketBuilder {
         ModelRenderPacket packet = new ModelRenderPacket(
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
-                appearance.animationId(), bounds[0], bounds[1], bounds[2],
-                bounds[3], bounds[4], bounds[5], animation.isPresent(), false,
-                objectCenterHeight(document, object, footprintWidth, footprintLength),
+                resolved.appearance().animationId(), bounds[0], bounds[1], bounds[2],
+                bounds[3], bounds[4], bounds[5], resolved.animation().isPresent(), false,
+                objectCenterHeight(document, object, resolved.footprintWidth(), resolved.footprintLength()),
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
-                GpuDrawCommand.RenderMode.DEFAULT);
-        // The client only reaches the shape-2 corner-wall normal merge for
-        // objects whose definition set opcode 22 (mergeNormals /
-        // nonFlatShading) - see Scene's shape-2 merge, gated the same way as
-        // the cross-packet mergeNormals() below via
-        // ObjectAppearanceView.mergeNormals(). Without this gate, corner
-        // walls that never opted into merging get their lighting seams
-        // over-smoothed.
-        return Optional.of(appearance.mergeNormals()
+                GpuDrawCommand.RenderMode.DEFAULT, presentation);
+        return Optional.of(resolved.appearance().mergeNormals()
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
+    }
+
+    private record ResolvedModelBuild(ObjectDefinitionView objectDefinition,
+                                      ObjectAppearanceView appearance,
+                                      Optional<AnimationFrameView> animation,
+                                      int decorDisplacement,
+                                      int footprintWidth,
+                                      int footprintLength) {
     }
 
     private Optional<AnimationFrameView> animationFrame(int animationId, int clientCycle) {
@@ -634,7 +688,8 @@ public final class ModelPacketBuilder {
                 vertices, triangles, packet.textureTriangles(), packet.animationId(),
                 packet.minX(), packet.minY(), packet.minZ(), packet.maxX(), packet.maxY(),
                 packet.maxZ(), packet.supportsAnimation(), packet.supportsParticles(),
-                packet.placementHeight(), packet.roofRelated(), packet.renderMode());
+                packet.placementHeight(), packet.roofRelated(), packet.renderMode(),
+                packet.wallDecorationPresentation());
     }
 
     /**
