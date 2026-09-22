@@ -35,15 +35,6 @@ public final class BackfacePolicy {
     }
 
     /**
-     * Converts the RuneScape edge expression to conventional OpenGL
-     * window-space signed area. Both use the same sign after the Y-axis
-     * coordinate-system conversion.
-     */
-    public static float nativeWindowArea(float softwareEdgeFunction) {
-        return softwareEdgeFunction;
-    }
-
-    /**
      * Native viewport validation mode. Normal editing remains two-sided until
      * the real-cache model and shaped-tile acceptance checks are complete.
      */
