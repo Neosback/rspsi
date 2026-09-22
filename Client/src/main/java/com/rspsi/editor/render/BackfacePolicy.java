@@ -3,14 +3,17 @@ package com.rspsi.editor.render;
 /**
  * RuneScape scene packets use a single, front-facing triangle winding.
  *
- * <p>The software reference rasterizer expresses projected coordinates with
- * Y increasing down the image and accepts a negative edge-function value.
- * That edge expression is itself the negative of the conventional 2D signed
- * area. Converting from the client's Y-down screen coordinates to OpenGL's
- * Y-up window coordinates flips the conventional signed area once, so the
- * two sign inversions cancel: a client-front face remains negative in
- * OpenGL's conventional window-space signed-area convention and is therefore
- * clockwise.</p>
+ * <p>RuneLite-melxin's {@code Model.draw0} computes the same projected
+ * edge-function sign used by the software reference renderer. The client
+ * stores {@code edge <= 0} in its culled-face flag and only draws faces for
+ * which that flag is false, so a visible client face has a strictly positive
+ * edge value.</p>
+ *
+ * <p>That client edge expression is the negative of conventional signed area
+ * in the client's Y-down screen coordinates. OpenGL window coordinates use a
+ * Y-up axis, which flips conventional signed area once. The two sign changes
+ * therefore make a positive client edge correspond to positive conventional
+ * OpenGL window area, i.e. counter-clockwise winding.</p>
  *
  * <p>Native winding remains an optimization hint only. The Phase 0 OpenGL
  * baseline intentionally disables culling until asymmetric cache-model and
@@ -22,30 +25,26 @@ public final class BackfacePolicy {
     private BackfacePolicy() {
     }
 
-    /** Returns true when the client's projected edge-function marks a face front-facing. */
+    /** Returns true when the client's projected edge-function marks a face visible. */
     public static boolean isFrontFacingSoftware(float edgeFunction) {
-        return edgeFunction < -DEGENERATE_EPSILON;
+        return edgeFunction > DEGENERATE_EPSILON;
     }
 
-    /**
-     * OpenGL front-face winding equivalent to the software client's accepted
-     * edge-function sign after accounting for both sign conventions.
-     */
+    /** OpenGL front-face winding equivalent to the client's visible-face sign. */
     public static NativeWinding nativeWinding() {
-        return NativeWinding.CLOCKWISE;
+        return NativeWinding.COUNTER_CLOCKWISE;
     }
 
     /**
-     * Converts the client's edge-function value to conventional OpenGL
-     * window-space signed area. The value keeps the same sign because the
-     * client's edge expression and the Y-axis conversion each contribute one
-     * sign inversion.
+     * Converts the client/software edge-function sign to conventional OpenGL
+     * window-space signed area. They have the same sign after the Y-axis
+     * conversion described in the class contract.
      */
     public static float nativeWindowArea(float softwareEdgeFunction) {
         return softwareEdgeFunction;
     }
 
     public enum NativeWinding {
-        CLOCKWISE
+        COUNTER_CLOCKWISE
     }
 }
