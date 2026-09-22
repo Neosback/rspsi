@@ -151,17 +151,12 @@ public final class OpenRuneCacheStore implements CacheStore {
      * a side effect of opening a cache.
      */
     public SymbolicNameProvider symbolicNameProvider() {
-        return symbolicNameProvider(configuredRevision());
-    }
-
-    /** Builds a cache-aware symbolic provider for the selected revision. */
-    public SymbolicNameProvider symbolicNameProvider(int revision) {
-        return new OpenRuneSymbolicNameProvider(cache, revision);
+        return new OpenRuneSymbolicNameProvider();
     }
 
     /** Builds the neutral asset-browser repository for this OpenRune cache. */
     public AssetRepository assetRepository(int revision) {
-        return new DefinitionAssetRepository(definitionProvider(revision), symbolicNameProvider(revision));
+        return new DefinitionAssetRepository(definitionProvider(revision), symbolicNameProvider());
     }
 
     /**
