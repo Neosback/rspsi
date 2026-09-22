@@ -6,6 +6,7 @@ import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
+import com.rspsi.editor.render.WorldZoneCoordinate;
 import org.lwjgl.BufferUtils;
 
 import java.nio.FloatBuffer;
@@ -47,10 +48,7 @@ public final class ZoneVboManager implements AutoCloseable {
     private int totalZonesCount = 0;
 
     public static long zoneKey(WorldTileAddress tile) {
-        int plane = tile.plane();
-        int zoneX = tile.worldX() >> 3;
-        int zoneY = tile.worldY() >> 3;
-        return (((long) plane) << 32) | (((long) (zoneX & 0xFFFF)) << 16) | ((long) (zoneY & 0xFFFF));
+        return WorldZoneCoordinate.from(tile).key();
     }
 
     public void upload(GpuUploadPlan plan) {
