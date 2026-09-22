@@ -239,30 +239,51 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private LoadedMapScene buildMapScene(LoadedOsrsCacheSession cache, int regionX, int regionY) {
+        long totalStart = System.nanoTime();
         OsrsProjectSessionLoader.OpenedProject opened = cache.openRegion(regionX, regionY);
         WorldRegion region = opened.worldRegion();
         WorldRegionWindow window = new WorldRegionWindow(regionX, regionY, 1, 1,
                 Map.of(region.regionId(), region));
+
+        long windowStart = System.nanoTime();
         RenderWindowScene scene = new RenderWindowSceneBuilder(cache.bundle().definitions()).build(window);
+        long windowNanos = System.nanoTime() - windowStart;
+
         SceneWindow sceneWindow = SceneWindow.from(window);
+        long packetStart = System.nanoTime();
         GpuScenePacket packet = new GpuScenePacketBuilder().build(sceneWindow, scene);
+        long packetNanos = System.nanoTime() - packetStart;
+
         // Flattening a real region creates a large immutable GPU plan. Keep
         // this work on the loader thread so the native window remains
         // responsive while the scene is being prepared.
         long settingsRevision = renderSettings.revision();
         RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
+        long planStart = System.nanoTime();
         GpuUploadPlan plan = new GpuUploadPlanBuilder().build(config.apply(packet));
+        long planNanos = System.nanoTime() - planStart;
+
         double centerX = sceneWindow.sceneBaseX() * 128.0 + window.worldWindow().width() * 64.0;
         double centerZ = sceneWindow.sceneBaseY() * 128.0 + window.worldWindow().length() * 64.0;
+
+        long renderSceneStart = System.nanoTime();
         RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).build(region.document());
+        long renderSceneNanos = System.nanoTime() - renderSceneStart;
+
         EditorSession session = opened.region().session();
         if (!session.canEdit()) {
             session = new EditorSession(region.document(), region.window());
         }
+        SceneBuildMetrics metrics = new SceneBuildMetrics(
+                windowNanos, packetNanos, planNanos, renderSceneNanos,
+                System.nanoTime() - totalStart,
+                plan.vertices().size(), plan.indices().size(), plan.commands().size(),
+                plan.textures().size());
+        logSceneBuild("initial", regionX, regionY, metrics);
         return new LoadedMapScene(opened, session, renderScene, packet, plan, settingsRevision,
                 new com.rspsi.editor.render.CameraState(
                 (float) centerX, -2400.0f, (float) centerZ - 4200.0f,
-                (float) -Math.toRadians(28.0), 0.0f));
+                (float) -Math.toRadians(28.0), 0.0f), metrics);
     }
 
     private void pollSceneLoad() {
@@ -310,18 +331,38 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private LoadedMapScene rebuildMapScene(LoadedOsrsCacheSession cache, LoadedMapScene baseScene) {
+        long totalStart = System.nanoTime();
         WorldRegion region = baseScene.opened().worldRegion();
         WorldRegionWindow window = new WorldRegionWindow(region.regionX(), region.regionY(), 1, 1,
                 Map.of(region.regionId(), region));
+
+        long windowStart = System.nanoTime();
         RenderWindowScene scene = new RenderWindowSceneBuilder(cache.bundle().definitions()).build(window);
+        long windowNanos = System.nanoTime() - windowStart;
+
         SceneWindow sceneWindow = SceneWindow.from(window);
+        long packetStart = System.nanoTime();
         GpuScenePacket packet = new GpuScenePacketBuilder().build(sceneWindow, scene);
+        long packetNanos = System.nanoTime() - packetStart;
+
         long settingsRevision = renderSettings.revision();
         RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
+        long planStart = System.nanoTime();
         GpuUploadPlan plan = new GpuUploadPlanBuilder().build(config.apply(packet));
+        long planNanos = System.nanoTime() - planStart;
+
+        long renderSceneStart = System.nanoTime();
         RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).build(region.document());
-        return new LoadedMapScene(baseScene.opened(), baseScene.session(), renderScene, packet, plan, settingsRevision,
-                baseScene.camera());
+        long renderSceneNanos = System.nanoTime() - renderSceneStart;
+
+        SceneBuildMetrics metrics = new SceneBuildMetrics(
+                windowNanos, packetNanos, planNanos, renderSceneNanos,
+                System.nanoTime() - totalStart,
+                plan.vertices().size(), plan.indices().size(), plan.commands().size(),
+                plan.textures().size());
+        logSceneBuild("edit", region.regionX(), region.regionY(), metrics);
+        return new LoadedMapScene(baseScene.opened(), baseScene.session(), renderScene, packet, plan,
+                settingsRevision, baseScene.camera(), metrics);
     }
 
     private static int[] parseRegion(String value) {
@@ -507,11 +548,50 @@ public final class StudioApplication implements AutoCloseable {
         window.close();
     }
 
+    private static void logSceneBuild(String kind, int regionX, int regionY,
+                                      SceneBuildMetrics metrics) {
+        LOGGER.info("Map scene {} {} , {}: total={} ms, window={} ms, packet={} ms, plan={} ms, "
+                        + "renderScene={} ms, vertices={}, indices={}, commands={}, textures={}, geometry={} KiB",
+                kind, regionX, regionY,
+                metrics.totalMillis(), metrics.windowMillis(), metrics.packetMillis(),
+                metrics.planMillis(), metrics.renderSceneMillis(),
+                metrics.vertices(), metrics.indices(), metrics.commands(), metrics.textures(),
+                metrics.geometryKiB());
+    }
+
+    private record SceneBuildMetrics(long windowNanos,
+                                     long packetNanos,
+                                     long planNanos,
+                                     long renderSceneNanos,
+                                     long totalNanos,
+                                     int vertices,
+                                     int indices,
+                                     int commands,
+                                     int textures) {
+        private long windowMillis() { return windowNanos / 1_000_000L; }
+        private long packetMillis() { return packetNanos / 1_000_000L; }
+        private long planMillis() { return planNanos / 1_000_000L; }
+        private long renderSceneMillis() { return renderSceneNanos / 1_000_000L; }
+        private long totalMillis() { return totalNanos / 1_000_000L; }
+
+        /**
+         * Native ZoneVboManager uploads twelve floats per vertex and one int
+         * per index. This is the flattened-plan upper bound before unchanged
+         * zone allocations are fingerprint-reused on the GPU.
+         */
+        private long geometryKiB() {
+            long bytes = (long) vertices * 12L * Float.BYTES
+                    + (long) indices * Integer.BYTES;
+            return (bytes + 1023L) / 1024L;
+        }
+    }
+
     private record LoadedMapScene(OsrsProjectSessionLoader.OpenedProject opened,
                                   EditorSession session,
                                   RenderScene renderScene,
                                   GpuScenePacket packet,
                                   GpuUploadPlan plan,
                                   long settingsRevision,
-                                  com.rspsi.editor.render.CameraState camera) { }
+                                  com.rspsi.editor.render.CameraState camera,
+                                  SceneBuildMetrics metrics) { }
 }
