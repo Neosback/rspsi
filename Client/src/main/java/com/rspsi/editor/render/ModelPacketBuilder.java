@@ -117,15 +117,19 @@ public final class ModelPacketBuilder {
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         Optional<ObjectDefinitionView> definition = definitions.object(object.id());
         if (definition.isEmpty()) return null;
-        ObjectDefinitionView objectDefinition = resolveDisplayDefinition(definition.orElseThrow());
+        ObjectDefinitionView placementDefinition = definition.orElseThrow();
+        ObjectDefinitionView objectDefinition = resolveDisplayDefinition(placementDefinition);
         ObjectAppearanceView appearance = definitions.objectAppearance(object.id())
                 .orElseGet(ObjectAppearanceView::empty);
         Optional<AnimationFrameView> animation = animationFrame(appearance.animationId(), clientCycle);
         int decorDisplacement = wallDecorationDisplacement(object, appearance, document);
+        // Scene occupancy belongs to the placed/base loc definition. A multiloc may
+        // resolve to another definition for its visible model, but the client creates
+        // the GameObject start/end tile rectangle before that runtime transform.
         int footprintWidth = object.rotation() % 2 == 0
-                ? objectDefinition.width() : objectDefinition.length();
+                ? placementDefinition.width() : placementDefinition.length();
         int footprintLength = object.rotation() % 2 == 0
-                ? objectDefinition.length() : objectDefinition.width();
+                ? placementDefinition.length() : placementDefinition.width();
         return new ResolvedModelBuild(objectDefinition, appearance, animation,
                 decorDisplacement, footprintWidth, footprintLength);
     }
