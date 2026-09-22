@@ -2,6 +2,7 @@ package com.rspsi.renderer.opengl;
 
 import com.rspsi.editor.render.GpuCommandVisibility;
 import com.rspsi.editor.render.GpuDrawCommand;
+import com.rspsi.editor.render.GpuDrawBatchPlanner;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.RenderTextureResource;
@@ -623,23 +624,19 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int drawBatches(GpuUploadPlan plan, List<GpuDrawCommand> commands,
                             List<Integer> orderedIndices, GpuCommandVisibility visibility,
                             CameraState camera, boolean alpha, int clientCycle) {
+        GpuDrawCommand.SubmissionPass pass = alpha
+                ? GpuDrawCommand.SubmissionPass.ALPHA
+                : GpuDrawCommand.SubmissionPass.OPAQUE;
+        List<GpuDrawBatchPlanner.Batch> batches = GpuDrawBatchPlanner.plan(
+                commands, orderedIndices, pass, zoneManager::zoneKeyForCommand);
+
         int drawCalls = 0;
-        int cursor = 0;
         int lastBoundVao = -1;
-        while (cursor < orderedIndices.size()) {
-            int firstIndex = orderedIndices.get(cursor);
+        for (GpuDrawBatchPlanner.Batch batch : batches) {
+            int firstIndex = batch.firstCommandIndex();
             GpuDrawCommand first = commands.get(firstIndex);
-            long zoneKey = zoneManager.zoneKeyForCommand(firstIndex);
-            ZoneVboManager.ZoneAllocation alloc = zoneManager.allocation(zoneKey);
-            int end = cursor + 1;
-            while (end < orderedIndices.size()) {
-                int candIndex = orderedIndices.get(end);
-                GpuDrawCommand candidate = commands.get(candIndex);
-                if (!sameDrawBatch(first, firstIndex, candidate, candIndex, alpha)) break;
-                end++;
-            }
+            ZoneVboManager.ZoneAllocation alloc = zoneManager.allocation(batch.zoneKey());
             if (alloc == null) {
-                cursor = end;
                 continue;
             }
             if (alloc.vao() != lastBoundVao) {
@@ -647,20 +644,18 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 lastBoundVao = alloc.vao();
             }
             applyDrawState(plan, first, alpha, clientCycle);
-            int count = end - cursor;
-            if (count == 1) {
+            if (batch.commandCount() == 1) {
                 int localFirst = zoneManager.localFirstIndex(firstIndex);
                 glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
                         (long) localFirst * Integer.BYTES);
             } else {
                 try (MemoryStack stack = MemoryStack.stackPush()) {
-                    IntBuffer counts = stack.mallocInt(count);
-                    PointerBuffer offsets = stack.mallocPointer(count);
-                    for (int i = cursor; i < end; i++) {
-                        int cmdIdx = orderedIndices.get(i);
-                        GpuDrawCommand command = commands.get(cmdIdx);
+                    IntBuffer counts = stack.mallocInt(batch.commandCount());
+                    PointerBuffer offsets = stack.mallocPointer(batch.commandCount());
+                    for (int commandIndex : batch.commandIndices()) {
+                        GpuDrawCommand command = commands.get(commandIndex);
                         counts.put(command.indexCount());
-                        offsets.put((long) zoneManager.localFirstIndex(cmdIdx) * Integer.BYTES);
+                        offsets.put((long) zoneManager.localFirstIndex(commandIndex) * Integer.BYTES);
                     }
                     counts.flip();
                     offsets.flip();
@@ -668,26 +663,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 }
             }
             drawCalls++;
-            cursor = end;
         }
         return drawCalls;
-    }
-
-    private boolean sameDrawBatch(GpuDrawCommand first, int firstIdx,
-                                 GpuDrawCommand candidate, int candIdx,
-                                 boolean alpha) {
-        return sameDrawState(first, candidate, alpha)
-                && zoneManager.zoneKeyForCommand(firstIdx) == zoneManager.zoneKeyForCommand(candIdx);
-    }
-
-    private static boolean sameDrawState(GpuDrawCommand first, GpuDrawCommand candidate,
-                                         boolean alpha) {
-        return (candidate.pass() == (alpha ? GpuDrawCommand.SubmissionPass.ALPHA
-                : GpuDrawCommand.SubmissionPass.OPAQUE))
-                && first.textureId() == candidate.textureId()
-                && first.layer() == candidate.layer()
-                && first.depthBias() == candidate.depthBias()
-                && first.renderMode() == candidate.renderMode();
     }
 
     private static long drawStateKey(GpuDrawCommand command, boolean alpha) {
