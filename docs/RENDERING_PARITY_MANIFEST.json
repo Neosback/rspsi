@@ -623,10 +623,14 @@
         "render/render/textures/TextureArray.ts"
       ],
       "evidence": [
-        "docs/RENDERING_SYSTEM_AUDIT_2026-09-18.md"
+        "docs/RENDERING_SYSTEM_AUDIT_2026-09-18.md",
+        "Client/src/test/java/com/rspsi/cache/store/OpenRuneTextureDefinitionDecoderTest.java",
+        "Client/src/test/java/com/rspsi/cache/verify/OsrsTextureSemanticFixtureTest.java",
+        "Client/src/test/java/com/rspsi/cache/verify/OsrsParityFixtureTest.java",
+        "docs/TEXTURE_PARITY_FIXTURE.md"
       ],
-      "reason": "Decoded texture diagnostics exist, but texture alpha, animation, and cache-backed pixel parity still need fixtures.",
-      "nextAction": "Add real revision-240 texture and transparent-pixel fixtures."
+      "reason": "Revision-240 texture-record decoding, neutral texture resources, decoded-pixel diagnostics, average-color fallback, and an external provenance-controlled textures.json parity format are implemented. Deterministic tests cover metadata, pixel SHA-256, RGB-zero cutout counts, and partial-alpha counts; one independently exported real revision-240 texture fixture still needs to be run before declaring cache-backed pixel parity complete.",
+      "nextAction": "Run docs/TEXTURE_PARITY_FIXTURE.md against an independently exported real revision-240 cache fixture covering opaque, RGB-zero cutout, animated, and alpha-bearing textures, then record the passing evidence."
     },
     {
       "id": "textures.animation",
@@ -774,10 +778,11 @@
         "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
         "Client/src/test/java/com/rspsi/editor/render/RenderOrderKeyTest.java",
         "Client/src/test/java/com/rspsi/editor/render/BackfacePolicyTest.java",
-        "RuneLite-melxin/runescape-client/src/main/java/Model.java#draw0"
+        "RuneLite-melxin/runescape-client/src/main/java/Model.java#draw0",
+        "Client/src/main/java/com/rspsi/editor/render/SoftwareSceneRenderer.java"
       ],
-      "reason": "Depth mode, scene/model category priority, face priority, face bias, and the current facing policy meet in one backend-neutral RenderOrderKey. A concrete reproduction of the RuneLite-melxin Model.draw0 edge expression shows that client-front projected triangles map to clockwise OpenGL window winding after accounting for both the client's reversed edge-expression convention and the Y-down to Y-up coordinate conversion. Native culling remains intentionally disabled until a real asymmetric cache model and shaped-tile fixture validate the full geometry/projection path.",
-      "nextAction": "Validate GL_CW against one asymmetric real-cache model and one shaped-tile fixture in the live viewport; if both agree with the software reference, enable verified culling selectively or globally only where the evidence permits."
+      "reason": "Depth mode, scene/model category priority, face priority, face bias, and the current facing policy meet in one backend-neutral RenderOrderKey. RuneLite-melxin Model.draw0 stores edge <= 0 in its culled-face flag and only draws !culled faces, so visible client faces have edge > 0. The software renderer uses the same edge-function sign; converting its Y-down viewport to OpenGL Y-up makes those visible faces counter-clockwise (GL_CCW). Native culling remains intentionally disabled until a real asymmetric cache model and shaped-tile fixture validate the full geometry/projection path.",
+      "nextAction": "Validate GL_CCW against one asymmetric real-cache model and one shaped-tile fixture in the live viewport; if both agree with the corrected software reference, enable verified culling only where the evidence permits."
     },
     {
       "id": "native.picking",
