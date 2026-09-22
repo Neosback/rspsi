@@ -328,7 +328,7 @@ public final class GpuUploadPlanBuilder {
             if (!commands.isEmpty()) {
                 for (GpuDrawCommand cmd : commands) {
                     ByteBuffer cmdBuffer = ByteBuffer.allocate(
-                            156 + cmd.clientRenderableBounds().size() * 60);
+                            160 + cmd.clientRenderableBounds().size() * 60);
                     cmdBuffer.putInt(cmd.tile().plane())
                             .putInt(cmd.tile().worldX())
                             .putInt(cmd.tile().worldY())
@@ -364,6 +364,7 @@ public final class GpuUploadPlanBuilder {
                             .putInt(cmd.sceneObjectIdentity().anchorY())
                             .putInt(cmd.sceneObjectIdentity().footprintWidth())
                             .putInt(cmd.sceneObjectIdentity().footprintLength())
+                            .putInt(cmd.sceneObjectIdentity().occurrence())
                             .putInt(cmd.placementHeight())
                             .putInt(cmd.modelAnchorX())
                             .putInt(cmd.modelAnchorY())
