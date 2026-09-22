@@ -97,7 +97,7 @@ class IncrementalRenderWindowSceneCompilerTest {
 
         assertTrue(update.fullRebuild());
         assertEquals("structural terrain/object change", update.reason());
-        assertEquals(0, update.scene().terrainPackets().get(changed).coordinate().plane());
+        assertEquals(OsrsTileFlags.BRIDGE, update.scene().tileFlags().get(changed));
     }
 
     @Test
