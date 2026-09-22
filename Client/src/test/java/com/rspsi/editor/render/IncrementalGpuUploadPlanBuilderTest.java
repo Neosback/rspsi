@@ -1,6 +1,8 @@
 package com.rspsi.editor.render;
 
+import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.model.WorldTileAddress;
 import org.junit.jupiter.api.Test;
@@ -57,6 +59,24 @@ class IncrementalGpuUploadPlanBuilderTest {
     }
 
     @Test
+    void rebuiltObjectFragmentRetainsStableSceneIdentity() {
+        SceneTileSnapshot initialTile = objectTile(1, 1, 42);
+        IncrementalGpuUploadPlanBuilder incremental = new IncrementalGpuUploadPlanBuilder();
+
+        var seeded = incremental.buildInitial(packet(List.of(initialTile), "identity-initial"));
+        SceneObjectIdentity initialIdentity = seeded.plan().commands().get(0).sceneObjectIdentity();
+
+        SceneTileSnapshot rebuiltTile = objectTile(1, 1, 42);
+        var rebuilt = incremental.build(packet(List.of(rebuiltTile), "identity-rebuilt"),
+                Set.of(WorldZoneCoordinate.from(rebuiltTile.worldAddress())));
+
+        assertEquals(1, rebuilt.rebuiltTiles());
+        assertEquals(initialIdentity, rebuilt.plan().commands().get(0).sceneObjectIdentity());
+        assertEquals(initialIdentity.stableId(),
+                rebuilt.plan().commands().get(0).sceneObjectIdentity().stableId());
+    }
+
+    @Test
     void assemblyPreservesFullBuilderMergingInsideOneWorldZone() {
         SceneTileSnapshot first = terrainTile(1, 1, 100);
         SceneTileSnapshot second = terrainTile(1, 2, 100);
@@ -101,6 +121,31 @@ class IncrementalGpuUploadPlanBuilderTest {
         incremental.build(packet(List.of(first), "filtered"), Set.of());
 
         assertEquals(1, incremental.cachedTileCount());
+    }
+
+    private static SceneTileSnapshot objectTile(int worldX, int worldY, int objectId) {
+        WorldTileAddress address = WorldTileAddress.of(worldX, worldY, 0);
+        TileCoordinate coordinate = new TileCoordinate(0, worldX, worldY);
+        SceneObjectIdentity identity = SceneObjectIdentity.of(
+                new WorldObject(objectId, 10, 0, 0, worldX, worldY), 1, 1);
+        ModelRenderPacket model = new ModelRenderPacket(coordinate, objectId, ObjectCategory.GROUND,
+                List.of(new ModelVertex(44, -20, 36, 0, 0, 0, 1, 0, 0),
+                        new ModelVertex(84, -20, 36, 0, 0, 0, 1, 0, 0),
+                        new ModelVertex(64, 20, 36, 0, 0, 0, 1, 0, 0)),
+                List.of(new ModelTriangle(0, 1, 2, 100, 100, 100,
+                        -1, 0, 0, 0)), List.of(), -1,
+                44, -20, 36, 84, 20, 36, false, false)
+                .withClientModelBounds(ClientModelBounds.calculate(
+                        List.of(new ModelVertex(-20, -20, 36, 0, 0, 0, 0, 0, 0),
+                                new ModelVertex(20, -20, 36, 0, 0, 0, 0, 0, 0),
+                                new ModelVertex(0, 20, 36, 0, 0, 0, 0, 0, 0)),
+                        0, false))
+                .withSceneObjectIdentity(identity);
+        return new SceneTileSnapshot(
+                coordinate, address, 0, 0, 0, 0, 0,
+                Optional.empty(), Optional.empty(), List.of(model),
+                List.of(new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0))),
+                List.of(), false, false);
     }
 
     private static SceneTileSnapshot terrainTile(int worldX, int worldY, int hsl) {
