@@ -8,6 +8,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ClientModelBoundsTest {
     private static final List<ModelVertex> ASYMMETRIC = List.of(
@@ -61,6 +62,14 @@ class ClientModelBoundsTest {
         ModelRenderPacket world = packet.withAnchor(new TileCoordinate(0, 3200, 6400));
 
         assertEquals(List.of(bounds), world.clientRenderableBounds());
+    }
+
+    @Test
+    void rejectsOrientationsOutsideTheClientAngleTable() {
+        assertThrows(IllegalArgumentException.class,
+                () -> ClientModelBounds.calculate(ASYMMETRIC, -1, false));
+        assertThrows(IllegalArgumentException.class,
+                () -> ClientModelBounds.calculate(ASYMMETRIC, 2048, false));
     }
 
     @Test
