@@ -54,9 +54,9 @@ public class Revision240TextureParityExporterTest
             SpriteManager spriteManager = new SpriteManager(store);
             spriteManager.load();
 
-            var definitions = textureManager.getTextures().stream()
+            java.util.List<TextureDefinition> definitions = textureManager.getTextures().stream()
                 .sorted(Comparator.comparingInt(TextureDefinition::getId))
-                .toList();
+                .collect(java.util.stream.Collectors.toList());
 
             for (TextureDefinition definition : definitions)
             {
@@ -284,18 +284,34 @@ public class Revision240TextureParityExporterTest
         return count;
     }
 
-    private record ReferenceTexture(
-        int id,
-        int fileId,
-        int averageRgb,
-        boolean lowDetail,
-        int animationDirection,
-        int animationSpeed,
-        int[] pixels,
-        String kind,
-        int zeroRgbPixels)
+    private static final class ReferenceTexture
     {
-        ReferenceTexture withKind(String value)
+        private final int id;
+        private final int fileId;
+        private final int averageRgb;
+        private final boolean lowDetail;
+        private final int animationDirection;
+        private final int animationSpeed;
+        private final int[] pixels;
+        private final String kind;
+        private final int zeroRgbPixels;
+
+        private ReferenceTexture(int id, int fileId, int averageRgb, boolean lowDetail,
+            int animationDirection, int animationSpeed, int[] pixels, String kind,
+            int zeroRgbPixels)
+        {
+            this.id = id;
+            this.fileId = fileId;
+            this.averageRgb = averageRgb;
+            this.lowDetail = lowDetail;
+            this.animationDirection = animationDirection;
+            this.animationSpeed = animationSpeed;
+            this.pixels = pixels;
+            this.kind = kind;
+            this.zeroRgbPixels = zeroRgbPixels;
+        }
+
+        private ReferenceTexture withKind(String value)
         {
             return new ReferenceTexture(id, fileId, averageRgb, lowDetail,
                 animationDirection, animationSpeed, pixels, value, zeroRgbPixels);
