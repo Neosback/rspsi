@@ -7,6 +7,7 @@ import com.rspsi.editor.render.BackfacePolicy;
 import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.picker.DdaScenePicker;
 import com.rspsi.editor.render.GpuUploadPlan;
+import com.rspsi.editor.render.GpuZonedUploadPlan;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.editor.render.RenderPresentation;
 import com.rspsi.editor.render.SceneCameraProjection;
@@ -27,6 +28,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private final GlFramebuffer framebuffer = new GlFramebuffer();
     private final DdaScenePicker picker = new DdaScenePicker();
     private GpuUploadPlan lastPlan;
+    private GpuZonedUploadPlan zonedPlan;
     private int lastWidth;
     private int lastHeight;
     private float imageOriginX;
@@ -84,6 +86,14 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
 
     public int cullMode() {
         return renderer.cullMode();
+    }
+
+    /**
+     * Supplies the native-ready 8x8 zone geometry corresponding to the flat
+     * compatibility plan. A mismatched fingerprint is ignored by the renderer.
+     */
+    public void setZonedPlan(GpuZonedUploadPlan plan) {
+        zonedPlan = plan;
     }
 
     public OpenGlSceneRenderer.Statistics statistics() {
@@ -182,7 +192,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         framebuffer.resize(width, height, samples);
         framebuffer.bindForScene();
         renderer.setFramebufferStatus(framebuffer.framebufferStatus());
-        renderer.draw(plan, navigation.camera(), width, height, presentation);
+        renderer.draw(plan, zonedPlan, navigation.camera(), width, height, presentation);
         framebuffer.resolve();
         // Remember what this frame actually drew so a click can be ray-cast
         // against the same plan, size, and camera the user was looking at.
