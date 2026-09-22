@@ -61,7 +61,7 @@ public record SceneVisibilityPolicy(
     public boolean includes(SceneTileSnapshot tile) {
         Objects.requireNonNull(tile, "tile");
         if (planeSelection == PlaneSelection.AUTHORED_PLANE
-                && tile.coordinate().plane() != selectedPlane) {
+                && tile.authoredPlane() != selectedPlane) {
             return false;
         }
         if (planeSelection == PlaneSelection.EFFECTIVE_PLANE
@@ -92,7 +92,7 @@ public record SceneVisibilityPolicy(
 
     private boolean includesPlaneAndBridge(SceneTileSnapshot tile) {
         if (planeSelection == PlaneSelection.AUTHORED_PLANE
-                && tile.coordinate().plane() != selectedPlane) {
+                && tile.authoredPlane() != selectedPlane) {
             return false;
         }
         if (planeSelection == PlaneSelection.EFFECTIVE_PLANE
@@ -128,7 +128,8 @@ public record SceneVisibilityPolicy(
             }
         }
         return new SceneTileSnapshot(tile.coordinate(), tile.worldAddress(), tile.tileFlags(),
-                tile.effectivePlane(), tile.bridge(), tile.terrain(), models, layers,
+                tile.effectivePlane(), tile.authoredPlane(), tile.renderLevel(),
+                tile.planeCullLevel(), tile.bridge(), tile.terrain(), models, layers,
                 tile.occluders(), false, tile.visibleBelow());
     }
 
@@ -141,7 +142,10 @@ public record SceneVisibilityPolicy(
         StringBuilder value = new StringBuilder(packetFingerprint)
                 .append("|visibility=").append(this);
         visible.forEach(tile -> value.append('|').append(tile.worldAddress())
-                .append(':').append(tile.effectivePlane()));
+                .append(':').append(tile.effectivePlane())
+                .append(':').append(tile.authoredPlane())
+                .append(':').append(tile.renderLevel())
+                .append(':').append(tile.planeCullLevel()));
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
                     .digest(value.toString().getBytes(StandardCharsets.UTF_8));
