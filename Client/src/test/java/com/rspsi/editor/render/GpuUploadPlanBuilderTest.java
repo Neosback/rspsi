@@ -489,4 +489,46 @@ class GpuUploadPlanBuilderTest {
         assertEquals(0, plan.commands().get(1).wallDecorationPresentation().offsetX());
     }
 
+
+    @Test
+    void uploadFingerprintIncludesPriorityBiasAndObjectIdentity() {
+        GpuUploadPlanBuilder builder = new GpuUploadPlanBuilder();
+
+        String base = builder.build(commandFingerprintPacket(42, 1, 2)).fingerprint();
+        String priority = builder.build(commandFingerprintPacket(42, 2, 2)).fingerprint();
+        String bias = builder.build(commandFingerprintPacket(42, 1, 3)).fingerprint();
+        String object = builder.build(commandFingerprintPacket(43, 1, 2)).fingerprint();
+
+        assertNotEquals(base, priority);
+        assertNotEquals(base, bias);
+        assertNotEquals(base, object);
+    }
+
+    private static GpuScenePacket commandFingerprintPacket(int objectId, int priority, int depthBias) {
+        TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
+        List<ModelVertex> vertices = List.of(
+                new ModelVertex(0, 0, 0, 1, 0, 0, 1, 0, 0),
+                new ModelVertex(64, 0, 0, 1, 0, 0, 1, 1, 0),
+                new ModelVertex(0, 64, 0, 1, 0, 0, 1, 0, 1));
+        ModelTriangle face = new ModelTriangle(
+                0, 1, 2, 100, 100, 100, -1, 0, priority, 0,
+                0, 0, 1, 0, 0, 1, 100, depthBias);
+        ModelRenderPacket model = new ModelRenderPacket(
+                coordinate, objectId, ObjectCategory.GROUND,
+                vertices, List.of(face), List.of(), -1,
+                0, 0, 0, 64, 64, 0, false, false);
+        SceneTileSnapshot tile = new SceneTileSnapshot(
+                coordinate, address, 0, 0, Optional.empty(), Optional.empty(),
+                List.of(model),
+                List.of(new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0))),
+                List.of(), false, false);
+        return new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(
+                        50, 50, 1, 1, Map.of()), 3200, 3200, 1, 0,
+                        java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(),
+                "same-source-fingerprint", Map.of());
+    }
+
 }
