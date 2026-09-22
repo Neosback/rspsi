@@ -20,6 +20,20 @@ class GpuDrawCommandTest {
         assertTrue(unsortedNoDepth.renderMode().noDepth());
     }
 
+    @Test
+    void terrainCommandsNeverMergeAcrossWorldZoneBoundary() {
+        WorldTileAddress lastTileInZone = WorldTileAddress.of(7, 4, 0);
+        WorldTileAddress firstTileNextZone = WorldTileAddress.of(8, 4, 0);
+        GpuDrawCommand command = new GpuDrawCommand(
+                lastTileInZone, SceneLayer.Kind.TERRAIN,
+                GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, -1, 0, 0, -1, GpuDrawCommand.RenderMode.DEFAULT);
+
+        assertFalse(command.canMerge(firstTileNextZone, SceneLayer.Kind.TERRAIN,
+                GpuDrawCommand.SubmissionPass.OPAQUE,
+                -1, 0, 0, -1, 3, GpuDrawCommand.RenderMode.DEFAULT));
+    }
+
     private static GpuDrawCommand command(GpuDrawCommand.RenderMode mode) {
         return new GpuDrawCommand(WorldTileAddress.of(3200, 3200, 0),
                 SceneLayer.Kind.GROUND_OBJECT, GpuDrawCommand.SubmissionPass.OPAQUE,

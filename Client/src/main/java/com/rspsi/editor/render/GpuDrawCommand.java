@@ -120,9 +120,11 @@ public record GpuDrawCommand(
                      int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex,
                      RenderMode nextRenderMode,
                      WallDecorationPresentation nextWallDecorationPresentation) {
+        boolean sameWorldZone = (tile.worldX() >> 3) == (nextTile.worldX() >> 3)
+                && (tile.worldY() >> 3) == (nextTile.worldY() >> 3);
         boolean tileCompatible = tile.equals(nextTile)
                 || (layer == SceneLayer.Kind.TERRAIN && nextLayer == SceneLayer.Kind.TERRAIN
-                    && tile.plane() == nextTile.plane());
+                    && tile.plane() == nextTile.plane() && sameWorldZone);
         return tileCompatible
                 && scenePlane == nextScenePlane
                 && planeCullLevel == nextPlaneCullLevel

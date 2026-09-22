@@ -244,7 +244,7 @@ public final class GpuUploadPlanBuilder {
                 wallDecorationPresentation));
     }
 
-    private static String fingerprint(String packetFingerprint, List<GpuSceneVertex> vertices,
+    static String fingerprint(String packetFingerprint, List<GpuSceneVertex> vertices,
                                       List<Integer> indices, List<GpuDrawCommand> commands,
                                       List<GpuTextureTriangle> textureTriangles,
                                       java.util.Map<Integer, RenderTextureResource> textures,
