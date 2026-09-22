@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SceneContractTest {
@@ -28,6 +29,10 @@ class SceneContractTest {
         assertEquals(77, contract.worldViewId());
         assertTrue(!contract.instance());
         assertEquals(Set.of(0x0A14), contract.mapRegionIds());
+        assertFalse(contract.rendersScenePlane(0));
+        assertTrue(contract.rendersScenePlane(1));
+        assertTrue(contract.rendersScenePlane(3));
+        assertFalse(contract.rendersScenePlane(4));
     }
 
     @Test

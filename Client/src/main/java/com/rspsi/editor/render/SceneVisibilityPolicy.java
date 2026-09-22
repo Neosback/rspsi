@@ -81,13 +81,23 @@ public record SceneVisibilityPolicy(
         // same tile as the terrain and walls below it; dropping the complete
         // tile creates the characteristic holes seen around castle roofs and
         // bridge approaches.
+        SceneContract contract = packet.window().contract();
         List<SceneTileSnapshot> visible = packet.tiles().stream()
+                .filter(tile -> includesSceneMinimum(contract, tile))
                 .filter(this::includesPlaneAndBridge)
                 .map(this::filterRoofGeometry)
                 .toList();
         if (visible.equals(packet.tiles())) return packet;
         return new GpuScenePacket(packet.window(), visible, packet.lightingProfile(),
                 fingerprint(packet.fingerprint(), visible), packet.textures());
+    }
+
+    private boolean includesSceneMinimum(SceneContract contract, SceneTileSnapshot tile) {
+        // ALL is the editor/debug projection and intentionally retains every
+        // loaded plane. Client-like plane projections mirror Scene.minPlane
+        // by rejecting current scene planes below the scene minimum first.
+        return planeSelection == PlaneSelection.ALL
+                || contract.rendersScenePlane(tile.effectivePlane());
     }
 
     private boolean includesPlaneAndBridge(SceneTileSnapshot tile) {

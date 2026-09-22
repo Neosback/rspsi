@@ -55,6 +55,15 @@ public record SceneContract(
     }
 
     /**
+     * Returns whether a current scene plane participates in traversal at this
+     * scene's minimum render level. This is the scene-wide gate used before
+     * per-tile physical/min-plane and camera visibility checks.
+     */
+    public boolean rendersScenePlane(int scenePlane) {
+        return scenePlane >= minimumRenderLevel && scenePlane < planes;
+    }
+
+    /**
      * Classification of the RuneLite Scene API surfaces tracked by the parity
      * manifest. This is intentionally explicit so future work can add semantic
      * state without turning renderer contracts into a mirror of the client API.

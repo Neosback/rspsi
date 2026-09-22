@@ -20,6 +20,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GpuScenePacketBuilderTest {
@@ -49,6 +50,33 @@ class GpuScenePacketBuilderTest {
         assertEquals(2, bridge.worldAddress().chunkLocalX());
         assertEquals(OsrsTileFlags.BRIDGE, bridge.tileFlags());
         assertTrue(bridge.layers().isEmpty());
+    }
+
+    @Test
+    void fingerprintIncludesSceneMinimumAndWorldViewIdentity() {
+        WorldDocument document = new WorldDocument(64, 64, 4);
+        WorldRegion region = new WorldRegion(10, 20, document);
+        WorldRegionWindow source = new WorldRegionWindow(10, 20, 1, 1,
+                Map.of(region.regionId(), region));
+        RenderWindowScene scene = new RenderWindowSceneBuilder().build(source);
+        int baseX = source.worldWindow().originX();
+        int baseY = source.worldWindow().originY();
+
+        SceneWindow baseline = new SceneWindow(source, baseX, baseY, 4, 1,
+                0, 77, source.regions().keySet(), List.of());
+        SceneWindow raisedMinimum = new SceneWindow(source, baseX, baseY, 4, 1,
+                1, 77, source.regions().keySet(), List.of());
+        SceneWindow otherWorldView = new SceneWindow(source, baseX, baseY, 4, 1,
+                0, 78, source.regions().keySet(), List.of());
+
+        GpuScenePacketBuilder builder = new GpuScenePacketBuilder();
+        GpuScenePacket first = builder.build(baseline, scene);
+        GpuScenePacket second = builder.build(raisedMinimum, scene);
+        GpuScenePacket third = builder.build(otherWorldView, scene);
+
+        assertEquals(first.tiles(), second.tiles());
+        assertNotEquals(first.fingerprint(), second.fingerprint());
+        assertNotEquals(first.fingerprint(), third.fingerprint());
     }
 
     @Test

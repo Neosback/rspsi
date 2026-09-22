@@ -167,7 +167,12 @@ public final class GpuScenePacketBuilder {
                                       java.util.Map<Integer, RenderTextureResource> textures) {
         StringBuilder value = new StringBuilder();
         value.append(window.sceneBaseX()).append(':').append(window.sceneBaseY()).append(':')
-                .append(window.planes()).append(':').append(window.border()).append(';');
+                .append(window.planes()).append(':').append(window.border()).append(':')
+                .append(window.minimumRenderLevel()).append(':').append(window.worldViewId()).append(':')
+                .append(window.instance()).append('|');
+        window.sourceRegionIds().stream().sorted()
+                .forEach(regionId -> value.append(regionId).append(','));
+        value.append(';');
         for (SceneTileSnapshot tile : tiles) {
             value.append(tile.coordinate()).append('|').append(tile.worldAddress()).append('|')
                     .append(tile.tileFlags()).append('|')

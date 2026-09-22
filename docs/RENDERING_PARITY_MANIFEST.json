@@ -81,8 +81,8 @@
         "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md",
         "docs/RENDERING_PARITY_INDEX.md"
       ],
-      "reason": "The tracked RuneLite Scene API surface is now explicitly classified as semantic, presentation-only, mutation, or deferred, and base coordinates, map regions, instance identity, world-view identity, and minimum render level have a first-class SceneContract. Extended scene arrays, roofs, and mutation APIs remain intentionally outside the neutral semantic core until a concrete editor consumer requires them.",
-      "nextAction": "Use SceneContract.minimumRenderLevel together with tile planeCullLevel for client-like camera/roof traversal; keep deferred extended-scene and mutation surfaces out of renderer contracts until needed."
+      "reason": "The tracked RuneLite Scene API surface is explicitly classified as semantic, presentation-only, mutation, or deferred, with base coordinates, map regions, instance identity, world-view identity, and minimum render level carried by SceneContract. Client-like plane projections now apply SceneContract.minimumRenderLevel to the current scene plane before plane selection, while editor/all-plane projections deliberately preserve every loaded plane. Tile planeCullLevel remains separate for the later camera-plane acceptance gate. Extended scene arrays, roofs, and mutation APIs remain intentionally outside the neutral semantic core until a concrete editor consumer requires them.",
+      "nextAction": "Move camera/roof traversal and tile planeCullLevel acceptance into the focused follow-up; keep deferred extended-scene and mutation surfaces out of renderer contracts until needed."
     },
     {
       "id": "scene.extendedTiles",
