@@ -34,7 +34,7 @@ Where it's a "target," it's a gap with a concrete next action, not a vague aspir
 
 ### 1.2 What's not correct yet - the tracked backlog
 
-`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 16 "partial," 4 "deferred." Only one
+`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 15 "partial," 4 "deferred." Only one
 P0 item remains partial.
 
 This foundation PR has now moved five P0 items to covered:
@@ -56,10 +56,15 @@ This foundation PR has now moved five P0 items to covered:
 current scene plane, original/render level, and minimum/cull level are distinct packet fields,
 with bridge and visibility-below fixtures.
 
+`occlusion.visibility` is now covered on the camera/roof/occlusion branch: the vanilla
+projection traverses from the scene minimum, tests each tile's physical/cull level against the
+active scene plane, carries the shifted scene plane into GPU commands, and matches bridge-wall
+occluders on that current scene plane. `scene.roofs` remains partial for the separate
+RuneLite connected-roof-region removal modes (position/hover/destination/between).
+
 P1-partial items worth picking up after this final P0 validation: `scene.apiSurface`,
 `scene.roofs`, `objects.wallTransforms`, `objects.decorations`,
-`objects.gameObjectFootprint`, `models.colors`, `models.contour`, `textures.animation`,
-`occlusion.visibility`.
+`objects.gameObjectFootprint`, `models.colors`, `models.contour`, `textures.animation`.
 
 ### 1.3 Ground-truth reference (RuneLite, verified this pass)
 
