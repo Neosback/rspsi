@@ -17,7 +17,42 @@ public record GpuUploadPlan(
         Map<Integer, RenderTextureResource> textures,
         List<SceneOccluder> occluders,
         String fingerprint
-) {
+) implements GpuCommandGeometry {
+    @Override
+    public int commandCount() {
+        return commands.size();
+    }
+
+    @Override
+    public GpuDrawCommand command(int commandIndex) {
+        return commands.get(commandIndex);
+    }
+
+    @Override
+    public GpuSceneVertex indexedVertex(int commandIndex, int indexOffset) {
+        GpuDrawCommand command = commands.get(commandIndex);
+        if (indexOffset < 0 || indexOffset >= command.indexCount()) {
+            throw new IndexOutOfBoundsException("indexOffset " + indexOffset);
+        }
+        return vertices.get(indices.get(command.firstIndex() + indexOffset));
+    }
+
+    @Override
+    public int vertexCount() {
+        return vertices.size();
+    }
+
+    @Override
+    public int indexCount() {
+        return indices.size();
+    }
+
+    @Override
+    public void forEachUniqueVertex(java.util.function.Consumer<GpuSceneVertex> consumer) {
+        Objects.requireNonNull(consumer, "consumer");
+        vertices.forEach(consumer);
+    }
+
     /** Compatibility constructor for callers that do not carry occluder inputs. */
     public GpuUploadPlan(List<GpuSceneVertex> vertices, List<Integer> indices,
                          List<GpuDrawCommand> commands, List<GpuTextureTriangle> textureTriangles,
