@@ -675,7 +675,7 @@ public final class ModelPacketBuilder {
                 packet.maxZ(), packet.supportsAnimation(), packet.supportsParticles(),
                 packet.placementHeight(), packet.roofRelated(), packet.renderMode(),
                 packet.wallDecorationPresentation(), packet.gameObjectSceneMetadata(),
-                packet.clientModelBounds());
+                packet.clientRenderableBounds());
     }
 
     /**
