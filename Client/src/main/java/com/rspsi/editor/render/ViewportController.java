@@ -101,6 +101,18 @@ public final class ViewportController {
     }
 
     /**
+     * Moves the camera vertically along the scene's Y axis.
+     * In OSRS coordinates, negative Y is up (higher in the sky) and positive Y is down.
+     *
+     * @param distance world units to move vertically; negative moves up, positive moves down
+     */
+    public void moveVertical(float distance) {
+        if (distance == 0.0f) return;
+        camera = new CameraState(camera.x(), camera.y() + distance, camera.z(),
+                camera.pitch(), camera.yaw());
+    }
+
+    /**
      * Turns the camera in place. This is a heading change, not a sideways
      * slide: the camera position is untouched and only {@code yaw} moves.
      *
@@ -123,6 +135,8 @@ public final class ViewportController {
             case "Down", "ArrowDown" -> { moveForward(-move); yield true; }
             case "Left", "ArrowLeft" -> { rotateYaw(-turn); yield true; }
             case "Right", "ArrowRight" -> { rotateYaw(turn); yield true; }
+            case "e", "E", "PageUp" -> { moveVertical(-move); yield true; }
+            case "q", "Q", "PageDown" -> { moveVertical(move); yield true; }
             default -> false;
         };
     }
@@ -131,10 +145,20 @@ public final class ViewportController {
     public void update(float deltaX, float deltaY,
                        boolean pan, boolean orbit, float wheel) {
         if (pan) {
+            // Pan relative to camera orientation: deltaX moves along camera-right, deltaY along camera-up/forward
+            float sinYaw = (float) Math.sin(camera.yaw());
+            float cosYaw = (float) Math.cos(camera.yaw());
+            float panRightX = cosYaw;
+            float panRightZ = -sinYaw;
+            float panForwardX = sinYaw;
+            float panForwardZ = cosYaw;
+
+            float shiftX = -deltaX * 8.0f * panRightX + deltaY * 8.0f * panForwardX;
+            float shiftZ = -deltaX * 8.0f * panRightZ + deltaY * 8.0f * panForwardZ;
             camera = new CameraState(
-                    camera.x() - deltaX * 8.0f,
+                    camera.x() + shiftX,
                     camera.y(),
-                    camera.z() + deltaY * 8.0f,
+                    camera.z() + shiftZ,
                     camera.pitch(), camera.yaw());
         }
         if (orbit) {
@@ -146,13 +170,8 @@ public final class ViewportController {
         }
         if (wheel != 0.0f) {
             float zoom = wheel * 180.0f;
-            camera = new CameraState(camera.x(),
-                    // Keep zooming along the OSRS down-axis. A positive wheel
-                    // delta moves the camera farther above the scene (more
-                    // negative Y); clamping to positive Y inverted the scene
-                    // once the canonical negative-up convention was restored.
-                    camera.y() - zoom,
-                    camera.z() + zoom, camera.pitch(), camera.yaw());
+            // Dolly forward along the camera's ground heading rather than pitching down into the terrain:
+            moveForward(zoom);
         }
     }
 }

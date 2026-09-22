@@ -73,6 +73,14 @@ public final class TilePainterToolPlugin implements StudioToolPlugin {
     }
 
     @Override
+    public java.util.Set<ToolSurface> surfaces() {
+        // The floating rail is a dedicated selection-mode switcher (Single/
+        // Multi Select); Tile Painter is already on the bottom bar and
+        // drives the docked brush rail's visibility from TOOL_RAIL.
+        return java.util.EnumSet.of(ToolSurface.BOTTOM_BAR, ToolSurface.TOOL_RAIL);
+    }
+
+    @Override
     public boolean isConfigurable() {
         return true;
     }

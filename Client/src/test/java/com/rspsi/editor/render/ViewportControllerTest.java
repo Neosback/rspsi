@@ -17,7 +17,24 @@ class ViewportControllerTest {
 
         assertEquals(-0.04f, controller.camera().pitch(), 0.0001f);
         assertEquals(0.04f, controller.camera().yaw(), 0.0001f);
-        assertEquals(20.0f, controller.camera().y(), 0.0001f);
+        // Zoom dollies forward along the heading: Y is preserved so camera does not dive into terrain
+        assertEquals(200.0f, controller.camera().y(), 0.0001f);
+        // And moves forward along heading: deltaX = sin(0.04) * 180 ~ 7.198f, deltaZ = cos(0.04) * 180 ~ 179.85f
+        assertEquals(91.198f, controller.camera().x(), 0.05f);
+        assertEquals(503.85f, controller.camera().z(), 0.05f);
+    }
+
+    @Test
+    void verticalMovementElevatesCameraAlongSceneY() {
+        ViewportController controller = new ViewportController(
+                new CameraState(100.0f, 200.0f, 300.0f, 0.0f, 0.0f));
+
+        // Negative distance moves up into sky (more negative Y)
+        controller.moveVertical(-50.0f);
+        assertEquals(150.0f, controller.camera().y(), 0.0001f);
+        // Positive distance descends towards ground (more positive Y)
+        controller.moveVertical(30.0f);
+        assertEquals(180.0f, controller.camera().y(), 0.0001f);
     }
 
     @Test

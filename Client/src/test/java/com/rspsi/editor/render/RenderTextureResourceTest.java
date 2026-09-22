@@ -83,4 +83,47 @@ class RenderTextureResourceTest {
                 fallback.pixelStatus());
         assertArrayEquals(new int[]{0x345678}, fallback.pixels());
     }
+
+    @Test
+    void argbPixelsWithPartialAlphaDeclareAnAlphaChannel() {
+        TextureDefinitionView definition = new TextureDefinitionView(17, true, 17, 0x112233,
+                0, 0, false);
+
+        // Water-style texture: opaque, half and fully transparent texels.
+        RenderTextureResource water = new RenderTextureResource(17, definition, 2, 2,
+                new int[]{0xFF3A5F9E, 0x803A5F9E, 0x003A5F9E, 0x003A5F9E},
+                RenderTextureResource.PixelStatus.AVAILABLE, "");
+
+        assertTrue(water.usesAlphaChannel());
+        assertEquals(0xFF, RenderTextureResource.alphaOf(0xFF3A5F9E));
+        assertEquals(0x80, RenderTextureResource.alphaOf(0x803A5F9E));
+        assertEquals(0x00, RenderTextureResource.alphaOf(0x003A5F9E));
+    }
+
+    @Test
+    void plainRgbAndFullyOpaquePixelsKeepTheBinaryCutoutConvention() {
+        TextureDefinitionView definition = new TextureDefinitionView(4, false, 4, 0,
+                0, 0, false);
+
+        // Plain RGB assembled as (r << 16) | (g << 8) | b leaves the top byte
+        // zero, which must not be mistaken for a transparent alpha channel.
+        RenderTextureResource plain = new RenderTextureResource(4, definition, 1, 2,
+                new int[]{0x000000, 0x1A2B3C},
+                RenderTextureResource.PixelStatus.AVAILABLE, "");
+        RenderTextureResource opaque = new RenderTextureResource(4, definition, 1, 2,
+                new int[]{0xFF1A2B3C, 0xFF445566},
+                RenderTextureResource.PixelStatus.AVAILABLE, "");
+
+        assertFalse(plain.usesAlphaChannel());
+        assertFalse(opaque.usesAlphaChannel());
+    }
+
+    @Test
+    void fallbackResourcesNeverClaimAnAlphaChannel() {
+        TextureDefinitionView definition = new TextureDefinitionView(6, true, 6,
+                0x345678, 0, 0, false);
+
+        assertFalse(RenderTextureResource.averageColorFallback(6, definition, "missing sprite")
+                .usesAlphaChannel());
+    }
 }

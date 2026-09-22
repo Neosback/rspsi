@@ -28,6 +28,7 @@ public final class RenderTextureResource {
     private final int[] pixels;
     private final PixelStatus pixelStatus;
     private final String diagnostic;
+    private final boolean alphaChannel;
 
     public RenderTextureResource(int id, TextureDefinitionView definition,
                                 int width, int height, int[] pixels,
@@ -56,6 +57,43 @@ public final class RenderTextureResource {
                 && this.pixels.length != 0) {
             throw new IllegalArgumentException("Unavailable or invalid texture pixels must be empty");
         }
+        this.alphaChannel = pixelStatus == PixelStatus.AVAILABLE
+                && declaresAlphaChannel(this.pixels);
+    }
+
+    /**
+     * Decides whether decoded pixels are ARGB rather than plain RGB.
+     *
+     * <p>Cache textures really do carry partial alpha: {@code ARGBTexture}
+     * and {@code AlphaPalettedTexture} both decode a per-pixel alpha byte, and
+     * the client blends with it ({@code src >>> 24} in the textured scanline).
+     * Plain RGB arrays assembled as {@code (r << 16) | (g << 8) | b} always
+     * leave the top byte zero, so the presence of a fully opaque texel is the
+     * proof that the array is ARGB and its zero/partial bytes are meaningful.
+     * A fully opaque ARGB texture reports false and keeps the binary cutout
+     * convention, which is equivalent for it.</p>
+     */
+    private static boolean declaresAlphaChannel(int[] pixels) {
+        boolean opaque = false;
+        boolean partial = false;
+        for (int pixel : pixels) {
+            int alpha = pixel >>> 24 & 0xFF;
+            if (alpha == 0xFF) {
+                opaque = true;
+            } else if (alpha != 0x00) {
+                partial = true;
+            } else if ((pixel & 0xFFFFFF) != 0) {
+                // Transparent texel that still stores a colour: only an ARGB
+                // array can express that; plain RGB would have stored 0.
+                partial = true;
+            }
+        }
+        return opaque && partial;
+    }
+
+    /** Reads one texel's alpha byte from a packed ARGB client texture pixel. */
+    public static int alphaOf(int pixel) {
+        return pixel >>> 24 & 0xFF;
     }
 
     public static RenderTextureResource from(int id, TextureDefinitionView definition,
@@ -118,6 +156,13 @@ public final class RenderTextureResource {
     public String diagnostic() { return diagnostic; }
 
     public boolean hasPixels() { return pixelStatus == PixelStatus.AVAILABLE; }
+
+    /**
+     * Returns whether this texture's pixels carry a usable per-texel alpha
+     * channel. When false the renderer keeps the client's binary cutout
+     * convention that an RGB-zero texel is fully transparent.
+     */
+    public boolean usesAlphaChannel() { return alphaChannel; }
 
     /**
      * Returns whether decoded indexed-sprite pixels contain the OSRS cutout

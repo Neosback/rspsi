@@ -59,4 +59,9 @@ public final class EditorInputRouter implements PointerEventSink {
     public void pointerUp(PointerEvent event) {
         tools.pointerUp(event);
     }
+
+    @Override
+    public void pointerMove(PointerEvent event) {
+        tools.pointerMove(event);
+    }
 }

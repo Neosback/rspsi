@@ -118,7 +118,7 @@ public final class InterfaceStudioView {
         }
 
         ImGui.dummy(1.0f, 12.0f);
-        if (ImGui.button("+ Add Child Component", ImGui.getContentRegionAvailX(), 26)) {
+        if (StudioWidgets.buttonSecondary("+ Add Child Component", ImGui.getContentRegionAvailX(), 28.0f)) {
             // Action to create widget node
         }
     }

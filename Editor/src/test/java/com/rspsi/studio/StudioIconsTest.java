@@ -65,6 +65,36 @@ class StudioIconsTest {
 
         assertNotNull(StudioIcons.CLOSE);
         assertEquals("\ue5cd", StudioIcons.CLOSE);
+
+        // Shape icons
+        assertNotNull(StudioIcons.SHAPE_SQUARE);
+        assertEquals("\ue3c6", StudioIcons.SHAPE_SQUARE);
+        assertNotNull(StudioIcons.SHAPE_CIRCLE);
+        assertEquals("\uef4a", StudioIcons.SHAPE_CIRCLE);
+        assertNotNull(StudioIcons.SHAPE_DIAMOND);
+        assertEquals("\uead5", StudioIcons.SHAPE_DIAMOND);
+        assertNotNull(StudioIcons.SHAPE_FALLOFF);
+        assertEquals("\ue3e9", StudioIcons.SHAPE_FALLOFF);
+
+        // Height sculpting icons
+        assertNotNull(StudioIcons.RAISE);
+        assertEquals("\ue5d8", StudioIcons.RAISE);
+        assertNotNull(StudioIcons.LOWER);
+        assertEquals("\ue5db", StudioIcons.LOWER);
+        assertNotNull(StudioIcons.FLATTEN);
+        assertEquals("\uf108", StudioIcons.FLATTEN);
+        assertNotNull(StudioIcons.TERRACE);
+        assertEquals("\uf1a9", StudioIcons.TERRACE);
+
+        // Math & Stepper icons
+        assertNotNull(StudioIcons.ADD);
+        assertEquals("\ue145", StudioIcons.ADD);
+        assertNotNull(StudioIcons.REMOVE);
+        assertEquals("\ue15b", StudioIcons.REMOVE);
+        assertNotNull(StudioIcons.ROTATE_LEFT);
+        assertEquals("\ue419", StudioIcons.ROTATE_LEFT);
+        assertNotNull(StudioIcons.ROTATE_RIGHT);
+        assertEquals("\ue41a", StudioIcons.ROTATE_RIGHT);
     }
 
     @Test

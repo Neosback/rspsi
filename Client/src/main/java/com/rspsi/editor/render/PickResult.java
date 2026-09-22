@@ -5,24 +5,27 @@ import com.rspsi.editor.model.WorldTile;
 /**
  * Neutral result of viewport picking across both 2D and 3D backends.
  *
- * <p>Beyond identifying what was clicked, this carries the submission
- * metadata of the draw command that was actually hit - the scene layer,
- * face priority, depth bias, and texture. Those are the exact values that
- * decide how a surface resolves against a coplanar neighbour, so surfacing
- * them in the inspector makes a mis-rendered wall or decoration reportable
- * ("this one is WALL_DECORATION, priority 10, bias 0") instead of only
- * describable.</p>
+ * <p>Beyond identifying what was clicked, this carries the exact ray-intersected
+ * hit {@link #tile()}, the base anchor {@link #objectTile()} if an object was hit,
+ * and the submission metadata of the draw command that was actually hit - the scene layer,
+ * face priority, depth bias, and texture.</p>
  */
-public record PickResult(WorldTile tile, int plane, int objectId, float distance,
+public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int objectId, float distance,
                          SceneLayer.Kind layer, int priority, int depthBias, int textureId) {
     /** Compatibility constructor for tile-only legacy viewport picking. */
     public PickResult(WorldTile tile, int plane) {
-        this(tile, plane, -1, Float.NaN);
+        this(tile, null, plane, -1, Float.NaN, null, 0, 0, -1);
     }
 
     /** Compatibility constructor from before submission metadata was carried. */
     public PickResult(WorldTile tile, int plane, int objectId, float distance) {
-        this(tile, plane, objectId, distance, null, 0, 0, -1);
+        this(tile, null, plane, objectId, distance, null, 0, 0, -1);
+    }
+
+    /** Compatibility constructor from before objectTile was carried. */
+    public PickResult(WorldTile tile, int plane, int objectId, float distance,
+                      SceneLayer.Kind layer, int priority, int depthBias, int textureId) {
+        this(tile, null, plane, objectId, distance, layer, priority, depthBias, textureId);
     }
 
     public PickResult {

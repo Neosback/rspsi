@@ -61,7 +61,7 @@ public final class HeightSculptorToolPlugin implements StudioToolPlugin {
     @Override
     public Set<String> toolIds() {
         return Set.of("terrain.raise", "terrain.lower", "terrain.flatten",
-                "terrain.smooth", "terrain.blend", "terrain.terrace");
+                "terrain.smooth", "terrain.blend", "terrain.terrace", "terrain.ramp");
     }
 
     @Override
@@ -77,6 +77,14 @@ public final class HeightSculptorToolPlugin implements StudioToolPlugin {
     @Override
     public String category() {
         return "Terrain";
+    }
+
+    @Override
+    public java.util.Set<ToolSurface> surfaces() {
+        // The floating rail is a dedicated selection-mode switcher (Single/
+        // Multi Select); Height Sculptor is already on the bottom bar and
+        // drives the docked brush rail's visibility from TOOL_RAIL.
+        return java.util.EnumSet.of(ToolSurface.BOTTOM_BAR, ToolSurface.TOOL_RAIL);
     }
 
     @Override

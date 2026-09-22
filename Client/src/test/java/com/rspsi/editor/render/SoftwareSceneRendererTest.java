@@ -67,21 +67,27 @@ class SoftwareSceneRendererTest {
                 0xFF0000, 0, 0, false);
         RenderTextureResource texture = RenderTextureResource.from(7, definition, 2,
                 new int[]{0xFF0000, 0xFF0000, 0xFF0000, 0xFF0000});
+        // A textured floor's vertex colour carries the texture's own hue and
+        // saturation with the tile light in the lightness slot - exactly what
+        // TerrainPacketBuilder emits. A bare light here would have no hue and
+        // no saturation and would resolve through the grey palette axis.
+        int packed = (TextureAverageColor.packedHslFromRgb(0x62A992) & 0xFF80) | 64;
         List<GpuSceneVertex> vertices = List.of(
-                texturedVertex(-20, -20, 100, 64, 7),
-                texturedVertex(20, -20, 100, 64, 7),
-                texturedVertex(0, 20, 100, 64, 7));
+                texturedVertex(-20, -20, 100, packed, 7),
+                texturedVertex(20, -20, 100, packed, 7),
+                texturedVertex(0, 20, 100, packed, 7));
         GpuUploadPlan plan = plan(vertices, Map.of(7, texture));
 
         SoftwareRenderFrame frame = new SoftwareSceneRenderer().render(plan,
                 new CameraState(0, 0, 0, 0, 0), 100, 100,
                 new SceneCameraProjection((float) Math.toRadians(60), 1, 1000));
 
-        int pixel = frame.pixel(50, 50);
-        int red = (pixel >>> 16) & 0xFF;
-        assertEquals(0, (pixel >>> 8) & 0xFF);
-        assertEquals(0, pixel & 0xFF);
-        assertEquals(127, red);
+        // Client floor rule: the tile's hue and saturation with the tile light
+        // scaled by the texel's own luminance (127 for the red texel).
+        int texelLuminance = ((0xFF >> 1) + 0 + 0 + 0x7F) >> 2;
+        int expected = OsrsTerrainColorMath.packedHslToRgb(
+                (packed & 0xFF80) | ((64 * texelLuminance) >> 7), 0.6);
+        assertEquals(0xFF000000 | expected, frame.pixel(50, 50));
     }
 
     @Test

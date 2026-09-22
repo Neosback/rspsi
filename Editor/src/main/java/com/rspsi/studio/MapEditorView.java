@@ -16,6 +16,7 @@ import com.rspsi.editor.plugin.runtime.PluginEcosystemService;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.RenderConfigCompiler;
 import com.rspsi.editor.render.RenderSettingKeys;
+import com.rspsi.editor.render.SceneVisibilityPolicy;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.simulation.SimulationEngine;
 import com.rspsi.editor.symbols.SymbolService;
@@ -24,19 +25,20 @@ import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.brush.StudioBrushManager;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioWidgets;
 import com.rspsi.studio.ui.FloatingToolbar;
 import com.rspsi.studio.ui.MinimapHudOverlay;
 import com.rspsi.studio.ui.panels.MinimapPanel;
 import com.rspsi.studio.ui.StudioBottomBar;
 import com.rspsi.studio.ui.StudioRightSidebar;
-import com.rspsi.studio.ui.StudioToolRail;
+import com.rspsi.studio.ui.LeftBrushRail;
 import com.rspsi.studio.ui.StudioMenuBar;
 import com.rspsi.studio.ui.StudioPanelContext;
 import com.rspsi.studio.ui.StudioPanelManager;
 import com.rspsi.studio.ui.WorkspaceTabBar;
 import com.rspsi.studio.ui.hud.ViewportHudManager;
 import com.rspsi.studio.ui.hud.DeclarativeOverlayRenderer;
-import com.rspsi.studio.ui.hud.TilePainterHud;
+import com.rspsi.studio.ui.hud.BrushSettingsHud;
 import com.rspsi.studio.ui.diagnostics.TerrainDiagnosticsOverlay;
 import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.builtin.TileInfoHudPlugin;
@@ -49,6 +51,7 @@ import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImString;
 
 import com.rspsi.editor.tool.BoxSelectTool;
+import com.rspsi.editor.tool.SplinePathTool;
 
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.editor.DeleteObjectCommand;
@@ -102,7 +105,7 @@ public final class MapEditorView {
 
     private final StudioMenuBar menuBar = new StudioMenuBar();
     private final WorkspaceTabBar workspaceTabBar = new WorkspaceTabBar();
-    private final StudioToolRail toolRail = new StudioToolRail();
+    private final LeftBrushRail leftBrushRail = new LeftBrushRail();
     private final FloatingToolbar floatingToolbar = new FloatingToolbar();
     private final MinimapHudOverlay minimapHudOverlay = new MinimapHudOverlay();
     private final StudioRightSidebar rightSidebar = new StudioRightSidebar();
@@ -119,7 +122,7 @@ public final class MapEditorView {
     {
         minimapHudOverlay.setOnWorldMapClick(() -> panelManager.setActiveRightPanelId(MinimapPanel.ID));
         studioPluginManager.register(new TileInfoHudPlugin());
-        studioPluginManager.register(new TilePainterHud());
+        studioPluginManager.register(new BrushSettingsHud());
         studioPluginManager.register(new TerrainDiagnosticsOverlay());
     }
 
@@ -131,7 +134,10 @@ public final class MapEditorView {
 
     private boolean commandPaletteOpen;
     private final ImString commandQuery = new ImString(128);
-    private boolean showLeftToolRail = true;
+    // Off by default: the rail auto-shows itself for brush tools (see
+    // LeftBrushRail.isBrushToolActive); this is only the View > Left Brush
+    // Rail override that forces it to stay up regardless of active tool.
+    private boolean showLeftToolRail = false;
 
     // Shared studio runtime services & sibling workspace callbacks
     private Runnable openInterfaceStudio;
@@ -211,7 +217,9 @@ public final class MapEditorView {
             }
         }
 
-        Layout layout = Layout.compute(bottomBar, showLeftToolRail);
+        boolean brushRailVisible = showLeftToolRail
+                || LeftBrushRail.isBrushToolActive(studioPluginManager, activeToolId);
+        Layout layout = Layout.compute(bottomBar, brushRailVisible);
 
         // 1. Program-owned Menu Bar (File, Edit, View, Cache, Plugins, Server, Help)
         menuBar.render(cache, pluginLifecycle, integrations, showServerSpawns,
@@ -243,10 +251,11 @@ public final class MapEditorView {
                 brushManager,
                 hudManager);
 
-        // 4. Left Tool Rail (TOOL_RAIL slot: Selection, Paint, Height, Path, Objects) - Optional toggle
-        if (showLeftToolRail) {
-            toolRail.render(panelContext, layout.x(), layout.contentY(), layout.contentHeight(),
-                    toolId -> activateTool(pluginLifecycle, toolId), activeToolId);
+        // 4. Left Brush Rail (TOOL_RAIL slot: brush settings for Tile Painter/Height Sculptor) -
+        // renders itself only when a brush tool is active, or always when forced via the View menu.
+        if (brushRailVisible) {
+            leftBrushRail.render(panelContext, layout.x(), layout.contentY(), layout.contentHeight(),
+                    toolId -> activateTool(pluginLifecycle, toolId), activeToolId, showLeftToolRail);
         }
 
         // 5. Viewport (Displee 3D Canvas) with FloatingToolbar, Minimap HUD, and Tile HUD
@@ -268,6 +277,7 @@ public final class MapEditorView {
         renderAppStatusBar(panelContext, cache);
 
         // 8. Overlays & Windows
+        studioPluginManager.renderFloating(panelContext);
         renderCommandPalette(pluginLifecycle);
         preferencesWindow.render(settings, pluginLifecycle != null && pluginLifecycle.host() != null
                 ? pluginLifecycle.host().context().settingsService() : null);
@@ -284,14 +294,19 @@ public final class MapEditorView {
         ImGui.setNextWindowSize(layout.viewportWidth(), layout.viewportHeight(), ImGuiCond.Always);
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
+        ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.WindowPadding, 0.0f, 0.0f);
         ImGui.begin(VIEWPORT_WINDOW, FIXED_VIEWPORT_FLAGS);
         if (plan == null) {
             ImGui.text(sceneStatus == null ? "Preparing scene..." : sceneStatus);
         } else {
-            // Even with other planes visible ("show all levels"), clicks must only land on the
-            // plane actually being edited - a tile on a plane rendered above/below is not a
-            // valid pick just because it's visible.
-            viewport.setPickPlaneRestriction(settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE));
+            // When all planes are visible, allow clicks on any plane's rendered geometry;
+            // otherwise restrict picks to the active editing plane.
+            var planeSelection = settings.snapshot().get(RenderSettingKeys.PLANE_SELECTION);
+            if (planeSelection == SceneVisibilityPolicy.PlaneSelection.ALL) {
+                viewport.setPickPlaneRestriction(null);
+            } else {
+                viewport.setPickPlaneRestriction(settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE));
+            }
 
             viewport.render(plan, ImGui.getContentRegionAvailX(),
                     Math.max(160.0f, ImGui.getContentRegionAvailY()),
@@ -325,8 +340,15 @@ public final class MapEditorView {
                     layout.viewportWidth(), layout.viewportHeight());
             declarativeOverlays.render(panelContext, pluginLifecycle);
             studioPluginManager.renderHUDs(panelContext);
+
+            // Dedicated selection-mode switcher (Single/Multi Select) - the
+            // one draggable frosted-glass rail, distinct from the docked
+            // brush rail and the bottom bar.
+            floatingToolbar.render(panelContext, layout.viewportX(), layout.contentY(),
+                    toolId -> activateTool(pluginLifecycle, toolId), activeToolId);
         }
         ImGui.end();
+        ImGui.popStyleVar();
     }
 
     private void renderServerSpawnOverlays(NativeSceneViewport viewport, SettingsStore settings) {
@@ -362,17 +384,18 @@ public final class MapEditorView {
     private void activateTool(EditorPluginLifecycleManager pluginLifecycle, String registrationId) {
         String previousToolId = activeToolId;
         activeToolId = registrationId;
-        // Tools with nothing to show in the shelf (e.g. Single/Multi Select, which report into
-        // the Tile Inspector panel instead) auto-collapse the drawer rather than showing it empty.
+        // Auto-open context drawer for tools with shelf content (Path Builder, Tile Painter),
+        // and collapse it for tools without shelf content (Single/Multi Select).
         studioPluginManager.toolPlugin(registrationId)
-                .filter(tool -> !tool.hasContextDrawerContent())
-                .ifPresent(tool -> bottomBar.setDrawerOpen(false));
+                .ifPresent(tool -> bottomBar.setDrawerOpen(tool.hasContextDrawerContent()));
         if (inputRouter == null || pluginLifecycle == null || pluginLifecycle.host() == null) return;
 
-        // Single Select / Multi Select are Studio-level presentation ids; both drive the one
-        // real "selection.box" engine tool, distinguished by its Mode.
+        // Single/Multi (tile) Select and Single/Multi Select Objects are all Studio-level
+        // presentation ids; all four drive the one real "selection.box" engine tool,
+        // distinguished by its Mode and Target.
         String engineId = switch (registrationId) {
-            case "selection.single", "selection.multi" -> "selection.box";
+            case "selection.single", "selection.multi",
+                 "selection.object.single", "selection.object.multi" -> "selection.box";
             default -> registrationId;
         };
 
@@ -384,8 +407,12 @@ public final class MapEditorView {
 
         var tool = registration.factory().get();
         if (tool instanceof BoxSelectTool boxSelectTool) {
-            boxSelectTool.setMode("selection.single".equals(registrationId)
-                    ? BoxSelectTool.Mode.SINGLE : BoxSelectTool.Mode.MULTI);
+            boolean single = "selection.single".equals(registrationId)
+                    || "selection.object.single".equals(registrationId);
+            boxSelectTool.setMode(single ? BoxSelectTool.Mode.SINGLE : BoxSelectTool.Mode.MULTI);
+            boolean objects = "selection.object.single".equals(registrationId)
+                    || "selection.object.multi".equals(registrationId);
+            boxSelectTool.setTarget(objects ? BoxSelectTool.Target.OBJECTS : BoxSelectTool.Target.TILES);
         }
         toolController.activate(tool,
                 new ToolContext(pluginLifecycle.host().context().session(),
@@ -430,13 +457,28 @@ public final class MapEditorView {
                 activateTool(pluginLifecycle, "selection.single");
             } else if (ImGui.isKeyPressed(ImGuiKey.B, false)) {
                 activateTool(pluginLifecycle, "terrain.tile-painter");
-            } else if (ImGui.isKeyPressed(ImGuiKey.E, false)) {
+            } else if (ImGui.isKeyPressed(ImGuiKey.R, false) || ImGui.isKeyPressed(ImGuiKey.H, false)) {
                 activateTool(pluginLifecycle, "terrain.raise");
             } else if (ImGui.isKeyPressed(ImGuiKey.O, false)) {
                 activateTool(pluginLifecycle, "object.place");
+            } else if (ImGui.isKeyPressed(ImGuiKey.P, false)) {
+                activateTool(pluginLifecycle, "path.spline");
             } else if (ImGui.isKeyPressed(ImGuiKey.X, false) || ImGui.isKeyPressed(ImGuiKey.Delete, false)) {
                 EditorSession s = session(pluginLifecycle);
                 if (s != null) s.selection().clear();
+            }
+        }
+
+        // Active Spline Path Tool shortcuts: Enter=Build, Esc=Clear, [/]=Width
+        if (toolController.activeTool() instanceof SplinePathTool pathTool) {
+            if (ImGui.isKeyPressed(ImGuiKey.Enter, false) || ImGui.isKeyPressed(ImGuiKey.KeypadEnter, false)) {
+                pathTool.buildPath();
+            } else if (ImGui.isKeyPressed(ImGuiKey.Escape, false)) {
+                pathTool.clear();
+            } else if (ImGui.isKeyPressed(ImGuiKey.LeftBracket, false)) {
+                pathTool.setWidth(Math.max(1, pathTool.width() - 1));
+            } else if (ImGui.isKeyPressed(ImGuiKey.RightBracket, false)) {
+                pathTool.setWidth(Math.min(16, pathTool.width() + 1));
             }
         }
     }
@@ -685,28 +727,49 @@ public final class MapEditorView {
         }
 
         imgui.ImVec2 center = ImGui.getMainViewport().getCenter();
-        ImGui.setNextWindowPos(center.x, center.y - 120.0f, ImGuiCond.Appearing, 0.5f, 0.5f);
-        ImGui.setNextWindowSize(520.0f, 320.0f, ImGuiCond.Appearing);
+        ImGui.setNextWindowPos(center.x, center.y - 100.0f, ImGuiCond.Appearing, 0.5f, 0.5f);
+        ImGui.setNextWindowSize(560.0f, 360.0f, ImGuiCond.Appearing);
 
-        if (!ImGui.beginPopupModal("CommandPaletteModal", null, ImGuiWindowFlags.NoDecoration)) return;
+        ImGui.pushStyleColor(ImGuiCol.PopupBg, 0xF80E1015);
+        ImGui.pushStyleColor(ImGuiCol.Border, 0xD0272C38);
+        ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.WindowRounding, 12.0f);
+        ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.WindowPadding, 14.0f, 14.0f);
+        ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.WindowBorderSize, 1.0f);
+
+        if (!ImGui.beginPopupModal("CommandPaletteModal", null, ImGuiWindowFlags.NoDecoration)) {
+            ImGui.popStyleVar(3);
+            ImGui.popStyleColor(2);
+            return;
+        }
         if (ImGui.isWindowAppearing()) ImGui.setKeyboardFocusHere(0);
 
-        ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.FramePadding, 8.0f, 6.0f);
+        // Spotlight search input
+        ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.FramePadding, 12.0f, 8.0f);
+        ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.FrameRounding, 8.0f);
+        ImGui.pushStyleColor(ImGuiCol.FrameBg, 0xFF181A22);
+        ImGui.pushStyleColor(ImGuiCol.FrameBgHovered, 0xFF222634);
+        ImGui.pushStyleColor(ImGuiCol.FrameBgActive, 0xFF262B3B);
+        ImGui.setNextItemWidth(-1.0f);
         ImGui.inputTextWithHint("##cmd-query", StudioIcons.SEARCH + "  Type a tool, command, or region ID (e.g. 50,50)...", commandQuery, ImGuiInputTextFlags.None);
-        ImGui.popStyleVar();
+        ImGui.popStyleColor(3);
+        ImGui.popStyleVar(2);
 
+        ImGui.dummy(1.0f, 4.0f);
         ImGui.separator();
+        ImGui.dummy(1.0f, 4.0f);
 
         String query = commandQuery.get().toLowerCase().trim();
-        ImGui.beginChild("palette-results", 0.0f, -32.0f, false);
+        ImGui.beginChild("palette-results", 0.0f, -36.0f, false);
         if (pluginLifecycle != null && pluginLifecycle.host() != null) {
             var registry = pluginLifecycle.host().registry();
             boolean any = false;
+
+            ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.SelectableTextAlign, 0.0f, 0.5f);
             for (EditorToolRegistration tool : registry.toolRegistrations()) {
                 if (!query.isBlank() && !tool.label().toLowerCase().contains(query)
                         && !tool.id().toLowerCase().contains(query)) continue;
                 any = true;
-                if (ImGui.selectable(StudioIcons.BRUSH + "  " + tool.label() + "  ##tool-" + tool.id())) {
+                if (ImGui.selectable(StudioIcons.BRUSH + "  " + tool.label() + "##tool-" + tool.id(), false, 0, 0.0f, 26.0f)) {
                     activateTool(pluginLifecycle, tool.id());
                     ImGui.closeCurrentPopup();
                 }
@@ -716,7 +779,7 @@ public final class MapEditorView {
                 if (!query.isBlank() && !command.label().toLowerCase().contains(query)
                         && !command.id().toLowerCase().contains(query)) continue;
                 any = true;
-                if (ImGui.selectable(StudioIcons.TERMINAL + "  " + command.label() + "  ##command-" + command.id())) {
+                if (ImGui.selectable(StudioIcons.TERMINAL + "  " + command.label() + "##command-" + command.id(), false, 0, 0.0f, 26.0f)) {
                     try {
                         EditorCommand cmd = registry.createCommand(command.id());
                         pluginLifecycle.host().context().session().execute(cmd);
@@ -727,6 +790,7 @@ public final class MapEditorView {
                 }
                 if (ImGui.isItemHovered()) ImGui.setItemTooltip(command.id());
             }
+            ImGui.popStyleVar();
             if (!any) ImGui.textDisabled("No matching tools or commands.");
         } else {
             ImGui.textDisabled("Plugin host unavailable.");
@@ -734,10 +798,16 @@ public final class MapEditorView {
         ImGui.endChild();
 
         ImGui.separator();
-        if (ImGui.button(StudioIcons.CLOSE + " Close##cmd-close", 80.0f, 22.0f) || ImGui.isKeyPressed(ImGuiKey.Escape)) {
+        ImGui.dummy(1.0f, 2.0f);
+        ImGui.alignTextToFramePadding();
+        ImGui.textDisabled("ESC to close  ·  Enter to run");
+        ImGui.sameLine(ImGui.getContentRegionAvailX() - 64.0f);
+        if (StudioWidgets.buttonGhost(StudioIcons.CLOSE + " Close", 64.0f, 22.0f) || ImGui.isKeyPressed(imgui.flag.ImGuiKey.Escape)) {
             ImGui.closeCurrentPopup();
         }
         ImGui.endPopup();
+        ImGui.popStyleVar(3);
+        ImGui.popStyleColor(2);
     }
 
     private void renderAppStatusBar(StudioPanelContext context, LoadedOsrsCacheSession cache) {
@@ -795,7 +865,7 @@ public final class MapEditorView {
         layoutStore.reset();
         bottomBar.setDrawerOpen(true);
         studioPluginManager.setEnabled(TileInfoHudPlugin.ID, true);
-        showLeftToolRail = true;
+        showLeftToolRail = false;
         floatingToolbar.resetPosition();
         hudManager.resetUserState();
     }
@@ -814,7 +884,7 @@ public final class MapEditorView {
                           float bottomY, float bottomWidth, float bottomHeight,
                           float drawerHeight) {
 
-        private static Layout compute(StudioBottomBar bottomBar, boolean showLeftToolRail) {
+        private static Layout compute(StudioBottomBar bottomBar, boolean brushRailVisible) {
             imgui.ImGuiViewport main = ImGui.getMainViewport();
             float menuBarH = ImGui.getFrameHeight();
             float wsBarH = WorkspaceTabBar.HEIGHT;
@@ -827,7 +897,7 @@ public final class MapEditorView {
             float width = Math.max(1.0f, main.getSizeX());
             float height = Math.max(1.0f, main.getSizeY() - menuBarH - menuBarGap);
 
-            float leftRailW = showLeftToolRail ? StudioToolRail.RAIL_WIDTH : 0.0f;
+            float leftRailW = brushRailVisible ? LeftBrushRail.RAIL_WIDTH : 0.0f;
             float rightWidth = Math.min(330.0f, Math.max(260.0f, width * 0.28f));
             float viewportX = x + leftRailW;
             float viewportWidth = Math.max(160.0f, width - leftRailW - rightWidth);

@@ -87,26 +87,51 @@ public final class BoxSelectTool implements EditorTool {
                 PropertyDescriptor.ValueType.ENUM, 0, 1));
     }
 
+    /** Amber, distinct from the default cyan tile-select outline - an object pick is not a tile pick. */
+    private static final int OBJECT_OUTLINE_COLOR = 0xF59E0BFF;
+
+    /**
+     * A representative scenery height, not this object's real one - this
+     * tool only knows a {@link WorldObject}'s id/type/rotation/position, not
+     * its model bounds (that needs the cache's {@code DefinitionProvider},
+     * which a low-level engine tool does not hold). A flat tile outline for
+     * an object pick still reads as "you selected the ground", so a boxy
+     * volume in roughly the right size is a real improvement even without
+     * the object's exact silhouette.
+     */
+    private static final float OBJECT_BOX_HEIGHT = 190.0f;
+
     @Override public void renderOverlay(OverlayDraw draw) {
         if (start == null) return;
+        boolean objects = target == Target.OBJECTS;
         if (mode == Mode.SINGLE || current == null) {
-            draw.tileOutline(start);
+            mark(draw, start, objects);
             return;
         }
         TileBounds bounds = bounds(start, current);
         int plane = start.plane();
         for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
-            draw.tileOutline(new WorldTile(plane, x, bounds.minY()));
+            mark(draw, new WorldTile(plane, x, bounds.minY()), objects);
             if (bounds.maxY() != bounds.minY()) {
-                draw.tileOutline(new WorldTile(plane, x, bounds.maxY()));
+                mark(draw, new WorldTile(plane, x, bounds.maxY()), objects);
             }
         }
         for (int y = bounds.minY() + 1; y < bounds.maxY(); y++) {
-            draw.tileOutline(new WorldTile(plane, bounds.minX(), y));
+            mark(draw, new WorldTile(plane, bounds.minX(), y), objects);
             if (bounds.maxX() != bounds.minX()) {
-                draw.tileOutline(new WorldTile(plane, bounds.maxX(), y));
+                mark(draw, new WorldTile(plane, bounds.maxX(), y), objects);
             }
         }
+    }
+
+    private static void mark(OverlayDraw draw, WorldTile tile, boolean objects) {
+        if (!objects) {
+            draw.tileOutline(tile);
+            return;
+        }
+        float x0 = tile.x() * 128.0f;
+        float z0 = tile.y() * 128.0f;
+        draw.box(x0, -OBJECT_BOX_HEIGHT, z0, x0 + 128.0f, 0.0f, z0 + 128.0f, OBJECT_OUTLINE_COLOR, false);
     }
 
     private static TileBounds bounds(WorldTile first, WorldTile second) {

@@ -105,7 +105,7 @@ public final class ObjectStudioView {
         ImGui.inputInt("Sequence ID##seq-id-input", selectedSequenceId);
 
         ImGui.dummy(1.0f, 12.0f);
-        if (ImGui.button("Reset Pose", ImGui.getContentRegionAvailX(), 26)) {
+        if (StudioWidgets.buttonSecondary("Reset Pose", ImGui.getContentRegionAvailX(), 28.0f)) {
             selectedSequenceId.set(-1);
         }
     }

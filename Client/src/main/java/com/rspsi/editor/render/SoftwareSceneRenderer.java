@@ -281,13 +281,17 @@ public final class SoftwareSceneRenderer {
                 float perspectiveA = (w0 / triangle.a.depth) / reciprocalDepth;
                 float perspectiveB = (w1 / triangle.b.depth) / reciprocalDepth;
                 float perspectiveC = (w2 / triangle.c.depth) / reciprocalDepth;
+                boolean terrain = command.layer() == SceneLayer.Kind.TERRAIN;
                 int color = shade(triangle.a.vertex, triangle.b.vertex, triangle.c.vertex,
                         perspectiveA, perspectiveB, perspectiveC, w0, w1, w2,
-                        textures, clientCycle, presentation);
-                // RuneLite's GPU texture upload preserves the client texture
-                // convention that RGB zero is a transparent texel.
-                if (triangle.a.vertex.colorEncoding() == GpuColorEncoding.TEXTURE_LIGHTNESS
-                        && (color >>> 24) == 0) continue;
+                        textures, clientCycle, presentation, terrain);
+                // A fully transparent texel - whether it came from the client's
+                // RGB-zero cutout convention or from a real ARGB alpha byte -
+                // leaves the framebuffer untouched, so a tile floor shows the
+                // underlay it covers.
+                boolean textured = triangle.a.vertex.colorEncoding() == GpuColorEncoding.TEXTURE_LIGHTNESS;
+                int texelAlpha = (color >>> 24) & 0xFF;
+                if (textured && texelAlpha == 0) continue;
                 color = present(color, presentation);
                 color = applyFog(color, triangle, perspectiveA, perspectiveB, perspectiveC,
                         presentation, fogBounds);
@@ -310,7 +314,8 @@ public final class SoftwareSceneRenderer {
                              float wa, float wb, float wc,
                              float screenWa, float screenWb, float screenWc,
                              Map<Integer, RenderTextureResource> textures,
-                             int clientCycle, RenderPresentation presentation) {
+                             int clientCycle, RenderPresentation presentation,
+                             boolean terrain) {
         float u = a.u() * wa + b.u() * wb + c.u() * wc;
         float v = a.v() * wa + b.v() * wb + c.v() * wc;
         boolean flat = a.renderType() == 1 || a.renderType() == 3;
@@ -319,15 +324,28 @@ public final class SoftwareSceneRenderer {
                 + c.encodedColor() * screenWc;
         if (a.colorEncoding() == GpuColorEncoding.TEXTURE_LIGHTNESS && a.textureId() >= 0) {
             RenderTextureResource texture = textures.get(a.textureId());
+            if (terrain) {
+                // Client floor scanline: a tile top is never blended into the
+                // framebuffer. A transparent texel leaves it untouched, and
+                // every other texel is written opaquely as the palette entry
+                // addressed by the tile's hue and saturation with the tile
+                // light scaled by the texel's own luminance. Reproducing this
+                // matters because the tile's hue and saturation come from the
+                // texture's average colour, so water keeps its own colour
+                // instead of resolving through the grey palette axis.
+                return terrainTexel(texture, light, u, v, clientCycle);
+            }
             if (texture != null && texture.hasPixels()) {
                 TextureAnimation.UvOffset animation = TextureAnimation.offset(texture, clientCycle);
                 boolean animated = animation.u() != 0.0f || animation.v() != 0.0f;
                 int sampled = sample(texture, u + animation.u(), v + animation.v(), animated);
                 if ((sampled >>> 24) == 0) return 0;
-                int scale = Math.max(0, Math.min(128, Math.round(light)));
-                return scaleRgb(sampled, scale);
+                int scale = textureLight(light);
+                // Keep the texel's alpha in the top byte: a textured tile floor
+                // spends it here instead of writing opaquely.
+                return (sampled & 0xFF000000) | (scaleRgb(sampled, scale) & 0xFFFFFF);
             }
-            int scale = Math.max(0, Math.min(128, Math.round(light)));
+            int scale = textureLight(light);
             if (texture != null
                     && texture.pixelStatus() == RenderTextureResource.PixelStatus.AVERAGE_COLOR_FALLBACK) {
                 return scaleRgb(texture.pixelAt(0, 0), scale);
@@ -346,6 +364,52 @@ public final class SoftwareSceneRenderer {
         return interpolateRgb(first, second, third, wa, wb, wc);
     }
 
+    /**
+     * Shades one textured floor texel with the client's floor scanline rule.
+     *
+     * <p>The client's textured tile path never blends into the framebuffer. A
+     * transparent texel leaves the destination alone (the underlay it covers
+     * stays visible) and every other texel is written opaquely as
+     * {@code colourPalette[(hue/sat) | (light * texelLuminance >> 7)]}, with a
+     * partially transparent texel mixed toward the tile's own flat colour
+     * first. The tile's hue and saturation come from the texture's average
+     * colour, which is what keeps water blue rather than grey.</p>
+     *
+     * @return opaque ARGB, or {@code 0} when the texel leaves the destination
+     *         untouched
+     */
+    private static int terrainTexel(RenderTextureResource texture, float interpolatedHsl,
+                                    float u, float v, int clientCycle) {
+        int packed = Math.round(interpolatedHsl);
+        int texel;
+        int texelAlpha;
+        if (texture != null && texture.hasPixels()) {
+            TextureAnimation.UvOffset animation = TextureAnimation.offset(texture, clientCycle);
+            boolean animated = animation.u() != 0.0f || animation.v() != 0.0f;
+            texel = sample(texture, u + animation.u(), v + animation.v(), animated);
+            texelAlpha = (texel >>> 24) & 0xFF;
+        } else if (texture != null
+                && texture.pixelStatus() == RenderTextureResource.PixelStatus.AVERAGE_COLOR_FALLBACK) {
+            texel = 0xFF000000 | (texture.pixelAt(0, 0) & 0xFFFFFF);
+            texelAlpha = 0xFF;
+        } else {
+            // A missing definition or pixel payload is a cache contract
+            // failure, not a valid texture colour: keep it visible the same
+            // way the native backend does.
+            return 0xFF000000 | (scaleRgb(0xFFFF00FF, textureLight(interpolatedHsl)) & 0xFFFFFF);
+        }
+        if (texelAlpha == 0) return 0;
+        int hueSaturation = packed & 0xFF80;
+        int texelLuminance = (((texel >>> 17) & 0x7F) + ((texel >>> 9) & 0x7F)
+                + ((texel >>> 1) & 0x7F) + 0x7F) >> 2;
+        int shadedLight = Math.max(0, Math.min(127,
+                ((packed & 0x7F) * texelLuminance) >> 7));
+        int shaded = OsrsTerrainColorMath.packedHslToRgb(hueSaturation | shadedLight, 0.6);
+        if (texelAlpha == 0xFF) return 0xFF000000 | (shaded & 0xFFFFFF);
+        int flat = OsrsTerrainColorMath.packedHslToRgb(hueSaturation | 0x7F, 0.6);
+        return blend(0xFF000000 | (flat & 0xFFFFFF), 0xFF000000 | (shaded & 0xFFFFFF), texelAlpha);
+    }
+
     private static int sample(RenderTextureResource texture, float u, float v,
                               boolean wrap) {
         int width = texture.width();
@@ -357,8 +421,31 @@ public final class SoftwareSceneRenderer {
         float sampleV = wrap ? wrapUv(v) : clampUv(v);
         int x = Math.max(0, Math.min(width - 1, (int) Math.floor(sampleU * width)));
         int y = Math.max(0, Math.min(height - 1, (int) Math.floor(sampleV * height)));
-        int pixel = texture.pixelAt(x, y) & 0xFFFFFF;
+        int argb = texture.pixelAt(x, y);
+        if (texture.usesAlphaChannel()) {
+            int alpha = RenderTextureResource.alphaOf(argb);
+            return alpha == 0 ? 0 : (alpha << 24) | (argb & 0xFFFFFF);
+        }
+        // RuneLite's GPU texture upload preserves the client texture
+        // convention that RGB zero is a transparent texel.
+        int pixel = argb & 0xFFFFFF;
         return pixel == 0 ? 0 : 0xFF000000 | pixel;
+    }
+
+    /**
+     * Extracts the lighting value carried in a textured vertex colour.
+     *
+     * <p>A textured model vertex carries a bare 2..126 lightness, while a
+     * textured terrain vertex carries a whole packed HSL whose hue and
+     * saturation identify the tile colour. Both keep the lighting in the low
+     * seven bits, so masking is correct for either - without it a packed HSL
+     * reads as a huge value and every textured floor renders at full
+     * brightness.</p>
+     */
+    private static int textureLight(float interpolated) {
+        int packed = Math.round(interpolated);
+        if (packed < 0) return 0;
+        return Math.min(128, packed & 0x7F);
     }
 
     private static float clampUv(float value) {
@@ -374,7 +461,6 @@ public final class SoftwareSceneRenderer {
                                GpuSceneVertex c, float wa, float wb, float wc) {
         float raw = a.alpha() * wa + b.alpha() * wb + c.alpha() * wc;
         if (command.layer() == SceneLayer.Kind.TERRAIN) return Math.round(raw);
-        if (a.renderType() == 3) return 128;
         return 255 - Math.round(raw);
     }
 

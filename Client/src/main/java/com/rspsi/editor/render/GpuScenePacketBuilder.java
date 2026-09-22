@@ -217,10 +217,11 @@ public final class GpuScenePacketBuilder {
     }
 
     /**
-     * OSRS model alpha is zero for opaque faces. Any non-zero face alpha is
-     * retained as a separate submission class; render type 3 is also treated
-     * as a non-opaque face because it is an alpha/visibility-controlled
-     * material in the client model path.
+     * OSRS model alpha is zero for opaque faces, so any non-zero face alpha is
+     * retained as a separate submission class. Render type is deliberately not
+     * consulted: the client's Mesh.renderFace uses it purely as a shading
+     * selector (0 shaded, 1 flat colour, 2/3 textured), so keying opacity off
+     * it drew every flat-textured face at half alpha.
      */
     private static boolean hasTransparentGeometry(ModelRenderPacket model) {
         // isTransparentFace already fully decides model transparency. An
@@ -231,9 +232,9 @@ public final class GpuScenePacketBuilder {
         return model.triangles().stream().anyMatch(GpuScenePacketBuilder::isTransparentFace);
     }
 
-    /** Model alpha/render type select the alpha stream; texture cutouts stay opaque. */
+    /** Model alpha selects the alpha stream; texture cutouts stay opaque. */
     private static boolean isTransparentFace(ModelTriangle face) {
-        return face.alpha() != 0 || face.renderType() == 3;
+        return face.alpha() != 0;
     }
 
     /** Emits only explicit definition-backed occluders; movement blocking alone is not visual occlusion. */

@@ -68,16 +68,27 @@ public final class StudioRightSidebar {
         ImGui.beginChild("right-sidebar-rail", RAIL_WIDTH, totalH, false, ImGuiWindowFlags.NoScrollbar);
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 2.0f, 2.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 0.0f, 4.0f);
-        ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 4.0f);
+        ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
 
         for (StudioPanel p : rightPanels) {
             boolean isSel = p.id().equals(activeId);
             boolean isPinned = p.id().equals(pinnedTopPanelId);
 
             if (isSel) {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
+                ImGui.pushStyleColor(ImGuiCol.Button, 0xFF6366F1); // Indigo 500
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF818CF8);
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF4F46E5);
+                ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
             } else if (isPinned) {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.35f, 0.28f, 0.15f, 1.0f));
+                ImGui.pushStyleColor(ImGuiCol.Button, 0xFFD97706); // Amber 600
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFFF59E0B);
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFFB45309);
+                ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
+            } else {
+                ImGui.pushStyleColor(ImGuiCol.Button, 0xFF181A22); // Zinc dark surface
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF262A37);
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF1E212B);
+                ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
             }
 
             ImGui.pushFont(StudioFonts.icon(), 0.0f);
@@ -88,10 +99,7 @@ public final class StudioRightSidebar {
                 });
             }
             ImGui.popFont();
-
-            if (isSel || isPinned) {
-                ImGui.popStyleColor();
-            }
+            ImGui.popStyleColor(4);
 
             if (ImGui.isItemHovered()) {
                 String tt = p.title() + (isPinned ? " (Pinned Top)" : "");

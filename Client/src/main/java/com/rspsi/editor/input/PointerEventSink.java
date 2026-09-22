@@ -7,4 +7,7 @@ public interface PointerEventSink {
     void pointerDrag(PointerEvent event);
 
     void pointerUp(PointerEvent event);
+
+    default void pointerMove(PointerEvent event) {
+    }
 }

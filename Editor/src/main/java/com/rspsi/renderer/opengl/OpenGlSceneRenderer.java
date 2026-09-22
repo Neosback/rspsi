@@ -51,6 +51,7 @@ import static org.lwjgl.opengl.GL11.GL_FRONT_AND_BACK;
 import static org.lwjgl.opengl.GL11.GL_LINE;
 import static org.lwjgl.opengl.GL11.GL_GEQUAL;
 import static org.lwjgl.opengl.GL11.GL_NEAREST;
+import static org.lwjgl.opengl.GL11.GL_NEAREST_MIPMAP_LINEAR;
 import static org.lwjgl.opengl.GL11.GL_ONE;
 import static org.lwjgl.opengl.GL11.GL_ONE_MINUS_SRC_ALPHA;
 import static org.lwjgl.opengl.GL11.GL_REPEAT;
@@ -121,10 +122,12 @@ import static org.lwjgl.opengl.GL20.glUniformMatrix4fv;
 import static org.lwjgl.opengl.GL20.glVertexAttribPointer;
 import static org.lwjgl.opengl.GL14.glMultiDrawElements;
 import static org.lwjgl.opengl.GL30.GL_TEXTURE0;
+import static org.lwjgl.opengl.GL30.GL_TEXTURE1;
 import static org.lwjgl.opengl.GL30.GL_TEXTURE_2D_ARRAY;
 import static org.lwjgl.opengl.GL30.glActiveTexture;
 import static org.lwjgl.opengl.GL30.glBindVertexArray;
 import static org.lwjgl.opengl.GL30.glDeleteVertexArrays;
+import static org.lwjgl.opengl.GL30.glGenerateMipmap;
 import static org.lwjgl.opengl.GL30.glGenVertexArrays;
 
 /** OpenGL 3.3 consumer of the immutable world-space upload plan. */
@@ -139,6 +142,20 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private static final float FOV_Y = (float) Math.toRadians(50.0);
     private static final float NEAR = 16.0f;
     private static final float FAR = 65536.0f;
+    /**
+     * Per-bias-step nudge added to clip Z, in normalised depth units.
+     *
+     * <p>The view-space face bias is the client's rule and is what separates
+     * coplanar surfaces close to the camera, but expressed in the depth buffer
+     * its effect is about {@code 2 * uDepthB * bias / depth^2} - roughly 530
+     * units of a 24-bit buffer at 1,000 units of depth, about 5 at 10,000, and
+     * below one at 20,000, which is where coplanar terrain overlays and wall
+     * decorations start to speckle. 1e-5 of normalised depth is around 80
+     * depth-buffer units and stays far below one world unit of real separation
+     * at any camera distance, so it can never reorder surfaces that are
+     * genuinely apart.</p>
+     */
+    private static final float DEPTH_BIAS_NUDGE = 1e-5f;
 
     /** Back-face culling is unresolved, so it is exposed rather than assumed. */
     public static final int CULL_OFF = 0;
@@ -188,6 +205,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int depthALocation;
     private int depthBLocation;
     private int faceBiasLocation;
+    private int depthBiasNudgeLocation;
     private int texturedLocation;
     private int textureAvailableLocation;
     private int textureMissingLocation;
@@ -206,6 +224,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int fogNorthLocation;
     private int fogDepthLocation;
     private int fogColorLocation;
+    private final ZoneVboManager zoneManager = new ZoneVboManager();
+    private int paletteTexture;
+    private int paletteLocation;
     private String uploadedFingerprint;
     private String uploadedTextureFingerprint;
     private int textureArray;
@@ -260,6 +281,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         depthALocation = glGetUniformLocation(program, "uDepthA");
         depthBLocation = glGetUniformLocation(program, "uDepthB");
         faceBiasLocation = glGetUniformLocation(program, "uFaceBias");
+        depthBiasNudgeLocation = glGetUniformLocation(program, "uDepthBiasNudge");
         texturedLocation = glGetUniformLocation(program, "uTextured");
         textureAvailableLocation = glGetUniformLocation(program, "uTextureAvailable");
         textureMissingLocation = glGetUniformLocation(program, "uTextureMissing");
@@ -278,9 +300,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         fogNorthLocation = glGetUniformLocation(program, "uFogNorth");
         fogDepthLocation = glGetUniformLocation(program, "uFogDepth");
         fogColorLocation = glGetUniformLocation(program, "uFogColor");
+        paletteLocation = glGetUniformLocation(program, "uPalette");
         glUseProgram(program);
         glUniform1i(textureLocation, 0);
+        glUniform1i(paletteLocation, 1);
         glUseProgram(0);
+        uploadPaletteTexture();
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_GEQUAL);
         glClearDepth(0.0);
@@ -292,6 +317,33 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // visibility contract of the CPU reference renderer.
         glClearColor(0.063f, 0.094f, 0.153f, 1.0f);
         captureGlError();
+    }
+
+    private void uploadPaletteTexture() {
+        if (paletteTexture != 0) {
+            org.lwjgl.opengl.GL11.glDeleteTextures(paletteTexture);
+        }
+        paletteTexture = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, paletteTexture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        ByteBuffer paletteBuffer = BufferUtils.createByteBuffer(256 * 256 * 4);
+        for (int hsl = 0; hsl < 65536; hsl++) {
+            int rgb = OsrsTerrainColorMath.packedHslToRgb(hsl, 0.6);
+            if (rgb == OsrsTerrainColorMath.INVALID_HSL_COLOR) {
+                rgb = 0;
+            }
+            paletteBuffer.put((byte) ((rgb >>> 16) & 0xFF));
+            paletteBuffer.put((byte) ((rgb >>> 8) & 0xFF));
+            paletteBuffer.put((byte) (rgb & 0xFF));
+            paletteBuffer.put((byte) 0xFF);
+        }
+        paletteBuffer.flip();
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, paletteBuffer);
+        glBindTexture(GL_TEXTURE_2D, 0);
     }
 
     public void draw(GpuUploadPlan plan, CameraState camera, int width, int height) {
@@ -353,8 +405,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         boolean geometryUploaded = false;
         boolean textureUploaded = false;
         if (!plan.fingerprint().equals(uploadedFingerprint)) {
-            uploadGeometry(plan);
-            geometryUploaded = true;
+            zoneManager.upload(plan);
+            geometryUploaded = zoneManager.dirtyZonesUploadedCount() > 0;
+            uploadedFingerprint = plan.fingerprint();
+            orderedPlanFingerprint = null;
         }
         String textureFingerprint = textureFingerprint(plan.textures());
         if (!textureFingerprint.equals(uploadedTextureFingerprint)) {
@@ -372,6 +426,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glUniform1f(aspectLocation, (float) width / height);
         glUniform1f(depthALocation, -(FAR + NEAR) / (FAR - NEAR));
         glUniform1f(depthBLocation, 2.0f * FAR * NEAR / (FAR - NEAR));
+        glUniform1f(depthBiasNudgeLocation, DEPTH_BIAS_NUDGE);
         glUniform1f(brightnessLocation, (float) presentation.brightness());
         glUniform1f(exposureLocation, (float) presentation.exposure());
         glUniform1i(smoothBandingLocation, presentation.smoothBanding() ? 1 : 0);
@@ -386,9 +441,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 ((presentation.fogColor() >>> 8) & 0xFF) / 255.0f,
                 (presentation.fogColor() & 0xFF) / 255.0f);
         glPolygonMode(GL_FRONT_AND_BACK, presentation.wireframe() ? GL_LINE : GL_FILL);
-        glBindVertexArray(vertexArray);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, paletteTexture);
         resetDrawState();
         int drawCalls = 0;
         List<GpuDrawCommand> commands = plan.commands();
@@ -430,6 +486,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         lastFrameDepthWrites = true;
         lastFramePolygonMode = presentation.wireframe() ? GL_LINE : GL_FILL;
         glBindVertexArray(0);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
         glUseProgram(0);
         captureGlError();
         statistics = statisticsFor(plan, visibility, geometryUploaded, textureUploaded, drawCalls);
@@ -565,28 +625,42 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                             CameraState camera, boolean alpha, int clientCycle) {
         int drawCalls = 0;
         int cursor = 0;
+        int lastBoundVao = -1;
         while (cursor < orderedIndices.size()) {
             int firstIndex = orderedIndices.get(cursor);
             GpuDrawCommand first = commands.get(firstIndex);
+            long zoneKey = zoneManager.zoneKeyForCommand(firstIndex);
+            ZoneVboManager.ZoneAllocation alloc = zoneManager.allocation(zoneKey);
             int end = cursor + 1;
             while (end < orderedIndices.size()) {
-                GpuDrawCommand candidate = commands.get(orderedIndices.get(end));
-                if (!sameDrawState(first, candidate, alpha)) break;
+                int candIndex = orderedIndices.get(end);
+                GpuDrawCommand candidate = commands.get(candIndex);
+                if (!sameDrawBatch(first, firstIndex, candidate, candIndex, alpha)) break;
                 end++;
+            }
+            if (alloc == null) {
+                cursor = end;
+                continue;
+            }
+            if (alloc.vao() != lastBoundVao) {
+                glBindVertexArray(alloc.vao());
+                lastBoundVao = alloc.vao();
             }
             applyDrawState(plan, first, alpha, clientCycle);
             int count = end - cursor;
             if (count == 1) {
+                int localFirst = zoneManager.localFirstIndex(firstIndex);
                 glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
-                        (long) first.firstIndex() * Integer.BYTES);
+                        (long) localFirst * Integer.BYTES);
             } else {
                 try (MemoryStack stack = MemoryStack.stackPush()) {
                     IntBuffer counts = stack.mallocInt(count);
                     PointerBuffer offsets = stack.mallocPointer(count);
                     for (int i = cursor; i < end; i++) {
-                        GpuDrawCommand command = commands.get(orderedIndices.get(i));
+                        int cmdIdx = orderedIndices.get(i);
+                        GpuDrawCommand command = commands.get(cmdIdx);
                         counts.put(command.indexCount());
-                        offsets.put((long) command.firstIndex() * Integer.BYTES);
+                        offsets.put((long) zoneManager.localFirstIndex(cmdIdx) * Integer.BYTES);
                     }
                     counts.flip();
                     offsets.flip();
@@ -597,6 +671,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             cursor = end;
         }
         return drawCalls;
+    }
+
+    private boolean sameDrawBatch(GpuDrawCommand first, int firstIdx,
+                                 GpuDrawCommand candidate, int candIdx,
+                                 boolean alpha) {
+        return sameDrawState(first, candidate, alpha)
+                && zoneManager.zoneKeyForCommand(firstIdx) == zoneManager.zoneKeyForCommand(candIdx);
     }
 
     private static boolean sameDrawState(GpuDrawCommand first, GpuDrawCommand candidate,
@@ -645,6 +726,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // GL_GEQUAL tie. Wall decorations separately beat their mounting wall via
         // submissionDepthBias in view-space depth.
         result.sort(Comparator.comparingInt((Integer index) -> commands.get(index).priority())
+                .thenComparingLong(index -> zoneManager.zoneKeyForCommand(index))
                 .thenComparingLong(index -> drawStateKey(commands.get(index), false)));
         if (!visibility.occlusionApplied()) {
             orderedPlanFingerprint = plan.fingerprint();
@@ -653,11 +735,15 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return result;
     }
 
-    private void drawCommand(GpuUploadPlan plan, GpuDrawCommand command,
+    private void drawCommand(GpuUploadPlan plan, GpuDrawCommand command, int commandIndex,
                              CameraState camera, boolean alpha, int clientCycle) {
+        long zoneKey = zoneManager.zoneKeyForCommand(commandIndex);
+        ZoneVboManager.ZoneAllocation alloc = zoneManager.allocation(zoneKey);
+        if (alloc == null) return;
+        glBindVertexArray(alloc.vao());
         applyDrawState(plan, command, alpha, clientCycle);
         glDrawElements(GL_TRIANGLES, command.indexCount(), GL_UNSIGNED_INT,
-                (long) command.firstIndex() * Integer.BYTES);
+                (long) zoneManager.localFirstIndex(commandIndex) * Integer.BYTES);
     }
 
     private void applyDrawState(GpuUploadPlan plan, GpuDrawCommand command,
@@ -778,30 +864,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return upDelta * sinPitch + yawDepth * cosPitch;
     }
 
-    private void uploadGeometry(GpuUploadPlan plan) {
-        FloatBuffer vertexData = BufferUtils.createFloatBuffer(plan.vertices().size() * FLOATS_PER_VERTEX);
-        for (GpuSceneVertex vertex : plan.vertices()) {
-            int rgb = packedColor(vertex);
-            vertexData.put(vertex.x()).put(vertex.y()).put(vertex.z())
-                    .put(vertex.u()).put(vertex.v()).put(vertex.encodedColor())
-                    .put(vertex.alpha()).put(vertex.renderType())
-                    .put(((rgb >>> 16) & 0xFF) / 255.0f)
-                    .put(((rgb >>> 8) & 0xFF) / 255.0f)
-                    .put((rgb & 0xFF) / 255.0f)
-                    .put((float) vertex.priority());
-        }
-        vertexData.flip();
-        IntBuffer indexData = BufferUtils.createIntBuffer(plan.indices().size());
-        plan.indices().forEach(indexData::put);
-        indexData.flip();
-        glBindVertexArray(vertexArray);
-        glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-        glBufferData(GL_ARRAY_BUFFER, vertexData, GL_STATIC_DRAW);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexData, GL_STATIC_DRAW);
-        glBindVertexArray(0);
-        uploadedFingerprint = plan.fingerprint();
-    }
 
     private static String textureFingerprint(Map<Integer, RenderTextureResource> resources) {
         StringBuilder value = new StringBuilder();
@@ -845,7 +907,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // Match the client baseline first. Mipmapping can be added after
         // parity is proven; it is not safe while fallback layers can have a
         // different source dimension.
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -868,6 +930,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             fallback.flip();
             glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, 1, 1, 1,
                     GL_RGBA, GL_UNSIGNED_BYTE, fallback);
+            glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
             return;
         }
         for (RenderTextureResource resource : available) {
@@ -879,12 +942,22 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 for (int x = 0; x < TEXTURE_SIZE; x++) {
                     int sourceX = Math.min(resource.width() - 1,
                             x * resource.width() / TEXTURE_SIZE);
-                    int rgb = source[sourceY * resource.width() + sourceX] & 0xFFFFFF;
-                    // Real cache pixels use RGB zero as the transparent texel.
-                    // Average-color fallbacks are explicit opaque material
-                    // colors even when their average happens to be black.
-                    int alpha = resource.pixelStatus() == RenderTextureResource.PixelStatus.AVAILABLE
-                            && rgb == 0 ? 0x00 : 0xFF;
+                    int argb = source[sourceY * resource.width() + sourceX];
+                    int rgb = argb & 0xFFFFFF;
+                    // The client's transparency source is the texture's own
+                    // alpha channel (`src >>> 24` in the textured scanline),
+                    // which ARGBTexture/AlphaPalettedTexture really populate
+                    // with partial values - that is how water and glass read
+                    // through to the terrain beneath them. Only fall back to
+                    // the binary cutout convention when the provider's pixels
+                    // carry no alpha information at all.
+                    int alpha;
+                    if (resource.usesAlphaChannel()) {
+                        alpha = RenderTextureResource.alphaOf(argb);
+                    } else {
+                        alpha = resource.pixelStatus() == RenderTextureResource.PixelStatus.AVAILABLE
+                                && rgb == 0 ? 0x00 : 0xFF;
+                    }
                     pixels.put((byte) (rgb >>> 16)).put((byte) (rgb >>> 8))
                             .put((byte) rgb).put((byte) alpha);
                 }
@@ -896,19 +969,14 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             textureLayers.put(resource.id(), resource.id());
             textureScales.put(resource.id(), new float[]{1.0f, 1.0f});
         }
-    }
-
-    private static int packedColor(GpuSceneVertex vertex) {
-        int rgb = vertex.colorEncoding() == GpuColorEncoding.PACKED_JAGEX_HSL
-                ? OsrsTerrainColorMath.packedHslToRgb(vertex.encodedColor(), 0.6)
-                : 0;
-        // This helper is expanded by the caller below; keeping the conversion
-        // here avoids ever feeding packed HSL into a native interpolation.
-        return rgb;
+        glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
     }
 
     @Override
     public void close() {
+        zoneManager.close();
+        if (paletteTexture != 0) org.lwjgl.opengl.GL11.glDeleteTextures(paletteTexture);
+        paletteTexture = 0;
         if (textureArray != 0) org.lwjgl.opengl.GL11.glDeleteTextures(textureArray);
         textureArray = 0;
         textureLayers.clear();
@@ -920,6 +988,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         vertexArray = vertexBuffer = indexBuffer = program = 0;
         uploadedFingerprint = null;
         uploadedTextureFingerprint = null;
+        orderedPlanFingerprint = null;
+        cachedOpaqueOrder = List.of();
         diagnosticsLogged = false;
     }
 
@@ -965,6 +1035,16 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             uniform float uDepthA;
             uniform float uDepthB;
             uniform float uFaceBias;
+            // Constant depth-buffer separation per bias step, on top of the
+            // view-space bias. The view-space term is correct up close but its
+            // depth-buffer effect falls off as 1 / depth^2, so coplanar pairs
+            // stop separating once the camera is far out. This uniform is added
+            // to Z_ndc directly - i.e. it is applied to clip Z scaled by the
+            // unbiased W (k * depth), not as a bare clip-space offset, which W
+            // would divide back down by depth and turn into yet another
+            // distance-dependent term. Only Z moves and W stays unbiased, so
+            // screen X/Y and the silhouette are unchanged.
+            uniform float uDepthBiasNudge;
             uniform int uUseFog;
             uniform float uFogWest;
             uniform float uFogEast;
@@ -1000,8 +1080,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 // the offset shrink with proximity, which is why flush wall
                 // decorations z-fought their wall when zoomed in.
                 float biasedDepth = max(depth - uFaceBias * 2.0, 1.0);
+                // Multiplying the nudge by depth (the unbiased W) is what makes
+                // it survive the perspective divide as a constant separation in
+                // normalised depth, independent of camera distance.
                 vec4 projected = vec4(uFocal / uAspect * x, uFocal * y,
-                                      uDepthA * depth + uDepthB * (depth / biasedDepth),
+                                      uDepthA * depth + uDepthB * (depth / biasedDepth)
+                                              + uFaceBias * uDepthBiasNudge * depth,
                                       depth);
                 gl_Position = projected;
                 vUv = aUv;
@@ -1034,6 +1118,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             in vec3 vColor;
             in float vFogAmount;
             uniform sampler2DArray uTexture;
+            uniform sampler2D uPalette;
             uniform int uTextured;
             uniform int uTextureAvailable;
             uniform int uTextureMissing;
@@ -1046,76 +1131,81 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             uniform int uSmoothBanding;
             uniform vec3 uFogColor;
             out vec4 outColor;
-            float hueChannel(float lower, float upper, float hue) {
-                if (hue > 1.0) hue -= 1.0;
-                if (hue < 0.0) hue += 1.0;
-                if (6.0 * hue < 1.0) return lower + (upper - lower) * 6.0 * hue;
-                if (2.0 * hue < 1.0) return upper;
-                if (3.0 * hue < 2.0) return lower + (upper - lower) * (2.0 / 3.0 - hue) * 6.0;
-                return lower;
-            }
-            vec3 packedHslToRgb(float packed) {
-                float hueBand = float((int(packed) >> 10) & 63);
-                float saturationBand = float((int(packed) >> 7) & 7);
-                float lightness = float(int(packed) & 127);
-                float hue = hueBand / 64.0 + 0.0078125;
-                float saturation = saturationBand / 8.0 + 0.0625;
-                float luminance = lightness / 128.0;
-                float upper = luminance < 0.5
-                        ? luminance * (1.0 + saturation)
-                        : luminance + saturation - luminance * saturation;
-                float lower = 2.0 * luminance - upper;
-                vec3 rgb = vec3(hueChannel(lower, upper, hue + 1.0 / 3.0),
-                        hueChannel(lower, upper, hue),
-                        hueChannel(lower, upper, hue - 1.0 / 3.0));
-                return pow(rgb, vec3(0.6));
-            }
             void main() {
                 vec3 color;
                 if (uTextured != 0) {
-                    // RuneLite's frag.glsl divides textured-face lightness by
-                    // 127, not 128; align the constant exactly.
-                    float lightness = clamp(vEncodedColor / 127.0, 0.0, 1.0);
                     vec2 textureUv = vUv + uTextureOffset;
                     if (uTerrain != 0 || uTextureOffset.x != 0.0 || uTextureOffset.y != 0.0) {
                         textureUv = fract(textureUv);
                     }
                     if (uTextureAvailable != 0) {
-                        vec4 texel = texture(uTexture,
-                                vec3(textureUv * uTextureScale, float(uTextureLayer)));
-                        // RuneScape's indexed texture convention marks the
-                        // transparent texel via alpha=0 at upload
-                        // (uploadTextureArray), matching RuneLite's
-                        // TextureManager. Testing alpha instead of rgb==0
-                        // lets legitimately black texels render instead of
-                        // becoming holes, and stays correct once mipmapping
-                        // blends alpha near cutout edges.
-                        if (texel.a < 1.0) discard;
-                        color = texel.rgb * lightness;
+                        vec3 texCoord = vec3(textureUv * uTextureScale, float(uTextureLayer));
+                        // Base LOD 0 alpha test prevents cutout erosion at distance
+                        vec4 texel0 = textureLod(uTexture, texCoord, 0.0);
+                        if (uTerrain != 0) {
+                            // Client floor rule: render_texture_triangle passes
+                            // floor = true for tile tops, and a floor texel is
+                            // never blended into the framebuffer. A zero-alpha
+                            // texel leaves it untouched - so the underlay the
+                            // floor covers stays visible - and every other texel
+                            // is mixed toward the tile's own flat colour and
+                            // written opaquely (see below).
+                            if (texel0.a <= 0.0) discard;
+                        } else if (texel0.a < 0.5) {
+                            // Model cutouts stay in the opaque stream so their
+                            // visible texels keep depth ownership and do not
+                            // fight their own backing faces.
+                            discard;
+                        }
+
+                        vec4 texel = texture(uTexture, texCoord);
+                        if (uTerrain != 0) {
+                            // Bank/shift integer texture shading: authentic client software rasterizer bit math
+                            ivec3 texRgb = ivec3(round(texel.rgb * 255.0));
+                            int texLum = ((texRgb.r >> 1) + (texRgb.g >> 1) + (texRgb.b >> 1) + 127) >> 2;
+                            int startCol = int(vEncodedColor);
+                            int shadedLight = clamp(((startCol & 0x7F) * texLum) >> 7, 0, 127);
+                            int shadedHsl = (startCol & 0xFF80) | shadedLight;
+                            vec3 shaded = texelFetch(uPalette, ivec2(shadedHsl & 255, (shadedHsl >> 8) & 255), 0).rgb;
+                            // The client mixes a partial texel toward the TILE's
+                            // flat colour - colourPalette[tile.getColour()] - and
+                            // then writes it opaquely; it does not blend into
+                            // whatever happens to be behind it. The flat colour
+                            // is the same hue and saturation at full lightness.
+                            int flatHsl = (startCol & 0xFF80) | 0x7F;
+                            vec3 tileColour =
+                                    texelFetch(uPalette, ivec2(flatHsl & 255, (flatHsl >> 8) & 255), 0).rgb;
+                            color = mix(tileColour, shaded, texel0.a);
+                        } else {
+                            float lightness = clamp(vEncodedColor / 127.0, 0.0, 1.0);
+                            color = texel.rgb * lightness;
+                        }
                     } else if (uTextureMissing != 0) {
-                        // Missing texture definitions are a cache/contract
-                        // failure, not a valid grayscale material. Make the
-                        // problem visible in the viewport and diagnostics.
+                        float lightness = clamp(vEncodedColor / 127.0, 0.0, 1.0);
                         color = vec3(1.0, 0.0, 1.0) * lightness;
                     } else {
                         color = vec3(clamp(vEncodedColor / 64.0, 0.0, 1.0));
                     }
                 } else {
-                    // RuneLite's frag.glsl picks between two HSL
-                    // interpolation strategies via a "smooth banding" mix,
-                    // not a single fixed one: interpolating pre-decoded RGB
-                    // (vColor, decoded once per vertex at upload) is the
-                    // client's classic/default look and can band across
-                    // large faces; interpolating the packed HSL integer
-                    // itself and decoding it per pixel (packedHslToRgb of
-                    // the noperspective-interpolated vEncodedColor) removes
-                    // that banding, matching RuneLite's smoothBanding=on
-                    // path exactly (uSmoothBanding was previously declared
-                    // but never read here, so the setting did nothing).
-                    color = mix(vColor, packedHslToRgb(vEncodedColor), float(uSmoothBanding));
+                    int hsl = clamp(int(vEncodedColor), 0, 65535);
+                    vec3 paletteColor = texelFetch(uPalette, ivec2(hsl & 255, (hsl >> 8) & 255), 0).rgb;
+                    color = mix(vColor, paletteColor, float(uSmoothBanding));
                 }
-                float alpha = uTerrain != 0 ? clamp(vAlpha / 255.0, 0.0, 1.0)
-                        : (vRenderType > 2.5 ? 0.5 : 1.0 - clamp(vAlpha / 255.0, 0.0, 1.0));
+                float alpha;
+                if (uTerrain != 0) {
+                    // Terrain vertex alpha is opacity (255 opaque), and a
+                    // textured floor stays opaque even where its texture is
+                    // partly transparent - that transparency was already spent
+                    // mixing toward the tile colour above.
+                    alpha = clamp(vAlpha / 255.0, 0.0, 1.0);
+                } else {
+                    // Model alpha is transparency (0 opaque, 255 invisible).
+                    // Render type is a shading selector (1 and 3 are flat
+                    // single-colour faces), never an opacity: the client's
+                    // Mesh.renderFace only switches on it to choose shaded,
+                    // flat-colour or textured output.
+                    alpha = 1.0 - clamp(vAlpha / 255.0, 0.0, 1.0);
+                }
                 color = clamp(color * uBrightness * exp2(uExposure), 0.0, 1.0);
                 color = mix(color, uFogColor, vFogAmount);
                 outColor = vec4(color, alpha);

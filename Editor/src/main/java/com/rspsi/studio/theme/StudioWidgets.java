@@ -124,16 +124,163 @@ public final class StudioWidgets {
         ImGui.dummy(1.0f, 2.0f);
     }
 
-    public static void badge(String label, float r, float g, float b) {
-        ImGui.pushStyleColor(ImGuiCol.Button, r, g, b, 0.22f);
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, r, g, b, 0.32f);
-        ImGui.smallButton(label);
+    private static final java.util.Map<String, Float> ANIMATIONS = new java.util.HashMap<>();
+
+    /** Delta-time smoothed animation lerp for fluid 60fps micro-interactions. */
+    public static float lerp(String key, float target, float speed) {
+        float dt = Math.max(1.0f / 120.0f, Math.min(1.0f / 15.0f, ImGui.getIO().getDeltaTime()));
+        float current = ANIMATIONS.getOrDefault(key, target);
+        float updated = current + (target - current) * Math.min(1.0f, speed * dt);
+        if (Math.abs(updated - target) < 0.001f) {
+            updated = target;
+        }
+        ANIMATIONS.put(key, updated);
+        return updated;
+    }
+
+    private static int lerpColor(int colA, int colB, float t) {
+        int rA = colA & 0xFF;
+        int gA = (colA >> 8) & 0xFF;
+        int bA = (colA >> 16) & 0xFF;
+        int aA = (colA >> 24) & 0xFF;
+
+        int rB = colB & 0xFF;
+        int gB = (colB >> 8) & 0xFF;
+        int bB = (colB >> 16) & 0xFF;
+        int aB = (colB >> 24) & 0xFF;
+
+        int r = Math.clamp((int) (rA + (rB - rA) * t), 0, 255);
+        int g = Math.clamp((int) (gA + (gB - gA) * t), 0, 255);
+        int b = Math.clamp((int) (bA + (bB - bA) * t), 0, 255);
+        int a = Math.clamp((int) (aA + (aB - aA) * t), 0, 255);
+
+        return (a << 24) | (b << 16) | (g << 8) | r;
+    }
+
+    /**
+     * Begins an elevated, rounded card container with 1px subtle border.
+     */
+    public static void beginCard(String id, float width, float height) {
+        ImGui.pushStyleColor(ImGuiCol.ChildBg, ImGui.getColorU32(0.10f, 0.11f, 0.15f, 0.95f));
+        ImGui.pushStyleColor(ImGuiCol.Border, ImGui.getColorU32(0.18f, 0.20f, 0.28f, 0.85f));
+        ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 8.0f);
+        ImGui.pushStyleVar(ImGuiStyleVar.ChildBorderSize, 1.0f);
+        ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 14.0f, 12.0f);
+        ImGui.beginChild("##card-" + id, width, height, true, imgui.flag.ImGuiWindowFlags.None);
+    }
+
+    public static void endCard() {
+        ImGui.endChild();
+        ImGui.popStyleVar(3);
         ImGui.popStyleColor(2);
     }
 
+    /**
+     * Modern iOS / Linear-style capsule toggle switch with smooth delta-time animated knob.
+     */
+    public static boolean toggleSwitch(String id, boolean state) {
+        return toggleSwitch(id, state, null);
+    }
+
+    public static boolean toggleSwitch(String id, boolean state, String label) {
+        float width = 36.0f;
+        float height = 20.0f;
+        float radius = height * 0.5f;
+
+        float x = ImGui.getCursorScreenPosX();
+        float y = ImGui.getCursorScreenPosY();
+
+        boolean clicked = ImGui.invisibleButton("##switch-" + id, width, height);
+        boolean newState = clicked ? !state : state;
+        boolean hovered = ImGui.isItemHovered();
+
+        float anim = lerp("switch-" + id, newState ? 1.0f : 0.0f, 16.0f);
+
+        ImDrawList drawList = ImGui.getWindowDrawList();
+        int colOff = ImGui.getColorU32(0.15f, 0.17f, 0.23f, 1.0f);
+        int colOn = ImGui.getColorU32(0.39f, 0.40f, 0.95f, 1.0f);
+        int colBg = lerpColor(colOff, colOn, anim);
+        drawList.addRectFilled(x, y, x + width, y + height, colBg, radius);
+
+        int borderColor = hovered ? ImGui.getColorU32(0.51f, 0.55f, 0.97f, 0.8f)
+                : ImGui.getColorU32(0.24f, 0.27f, 0.36f, 0.7f);
+        drawList.addRect(x, y, x + width, y + height, borderColor, radius, 0, 1.0f);
+
+        float knobPadding = 2.5f;
+        float knobRadius = radius - knobPadding;
+        float knobMinX = x + radius;
+        float knobMaxX = x + width - radius;
+        float knobX = knobMinX + (knobMaxX - knobMinX) * anim;
+        float knobY = y + radius;
+
+        drawList.addCircleFilled(knobX, knobY, knobRadius, ImGui.getColorU32(1.0f, 1.0f, 1.0f, 1.0f));
+
+        if (label != null && !label.isEmpty()) {
+            ImGui.sameLine(0.0f, 8.0f);
+            ImGui.alignTextToFramePadding();
+            ImGui.textUnformatted(label);
+        }
+
+        return newState;
+    }
+
+    /** Primary saturated brand CTA button (#6366F1). */
+    public static boolean buttonPrimary(String label, float width, float height) {
+        ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.39f, 0.40f, 0.95f, 1.0f));
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.51f, 0.55f, 0.97f, 1.0f));
+        ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.31f, 0.27f, 0.90f, 1.0f));
+        ImGui.pushStyleColor(ImGuiCol.Text, ImGui.getColorU32(1.0f, 1.0f, 1.0f, 1.0f));
+        boolean clicked = ImGui.button(label, width, height);
+        ImGui.popStyleColor(4);
+        return clicked;
+    }
+
+    /** Secondary neutral surface button with subtle 1px border. */
+    public static boolean buttonSecondary(String label, float width, float height) {
+        ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.14f, 0.16f, 0.22f, 1.0f));
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.20f, 0.22f, 0.30f, 1.0f));
+        ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.12f, 0.13f, 0.18f, 1.0f));
+        ImGui.pushStyleColor(ImGuiCol.Border, ImGui.getColorU32(0.24f, 0.27f, 0.36f, 0.8f));
+        boolean clicked = ImGui.button(label, width, height);
+        ImGui.popStyleColor(4);
+        return clicked;
+    }
+
+    /** Ghost button: transparent background until hovered. */
+    public static boolean buttonGhost(String label, float width, float height) {
+        ImGui.pushStyleColor(ImGuiCol.Button, 0x00000000);
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.20f, 0.22f, 0.30f, 0.6f));
+        ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.15f, 0.17f, 0.24f, 0.8f));
+        boolean clicked = ImGui.button(label, width, height);
+        ImGui.popStyleColor(3);
+        return clicked;
+    }
+
+    /** Rounded pill badge for status and tags. */
+    public static void pill(String label, int bgColor, int textColor) {
+        ImVec2 size = ImGui.calcTextSize(label);
+        float padX = 8.0f;
+        float padY = 2.5f;
+        float width = size.x + padX * 2.0f;
+        float height = size.y + padY * 2.0f;
+        float radius = height * 0.5f;
+
+        float x = ImGui.getCursorScreenPosX();
+        float y = ImGui.getCursorScreenPosY();
+
+        ImDrawList drawList = ImGui.getWindowDrawList();
+        drawList.addRectFilled(x, y, x + width, y + height, bgColor, radius);
+        drawList.addText(x + padX, y + padY, textColor, label);
+
+        ImGui.dummy(width, height);
+    }
+
+    public static void badge(String label, float r, float g, float b) {
+        pill(label, ImGui.getColorU32(r, g, b, 0.22f), ImGui.getColorU32(r, g, b, 1.0f));
+    }
+
     public static boolean toggle(String label, boolean value) {
-        ImBoolean state = new ImBoolean(value);
-        return ImGui.checkbox(label, state) ? state.get() : value;
+        return toggleSwitch(label, value, label);
     }
 
     public static void searchHint(String hint) {

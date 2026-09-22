@@ -409,6 +409,14 @@ public final class MinimapBuilder {
                         definitions.texture(floor.texture());
                 if (texture.isPresent() && texture.get().averageHsl() >= 0) {
                     minimapHsl = texture.get().averageHsl();
+                } else {
+                    // The provider exposes no average HSL, so derive the
+                    // texture's hue and saturation from its decoded pixels -
+                    // otherwise textured tiles (water, paths, interior floors)
+                    // fall through to the overlay colour and the minimap shows
+                    // them as the wrong material.
+                    minimapHsl = com.rspsi.editor.render.TextureAverageColor.of(definitions)
+                            .packedHsl(floor.texture());
                 }
             }
             int hue = floor.hue();

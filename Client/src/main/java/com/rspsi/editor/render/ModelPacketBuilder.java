@@ -81,7 +81,7 @@ public final class ModelPacketBuilder {
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         Optional<ObjectDefinitionView> definition = definitions.object(object.id());
         if (definition.isEmpty()) return Optional.empty();
-        ObjectDefinitionView objectDefinition = definition.orElseThrow();
+        ObjectDefinitionView objectDefinition = resolveDisplayDefinition(definition.orElseThrow());
         ObjectAppearanceView appearance = definitions.objectAppearance(object.id())
                 .orElseGet(ObjectAppearanceView::empty);
         Optional<AnimationFrameView> animation = animationFrame(appearance.animationId(), clientCycle);
@@ -239,6 +239,29 @@ public final class ModelPacketBuilder {
      * also reproduces the client's separate "8" diagonal default without a
      * second case.
      */
+    /**
+     * A "multiloc" definition (opcodes 77/92: {@code multiVarBit}/{@code
+     * multiVarp}/{@code transforms}) carries no models of its own - the
+     * client swaps in one of its {@code transforms} entries based on live
+     * varbit/varp state, falling back to {@code multiDefault} (an object id,
+     * not an index - see OpenRune's {@code Transforms.readTransforms}, which
+     * appends it as the array's own last slot) when no player state applies.
+     * An editor session has no player state at all, so {@code multiDefault}
+     * IS the client's "no state" case, not an approximation of it. Skipping
+     * this resolution renders such objects as nothing - Lumbridge's castle
+     * bushes are exactly this: the placed id is a bare multiloc shell.
+     */
+    private ObjectDefinitionView resolveDisplayDefinition(ObjectDefinitionView definition) {
+        ObjectDefinitionView current = definition;
+        for (int hop = 0; hop < 8 && current.modelIds().length == 0
+                && current.hasTransforms() && current.defaultTransform() >= 0; hop++) {
+            Optional<ObjectDefinitionView> next = definitions.object(current.defaultTransform());
+            if (next.isEmpty() || next.orElseThrow().id() == current.id()) break;
+            current = next.orElseThrow();
+        }
+        return current;
+    }
+
     private int wallDecorationDisplacement(WorldObject decoration,
                                            ObjectAppearanceView ownAppearance,
                                            WorldDocument document) {
@@ -334,15 +357,22 @@ public final class ModelPacketBuilder {
             }
             int rawAlpha = valueAt(alphas, face, 0);
             int renderType = valueAt(renderTypes, face, 0);
-            // The client encodes face render types 2 and 3 through alpha
-            // sentinels -1 and -2. Preserve those semantics before clamping
-            // ordinary 0..255 transparency values.
-            if (rawAlpha == -1) renderType = 2;
-            if (rawAlpha == -2) renderType = 3;
+            // The cache stores one SIGNED byte of per-face transparency and the
+            // client normalises it to 0..255 while loading (MeshOSRSType3:
+            // `if (faceTransparencies[face] < 0) faceTransparencies[face] += 256`).
+            // The definition provider hands that raw signed byte through, so
+            // 0x80..0xFF arrives negative. Clamping it to zero instead drew
+            // every translucent face fully opaque - which is what made gates and
+            // doors read as solid slabs and left translucent wall trim fighting
+            // the wall it decorates. 0xFF is invisible in the client (its
+            // transparency is spent before the write), so it stays out of both
+            // submission passes exactly as the old -1 sentinel did.
+            int alpha = rawAlpha & 0xFF;
+            if (renderType == -1) renderType = 2;
+            if (alpha == 255) renderType = 2;
             int texture = valueAt(textures, face, -1);
             int color = valueAt(colors, face, 0);
             color = recolor(color, appearance.recolors());
-            int alpha = clamp(rawAlpha, 0, 255);
             int priority = clamp(valueAt(priorities, face, renderPriority), 0, 255);
             int bias = clamp(valueAt(depthBias, face, 0), 0, 255);
             Normal faceNormal = faceNormal(transformed.get(a), transformed.get(b), transformed.get(c));

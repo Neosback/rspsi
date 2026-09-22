@@ -107,6 +107,13 @@ class StudioPluginsAndMinimapTest {
         assertTrue(manager.toolPlugin("terrain.terrace").isPresent());
         assertTrue(manager.toolPlugin("terrain.ramp").isPresent());
         assertTrue(manager.toolPlugin("object.place").isPresent());
+        assertTrue(manager.toolPlugin("path.spline").isPresent());
+
+        var pathPlugin = manager.toolPlugin("path.spline").get();
+        assertEquals("path.spline", pathPlugin.toolId());
+        assertEquals("P", pathPlugin.shortcut());
+        assertEquals("Path Builder", pathPlugin.name());
+        assertTrue(pathPlugin.isConfigurable());
 
         var painter = manager.toolPlugin("terrain.tile-painter").get();
         assertEquals("terrain.tile-painter", painter.toolId());

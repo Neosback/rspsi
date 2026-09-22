@@ -17,6 +17,9 @@ public interface EditorTool {
 
     void pointerUp(PointerEvent event);
 
+    default void pointerMove(PointerEvent event) {
+    }
+
     default void renderOverlay(OverlayDraw draw) {
     }
 

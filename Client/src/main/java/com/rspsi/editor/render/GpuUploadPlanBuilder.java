@@ -38,8 +38,7 @@ public final class GpuUploadPlanBuilder {
                     indices.add(base + 1);
                     indices.add(base + 2);
                     appendCommand(commands, tile.worldAddress(), SceneLayer.Kind.TERRAIN,
-                            face.alpha() == 255 ? GpuDrawCommand.SubmissionPass.OPAQUE
-                                    : GpuDrawCommand.SubmissionPass.ALPHA,
+                            terrainPass(face),
                             first, face.textureId(), face.priority(),
                             terrainDepthBias(face), -1, GpuDrawCommand.RenderMode.DEFAULT);
                 }
@@ -93,6 +92,24 @@ public final class GpuUploadPlanBuilder {
     }
 
     /**
+     * Selects the submission pass for one terrain face.
+     *
+     * <p>A textured floor stays in the opaque, depth-writing pass even when its
+     * texture is partly transparent. The client's floor scanline
+     * ({@code isObject = floor} with {@code floor = true} for tile tops) spends
+     * the texture's alpha by mixing the texel toward the tile's own flat colour
+     * and then writing the result OPAQUELY; only a zero-alpha texel skips the
+     * write. No routing to a blend stream is needed, and keeping the depth write
+     * is what stops coplanar floors from losing depth ownership. The shading
+     * path does that mixing, so this only has to respect explicit face alpha.</p>
+     */
+    private static GpuDrawCommand.SubmissionPass terrainPass(TerrainRenderFace face) {
+        return face.alpha() == 255
+                ? GpuDrawCommand.SubmissionPass.OPAQUE
+                : GpuDrawCommand.SubmissionPass.ALPHA;
+    }
+
+    /**
      * Overlay and underlay meshes occupy the same tile plane. Give the
      * authored overlay a minimal client-style bias so the native depth buffer
      * does not alternate between coplanar fragments along every tile seam.
@@ -118,7 +135,13 @@ public final class GpuUploadPlanBuilder {
                 // discards transparent texels. Moving the entire triangle to
                 // the alpha pass disables depth writes and makes banners and
                 // foliage fight with their own coplanar/backing faces.
-                boolean transparent = face.alpha() != 0 || face.renderType() == 3;
+                //
+                // Only real model alpha selects the blend pass. Render type is
+                // a shading selector - the client's Mesh.renderFace maps 0 to
+                // shaded, 1 to flat colour and 2/3 to textured - so treating
+                // type 3 as 50% translucent drew a large share of roof, wall
+                // and prop textures at half opacity.
+                boolean transparent = face.alpha() != 0;
                 if ((pass == GpuDrawCommand.SubmissionPass.ALPHA) != transparent) continue;
                 ModelVertex a = model.vertices().get(face.a());
                 ModelVertex b = model.vertices().get(face.b());
@@ -140,7 +163,7 @@ public final class GpuUploadPlanBuilder {
                 indices.add(base + 2);
                 appendCommand(commands, tile.worldAddress(), layer.kind(), pass,
                         first, face.textureId(), submissionPriority(layer.kind(), face.priority()),
-                        submissionDepthBias(layer.kind(), face.depthBias()), model.objectId(),
+                        submissionDepthBias(layer.kind(), face.priority(), face.depthBias()), model.objectId(),
                         model.renderMode());
             }
         }
@@ -173,9 +196,19 @@ public final class GpuUploadPlanBuilder {
      * nonzero bias step so the ordering the client got implicitly is stated
      * explicitly here, exactly as terrainDepthBias above does for a coplanar
      * overlay over its underlay.</p>
+     *
+     * <p>That flat step alone only separates a decoration from its wall - it
+     * does nothing for a decoration's OWN internal layers (a banner's cloth,
+     * trim and crest are separate coplanar faces at ascending priorities,
+     * per {@link #submissionPriority}'s javadoc). Those faces all shared the
+     * same flat bias, so they z-fought each other exactly as the wall/decor
+     * pair did before this method existed. Folding facePriority into the
+     * bias gives each priority tier its own depth step, same as the wall
+     * case, instead of only stating intent in a comment nothing enforced.</p>
      */
-    private static int submissionDepthBias(SceneLayer.Kind layer, int faceBias) {
-        return layer == SceneLayer.Kind.WALL_DECORATION ? Math.max(1, faceBias) : faceBias;
+    private static int submissionDepthBias(SceneLayer.Kind layer, int facePriority, int faceBias) {
+        if (layer != SceneLayer.Kind.WALL_DECORATION) return faceBias;
+        return Math.min(255, Math.max(1, faceBias) + facePriority);
     }
 
     private static void appendCommand(List<GpuDrawCommand> commands, WorldTileAddress tile,

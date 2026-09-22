@@ -44,4 +44,9 @@ public final class EditorToolController implements PointerEventSink {
     public void pointerUp(PointerEvent event) {
         if (activeTool != null) activeTool.pointerUp(event);
     }
+
+    @Override
+    public void pointerMove(PointerEvent event) {
+        if (activeTool != null) activeTool.pointerMove(event);
+    }
 }

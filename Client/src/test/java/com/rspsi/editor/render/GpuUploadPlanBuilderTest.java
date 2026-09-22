@@ -59,7 +59,10 @@ class GpuUploadPlanBuilderTest {
         assertEquals(7, plan.vertices().get(5).encodedColor());
         assertEquals(3, plan.commands().get(0).indexCount());
         assertEquals(3, plan.commands().get(1).firstIndex());
-        assertEquals(23, plan.commands().get(1).depthBias());
+        // Authored face bias (23) plus this face's own priority (2): wall
+        // decorations fold priority into the bias so a model's own coplanar
+        // priority layers separate in depth, not just the flat minimum step.
+        assertEquals(25, plan.commands().get(1).depthBias());
         assertEquals(2, plan.commands().get(1).priority(),
                 "wall decorations preserve authored model face priority");
         assertEquals(GpuDrawCommand.RenderMode.SORTED_NO_DEPTH,
@@ -205,6 +208,96 @@ class GpuUploadPlanBuilderTest {
     }
 
     @Test
+    void alphaCarryingFloorTextureStaysInTheDepthWritingPass() {
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
+        TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
+        TerrainRenderPacket terrain = new TerrainRenderPacket(coordinate,
+                List.of(new TerrainRenderVertex(0, 0, 12, 64, 0, 0),
+                        new TerrainRenderVertex(128, 0, 12, 80, 128, 0),
+                        new TerrainRenderVertex(0, 128, 16, 96, 0, 128)),
+                List.of(new TerrainRenderFace(0, 1, 2, 1, 17, 255, 0)),
+                1, 0, 17, -1, -1, false, false, -1);
+        SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
+                Optional.empty(), Optional.of(terrain), List.of(),
+                List.of(new SceneLayer(SceneLayer.Kind.TERRAIN, List.of())),
+                List.of(), false, false);
+        // Water-style ARGB texture: opaque, half and fully transparent texels.
+        RenderTextureResource water = new RenderTextureResource(17,
+                new TextureDefinitionView(17, true, 17, 0x3A5F9E, 0, 0, false),
+                2, 2, new int[]{0xFF3A5F9E, 0x803A5F9E, 0x003A5F9E, 0x003A5F9E},
+                RenderTextureResource.PixelStatus.AVAILABLE, "");
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
+                        Map.of()), 3200, 3200, 1, 0, java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "alpha-floor", Map.of(17, water));
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        // The client's floor scanline spends the texture's alpha by mixing the
+        // texel toward the tile's flat colour and then writing the result
+        // opaquely, so a translucent floor texture never leaves the pass that
+        // owns depth.
+        assertEquals(GpuDrawCommand.SubmissionPass.OPAQUE, plan.commands().get(0).pass());
+    }
+
+    @Test
+    void opaqueFloorTextureStaysInTheDepthWritingPass() {
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
+        TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
+        TerrainRenderPacket terrain = new TerrainRenderPacket(coordinate,
+                List.of(new TerrainRenderVertex(0, 0, 12, 64, 0, 0),
+                        new TerrainRenderVertex(128, 0, 12, 80, 128, 0),
+                        new TerrainRenderVertex(0, 128, 16, 96, 0, 128)),
+                List.of(new TerrainRenderFace(0, 1, 2, 1, 7, 255, 0)),
+                1, 0, 7, -1, -1, false, false, -1);
+        SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
+                Optional.empty(), Optional.of(terrain), List.of(),
+                List.of(new SceneLayer(SceneLayer.Kind.TERRAIN, List.of())),
+                List.of(), false, false);
+        RenderTextureResource grass = new RenderTextureResource(7,
+                new TextureDefinitionView(7, false, 7, 0x4A7C3F, 0, 0, false),
+                2, 2, new int[]{0x4A7C3F, 0x518444, 0x446E39, 0x5A8F4B},
+                RenderTextureResource.PixelStatus.AVAILABLE, "");
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
+                        Map.of()), 3200, 3200, 1, 0, java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "opaque-floor", Map.of(7, grass));
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertFalse(grass.usesAlphaChannel());
+        assertEquals(GpuDrawCommand.SubmissionPass.OPAQUE, plan.commands().get(0).pass());
+    }
+
+    @Test
+    void modelTextureAlphaStillKeepsCutoutsInTheDepthWritingPass() {
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
+        TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
+        ModelRenderPacket model = new ModelRenderPacket(coordinate, 8, ObjectCategory.GROUND,
+                List.of(new ModelVertex(0, 0, 0, 1, 0, 0, 1, 0, 0),
+                        new ModelVertex(128, 0, 0, 1, 0, 0, 1, 1, 0),
+                        new ModelVertex(0, 0, 128, 1, 0, 0, 1, 0, 1)),
+                List.of(new ModelTriangle(0, 1, 2, 1, 1, 1, 17, 0, 0, 0)), List.of(), -1,
+                0, 0, 0, 128, 0, 128, false, false);
+        SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
+                Optional.empty(), Optional.empty(), List.of(model),
+                List.of(new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0))),
+                List.of(), false, false);
+        RenderTextureResource foliage = new RenderTextureResource(17,
+                new TextureDefinitionView(17, true, 17, 0x3A5F9E, 0, 0, false),
+                2, 2, new int[]{0xFF3A5F9E, 0x803A5F9E, 0x003A5F9E, 0x003A5F9E},
+                RenderTextureResource.PixelStatus.AVAILABLE, "");
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
+                        Map.of()), 3200, 3200, 1, 0, java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "model-cutout", Map.of(17, foliage));
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(GpuDrawCommand.SubmissionPass.OPAQUE, plan.commands().get(0).pass());
+    }
+
+    @Test
     void textureAndGeometryChangesProduceDifferentUploadFingerprints() {
         GpuScenePacket empty = new GpuScenePacket(
                 new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
@@ -328,14 +421,19 @@ class GpuUploadPlanBuilderTest {
         // Priorities must match the authored face priorities 0, 1, 3, not clamped to 10
         assertEquals(0, plan.commands().get(0).priority(), "cloth retains priority 0");
         assertEquals(16, plan.commands().get(0).textureId());
-        assertEquals(1, plan.commands().get(0).depthBias(), "wall decoration retains minimum depth bias 1");
+        // A flat minimum bias of 1 for every face here is exactly the bug
+        // Object 899 shipped with: cloth/trim/crest are coplanar, so an
+        // identical bias leaves them separated only by float rounding and
+        // they z-fight/flicker into each other. Depth bias must climb with
+        // face priority so each layer gets its own depth step.
+        assertEquals(1, plan.commands().get(0).depthBias(), "cloth (priority 0) gets the base bias step");
 
         assertEquals(1, plan.commands().get(1).priority(), "trim retains priority 1");
         assertEquals(-1, plan.commands().get(1).textureId());
-        assertEquals(1, plan.commands().get(1).depthBias());
+        assertEquals(2, plan.commands().get(1).depthBias(), "trim (priority 1) sits one step above cloth");
 
         assertEquals(3, plan.commands().get(2).priority(), "crest retains priority 3");
         assertEquals(-1, plan.commands().get(2).textureId());
-        assertEquals(1, plan.commands().get(2).depthBias());
+        assertEquals(4, plan.commands().get(2).depthBias(), "crest (priority 3) sits above trim, not tied with it");
     }
 }

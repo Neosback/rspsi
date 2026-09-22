@@ -82,6 +82,12 @@ public interface StudioPlugin {
     default void renderHUD(StudioPanelContext context) {}
 
     /**
+     * Renders floating interactive tool windows (e.g. Brush Settings HUD, Floating Palettes)
+     * after viewport presentation.
+     */
+    default void renderFloating(StudioPanelContext context) {}
+
+    /**
      * Renders inside the right sidebar inspector tabs.
      */
     default void renderSidePanel(StudioPanelContext context) {}

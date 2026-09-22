@@ -58,7 +58,9 @@ public final class MultiSelectToolPlugin implements StudioToolPlugin {
 
     @Override
     public Set<ToolSurface> surfaces() {
-        return EnumSet.of(ToolSurface.FLOATING_TOOLBAR, ToolSurface.TOOL_RAIL);
+        // The docked Left Tool Rail is brush-only now (Tile Painter, Height
+        // Sculptor); selection lives on the floating rail instead.
+        return EnumSet.of(ToolSurface.FLOATING_TOOLBAR);
     }
 
     @Override

@@ -2,21 +2,25 @@ package com.rspsi.studio.ui.panels;
 
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.selection.ObjectSelection;
+import com.rspsi.editor.selection.ObjectSetSelection;
+import com.rspsi.editor.selection.Selection;
 import com.rspsi.editor.settings.EditorSettingKeys;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.ui.DockRegion;
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.ui.ObjectPreviewRenderer;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
+import imgui.ImDrawList;
 import imgui.ImGui;
 import imgui.ImGuiListClipper;
 import imgui.flag.ImGuiCol;
-import imgui.flag.ImGuiInputTextFlags;
-import imgui.flag.ImGuiSelectableFlags;
+import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiStyleVar;
-import imgui.flag.ImGuiTableColumnFlags;
-import imgui.flag.ImGuiTableFlags;
 import imgui.type.ImInt;
 import imgui.type.ImString;
 
@@ -36,9 +40,22 @@ public final class ObjectViewerPanel implements StudioPanel {
     private int activeSubTab = 0; // 0: Object viewer, 1: Object properties
     private final ImInt typeFilter = new ImInt(0);
     private final ImString searchFilter = new ImString(64);
-    private final ImInt selectedObjectId = new ImInt(10583);
+    // No selection by default - a hardcoded "always Bank booth" default made
+    // every fresh session look like it had already picked something.
+    private final ImInt selectedObjectId = new ImInt(-1);
     private final ImInt objectType = new ImInt(10);
     private final ImInt objectRotation = new ImInt(0);
+
+    private final ObjectPreviewRenderer previewRenderer = new ObjectPreviewRenderer();
+    private float previewYaw = (float) Math.toRadians(200.0);
+    private float previewPitch = -0.35f;
+    private float previewZoom = 1.0f;
+
+    // Tracks the last viewport pick this panel already reacted to, so a
+    // fresh Select-Object/Multi-Select-Object pick takes over the preview
+    // without fighting a selection the user then browses away from
+    // manually (e.g. clicking a different row in the grid below).
+    private int lastSyncedPickedObjectId = Integer.MIN_VALUE;
 
     // Filter cache state
     private List<Integer> allObjectIds = null;
@@ -91,13 +108,16 @@ public final class ObjectViewerPanel implements StudioPanel {
         LoadedOsrsCacheSession cache = context.cache();
         SettingsStore settings = context.settings();
 
-        // 1. Sub-tabs at top: [Object viewer] [Object properties]
-        ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 8.0f, 3.0f);
-        String vPrefix = activeSubTab == 0 ? StudioIcons.CHECK + " " : "";
-        String pPrefix = activeSubTab == 1 ? StudioIcons.CHECK + " " : "";
-        if (ImGui.button(vPrefix + StudioIcons.OBJECT + " Viewer##sub-viewer")) activeSubTab = 0;
+        syncFromViewportPick(context);
+
+        // 1. Sub-tabs at top: [Viewer] [Properties]. The active tab reads as
+        // a filled, brighter segment - not a checkmark glued onto a button
+        // that already has an icon of its own.
+        ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 8.0f, 5.0f);
+        float tabWidth = ImGui.getContentRegionAvailX() * 0.5f - 2.0f;
+        renderSubTabButton("Viewer", 0, tabWidth);
         ImGui.sameLine();
-        if (ImGui.button(pPrefix + StudioIcons.TUNE + " Properties##sub-props")) activeSubTab = 1;
+        renderSubTabButton("Properties", 1, tabWidth);
         ImGui.popStyleVar();
         ImGui.separator();
 
@@ -108,59 +128,144 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
     }
 
+    /**
+     * Picking an object with Select-Object/Multi-Select-Object in the
+     * viewport takes over this panel's preview, the same way clicking a row
+     * in the grid below does - a viewport pick is not a lesser way to
+     * choose an object than typing its id.
+     */
+    private void syncFromViewportPick(StudioPanelContext context) {
+        if (context.session() == null) return;
+        Selection current = context.session().selection().current();
+        WorldObject picked = switch (current) {
+            case ObjectSelection single -> single.object();
+            case ObjectSetSelection set -> set.objects().iterator().next();
+            case null, default -> null;
+        };
+        if (picked == null) return;
+        if (picked.id() == lastSyncedPickedObjectId) return;
+        lastSyncedPickedObjectId = picked.id();
+        selectedObjectId.set(picked.id());
+        activeSubTab = 0;
+    }
+
+    private void renderSubTabButton(String label, int tabIndex, float width) {
+        boolean active = activeSubTab == tabIndex;
+        if (active) {
+            ImGui.pushStyleColor(ImGuiCol.Button, 0.23f, 0.51f, 0.96f, 1.0f);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0.29f, 0.56f, 0.98f, 1.0f);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0.18f, 0.44f, 0.87f, 1.0f);
+            ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 1.0f, 1.0f, 1.0f);
+        } else {
+            ImGui.pushStyleColor(ImGuiCol.Button, 0.12f, 0.16f, 0.21f, 1.0f);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0.16f, 0.21f, 0.28f, 1.0f);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0.12f, 0.16f, 0.21f, 1.0f);
+            ImGui.pushStyleColor(ImGuiCol.Text, 0.58f, 0.64f, 0.72f, 1.0f);
+        }
+        if (ImGui.button(label + "##sub-" + tabIndex, width, 28.0f)) {
+            activeSubTab = tabIndex;
+        }
+        ImGui.popStyleColor(4);
+    }
+
+    private static final float PREVIEW_HEIGHT = 200.0f;
+    private static final float CELL_SIZE = 88.0f;
+    private static final float CELL_SPACING = 8.0f;
+
     private void renderObjectViewerSubTab(StudioPanelContext context,
                                           LoadedOsrsCacheSession cache,
                                           SettingsStore settings) {
         // Filter dropdown & Search
-        if (ImGui.combo("Filter##obj-flt", typeFilter, FILTER_OPTIONS)) {
-            // Filter updated
-        }
+        ImGui.combo("Filter##obj-flt", typeFilter, FILTER_OPTIONS);
         ImGui.inputTextWithHint("##obj-search", StudioIcons.SEARCH + "  Search by ID or name...", searchFilter);
         ImGui.separator();
 
-        // Object item card preview
         int objId = selectedObjectId.get();
-        String objName = "Object " + objId;
-        if (cache != null) {
-            objName = cache.bundle().definitions().object(objId)
-                    .map(ObjectDefinitionView::name)
-                    .filter(n -> !n.isBlank())
-                    .orElse("Unnamed #" + objId);
-        }
+        float panelW = ImGui.getContentRegionAvailX();
 
-        float cardW = ImGui.getContentRegionAvailX();
-        float cardH = 58.0f;
+        renderPreviewAndControls(context, cache, settings, objId, panelW);
+
+        ImGui.separator();
+
+        // Virtualized thumbnail grid
+        updateFilteredList(cache);
+        ImGui.textDisabled("Objects (" + filteredObjectIds.size() + " matches):");
+        renderThumbnailGrid(cache, settings, panelW);
+    }
+
+    /** The persistent, rotatable preview and its placement controls - stays put above the grid. */
+    private void renderPreviewAndControls(StudioPanelContext context, LoadedOsrsCacheSession cache,
+                                          SettingsStore settings, int objId, float panelW) {
         float cx = ImGui.getCursorScreenPos().x;
         float cy = ImGui.getCursorScreenPos().y;
+        ImDrawList draw = ImGui.getWindowDrawList();
+        draw.addRectFilled(cx, cy, cx + panelW, cy + PREVIEW_HEIGHT, StudioDrawColors.abgr(0xFF1E2836), 4.0f);
+        draw.addRect(cx, cy, cx + panelW, cy + PREVIEW_HEIGHT, StudioDrawColors.abgr(0xFF33455C), 4.0f);
 
-        // Register invisible button to provide a valid ImGui item ID for drag-and-drop
-        ImGui.invisibleButton("##preview-card-" + objId, cardW, cardH);
-        boolean cardHovered = ImGui.isItemHovered();
+        if (objId < 0 || cache == null) {
+            String prompt = cache == null ? "No cache loaded." : "Select an object below to preview it.";
+            draw.addText(StudioFonts.ui(), 13, cx + 12, cy + PREVIEW_HEIGHT * 0.5f - 8.0f,
+                    StudioDrawColors.abgr(0xFF64748B), prompt);
+            ImGui.dummy(panelW, PREVIEW_HEIGHT + 8.0f);
+        } else {
+            int size = (int) PREVIEW_HEIGHT - 4;
+            int texture = previewRenderer.render(cache.bundle().definitions(), objId, objectType.get(),
+                    objectRotation.get(), previewYaw, previewPitch, previewZoom, size, size);
 
-        // Drag & drop source on preview card
-        if (ImGui.beginDragDropSource()) {
-            ImGui.setDragDropPayload("DND_OBJECT_ID", objId);
-            ImGui.text(StudioIcons.OBJECT + " Spawn Object #" + objId + ": " + objName);
-            ImGui.endDragDropSource();
+            ImGui.setCursorScreenPos(cx + (panelW - size) * 0.5f, cy + 2.0f);
+            if (texture != 0) {
+                ImGui.image((long) texture, size, size);
+            } else {
+                draw.addText(StudioFonts.ui(), 12, cx + 12, cy + PREVIEW_HEIGHT * 0.5f - 16.0f,
+                        StudioDrawColors.abgr(0xFFF59E0B), "No renderable model for #" + objId);
+                draw.addText(StudioFonts.mono(), 11, cx + 12, cy + PREVIEW_HEIGHT * 0.5f + 2.0f,
+                        StudioDrawColors.abgr(0xFF94A3B8), "(varbit/varp-driven appearance with no live game state,");
+                draw.addText(StudioFonts.mono(), 11, cx + 12, cy + PREVIEW_HEIGHT * 0.5f + 16.0f,
+                        StudioDrawColors.abgr(0xFF94A3B8), "and no configured default - nothing to fall back to)");
+            }
+
+            // Drag-anywhere-on-the-preview to orbit; the invisible button
+            // both hosts the drag gesture and doubles as the drop source.
+            ImGui.setCursorScreenPos(cx + (panelW - size) * 0.5f, cy + 2.0f);
+            ImGui.invisibleButton("##preview-3d-" + objId, size, size);
+            boolean previewHovered = ImGui.isItemHovered();
+            if (ImGui.isItemActive() && ImGui.isMouseDragging(0)) {
+                previewYaw -= ImGui.getMouseDragDeltaX() * 0.01f;
+                previewPitch = clamp(previewPitch + ImGui.getMouseDragDeltaY() * 0.01f, -1.4f, 1.4f);
+                ImGui.resetMouseDragDelta();
+            }
+            if (previewHovered) {
+                float wheel = ImGui.getIO().getMouseWheel();
+                if (wheel != 0.0f) {
+                    // Scrolling "up" (positive wheel) should move the camera
+                    // closer, so it shrinks the distance multiplier.
+                    previewZoom = clamp(previewZoom * (1.0f - wheel * 0.1f), 0.35f, 4.0f);
+                }
+            }
+            // beginDragDropSource must immediately follow the item it
+            // sources from - anything (even a debug ImGui.text) placed
+            // between the invisibleButton and this call makes it operate on
+            // the wrong "last item" and hard-crashes the native assert.
+            if (ImGui.beginDragDropSource()) {
+                ImGui.setDragDropPayload("DND_OBJECT_ID", objId, ImGuiCond.Once);
+                ImGui.text(StudioIcons.OBJECT + " Spawn Object #" + objId);
+                ImGui.endDragDropSource();
+            } else if (previewHovered) {
+                ImGui.setTooltip("Drag to rotate, scroll to zoom - drop on the 3D viewport to spawn");
+            }
+
+            ImGui.setCursorScreenPos(cx, cy + PREVIEW_HEIGHT + 4.0f);
         }
 
-        imgui.ImDrawList draw = ImGui.getWindowDrawList();
-        int bgCol = cardHovered ? 0xFF2A374A : 0xFF1E2836;
-        draw.addRectFilled(cx, cy, cx + cardW, cy + cardH, bgCol, 4.0f);
-        draw.addRect(cx, cy, cx + cardW, cy + cardH, 0xFF3B82F6, 4.0f);
+        String objName = cache == null || objId < 0 ? null
+                : cache.bundle().definitions().object(objId).map(ObjectDefinitionView::name)
+                        .filter(n -> !n.isBlank()).orElse(null);
+        if (objId >= 0) {
+            ImGui.text((objName == null ? "Unnamed" : objName) + "  #" + objId);
+        }
 
-        // Thumbnail placeholder box
-        draw.addRectFilled(cx + 6, cy + 6, cx + 52, cy + 52, 0xFF0F172A, 2.0f);
-        draw.addText(StudioFonts.mono(), 10, cx + 14, cy + 20, 0xFF94A3B8, "3D");
-
-        // Object details
-        draw.addText(StudioFonts.ui(), 13, cx + 60, cy + 8, 0xFFF8FAFC, objId + " - " + objName);
-        draw.addText(StudioFonts.mono(), 11, cx + 60, cy + 28, 0xFF94A3B8, "Type: " + objectType.get() + "  Rot: " + objectRotation.get());
-
-        ImGui.spacing();
-
-        // Action buttons & Type/Rot
-        if (ImGui.button(StudioIcons.ADD_OBJECT + " Add game object##add-obj", cardW * 0.5f - 4.0f, 24.0f)) {
+        ImGui.beginDisabled(objId < 0);
+        if (ImGui.button(StudioIcons.ADD_OBJECT + " Add game object##add-obj", panelW * 0.5f - 4.0f, 24.0f)) {
             settings.set(EditorSettingKeys.OBJECT_ID, objId);
             settings.set(EditorSettingKeys.OBJECT_TYPE, objectType.get());
             settings.set(EditorSettingKeys.OBJECT_ROTATION, objectRotation.get());
@@ -168,16 +273,11 @@ public final class ObjectViewerPanel implements StudioPanel {
                 context.activateTool().accept("object.place");
             }
         }
-        if (ImGui.beginDragDropSource()) {
-            ImGui.setDragDropPayload("DND_OBJECT_ID", objId);
-            ImGui.text(StudioIcons.OBJECT + " Spawn Object #" + objId);
-            ImGui.endDragDropSource();
-        }
+        ImGui.endDisabled();
         ImGui.sameLine();
-        ImGui.textDisabled(StudioIcons.OPEN_IN_NEW + " Drag to Viewport");
+        ImGui.textDisabled(StudioIcons.OPEN_IN_NEW + " Drag preview to Viewport");
 
-        // Object placement parameters
-        ImGui.pushItemWidth(cardW * 0.48f);
+        ImGui.pushItemWidth(panelW * 0.48f);
         if (ImGui.combo("##place-type", objectType, OBJECT_TYPES)) {
             settings.set(EditorSettingKeys.OBJECT_TYPE, objectType.get());
         }
@@ -186,72 +286,92 @@ public final class ObjectViewerPanel implements StudioPanel {
             settings.set(EditorSettingKeys.OBJECT_ROTATION, objectRotation.get());
         }
         ImGui.popItemWidth();
+    }
 
-        ImGui.separator();
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
+    }
 
-        // Virtualized Object Table
-        updateFilteredList(cache);
+    /**
+     * A scrollable grid of lightweight swatches (id, name, a has-model
+     * indicator) - not a full 3D render per cell, which would mean
+     * software-rendering thousands of models a frame. The one real 3D
+     * preview lives above and follows the current selection instead.
+     */
+    private void renderThumbnailGrid(LoadedOsrsCacheSession cache, SettingsStore settings, float panelW) {
+        float gridH = Math.max(120.0f, ImGui.getContentRegionAvailY() - 4.0f);
+        if (!ImGui.beginChild("##obj-thumb-grid", panelW, gridH, true)) {
+            ImGui.endChild();
+            return;
+        }
 
-        ImGui.textDisabled("Objects (" + filteredObjectIds.size() + " matches):");
-        float tableH = Math.max(120.0f, ImGui.getContentRegionAvailY() - 4.0f);
+        float cellStride = CELL_SIZE + CELL_SPACING;
+        int columns = Math.max(1, (int) ((ImGui.getContentRegionAvailX() + CELL_SPACING) / cellStride));
+        int rows = (filteredObjectIds.size() + columns - 1) / columns;
 
-        int tableFlags = ImGuiTableFlags.RowBg
-                | ImGuiTableFlags.Borders
-                | ImGuiTableFlags.ScrollY
-                | ImGuiTableFlags.Resizable;
-
-        if (ImGui.beginTable("##virtual-obj-table", 3, tableFlags, cardW, tableH)) {
-            ImGui.tableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 55.0f);
-            ImGui.tableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.tableSetupColumn("Size", ImGuiTableColumnFlags.WidthFixed, 45.0f);
-            ImGui.tableHeadersRow();
-
-            ImGuiListClipper clipper = new ImGuiListClipper();
-            clipper.begin(filteredObjectIds.size());
-
-            while (clipper.step()) {
-                for (int i = clipper.getDisplayStart(); i < clipper.getDisplayEnd(); i++) {
-                    if (i < 0 || i >= filteredObjectIds.size()) continue;
-                    int id = filteredObjectIds.get(i);
-
-                    ImGui.tableNextRow();
-                    ImGui.tableSetColumnIndex(0);
-
-                    boolean isSelected = (id == selectedObjectId.get());
-                    if (ImGui.selectable(String.valueOf(id) + "##row-" + id, isSelected, ImGuiSelectableFlags.SpanAllColumns)) {
-                        selectedObjectId.set(id);
-                        settings.set(EditorSettingKeys.OBJECT_ID, id);
-                    }
-
-                    // Drag & Drop Source: drag any row directly into 3D Viewport!
-                    if (ImGui.beginDragDropSource()) {
-                        ImGui.setDragDropPayload("DND_OBJECT_ID", id);
-                        ImGui.text("Object #" + id + " (Drop on 3D Viewport)");
-                        ImGui.endDragDropSource();
-                    }
-
-                    ImGui.tableSetColumnIndex(1);
-                    String name = "(unnamed)";
-                    String size = "";
-                    if (cache != null) {
-                        var defOpt = cache.bundle().definitions().object(id);
-                        if (defOpt.isPresent()) {
-                            var def = defOpt.get();
-                            if (def.name() != null && !def.name().isBlank()) {
-                                name = def.name();
-                            }
-                            size = def.width() + "x" + def.length();
-                        }
-                    }
-                    ImGui.text(name);
-
-                    ImGui.tableSetColumnIndex(2);
-                    ImGui.textDisabled(size);
+        ImGuiListClipper clipper = new ImGuiListClipper();
+        clipper.begin(rows);
+        while (clipper.step()) {
+            for (int row = clipper.getDisplayStart(); row < clipper.getDisplayEnd(); row++) {
+                for (int col = 0; col < columns; col++) {
+                    int index = row * columns + col;
+                    if (index >= filteredObjectIds.size()) break;
+                    if (col > 0) ImGui.sameLine(0.0f, CELL_SPACING);
+                    renderThumbnailCell(cache, settings, filteredObjectIds.get(index));
                 }
             }
-            clipper.end();
-            ImGui.endTable();
         }
+        clipper.end();
+        ImGui.endChild();
+    }
+
+    private void renderThumbnailCell(LoadedOsrsCacheSession cache, SettingsStore settings, int id) {
+        ImGui.pushID(id);
+        float cx = ImGui.getCursorScreenPos().x;
+        float cy = ImGui.getCursorScreenPos().y;
+
+        ImGui.invisibleButton("##cell", CELL_SIZE, CELL_SIZE);
+        boolean hovered = ImGui.isItemHovered();
+        if (ImGui.isItemClicked()) {
+            selectedObjectId.set(id);
+            settings.set(EditorSettingKeys.OBJECT_ID, id);
+        }
+        if (ImGui.beginDragDropSource()) {
+            ImGui.setDragDropPayload("DND_OBJECT_ID", id, ImGuiCond.Once);
+            ImGui.text("Object #" + id + " (drop on 3D viewport)");
+            ImGui.endDragDropSource();
+        }
+
+        String name = null;
+        boolean hasModel = true;
+        if (cache != null) {
+            var defOpt = cache.bundle().definitions().object(id);
+            if (defOpt.isPresent()) {
+                var def = defOpt.get();
+                if (def.name() != null && !def.name().isBlank()) name = def.name();
+                hasModel = def.modelIds().length > 0 || def.hasTransforms();
+            }
+        }
+
+        boolean selected = id == selectedObjectId.get();
+        ImDrawList draw = ImGui.getWindowDrawList();
+        int bg = selected ? 0xFF2A3F5C : hovered ? 0xFF232F3F : 0xFF1A2432;
+        draw.addRectFilled(cx, cy, cx + CELL_SIZE, cy + CELL_SIZE, StudioDrawColors.abgr(bg), 3.0f);
+        draw.addRect(cx, cy, cx + CELL_SIZE, cy + CELL_SIZE,
+                StudioDrawColors.abgr(selected ? 0xFF3B82F6 : 0xFF2B3A4E), 3.0f, 0, selected ? 2.0f : 1.0f);
+        draw.addText(StudioFonts.ui(), 15, cx + 8, cy + 8, StudioDrawColors.abgr(0xFFE2E8F0), "#" + id);
+        String label = name == null ? "(unnamed)" : name;
+        if (label.length() > 13) label = label.substring(0, 12) + "…";
+        draw.addText(StudioFonts.mono(), 11, cx + 8, cy + CELL_SIZE - 20, StudioDrawColors.abgr(0xFF94A3B8), label);
+        if (!hasModel) {
+            // No models of its own and no transform fallback either - this
+            // definition genuinely cannot render; flag it instead of letting
+            // the object silently vanish when placed.
+            draw.addText(StudioFonts.mono(), 10, cx + 8, cy + CELL_SIZE - 34,
+                    StudioDrawColors.abgr(0xFFF59E0B), "no model");
+        }
+
+        ImGui.popID();
     }
 
     private void updateFilteredList(LoadedOsrsCacheSession cache) {

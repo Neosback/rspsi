@@ -13,6 +13,7 @@ import com.rspsi.editor.tool.CompositeTilePainterTool;
 import com.rspsi.editor.tool.state.TilePainterState;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioWidgets;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
 import imgui.ImGui;
@@ -31,6 +32,12 @@ import java.util.function.Consumer;
  * Composite Tile Painter console bound to one authoritative TilePainterState.
  * The active tool shares this same state object rather than receiving copied
  * settings every frame.
+ *
+ * <p>Brush shape/radius controls live exclusively in {@link
+ * com.rspsi.studio.ui.hud.BrushSettingsHud} now - this panel and that HUD
+ * used to render two independent copies of the same brush strip bound to
+ * the same underlying state, which was confusing busywork, not two
+ * different things to configure.</p>
  */
 public final class TilePainterPalette implements StudioPanel {
     public static final String ID = "studio.tile-palette";
@@ -108,8 +115,6 @@ public final class TilePainterPalette implements StudioPanel {
         ImGui.textColored(0xFFE2E8F0, "Tile Painter");
         ImGui.sameLine(0.0f, 20.0f);
         renderPresets();
-        ImGui.separator();
-        renderBrushStrip(context);
         ImGui.separator();
 
         float availW = ImGui.getContentRegionAvailX();
@@ -196,7 +201,7 @@ public final class TilePainterPalette implements StudioPanel {
         return y + size - vertexY / 128.0f * size;
     }
 
-    private static int floorColor(LoadedOsrsCacheSession cache, int id,
+    public static int floorColor(LoadedOsrsCacheSession cache, int id,
                                   boolean underlay, int fallback) {
         if (cache == null || id <= 0) return fallback;
         var def = underlay
@@ -204,51 +209,6 @@ public final class TilePainterPalette implements StudioPanel {
                 : cache.bundle().definitions().overlay(id);
         return def.isPresent() && def.get().rgb() >= 0
                 ? 0xFF000000 | def.get().rgb() : fallback;
-    }
-
-    private void renderBrushStrip(StudioPanelContext context) {
-        if (context.brushes() == null) return;
-
-        List<EditorBrush> compatible = compatibleBrushes(context);
-        EditorBrush active = activeBrush(context);
-        ImGui.textDisabled("Brush:");
-        ImGui.sameLine();
-
-        for (EditorBrush brush : compatible) {
-            boolean selected = active != null && brush.id().equals(active.id());
-            if (selected) ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
-            if (ImGui.smallButton(brush.name() + "##tile-brush-" + brush.id())) {
-                context.brushes().setActiveBrush("terrain.tile-painter", brush.id());
-                state.setBrushId(brush.id());
-                if (context.toolController().activeTool() instanceof CompositeTilePainterTool tool) {
-                    tool.setBrush(brush);
-                }
-                active = brush;
-            }
-            if (selected) ImGui.popStyleColor();
-            if (ImGui.isItemHovered()) {
-                ImGui.setTooltip(brush.description() + "\n"
-                        + String.join(", ", context.brushes().capabilityLabels(brush)));
-            }
-            ImGui.sameLine();
-        }
-        ImGui.newLine();
-
-        ImInt radius = new ImInt(state.brushRadius());
-        ImGui.setNextItemWidth(180.0f);
-        if (ImGui.sliderInt("Radius##tile-brush-radius", radius.getData(), 0, 16)) {
-            state.setBrushRadius(radius.get());
-            context.brushes().setBrushRadius(radius.get());
-        }
-        ImGui.sameLine();
-        ImGui.textDisabled("Quick:");
-        for (int preset : new int[]{0, 1, 2, 3, 5}) {
-            ImGui.sameLine();
-            if (ImGui.smallButton(preset + "##tile-brush-radius-" + preset)) {
-                state.setBrushRadius(preset);
-                context.brushes().setBrushRadius(preset);
-            }
-        }
     }
 
     private List<EditorBrush> compatibleBrushes(StudioPanelContext context) {
@@ -432,9 +392,9 @@ public final class TilePainterPalette implements StudioPanel {
 
     private void flagCheckbox(String label, int bit) {
         boolean current = (state.flags() & bit) != 0;
-        ImBoolean value = new ImBoolean(current);
-        if (ImGui.checkbox(label, value)) {
-            state.setFlags(value.get() ? state.flags() | bit : state.flags() & ~bit);
+        boolean updated = StudioWidgets.toggleSwitch(label, current, label);
+        if (updated != current) {
+            state.setFlags(updated ? state.flags() | bit : state.flags() & ~bit);
             state.setApplyFlags(true);
         }
     }
@@ -459,7 +419,9 @@ public final class TilePainterPalette implements StudioPanel {
     }
 
     private static void checkbox(String label, boolean current, Consumer<Boolean> setter) {
-        ImBoolean value = new ImBoolean(current);
-        if (ImGui.checkbox(label, value)) setter.accept(value.get());
+        boolean updated = StudioWidgets.toggleSwitch(label, current, label);
+        if (updated != current) {
+            setter.accept(updated);
+        }
     }
 }

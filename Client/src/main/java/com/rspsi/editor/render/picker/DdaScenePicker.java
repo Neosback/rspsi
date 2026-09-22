@@ -176,15 +176,13 @@ public final class DdaScenePicker {
     private static PickResult toResult(Hit hit, Ray ray) {
         GpuDrawCommand command = hit.triangle().command();
         WorldTileAddress address = command.tile();
-        WorldTile tile;
-        if (command.layer() == SceneLayer.Kind.TERRAIN && command.objectId() < 0) {
-            float hitX = ray.ox() + hit.distance() * ray.dx();
-            float hitZ = ray.oz() + hit.distance() * ray.dz();
-            tile = new WorldTile(address.plane(), floorTile(hitX), floorTile(hitZ));
-        } else {
-            tile = new WorldTile(address.plane(), address.worldX(), address.worldY());
-        }
-        return new PickResult(tile, address.plane(), command.objectId(), hit.distance(),
+        float hitX = ray.ox() + hit.distance() * ray.dx();
+        float hitZ = ray.oz() + hit.distance() * ray.dz();
+        WorldTile hitTile = new WorldTile(address.plane(), floorTile(hitX), floorTile(hitZ));
+        WorldTile objectTile = command.objectId() >= 0
+                ? new WorldTile(address.plane(), address.worldX(), address.worldY())
+                : hitTile;
+        return new PickResult(hitTile, objectTile, address.plane(), command.objectId(), hit.distance(),
                 command.layer(), command.priority(), command.depthBias(), command.textureId());
     }
 

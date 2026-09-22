@@ -126,11 +126,11 @@ public final class PreferencesWindow {
         ImGui.endChild();
 
         // Bottom footer
-        if (ImGui.button("Close##pref-close")) {
+        if (StudioWidgets.buttonSecondary("Close##pref-close", 80.0f, 28.0f)) {
             open = false;
         }
         ImGui.sameLine();
-        if (!isSearching && !"ALL".equalsIgnoreCase(selectedCategory) && ImGui.button("Reset Category to Defaults")) {
+        if (!isSearching && !"ALL".equalsIgnoreCase(selectedCategory) && StudioWidgets.buttonGhost("Reset Category to Defaults", 0.0f, 28.0f)) {
             for (SettingSpec<?> spec : visibleSettings) {
                 resetToDefault(store, spec);
             }
@@ -198,9 +198,10 @@ public final class PreferencesWindow {
         Class<T> type = spec.key().valueType();
 
         if (type == Boolean.class) {
-            ImBoolean val = new ImBoolean(Boolean.TRUE.equals(currentValue));
-            if (ImGui.checkbox("Enabled" + id, val)) {
-                store.set(spec.key(), (T) Boolean.valueOf(val.get()));
+            boolean cur = Boolean.TRUE.equals(currentValue);
+            boolean updated = StudioWidgets.toggleSwitch(spec.key().id(), cur, cur ? "Enabled" : "Disabled");
+            if (updated != cur) {
+                store.set(spec.key(), (T) Boolean.valueOf(updated));
             }
         } else if (type == Integer.class) {
             int current = currentValue instanceof Number n ? n.intValue() : 0;

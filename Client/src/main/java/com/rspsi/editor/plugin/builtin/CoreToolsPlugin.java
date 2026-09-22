@@ -21,6 +21,7 @@ import com.rspsi.editor.plugin.builtin.tool.ReplaceSelectionToolPlugin;
 import com.rspsi.editor.plugin.builtin.tool.RotateObjectToolPlugin;
 import com.rspsi.editor.plugin.builtin.tool.RotateSelectionToolPlugin;
 import com.rspsi.editor.plugin.builtin.tool.SmoothTerrainToolPlugin;
+import com.rspsi.editor.plugin.builtin.tool.SplinePathToolPlugin;
 import com.rspsi.editor.plugin.builtin.tool.TilePainterToolPlugin;
 
 import java.util.List;
@@ -59,7 +60,8 @@ public final class CoreToolsPlugin {
                 new RotateObjectToolPlugin(),
                 new DuplicateObjectToolPlugin(),
                 new DeleteObjectToolPlugin(),
-                new TilePainterToolPlugin()
+                new TilePainterToolPlugin(),
+                new SplinePathToolPlugin()
         );
     }
 }

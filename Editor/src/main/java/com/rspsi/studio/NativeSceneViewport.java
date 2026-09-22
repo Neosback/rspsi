@@ -2,6 +2,7 @@ package com.rspsi.studio;
 
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.picker.DdaScenePicker;
 import com.rspsi.editor.render.GpuUploadPlan;
@@ -73,7 +74,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
 
     @Override
     public java.util.Optional<com.rspsi.editor.model.WorldTile> tileAt(float x, float y) {
-        return pickAt(x, y).map(PickResult::tile);
+        return pickAt(x, y).map(hit -> hit.objectHit() && hit.objectTile() != null ? hit.objectTile() : hit.tile());
     }
 
     private Integer pickPlaneRestriction;
@@ -134,9 +135,9 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         lastPlan = plan;
         lastWidth = width;
         lastHeight = height;
-        imageOriginX = ImGui.getCursorScreenPosX();
-        imageOriginY = ImGui.getCursorScreenPosY();
         ImGui.image(framebuffer.texture(), width, height, 0.0f, 1.0f, 1.0f, 0.0f);
+        imageOriginX = ImGui.getItemRectMinX();
+        imageOriginY = ImGui.getItemRectMinY();
         updateSelectionFromInput();
         updateCameraFromInput();
         updateCameraFromKeyboard();
@@ -147,9 +148,24 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     public int lastWidth() { return lastWidth; }
     public int lastHeight() { return lastHeight; }
 
+    /** The exact plan submitted on the most recent frame, for inspectors that want to show
+     * which real {@code GpuDrawCommand}(s) a tile/object resolved to (texture, pass, priority,
+     * depth bias) - e.g. to debug z-fighting or a coplanar-face ordering bug. */
+    public GpuUploadPlan lastPlan() { return lastPlan; }
+
+    private ViewportOverlayDraw.ViewportElevationSampler elevationSampler;
+
+    public void setElevationSampler(ViewportOverlayDraw.ViewportElevationSampler sampler) {
+        this.elevationSampler = sampler;
+    }
+
     public ViewportOverlayDraw createOverlayDraw() {
+        return createOverlayDraw(elevationSampler);
+    }
+
+    public ViewportOverlayDraw createOverlayDraw(ViewportOverlayDraw.ViewportElevationSampler sampler) {
         return new ViewportOverlayDraw(ImGui.getWindowDrawList(), imageOriginX, imageOriginY,
-                lastWidth, lastHeight, navigation.camera());
+                lastWidth, lastHeight, navigation.camera(), SceneCameraProjection.editorDefault(), sampler);
     }
 
     private final java.util.Set<String> enabledOverlays = new java.util.HashSet<>();
@@ -172,7 +188,21 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     public void renderOverlays(com.rspsi.editor.tool.EditorTool activeTool,
                                com.rspsi.editor.plugin.EditorPluginLifecycleManager pluginLifecycle) {
         if (lastPlan == null || lastWidth <= 0 || lastHeight <= 0) return;
-        ViewportOverlayDraw draw = createOverlayDraw();
+        ViewportOverlayDraw.ViewportElevationSampler sampler = this.elevationSampler;
+        if (sampler == null && pluginLifecycle != null && pluginLifecycle.host() != null) {
+            var session = pluginLifecycle.host().context().session();
+            if (session != null) {
+                sampler = (plane, x, y) -> {
+                    var local = session.coordinates().toLocal(new WorldTile(plane, x, y)).orElse(null);
+                    if (local == null || !session.world().contains(local)) return null;
+                    var snap = session.world().tile(local).snapshot();
+                    return new float[]{snap.southWestHeight(), snap.southEastHeight(),
+                            snap.northEastHeight(), snap.northWestHeight()};
+                };
+                this.elevationSampler = sampler;
+            }
+        }
+        ViewportOverlayDraw draw = createOverlayDraw(sampler);
         if (activeTool != null) {
             try {
                 activeTool.renderOverlay(draw);
@@ -220,6 +250,12 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
             toolController.pointerDrag(event);
         } else if (ImGui.isMouseReleased(ImGuiMouseButton.Left)) {
             toolController.pointerUp(event);
+        } else if (ImGui.isMouseClicked(ImGuiMouseButton.Right)) {
+            PointerEvent rightEvent = new PointerEvent(localX, localY, PointerButton.SECONDARY,
+                    io.getKeyShift(), io.getKeyCtrl(), io.getKeyAlt());
+            toolController.pointerDown(rightEvent);
+        } else {
+            toolController.pointerMove(event);
         }
     }
 
@@ -263,23 +299,29 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
      */
     private void updateCameraFromKeyboard() {
         var io = ImGui.getIO();
-        if (io.getWantTextInput() || io.getWantCaptureKeyboard()) return;
+        if (io.getWantTextInput()) return;
         float seconds = Math.min(0.1f, Math.max(0.0f, io.getDeltaTime()));
         if (seconds <= 0.0f) return;
         boolean shift = io.getKeyShift();
         boolean ctrl = io.getKeyCtrl();
         boolean alt = io.getKeyAlt();
-        if (ImGui.isKeyDown(ImGuiKey.UpArrow)) {
+        if (ImGui.isKeyDown(ImGuiKey.UpArrow) || ImGui.isKeyDown(ImGuiKey.W)) {
             navigation.handleKeyEvent(new com.rspsi.editor.input.EditorKeyEvent("ArrowUp", true, false, shift, ctrl, alt, false), seconds);
         }
-        if (ImGui.isKeyDown(ImGuiKey.DownArrow)) {
+        if (ImGui.isKeyDown(ImGuiKey.DownArrow) || ImGui.isKeyDown(ImGuiKey.S)) {
             navigation.handleKeyEvent(new com.rspsi.editor.input.EditorKeyEvent("ArrowDown", true, false, shift, ctrl, alt, false), seconds);
         }
-        if (ImGui.isKeyDown(ImGuiKey.LeftArrow)) {
+        if (ImGui.isKeyDown(ImGuiKey.LeftArrow) || ImGui.isKeyDown(ImGuiKey.A)) {
             navigation.handleKeyEvent(new com.rspsi.editor.input.EditorKeyEvent("ArrowLeft", true, false, shift, ctrl, alt, false), seconds);
         }
-        if (ImGui.isKeyDown(ImGuiKey.RightArrow)) {
+        if (ImGui.isKeyDown(ImGuiKey.RightArrow) || ImGui.isKeyDown(ImGuiKey.D)) {
             navigation.handleKeyEvent(new com.rspsi.editor.input.EditorKeyEvent("ArrowRight", true, false, shift, ctrl, alt, false), seconds);
+        }
+        if (ImGui.isKeyDown(ImGuiKey.E) || ImGui.isKeyDown(ImGuiKey.PageUp)) {
+            navigation.handleKeyEvent(new com.rspsi.editor.input.EditorKeyEvent("E", true, false, shift, ctrl, alt, false), seconds);
+        }
+        if (ImGui.isKeyDown(ImGuiKey.Q) || ImGui.isKeyDown(ImGuiKey.PageDown)) {
+            navigation.handleKeyEvent(new com.rspsi.editor.input.EditorKeyEvent("Q", true, false, shift, ctrl, alt, false), seconds);
         }
     }
 

@@ -32,6 +32,7 @@ public final class MinimapHudOverlay {
     private Runnable onWorldMapClick;
 
     private final MinimapTextureService textureService = new MinimapTextureService();
+    private EditorSession listenedSession;
 
     public void setOnWorldMapClick(Runnable callback) {
         this.onWorldMapClick = callback;
@@ -97,6 +98,10 @@ public final class MinimapHudOverlay {
         NativeSceneViewport viewport = context.viewport();
         EditorSession session = context.session();
         if (session == null || viewport == null) return;
+        if (session != listenedSession) {
+            listenedSession = session;
+            listenedSession.addChangeListener(changed -> textureService.markDirty());
+        }
 
         WorldDocument world = session.world();
         int activePlane = context.settings().snapshot().get(RenderSettingKeys.ACTIVE_PLANE);

@@ -9,6 +9,37 @@ Status key: `[x]` done and verified in a running build, `[~]` in progress / part
 
 ## Done
 
+- [x] **Object Inspector, built into the Tile Inspector** (2026-09-21): every object on a
+      selected tile is now listed and expandable into a full `ObjectInspectorSnapshot` -
+      Placement (id/type/rotation/position/category/shape), Definition (name, size, model
+      ids/types, actions), Collision (block walk/projectile, breaks routefinding), Appearance
+      (animation id, scale/offset, contoured/obstructs ground, shadow/occlusion, normal
+      merging/shading, ambient/contrast, clip mask, recolors/retextures) - all resolved live
+      from the cache, not guessed. This was fast because the data layer already existed and was
+      fully wired (`Client/.../editor/inspector/ObjectInspectorSnapshot.java` +
+      `ObjectDefinitionSummary`/`ObjectCollisionSummary`, consuming real
+      `DefinitionProvider.object/objectCollision/objectAppearance`) - only the UI panel
+      (`TileBrushPanel.renderObjectsOnTile`/`renderObjectInspectorDetail`) needed building.
+      Visually confirmed against a real object (`#899 Hanging banner`) showing correct resolved
+      data in all four sections.
+      Also expanded the Tile Inspector itself: decoded flags shown alongside the raw hex
+      (Blocked/Bridge/Removes Roofs/Minimap Hidden via `OsrsTileFlags`), the effective
+      bridge-adjusted plane called out when it differs from the authored plane
+      (`WorldDocument.effectivePlane`), and full underlay/overlay floor-definition detail (HSL
+      values, secondary color, texture id) instead of just the color swatch - all aimed at
+      tracing a rendering bug back to its real source data rather than guessing.
+      **Noticed in passing** (not yet acted on): substantial concurrent progress has landed in
+      this same area since earlier in the session - a `DdaScenePicker` replacing the old
+      brute-force `GpuPlanPicker` for the primary viewport, a type-safe `WorldTile`/`LocalTile`/
+      `DocumentCoordinates` absolute-to-local conversion service (superseding the ad hoc
+      `Math.floorMod` patches applied to `BoxSelectTool`/`CompositeTilePainterTool`/
+      `ChangeHeightTool`/`SmoothTerrainTool`/`PlaceObjectTool`/`TileBrushPanel` earlier this
+      session - those should probably be migrated to `session.coordinates()` next time this
+      area is touched), a `TerrainMeshBuilder`-based accurate tile-shape preview (replacing the
+      earlier full-tile/diagonal-half approximation), and `EditorTool.pointerMove` for hover
+      support. Worth a proper look before doing more picker/coordinate work, since some of the
+      still-open items above (picker accuracy, hover-highlight-without-lag, tile-shape
+      precision) may already be partially or fully addressed by this.
 - [x] Renamed "Map Editor" -> "Map Studio" everywhere user-facing (tab bar label; an older,
       newer tab-bar class had missed the earlier rename).
 - [x] Removed everything floating over the 3D viewport that belongs in Settings instead

@@ -99,6 +99,38 @@ class DdaScenePickerTest {
         assertEquals(0, hit.plane());
     }
 
+    @Test
+    void resolvesObjectAnchorTileForMultiTileModel() {
+        // Object is anchored at tile (3200, 3200), but has geometry extending into tile (3201, 3200)
+        float originX = 3201 * 128.0f;
+        float originZ = 3200 * 128.0f;
+        GpuUploadPlan plan = new GpuUploadPlan(
+                List.of(
+                        vertex(originX + 10, 0, originZ + 10),
+                        vertex(originX + 100, 0, originZ + 10),
+                        vertex(originX + 10, 0, originZ + 100)),
+                List.of(0, 1, 2),
+                List.of(new GpuDrawCommand(WorldTileAddress.of(3200, 3200, 0),
+                        SceneLayer.Kind.GROUND_OBJECT, GpuDrawCommand.SubmissionPass.OPAQUE,
+                        0, 3, -1, 0, 500)),
+                List.of(), Map.of(), "dda-object-anchor");
+
+        DdaScenePicker picker = new DdaScenePicker();
+        var hit = picker.pick(plan,
+                new CameraState(originX + 30, -100, originZ + 30,
+                        (float) -Math.PI / 2, 0),
+                100, 100, 50, 50).orElseThrow();
+
+        assertTrue(hit.objectHit());
+        assertEquals(500, hit.objectId());
+        // Exact triangle hit tile is (3201, 3200)
+        assertEquals(3201, hit.tile().x());
+        assertEquals(3200, hit.tile().y());
+        // Object root anchor tile is (3200, 3200)
+        assertEquals(3200, hit.objectTile().x());
+        assertEquals(3200, hit.objectTile().y());
+    }
+
     private static GpuSceneVertex vertex(float x, float y, float z) {
         return new GpuSceneVertex(x, y, z, 0, 0, 0x1200,
                 GpuColorEncoding.PACKED_JAGEX_HSL, 0,

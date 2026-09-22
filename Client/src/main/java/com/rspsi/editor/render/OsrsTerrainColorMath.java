@@ -67,6 +67,25 @@ public final class OsrsTerrainColorMath {
         return adjustPackedHslLight(packedHsl, adjustedLight);
     }
 
+    /**
+     * Builds the vertex colour of a textured overlay - a tile whose texture
+     * supplies the detail.
+     *
+     * <p>Such a tile has no overlay render HSL (the client stores the -1
+     * sentinel), but it still needs hue and saturation: the client's textured
+     * scanline reads them from the shaded vertex colour
+     * ({@code start_col >> 8 & 0xff80}) and multiplies the texture's luminance
+     * into the lightness byte. Packing a bare light here leaves both hue and
+     * saturation at zero, so every texel resolves through the grey axis. The
+     * texture's average colour is the hue/saturation source, while the
+     * lightness slot keeps the tile light so the texture is not darkened by
+     * its own average brightness a second time.</p>
+     */
+    public static int texturedOverlayHsl(int textureAverageHsl, int light) {
+        int adjustedLight = Math.max(2, Math.min(126, light));
+        return (textureAverageHsl & 0xFF80) | adjustedLight;
+    }
+
     /** Matches the client packed-HSL midpoint used by shaped tile vertices. */
     public static int mixPackedHsl(int first, int second) {
         if (first < 0) return second;

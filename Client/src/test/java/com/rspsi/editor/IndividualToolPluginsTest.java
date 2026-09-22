@@ -22,16 +22,16 @@ class IndividualToolPluginsTest {
     @Test
     void allTwentyToolPluginsInitializeIndependently() {
         List<EditorPlugin> plugins = CoreToolsPlugin.individualToolPlugins();
-        assertEquals(21, plugins.size());
+        assertEquals(22, plugins.size());
 
         EditorSession session = new EditorSession(new WorldModel(1, 1, 1));
         try (EditorPluginHost host = EditorPluginHost.initialize(plugins, session, EmptyAssetRepository.INSTANCE)) {
-            assertEquals(21, host.plugins().size());
+            assertEquals(22, host.plugins().size());
             List<EditorToolRegistration> tools = host.registry().toolRegistrations();
-            assertEquals(21, tools.size());
+            assertEquals(22, tools.size());
 
             // Check groups
-            Set<String> groups = Set.of("Selector", "Paint", "Height", "Objects");
+            Set<String> groups = Set.of("Selector", "Paint", "Height", "Objects", "Path");
             for (EditorToolRegistration tool : tools) {
                 assertNotNull(tool.id());
                 assertNotNull(tool.label());
@@ -45,6 +45,7 @@ class IndividualToolPluginsTest {
             assertNotNull(host.registry().createTool("terrain.paint-overlay"));
             assertNotNull(host.registry().createTool("terrain.paint-underlay"));
             assertNotNull(host.registry().createTool("terrain.tile-painter"));
+            assertNotNull(host.registry().createTool("path.spline"));
             assertNotNull(host.registry().createTool("terrain.raise"));
             assertNotNull(host.registry().createTool("terrain.lower"));
             assertNotNull(host.registry().createTool("object.place"));

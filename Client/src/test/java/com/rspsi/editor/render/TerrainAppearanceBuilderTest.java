@@ -78,6 +78,53 @@ class TerrainAppearanceBuilderTest {
     }
 
     @Test
+    void texturedOverlayRecoversHueAndSaturationWhenTheProviderHasNoAverageHsl() {
+        int[] pixels = new int[16];
+        java.util.Arrays.fill(pixels, 0x62A992);
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return Optional.empty();
+            }
+
+            @Override public Optional<FloorDefinitionView> underlay(int id) {
+                return id == 0 ? Optional.of(new FloorDefinitionView(
+                        0, -1, 0x102030, 64, 192, 96, 64, 256)) : Optional.empty();
+            }
+
+            @Override public Optional<FloorDefinitionView> overlay(int id) {
+                // Tile overlay ids are one-based in the scene document, so the
+                // overlay-id-1 tile below resolves this definition.
+                return id == 0 ? Optional.of(new FloorDefinitionView(
+                        0, 25, 0, 0, 0, 0, 0, 1, -1, 0, 0, 0)) : Optional.empty();
+            }
+
+            @Override public Optional<TextureDefinitionView> texture(int id) {
+                // A provider that exposes the definition but no average HSL is
+                // exactly what the 3.0.2 texture view does today.
+                return id == 25 ? Optional.of(new TextureDefinitionView(
+                        25, false, 25, 0x0071AD, -1, 0, 0, false)) : Optional.empty();
+            }
+
+            @Override public Optional<int[]> texturePixels(int id, double brightness, int size) {
+                return id == 25 ? Optional.of(pixels) : Optional.empty();
+            }
+        };
+        WorldDocument document = new WorldDocument(11, 11, 1);
+        document.tile(0, 5, 5).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 1, 0, 0, 0, List.of()));
+
+        TerrainAppearance appearance = new TerrainAppearanceBuilder()
+                .buildTile(document, definitions, 0, 5, 5);
+
+        assertEquals(25, appearance.textureId());
+        assertEquals(TextureAverageColor.packedHslFromRgb(0x62A992) & 0xFF80,
+                appearance.textureAverageHsl() & 0xFF80,
+                "a textured overlay without a provider average HSL must still carry "
+                        + "the texture's hue and saturation, or the palette resolves "
+                        + "every texel through the grey axis");
+    }
+
+    @Test
     void usesTheAsymmetricClientBlendWindow() {
         WorldDocument document = new WorldDocument(11, 1, 1);
         for (int x = 0; x < 11; x++) {

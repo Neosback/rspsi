@@ -19,6 +19,12 @@ import java.util.Objects;
  * onto the active {@link ImDrawList}.</p>
  */
 public final class ViewportOverlayDraw implements OverlayDraw {
+
+    @FunctionalInterface
+    public interface ViewportElevationSampler {
+        float[] cornerHeights(int plane, int x, int y);
+    }
+
     private final ImDrawList drawList;
     private final float originX;
     private final float originY;
@@ -26,15 +32,23 @@ public final class ViewportOverlayDraw implements OverlayDraw {
     private final int height;
     private final CameraState camera;
     private final SceneCameraProjection projection;
+    private final ViewportElevationSampler elevationSampler;
 
     public ViewportOverlayDraw(ImDrawList drawList, float originX, float originY,
                                int width, int height, CameraState camera) {
-        this(drawList, originX, originY, width, height, camera, SceneCameraProjection.editorDefault());
+        this(drawList, originX, originY, width, height, camera, SceneCameraProjection.editorDefault(), null);
     }
 
     public ViewportOverlayDraw(ImDrawList drawList, float originX, float originY,
                                int width, int height, CameraState camera,
                                SceneCameraProjection projection) {
+        this(drawList, originX, originY, width, height, camera, projection, null);
+    }
+
+    public ViewportOverlayDraw(ImDrawList drawList, float originX, float originY,
+                               int width, int height, CameraState camera,
+                               SceneCameraProjection projection,
+                               ViewportElevationSampler elevationSampler) {
         this.drawList = Objects.requireNonNull(drawList, "drawList");
         this.originX = originX;
         this.originY = originY;
@@ -42,6 +56,7 @@ public final class ViewportOverlayDraw implements OverlayDraw {
         this.height = height;
         this.camera = Objects.requireNonNull(camera, "camera");
         this.projection = Objects.requireNonNull(projection, "projection");
+        this.elevationSampler = elevationSampler;
     }
 
     public static int toImGuiColor(int colorRgba) {
@@ -105,12 +120,22 @@ public final class ViewportOverlayDraw implements OverlayDraw {
         float x1 = (tile.x() + 1) * 128.0f;
         float z0 = tile.y() * 128.0f;
         float z1 = (tile.y() + 1) * 128.0f;
-        float y = 0.0f;
+        float basePlaneY = -tile.plane() * 240.0f;
+        float y0 = basePlaneY, y1 = basePlaneY, y2 = basePlaneY, y3 = basePlaneY;
+        if (elevationSampler != null) {
+            float[] h = elevationSampler.cornerHeights(tile.plane(), tile.x(), tile.y());
+            if (h != null && h.length >= 4) {
+                y0 = h[0] - 2.0f;
+                y1 = h[1] - 2.0f;
+                y2 = h[2] - 2.0f;
+                y3 = h[3] - 2.0f;
+            }
+        }
 
-        ScreenPoint p0 = worldToScreen(x0, y, z0);
-        ScreenPoint p1 = worldToScreen(x1, y, z0);
-        ScreenPoint p2 = worldToScreen(x1, y, z1);
-        ScreenPoint p3 = worldToScreen(x0, y, z1);
+        ScreenPoint p0 = worldToScreen(x0, y0, z0);
+        ScreenPoint p1 = worldToScreen(x1, y1, z0);
+        ScreenPoint p2 = worldToScreen(x1, y2, z1);
+        ScreenPoint p3 = worldToScreen(x0, y3, z1);
 
         if (p0.visible() && p1.visible() && p2.visible() && p3.visible()) {
             int col = toImGuiColor(colorRgba);
@@ -125,12 +150,22 @@ public final class ViewportOverlayDraw implements OverlayDraw {
         float x1 = (tile.x() + 1) * 128.0f;
         float z0 = tile.y() * 128.0f;
         float z1 = (tile.y() + 1) * 128.0f;
-        float y = 0.0f;
+        float basePlaneY = -tile.plane() * 240.0f;
+        float y0 = basePlaneY, y1 = basePlaneY, y2 = basePlaneY, y3 = basePlaneY;
+        if (elevationSampler != null) {
+            float[] h = elevationSampler.cornerHeights(tile.plane(), tile.x(), tile.y());
+            if (h != null && h.length >= 4) {
+                y0 = h[0] - 2.0f;
+                y1 = h[1] - 2.0f;
+                y2 = h[2] - 2.0f;
+                y3 = h[3] - 2.0f;
+            }
+        }
 
-        ScreenPoint p0 = worldToScreen(x0, y, z0);
-        ScreenPoint p1 = worldToScreen(x1, y, z0);
-        ScreenPoint p2 = worldToScreen(x1, y, z1);
-        ScreenPoint p3 = worldToScreen(x0, y, z1);
+        ScreenPoint p0 = worldToScreen(x0, y0, z0);
+        ScreenPoint p1 = worldToScreen(x1, y1, z0);
+        ScreenPoint p2 = worldToScreen(x1, y2, z1);
+        ScreenPoint p3 = worldToScreen(x0, y3, z1);
 
         if (p0.visible() && p1.visible() && p2.visible() && p3.visible()) {
             int col = toImGuiColor(colorRgba);

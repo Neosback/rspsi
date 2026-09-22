@@ -88,6 +88,14 @@ public final class TerrainAppearanceBuilder {
         if (textureId >= 0) {
             TextureDefinitionView texture = definitions.texture(textureId).orElse(null);
             textureHsl = texture == null ? -1 : texture.averageHsl();
+            if (textureHsl < 0) {
+                // The 3.0.2 texture view carries only the 16-bit averageRgb
+                // record field and no average HSL, so recover the texture's
+                // hue and saturation from its decoded pixels. Without this the
+                // textured overlay falls back to the bare light vertex value
+                // and every texel resolves through the grey palette axis.
+                textureHsl = TextureAverageColor.of(definitions).packedHsl(textureId);
+            }
         }
         // The client keeps two overlay colors: the render HSL and the
         // minimap/fallback HSL. Textured overlays deliberately use -1 for

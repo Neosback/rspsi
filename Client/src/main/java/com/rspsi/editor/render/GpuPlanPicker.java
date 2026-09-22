@@ -73,17 +73,15 @@ public final class GpuPlanPicker {
         }
         if (best == null) return Optional.empty();
         WorldTileAddress address = best.command.tile();
-        WorldTile tile;
-        if (best.command.layer() == SceneLayer.Kind.TERRAIN && best.command.objectId() < 0) {
-            float hitX = ray.ox() + best.distance * ray.dx();
-            float hitZ = ray.oz() + best.distance * ray.dz();
-            int tileX = (int) Math.floor(hitX / 128.0f);
-            int tileY = (int) Math.floor(hitZ / 128.0f);
-            tile = new WorldTile(address.plane(), tileX, tileY);
-        } else {
-            tile = new WorldTile(address.plane(), address.worldX(), address.worldY());
-        }
-        return Optional.of(new PickResult(tile, address.plane(), best.command.objectId(),
+        float hitX = ray.ox() + best.distance * ray.dx();
+        float hitZ = ray.oz() + best.distance * ray.dz();
+        int tileX = (int) Math.floor(hitX / 128.0f);
+        int tileY = (int) Math.floor(hitZ / 128.0f);
+        WorldTile hitTile = new WorldTile(address.plane(), tileX, tileY);
+        WorldTile objectTile = best.command.objectId() >= 0
+                ? new WorldTile(address.plane(), address.worldX(), address.worldY())
+                : hitTile;
+        return Optional.of(new PickResult(hitTile, objectTile, address.plane(), best.command.objectId(),
                 best.distance, best.command.layer(), best.command.priority(),
                 best.command.depthBias(), best.command.textureId()));
     }

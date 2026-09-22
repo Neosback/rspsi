@@ -24,4 +24,27 @@ class OsrsTerrainColorMathTest {
         assertThrows(IllegalArgumentException.class,
                 () -> OsrsTerrainColorMath.packedHslToRgb(64, 0.0));
     }
+
+    @Test
+    void texturedOverlayKeepsTextureHueAndSaturationAndUsesTheTileLight() {
+        // A blue-water texture average at half saturation.
+        int textureAverage = OsrsTerrainColorMath.packHsl(176, 128, 90);
+
+        int packed = OsrsTerrainColorMath.texturedOverlayHsl(textureAverage, 96);
+
+        // Hue and saturation come from the texture, so the palette lookup is
+        // no longer stuck on the greyscale axis...
+        assertEquals(textureAverage & 0xFF80, packed & 0xFF80);
+        // ...and the lightness slot carries the tile light, not the texture's
+        // own average brightness, so the texture cannot darken itself twice.
+        assertEquals(96, packed & 0x7F);
+    }
+
+    @Test
+    void texturedOverlayClampsTheTileLightIntoTheUsableRange() {
+        int textureAverage = OsrsTerrainColorMath.packHsl(176, 128, 90);
+
+        assertEquals(2, OsrsTerrainColorMath.texturedOverlayHsl(textureAverage, 0) & 0x7F);
+        assertEquals(126, OsrsTerrainColorMath.texturedOverlayHsl(textureAverage, 400) & 0x7F);
+    }
 }

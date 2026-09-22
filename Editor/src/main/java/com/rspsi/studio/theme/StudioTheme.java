@@ -18,25 +18,25 @@ public final class StudioTheme {
     private StudioTheme() {
     }
 
-    // Backgrounds, darkest to lightest in soft modern graphite slate (#2E3035).
-    private static final float[] BG_APP = rgb(0x2E, 0x30, 0x35);
-    private static final float[] BG_PANEL = rgb(0x26, 0x28, 0x2B);
-    private static final float[] BG_PANEL_ALT = rgb(0x32, 0x35, 0x3B);
-    private static final float[] BG_FIELD = rgb(0x22, 0x23, 0x26);
-    private static final float[] BG_FIELD_HOVERED = rgb(0x35, 0x38, 0x40);
+    // Backgrounds, darkest to lightest in modern layered Zinc/Neutral scale.
+    private static final float[] BG_APP = rgb(0x0E, 0x10, 0x15);
+    private static final float[] BG_PANEL = rgb(0x14, 0x16, 0x1D);
+    private static final float[] BG_PANEL_ALT = rgb(0x1B, 0x1E, 0x27);
+    private static final float[] BG_FIELD = rgb(0x11, 0x13, 0x1A);
+    private static final float[] BG_FIELD_HOVERED = rgb(0x22, 0x26, 0x33);
 
-    private static final float[] BORDER = rgb(0x44, 0x4A, 0x54);
+    private static final float[] BORDER = rgb(0x27, 0x2C, 0x38);
 
-    // Warm OSRS gold and bronze accents (#D49B35)
-    private static final float[] ACCENT = rgb(0xD4, 0x9B, 0x35);
-    private static final float[] ACCENT_HOVER = rgb(0xF5, 0xC4, 0x69);
-    private static final float[] ACCENT_ACTIVE = rgb(0xB8, 0x82, 0x28);
-    private static final float[] ACCENT_MUTED = rgb(0x3D, 0x42, 0x4D);
-    private static final float[] ACCENT_GOLD = rgb(0xD4, 0x9B, 0x35);
+    // Modern Indigo / Violet primary accents (#6366F1), plus OSRS gold for telemetry/badges
+    private static final float[] ACCENT = rgb(0x63, 0x66, 0xF1);
+    private static final float[] ACCENT_HOVER = rgb(0x81, 0x8C, 0xF8);
+    private static final float[] ACCENT_ACTIVE = rgb(0x4F, 0x46, 0xE5);
+    private static final float[] ACCENT_MUTED = rgb(0x25, 0x28, 0x3D);
+    private static final float[] ACCENT_GOLD = rgb(0xF5, 0x9E, 0x0B);
 
-    private static final float[] TEXT = rgb(0xEB, 0xEE, 0xF2);
-    private static final float[] TEXT_MUTED = rgb(0x9E, 0xA8, 0xB6);
-    private static final float[] TEXT_DISABLED = rgb(0x6E, 0x77, 0x85);
+    private static final float[] TEXT = rgb(0xF1, 0xF5, 0xF9);
+    private static final float[] TEXT_MUTED = rgb(0x94, 0xA3, 0xB8);
+    private static final float[] TEXT_DISABLED = rgb(0x64, 0x74, 0x8B);
 
     /** Applies the theme once. Call after {@code ImGui.createContext()}. */
     public static void apply() {
@@ -46,23 +46,25 @@ public final class StudioTheme {
         ImGui.styleColorsDark();
         ImGuiStyle style = ImGui.getStyle();
 
-        // Modern softer rounding for a refined IDE feel
-        style.setWindowRounding(6.0f);
-        style.setChildRounding(4.0f);
-        style.setFrameRounding(4.0f);
-        style.setPopupRounding(6.0f);
-        style.setScrollbarRounding(6.0f);
-        style.setGrabRounding(4.0f);
-        style.setTabRounding(5.0f);
-        style.setWindowBorderSize(0.0f);
-        style.setChildBorderSize(0.0f);
+        // Modern SaaS-grade border radii (Linear / Raycast aesthetic)
+        style.setWindowRounding(10.0f);
+        style.setChildRounding(8.0f);
+        style.setFrameRounding(6.0f);
+        style.setPopupRounding(8.0f);
+        style.setScrollbarRounding(10.0f);
+        style.setGrabRounding(6.0f);
+        style.setTabRounding(6.0f);
+        style.setWindowBorderSize(1.0f);
+        style.setChildBorderSize(1.0f);
         style.setPopupBorderSize(1.0f);
-        style.setFrameBorderSize(0.0f);
-        style.setWindowPadding(8.0f, 6.0f);
-        style.setFramePadding(6.0f, 4.0f);
-        style.setItemSpacing(6.0f, 4.0f);
-        style.setItemInnerSpacing(5.0f, 3.0f);
-        style.setIndentSpacing(16.0f);
+        style.setFrameBorderSize(1.0f);
+
+        // Generous spacing & whitespace: components have room to breathe
+        style.setWindowPadding(14.0f, 12.0f);
+        style.setFramePadding(10.0f, 6.0f);
+        style.setItemSpacing(8.0f, 8.0f);
+        style.setItemInnerSpacing(6.0f, 6.0f);
+        style.setIndentSpacing(18.0f);
         style.setScrollbarSize(10.0f);
 
         color(style, ImGuiCol.Text, TEXT);
@@ -83,7 +85,7 @@ public final class StudioTheme {
         color(style, ImGuiCol.MenuBarBg, BG_PANEL);
 
         color(style, ImGuiCol.ScrollbarBg, BG_APP);
-        color(style, ImGuiCol.ScrollbarGrab, BG_FIELD);
+        color(style, ImGuiCol.ScrollbarGrab, BG_PANEL_ALT);
         color(style, ImGuiCol.ScrollbarGrabHovered, BG_FIELD_HOVERED);
         color(style, ImGuiCol.ScrollbarGrabActive, ACCENT_ACTIVE);
 
@@ -91,22 +93,20 @@ public final class StudioTheme {
         color(style, ImGuiCol.SliderGrab, ACCENT);
         color(style, ImGuiCol.SliderGrabActive, ACCENT_ACTIVE);
 
-        // Buttons stay neutral until interacted with; the accent is earned
-        // by hover/press/selection, not painted on every control by default.
+        // Buttons stay quiet and layered until interacted with
         color(style, ImGuiCol.Button, BG_PANEL_ALT);
-        color(style, ImGuiCol.ButtonHovered, ACCENT_MUTED);
-        color(style, ImGuiCol.ButtonActive, ACCENT_ACTIVE);
+        color(style, ImGuiCol.ButtonHovered, rgb(0x25, 0x2A, 0x38));
+        color(style, ImGuiCol.ButtonActive, ACCENT);
 
-        color(style, ImGuiCol.Header, ACCENT_MUTED, 0.72f);
-        color(style, ImGuiCol.HeaderHovered, ACCENT_MUTED);
+        color(style, ImGuiCol.Header, ACCENT_MUTED, 0.85f);
+        color(style, ImGuiCol.HeaderHovered, rgb(0x28, 0x2F, 0x42));
         color(style, ImGuiCol.HeaderActive, ACCENT_ACTIVE);
 
-        color(style, ImGuiCol.Separator, BORDER, 0.75f);
+        color(style, ImGuiCol.Separator, BORDER, 0.85f);
         color(style, ImGuiCol.SeparatorHovered, ACCENT);
         color(style, ImGuiCol.SeparatorActive, ACCENT_ACTIVE);
 
-        // Visible focus rings: resize grips use the accent instead of
-        // fading into the panel background.
+        // Visible focus rings: resize grips use the accent
         color(style, ImGuiCol.ResizeGrip, ACCENT_MUTED, 0.4f);
         color(style, ImGuiCol.ResizeGripHovered, ACCENT_HOVER);
         color(style, ImGuiCol.ResizeGripActive, ACCENT_ACTIVE);
@@ -124,14 +124,14 @@ public final class StudioTheme {
         color(style, ImGuiCol.TableBorderStrong, BORDER);
         color(style, ImGuiCol.TableBorderLight, BORDER, 0.6f);
         color(style, ImGuiCol.TableRowBg, BG_PANEL, 0.0f);
-        color(style, ImGuiCol.TableRowBgAlt, BG_PANEL_ALT, 0.4f);
+        color(style, ImGuiCol.TableRowBgAlt, BG_PANEL_ALT, 0.35f);
 
-        color(style, ImGuiCol.TextLink, ACCENT);
+        color(style, ImGuiCol.TextLink, ACCENT_HOVER);
         color(style, ImGuiCol.TextSelectedBg, ACCENT_MUTED);
 
         color(style, ImGuiCol.NavCursor, ACCENT);
         color(style, ImGuiCol.DragDropTarget, ACCENT);
-        color(style, ImGuiCol.UnsavedMarker, rgb(0xD9, 0xA4, 0x41));
+        color(style, ImGuiCol.UnsavedMarker, ACCENT_GOLD);
     }
 
     private static void color(ImGuiStyle style, int slot, float[] rgb) {

@@ -5,6 +5,7 @@ import com.rspsi.cache.workspace.CacheDecoderSummary.IndexEntry;
 import com.rspsi.cache.workspace.CacheSessionState;
 import com.rspsi.cache.workspace.CacheSessionStatus;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImDrawList;
 import imgui.ImGui;
@@ -86,13 +87,17 @@ public final class DashboardView {
         boolean ready = status.state() == CacheSessionState.READY;
         if (ready && !editingCachePath) {
             status.currentSession().ifPresent(session -> {
-                ImGui.textDisabled("Cache:");
+                StudioWidgets.beginCard("cache-summary", -1.0f, 48.0f);
+                ImGui.textColored(0xFF4ADE80, StudioIcons.CHECK + "  Cache Ready:");
                 ImGui.sameLine();
                 ImGui.text(session.path().toString());
-                ImGui.sameLine();
-                if (ImGui.smallButton("Change...##cache-path-edit")) {
+                ImGui.sameLine(0.0f, 12.0f);
+                StudioWidgets.pill("Rev " + session.identity().revision(), ImGui.getColorU32(0.18f, 0.24f, 0.38f, 0.8f), ImGui.getColorU32(0.51f, 0.65f, 0.97f, 1.0f));
+                ImGui.sameLine(0.0f, 12.0f);
+                if (StudioWidgets.buttonGhost("Change...##cache-path-edit", 75.0f, 22.0f)) {
                     editingCachePath = true;
                 }
+                StudioWidgets.endCard();
             });
         } else {
             ImGui.textDisabled("Specify the OSRS cache folder containing main_file_cache.dat2 and .idx files.");
@@ -100,7 +105,7 @@ public final class DashboardView {
             ImGui.sameLine();
             boolean loading = status.state() == CacheSessionState.LOADING;
             ImGui.beginDisabled(loading || cachePath.isEmpty());
-            if (ImGui.button(loading ? "Loading..." : "Load cache")) {
+            if (StudioWidgets.buttonPrimary(loading ? "Loading..." : "Load cache", 110.0f, 0.0f)) {
                 Path path = Path.of(cachePath.get().trim()).toAbsolutePath().normalize();
                 loadCache.accept(path);
                 editingCachePath = false;
@@ -123,28 +128,120 @@ public final class DashboardView {
         // Server Integration Section
         renderServerIntegrationSection(integrations, openIntegrationCenter);
 
-        ImGui.dummy(1.0f, 12.0f);
-        ImGui.separatorText("Workspaces");
-        ImGui.textWrapped("Open a workspace after the cache has been validated and indexed.");
-        ImGui.inputTextWithHint("##region", "Region X,Y or region ID", region);
-        ImGui.textDisabled("Example: 50,50 opens the Lumbridge region.");
-
-        ImGui.spacing();
-        ImGui.beginDisabled(status.state() != CacheSessionState.READY);
-        if (ImGui.button("Map Studio", 130, 32)) openMapEditor.run();
-        ImGui.sameLine();
-        if (ImGui.button("Interface Studio", 140, 32) && openInterfaceStudio != null) {
-            openInterfaceStudio.run();
-        }
-        ImGui.sameLine();
-        if (ImGui.button("Object Studio", 130, 32) && openObjectStudio != null) {
-            openObjectStudio.run();
-        }
-        ImGui.endDisabled();
+        // Modern 3-Card Workspace Launchers
+        renderWorkspaceSection(status, openMapEditor, openInterfaceStudio, openObjectStudio);
 
         ImGui.dummy(1.0f, 24.0f);
         ImGui.unindent(margin);
         ImGui.end();
+    }
+
+    private void renderWorkspaceSection(CacheSessionStatus status,
+                                        Runnable openMapEditor,
+                                        Runnable openInterfaceStudio,
+                                        Runnable openObjectStudio) {
+        ImGui.dummy(1.0f, 12.0f);
+        ImGui.separatorText("Workspaces");
+        ImGui.textDisabled("Select an editing environment. Workspaces become active once cache decoding completes.");
+        ImGui.dummy(1.0f, 6.0f);
+
+        boolean ready = status.state() == CacheSessionState.READY;
+        float availWidth = ImGui.getContentRegionAvailX();
+        float cardSpacing = 12.0f;
+        float cardWidth = Math.max(260.0f, (availWidth - cardSpacing * 2.0f) / 3.0f);
+        float cardHeight = 220.0f;
+
+        // Card 1: Map Studio
+        StudioWidgets.beginCard("ws-map", cardWidth, cardHeight);
+        {
+            ImGui.textColored(0xFF818CF8, StudioIcons.MAP);
+            ImGui.sameLine();
+            ImGui.text("Map Studio");
+            ImGui.sameLine(0.0f, 8.0f);
+            if (ready) {
+                StudioWidgets.pill("READY", ImGui.getColorU32(0.13f, 0.28f, 0.18f, 0.8f), ImGui.getColorU32(0.29f, 0.87f, 0.50f, 1.0f));
+            } else {
+                StudioWidgets.pill("LOCKED", ImGui.getColorU32(0.18f, 0.20f, 0.26f, 0.8f), ImGui.getColorU32(0.58f, 0.64f, 0.72f, 1.0f));
+            }
+
+            ImGui.dummy(1.0f, 2.0f);
+            ImGui.pushStyleColor(ImGuiCol.Text, 0.65f, 0.70f, 0.78f, 1.0f);
+            ImGui.textWrapped("3D terrain sculpting, tile painting, object placement & spline path autotiling.");
+            ImGui.popStyleColor();
+
+            ImGui.dummy(1.0f, 6.0f);
+            ImGui.textDisabled("Target Region:");
+            ImGui.setNextItemWidth(-1.0f);
+            ImGui.inputTextWithHint("##region", "Region X,Y or ID (e.g. 50,50)", region);
+
+            ImGui.dummy(1.0f, 8.0f);
+            ImGui.beginDisabled(!ready);
+            if (StudioWidgets.buttonPrimary(StudioIcons.MAP + "  Launch Map Studio", -1.0f, 34.0f)) {
+                openMapEditor.run();
+            }
+            ImGui.endDisabled();
+        }
+        StudioWidgets.endCard();
+
+        ImGui.sameLine(0.0f, cardSpacing);
+
+        // Card 2: Interface Studio
+        StudioWidgets.beginCard("ws-interface", cardWidth, cardHeight);
+        {
+            ImGui.textColored(0xFF38BDF8, StudioIcons.PREFAB);
+            ImGui.sameLine();
+            ImGui.text("Interface Studio");
+            ImGui.sameLine(0.0f, 8.0f);
+            if (ready) {
+                StudioWidgets.pill("READY", ImGui.getColorU32(0.13f, 0.28f, 0.18f, 0.8f), ImGui.getColorU32(0.29f, 0.87f, 0.50f, 1.0f));
+            } else {
+                StudioWidgets.pill("LOCKED", ImGui.getColorU32(0.18f, 0.20f, 0.26f, 0.8f), ImGui.getColorU32(0.58f, 0.64f, 0.72f, 1.0f));
+            }
+
+            ImGui.dummy(1.0f, 2.0f);
+            ImGui.pushStyleColor(ImGuiCol.Text, 0.65f, 0.70f, 0.78f, 1.0f);
+            ImGui.textWrapped("Visual layout editor for game interfaces, component trees, sprite assets & CS2 scripts.");
+            ImGui.popStyleColor();
+
+            ImGui.dummy(1.0f, 36.0f);
+
+            ImGui.beginDisabled(!ready || openInterfaceStudio == null);
+            if (StudioWidgets.buttonSecondary(StudioIcons.PREFAB + "  Open Interface Studio", -1.0f, 34.0f)) {
+                if (openInterfaceStudio != null) openInterfaceStudio.run();
+            }
+            ImGui.endDisabled();
+        }
+        StudioWidgets.endCard();
+
+        ImGui.sameLine(0.0f, cardSpacing);
+
+        // Card 3: Object Studio
+        StudioWidgets.beginCard("ws-object", cardWidth, cardHeight);
+        {
+            ImGui.textColored(0xFFFBBF24, StudioIcons.OBJECT);
+            ImGui.sameLine();
+            ImGui.text("Object Studio");
+            ImGui.sameLine(0.0f, 8.0f);
+            if (ready) {
+                StudioWidgets.pill("READY", ImGui.getColorU32(0.13f, 0.28f, 0.18f, 0.8f), ImGui.getColorU32(0.29f, 0.87f, 0.50f, 1.0f));
+            } else {
+                StudioWidgets.pill("LOCKED", ImGui.getColorU32(0.18f, 0.20f, 0.26f, 0.8f), ImGui.getColorU32(0.58f, 0.64f, 0.72f, 1.0f));
+            }
+
+            ImGui.dummy(1.0f, 2.0f);
+            ImGui.pushStyleColor(ImGuiCol.Text, 0.65f, 0.70f, 0.78f, 1.0f);
+            ImGui.textWrapped("3D model inspection, animation sequence scrubber, model export & transform tuning.");
+            ImGui.popStyleColor();
+
+            ImGui.dummy(1.0f, 36.0f);
+
+            ImGui.beginDisabled(!ready || openObjectStudio == null);
+            if (StudioWidgets.buttonSecondary(StudioIcons.OBJECT + "  Open Object Studio", -1.0f, 34.0f)) {
+                if (openObjectStudio != null) openObjectStudio.run();
+            }
+            ImGui.endDisabled();
+        }
+        StudioWidgets.endCard();
     }
 
     public void render(CacheSessionStatus status,

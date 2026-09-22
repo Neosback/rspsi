@@ -72,7 +72,7 @@ public final class StudioMenuBar {
             if (ImGui.menuItem(StudioIcons.VIEWPORT + "  Tile Information HUD", null, hudVisible)) {
                 if (toggleHud != null) toggleHud.run();
             }
-            if (ImGui.menuItem(StudioIcons.OUTLINER + "  Left Tool Rail", null, leftRailVisible)) {
+            if (ImGui.menuItem(StudioIcons.BRUSH + "  Left Brush Rail (always show)", null, leftRailVisible)) {
                 if (toggleLeftRail != null) toggleLeftRail.run();
             }
             ImGui.separator();

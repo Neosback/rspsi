@@ -107,8 +107,12 @@ public final class ModelPreviewCanvas extends Region {
             int a = triangles[offset];
             int b = triangles[offset + 1];
             int c = triangles[offset + 2];
+            // Face transparency is a signed byte in the cache that the client
+            // normalises to 0..255 while loading; -1 is 0xFF (invisible), not
+            // "opaque". Masking keeps the preview's alpha identical to the
+            // scene renderer's.
             double alpha = alphas.length == geometry.triangleCount()
-                    ? 1.0 - Math.min(255, Math.max(0, alphas[triangle])) / 255.0 : 0.88;
+                    ? 1.0 - Math.min(255, Math.max(0, alphas[triangle] & 0xFF)) / 255.0 : 0.88;
             if (alpha <= 0) continue;
             graphics.setGlobalAlpha(alpha);
             graphics.setFill(faceColor(triangle, colors));

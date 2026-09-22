@@ -71,7 +71,7 @@ class TerrainPacketBuilderTest {
     }
 
     @Test
-    void texturedOverlayUsesLightOnlyRenderHslAndKeepsAverageForMinimap() {
+    void texturedOverlayKeepsTextureHueAndUsesTileLightForLightness() {
         TileSnapshot tile = new TileSnapshot(0, 0, 0, 0,
                 0, 1, 0, 0, 0, List.of());
         TerrainAppearance appearance = new TerrainAppearance(
@@ -86,8 +86,15 @@ class TerrainPacketBuilderTest {
         assertEquals(0x1234, packet.overlayMinimapHsl());
         assertTrue(packet.faces().stream().anyMatch(face -> face.material() == 1
                 && face.textureId() == 9));
+        // The vertex colour must carry the texture's hue and saturation, or the
+        // palette lookup lands on the grey axis and every textured floor - water
+        // included - renders flat grey.
         assertTrue(packet.vertices().stream().allMatch(vertex ->
-                vertex.packedHsl() >= 2 && vertex.packedHsl() <= 126));
+                (vertex.packedHsl() & 0xFF80) == (0x1234 & 0xFF80)));
+        // The lightness slot stays the tile light rather than the texture's own
+        // average luminance, so the texture cannot darken itself twice.
+        assertTrue(packet.vertices().stream().allMatch(vertex ->
+                (vertex.packedHsl() & 0x7F) >= 2 && (vertex.packedHsl() & 0x7F) <= 126));
         assertEquals(1, packet.shape());
         assertFalse(packet.flat());
     }

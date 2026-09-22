@@ -37,18 +37,30 @@ public final class StudioIcons {
     public static final String CLOSE = "\ue5cd";            // close
     public static final String REFRESH = "\ue5d5";          // refresh
     public static final String FULLSCREEN = "\ue5d0";       // fullscreen
+    public static final String FULLSCREEN_EXIT = "\ue5d1";  // fullscreen_exit
+    public static final String MINIMIZE = "\ue931";         // minimize
     public static final String OPEN_IN_NEW = "\ue89e";      // open_in_new
+    public static final String LOCK = "\ue897";             // lock
+    public static final String LOCK_OPEN = "\ue898";        // lock_open
+    public static final String MORE_VERT = "\ue5d4";        // more_vert
+    public static final String MORE_HORIZ = "\ue5d3";       // more_horiz
+    public static final String CAMERA = "\ue412";           // photo_camera
+    public static final String CENTER_FOCUS = "\ue3dc";     // filter_center_focus
+    public static final String ZOOM_IN = "\ue8ff";          // zoom_in
+    public static final String ZOOM_OUT = "\ue900";         // zoom_out
 
     // --- Selection & Editing Tools ---
     public static final String SELECT = "\ue569";           // near_me (pointer cursor)
     public static final String TILE = "\ue3c6";             // crop_square (single tile)
     public static final String AREA = "\ue162";             // select_all (marquee range)
     public static final String GRID = "\ue3ec";             // grid_on
+    public static final String GRID_OFF = "\ue3eb";         // grid_off
     public static final String BRUSH = "\ue3ae";            // brush
     public static final String PALETTE = "\ue40a";          // palette
     public static final String COLOR_LENS = "\ue3b7";       // color_lens
     public static final String TEXTURE = "\ue421";          // texture
     public static final String LAYERS = "\ue53b";           // layers
+    public static final String LAYERS_CLEAR = "\ue53c";     // layers_clear
     public static final String TERRAIN = "\ue564";          // terrain (mountain/landscape)
     public static final String HEIGHT = "\uea3b";           // architecture (elevation)
     public static final String STRAIGHTEN = "\ue41c";       // straighten
@@ -58,6 +70,28 @@ public final class StudioIcons {
     public static final String FLAG = "\ue153";             // flag (tile collision/mask)
     public static final String PATH = "\ue922";             // timeline (spline path)
     public static final String ROUTE = "\ueacd";            // route
+    public static final String POLYLINE = "\uebbb";         // polyline
+
+    // --- Brush Shapes & Geometry ---
+    public static final String SHAPE_SQUARE = "\ue3c6";     // crop_square
+    public static final String SHAPE_CIRCLE = "\uef4a";     // circle
+    public static final String SHAPE_DIAMOND = "\uead5";    // diamond
+    public static final String SHAPE_FALLOFF = "\ue3e9";    // gradient (smooth falloff)
+    public static final String SHAPE_WAVE = "\ue176";       // waves
+
+    // --- Height Sculpting & Manipulation ---
+    public static final String RAISE = "\ue5d8";            // arrow_upward
+    public static final String LOWER = "\ue5db";            // arrow_downward
+    public static final String FLATTEN = "\uf108";          // horizontal_rule
+    public static final String SMOOTH = "\ue176";           // waves
+    public static final String TERRACE = "\uf1a9";          // stairs
+    public static final String BLEND = "\ue429";            // tune
+
+    // --- Math, Steppers & Transformations ---
+    public static final String ADD = "\ue145";              // add
+    public static final String REMOVE = "\ue15b";           // remove
+    public static final String ROTATE_LEFT = "\ue419";      // rotate_left
+    public static final String ROTATE_RIGHT = "\ue41a";     // rotate_right
 
     // --- 3D Objects & Hierarchy ---
     public static final String OBJECT = "\ue9fe";           // view_in_ar (3D cube)
@@ -83,6 +117,8 @@ public final class StudioIcons {
     public static final String COPY = "\ue14d";             // content_copy
     public static final String PASTE = "\ue14f";            // content_paste
     public static final String PLAY = "\ue037";             // play_arrow
+    public static final String PAUSE = "\ue034";            // pause
+    public static final String STOP = "\ue047";             // stop
 
     // --- Chevrons & UI Directionals ---
     public static final String EXPAND_MORE = "\ue5cf";      // expand_more (down chevron)

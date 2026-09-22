@@ -136,20 +136,50 @@ class ModelPacketBuilderTest {
     }
 
     @Test
-    void preservesClientAlphaSentinelRenderTypes() {
+    void fullyTransparentFaceStaysOutOfBothSubmissionPasses() {
+        // 0xFF is invisible in the client - its transparency is spent before the
+        // write - and it arrives here as the signed byte -1.
+        ModelRenderPacket packet = singleFacePacket(-1);
+
+        assertEquals(2, packet.triangles().get(0).renderType());
+        assertTrue(packet.opaqueTriangleIndices().isEmpty());
+        assertTrue(packet.transparentTriangleIndices().isEmpty());
+    }
+
+    @Test
+    void signedFaceTransparencyIsNormalizedInsteadOfClampedToOpaque() {
+        // The cache stores one signed byte of transparency per face and the
+        // client normalises it with `+= 256`, so -128 is 0x80 = half
+        // transparent. Clamping it to zero is what drew translucent gate,
+        // door and wall faces as solid slabs.
+        ModelRenderPacket packet = singleFacePacket(-128);
+
+        assertEquals(128, packet.triangles().get(0).alpha());
+        assertTrue(packet.opaqueTriangleIndices().isEmpty());
+        assertEquals(List.of(0), packet.transparentTriangleIndices());
+    }
+
+    @Test
+    void nearlyInvisibleFaceKeepsItsTransparencyInsteadOfBecomingFlatColour() {
+        // 0xFE (254/255 transparent) used to be promoted to render type 3 and
+        // drawn as an opaque flat colour.
+        ModelRenderPacket packet = singleFacePacket(-2);
+
+        assertEquals(254, packet.triangles().get(0).alpha());
+        assertEquals(0, packet.triangles().get(0).renderType());
+        assertTrue(packet.opaqueTriangleIndices().isEmpty());
+    }
+
+    private static ModelRenderPacket singleFacePacket(int faceAlpha) {
         WorldDocument document = new WorldDocument(1, 1, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
                 0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 0, 0))));
         ModelGeometryView geometry = new ModelGeometryView(7,
                 new int[]{0, 0, 0, 64, 0, 0, 0, 0, 64},
-                new int[]{0, 1, 2}, new short[]{100}, new int[]{-1}, new int[]{-1});
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{faceAlpha}, new int[]{-1});
 
-        ModelRenderPacket packet = new ModelPacketBuilder(definitions(ObjectAppearanceView.empty(), geometry))
+        return new ModelPacketBuilder(definitions(ObjectAppearanceView.empty(), geometry))
                 .build(document).get(0);
-
-        assertEquals(2, packet.triangles().get(0).renderType());
-        assertTrue(packet.opaqueTriangleIndices().isEmpty());
-        assertTrue(packet.transparentTriangleIndices().isEmpty());
     }
 
     @Test
@@ -561,5 +591,50 @@ class ModelPacketBuilderTest {
         assertEquals(2, packets.size());
         assertEquals(2, packets.get(0).triangles().get(0).renderType());
         assertEquals(2, packets.get(1).triangles().get(0).renderType());
+    }
+
+    @Test
+    void resolvesMultilocDefaultTransformWhenBaseDefinitionHasNoModels() {
+        // A bare multiloc shell (Lumbridge's castle bushes are exactly this):
+        // its own definition carries no models at all - the client swaps in
+        // one of its varbit/varp-selected "transforms" ids, falling back to
+        // multiDefault (5000 here) when no player state applies, which is
+        // always the case in an editor session. Object 5001 exists only to
+        // prove the resolver follows multiDefault specifically, not just the
+        // first transforms entry.
+        WorldDocument document = new WorldDocument(2, 2, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(10778, 10, 0, 0, 0, 0))));
+
+        ModelGeometryView geometry = triangle(7, 100);
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                if (id == 10778) {
+                    return Optional.of(new ObjectDefinitionView(id, null, 1, 1,
+                            List.of(), new int[0], new int[0], -1, false,
+                            1234, -1, new int[]{5001, 5000}, 5000));
+                }
+                if (id == 5000) {
+                    return Optional.of(new ObjectDefinitionView(id, "Bush", 1, 1,
+                            List.of(), new int[]{7}, new int[]{10}, -1, false));
+                }
+                return Optional.empty();
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(ObjectAppearanceView.empty());
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(geometry);
+            }
+        };
+
+        Optional<ModelRenderPacket> packet = new ModelPacketBuilder(definitions)
+                .build(new WorldObject(10778, 10, 0, 0, 0, 0), document);
+
+        assertTrue(packet.isPresent(), "the multiloc shell must resolve to its default transform's model");
+        assertEquals(10778, packet.get().objectId(),
+                "placement identity stays the placed shell id, not the resolved transform");
     }
 }

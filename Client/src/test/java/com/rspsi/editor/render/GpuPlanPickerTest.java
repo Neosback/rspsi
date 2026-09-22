@@ -34,8 +34,10 @@ class GpuPlanPickerTest {
 
         assertTrue(result.objectHit());
         assertEquals(11, result.objectId());
-        assertEquals(tile.worldX(), result.tile().x());
-        assertEquals(tile.worldY(), result.tile().y());
+        assertEquals(tile.worldX(), result.objectTile().x());
+        assertEquals(tile.worldY(), result.objectTile().y());
+        assertEquals(0, result.tile().x());
+        assertEquals(0, result.tile().y());
     }
 
     @Test

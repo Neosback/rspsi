@@ -119,11 +119,16 @@ public final class KnowledgePanel implements StudioPanel {
 
             WorldDocument world = context.pluginLifecycle().host().context().world();
             WorldObject pickedObject = null;
-            if (hit.objectHit() && world != null && coord.plane() >= 0 && coord.plane() < world.planes()) {
-                for (WorldObject obj : world.tile(coord).snapshot().objects()) {
-                    if (obj.id() == hit.objectId()) {
-                        pickedObject = obj;
-                        break;
+            if (hit.objectHit() && world != null) {
+                WorldTile objTile = hit.objectTile() != null ? hit.objectTile() : worldCoord;
+                LocalTile objLocal = context.session().coordinates().toLocal(objTile).orElse(null);
+                TileCoordinate objCoord = objLocal != null ? objLocal.coordinate() : coord;
+                if (objCoord.plane() >= 0 && objCoord.plane() < world.planes() && world.contains(objCoord)) {
+                    for (WorldObject obj : world.tile(objCoord).snapshot().objects()) {
+                        if (obj.id() == hit.objectId()) {
+                            pickedObject = obj;
+                            break;
+                        }
                     }
                 }
             }

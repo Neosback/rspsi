@@ -95,6 +95,11 @@ public final class ViewportHudManager {
         resetStackOffsets();
     }
 
+    public synchronized float viewportX() { return viewportX; }
+    public synchronized float viewportY() { return viewportY; }
+    public synchronized float viewportWidth() { return viewportWidth; }
+    public synchronized float viewportHeight() { return viewportHeight; }
+
     /** Places a registered HUD. Returns null when the HUD is hidden. */
     public synchronized Placement place(String id, float width, float height) {
         HudConfig config = configs.computeIfAbsent(id,

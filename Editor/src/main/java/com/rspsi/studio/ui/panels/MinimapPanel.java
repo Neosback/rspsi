@@ -33,6 +33,7 @@ public final class MinimapPanel implements StudioPanel {
     private final ImInt jumpX = new ImInt(32);
     private final ImInt jumpY = new ImInt(32);
     private final com.rspsi.studio.ui.MinimapTextureService textureService = new com.rspsi.studio.ui.MinimapTextureService();
+    private EditorSession listenedSession;
 
     @Override
     public String id() {
@@ -69,6 +70,11 @@ public final class MinimapPanel implements StudioPanel {
         NativeSceneViewport viewport = context.viewport();
         EditorSession session = context.session();
         LoadedOsrsCacheSession cache = context.cache();
+
+        if (session != null && session != listenedSession) {
+            listenedSession = session;
+            listenedSession.addChangeListener(changed -> textureService.markDirty());
+        }
 
         if (viewport == null) {
             ImGui.textDisabled("Viewport not available");

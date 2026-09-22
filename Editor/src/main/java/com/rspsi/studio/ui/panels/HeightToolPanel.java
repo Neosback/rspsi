@@ -32,13 +32,13 @@ public final class HeightToolPanel implements StudioPanel {
     }
 
     public enum HeightMode {
-        RAISE("Raise (+)", 1, "terrain.raise"),
-        LOWER("Lower (-)", -1, "terrain.lower"),
-        FLATTEN("Flatten (=)", 0, "terrain.flatten"),
-        SMOOTH("Smooth (~)", 0, "terrain.smooth"),
-        BLEND("Blend", 0, "terrain.blend"),
-        TERRACE("Terrace", 0, "terrain.terrace"),
-        SET_VALUE("Set Value =", 0, "terrain.flatten");
+        RAISE(StudioIcons.RAISE + " Raise", 1, "terrain.raise"),
+        LOWER(StudioIcons.LOWER + " Lower", -1, "terrain.lower"),
+        FLATTEN(StudioIcons.FLATTEN + " Flat", 0, "terrain.flatten"),
+        SMOOTH(StudioIcons.SMOOTH + " Smooth", 0, "terrain.smooth"),
+        BLEND(StudioIcons.BLEND + " Blend", 0, "terrain.blend"),
+        TERRACE(StudioIcons.TERRACE + " Terrace", 0, "terrain.terrace"),
+        SET_VALUE(StudioIcons.FLATTEN + " Set Value", 0, "terrain.flatten");
 
         private final String label;
         private final int direction;
@@ -120,7 +120,15 @@ public final class HeightToolPanel implements StudioPanel {
         for (HeightMode m : HeightMode.values()) {
             boolean isCur = this.mode == m;
             if (isCur) {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
+                ImGui.pushStyleColor(ImGuiCol.Button, 0xFF6366F1);
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF818CF8);
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF4F46E5);
+                ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
+            } else {
+                ImGui.pushStyleColor(ImGuiCol.Button, 0xFF181A22);
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF262A37);
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF1E212B);
+                ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
             }
             if (ImGui.button(m.label() + "##hm-" + m.name())) {
                 this.mode = m;
@@ -128,9 +136,7 @@ public final class HeightToolPanel implements StudioPanel {
                     context.activateTool().accept(m.engineToolId());
                 }
             }
-            if (isCur) {
-                ImGui.popStyleColor();
-            }
+            ImGui.popStyleColor(4);
             ImGui.sameLine();
         }
 

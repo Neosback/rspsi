@@ -78,11 +78,13 @@ public final class StudioPluginManager {
         // Core built-in Studio modal tool projections.
         register(new com.rspsi.studio.plugin.builtin.tool.SingleSelectToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.MultiSelectToolPlugin());
+        register(new com.rspsi.studio.plugin.builtin.tool.SingleObjectSelectToolPlugin());
+        register(new com.rspsi.studio.plugin.builtin.tool.MultiObjectSelectToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.TilePainterToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.HeightSculptorToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.PathToolPlugin());
         register(new com.rspsi.studio.plugin.builtin.tool.ObjectPlacementToolPlugin());
-
+        register(new com.rspsi.studio.ui.hud.BrushSettingsHud());
     }
 
     public synchronized void register(StudioPlugin plugin) {
@@ -206,6 +208,19 @@ public final class StudioPluginManager {
                 p.renderHUD(context);
             } catch (Exception ex) {
                 log.error("Plugin {} HUD error: {}", p.id(), ex.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Dispatches floating interactive window rendering to all active plugins.
+     */
+    public void renderFloating(StudioPanelContext context) {
+        for (StudioPlugin p : enabledPlugins()) {
+            try {
+                p.renderFloating(context);
+            } catch (Exception ex) {
+                log.error("Plugin {} floating error: {}", p.id(), ex.getMessage(), ex);
             }
         }
     }

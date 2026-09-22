@@ -71,6 +71,15 @@ public final class ObjectPlacementToolPlugin implements StudioToolPlugin {
     }
 
     @Override
+    public java.util.Set<ToolSurface> surfaces() {
+        // The docked Left Tool Rail is brush-only now (Tile Painter, Height
+        // Sculptor) and the floating rail is a dedicated selection-mode
+        // switcher (Single/Multi Select); object placement lives only on
+        // the bottom bar, which already covered it.
+        return java.util.EnumSet.of(ToolSurface.BOTTOM_BAR);
+    }
+
+    @Override
     public boolean isConfigurable() {
         return true;
     }
@@ -99,11 +108,11 @@ public final class ObjectPlacementToolPlugin implements StudioToolPlugin {
         ImGui.textDisabled("Click in the 3D viewport to spawn or manipulate objects. Use the Outliner or Object Viewer for full definitions.");
 
         ImGui.spacing();
-        if (ImGui.button("Rotate CW (+90°)##rot-cw", 130.0f, 22.0f)) {
+        if (ImGui.button(StudioIcons.ROTATE_RIGHT + " Rotate CW (+90°)##rot-cw", 150.0f, 22.0f)) {
             defaultRotation.set((defaultRotation.get() + 1) % 4);
         }
         ImGui.sameLine(0.0f, 8.0f);
-        if (ImGui.button("Rotate CCW (-90°)##rot-ccw", 130.0f, 22.0f)) {
+        if (ImGui.button(StudioIcons.ROTATE_LEFT + " Rotate CCW (-90°)##rot-ccw", 150.0f, 22.0f)) {
             defaultRotation.set((defaultRotation.get() + 3) % 4);
         }
         ImGui.sameLine(0.0f, 12.0f);

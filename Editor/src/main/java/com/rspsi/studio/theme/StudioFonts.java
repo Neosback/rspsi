@@ -20,6 +20,8 @@ public final class StudioFonts {
             (short) 0xf000, (short) 0xf8ff, 0
     };
 
+    public static final float BASE_FONT_SIZE = 16.0f;
+
     private static ImFont ui;
     private static ImFont icon;
     private static ImFont mono;
@@ -39,11 +41,11 @@ public final class StudioFonts {
         float uiScale = Math.max(1.0f, Math.max(scaleX[0], scaleY[0]));
 
         ImFontConfig uiConfig = new ImFontConfig();
-        uiConfig.setOversampleH(2);
-        uiConfig.setOversampleV(1);
-        uiConfig.setPixelSnapH(true);
+        uiConfig.setOversampleH(3);
+        uiConfig.setOversampleV(3);
+        uiConfig.setPixelSnapH(false);
         byte[] roboto = resource("/font/Roboto-Regular.ttf");
-        ui = atlas.addFontFromMemoryTTF(roboto, 15.0f * uiScale, uiConfig);
+        ui = atlas.addFontFromMemoryTTF(roboto, BASE_FONT_SIZE * uiScale, uiConfig);
 
         // Merge Google Fonts Material Icons into primary UI font
         ImFontConfig materialIconConfig = new ImFontConfig();

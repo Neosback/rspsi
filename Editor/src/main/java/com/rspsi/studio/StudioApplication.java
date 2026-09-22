@@ -44,6 +44,7 @@ import com.rspsi.editor.simulation.SimulationEngine;
 import com.rspsi.editor.symbols.CacheGamevalProvider;
 import com.rspsi.editor.symbols.SymbolService;
 import com.rspsi.editor.plugin.builtin.tool.TilePainterToolPlugin;
+import com.rspsi.editor.plugin.builtin.tool.SplinePathToolPlugin;
 import com.rspsi.plugins.server.openrune.OpenRuneServerPlugin;
 import com.rspsi.plugins.server.openrune.OpenRuneServerProvider;
 import com.rspsi.studio.integration.IntegrationCenterWindow;
@@ -62,6 +63,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Initial native application shell; services and workspaces attach here. */
 public final class StudioApplication implements AutoCloseable {
@@ -98,7 +100,9 @@ public final class StudioApplication implements AutoCloseable {
         thread.setDaemon(true);
         return thread;
     });
+    private final AtomicBoolean sceneDirty = new AtomicBoolean(false);
     private CompletableFuture<LoadedMapScene> pendingScene;
+    private CompletableFuture<LoadedMapScene> pendingSceneRebuild;
     private LoadedMapScene loadedScene;
     private EditorPluginLifecycleManager pluginLifecycle;
     private GpuUploadPlan currentPlan;
@@ -168,6 +172,7 @@ public final class StudioApplication implements AutoCloseable {
             }
             case MAP_EDITOR -> {
                 pollSceneLoad();
+                pollSceneRebuild(cache);
                 if (loadedScene != null && renderedSettingsRevision != renderSettings.revision()) {
                     RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
                     currentPlan = new GpuUploadPlanBuilder().build(config.apply(loadedScene.packet()));
@@ -268,6 +273,7 @@ public final class StudioApplication implements AutoCloseable {
             currentPlan = loadedScene.plan();
             renderedSettingsRevision = loadedScene.settingsRevision();
             initializePlugins(loadedScene);
+            loadedScene.session().addChangeListener(changedTiles -> sceneDirty.set(true));
             sceneStatus = "Region " + loadedScene.opened().region().regionX()
                     + "," + loadedScene.opened().region().regionY() + " ready.";
         } catch (RuntimeException failure) {
@@ -279,6 +285,43 @@ public final class StudioApplication implements AutoCloseable {
         } finally {
             pendingScene = null;
         }
+    }
+
+    private void pollSceneRebuild(LoadedOsrsCacheSession cache) {
+        if (pendingSceneRebuild != null) {
+            if (!pendingSceneRebuild.isDone()) return;
+            try {
+                loadedScene = pendingSceneRebuild.join();
+                currentPlan = loadedScene.plan();
+                renderedSettingsRevision = loadedScene.settingsRevision();
+            } catch (RuntimeException failure) {
+                LOGGER.error("Scene rebuild failed", failure);
+            } finally {
+                pendingSceneRebuild = null;
+            }
+        }
+        if (sceneDirty.compareAndSet(true, false)) {
+            if (loadedScene != null && cache != null) {
+                LoadedMapScene baseScene = loadedScene;
+                pendingSceneRebuild = CompletableFuture.supplyAsync(
+                        () -> rebuildMapScene(cache, baseScene), sceneExecutor);
+            }
+        }
+    }
+
+    private LoadedMapScene rebuildMapScene(LoadedOsrsCacheSession cache, LoadedMapScene baseScene) {
+        WorldRegion region = baseScene.opened().worldRegion();
+        WorldRegionWindow window = new WorldRegionWindow(region.regionX(), region.regionY(), 1, 1,
+                Map.of(region.regionId(), region));
+        RenderWindowScene scene = new RenderWindowSceneBuilder(cache.bundle().definitions()).build(window);
+        SceneWindow sceneWindow = SceneWindow.from(window);
+        GpuScenePacket packet = new GpuScenePacketBuilder().build(sceneWindow, scene);
+        long settingsRevision = renderSettings.revision();
+        RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(config.apply(packet));
+        RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).build(region.document());
+        return new LoadedMapScene(baseScene.opened(), baseScene.session(), renderScene, packet, plan, settingsRevision,
+                baseScene.camera());
     }
 
     private static int[] parseRegion(String value) {
@@ -325,6 +368,7 @@ public final class StudioApplication implements AutoCloseable {
         // Tile Painter palette and rail/bottom-bar tool both target) gets registered.
         // Without it, selecting the tool highlights fine but painting silently no-ops.
         candidates.add(new TilePainterToolPlugin());
+        candidates.add(new SplinePathToolPlugin());
         candidates.add(new OpenRuneServerPlugin());
         Map<String, SemanticVersion> hostPluginVersions = new java.util.LinkedHashMap<>();
         for (EditorPlugin candidate : candidates) {
@@ -348,7 +392,8 @@ public final class StudioApplication implements AutoCloseable {
                 .map(com.rspsi.cache.workspace.OsrsBundle::assets)
                 .orElse(EmptyAssetRepository.INSTANCE);
         EditorSceneAccess sceneAccess = () -> EditorSceneSnapshot.from(
-                scene.renderScene(), scene.opened().worldRegion().window());
+                loadedScene != null ? loadedScene.renderScene() : scene.renderScene(),
+                scene.opened().worldRegion().window());
         CacheDecoderSummary decodedSummary = cacheSessions.current()
                 .map(LoadedOsrsCacheSession::decoderSummary)
                 .orElse(CacheDecoderSummary.empty());
@@ -437,6 +482,9 @@ public final class StudioApplication implements AutoCloseable {
     private void cancelPendingScene() {
         if (pendingScene != null) pendingScene.cancel(true);
         pendingScene = null;
+        if (pendingSceneRebuild != null) pendingSceneRebuild.cancel(true);
+        pendingSceneRebuild = null;
+        sceneDirty.set(false);
     }
 
     private void closePluginLifecycle() {

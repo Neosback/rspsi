@@ -132,7 +132,7 @@ public final class StudioBottomBar {
                                    boolean toolHasDrawer) {
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 4.0f, 0.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 2.0f, 2.0f);
-        ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 4.0f);
+        ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
 
         List<StudioToolPlugin> toolPlugins = (context != null && context.studioPlugins() != null)
                 ? context.studioPlugins().toolPlugins()
@@ -157,14 +157,14 @@ public final class StudioBottomBar {
                 boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
 
                 if (isActive) {
-                    ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
-                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.28f, 0.53f, 0.92f, 1.0f));
-                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.16f, 0.40f, 0.78f, 1.0f));
+                    ImGui.pushStyleColor(ImGuiCol.Button, 0xFF6366F1); // Indigo 500
+                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF818CF8);
+                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF4F46E5);
                     ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
                 } else {
-                    ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.18f, 0.22f, 0.28f, 1.0f));
-                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.24f, 0.29f, 0.36f, 1.0f));
-                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.14f, 0.17f, 0.22f, 1.0f));
+                    ImGui.pushStyleColor(ImGuiCol.Button, 0xFF181A22); // Zinc dark surface
+                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF262A37);
+                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF1E212B);
                     ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
                 }
 
