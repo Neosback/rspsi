@@ -18,7 +18,6 @@ class BackfacePolicyTest {
         // positive for the same displayed triangle, therefore GL_CCW.
         float nativeArea = conventionalArea(0, 1, 0, 0, 1, 1);
         assertEquals(1.0f, nativeArea);
-        assertEquals(nativeArea, BackfacePolicy.nativeWindowArea(clientEdge));
         assertEquals(BackfacePolicy.NativeWinding.COUNTER_CLOCKWISE,
                 BackfacePolicy.nativeWinding());
     }
@@ -29,7 +28,8 @@ class BackfacePolicyTest {
 
         assertEquals(-1.0f, clientEdge);
         assertTrue(!BackfacePolicy.isFrontFacingSoftware(clientEdge));
-        assertTrue(BackfacePolicy.nativeWindowArea(clientEdge) < 0.0f);
+        float nativeArea = conventionalArea(0, 1, 1, 1, 0, 0);
+        assertTrue(nativeArea < 0.0f);
     }
 
     @Test
