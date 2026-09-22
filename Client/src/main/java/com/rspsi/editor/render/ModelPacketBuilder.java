@@ -182,6 +182,8 @@ public final class ModelPacketBuilder {
                         resolved.footprintWidth(), resolved.footprintLength(),
                         object.rotation(), modelDrawOrientation)
                 : GameObjectSceneMetadata.none();
+        SceneObjectIdentity sceneObjectIdentity = SceneObjectIdentity.of(
+                object, resolved.footprintWidth(), resolved.footprintLength());
         ModelRenderPacket packet = new ModelRenderPacket(
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
@@ -190,7 +192,7 @@ public final class ModelPacketBuilder {
                 objectCenterHeight(document, object, resolved.footprintWidth(), resolved.footprintLength()),
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
                 GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata,
-                clientRenderableBounds);
+                clientRenderableBounds, sceneObjectIdentity);
         return Optional.of(resolved.appearance().mergeNormals()
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }
@@ -675,7 +677,7 @@ public final class ModelPacketBuilder {
                 packet.maxZ(), packet.supportsAnimation(), packet.supportsParticles(),
                 packet.placementHeight(), packet.roofRelated(), packet.renderMode(),
                 packet.wallDecorationPresentation(), packet.gameObjectSceneMetadata(),
-                packet.clientRenderableBounds());
+                packet.clientRenderableBounds(), packet.sceneObjectIdentity());
     }
 
     /**
