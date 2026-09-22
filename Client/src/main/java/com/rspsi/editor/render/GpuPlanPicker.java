@@ -53,6 +53,9 @@ public final class GpuPlanPicker {
             if (restrictToPlane != null && command.tile().plane() != restrictToPlane) {
                 continue;
             }
+            if (!intersectsClientBounds(command, ray, projection)) {
+                continue;
+            }
             for (int offset = command.firstIndex();
                  offset + 2 < command.firstIndex() + command.indexCount(); offset += 3) {
                 GpuSceneVertex first = plan.vertices().get(plan.indices().get(offset));
@@ -84,7 +87,8 @@ public final class GpuPlanPicker {
         return Optional.of(new PickResult(hitTile, objectTile, address.plane(), best.command.objectId(),
                 best.distance, best.command.layer(), best.command.priority(),
                 best.command.depthBias(), best.command.textureId(),
-                best.command.gameObjectSceneMetadata(), best.command.clientRenderableBounds()));
+                best.command.gameObjectSceneMetadata(), best.command.clientRenderableBounds(),
+                best.command.sceneObjectIdentity()));
     }
 
     private static Ray ray(CameraState camera, int width, int height,
@@ -104,6 +108,70 @@ public final class GpuPlanPicker {
                 + yawDepth * (float) Math.cos(camera.yaw());
         return new Ray(camera.x(), camera.y(), camera.z(),
                 worldX, worldY, worldZ).normalized();
+    }
+
+    /**
+     * Coarse object candidate test using the client Model AABB contract.
+     * Terrain and legacy commands without bounds fall through to exact
+     * triangle testing. Bounds never decide the final pick.
+     */
+    private static boolean intersectsClientBounds(GpuDrawCommand command, Ray ray,
+                                                  SceneCameraProjection projection) {
+        if (!command.sceneObjectIdentity().present()
+                || command.clientRenderableBounds().isEmpty()) {
+            return true;
+        }
+        SceneObjectIdentity identity = command.sceneObjectIdentity();
+        float baseX = command.modelAnchorX() * 128.0f + identity.centerOffsetX();
+        float translateY = command.placementHeight();
+        float baseZ = command.modelAnchorY() * 128.0f + identity.centerOffsetZ();
+
+        for (int renderableIndex = 0;
+             renderableIndex < command.clientRenderableBounds().size();
+             renderableIndex++) {
+            ClientModelBounds bounds = command.clientRenderableBounds().get(renderableIndex);
+            ClientRenderablePlacement placement =
+                    command.clientRenderablePlacements().get(renderableIndex);
+            ClientModelBounds.Aabb aabb = bounds.drawAabb();
+            float translateX = baseX + placement.offsetX();
+            float translateZ = baseZ + placement.offsetZ();
+            if (intersectsAabb(ray,
+                    translateX + aabb.minX(), translateY + aabb.minY(),
+                    translateZ + aabb.minZ(),
+                    translateX + aabb.maxX(), translateY + aabb.maxY(),
+                    translateZ + aabb.maxZ(),
+                    projection.nearPlane(), projection.farPlane())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean intersectsAabb(Ray ray,
+                                          float minX, float minY, float minZ,
+                                          float maxX, float maxY, float maxZ,
+                                          float nearPlane, float farPlane) {
+        float[] interval = new float[]{nearPlane, farPlane};
+        if (!clipAxis(ray.ox(), ray.dx(), minX, maxX, interval)) return false;
+        if (!clipAxis(ray.oy(), ray.dy(), minY, maxY, interval)) return false;
+        return clipAxis(ray.oz(), ray.dz(), minZ, maxZ, interval);
+    }
+
+    private static boolean clipAxis(float origin, float direction, float minimum, float maximum,
+                                    float[] interval) {
+        if (Math.abs(direction) <= EPSILON) {
+            return origin >= minimum && origin <= maximum;
+        }
+        float first = (minimum - origin) / direction;
+        float second = (maximum - origin) / direction;
+        if (first > second) {
+            float swap = first;
+            first = second;
+            second = swap;
+        }
+        interval[0] = Math.max(interval[0], first);
+        interval[1] = Math.min(interval[1], second);
+        return interval[1] + EPSILON >= interval[0];
     }
 
     private static float intersect(Ray ray, GpuSceneVertex a, GpuSceneVertex b,

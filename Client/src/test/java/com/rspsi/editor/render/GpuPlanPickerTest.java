@@ -1,6 +1,7 @@
 package com.rspsi.editor.render;
 
 import com.rspsi.editor.model.WorldTileAddress;
+import com.rspsi.editor.model.WorldObject;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -61,6 +62,125 @@ class GpuPlanPickerTest {
     }
 
     @Test
+    void returnsStableSceneIdentityForSameDefinitionAtDifferentPlacements() {
+        ClientModelBounds bounds = boundsForTriangle(-20, -20, 36, 20, -20, 36, 0, 20, 36);
+        SceneObjectIdentity firstIdentity = SceneObjectIdentity.of(
+                new WorldObject(11, 10, 0, 0, 0, 0), 1, 1);
+        SceneObjectIdentity secondIdentity = SceneObjectIdentity.of(
+                new WorldObject(11, 10, 0, 0, 1, 0), 1, 1);
+        GpuUploadPlan plan = new GpuUploadPlan(
+                List.of(
+                        vertex(44, -20, 100, 0x1200),
+                        vertex(84, -20, 100, 0x1200),
+                        vertex(64, 20, 100, 0x1200),
+                        vertex(172, -20, 100, 0x4A38),
+                        vertex(212, -20, 100, 0x4A38),
+                        vertex(192, 20, 100, 0x4A38)),
+                List.of(0, 1, 2, 3, 4, 5),
+                List.of(
+                        objectCommand(WorldTileAddress.of(0, 0, 0), 0, 11,
+                                firstIdentity, bounds),
+                        objectCommand(WorldTileAddress.of(1, 0, 0), 3, 11,
+                                secondIdentity, bounds)),
+                List.of(), Map.of(), "identity-placement");
+
+        PickResult result = new GpuPlanPicker().pick(plan,
+                new CameraState(64, 0, 0, 0, 0),
+                100, 100, 50, 50).orElseThrow();
+
+        assertTrue(result.hasSceneObjectIdentity());
+        assertEquals(firstIdentity, result.sceneObjectIdentity());
+        assertEquals(firstIdentity.stableId(), result.sceneInstanceId());
+        assertTrue(!firstIdentity.stableId().equals(secondIdentity.stableId()));
+    }
+
+    @Test
+    void clientBoundsRejectTriangleFromWrongScenePlacement() {
+        ClientModelBounds bounds = boundsForTriangle(-20, -20, 36, 20, -20, 36, 0, 20, 36);
+        SceneObjectIdentity wrongPlacement = SceneObjectIdentity.of(
+                new WorldObject(11, 10, 0, 0, 1, 0), 1, 1);
+        GpuUploadPlan plan = new GpuUploadPlan(
+                List.of(
+                        vertex(44, -20, 100, 0x1200),
+                        vertex(84, -20, 100, 0x1200),
+                        vertex(64, 20, 100, 0x1200)),
+                List.of(0, 1, 2),
+                List.of(objectCommand(WorldTileAddress.of(1, 0, 0), 0, 11,
+                        wrongPlacement, bounds)),
+                List.of(), Map.of(), "bounds-reject");
+
+        assertTrue(new GpuPlanPicker().pick(plan,
+                new CameraState(64, 0, 0, 0, 0),
+                100, 100, 50, 50).isEmpty());
+    }
+
+    @Test
+    void overlappingClientBoundsStillUseExactTriangleAsFinalAnswer() {
+        ClientModelBounds broadBounds = boundsForTriangle(
+                -96, -20, 36, 96, -20, 36, 0, 20, 36);
+        SceneObjectIdentity hitIdentity = SceneObjectIdentity.of(
+                new WorldObject(11, 10, 0, 0, 0, 0), 1, 1);
+        SceneObjectIdentity missIdentity = SceneObjectIdentity.of(
+                new WorldObject(12, 10, 0, 0, 0, 0), 1, 1);
+        GpuUploadPlan plan = new GpuUploadPlan(
+                List.of(
+                        vertex(44, -20, 100, 0x1200),
+                        vertex(84, -20, 100, 0x1200),
+                        vertex(64, 20, 100, 0x1200),
+                        vertex(100, -20, 90, 0x4A38),
+                        vertex(124, -20, 90, 0x4A38),
+                        vertex(112, 20, 90, 0x4A38)),
+                List.of(0, 1, 2, 3, 4, 5),
+                List.of(
+                        objectCommand(WorldTileAddress.of(0, 0, 0), 0, 11,
+                                hitIdentity, broadBounds),
+                        objectCommand(WorldTileAddress.of(0, 0, 0), 3, 12,
+                                missIdentity, broadBounds)),
+                List.of(), Map.of(), "bounds-exact");
+
+        PickResult result = new GpuPlanPicker().pick(plan,
+                new CameraState(64, 0, 0, 0, 0),
+                100, 100, 50, 50).orElseThrow();
+
+        assertEquals(11, result.objectId());
+        assertEquals(hitIdentity, result.sceneObjectIdentity());
+    }
+
+    @Test
+    void displacedWallDecorationUsesPerRenderablePlacementForBroadPhase() {
+        ClientModelBounds bounds = boundsForTriangle(
+                -10, -20, 36, 10, -20, 36, 0, 20, 36);
+        SceneObjectIdentity identity = SceneObjectIdentity.of(
+                new WorldObject(11, 5, 0, 0, 0, 0), 1, 1);
+        GpuDrawCommand command = new GpuDrawCommand(
+                WorldTileAddress.of(0, 0, 0), 0, 0,
+                SceneLayer.Kind.WALL_DECORATION,
+                GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, -1, 0, 0, 11,
+                GpuDrawCommand.RenderMode.DEFAULT,
+                WallDecorationPresentation.none(),
+                GameObjectSceneMetadata.none(),
+                List.of(bounds),
+                List.of(new ClientRenderablePlacement(64, 0)),
+                identity, 0, 0, 0);
+        GpuUploadPlan plan = new GpuUploadPlan(
+                List.of(
+                        vertex(118, -20, 100, 0x1200),
+                        vertex(138, -20, 100, 0x1200),
+                        vertex(128, 20, 100, 0x1200)),
+                List.of(0, 1, 2),
+                List.of(command),
+                List.of(), Map.of(), "decor-placement");
+
+        PickResult result = new GpuPlanPicker().pick(plan,
+                new CameraState(128, 0, 0, 0, 0),
+                100, 100, 50, 50).orElseThrow();
+
+        assertEquals(11, result.objectId());
+        assertEquals(identity, result.sceneObjectIdentity());
+    }
+
+    @Test
     void picksCorrectTileInMergedTerrainCommand() {
         // A single merged draw command covering tile (3200, 3200) and (3201, 3200)
         // Tile 3200, 3200: X in [3200*128, 3201*128]
@@ -84,6 +204,26 @@ class GpuPlanPickerTest {
 
         assertEquals(3201, result.tile().x());
         assertEquals(3200, result.tile().y());
+    }
+
+    private static GpuDrawCommand objectCommand(WorldTileAddress tile, int firstIndex,
+                                                int objectId, SceneObjectIdentity identity,
+                                                ClientModelBounds bounds) {
+        return new GpuDrawCommand(tile, 0, 0, SceneLayer.Kind.GROUND_OBJECT,
+                GpuDrawCommand.SubmissionPass.OPAQUE, firstIndex, 3, -1, 0, 0, objectId,
+                GpuDrawCommand.RenderMode.DEFAULT, WallDecorationPresentation.none(),
+                GameObjectSceneMetadata.none(), List.of(bounds), identity, 0);
+    }
+
+    private static ClientModelBounds boundsForTriangle(
+            int ax, int ay, int az,
+            int bx, int by, int bz,
+            int cx, int cy, int cz) {
+        return ClientModelBounds.calculate(List.of(
+                new ModelVertex(ax, ay, az, 0, 0, 0, 0, 0, 0),
+                new ModelVertex(bx, by, bz, 0, 0, 0, 0, 0, 0),
+                new ModelVertex(cx, cy, cz, 0, 0, 0, 0, 0, 0)),
+                0, false);
     }
 
     private static GpuSceneVertex vertex(float x, float y, float z, int hsl) {

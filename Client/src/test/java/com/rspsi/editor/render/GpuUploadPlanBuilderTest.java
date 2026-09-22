@@ -3,6 +3,7 @@ package com.rspsi.editor.render;
 import com.rspsi.editor.model.ObjectCategory;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldTileAddress;
+import com.rspsi.editor.model.WorldObject;
 import com.rspsi.cache.definition.TextureDefinitionView;
 import org.junit.jupiter.api.Test;
 
@@ -83,6 +84,8 @@ class GpuUploadPlanBuilderTest {
         TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
         GameObjectSceneMetadata metadata =
                 GameObjectSceneMetadata.of(3200, 3200, 2, 3, 1, 0);
+        SceneObjectIdentity identity = SceneObjectIdentity.of(
+                new WorldObject(42, 10, 1, 0, 3200, 3200), 3, 2);
         ClientModelBounds clientBounds = ClientModelBounds.calculate(
                 List.of(new ModelVertex(0, -20, 0, 0, 0, 0, 0, 0, 0),
                         new ModelVertex(64, 40, 0, 0, 0, 0, 0, 0, 0),
@@ -96,7 +99,9 @@ class GpuUploadPlanBuilderTest {
                         -1, 0, 0, 0)), List.of(), -1,
                 0, 0, 0, 64, 0, 64, false, false)
                 .withGameObjectSceneMetadata(metadata)
-                .withClientModelBounds(clientBounds);
+                .withClientModelBounds(clientBounds)
+                .withClientRenderablePlacements(List.of(new ClientRenderablePlacement(12, -7)))
+                .withSceneObjectIdentity(identity);
         SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
                 Optional.empty(), Optional.empty(), List.of(model),
                 List.of(new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0))),
@@ -111,6 +116,9 @@ class GpuUploadPlanBuilderTest {
         assertEquals(1, plan.commands().size());
         assertEquals(metadata, plan.commands().get(0).gameObjectSceneMetadata());
         assertEquals(List.of(clientBounds), plan.commands().get(0).clientRenderableBounds());
+        assertEquals(List.of(new ClientRenderablePlacement(12, -7)),
+                plan.commands().get(0).clientRenderablePlacements());
+        assertEquals(identity, plan.commands().get(0).sceneObjectIdentity());
     }
 
     @Test
@@ -152,6 +160,60 @@ class GpuUploadPlanBuilderTest {
                 GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 0, 42,
                 GpuDrawCommand.RenderMode.DEFAULT, WallDecorationPresentation.none(),
                 sceneMetadata, List.of(secondBounds));
+
+        String firstFingerprint = GpuUploadPlanBuilder.fingerprint(
+                "same", List.of(), List.of(), List.of(first), List.of(), Map.of(), List.of());
+        String secondFingerprint = GpuUploadPlanBuilder.fingerprint(
+                "same", List.of(), List.of(), List.of(second), List.of(), Map.of(), List.of());
+
+        assertNotEquals(firstFingerprint, secondFingerprint);
+    }
+
+    @Test
+    void uploadFingerprintChangesWhenOnlyRenderablePlacementChanges() {
+        WorldTileAddress tile = WorldTileAddress.of(3200, 3200, 0);
+        ClientModelBounds bounds = ClientModelBounds.calculate(
+                List.of(new ModelVertex(-10, -20, -30, 0, 0, 0, 0, 0, 0),
+                        new ModelVertex(50, 40, 70, 0, 0, 0, 0, 0, 0),
+                        new ModelVertex(20, 10, -5, 0, 0, 0, 0, 0, 0)),
+                0, false);
+        SceneObjectIdentity identity = SceneObjectIdentity.of(
+                new WorldObject(42, 5, 0, 0, 3200, 3200), 1, 1);
+        GpuDrawCommand first = new GpuDrawCommand(tile, 0, 0,
+                SceneLayer.Kind.WALL_DECORATION, GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, -1, 0, 0, 42, GpuDrawCommand.RenderMode.DEFAULT,
+                WallDecorationPresentation.none(), GameObjectSceneMetadata.none(),
+                List.of(bounds), List.of(new ClientRenderablePlacement(16, 0)),
+                identity, 0, 3200, 3200);
+        GpuDrawCommand second = new GpuDrawCommand(tile, 0, 0,
+                SceneLayer.Kind.WALL_DECORATION, GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, -1, 0, 0, 42, GpuDrawCommand.RenderMode.DEFAULT,
+                WallDecorationPresentation.none(), GameObjectSceneMetadata.none(),
+                List.of(bounds), List.of(new ClientRenderablePlacement(32, 0)),
+                identity, 0, 3200, 3200);
+
+        assertNotEquals(
+                GpuUploadPlanBuilder.fingerprint(
+                        "same", List.of(), List.of(), List.of(first), List.of(), Map.of(), List.of()),
+                GpuUploadPlanBuilder.fingerprint(
+                        "same", List.of(), List.of(), List.of(second), List.of(), Map.of(), List.of()));
+    }
+
+    @Test
+    void uploadFingerprintChangesWhenOnlySceneObjectIdentityChanges() {
+        WorldTileAddress tile = WorldTileAddress.of(3200, 3200, 0);
+        SceneObjectIdentity firstIdentity = SceneObjectIdentity.of(
+                new WorldObject(42, 10, 0, 0, 3200, 3200), 2, 3);
+        SceneObjectIdentity secondIdentity = SceneObjectIdentity.of(
+                new WorldObject(42, 10, 1, 0, 3200, 3200), 3, 2);
+        GpuDrawCommand first = new GpuDrawCommand(tile, 0, 0, SceneLayer.Kind.GROUND_OBJECT,
+                GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 0, 42,
+                GpuDrawCommand.RenderMode.DEFAULT, WallDecorationPresentation.none(),
+                GameObjectSceneMetadata.none(), List.of(), firstIdentity, 0);
+        GpuDrawCommand second = new GpuDrawCommand(tile, 0, 0, SceneLayer.Kind.GROUND_OBJECT,
+                GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 0, 42,
+                GpuDrawCommand.RenderMode.DEFAULT, WallDecorationPresentation.none(),
+                GameObjectSceneMetadata.none(), List.of(), secondIdentity, 0);
 
         String firstFingerprint = GpuUploadPlanBuilder.fingerprint(
                 "same", List.of(), List.of(), List.of(first), List.of(), Map.of(), List.of());

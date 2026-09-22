@@ -55,8 +55,11 @@ public final class ModelPacketBuilder {
         for (int plane = 0; plane < document.planes(); plane++) {
             for (int x = 0; x < document.width(); x++) {
                 for (int y = 0; y < document.length(); y++) {
+                    java.util.Map<WorldObject, Integer> occurrences = new java.util.HashMap<>();
                     for (WorldObject object : document.tile(plane, x, y).objects()) {
-                        packets.addAll(buildScenePackets(object, document, clientCycle));
+                        int occurrence = occurrences.getOrDefault(object, 0);
+                        occurrences.put(object, occurrence + 1);
+                        packets.addAll(buildScenePackets(object, document, clientCycle, occurrence));
                     }
                 }
             }
@@ -87,7 +90,7 @@ public final class ModelPacketBuilder {
      * scene path preserves both renderables and their camera-order metadata.
      */
     private List<ModelRenderPacket> buildScenePackets(WorldObject object, WorldDocument document,
-                                                       int clientCycle) {
+                                                       int clientCycle, int occurrence) {
         ResolvedModelBuild resolved = resolveBuild(object, document, clientCycle);
         if (resolved == null) return List.of();
         List<WallRules.LocModelVariant> variants = variantsFor(object, resolved.decorDisplacement());
@@ -97,16 +100,17 @@ public final class ModelPacketBuilder {
             List<ModelRenderPacket> result = new ArrayList<>(2);
             buildResolvedPacket(object, document, resolved, List.of(primaryVariant),
                     WallDecorationPresentation.primary(
-                            primaryVariant.decorX(), primaryVariant.decorZ(), object.rotation()))
+                            primaryVariant.decorX(), primaryVariant.decorZ(), object.rotation()),
+                    occurrence)
                     .ifPresent(result::add);
             buildResolvedPacket(object, document, resolved, List.of(secondaryVariant),
-                    WallDecorationPresentation.secondary(object.rotation()))
+                    WallDecorationPresentation.secondary(object.rotation()), occurrence)
                     .ifPresent(result::add);
             return List.copyOf(result);
         }
 
         return buildResolvedPacket(object, document, resolved, variants,
-                WallDecorationPresentation.none())
+                WallDecorationPresentation.none(), occurrence)
                 .map(List::of).orElseGet(List::of);
     }
 
@@ -140,6 +144,16 @@ public final class ModelPacketBuilder {
             ResolvedModelBuild resolved,
             List<WallRules.LocModelVariant> variants,
             WallDecorationPresentation presentation) {
+        return buildResolvedPacket(object, document, resolved, variants, presentation, 0);
+    }
+
+    private Optional<ModelRenderPacket> buildResolvedPacket(
+            WorldObject object,
+            WorldDocument document,
+            ResolvedModelBuild resolved,
+            List<WallRules.LocModelVariant> variants,
+            WallDecorationPresentation presentation,
+            int occurrence) {
         PacketParts parts = new PacketParts();
         for (WallRules.LocModelVariant variant : variants) {
             int renderableBoundsStart = parts.clientBoundsVertices.size();
@@ -166,6 +180,8 @@ public final class ModelPacketBuilder {
             if (parts.clientBoundsVertices.size() > renderableBoundsStart) {
                 parts.clientRenderableRanges.add(new VertexRange(
                         renderableBoundsStart, parts.clientBoundsVertices.size()));
+                parts.clientRenderablePlacements.add(
+                        new ClientRenderablePlacement(variant.decorX(), variant.decorZ()));
             }
         }
         if (parts.vertices.isEmpty() || parts.triangles.isEmpty()) return Optional.empty();
@@ -182,6 +198,8 @@ public final class ModelPacketBuilder {
                         resolved.footprintWidth(), resolved.footprintLength(),
                         object.rotation(), modelDrawOrientation)
                 : GameObjectSceneMetadata.none();
+        SceneObjectIdentity sceneObjectIdentity = SceneObjectIdentity.of(
+                object, resolved.footprintWidth(), resolved.footprintLength(), occurrence);
         ModelRenderPacket packet = new ModelRenderPacket(
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
@@ -190,7 +208,7 @@ public final class ModelPacketBuilder {
                 objectCenterHeight(document, object, resolved.footprintWidth(), resolved.footprintLength()),
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
                 GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata,
-                clientRenderableBounds);
+                clientRenderableBounds, parts.clientRenderablePlacements, sceneObjectIdentity);
         return Optional.of(resolved.appearance().mergeNormals()
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }
@@ -675,7 +693,8 @@ public final class ModelPacketBuilder {
                 packet.maxZ(), packet.supportsAnimation(), packet.supportsParticles(),
                 packet.placementHeight(), packet.roofRelated(), packet.renderMode(),
                 packet.wallDecorationPresentation(), packet.gameObjectSceneMetadata(),
-                packet.clientRenderableBounds());
+                packet.clientRenderableBounds(), packet.clientRenderablePlacements(),
+                packet.sceneObjectIdentity());
     }
 
     /**
@@ -1505,6 +1524,7 @@ public final class ModelPacketBuilder {
         private final List<ModelVertex> vertices = new ArrayList<>();
         private final List<ModelVertex> clientBoundsVertices = new ArrayList<>();
         private final List<VertexRange> clientRenderableRanges = new ArrayList<>();
+        private final List<ClientRenderablePlacement> clientRenderablePlacements = new ArrayList<>();
         private final List<ModelTriangle> triangles = new ArrayList<>();
         private final List<TextureTriangle> textureTriangles = new ArrayList<>();
         private final List<VertexRange> wallVariantRanges = new ArrayList<>();
