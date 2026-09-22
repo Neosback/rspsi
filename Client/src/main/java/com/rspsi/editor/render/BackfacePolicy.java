@@ -43,6 +43,16 @@ public final class BackfacePolicy {
         return softwareEdgeFunction;
     }
 
+    /**
+     * Native viewport validation mode. Normal editing remains two-sided until
+     * the real-cache model and shaped-tile acceptance checks are complete.
+     */
+    public enum NativeCullingMode {
+        TWO_SIDED,
+        CLIENT_FRONT,
+        REVERSED_DEBUG
+    }
+
     public enum NativeWinding {
         COUNTER_CLOCKWISE
     }
