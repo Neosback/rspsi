@@ -34,10 +34,10 @@ Where it's a "target," it's a gap with a concrete next action, not a vague aspir
 
 ### 1.2 What's not correct yet - the tracked backlog
 
-`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 18 "partial," 4 "deferred." Only two
-P0 items remain partial.
+`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 17 "partial," 4 "deferred." Only one
+P0 item remains partial.
 
-This foundation PR has already moved four P0 items to covered:
+This foundation PR has now moved five P0 items to covered:
 
 - `native.drawRanges` - backend-neutral batch planning plus synthetic material/zone fixtures.
 - `models.textureAlpha` - RuneLite model cutout threshold plus texture-animation fixtures.
@@ -45,13 +45,14 @@ This foundation PR has already moved four P0 items to covered:
   wall displacement, and camera-dependent submission order.
 - `objects.wallNormalMerge` - L-wall pair merge plus a passing cross-region x=63/x=0 seam
   fixture over the stitched/padded world-window path.
+- `textures.definitions` - OpenRS2 build-240 cache, independent RuneLite exporter, and focused
+  RSPSi verifier matched 3 representative 128x128 textures with zero metadata/pixel differences.
 
 | id | title | next action |
 |---|---|---|
-| `textures.definitions` | Texture definitions, pixels, average-color fallback | Run the implemented external `textures.json` verifier against an independently exported real revision-240 cache fixture; code and deterministic tests are complete |
 | `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Software/native winding polarity is corrected to GL_CCW; validate one asymmetric real-cache model and one shaped tile in the live viewport before enabling hardware culling |
 
-P1-partial items worth picking up after these P0 validations: `scene.apiSurface`,
+P1-partial items worth picking up after this final P0 validation: `scene.apiSurface`,
 `terrain.bridge`, `scene.roofs`, `objects.wallTransforms`, `objects.decorations`,
 `objects.gameObjectFootprint`, `models.colors`, `models.contour`, `textures.animation`,
 `occlusion.visibility`.
