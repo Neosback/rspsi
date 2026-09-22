@@ -34,6 +34,14 @@ class SceneContractTest {
     void classifiesTrackedRuneLiteSceneSurfaceDeliberately() {
         Map<String, SceneContract.ApiClass> surface = SceneContract.runeLiteApiSurface();
 
+        assertEquals(Set.of(
+                "getBaseX", "getBaseY", "getDrawDistance",
+                "getExtendedTiles", "getExtendedTileSettings",
+                "getInstanceTemplateChunks", "getMapRegions", "getMinLevel",
+                "getOverlayIds", "getRoofRemovalMode", "getRoofs", "getSkybox",
+                "getTileHeights", "getTiles", "getTileShapes", "getUnderlayIds",
+                "getWorldViewId", "isInstance", "buildRoofs"),
+                surface.keySet());
         assertEquals(SceneContract.ApiClass.SEMANTIC, surface.get("getBaseX"));
         assertEquals(SceneContract.ApiClass.SEMANTIC, surface.get("getMinLevel"));
         assertEquals(SceneContract.ApiClass.PRESENTATION_ONLY, surface.get("getDrawDistance"));
