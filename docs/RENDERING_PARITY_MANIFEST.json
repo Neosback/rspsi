@@ -785,8 +785,8 @@
         "RuneLite-melxin/runescape-client/src/main/java/Model.java#draw0",
         "Client/src/main/java/com/rspsi/editor/render/SoftwareSceneRenderer.java"
       ],
-      "reason": "Depth mode, scene/model category priority, face priority, face bias, and the current facing policy meet in one backend-neutral RenderOrderKey. RuneLite-melxin Model.draw0 stores edge <= 0 in its culled-face flag and only draws !culled faces, so visible client faces have edge > 0. The software renderer uses the same edge-function sign; converting its Y-down viewport to OpenGL Y-up makes those visible faces counter-clockwise (GL_CCW). Native culling remains intentionally disabled until a real asymmetric cache model and shaped-tile fixture validate the full geometry/projection path.",
-      "nextAction": "Validate GL_CCW against one asymmetric real-cache model and one shaped-tile fixture in the live viewport; if both agree with the corrected software reference, enable verified culling only where the evidence permits."
+      "reason": "Depth mode, scene/model category priority, face priority, and face bias are expressed in the backend-neutral RenderOrderKey and consumed by native ordering/batching. Facing is intentionally separate: BackfacePolicy defines the RuneLite-derived winding contract, while the viewport validation mode applies model-only culling and leaves terrain two-sided. RuneLite-melxin Model.draw0 stores edge <= 0 in its culled-face flag and only draws !culled faces, so visible client faces have edge > 0. The software renderer uses the same edge-function sign; converting its Y-down viewport to OpenGL Y-up makes those visible faces counter-clockwise (GL_CCW). Normal editing remains two-sided until live asymmetric-model acceptance validates the full upload/projection path.",
+      "nextAction": "Validate Client Front (GL_CCW) against one asymmetric real-cache model plus wall/roof/bridge-heavy views. Terrain remains two-sided until shaped-tile winding receives its own acceptance evidence; enable culling by default only where the evidence permits."
     },
     {
       "id": "native.picking",
