@@ -23,7 +23,6 @@ public record WallDecorationPresentation(
 ) {
     public enum Part {
         NONE,
-        SINGLE,
         PRIMARY,
         SECONDARY
     }
@@ -48,20 +47,12 @@ public record WallDecorationPresentation(
         return NONE;
     }
 
-    public static WallDecorationPresentation single(int offsetX, int offsetZ, int orientation) {
-        return new WallDecorationPresentation(Part.SINGLE, offsetX, offsetZ, orientation & 3, false);
-    }
-
     public static WallDecorationPresentation primary(int offsetX, int offsetZ, int orientation) {
         return new WallDecorationPresentation(Part.PRIMARY, offsetX, offsetZ, orientation & 3, true);
     }
 
     public static WallDecorationPresentation secondary(int orientation) {
         return new WallDecorationPresentation(Part.SECONDARY, 0, 0, orientation & 3, true);
-    }
-
-    public boolean isDecoration() {
-        return part != Part.NONE;
     }
 
     /**
