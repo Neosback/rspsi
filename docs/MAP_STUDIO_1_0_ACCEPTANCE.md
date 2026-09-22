@@ -61,8 +61,12 @@ In Studio Preferences, find **Native back-face culling** and compare:
 Validate at least:
 
 - one visibly asymmetric real-cache model from multiple camera angles;
-- one shaped terrain tile;
 - one wall/roof/bridge-heavy view so the prior see-through-wall regression is obvious.
+
+Terrain is intentionally excluded from this culling acceptance: `applyDrawState()` keeps
+`SceneLayer.Kind.TERRAIN` two-sided even when **Client Front** is selected. Shaped-tile
+winding therefore does not block this PR and should only be revisited in a separate experiment
+if native terrain culling has a demonstrated benefit.
 
 Acceptance:
 
@@ -71,8 +75,8 @@ Acceptance:
 - no see-through wall, missing roof, bridge, or dark-scene regression appears under
   **Client Front**.
 
-Only after this live check should native culling become a normal default or
-`native.depthPriorityFacing` move to covered.
+Only after this live check should model-geometry culling become a normal default or
+`native.depthPriorityFacing` move to covered. Terrain remains two-sided.
 
 ## 4. Merge rule
 
