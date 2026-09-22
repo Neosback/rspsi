@@ -112,6 +112,7 @@ public final class StudioApplication implements AutoCloseable {
     private final Set<TileCoordinate> pendingSceneChanges = new LinkedHashSet<>();
     private CompletableFuture<LoadedMapScene> pendingScene;
     private CompletableFuture<LoadedMapScene> pendingSceneRebuild;
+    private Set<TileCoordinate> pendingRebuildChanges = Set.of();
     private LoadedMapScene loadedScene;
     private EditorPluginLifecycleManager pluginLifecycle;
     private GpuUploadPlan currentPlan;
@@ -334,8 +335,14 @@ public final class StudioApplication implements AutoCloseable {
                 loadedScene = pendingSceneRebuild.join();
                 currentPlan = loadedScene.plan();
                 renderedSettingsRevision = loadedScene.settingsRevision();
+                pendingRebuildChanges = Set.of();
             } catch (RuntimeException failure) {
                 LOGGER.error("Scene rebuild failed", failure);
+                synchronized (sceneChangeLock) {
+                    pendingSceneChanges.addAll(pendingRebuildChanges);
+                }
+                pendingRebuildChanges = Set.of();
+                sceneDirty.set(true);
             } finally {
                 pendingSceneRebuild = null;
             }
@@ -345,6 +352,7 @@ public final class StudioApplication implements AutoCloseable {
                 LoadedMapScene baseScene = loadedScene;
                 Set<TileCoordinate> changedTiles = drainSceneChanges();
                 if (!changedTiles.isEmpty()) {
+                    pendingRebuildChanges = changedTiles;
                     pendingSceneRebuild = CompletableFuture.supplyAsync(
                             () -> rebuildMapScene(cache, baseScene, changedTiles), sceneExecutor);
                 }
@@ -400,7 +408,7 @@ public final class StudioApplication implements AutoCloseable {
         RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
         GpuScenePacket visiblePacket = config.apply(packet);
         long planStart = System.nanoTime();
-        IncrementalGpuUploadPlanBuilder incrementalPlanBuilder = baseScene.planBuilder();
+        IncrementalGpuUploadPlanBuilder incrementalPlanBuilder = baseScene.planBuilder().fork();
         IncrementalGpuUploadPlanBuilder.BuildResult planUpdate;
         if (windowUpdate.fullRebuild() || settingsRevision != baseScene.settingsRevision()) {
             incrementalPlanBuilder.invalidateAll();
@@ -595,6 +603,7 @@ public final class StudioApplication implements AutoCloseable {
         pendingScene = null;
         if (pendingSceneRebuild != null) pendingSceneRebuild.cancel(true);
         pendingSceneRebuild = null;
+        pendingRebuildChanges = Set.of();
         sceneDirty.set(false);
         synchronized (sceneChangeLock) {
             pendingSceneChanges.clear();

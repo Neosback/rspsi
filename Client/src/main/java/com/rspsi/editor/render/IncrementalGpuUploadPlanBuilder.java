@@ -68,6 +68,13 @@ public final class IncrementalGpuUploadPlanBuilder {
         return new BuildResult(plan, rebuilt, reused);
     }
 
+    /** Creates an isolated cache snapshot for an asynchronous rebuild transaction. */
+    public IncrementalGpuUploadPlanBuilder fork() {
+        IncrementalGpuUploadPlanBuilder copy = new IncrementalGpuUploadPlanBuilder();
+        copy.cache.putAll(cache);
+        return copy;
+    }
+
     public void invalidateAll() {
         cache.clear();
     }
