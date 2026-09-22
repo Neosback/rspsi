@@ -283,7 +283,7 @@ public final class StudioApplication implements AutoCloseable {
         return new LoadedMapScene(opened, session, renderScene, packet, plan, settingsRevision,
                 new com.rspsi.editor.render.CameraState(
                 (float) centerX, -2400.0f, (float) centerZ - 4200.0f,
-                (float) -Math.toRadians(28.0), 0.0f), metrics);
+                (float) -Math.toRadians(28.0), 0.0f));
     }
 
     private void pollSceneLoad() {
@@ -362,7 +362,7 @@ public final class StudioApplication implements AutoCloseable {
                 plan.textures().size());
         logSceneBuild("edit", region.regionX(), region.regionY(), metrics);
         return new LoadedMapScene(baseScene.opened(), baseScene.session(), renderScene, packet, plan,
-                settingsRevision, baseScene.camera(), metrics);
+                settingsRevision, baseScene.camera());
     }
 
     private static int[] parseRegion(String value) {
@@ -592,6 +592,5 @@ public final class StudioApplication implements AutoCloseable {
                                   GpuScenePacket packet,
                                   GpuUploadPlan plan,
                                   long settingsRevision,
-                                  com.rspsi.editor.render.CameraState camera,
-                                  SceneBuildMetrics metrics) { }
+                                  com.rspsi.editor.render.CameraState camera) { }
 }
