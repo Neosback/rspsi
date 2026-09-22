@@ -28,7 +28,7 @@ public record ModelRenderPacket(
         GpuDrawCommand.RenderMode renderMode,
         WallDecorationPresentation wallDecorationPresentation,
         GameObjectSceneMetadata gameObjectSceneMetadata,
-        ClientModelBounds clientModelBounds
+        List<ClientModelBounds> clientRenderableBounds
 ) {
     /** Compatibility constructor before client model bounds metadata was retained. */
     public ModelRenderPacket(TileCoordinate anchor, int objectId, ObjectCategory category,
@@ -43,7 +43,7 @@ public record ModelRenderPacket(
         this(anchor, objectId, category, vertices, triangles, textureTriangles, animationId,
                 minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles,
                 placementHeight, roofRelated, renderMode, wallDecorationPresentation,
-                gameObjectSceneMetadata, ClientModelBounds.none());
+                gameObjectSceneMetadata, List.of());
     }
 
     /** Compatibility constructor before game-object scene metadata was retained. */
@@ -109,7 +109,11 @@ public record ModelRenderPacket(
                 wallDecorationPresentation, "wallDecorationPresentation");
         gameObjectSceneMetadata = Objects.requireNonNull(
                 gameObjectSceneMetadata, "gameObjectSceneMetadata");
-        clientModelBounds = Objects.requireNonNull(clientModelBounds, "clientModelBounds");
+        clientRenderableBounds = List.copyOf(Objects.requireNonNull(
+                clientRenderableBounds, "clientRenderableBounds"));
+        if (clientRenderableBounds.stream().anyMatch(value -> value == null || !value.present())) {
+            throw new IllegalArgumentException("Client renderable bounds must be present");
+        }
         if (objectId < 0 || animationId < -1 || minX > maxX || minY > maxY || minZ > maxZ) {
             throw new IllegalArgumentException("Invalid model packet identity or bounds");
         }
@@ -154,7 +158,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, Objects.requireNonNull(presentation, "presentation"),
-                gameObjectSceneMetadata, clientModelBounds);
+                gameObjectSceneMetadata, clientRenderableBounds);
     }
 
     /** Returns this packet with explicit client game-object scene metadata. */
@@ -166,13 +170,18 @@ public record ModelRenderPacket(
                 clientModelBounds);
     }
 
-    /** Returns this packet with explicit client-local model bounds metadata. */
-    public ModelRenderPacket withClientModelBounds(ClientModelBounds bounds) {
+    /** Returns this packet with one client-local bounds entry per client renderable. */
+    public ModelRenderPacket withClientRenderableBounds(List<ClientModelBounds> bounds) {
         return new ModelRenderPacket(anchor, objectId, category, vertices, triangles,
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
-                Objects.requireNonNull(bounds, "bounds"));
+                List.copyOf(Objects.requireNonNull(bounds, "bounds")));
+    }
+
+    /** Convenience for the common one-renderable packet. */
+    public ModelRenderPacket withClientModelBounds(ClientModelBounds bounds) {
+        return withClientRenderableBounds(List.of(Objects.requireNonNull(bounds, "bounds")));
     }
 
     /** Triangle indices suitable for the opaque submission pass. */
