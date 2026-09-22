@@ -142,6 +142,7 @@ public final class ModelPacketBuilder {
             WallDecorationPresentation presentation) {
         PacketParts parts = new PacketParts();
         for (WallRules.LocModelVariant variant : variants) {
+            int renderableBoundsStart = parts.clientBoundsVertices.size();
             for (int modelId : modelIdsFor(resolved.objectDefinition(), variant.sourceType())) {
                 Optional<ModelGeometryView> geometry = definitions.modelGeometry(modelId);
                 if (geometry.isEmpty()) continue;
@@ -162,12 +163,19 @@ public final class ModelPacketBuilder {
                     parts.wallVariantRanges.add(new VertexRange(variantStart, parts.vertices.size()));
                 }
             }
+            if (parts.clientBoundsVertices.size() > renderableBoundsStart) {
+                parts.clientRenderableRanges.add(new VertexRange(
+                        renderableBoundsStart, parts.clientBoundsVertices.size()));
+            }
         }
         if (parts.vertices.isEmpty() || parts.triangles.isEmpty()) return Optional.empty();
         int[] bounds = bounds(parts.vertices);
         int modelDrawOrientation = object.type() == 11 ? 256 : 0;
-        ClientModelBounds clientModelBounds =
-                ClientModelBounds.calculate(parts.clientBoundsVertices, modelDrawOrientation, false);
+        List<ClientModelBounds> clientRenderableBounds = parts.clientRenderableRanges.stream()
+                .map(range -> ClientModelBounds.calculate(
+                        parts.clientBoundsVertices.subList(range.start(), range.end()),
+                        modelDrawOrientation, false))
+                .toList();
         GameObjectSceneMetadata sceneMetadata = object.category()
                 == com.rspsi.editor.model.ObjectCategory.GROUND
                 ? GameObjectSceneMetadata.of(object.x(), object.y(),
@@ -182,7 +190,7 @@ public final class ModelPacketBuilder {
                 objectCenterHeight(document, object, resolved.footprintWidth(), resolved.footprintLength()),
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
                 GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata,
-                clientModelBounds);
+                clientRenderableBounds);
         return Optional.of(resolved.appearance().mergeNormals()
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }
@@ -1496,6 +1504,7 @@ public final class ModelPacketBuilder {
     private static final class PacketParts {
         private final List<ModelVertex> vertices = new ArrayList<>();
         private final List<ModelVertex> clientBoundsVertices = new ArrayList<>();
+        private final List<VertexRange> clientRenderableRanges = new ArrayList<>();
         private final List<ModelTriangle> triangles = new ArrayList<>();
         private final List<TextureTriangle> textureTriangles = new ArrayList<>();
         private final List<VertexRange> wallVariantRanges = new ArrayList<>();
