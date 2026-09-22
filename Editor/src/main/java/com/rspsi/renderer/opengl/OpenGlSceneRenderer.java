@@ -455,7 +455,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // wall trim/decor faces can be resolved by the OSRS submission order
         // instead of failing a strict depth test. List.sort is stable, so
         // indices are only reordered relative to distinct priority values.
-        List<Integer> opaqueOrder = opaqueOrder(plan, commands, visibility);
+        List<Integer> opaqueOrder = opaqueOrder(plan, commands, visibility, camera);
         drawCalls += drawBatches(plan, commands, opaqueOrder, visibility, camera, false, clientCycle);
         // The software reference renderer composites transparent triangles
         // back-to-front. Keep opaque submission order stable, but apply the
@@ -470,7 +470,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             }
         }
         alpha = RsFaceOrderPlanner.orderAlpha(alpha,
-                command -> averageDepth(plan, command, camera));
+                command -> averageDepth(plan, command, camera),
+                command -> command.wallDecorationPresentation().cameraOrder(command.tile(), camera));
         List<Integer> alphaOrder = new ArrayList<>(alpha.size());
         for (GpuDrawCommand command : alpha) {
             alphaOrder.add(alphaIndices.get(command));
@@ -679,8 +680,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     private List<Integer> opaqueOrder(GpuUploadPlan plan, List<GpuDrawCommand> commands,
-                                      GpuCommandVisibility visibility) {
-        if (!visibility.occlusionApplied() && plan.fingerprint().equals(orderedPlanFingerprint)) {
+                                      GpuCommandVisibility visibility, CameraState camera) {
+        boolean cameraOrderedDecorations = commands.stream()
+                .anyMatch(command -> command.wallDecorationPresentation().cameraOrdered());
+        if (!cameraOrderedDecorations
+                && !visibility.occlusionApplied()
+                && plan.fingerprint().equals(orderedPlanFingerprint)) {
             return cachedOpaqueOrder;
         }
         List<Integer> result = new ArrayList<>();
@@ -706,9 +711,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // GL_GEQUAL tie. Wall decorations separately beat their mounting wall via
         // submissionDepthBias in view-space depth.
         result.sort(Comparator.comparingInt((Integer index) -> commands.get(index).priority())
+                .thenComparingInt(index -> commands.get(index).wallDecorationPresentation()
+                        .cameraOrder(commands.get(index).tile(), camera))
                 .thenComparingLong(index -> zoneManager.zoneKeyForCommand(index))
                 .thenComparingLong(index -> drawStateKey(commands.get(index), false)));
-        if (!visibility.occlusionApplied()) {
+        if (!cameraOrderedDecorations && !visibility.occlusionApplied()) {
             orderedPlanFingerprint = plan.fingerprint();
             cachedOpaqueOrder = List.copyOf(result);
         }
