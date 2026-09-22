@@ -134,7 +134,8 @@ public record ModelRenderPacket(
         return new ModelRenderPacket(newAnchor, objectId, category, vertices, triangles,
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated, renderMode,
-                wallDecorationPresentation, gameObjectSceneMetadata.translated(deltaX, deltaY));
+                wallDecorationPresentation, gameObjectSceneMetadata.translated(deltaX, deltaY),
+                clientModelBounds);
     }
 
     /** Returns this packet with an explicit RuneLite-compatible render mode. */
@@ -142,7 +143,8 @@ public record ModelRenderPacket(
         return new ModelRenderPacket(anchor, objectId, category, vertices, triangles,
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
-                newRenderMode, wallDecorationPresentation, gameObjectSceneMetadata);
+                newRenderMode, wallDecorationPresentation, gameObjectSceneMetadata,
+                clientModelBounds);
     }
 
     /** Returns this packet with explicit wall-decoration renderable identity. */
@@ -152,7 +154,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, Objects.requireNonNull(presentation, "presentation"),
-                gameObjectSceneMetadata);
+                gameObjectSceneMetadata, clientModelBounds);
     }
 
     /** Returns this packet with explicit client game-object scene metadata. */
@@ -160,7 +162,8 @@ public record ModelRenderPacket(
         return new ModelRenderPacket(anchor, objectId, category, vertices, triangles,
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
-                renderMode, wallDecorationPresentation, Objects.requireNonNull(metadata, "metadata"));
+                renderMode, wallDecorationPresentation, Objects.requireNonNull(metadata, "metadata"),
+                clientModelBounds);
     }
 
     /** Returns this packet with explicit client-local model bounds metadata. */
