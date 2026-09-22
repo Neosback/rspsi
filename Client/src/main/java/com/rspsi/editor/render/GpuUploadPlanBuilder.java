@@ -258,7 +258,7 @@ public final class GpuUploadPlanBuilder {
             digest.update(counts);
 
             if (!commands.isEmpty()) {
-                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 68);
+                ByteBuffer cmdBuffer = ByteBuffer.allocate(commands.size() * 64);
                 for (GpuDrawCommand cmd : commands) {
                     cmdBuffer.putInt(cmd.tile().plane())
                             .putInt(cmd.tile().worldX())
@@ -275,8 +275,7 @@ public final class GpuUploadPlanBuilder {
                             .putInt(cmd.wallDecorationPresentation().part().ordinal())
                             .putInt(cmd.wallDecorationPresentation().offsetX())
                             .putInt(cmd.wallDecorationPresentation().offsetZ())
-                            .putInt(cmd.wallDecorationPresentation().orientation())
-                            .putInt(cmd.wallDecorationPresentation().cameraOrdered() ? 1 : 0);
+                            .putInt(cmd.wallDecorationPresentation().orientation());
                 }
                 cmdBuffer.flip();
                 digest.update(cmdBuffer);
