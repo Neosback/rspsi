@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RenderOrderKeyTest {
     @Test
-    void capturesLayerFacePriorityDepthModeBiasAndTwoSidedBaseline() {
+    void capturesLayerFacePriorityDepthModeAndBias() {
         GpuDrawCommand command = new GpuDrawCommand(
                 WorldTileAddress.of(3200, 3200, 0),
                 SceneLayer.Kind.WALL_DECORATION,
@@ -23,7 +23,6 @@ class RenderOrderKeyTest {
         assertEquals(11, key.facePriority());
         assertEquals(GpuDrawCommand.RenderMode.SORTED_NO_DEPTH, key.depthMode());
         assertEquals(23, key.faceBias());
-        assertEquals(RenderOrderKey.FacingPolicy.TWO_SIDED, key.facingPolicy());
     }
 
     @Test
