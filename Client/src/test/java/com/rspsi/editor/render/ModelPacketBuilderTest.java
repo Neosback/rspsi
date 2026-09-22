@@ -650,9 +650,9 @@ class ModelPacketBuilderTest {
     }
 
     private static ObjectAppearanceView appearance(boolean rotated) {
-        return new ObjectAppearanceView(-1, rotated, 128, 128, 128,
+        return new ObjectAppearanceView(-1, false, 128, 128, 128,
                 0, 0, 0, Map.of(), Map.of(), true, false, false, false,
-                0, 0, 16, -1, 0, false, false, false, 0);
+                0, 0, 16, -1, 0, false, rotated, false, 0);
     }
 
     private static ObjectAppearanceView appearanceWithDisplacement(int displacement) {
