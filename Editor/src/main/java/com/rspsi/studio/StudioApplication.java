@@ -62,11 +62,11 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -107,7 +107,8 @@ public final class StudioApplication implements AutoCloseable {
         return thread;
     });
     private final AtomicBoolean sceneDirty = new AtomicBoolean(false);
-    private final Set<TileCoordinate> pendingSceneChanges = ConcurrentHashMap.newKeySet();
+    private final Object sceneChangeLock = new Object();
+    private final Set<TileCoordinate> pendingSceneChanges = new LinkedHashSet<>();
     private CompletableFuture<LoadedMapScene> pendingScene;
     private CompletableFuture<LoadedMapScene> pendingSceneRebuild;
     private LoadedMapScene loadedScene;
@@ -302,7 +303,9 @@ public final class StudioApplication implements AutoCloseable {
             renderedSettingsRevision = loadedScene.settingsRevision();
             initializePlugins(loadedScene);
             loadedScene.session().addChangeListener(changedTiles -> {
-                pendingSceneChanges.addAll(changedTiles);
+                synchronized (sceneChangeLock) {
+                    pendingSceneChanges.addAll(changedTiles);
+                }
                 sceneDirty.set(true);
             });
             sceneStatus = "Region " + loadedScene.opened().region().regionX()
@@ -344,9 +347,11 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private Set<TileCoordinate> drainSceneChanges() {
-        Set<TileCoordinate> snapshot = Set.copyOf(pendingSceneChanges);
-        pendingSceneChanges.removeAll(snapshot);
-        return snapshot;
+        synchronized (sceneChangeLock) {
+            Set<TileCoordinate> snapshot = Set.copyOf(pendingSceneChanges);
+            pendingSceneChanges.clear();
+            return snapshot;
+        }
     }
 
     private LoadedMapScene rebuildMapScene(LoadedOsrsCacheSession cache, LoadedMapScene baseScene,
@@ -561,7 +566,9 @@ public final class StudioApplication implements AutoCloseable {
         if (pendingSceneRebuild != null) pendingSceneRebuild.cancel(true);
         pendingSceneRebuild = null;
         sceneDirty.set(false);
-        pendingSceneChanges.clear();
+        synchronized (sceneChangeLock) {
+            pendingSceneChanges.clear();
+        }
     }
 
     private void closePluginLifecycle() {
