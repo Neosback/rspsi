@@ -304,10 +304,7 @@ public final class ObjectDefinitionOutputCacheBuilder {
                             "Cache clone only supports regular files: " + file);
                 }
                 Path relative = source.relativize(file);
-                Files.copy(
-                        file,
-                        target.resolve(relative),
-                        StandardCopyOption.COPY_ATTRIBUTES);
+                Files.copy(file, target.resolve(relative));
                 return FileVisitResult.CONTINUE;
             }
         });
