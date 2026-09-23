@@ -51,8 +51,25 @@ public final class ContentDiscoveryService {
         }
 
         if (layout != null) {
-            layout.knownRoots().forEach((capability, roots) -> roots.forEach(root -> {
-                if (!Files.exists(root)) return;
+            // A resolver may expose a precise subtree and a broader fallback
+            // root at the same time (for example OpenRune's raw-cache/server
+            // inside raw-cache). Classify the deepest roots first so a file's
+            // most specific capability wins deterministically, independent of
+            // the Map implementation used by ResolvedLayout.
+            List<KnownRoot> knownRoots = layout.knownRoots().entrySet().stream()
+                    .flatMap(entry -> entry.getValue().stream()
+                            .map(root -> new KnownRoot(entry.getKey(), root)))
+                    .sorted(java.util.Comparator
+                            .comparingInt((KnownRoot root) ->
+                                    root.path().toAbsolutePath().normalize().getNameCount())
+                            .reversed()
+                            .thenComparing(root -> root.path().toString())
+                            .thenComparing(root -> root.capability().id()))
+                    .toList();
+            for (KnownRoot knownRoot : knownRoots) {
+                Path root = knownRoot.path();
+                if (!Files.exists(root)) continue;
+                ContentCapability capability = knownRoot.capability();
                 walk(root, diagnostics)
                         .filter(ContentDiscoveryService::isDeclarative)
                         .forEach(path -> {
@@ -62,7 +79,7 @@ public final class ContentDiscoveryService {
                                         java.util.Optional.of(capability), true, layout.resolverId()));
                             }
                         });
-            }));
+            }
         }
 
         List<Path> scanRoots = layout == null || layout.contentRoots().isEmpty()
@@ -150,6 +167,13 @@ public final class ContentDiscoveryService {
                         java.util.Optional.of(capability), true, providerId));
             }
         });
+    }
+
+    private record KnownRoot(ContentCapability capability, Path path) {
+        private KnownRoot {
+            java.util.Objects.requireNonNull(capability, "capability");
+            java.util.Objects.requireNonNull(path, "path");
+        }
     }
 
     public record Discovery(
