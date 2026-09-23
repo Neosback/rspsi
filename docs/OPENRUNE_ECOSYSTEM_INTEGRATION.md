@@ -136,32 +136,44 @@ The last rule is particularly important for map editing. OpenRune currently has 
 
 ### Expected user experience
 
-Standalone:
+Project creation/opening is owned by the Project Launcher described in `PROJECT_LAUNCHER_AND_DASHBOARD.md`.
+
+Standalone project:
 
 ```
-Open Cache...
-   -> choose any supported OSRS cache directory
+New Project
+   -> Standalone OSRS Cache
+   -> name project
+   -> choose supported source cache
+   -> create
+   -> project loading gate opens/verifies cache
+   -> Dashboard
    -> edit
-   -> Publish/Export...
-   -> choose a separate output cache
+   -> Publish/Export to separate explicit output cache
 ```
 
 Connected OpenRune project:
 
 ```
-Connect OpenRune Project...
-   -> choose project root
+New Project / Link Existing
+   -> OpenRune Server
+   -> name Studio project
+   -> choose OpenRune project root
    -> Studio discovers revision, LIVE, SERVER, source roots, build tasks
-   -> Studio binds LIVE to the map/scene automatically
-   -> Studio binds SERVER/source data to server-aware inspectors
+   -> choose Inspect / Author / Managed Build / Developer policy
+   -> create/link
+   -> project loading gate binds LIVE + SERVER + required services
+   -> Dashboard
    -> edit
-   -> Publish to Project
+   -> Publish to Project when policy/resource supports it
    -> update supported OpenRune source artifacts
-   -> run :or-cache:buildCache
+   -> run :or-cache:buildCache when Managed Build permits it
    -> reload and verify LIVE + SERVER
 ```
 
 A connected user should not have to re-select `.data/cache/LIVE` manually under the normal layout. Non-standard projects may use explicit saved path overrides, but Studio should never silently search outside the connected project root.
+
+The integration preset is only a convenience over granular capabilities. It never changes the no-clobber rules above, and even Developer policy does not make `FreshCache` an automatic action.
 
 ### Converge the existing integration paths
 
