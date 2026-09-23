@@ -219,6 +219,85 @@ class RenderSceneBuilderTest {
                 nextAnimated.animationState().frameIndex());
     }
 
+    @Test
+    void animationRefreshUsesResolvedChildMergeNormalsForMultiloc() {
+        WorldDocument document = new WorldDocument(3, 1, 1);
+        WorldObject animatedShell = new WorldObject(42, 10, 0, 0, 0, 0);
+        WorldObject stationary = new WorldObject(43, 10, 0, 0, 2, 0);
+        document.tile(0, 0, 0).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(animatedShell)));
+        document.tile(0, 2, 0).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(stationary)));
+
+        DefinitionProvider base = animationDefinitions();
+        ObjectAppearanceView childAppearance = new ObjectAppearanceView(
+                -1, false, 128, 128, 128,
+                0, 0, 0, java.util.Map.of(), java.util.Map.of(),
+                true, false, true, false,
+                0, 0, 16, -1, 0,
+                false, false, false, 0);
+
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                if (id == 42) {
+                    return Optional.of(new ObjectDefinitionView(
+                            42, "animated shell", 1, 1, List.of(),
+                            new int[0], new int[0], -1, false,
+                            1234, -1, new int[]{142}, 142));
+                }
+                if (id == 142) {
+                    return Optional.of(new ObjectDefinitionView(
+                            142, "animated child", 1, 1, List.of(),
+                            new int[]{7}, new int[]{10}, -1, false));
+                }
+                return base.object(id);
+            }
+
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                if (id == 142) return Optional.of(childAppearance);
+                return base.objectAppearance(id);
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.ModelGeometryView> modelGeometry(int id) {
+                return base.modelGeometry(id);
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.SequenceDefinitionView> sequence(int id) {
+                return base.sequence(id);
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.AnimationFrameView> animationFrame(int id) {
+                return base.animationFrame(id);
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.SkeletonDefinitionView> skeleton(int id) {
+                return base.skeleton(id);
+            }
+
+            @Override public Optional<FloorDefinitionView> underlay(int id) {
+                return base.underlay(id);
+            }
+
+            @Override public Optional<FloorDefinitionView> overlay(int id) {
+                return base.overlay(id);
+            }
+        };
+
+        RenderSceneBuilder builder = new RenderSceneBuilder(definitions);
+        RenderScene initial = builder.build(document, 0);
+        ModelRenderPacket staticPacket = initial.modelPackets().stream()
+                .filter(packet -> packet.objectId() == 43)
+                .findFirst().orElseThrow();
+
+        RenderScene refreshed = builder.refreshAnimations(initial, 2);
+        ModelRenderPacket nextStatic = refreshed.modelPackets().stream()
+                .filter(packet -> packet.objectId() == 43)
+                .findFirst().orElseThrow();
+
+        org.junit.jupiter.api.Assertions.assertNotSame(staticPacket, nextStatic,
+                "display-child mergeNormals requires a full model packet rebuild");
+    }
+
     private static DefinitionProvider animationDefinitions() {
         ObjectAppearanceView animatedAppearance = new ObjectAppearanceView(
                 77, false, 128, 128, 128,
