@@ -49,6 +49,16 @@ public record ModelTriangle(
         }
     }
 
+    /**
+     * Recolored, unlit source HSL retained alongside the client-baked face colors.
+     *
+     * <p>This is the packet equivalent of ModelData's faceColors before
+     * toModel() writes Model.faceColors1/2/3.</p>
+     */
+    public int unlitColor() {
+        return baseColor;
+    }
+
     public ModelTriangle withColors(int newColorA, int newColorB, int newColorC) {
         return new ModelTriangle(a, b, c, newColorA, newColorB, newColorC,
                 textureId, alpha, priority, renderType, uA, vA, uB, vB, uC, vC,
