@@ -15,7 +15,8 @@ import java.util.stream.Stream;
  * files. Unknown declarative files are catalogued instead of silently dropped.
  */
 public final class ContentDiscoveryService {
-    private static final Set<String> DECLARATIVE_EXTENSIONS = Set.of(".toml", ".json");
+    private static final Set<String> DECLARATIVE_EXTENSIONS =
+            Set.of(".toml", ".json", ".rscm");
     private static final Set<String> IGNORED_DIRS = Set.of(
             ".git", ".gradle", "build", "out", "target", "node_modules");
 
