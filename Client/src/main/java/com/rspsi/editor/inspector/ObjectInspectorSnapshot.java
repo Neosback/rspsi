@@ -98,7 +98,6 @@ public record ObjectInspectorSnapshot(
                 com.rspsi.cache.definition.ObjectDefinitionResolver.Status.MISSING_PLACED_DEFINITION,
                 List.of(Math.max(0, id)),
                 Optional.empty(),
-                Optional.empty(),
                 ObjectResolutionSummary.GeometryStatus.DEFINITION_UNRESOLVED,
                 List.of(),
                 List.of(),
