@@ -172,8 +172,8 @@ public final class RenderWindowSceneBuilder {
         Set<WorldTileAddress> changedAddresses = new LinkedHashSet<>();
         changedAddresses.addAll(previous.modelPackets().keySet());
         changedAddresses.addAll(nextModels.keySet());
-        changedAddresses.removeIf(address ->
-                Objects.equals(previous.modelPackets().get(address), nextModels.get(address)));
+        changedAddresses.removeIf(address -> sameModelPresentation(
+                previous.modelPackets().get(address), nextModels.get(address)));
 
         Set<WorldZoneCoordinate> dirtyZones = changedAddresses.stream()
                 .map(WorldZoneCoordinate::from)
@@ -195,6 +195,20 @@ public final class RenderWindowSceneBuilder {
                 previous.textures());
         return new AnimationRefreshResult(
                 refreshed, dirtyZones, changedAddresses.size());
+    }
+
+    private static boolean sameModelPresentation(List<ModelRenderPacket> first,
+                                                 List<ModelRenderPacket> second) {
+        if (first == second) return true;
+        if (first == null || second == null || first.size() != second.size()) return false;
+        ModelAnimationState none = ModelAnimationState.none();
+        for (int index = 0; index < first.size(); index++) {
+            ModelRenderPacket a = first.get(index);
+            ModelRenderPacket b = second.get(index);
+            if (!a.animationState().samePresentation(b.animationState())) return false;
+            if (!a.withAnimationState(none).equals(b.withAnimationState(none))) return false;
+        }
+        return true;
     }
 
     private Map<WorldTileAddress, List<ModelRenderPacket>> buildWorldModelPackets(
