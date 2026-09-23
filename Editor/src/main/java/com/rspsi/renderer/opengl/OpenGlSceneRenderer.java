@@ -877,10 +877,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     private static int clientCycle() {
-        // RuneLite advances graphicsCycle at approximately 50 client cycles
-        // per second. Monotonic time keeps the native path animated without
-        // coupling the renderer to editor command timing.
-        return (int) ((System.nanoTime() / 1_000_000L) / 20L);
+        // RuneLite sends client.getGameCycle() & 127 to the GPU texture
+        // animation path. Keep the same bounded phase while using monotonic
+        // editor time instead of coupling rendering to command timing.
+        long cycle = (System.nanoTime() / 1_000_000L) / 20L;
+        return (int) (cycle & TextureAnimation.CLIENT_CYCLE_MASK);
     }
 
     private static float averageDepth(GpuCommandGeometry geometry, int commandIndex,

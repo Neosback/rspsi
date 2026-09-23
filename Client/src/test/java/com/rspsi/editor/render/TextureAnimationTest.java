@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.TextureDefinitionView;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TextureAnimationTest {
     @Test
@@ -17,51 +18,93 @@ class TextureAnimationTest {
     }
 
     @Test
-    void mapsClientDirectionsToWrappedPixelUvOffsets() {
+    void mapsRuneLiteAnimationDirectionsToNormalizedUvOffsets() {
         assertEquals(new TextureAnimation.UvOffset(0.0f, -0.5f),
-                offset(1, 1, 1));
+                offset(128, 128, 1, 4, 16));
         assertEquals(new TextureAnimation.UvOffset(-0.5f, 0.0f),
-                offset(2, 1, 1));
+                offset(128, 128, 2, 4, 16));
         assertEquals(new TextureAnimation.UvOffset(0.0f, 0.5f),
-                offset(3, 1, 1));
+                offset(128, 128, 3, 4, 16));
         assertEquals(new TextureAnimation.UvOffset(0.5f, 0.0f),
-                offset(4, 1, 1));
+                offset(128, 128, 4, 4, 16));
     }
 
     @Test
-    void matchesRuneLiteGpuTextureAnimationVectorsAtOsrsTextureSize() {
-        // RuneLite TextureManager.computeTextureAnimations maps directions
-        // 1/2/3/4 to -V/-U/+V/+U and scales by animationSpeed. RSPSi stores
-        // the same motion as normalized UV displacement per client cycle.
-        int size = 128;
-        int cycle = 16;
-        int speed = 4;
-        assertEquals(new TextureAnimation.UvOffset(0.0f, -0.5f),
-                offset(size, 1, speed, cycle));
+    void matchesRuneLiteGpuTickTimesSpeedOver128() {
+        // RuneLite TextureManager.computeTextureAnimations returns signed
+        // speed vectors and vert.glsl applies:
+        // tick * textureAnim * (1 / 128), with tick=gameCycle&127.
+        assertEquals(new TextureAnimation.UvOffset(0.0f, -0.375f),
+                offset(128, 128, 1, 3, 16));
+        assertEquals(new TextureAnimation.UvOffset(0.625f, 0.0f),
+                offset(128, 128, 4, 5, 16));
+    }
+
+    @Test
+    void wrapsAtTheSame128CyclePhaseAsRuneLiteGpu() {
+        for (int direction = 1; direction <= 4; direction++) {
+            assertEquals(offset(128, 128, direction, 3, 0),
+                    offset(128, 128, direction, 3, 128));
+            assertEquals(offset(128, 128, direction, 3, 1),
+                    offset(128, 128, direction, 3, 129));
+            assertEquals(offset(128, 128, direction, 3, 127),
+                    offset(128, 128, direction, 3, 255));
+        }
+    }
+
+    @Test
+    void preservesClientPixelSpeedFor64And128Textures() {
+        // One source texel per cycle is 1/64 UV for a low-detail 64px texture
+        // and 1/128 UV for the normal 128px client texture. The native array
+        // upscales the former to 128px, so this also represents two uploaded
+        // texels per original 64px source texel.
+        assertEquals(new TextureAnimation.UvOffset(1.0f / 64.0f, 0.0f),
+                offset(64, 64, 4, 1, 1));
+        assertEquals(new TextureAnimation.UvOffset(1.0f / 128.0f, 0.0f),
+                offset(128, 128, 4, 1, 1));
+    }
+
+    @Test
+    void rectangularMetadataPathUsesAxisSpecificDimensions() {
         assertEquals(new TextureAnimation.UvOffset(-0.5f, 0.0f),
-                offset(size, 2, speed, cycle));
-        assertEquals(new TextureAnimation.UvOffset(0.0f, 0.5f),
-                offset(size, 3, speed, cycle));
-        assertEquals(new TextureAnimation.UvOffset(0.5f, 0.0f),
-                offset(size, 4, speed, cycle));
+                offset(64, 128, 2, 2, 16));
+        assertEquals(new TextureAnimation.UvOffset(0.0f, 0.25f),
+                offset(64, 128, 3, 2, 16));
     }
 
     @Test
     void invalidDirectionAndStaticTexturesHaveNoDisplacement() {
-        assertEquals(TextureAnimation.UvOffset.ZERO, offset(0, 9, 4));
-        assertEquals(TextureAnimation.UvOffset.ZERO, offset(5, 9, 4));
-        assertEquals(TextureAnimation.UvOffset.ZERO, offset(4, 9, 0));
+        assertEquals(TextureAnimation.UvOffset.ZERO, offset(128, 128, 0, 9, 4));
+        assertEquals(TextureAnimation.UvOffset.ZERO, offset(128, 128, 5, 9, 4));
+        assertEquals(TextureAnimation.UvOffset.ZERO, offset(128, 128, 4, 0, 4));
     }
 
-    private static TextureAnimation.UvOffset offset(int direction, int speed, int cycle) {
-        return offset(2, direction, speed, cycle);
+    @Test
+    void rejectsInvalidCycleOrDimensions() {
+        TextureDefinitionView definition = definition(4, 1);
+        assertThrows(IllegalArgumentException.class,
+                () -> TextureAnimation.offset(definition, -1, 128, 128));
+        assertThrows(IllegalArgumentException.class,
+                () -> TextureAnimation.offset(definition, 0, 0, 128));
+        assertThrows(IllegalArgumentException.class,
+                () -> TextureAnimation.offset(definition, 0, 128, 0));
     }
 
-    private static TextureAnimation.UvOffset offset(int size, int direction, int speed, int cycle) {
-        TextureDefinitionView definition = new TextureDefinitionView(
-                1, false, 1, 0, direction, speed, false);
-        RenderTextureResource texture = RenderTextureResource.from(1, definition, size,
-                new int[size * size]);
-        return TextureAnimation.offset(texture, cycle);
+    @Test
+    void unavailableRendererTextureDoesNotAnimate() {
+        TextureDefinitionView definition = definition(4, 2);
+        RenderTextureResource unavailable =
+                RenderTextureResource.unavailable(1, definition, "fixture");
+        assertEquals(TextureAnimation.UvOffset.ZERO,
+                TextureAnimation.offset(unavailable, 32));
+    }
+
+    private static TextureAnimation.UvOffset offset(int width, int height,
+                                                     int direction, int speed, int cycle) {
+        return TextureAnimation.offset(definition(direction, speed), cycle, width, height);
+    }
+
+    private static TextureDefinitionView definition(int direction, int speed) {
+        return new TextureDefinitionView(1, false, 1, 0, direction, speed, false);
     }
 }

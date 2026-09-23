@@ -695,24 +695,32 @@
       "id": "textures.animation",
       "domain": "textures",
       "title": "Texture animation direction, speed, and offsets",
-      "status": "partial",
+      "status": "covered",
       "priority": "p1",
       "runelite": [
-        "net.runelite.api.Model#getFaceTextures"
+        "RuneLite-melxin/runelite-client/src/main/java/net/runelite/client/plugins/gpu/TextureManager.java#computeTextureAnimations",
+        "RuneLite-melxin/runelite-client/src/main/resources/net/runelite/client/plugins/gpu/vert.glsl#TEXTURE_ANIM_UNIT",
+        "RuneLite-melxin/runescape-client/src/main/java/Texture.java#animate"
       ],
       "rspsi": [
         "Client/src/main/java/com/rspsi/editor/render/TextureAnimation.java",
-        "Client/src/main/java/com/rspsi/editor/render/TextureTriangle.java"
+        "Client/src/main/java/com/rspsi/editor/render/TextureAnimationService.java",
+        "Client/src/main/java/com/rspsi/editor/render/RenderTextureResource.java",
+        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
       ],
       "tsps": [
         "render/render/textures/TextureAnimator.ts",
         "render/SceneBuffer.ts"
       ],
       "evidence": [
-        "docs/OSRS_MECHANICS_PARITY_AUDIT_2026-09-18.md"
+        "Client/src/test/java/com/rspsi/cache/store/OpenRuneTextureDefinitionDecoderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/TextureAnimationTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/TextureAnimationServiceTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Editor/src/test/java/com/rspsi/renderer/opengl/OpenGlTextureAnimationAcceptanceTest.java"
       ],
-      "reason": "Definition metadata is transported, but native frame-time animation parity is incomplete.",
-      "nextAction": "Add a deterministic animation-offset fixture and native frame comparison."
+      "reason": "Texture animation direction, speed, cache metadata transport, cycle phase, source-size scaling, native uniform state, and frame output are covered. RuneLite GPU supplies signed speed vectors and applies (gameCycle & 127) * speed / 128 in shader space; the software client performs the equivalent wrapped pixel shift. RSPSi centralizes the same phase math, preserves 64px and 128px texel speed, and the Xvfb/Mesa production-OpenGL acceptance proves animated output advances, a following static command cannot inherit the previous UV offset, and cycle 128 pixel-matches cycle 0.",
+      "nextAction": "Keep the shared TextureAnimation phase contract as the single source of truth and retain the native frame fixture when texture-array, sampling, or material batching changes."
     },
     {
       "id": "occlusion.planes",

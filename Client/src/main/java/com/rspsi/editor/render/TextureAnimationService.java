@@ -51,19 +51,9 @@ public final class TextureAnimationService {
         if (textureSize <= 0) throw new IllegalArgumentException("textureSize must be positive");
         int direction = definition.animationDirection();
         int speed = definition.animationSpeed();
-        float distance = speed * (float) clientCycle / textureSize;
-        float u = 0.0f;
-        float v = 0.0f;
-        if (speed != 0) {
-            switch (direction) {
-                case 1 -> v = -distance;
-                case 2 -> u = -distance;
-                case 3 -> v = distance;
-                case 4 -> u = distance;
-                default -> { }
-            }
-        }
-        return new State(definition.id(), direction, speed, u, v);
+        TextureAnimation.UvOffset offset =
+                TextureAnimation.offset(definition, clientCycle, textureSize, textureSize);
+        return new State(definition.id(), direction, speed, offset.u(), offset.v());
     }
 
     public record State(int textureId, int direction, int speed, float u, float v) {

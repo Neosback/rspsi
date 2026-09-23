@@ -18,6 +18,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GpuUploadPlanBuilderTest {
     @Test
+    void preservesTextureAnimationMetadataIntoGpuPlan() {
+        TextureDefinitionView definition =
+                new TextureDefinitionView(7, false, 70, 0x1234, 3, 5, false);
+        RenderTextureResource texture = RenderTextureResource.from(
+                7, definition, 128, new int[128 * 128]);
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(
+                        new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1, Map.of()),
+                        3200, 3200, 1, 0, java.util.Set.of(), List.of()),
+                List.of(), LightingProfile.osrs(), "texture-animation-metadata",
+                Map.of(7, texture));
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(definition, plan.textures().get(7).definition());
+        assertEquals(3, plan.textures().get(7).definition().animationDirection());
+        assertEquals(5, plan.textures().get(7).definition().animationSpeed());
+    }
+
+    @Test
     void flattensTerrainAndModelsIntoWorldSpaceWithStableCommands() {
         WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
         TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
