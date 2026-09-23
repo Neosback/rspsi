@@ -908,19 +908,24 @@ public final class ObjectViewerPanel implements StudioPanel {
         ImGui.text("Definition output cache");
         ImGui.textDisabled("Modified: " + modified + "  |  Unpublished: " + unpublished);
         ImGui.textDisabled(
-                "Builds a new verified cache. The selected source cache remains read-only.");
+                "Builds a new cache or transactionally updates an existing output. "
+                        + "The selected source cache remains read-only.");
 
         ImGui.inputTextWithHint(
                 "Output directory##definition-output-cache",
-                "Choose a new output cache directory...",
+                "Choose a new or existing output cache directory...",
                 outputCachePath);
 
         boolean buildRunning = definitionBuild != null;
         Path candidate = outputPathOrNull();
         boolean outputExists = candidate != null && Files.exists(candidate);
-        if (outputExists) {
+        boolean outputDirectory = outputExists && Files.isDirectory(candidate);
+        if (outputExists && !outputDirectory) {
             ImGui.textColored(0xFF60A5FA,
-                    "That output path already exists. Choose a new directory.");
+                    "That output path exists but is not a cache directory.");
+        } else if (outputDirectory) {
+            ImGui.textDisabled(
+                    "Existing output selected: Studio will stage, verify, and replace it transactionally.");
         }
 
         if (ImGui.button("Suggest path##definition-output-suggest")) {
@@ -929,12 +934,15 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
         ImGui.sameLine();
 
-        boolean canBuild = modified > 0
+        boolean canBuild = unpublished > 0
                 && !buildRunning
                 && candidate != null
-                && !outputExists;
+                && (!outputExists || outputDirectory);
         ImGui.beginDisabled(!canBuild);
-        if (ImGui.button("Build output cache##definition-output-build")) {
+        String publishLabel = outputDirectory
+                ? "Update output cache##definition-output-build"
+                : "Build output cache##definition-output-build";
+        if (ImGui.button(publishLabel)) {
             startDefinitionBuild(cache);
         }
         ImGui.endDisabled();
@@ -954,26 +962,36 @@ public final class ObjectViewerPanel implements StudioPanel {
                 throw new IllegalArgumentException("Output cache path cannot be blank");
             }
 
+            boolean updateExisting = Files.exists(output);
+            if (updateExisting && !Files.isDirectory(output)) {
+                throw new IllegalArgumentException(
+                        "Existing output path is not a directory: " + output);
+            }
+
             ObjectDefinitionEditWorkspace workspace = cache.objectDefinitions();
             ObjectDefinitionOutputCacheBuilder.BuildPlan plan =
                     ObjectDefinitionOutputCacheBuilder.plan(
-                            workspace.modifiedTransactions());
+                            workspace.unpublishedTransactions());
             Path source = cache.path();
             int revision = cache.identity().revision();
 
             definitionBuildStatus = "Prepared " + plan.definitionCount()
-                    + " definition snapshot"
-                    + (plan.definitionCount() == 1 ? "" : "s") + " for output.";
+                    + " unpublished definition snapshot"
+                    + (plan.definitionCount() == 1 ? "" : "s")
+                    + (updateExisting ? " for transactional update." : " for new output.");
             definitionBuild = CompletableFuture.supplyAsync(() -> {
                 try {
                     ObjectDefinitionOutputCacheBuilder.BuildResult result =
-                            ObjectDefinitionOutputCacheBuilder.buildNewOutput(
-                                    source, output, revision, plan);
+                            updateExisting
+                                    ? ObjectDefinitionOutputCacheBuilder.updateExistingOutput(
+                                            source, output, revision, plan)
+                                    : ObjectDefinitionOutputCacheBuilder.buildNewOutput(
+                                            source, output, revision, plan);
                     return DefinitionBuildCompletion.success(
-                            workspace, plan, result);
+                            workspace, plan, result, updateExisting);
                 } catch (Exception failure) {
                     return DefinitionBuildCompletion.failure(
-                            workspace, plan, failure);
+                            workspace, plan, updateExisting, failure);
                 }
             });
         } catch (RuntimeException failure) {
@@ -1014,7 +1032,9 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
 
         ObjectDefinitionOutputCacheBuilder.BuildResult result = completion.result();
-        definitionBuildStatus = "Built and verified " + result.definitionCount()
+        definitionBuildStatus =
+                (completion.updatedExisting() ? "Updated and verified " : "Built and verified ")
+                + result.definitionCount()
                 + " definition" + (result.definitionCount() == 1 ? "" : "s")
                 + " (" + result.encodedBytes() + " encoded bytes) at "
                 + result.outputCache();
@@ -1150,21 +1170,24 @@ public final class ObjectViewerPanel implements StudioPanel {
             ObjectDefinitionEditWorkspace workspace,
             ObjectDefinitionOutputCacheBuilder.BuildPlan plan,
             ObjectDefinitionOutputCacheBuilder.BuildResult result,
+            boolean updatedExisting,
             Throwable failure) {
         private static DefinitionBuildCompletion success(
                 ObjectDefinitionEditWorkspace workspace,
                 ObjectDefinitionOutputCacheBuilder.BuildPlan plan,
-                ObjectDefinitionOutputCacheBuilder.BuildResult result) {
+                ObjectDefinitionOutputCacheBuilder.BuildResult result,
+                boolean updatedExisting) {
             return new DefinitionBuildCompletion(
-                    workspace, plan, result, null);
+                    workspace, plan, result, updatedExisting, null);
         }
 
         private static DefinitionBuildCompletion failure(
                 ObjectDefinitionEditWorkspace workspace,
                 ObjectDefinitionOutputCacheBuilder.BuildPlan plan,
+                boolean updatedExisting,
                 Throwable failure) {
             return new DefinitionBuildCompletion(
-                    workspace, plan, null, failure);
+                    workspace, plan, null, updatedExisting, failure);
         }
     }
 
