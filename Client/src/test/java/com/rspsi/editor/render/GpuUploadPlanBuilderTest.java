@@ -38,6 +38,65 @@ class GpuUploadPlanBuilderTest {
     }
 
     @Test
+    void uploadsClientLitColorsAndExpandsFlatSentinelWithoutLosingEncoding() {
+        TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
+        List<ModelVertex> vertices = List.of(
+                new ModelVertex(0, 0, 0, 0, 0, 0, 1, 0, 0),
+                new ModelVertex(64, 0, 0, 0, 0, 0, 1, 1, 0),
+                new ModelVertex(0, 0, 64, 0, 0, 0, 1, 0, 1),
+                new ModelVertex(80, 0, 0, 0, 0, 0, 1, 0, 0),
+                new ModelVertex(144, 0, 0, 0, 0, 0, 1, 1, 0),
+                new ModelVertex(80, 0, 64, 0, 0, 0, 1, 0, 1),
+                new ModelVertex(160, 0, 0, 0, 0, 0, 1, 0, 0),
+                new ModelVertex(224, 0, 0, 0, 0, 0, 1, 1, 0),
+                new ModelVertex(160, 0, 64, 0, 0, 0, 1, 0, 1));
+        List<ModelTriangle> faces = List.of(
+                new ModelTriangle(0, 1, 2, 11, 22, 33, -1, 0, 0, 0,
+                        0, 0, 1, 0, 0, 1, 0x4567, 0),
+                new ModelTriangle(3, 4, 5, 44, 44, -1, -1, 0, 0, 1,
+                        0, 0, 1, 0, 0, 1, 0x4567, 0),
+                new ModelTriangle(6, 7, 8, 70, 80, 90, 7, 0, 0, 0,
+                        0, 0, 1, 0, 0, 1, 0x4567, 0));
+        ModelRenderPacket model = new ModelRenderPacket(
+                coordinate, 42, ObjectCategory.GROUND, vertices, faces, List.of(), -1,
+                0, 0, 0, 224, 0, 64, false, false);
+        SceneTileSnapshot tile = new SceneTileSnapshot(
+                coordinate, address, 0, 0, Optional.empty(), Optional.empty(),
+                List.of(model),
+                List.of(new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0))),
+                List.of(), false, false);
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(
+                        50, 50, 1, 1, Map.of()), 3200, 3200, 1, 0,
+                        java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "model-color-upload", Map.of());
+
+        assertEquals(0x4567, faces.get(0).unlitColor());
+        assertEquals(-1, faces.get(1).colorC(),
+                "flat face keeps the client sentinel until the GPU upload boundary");
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(List.of(11, 22, 33),
+                plan.vertices().subList(0, 3).stream().map(GpuSceneVertex::encodedColor).toList());
+        assertEquals(List.of(44, 44, 44),
+                plan.vertices().subList(3, 6).stream().map(GpuSceneVertex::encodedColor).toList(),
+                "flat colorC=-1 must expand to the constant lit color");
+        assertEquals(List.of(70, 80, 90),
+                plan.vertices().subList(6, 9).stream().map(GpuSceneVertex::encodedColor).toList());
+
+        for (int index = 0; index < 6; index++) {
+            assertEquals(GpuColorEncoding.PACKED_JAGEX_HSL,
+                    plan.vertices().get(index).colorEncoding());
+        }
+        for (int index = 6; index < 9; index++) {
+            assertEquals(GpuColorEncoding.TEXTURE_LIGHTNESS,
+                    plan.vertices().get(index).colorEncoding());
+        }
+    }
+
+    @Test
     void flattensTerrainAndModelsIntoWorldSpaceWithStableCommands() {
         WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
         TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
