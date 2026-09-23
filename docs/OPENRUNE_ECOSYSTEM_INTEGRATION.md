@@ -6,6 +6,8 @@
 
 This document records the OpenRune capabilities that are relevant to RSPSi / OpenRune Studio so implementation work does not repeatedly rediscover the same backend features or build competing abstractions.
 
+For the published artifact inventory, current versions, mirrored OpenRS2/compiler artifacts, adoption status, and XTEA revision boundary, see `docs/OPENRUNE_MAVEN_CATALOG.md`. That catalog must be checked before adding new cache/content infrastructure.
+
 ## Architectural direction
 
 OpenRune Studio should treat the OpenRune ecosystem as the underlying content toolchain, not merely use OpenRune-FileStore as a cache reader.
@@ -103,6 +105,8 @@ The `dev.or2:tools` module contains significantly more than the writable cache d
 
 Relevant capabilities include:
 
+- `FreshCache` revision-aware reference-cache acquisition
+- `OpenRS2` cache/keys download and cache metadata lookup
 - `CacheDelegate`
 - cache build task ordering / `TaskPriority`
 - incremental cache target tooling
@@ -256,6 +260,9 @@ These should be checked before implementing developer UX, source tooling, remote
 8. Prefer incremental build/write flows over whole-cache rewrites.
 9. Treat RsConfig/TOML as a future first-class source representation.
 10. Treat OpenRune Server integration as a separate content layer, not renderer coupling.
+11. Prefer FileStore `FreshCache` / `OpenRS2` for reference-cache acquisition rather than building another downloader.
+12. For the current FileStore workflow, revision 237+ does not require XTEA key acquisition; pre-237 cache support needs explicit key handling or preprocessing.
+13. Audit `OpenRune/hosting` before adding a new dependency or reimplementing a published OpenRune capability.
 
 ## Immediate implementation sequence
 
