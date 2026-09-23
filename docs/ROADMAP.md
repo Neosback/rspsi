@@ -1423,6 +1423,9 @@ Rules:
 11. For OSRS semantic behavior, cite the vendored RuneLite/OpenRune source path or real-cache fixture used as evidence in the PR.
 12. Prefer semantic parity fixtures before adding renderer-specific compensations.
 13. Do not expose a new public plugin API merely because an equivalent RuneLite method exists; prove the Studio use case with first-party callers first.
+14. New neutral/public API members require a real production/verifier/plugin consumer plus semantic test evidence before promotion.
+15. Do not widen private/package visibility "for future diagnostics." Extract a shared rule only when at least two real components need the same semantics.
+16. Remove PR-introduced convenience methods or payload fields that are unused outside tests. Preserve compatibility shims only for known existing callers or versioned public contracts.
 
 ---
 
