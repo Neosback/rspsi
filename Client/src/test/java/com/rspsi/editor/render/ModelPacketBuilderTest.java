@@ -462,6 +462,11 @@ class ModelPacketBuilderTest {
         assertEquals(80, straightNormal.vertices().get(0).z());
         assertEquals(96, straightRotated.vertices().get(0).x());
         assertEquals(48, straightRotated.vertices().get(0).z());
+        assertEquals(1, straightNormal.triangles().get(0).b());
+        assertEquals(2, straightNormal.triangles().get(0).c());
+        assertEquals(2, straightRotated.triangles().get(0).b(),
+                "mirroring must swap B/C so client-front winding is preserved");
+        assertEquals(1, straightRotated.triangles().get(0).c());
 
         WorldDocument diagonalDocument = new WorldDocument(1, 1, 1);
         WorldObject diagonal = new WorldObject(42, 6, 0, 0, 0, 0);
@@ -481,6 +486,11 @@ class ModelPacketBuilderTest {
         assertEquals(-23, diagonalNormal.vertices().get(0).z());
         assertEquals(150, diagonalRotated.vertices().get(0).x());
         assertEquals(-1, diagonalRotated.vertices().get(0).z());
+        assertEquals(2, diagonalNormal.triangles().get(0).b(),
+                "rotation+4 mirror path must preserve front-face winding");
+        assertEquals(1, diagonalNormal.triangles().get(0).c());
+        assertEquals(1, diagonalRotated.triangles().get(0).b());
+        assertEquals(2, diagonalRotated.triangles().get(0).c());
     }
 
     @Test
