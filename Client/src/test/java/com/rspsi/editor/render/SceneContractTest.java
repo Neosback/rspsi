@@ -51,8 +51,8 @@ class SceneContractTest {
         assertEquals(SceneContract.ApiClass.SEMANTIC, surface.get("getMinLevel"));
         assertEquals(SceneContract.ApiClass.PRESENTATION_ONLY, surface.get("getDrawDistance"));
         assertEquals(SceneContract.ApiClass.PRESENTATION_ONLY, surface.get("getRoofRemovalMode"));
+        assertEquals(SceneContract.ApiClass.SEMANTIC, surface.get("getRoofs"));
         assertEquals(SceneContract.ApiClass.MUTATION, surface.get("buildRoofs"));
         assertEquals(SceneContract.ApiClass.DEFERRED, surface.get("getExtendedTiles"));
-        assertEquals(SceneContract.ApiClass.DEFERRED, surface.get("getRoofs"));
     }
 }
