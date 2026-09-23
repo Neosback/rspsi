@@ -104,6 +104,7 @@ file.
 
 ## Conventions worth knowing before you hit them
 
+- **Connected OpenRune Server caches are generated artifacts, not generic Studio output directories.** In standalone mode a user may select any supported cache and publish to a separate explicit output cache. In connected OpenRune mode, `.data/cache/LIVE` is the read-only client/scene cache and `.data/cache/SERVER` is the separate read-only server cache. Do not directly patch either one and do not auto-run `FreshCache` on project open. Publish only through a supported OpenRune source representation, invoke the project's canonical `:or-cache:buildCache`, then reopen and verify both outputs. If no lossless source mapping exists for a resource, leave connected-project publishing disabled for that resource. See `docs/OPENRUNE_ECOSYSTEM_INTEGRATION.md`.
 - **Local document space vs. absolute OSRS world-tile space are different coordinate systems
   and the compiler will not catch mixing them up.** `WorldTile`/`ToolContext` speak absolute
   world tiles (what the camera and picker use); `LocalTile`/`WorldDocument` speak
