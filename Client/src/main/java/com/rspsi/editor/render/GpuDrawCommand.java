@@ -255,6 +255,26 @@ public record GpuDrawCommand(
                 sceneObjectIdentity, placementHeight, modelAnchorX, modelAnchorY);
     }
 
+    /** Compatibility overload from before contour metadata participated in batching. */
+    boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
+                     SceneLayer.Kind nextLayer, SubmissionPass nextPass, int nextTextureId,
+                     int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex,
+                     RenderMode nextRenderMode,
+                     WallDecorationPresentation nextWallDecorationPresentation,
+                     GameObjectSceneMetadata nextGameObjectSceneMetadata,
+                     List<ClientModelBounds> nextClientRenderableBounds,
+                     List<ClientRenderablePlacement> nextClientRenderablePlacements,
+                     SceneObjectIdentity nextSceneObjectIdentity,
+                     int nextPlacementHeight,
+                     int nextModelAnchorX,
+                     int nextModelAnchorY) {
+        return canMerge(nextTile, nextScenePlane, nextPlaneCullLevel, nextLayer, nextPass,
+                nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
+                nextRenderMode, nextWallDecorationPresentation, nextGameObjectSceneMetadata,
+                nextClientRenderableBounds, nextClientRenderablePlacements, contourMetadata,
+                nextSceneObjectIdentity, nextPlacementHeight, nextModelAnchorX, nextModelAnchorY);
+    }
+
     boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
                      SceneLayer.Kind nextLayer, SubmissionPass nextPass, int nextTextureId,
                      int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex,
