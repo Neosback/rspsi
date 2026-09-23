@@ -72,6 +72,33 @@ subprojects {
 
 }
 
+// Opt-in developer utility. This is intentionally not part of foundationGate:
+// it performs network/cache acquisition through OpenRune FileStore FreshCache.
+tasks.register('prepareOsrsReferenceCache') {
+    description = 'Prepares an OSRS reference cache through OpenRune FileStore FreshCache/OpenRS2 tooling.'
+    group = 'verification'
+    dependsOn(':Client:classes')
+    doLast {
+        def output = providers.environmentVariable('RSPSI_OSRS_CACHE').orNull
+        def revision = providers.environmentVariable('RSPSI_OSRS_REVISION').orNull
+        def subRevision = providers.environmentVariable('RSPSI_OSRS_SUBREVISION').orNull
+        if (output == null || output.isBlank() || revision == null || revision.isBlank()) {
+            throw new GradleException('Set RSPSI_OSRS_CACHE and RSPSI_OSRS_REVISION. '
+                    + 'RSPSI_OSRS_SUBREVISION is optional.')
+        }
+        project(':Client').javaexec {
+            def javaLauncher = project(':Client').javaToolchains.launcherFor {
+                languageVersion = JavaLanguageVersion.of(21)
+            }.get()
+            executable = javaLauncher.executablePath.asFile.absolutePath
+            classpath = project(':Client').sourceSets.main.runtimeClasspath
+            mainClass = 'com.rspsi.cache.store.OpenRuneReferenceCacheBootstrap'
+            args output, revision
+            if (subRevision != null && !subRevision.isBlank()) args subRevision
+        }
+    }
+}
+
 // The report is intentionally explicit while external parity fixtures remain
 // outside the repository: this gate never mutates or silently discovers a
 // user cache, and reports real-cache results only when a path is supplied.
