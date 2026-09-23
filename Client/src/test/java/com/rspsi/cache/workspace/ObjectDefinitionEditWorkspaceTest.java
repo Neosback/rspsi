@@ -46,6 +46,12 @@ class ObjectDefinitionEditWorkspaceTest {
         first.setField("name",
                 ObjectDefinitionEditValue.stringValue("Newer"));
         assertEquals(1, workspace.unpublishedCount());
+
+        first.setField("name",
+                ObjectDefinitionEditValue.stringValue("Original"));
+        assertEquals(0, workspace.modifiedCount());
+        assertEquals(1, workspace.unpublishedCount(),
+                "the selected output still needs the published edit reverted");
     }
 
     private static final class FakeProvider implements DefinitionProvider {
@@ -125,8 +131,14 @@ class ObjectDefinitionEditWorkspaceTest {
         @Override
         public boolean hasUnpublishedChanges() {
             ObjectDefinitionRawView current = preview();
-            if (current.equals(ORIGINAL)) return false;
-            return published == null || !current.equals(published);
+            return published == null
+                    ? !current.equals(ORIGINAL)
+                    : !current.equals(published);
+        }
+
+        @Override
+        public Optional<ObjectDefinitionRawView> publishedPreview() {
+            return Optional.ofNullable(published);
         }
 
         @Override
