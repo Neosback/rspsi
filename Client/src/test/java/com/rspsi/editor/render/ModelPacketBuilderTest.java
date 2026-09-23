@@ -1,12 +1,16 @@
 package com.rspsi.editor.render;
 
 import com.rspsi.cache.definition.AnimationFrameView;
+import com.rspsi.cache.definition.AnimationCurveView;
+import com.rspsi.cache.definition.CachedSkeletalAnimationView;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.SequenceDefinitionView;
+import com.rspsi.cache.definition.SkeletalRigView;
+import com.rspsi.cache.definition.ModelSkeletalSkinView;
 import com.rspsi.cache.definition.SkeletonDefinitionView;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
@@ -112,6 +116,98 @@ class ModelPacketBuilderTest {
         assertTrue(state.transformed());
         assertEquals(40, cycleTwo.placementHeight());
         assertEquals(34, cycleTwo.renderPlacementHeight());
+    }
+
+    @Test
+    void cachedSkeletalSequenceChangesGeometryAcrossClientCycles() {
+        WorldDocument document = new WorldDocument(2, 2, 1);
+        WorldObject object = new WorldObject(42, 10, 0, 0, 0, 0);
+        for (int x = 0; x < 2; x++) {
+            for (int y = 0; y < 2; y++) {
+                document.tile(0, x, y).restore(new TileSnapshot(
+                        40, 40, 40, 40, 0, 0, 0, 0, 0,
+                        x == 0 && y == 0 ? List.of(object) : List.of()));
+            }
+        }
+
+        ObjectAppearanceView appearance = new ObjectAppearanceView(
+                77, false, 128, 128, 128, 0, 0, 0,
+                Map.of(), Map.of(), true, false, false, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
+        ModelGeometryView geometry = new ModelGeometryView(
+                7, new int[]{0, 0, 0, 64, 0, 0, 0, 0, 64},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+        SequenceDefinitionView sequence = new SequenceDefinitionView(
+                77, new int[0], new int[0], 2, false,
+                -1, -1, 99, 0, 0, 2,
+                900, 0, 2, 6);
+
+        float[] identity = new float[16];
+        identity[0] = identity[5] = identity[10] = identity[15] = 1.0f;
+        SkeletonDefinitionView skeleton = new SkeletonDefinitionView(
+                5, new int[]{0}, new int[][]{{0}},
+                Optional.of(new SkeletalRigView(
+                        1, new int[]{-1}, new float[][][]{{identity}})));
+        ModelSkeletalSkinView skin = new ModelSkeletalSkinView(
+                7,
+                new int[][]{{0}, {0}, {0}},
+                new int[][]{{255}, {255}, {255}});
+        AnimationCurveView[][] curves = new AnimationCurveView[1][9];
+        curves[0][3] = new AnimationCurveView(
+                AnimationCurveView.Extrapolation.CONSTANT,
+                AnimationCurveView.Extrapolation.CONSTANT,
+                false,
+                new AnimationCurveView.Key[]{
+                        new AnimationCurveView.Key(
+                                0, 0.0f, 0.0f, 0.0f, 1.0f, 10.0f),
+                        new AnimationCurveView.Key(
+                                1, 10.0f, 1.0f, 10.0f, 0.0f, 0.0f)
+                });
+        CachedSkeletalAnimationView cached = new CachedSkeletalAnimationView(
+                900, 5, 0, curves, new AnimationCurveView[1]);
+
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return Optional.of(new ObjectDefinitionView(
+                        id, "cached skeletal", 1, 1, List.of(),
+                        new int[]{7}, new int[]{10}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(appearance);
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return id == 7 ? Optional.of(geometry) : Optional.empty();
+            }
+            @Override public Optional<SequenceDefinitionView> sequence(int id) {
+                return id == 77 ? Optional.of(sequence) : Optional.empty();
+            }
+            @Override public Optional<CachedSkeletalAnimationView> cachedSkeletalAnimation(int id) {
+                return id == 900 ? Optional.of(cached) : Optional.empty();
+            }
+            @Override public Optional<SkeletonDefinitionView> skeleton(int id) {
+                return id == 5 ? Optional.of(skeleton) : Optional.empty();
+            }
+            @Override public Optional<ModelSkeletalSkinView> modelSkeletalSkin(int id) {
+                return id == 7 ? Optional.of(skin) : Optional.empty();
+            }
+        };
+
+        ModelPacketBuilder builder = new ModelPacketBuilder(definitions);
+        ModelRenderPacket frameZero = builder.build(object, document, 0).orElseThrow();
+        ModelRenderPacket frameOne = builder.build(object, document, 1).orElseThrow();
+
+        assertEquals(frameZero.sceneObjectIdentity(), frameOne.sceneObjectIdentity());
+        assertEquals(0, frameZero.animationState().frameIndex());
+        assertEquals(1, frameOne.animationState().frameIndex());
+        assertEquals(900, frameOne.animationState().frameId());
+        assertTrue(frameOne.animationState().transformed());
+        assertNotEquals(frameZero.vertices(), frameOne.vertices());
+        assertEquals(10,
+                frameOne.vertices().get(0).x() - frameZero.vertices().get(0).x());
+        assertEquals(40, frameOne.placementHeight());
+        assertEquals(34, frameOne.renderPlacementHeight());
     }
 
     @Test
