@@ -633,42 +633,16 @@ public final class ModelPacketBuilder {
                 .orElseGet(ObjectAppearanceView::empty);
         List<ModelTriangle> triangles = new ArrayList<>(sourceTriangles.size());
         for (ModelTriangle face : sourceTriangles) {
-            if (face.textureId() >= 0) {
-                if (face.renderType() == 0) {
-                    triangles.add(face.withColors(
-                            clamp(lightness(normal(vertices.get(face.a())), appearance), 2, 126),
-                            clamp(lightness(normal(vertices.get(face.b())), appearance), 2, 126),
-                            clamp(lightness(normal(vertices.get(face.c())), appearance), 2, 126)));
-                } else if (face.renderType() == 1) {
-                    int light = clamp(flatLightness(faceNormal(vertices.get(face.a()),
-                            vertices.get(face.b()), vertices.get(face.c())), appearance), 2, 126);
-                    triangles.add(face.withColors(light, light, -1));
-                } else {
-                    triangles.add(face.withColors(0, 0, -2));
-                }
-                continue;
-            }
-            if (face.renderType() == 2) {
-                triangles.add(face.withColors(0, 0, -2));
-                continue;
-            }
-            if (face.renderType() == 3) {
-                triangles.add(face.withColors(128, 128, -1));
-                continue;
-            }
             ModelVertex first = vertices.get(face.a());
             ModelVertex second = vertices.get(face.b());
             ModelVertex third = vertices.get(face.c());
-            if (face.renderType() == 1) {
-                int light = flatLightness(faceNormal(first, second, third), appearance);
-                int color = blendLight(face.baseColor(), light);
-                triangles.add(face.withColors(color, color, -1));
-            } else {
-                triangles.add(face.withColors(
-                        blendLight(face.baseColor(), lightness(normal(first), appearance)),
-                        blendLight(face.baseColor(), lightness(normal(second), appearance)),
-                        blendLight(face.baseColor(), lightness(normal(third), appearance))));
-            }
+            ModelFaceColorContract.LitFace lit = ModelFaceColorContract.shade(
+                    face.baseColor(), face.textureId() >= 0, face.renderType(),
+                    lightness(normal(first), appearance),
+                    lightness(normal(second), appearance),
+                    lightness(normal(third), appearance),
+                    flatLightness(faceNormal(first, second, third), appearance));
+            triangles.add(face.withColors(lit.colorA(), lit.colorB(), lit.colorC()));
         }
         return new ModelRenderPacket(packet.anchor(), packet.objectId(), packet.category(),
                 vertices, triangles, packet.textureTriangles(), packet.animationId(),
