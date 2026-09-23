@@ -19,16 +19,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
- * Builds a new writable output cache from a read-only source cache and a set
- * of validated object-definition snapshots.
+ * Publishes validated object-definition snapshots without ever opening the
+ * loaded source cache writable.
  *
- * <p>The source directory is never opened writable. A new sibling staging
- * directory is cloned from the source, definition payloads are written there,
- * the staged cache is closed and reopened read-only for byte and semantic
- * verification, and only then is the staging directory moved into the caller's
- * requested output path.</p>
+ * <p>New outputs are cloned from the source into a sibling staging directory.
+ * Existing outputs are cloned from the selected output into staging after the
+ * expected prior published definitions are verified. Staged writes are closed,
+ * reopened read-only, and byte/semantic/canonical verified before publication.
+ * Existing-output updates retain a rollback copy until the verified staging
+ * directory has replaced the selected output.</p>
  */
 public final class ObjectDefinitionOutputCacheBuilder {
 
@@ -36,35 +38,37 @@ public final class ObjectDefinitionOutputCacheBuilder {
     }
 
     /**
-     * Captures immutable canonical payloads from the current transaction
-     * previews. Call this on the editor thread before dispatching filesystem
-     * work so later edits cannot race an in-progress build.
+     * Captures immutable canonical payloads from the current unpublished
+     * transaction previews. Call this on the editor thread before dispatching
+     * filesystem work so later edits cannot race an in-progress build.
      */
     public static BuildPlan plan(
             Collection<? extends ObjectDefinitionEditTransaction> transactions) {
         Objects.requireNonNull(transactions, "transactions");
 
-        Map<Integer, ObjectDefinitionEditTransaction> dirty = new LinkedHashMap<>();
+        Map<Integer, ObjectDefinitionEditTransaction> unpublished =
+                new LinkedHashMap<>();
         for (ObjectDefinitionEditTransaction transaction : transactions) {
             ObjectDefinitionEditTransaction checked =
                     Objects.requireNonNull(transaction, "transaction");
-            if (!checked.dirty()) {
+            if (!checked.hasUnpublishedChanges()) {
                 continue;
             }
-            ObjectDefinitionEditTransaction previous = dirty.putIfAbsent(
+            ObjectDefinitionEditTransaction previous = unpublished.putIfAbsent(
                     checked.id(), checked);
             if (previous != null) {
                 throw new IllegalArgumentException(
                         "Duplicate object definition transaction for id " + checked.id());
             }
         }
-        if (dirty.isEmpty()) {
+        if (unpublished.isEmpty()) {
             throw new IllegalArgumentException(
-                    "At least one dirty object definition transaction is required");
+                    "At least one unpublished object definition transaction is required");
         }
 
-        List<PlannedObjectDefinition> definitions = new ArrayList<>(dirty.size());
-        dirty.entrySet().stream()
+        List<PlannedObjectDefinition> definitions =
+                new ArrayList<>(unpublished.size());
+        unpublished.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> {
                     ObjectDefinitionEditTransaction transaction = entry.getValue();
@@ -75,9 +79,13 @@ public final class ObjectDefinitionOutputCacheBuilder {
                                 "Object definition preview id " + preview.id()
                                         + " does not match transaction " + transaction.id());
                     }
+                    ObjectDefinitionRawView expectedOutputBase =
+                            transaction.publishedPreview()
+                                    .orElse(transaction.original());
                     definitions.add(new PlannedObjectDefinition(
                             transaction.id(),
                             transaction.original(),
+                            expectedOutputBase,
                             preview,
                             encoded));
                 });
@@ -114,32 +122,21 @@ public final class ObjectDefinitionOutputCacheBuilder {
             BuildPlan plan)
             throws IOException {
 
-        Objects.requireNonNull(sourceCache, "sourceCache");
-        Objects.requireNonNull(outputCache, "outputCache");
-        Objects.requireNonNull(plan, "plan");
-        if (revision <= 0) {
-            throw new IllegalArgumentException("OSRS revision must be positive");
-        }
-        if (plan.definitions().isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Object definition output plan cannot be empty");
-        }
+        validateCommonArguments(sourceCache, outputCache, revision, plan);
 
         Path source = sourceCache.toAbsolutePath().normalize();
         Path output = outputCache.toAbsolutePath().normalize();
         if (!Files.isDirectory(source)) {
-            throw new IllegalArgumentException("Source cache directory does not exist: " + source);
+            throw new IllegalArgumentException(
+                    "Source cache directory does not exist: " + source);
         }
         Path sourceReal = source.toRealPath();
 
-        validateOutputPath(source, sourceReal, output);
+        validateNewOutputPath(source, sourceReal, output);
 
         List<PlannedObjectDefinition> edits =
                 validatePlanAgainstSource(sourceReal, revision, plan);
-        Path outputParent = output.getParent();
-        if (outputParent == null) {
-            throw new IllegalArgumentException("Output cache must have a parent directory");
-        }
+        Path outputParent = requireParent(output);
         Files.createDirectories(outputParent);
 
         Path staging = Files.createTempDirectory(
@@ -152,16 +149,108 @@ public final class ObjectDefinitionOutputCacheBuilder {
             // Reopen and verify the complete staged cache before the requested
             // output path exists. The move below is the publication boundary.
             verifyCache(staging, revision, edits);
-            moveIntoPlace(staging, output);
+            moveDirectory(staging, output);
 
-            long bytes = edits.stream().mapToLong(edit -> edit.payload().length).sum();
-            return new BuildResult(
-                    output,
-                    edits.stream().map(PlannedObjectDefinition::objectId).toList(),
-                    bytes);
+            return buildResult(output, edits);
         } catch (IOException | RuntimeException failure) {
             cleanupTree(staging, failure);
             throw failure;
+        }
+    }
+
+    /** Convenience overload for updating an existing output cache. */
+    public static BuildResult updateExistingOutput(
+            Path sourceCache,
+            Path outputCache,
+            int revision,
+            Collection<? extends ObjectDefinitionEditTransaction> transactions)
+            throws IOException {
+        return updateExistingOutput(
+                sourceCache,
+                outputCache,
+                revision,
+                plan(transactions));
+    }
+
+    /**
+     * Transactionally updates an explicitly selected existing output cache.
+     *
+     * <p>The selected output is never edited in place. Its definitions that are
+     * about to change must match the expected prior publication baseline
+     * captured in the plan. The complete output is then cloned to staging,
+     * changed and verified there. Publication moves the old output aside as a
+     * rollback backup, moves the verified staging directory into place, and
+     * only then removes the backup.</p>
+     *
+     * @throws IllegalArgumentException if the output is missing, aliases the
+     *                                  source, nests with the source, is a
+     *                                  symbolic link, or does not match the
+     *                                  expected prior publication baseline
+     * @throws IOException              if staging/copy/replacement operations fail
+     */
+    public static BuildResult updateExistingOutput(
+            Path sourceCache,
+            Path outputCache,
+            int revision,
+            BuildPlan plan)
+            throws IOException {
+
+        validateCommonArguments(sourceCache, outputCache, revision, plan);
+
+        Path source = sourceCache.toAbsolutePath().normalize();
+        Path output = outputCache.toAbsolutePath().normalize();
+        if (!Files.isDirectory(source)) {
+            throw new IllegalArgumentException(
+                    "Source cache directory does not exist: " + source);
+        }
+        if (!Files.isDirectory(output)) {
+            throw new IllegalArgumentException(
+                    "Existing output cache directory does not exist: " + output);
+        }
+        if (Files.isSymbolicLink(output)) {
+            throw new IllegalArgumentException(
+                    "Existing output cache cannot be a symbolic link: " + output);
+        }
+
+        Path sourceReal = source.toRealPath();
+        Path outputReal = output.toRealPath();
+        validateExistingOutputPath(source, sourceReal, output, outputReal);
+
+        List<PlannedObjectDefinition> edits =
+                validatePlanAgainstSource(sourceReal, revision, plan);
+        validatePlanAgainstExistingOutput(outputReal, revision, edits);
+
+        Path outputParent = requireParent(output);
+        Path staging = Files.createTempDirectory(
+                outputParent,
+                "." + output.getFileName() + "-staging-");
+        try {
+            copyCacheDirectory(outputReal, staging);
+            writeStagedDefinitions(staging, edits);
+            verifyCache(staging, revision, edits);
+
+            replaceExistingOutput(staging, output);
+            return buildResult(output, edits);
+        } catch (IOException | RuntimeException failure) {
+            cleanupTree(staging, failure);
+            throw failure;
+        }
+    }
+
+    private static void validateCommonArguments(
+            Path sourceCache,
+            Path outputCache,
+            int revision,
+            BuildPlan plan) {
+        Objects.requireNonNull(sourceCache, "sourceCache");
+        Objects.requireNonNull(outputCache, "outputCache");
+        Objects.requireNonNull(plan, "plan");
+        if (revision <= 0) {
+            throw new IllegalArgumentException("OSRS revision must be positive");
+        }
+        if (plan.definitions().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Object definition output plan cannot be empty");
         }
     }
 
@@ -200,6 +289,34 @@ public final class ObjectDefinitionOutputCacheBuilder {
             }
         }
         return plan.definitions();
+    }
+
+    private static void validatePlanAgainstExistingOutput(
+            Path output,
+            int revision,
+            List<PlannedObjectDefinition> edits) {
+
+        try (OpenRuneCacheStore outputStore = OpenRuneCacheStore.open(output)) {
+            for (PlannedObjectDefinition edit : edits) {
+                byte[] outputPayload =
+                        outputStore.readObjectDefinitionPayload(edit.objectId());
+                if (outputPayload == null) {
+                    throw new IllegalArgumentException(
+                            "Existing output cache does not contain object definition "
+                                    + edit.objectId());
+                }
+
+                ObjectDefinitionRawView outputRaw =
+                        outputStore.decodeObjectDefinitionPayload(
+                                edit.objectId(), outputPayload, revision);
+                if (!edit.expectedOutputBase().equals(outputRaw)) {
+                    throw new IllegalArgumentException(
+                            "Existing output cache has an unexpected prior value for object "
+                                    + edit.objectId()
+                                    + "; refusing to overwrite a stale or unrelated cache");
+                }
+            }
+        }
     }
 
     private static void writeStagedDefinitions(
@@ -253,7 +370,7 @@ public final class ObjectDefinitionOutputCacheBuilder {
         }
     }
 
-    private static void validateOutputPath(
+    private static void validateNewOutputPath(
             Path sourceAbsolute,
             Path sourceReal,
             Path output) throws IOException {
@@ -268,7 +385,8 @@ public final class ObjectDefinitionOutputCacheBuilder {
                         "Source and output cache paths resolve to the same directory");
             }
             throw new IllegalArgumentException(
-                    "Output cache already exists; buildNewOutput never overwrites: " + output);
+                    "Output cache already exists; use updateExistingOutput for an explicit update: "
+                            + output);
         }
 
         // Reject the obvious lexical nesting before creating any directories.
@@ -277,11 +395,7 @@ public final class ObjectDefinitionOutputCacheBuilder {
                     "Output cache cannot be created inside the source cache");
         }
 
-        Path parent = output.getParent();
-        if (parent == null) {
-            throw new IllegalArgumentException("Output cache must have a parent directory");
-        }
-
+        Path parent = requireParent(output);
         Path existingAncestor = parent;
         while (existingAncestor != null && !Files.exists(existingAncestor)) {
             existingAncestor = existingAncestor.getParent();
@@ -298,6 +412,36 @@ public final class ObjectDefinitionOutputCacheBuilder {
             throw new IllegalArgumentException(
                     "Output cache cannot resolve inside the source cache");
         }
+    }
+
+    private static void validateExistingOutputPath(
+            Path sourceAbsolute,
+            Path sourceReal,
+            Path outputAbsolute,
+            Path outputReal) throws IOException {
+
+        if (sourceAbsolute.equals(outputAbsolute)
+                || Files.isSameFile(sourceReal, outputReal)) {
+            throw new IllegalArgumentException(
+                    "Source and output cache paths must differ");
+        }
+        if (outputReal.startsWith(sourceReal)) {
+            throw new IllegalArgumentException(
+                    "Existing output cache cannot be inside the source cache");
+        }
+        if (sourceReal.startsWith(outputReal)) {
+            throw new IllegalArgumentException(
+                    "Existing output cache cannot contain the source cache");
+        }
+    }
+
+    private static Path requireParent(Path path) {
+        Path parent = path.getParent();
+        if (parent == null) {
+            throw new IllegalArgumentException(
+                    "Output cache must have a parent directory");
+        }
+        return parent;
     }
 
     private static void copyCacheDirectory(Path source, Path target)
@@ -332,13 +476,52 @@ public final class ObjectDefinitionOutputCacheBuilder {
         });
     }
 
-    private static void moveIntoPlace(Path staging, Path output)
+    private static void replaceExistingOutput(Path staging, Path output)
+            throws IOException {
+        Path backup = output.resolveSibling(
+                "." + output.getFileName() + "-rollback-" + UUID.randomUUID());
+
+        moveDirectory(output, backup);
+        try {
+            moveDirectory(staging, output);
+        } catch (IOException publishFailure) {
+            IOException failure = new IOException(
+                    "Failed to replace existing output cache; attempting rollback to "
+                            + output,
+                    publishFailure);
+            try {
+                if (Files.exists(output)) {
+                    throw new IOException(
+                            "Replacement failed but output path already exists; rollback copy retained at "
+                                    + backup);
+                }
+                moveDirectory(backup, output);
+            } catch (IOException rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+            }
+            throw failure;
+        }
+
+        cleanupTreeQuietly(backup);
+    }
+
+    private static void moveDirectory(Path source, Path target)
             throws IOException {
         try {
-            Files.move(staging, output, StandardCopyOption.ATOMIC_MOVE);
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException unsupported) {
-            Files.move(staging, output);
+            Files.move(source, target);
         }
+    }
+
+    private static BuildResult buildResult(
+            Path output,
+            List<PlannedObjectDefinition> edits) {
+        long bytes = edits.stream().mapToLong(edit -> edit.payload().length).sum();
+        return new BuildResult(
+                output,
+                edits.stream().map(PlannedObjectDefinition::objectId).toList(),
+                bytes);
     }
 
     private static void cleanupTree(Path root, Exception original) {
@@ -358,6 +541,28 @@ public final class ObjectDefinitionOutputCacheBuilder {
             }
         } catch (IOException failure) {
             original.addSuppressed(failure);
+        }
+    }
+
+    private static void cleanupTreeQuietly(Path root) {
+        if (root == null || !Files.exists(root)) {
+            return;
+        }
+        try {
+            try (var paths = Files.walk(root)) {
+                paths.sorted(Comparator.reverseOrder())
+                        .forEach(path -> {
+                            try {
+                                Files.deleteIfExists(path);
+                            } catch (IOException ignored) {
+                                // Publication already succeeded. A leftover
+                                // rollback directory is safer than reporting
+                                // the verified output as failed.
+                            }
+                        });
+            }
+        } catch (IOException ignored) {
+            // See above: cleanup cannot invalidate a successful publication.
         }
     }
 
@@ -381,6 +586,7 @@ public final class ObjectDefinitionOutputCacheBuilder {
     public record PlannedObjectDefinition(
             int objectId,
             ObjectDefinitionRawView original,
+            ObjectDefinitionRawView expectedOutputBase,
             ObjectDefinitionRawView preview,
             byte[] payload) {
         public PlannedObjectDefinition {
@@ -389,9 +595,13 @@ public final class ObjectDefinitionOutputCacheBuilder {
                         "Object definition id cannot be negative");
             }
             original = Objects.requireNonNull(original, "original");
+            expectedOutputBase =
+                    Objects.requireNonNull(expectedOutputBase, "expectedOutputBase");
             preview = Objects.requireNonNull(preview, "preview");
             payload = Objects.requireNonNull(payload, "payload").clone();
-            if (original.id() != objectId || preview.id() != objectId) {
+            if (original.id() != objectId
+                    || expectedOutputBase.id() != objectId
+                    || preview.id() != objectId) {
                 throw new IllegalArgumentException(
                         "Planned object definition views must match id " + objectId);
             }
@@ -412,7 +622,8 @@ public final class ObjectDefinitionOutputCacheBuilder {
                     .toAbsolutePath().normalize();
             objectIds = List.copyOf(objectIds);
             if (encodedBytes < 0) {
-                throw new IllegalArgumentException("Encoded byte count cannot be negative");
+                throw new IllegalArgumentException(
+                        "Encoded byte count cannot be negative");
             }
         }
 
