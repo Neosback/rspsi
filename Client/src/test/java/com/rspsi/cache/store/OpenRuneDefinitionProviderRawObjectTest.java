@@ -36,6 +36,8 @@ class OpenRuneDefinitionProviderRawObjectTest {
         assertEquals("14", field(raw, "sizeX").opcode());
         assertEquals("456", field(raw, "animationId").value());
         assertEquals("24", field(raw, "animationId").opcode());
+        assertEquals("74", field(raw, "isHollow").opcode());
+        assertEquals("62", field(raw, "isRotated").opcode());
         assertFalse(raw.fields().stream().anyMatch(value -> value.name().equals("params")),
                 "opcode 249 parameters have a dedicated typed surface");
 
