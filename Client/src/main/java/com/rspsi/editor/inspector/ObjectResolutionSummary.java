@@ -57,6 +57,28 @@ public record ObjectResolutionSummary(
                 || geometryStatus == GeometryStatus.PARTIAL_GEOMETRY;
     }
 
+    /** Compact frontend-neutral explanation suitable for inspectors and preview errors. */
+    public String diagnosticSummary() {
+        if (!definitionResolved()) {
+            return switch (definitionStatus) {
+                case MISSING_PLACED_DEFINITION -> "Object definition is missing";
+                case NO_DEFAULT_TRANSFORM -> "Multiloc has no default transform for editor state";
+                case MISSING_TRANSFORM_DEFINITION -> "Default transform definition is missing";
+                default -> "Object definition could not be resolved: " + definitionStatus;
+            };
+        }
+        return switch (geometryStatus) {
+            case DEFINITION_UNRESOLVED -> "Object definition could not be resolved";
+            case NO_MODEL_FOR_SHAPE -> "Definition has no model for this loc shape";
+            case MISSING_MODEL_GEOMETRY -> "Selected model geometry is missing: " + missingGeometryIds;
+            case EMPTY_RENDERABLE_GEOMETRY -> "Selected models contain no renderable triangles";
+            case PARTIAL_GEOMETRY -> "Some selected model geometry is unavailable";
+            case READY -> transformed()
+                    ? "Resolved transform " + transformPath.get(0) + " -> " + transformPath.get(transformPath.size() - 1)
+                    : "Renderable model data resolved";
+        };
+    }
+
     public static ObjectResolutionSummary capture(WorldObject object, DefinitionProvider definitions) {
         Objects.requireNonNull(object, "object");
         Objects.requireNonNull(definitions, "definitions");
