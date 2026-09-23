@@ -635,6 +635,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             int priority = -1;
             int replyMode = 2;
             int skeletalId = -1;
+            int animationHeightOffset = 0;
             while (cursor.remaining() > 0) {
                 int opcode = cursor.readUnsignedByte();
                 if (opcode == 0) break;
@@ -682,7 +683,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                     }
                     case 16 -> {
                         if (revision < OSRS_SEQUENCE_REVISION) cursor.skip(4);
-                        else if (revision >= 233) cursor.skip(1);
+                        else if (revision >= 233) animationHeightOffset = cursor.readByte();
                     }
                     case 17 -> cursor.skip(cursor.readUnsignedByte());
                     case 18 -> cursor.readString();
@@ -698,7 +699,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                     frameStep, stretches, normalizeSentinel(leftHandItem),
                     normalizeSentinel(rightHandItem), maxLoops,
                     normalizeSentinel(precedenceAnimating), normalizeSentinel(priority),
-                    replyMode, skeletalId));
+                    replyMode, skeletalId, animationHeightOffset));
         } catch (RuntimeException failure) {
             recordFailure("sequence", id, failure);
             return Optional.empty();
@@ -953,6 +954,11 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         private int readUnsignedByte() {
             require(1);
             return data[offset++] & 0xFF;
+        }
+
+        private int readByte() {
+            require(1);
+            return data[offset++];
         }
 
         private int readUnsignedShort() {
