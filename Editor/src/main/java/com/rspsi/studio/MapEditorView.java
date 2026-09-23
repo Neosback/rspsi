@@ -152,9 +152,18 @@ public final class MapEditorView {
     private WorkspaceManager workspaces;
     private Runnable openMapEditor;
     private Consumer<WorkspaceManager.Workspace> closeWorkspace;
+    private Consumer<LoadedOsrsCacheSession> definitionPublicationPersistence =
+            ignored -> { };
 
     public void setPluginEcosystem(PluginEcosystemService ecosystem, Runnable rescanPlugins) {
         pluginManagerWindow.setEcosystem(ecosystem, rescanPlugins);
+    }
+
+    public void setDefinitionPublicationPersistence(
+            Consumer<LoadedOsrsCacheSession> persistence) {
+        definitionPublicationPersistence = persistence == null
+                ? ignored -> { }
+                : persistence;
     }
 
     public void render(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
@@ -249,7 +258,8 @@ public final class MapEditorView {
                 toolController,
                 studioPluginManager,
                 brushManager,
-                hudManager);
+                hudManager,
+                definitionPublicationPersistence);
 
         // 4. Left Brush Rail (TOOL_RAIL slot: brush settings for Tile Painter/Height Sculptor) -
         // renders itself only when a brush tool is active, or always when forced via the View menu.

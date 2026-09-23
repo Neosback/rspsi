@@ -11,12 +11,15 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ObjectDefinitionEditWorkspaceTest {
 
@@ -62,6 +65,125 @@ class ObjectDefinitionEditWorkspaceTest {
         assertEquals(0, workspace.modifiedCount());
         assertEquals(1, workspace.unpublishedCount(),
                 "the selected output still needs the published edit reverted");
+    }
+
+
+    @Test
+    void restoresPublishedSnapshotLazilyAsTheCurrentPreview() {
+        FakeProvider provider = new FakeProvider();
+        ObjectDefinitionEditWorkspace workspace =
+                new ObjectDefinitionEditWorkspace(provider);
+        Path output = Path.of("build", "restored-output");
+        ObjectDefinitionRawView published = rawName("Published");
+
+        workspace.restorePublication(output, Map.of(7, published));
+
+        assertEquals(0, provider.editCalls,
+                "restoring provenance must not eagerly create edit transactions");
+        ObjectDefinitionEditTransaction transaction =
+                workspace.transaction(7).orElseThrow();
+
+        assertEquals(1, provider.editCalls);
+        assertEquals(published, transaction.preview());
+        assertEquals(published, transaction.publishedPreview().orElseThrow());
+        assertTrue(transaction.dirty(),
+                "the restored published preview still differs from the source");
+        assertFalse(transaction.hasUnpublishedChanges());
+        assertEquals(0, workspace.unpublishedCount());
+        assertEquals(Map.of(7, published), workspace.publishedSnapshots());
+    }
+
+    @Test
+    void restoreDoesNotOverwriteAnEditMadeBeforeHydrationCompletes() {
+        FakeProvider provider = new FakeProvider();
+        ObjectDefinitionEditWorkspace workspace =
+                new ObjectDefinitionEditWorkspace(provider);
+        ObjectDefinitionEditTransaction transaction =
+                workspace.transaction(7).orElseThrow();
+        transaction.setField(
+                "name", ObjectDefinitionEditValue.stringValue("User edit"));
+
+        ObjectDefinitionRawView published = rawName("Previously published");
+        workspace.restorePublication(
+                Path.of("build", "restored-output"),
+                Map.of(7, published));
+
+        assertEquals("User edit", transaction.preview().fields().get(0).value());
+        assertEquals(published, transaction.publishedPreview().orElseThrow());
+        assertTrue(transaction.hasUnpublishedChanges());
+    }
+
+
+    @Test
+    void failedRestoreLeavesWorkspaceUnboundAndExistingPreviewUntouched() {
+        FakeProvider provider = new FakeProvider();
+        ObjectDefinitionEditWorkspace workspace =
+                new ObjectDefinitionEditWorkspace(provider);
+        ObjectDefinitionEditTransaction transaction =
+                workspace.transaction(7).orElseThrow();
+        ObjectDefinitionRawView before = transaction.preview();
+        ObjectDefinitionRawView unsupported = new ObjectDefinitionRawView(
+                7,
+                List.of(new ObjectDefinitionRawView.Field(
+                        "name",
+                        "2",
+                        ObjectDefinitionRawView.ValueType.LIST,
+                        "[Published]")),
+                List.of());
+
+        IllegalArgumentException failure = assertThrows(
+                IllegalArgumentException.class,
+                () -> workspace.restorePublication(
+                        Path.of("build", "restored-output"),
+                        Map.of(7, unsupported)));
+
+        assertTrue(failure.getMessage().contains("unsupported editable value type"));
+        assertTrue(workspace.publicationTarget().isEmpty());
+        assertTrue(workspace.publishedSnapshots().isEmpty());
+        assertEquals(before, transaction.preview());
+        assertTrue(transaction.publishedPreview().isEmpty());
+        assertFalse(transaction.dirty());
+        assertEquals(2, provider.editCalls,
+                "restore should validate with a throwaway transaction before commit");
+    }
+
+
+    @Test
+    void staleRestoreCannotReplacePublicationThatWonTheStartupRace() {
+        FakeProvider provider = new FakeProvider();
+        ObjectDefinitionEditWorkspace workspace =
+                new ObjectDefinitionEditWorkspace(provider);
+        ObjectDefinitionEditTransaction transaction =
+                workspace.transaction(7).orElseThrow();
+        transaction.setField(
+                "name", ObjectDefinitionEditValue.stringValue("Live publish"));
+        ObjectDefinitionRawView live = transaction.preview();
+        Path liveOutput = Path.of("build", "live-output");
+        workspace.markPublished(liveOutput, 7, live);
+
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> workspace.restorePublication(
+                        Path.of("build", "stale-output"),
+                        Map.of(7, rawName("Stale publish"))));
+
+        assertTrue(failure.getMessage().contains("already bound"));
+        assertEquals(
+                liveOutput.toAbsolutePath().normalize(),
+                workspace.publicationTarget().orElseThrow());
+        assertEquals(live, workspace.publishedSnapshots().get(7));
+        assertFalse(transaction.hasUnpublishedChanges());
+    }
+
+    private static ObjectDefinitionRawView rawName(String name) {
+        return new ObjectDefinitionRawView(
+                7,
+                List.of(new ObjectDefinitionRawView.Field(
+                        "name",
+                        "2",
+                        ObjectDefinitionRawView.ValueType.STRING,
+                        name)),
+                List.of());
     }
 
     private static final class FakeProvider implements DefinitionProvider {

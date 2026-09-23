@@ -5,6 +5,7 @@ import com.rspsi.cache.workspace.CacheDecoderSummary;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.cache.workspace.OsrsCacheSessionService;
 import com.rspsi.cache.map.OsrsProjectSessionLoader;
+import com.rspsi.cache.store.ObjectDefinitionOutputCacheBuilder;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldRegion;
 import com.rspsi.editor.model.WorldRegionWindow;
@@ -105,6 +106,11 @@ public final class StudioApplication implements AutoCloseable {
             Path.of(System.getProperty("user.home"), ".openrune-studio", "plugin-repositories.json"));
     private final Path settingsFile = Path.of(System.getProperty("user.home"),
             ".openrune-studio", "settings.json");
+    private final StudioDefinitionPublicationStore definitionPublicationStore =
+            new StudioDefinitionPublicationStore(
+                    Path.of(System.getProperty("user.home"),
+                            ".openrune-studio",
+                            "definition-publications.json"));
     private final ExecutorService sceneExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "openrune-scene-loader");
         thread.setDaemon(true);
@@ -138,6 +144,8 @@ public final class StudioApplication implements AutoCloseable {
         if (initialCache == null || initialCache.isBlank()) initialCache = preferences.recentCache();
         dashboard = new DashboardView(initialCache);
         mapEditor.setPluginEcosystem(pluginEcosystem, this::rescanPlugins);
+        mapEditor.setDefinitionPublicationPersistence(
+                this::persistDefinitionPublicationState);
         if (initialCache != null && !initialCache.isBlank()
                 && Files.isDirectory(Path.of(initialCache))) {
             loadCache(Path.of(initialCache));
@@ -232,7 +240,62 @@ public final class StudioApplication implements AutoCloseable {
 
     private void loadCache(Path path) {
         if (path == null) return;
-        cacheSessions.load(path);
+        cacheSessions.load(path, this::restoreDefinitionPublicationState);
+    }
+
+    private void restoreDefinitionPublicationState(
+            LoadedOsrsCacheSession cache) {
+        definitionPublicationStore.loadFor(cache.path(), cache.identity())
+                .ifPresent(state -> {
+                    try {
+                        ObjectDefinitionOutputCacheBuilder.verifyExistingOutputSnapshots(
+                                cache.path(),
+                                state.outputCache(),
+                                cache.identity().revision(),
+                                state.publishedSnapshots());
+                        cache.objectDefinitions().restorePublication(
+                                state.outputCache(),
+                                state.publishedSnapshots());
+                        LOGGER.info(
+                                "Restored definition publication provenance for {} -> {} "
+                                        + "({} snapshots)",
+                                cache.path(),
+                                state.outputCache(),
+                                state.publishedSnapshots().size());
+                    } catch (Exception failure) {
+                        LOGGER.warn(
+                                "Ignoring stale definition publication provenance for {} -> {}",
+                                cache.path(),
+                                state.outputCache(),
+                                failure);
+                    }
+                });
+    }
+
+    private void persistDefinitionPublicationState(
+            LoadedOsrsCacheSession cache) {
+        var workspace = cache.objectDefinitions();
+        Path output = workspace.publicationTarget().orElse(null);
+        Map<Integer, com.rspsi.cache.definition.ObjectDefinitionRawView> snapshots =
+                workspace.publishedSnapshots();
+        if (output == null || snapshots.isEmpty()) {
+            return;
+        }
+
+        try {
+            definitionPublicationStore.save(
+                    new StudioDefinitionPublicationStore.PublicationState(
+                            cache.path(),
+                            cache.identity(),
+                            output,
+                            snapshots));
+        } catch (RuntimeException failure) {
+            LOGGER.warn(
+                    "Verified definition output was published, but Studio could not persist "
+                            + "its restart provenance for {}",
+                    output,
+                    failure);
+        }
     }
 
     private void openMapEditor() {

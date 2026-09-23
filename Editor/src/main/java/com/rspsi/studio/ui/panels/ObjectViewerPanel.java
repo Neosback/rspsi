@@ -1067,6 +1067,7 @@ public final class ObjectViewerPanel implements StudioPanel {
                     definition.objectId(),
                     definition.preview());
         }
+        context.persistDefinitionPublication().accept(context.cache());
         if (context.session() != null) {
             context.session().externalStateChanged();
         }

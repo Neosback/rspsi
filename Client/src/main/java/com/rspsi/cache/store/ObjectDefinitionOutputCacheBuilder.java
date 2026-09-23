@@ -237,6 +237,87 @@ public final class ObjectDefinitionOutputCacheBuilder {
         }
     }
 
+    /**
+     * Revalidates persisted publication snapshots against an existing output
+     * cache before a Studio session restores them as trusted baselines.
+     */
+    public static void verifyExistingOutputSnapshots(
+            Path sourceCache,
+            Path outputCache,
+            int revision,
+            Map<Integer, ObjectDefinitionRawView> publishedSnapshots)
+            throws IOException {
+
+        Objects.requireNonNull(sourceCache, "sourceCache");
+        Objects.requireNonNull(outputCache, "outputCache");
+        Objects.requireNonNull(publishedSnapshots, "publishedSnapshots");
+        if (revision <= 0) {
+            throw new IllegalArgumentException("OSRS revision must be positive");
+        }
+        if (publishedSnapshots.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "At least one published object definition snapshot is required");
+        }
+
+        Path source = sourceCache.toAbsolutePath().normalize();
+        Path output = outputCache.toAbsolutePath().normalize();
+        if (!Files.isDirectory(source)) {
+            throw new IllegalArgumentException(
+                    "Source cache directory does not exist: " + source);
+        }
+        if (!Files.isDirectory(output)) {
+            throw new IllegalArgumentException(
+                    "Existing output cache directory does not exist: " + output);
+        }
+        if (Files.isSymbolicLink(output)) {
+            throw new IllegalArgumentException(
+                    "Existing output cache cannot be a symbolic link: " + output);
+        }
+
+        Path sourceReal = source.toRealPath();
+        Path outputReal = output.toRealPath();
+        validateExistingOutputPath(source, sourceReal, output, outputReal);
+
+        try (OpenRuneCacheStore outputStore = OpenRuneCacheStore.open(outputReal)) {
+            for (Map.Entry<Integer, ObjectDefinitionRawView> entry
+                    : publishedSnapshots.entrySet()) {
+                int objectId = entry.getKey();
+                ObjectDefinitionRawView expected =
+                        Objects.requireNonNull(entry.getValue(), "published snapshot");
+                if (objectId < 0 || expected.id() != objectId) {
+                    throw new IllegalArgumentException(
+                            "Published object snapshot does not match id " + objectId);
+                }
+
+                byte[] actual =
+                        outputStore.readObjectDefinitionPayload(objectId);
+                if (actual == null) {
+                    throw new IllegalArgumentException(
+                            "Existing output cache does not contain published object definition "
+                                    + objectId);
+                }
+
+                ObjectDefinitionRawView decoded =
+                        outputStore.decodeObjectDefinitionPayload(
+                                objectId, actual, revision);
+                if (!expected.equals(decoded)) {
+                    throw new IllegalArgumentException(
+                            "Existing output cache no longer matches the persisted publication "
+                                    + "snapshot for object " + objectId);
+                }
+
+                byte[] canonical =
+                        outputStore.canonicalObjectDefinitionPayload(
+                                objectId, actual, revision);
+                if (!Arrays.equals(actual, canonical)) {
+                    throw new IllegalArgumentException(
+                            "Existing output cache contains a non-canonical published object "
+                                    + objectId);
+                }
+            }
+        }
+    }
+
     private static void validateCommonArguments(
             Path sourceCache,
             Path outputCache,

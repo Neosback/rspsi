@@ -333,6 +333,45 @@ class ObjectDefinitionOutputCacheBuilderTest {
         }
     }
 
+
+    @Test
+    void revalidatesPersistedPublicationSnapshotsBeforeRestoringThem()
+            throws IOException {
+        Path source = temporaryDirectory.resolve("source-cache");
+        Path output = temporaryDirectory.resolve("development-cache");
+        ObjectType original = seedCache(source, "Copper rocks");
+
+        ObjectDefinitionEditTransaction transaction =
+                new OpenRuneObjectDefinitionEditTransaction(original, REVISION);
+        transaction.setField(
+                "name", ObjectDefinitionEditValue.stringValue("Published"));
+        ObjectDefinitionOutputCacheBuilder.BuildPlan plan =
+                ObjectDefinitionOutputCacheBuilder.plan(
+                        java.util.List.of(transaction));
+        ObjectDefinitionOutputCacheBuilder.buildNewOutput(
+                source, output, REVISION, plan);
+
+        ObjectDefinitionRawView published =
+                plan.definitions().get(0).preview();
+        ObjectDefinitionOutputCacheBuilder.verifyExistingOutputSnapshots(
+                source,
+                output,
+                REVISION,
+                java.util.Map.of(OBJECT_ID, published));
+
+        transaction.setField(
+                "name", ObjectDefinitionEditValue.stringValue("Different expected state"));
+        IllegalArgumentException failure = assertThrows(
+                IllegalArgumentException.class,
+                () -> ObjectDefinitionOutputCacheBuilder.verifyExistingOutputSnapshots(
+                        source,
+                        output,
+                        REVISION,
+                        java.util.Map.of(OBJECT_ID, transaction.preview())));
+
+        assertTrue(failure.getMessage().contains("no longer matches"));
+    }
+
     private static ObjectType seedCache(Path directory, String name)
             throws IOException {
         Files.createDirectories(directory);

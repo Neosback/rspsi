@@ -38,7 +38,20 @@ public final class OsrsCacheSessionService implements AutoCloseable {
     }
 
     public CompletionStage<LoadedOsrsCacheSession> load(Path path) {
+        return load(path, ignored -> { });
+    }
+
+    /**
+     * Loads a cache and runs one session initializer before publishing READY.
+     * The initializer is intended for validated session-scoped state such as
+     * durable Studio provenance that must be restored before UI consumers can
+     * safely begin editing.
+     */
+    public CompletionStage<LoadedOsrsCacheSession> load(
+            Path path,
+            Consumer<LoadedOsrsCacheSession> initializer) {
         Objects.requireNonNull(path, "path");
+        Objects.requireNonNull(initializer, "initializer");
         if (closed) throw new IllegalStateException("Cache session service is closed");
         Path normalized = path.toAbsolutePath().normalize();
         long request = requestSequence.incrementAndGet();
@@ -53,9 +66,15 @@ public final class OsrsCacheSessionService implements AutoCloseable {
                     LoadedOsrsCacheSession loaded = LoadedOsrsCacheSession.open(normalized);
                     publishIfCurrent(request, new CacheSessionStatus(
                             CacheSessionState.LOADING, normalized, previous,
-                            "Preparing cache assets…", null,
+                            "Preparing cache assets and session state…", null,
                             CacheLoadPhase.PREPARING_ASSETS, 0.8));
-                    return loaded;
+                    try {
+                        initializer.accept(loaded);
+                        return loaded;
+                    } catch (RuntimeException failure) {
+                        loaded.close();
+                        throw failure;
+                    }
                 }, executor)
                 .handle((loaded, failure) -> {
                     if (request != requestSequence.get()) {

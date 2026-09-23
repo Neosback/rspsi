@@ -293,10 +293,14 @@ The first verified Studio publishing path is now implemented with these invarian
 - An explicitly-selected existing output can be updated transactionally: verify its edited definitions against the expected prior published snapshots -> clone the existing output to staging -> write/verify there -> move the old output to a rollback sibling -> publish the verified staging directory -> remove the rollback copy.
 - A stale or unrelated existing output is rejected before replacement when an edited definition does not match its expected publication baseline.
 - After the first successful publish, the loaded cache session binds its publication snapshots to that explicit output directory. Studio does not silently carry "published" state across a path change.
+- The source identity, bound output path, and exact verified published object snapshots are persisted in a versioned Studio provenance file with atomic replacement.
+- On cache reload, persisted provenance is accepted only when the source path and cache identity still match and the output cache still decodes canonically to every saved published snapshot.
+- Provenance revalidation/restoration runs during cache-session initialization before the service publishes the new cache as READY, so editor UI cannot begin from a stale source-only preview.
+- Restored transactions hydrate lazily to the verified published preview. The workspace also refuses a stale restoration if a live publication target has already won the initialization race.
 - Already-published definitions are excluded from new build plans; only unpublished snapshots are persisted.
 - Studio close/dirty gating consults the cache-scoped workspace as well as the current map session, so changing regions cannot hide unpublished definition edits.
 
-The next persistence work should make the session-level output binding durable across Studio restarts, then generalize the same transactional build model beyond object definitions.
+The next persistence work should generalize this durable transactional publication model beyond object definitions and into a project-level dirty-resource/build registry.
 
 ### Phase C: broader content studio
 
