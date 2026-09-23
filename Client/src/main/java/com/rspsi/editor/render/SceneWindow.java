@@ -86,6 +86,11 @@ public record SceneWindow(
         return ExtendedSceneLayout.runeLite();
     }
 
+    /** RuneLite's 23x23 top-level GPU zone projection over absolute world zones. */
+    public ExtendedSceneZoneLayout extendedSceneZoneLayout() {
+        return new ExtendedSceneZoneLayout(extendedSceneLayout());
+    }
+
     public SceneContract contract() {
         return SceneContract.from(this);
     }

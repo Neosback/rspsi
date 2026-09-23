@@ -75,4 +75,49 @@ class GpuCommandVisibilityTest {
                 GpuColorEncoding.PACKED_JAGEX_HSL, 0,
                 0, 0, 0, 0, -1, 255, 0, 0, 0, 0, 0);
     }
+    @Test
+    void topLevelExtendedSceneGateKeepsBorderCommandsAndRejectsOutsideZones() {
+        com.rspsi.editor.model.WorldRegionWindow source =
+                new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1, Map.of());
+        SceneWindow window = new SceneWindow(
+                source, 3200, 3200, 1, 0, 0, -1, java.util.Set.of(), List.of());
+
+        WorldTileAddress borderTile = WorldTileAddress.of(3160, 3200, 0); // extended zone (0,5)
+        WorldTileAddress normalTile = WorldTileAddress.of(3200, 3200, 0); // extended zone (5,5)
+        WorldTileAddress outsideTile = WorldTileAddress.of(3152, 3200, 0); // one zone west of extended scene
+
+        List<GpuSceneVertex> vertices = List.of(
+                vertex(3160 * 128.0f, 0, 3200 * 128.0f),
+                vertex(3160 * 128.0f + 64, 0, 3200 * 128.0f),
+                vertex(3160 * 128.0f, 64, 3200 * 128.0f),
+                vertex(3200 * 128.0f, 0, 3200 * 128.0f),
+                vertex(3200 * 128.0f + 64, 0, 3200 * 128.0f),
+                vertex(3200 * 128.0f, 64, 3200 * 128.0f),
+                vertex(3152 * 128.0f, 0, 3200 * 128.0f),
+                vertex(3152 * 128.0f + 64, 0, 3200 * 128.0f),
+                vertex(3152 * 128.0f, 64, 3200 * 128.0f));
+        List<Integer> indices = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8);
+        List<GpuDrawCommand> commands = List.of(
+                new GpuDrawCommand(borderTile, SceneLayer.Kind.TERRAIN,
+                        GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, -1),
+                new GpuDrawCommand(normalTile, SceneLayer.Kind.TERRAIN,
+                        GpuDrawCommand.SubmissionPass.OPAQUE, 3, 3, -1, 0, -1),
+                new GpuDrawCommand(outsideTile, SceneLayer.Kind.TERRAIN,
+                        GpuDrawCommand.SubmissionPass.OPAQUE, 6, 3, -1, 0, -1));
+        GpuUploadPlan plan = new GpuUploadPlan(
+                vertices, indices, commands, List.of(), Map.of(), List.of(),
+                "extended-visibility", java.util.Optional.of(window));
+
+        float cameraX = 3160 * 128.0f + 64;
+        float cameraZ = 3200 * 128.0f + 64;
+        GpuCommandVisibility visibility = GpuCommandVisibility.of(
+                plan, new CameraState(cameraX, 0, cameraZ, 0, 0));
+
+        assertTrue(visibility.extendedSceneApplied());
+        assertTrue(visibility.cameraInExtendedBorder());
+        assertTrue(visibility.visible(0));
+        assertTrue(visibility.visible(1));
+        assertFalse(visibility.visible(2));
+    }
+
 }

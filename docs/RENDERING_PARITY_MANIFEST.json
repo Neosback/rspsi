@@ -96,23 +96,36 @@
       "id": "scene.extendedTiles",
       "domain": "scene",
       "title": "Extended tile border context",
-      "status": "partial",
+      "status": "covered",
       "priority": "p2",
       "runelite": [
-        "net.runelite.api.Scene#getExtendedTiles"
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/Scene.java#getExtendedTiles",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/Scene.java#getExtendedTileSettings",
+        "RuneLite-melxin/runelite-client/src/main/java/net/runelite/client/plugins/gpu/GpuPlugin.java#SCENE_OFFSET",
+        "RuneLite-melxin/runelite-client/src/main/java/net/runelite/client/plugins/gpu/GpuPlugin.java#drawZoneOpaque",
+        "RuneLite-melxin/runelite-client/src/main/java/net/runelite/client/plugins/gpu/GpuPlugin.java#drawZoneAlpha"
       ],
       "rspsi": [
-        "Client/src/main/java/com/rspsi/editor/render/SceneWindow.java"
+        "Client/src/main/java/com/rspsi/editor/render/ExtendedSceneLayout.java",
+        "Client/src/main/java/com/rspsi/editor/render/ExtendedSceneZoneLayout.java",
+        "Client/src/main/java/com/rspsi/editor/render/ExtendedSceneZoneTraversal.java",
+        "Client/src/main/java/com/rspsi/editor/render/SceneWindow.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlan.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuCommandVisibility.java",
+        "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
       ],
       "tsps": [
         "rs/scene/Scene.ts",
         "render/render/camera/roof.ts"
       ],
       "evidence": [
-        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+        "Client/src/test/java/com/rspsi/editor/render/ExtendedSceneZoneLayoutTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ExtendedSceneZoneTraversalTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuCommandVisibilityTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/IncrementalGpuUploadPlanBuilderTest.java"
       ],
-      "reason": "Border data exists, but camera traversal does not yet reproduce the client extended-scene walk.",
-      "nextAction": "Add a border/roof camera fixture before enabling exact culling parity."
+      "reason": "RuneLite's 104x104 normal scene and 184x184 extended top-level scene are represented explicitly, including the 40-tile / five-zone offset and the 13x13 normal zone footprint centered inside the 23x23 root GPU zone grid. ExtendedSceneZoneLayout reproduces the top-level draw-zone translation used by GpuPlugin.drawZoneOpaque/drawZoneAlpha while leaving sub-worldviews unshifted. RSPSi retains geometry by absolute 8x8 WorldZoneCoordinate instead of rebasing arrays; GpuUploadPlan now carries SceneWindow metadata through both full and incremental compilation, and GpuCommandVisibility consumes it every native frame to keep the full five-zone border eligible while rejecting zones outside the 184x184 root domain. Camera movement changes only frame visibility metadata and never the geometry/upload fingerprint. A combined fixture verifies that connected roof removal remains an independent earlier scene projection and does not discard valid extended-border geometry.",
+      "nextAction": "Keep extended traversal as a frame-time zone gate over absolute resident geometry. Instance-template rotation/projection remains separately tracked under scene.instances; do not duplicate that work in the extended-scene contract."
     },
     {
       "id": "terrain.heights",

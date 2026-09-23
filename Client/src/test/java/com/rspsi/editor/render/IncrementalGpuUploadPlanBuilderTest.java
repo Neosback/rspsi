@@ -171,4 +171,20 @@ class IncrementalGpuUploadPlanBuilderTest {
                         0, 0, 1, 0, Set.of(), List.of()),
                 tiles, LightingProfile.osrs(), fingerprint, Map.of());
     }
+    @Test
+    void retainsSceneWindowForPerFrameExtendedTraversal() {
+        com.rspsi.editor.model.WorldRegionWindow source =
+                new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1, Map.of());
+        SceneWindow window = new SceneWindow(
+                source, 3200, 3200, 4, 0, 0, -1, java.util.Set.of(), List.of());
+        GpuScenePacket packet = new GpuScenePacket(
+                window, List.of(), LightingProfile.osrs(),
+                "incremental-window-contract", Map.of());
+
+        IncrementalGpuUploadPlanBuilder.BuildResult result =
+                new IncrementalGpuUploadPlanBuilder().buildInitial(packet);
+
+        assertEquals(window, result.plan().sceneWindow().orElseThrow());
+    }
+
 }

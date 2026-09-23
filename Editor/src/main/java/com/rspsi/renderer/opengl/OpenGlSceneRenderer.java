@@ -448,7 +448,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             textureUploaded = true;
         }
         GpuCommandVisibility visibility =
-                GpuCommandVisibility.of(runtimeGeometry, camera, plan.occluders());
+                GpuCommandVisibility.of(runtimeGeometry, camera, plan.occluders(),
+                        plan.sceneWindow());
 
         glUseProgram(program);
         glUniform3f(cameraLocation, camera.x(), camera.y(), camera.z());

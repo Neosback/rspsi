@@ -62,7 +62,8 @@ public final class GpuUploadPlanBuilder {
         return new GpuUploadPlan(vertices, indices, commands, textureTriangles, packet.textures(),
                 mergedOccluders,
                 fingerprint(packet.fingerprint(), vertices, indices, commands, textureTriangles,
-                        packet.textures(), mergedOccluders));
+                        packet.textures(), mergedOccluders),
+                java.util.Optional.of(packet.window()));
     }
 
     private static GpuSceneVertex terrainVertex(WorldTileAddress tile,

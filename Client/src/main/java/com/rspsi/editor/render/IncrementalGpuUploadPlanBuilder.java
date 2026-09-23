@@ -73,7 +73,7 @@ public final class IncrementalGpuUploadPlanBuilder {
                 packet.fingerprint(), flatGeometry, commands, textureTriangles,
                 packet.textures(), mergedOccluders);
         GpuUploadPlan plan = GpuUploadPlan.lazy(flatGeometry, commands, textureTriangles,
-                packet.textures(), mergedOccluders, fingerprint);
+                packet.textures(), mergedOccluders, fingerprint, packet.window());
         GpuZonedUploadPlan zonedPlan = zonedBuilder.build(plan, dirtyZones);
         return new BuildResult(plan, zonedPlan, rebuilt, reused,
                 zonedBuilder.lastRebuiltZoneCount(), zonedBuilder.lastReusedZoneCount());
