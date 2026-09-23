@@ -13,6 +13,8 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -66,6 +68,26 @@ class OpenRuneObjectDefinitionEditTransactionTest {
         assertFalse(source.isHollow());
         assertEquals("old", source.getParams().get(100));
         assertEquals(7, source.getParams().get(200));
+    }
+
+    @Test
+    void previewIsStableUntilTheTransactionMutates() {
+        ObjectTypeBuilder builder = new ObjectTypeBuilder(54);
+        builder.setName("Cached");
+
+        OpenRuneObjectDefinitionEditTransaction transaction =
+                new OpenRuneObjectDefinitionEditTransaction(builder.build(), 240);
+
+        ObjectDefinitionRawView first = transaction.preview();
+        assertSame(first, transaction.preview());
+
+        transaction.setField(
+                "name", ObjectDefinitionEditValue.stringValue("Changed"));
+        ObjectDefinitionRawView changed = transaction.preview();
+
+        assertNotSame(first, changed);
+        assertSame(changed, transaction.preview());
+        assertEquals("Changed", field(changed, "name").value());
     }
 
     @Test
