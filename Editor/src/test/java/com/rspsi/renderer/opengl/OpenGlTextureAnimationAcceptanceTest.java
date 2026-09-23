@@ -11,11 +11,9 @@ import com.rspsi.editor.render.RenderPresentation;
 import com.rspsi.editor.render.RenderTextureResource;
 import com.rspsi.editor.render.SceneLayer;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.BufferUtils;
-import org.lwjgl.opengl.GL;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -24,7 +22,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.GL_NO_ERROR;
 import static org.lwjgl.opengl.GL11.GL_RGBA;
@@ -42,38 +39,13 @@ class OpenGlTextureAnimationAcceptanceTest {
 
     @BeforeAll
     static void createContext() {
-        boolean initialized = glfwInit();
-        if (!initialized) {
-            if ("true".equalsIgnoreCase(System.getenv("CI"))) {
-                fail("CI must provide a working GLFW/OpenGL context");
-            }
-            Assumptions.assumeTrue(false, "No GLFW display/context available");
-        }
-        glfwDefaultWindowHints();
-        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        window = glfwCreateWindow(SIZE, SIZE, "rspsi-texture-animation-acceptance", 0L, 0L);
-        if (window == 0L) {
-            glfwTerminate();
-            if ("true".equalsIgnoreCase(System.getenv("CI"))) {
-                fail("CI must create an OpenGL 3.3 core context");
-            }
-            Assumptions.assumeTrue(false, "OpenGL 3.3 core context unavailable");
-        }
-        glfwMakeContextCurrent(window);
+        window = HeadlessGlContext.createOrSkip(SIZE, "rspsi-texture-animation-acceptance");
     }
 
     @AfterAll
     static void destroyContext() {
-        if (window != 0L) {
-            glfwMakeContextCurrent(window);
-            GL.setCapabilities(null);
-            glfwDestroyWindow(window);
-            window = 0L;
-        }
-        glfwTerminate();
+        HeadlessGlContext.destroy(window);
+        window = 0L;
     }
 
     @Test

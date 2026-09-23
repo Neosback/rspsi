@@ -1,57 +1,83 @@
-# RSPSi
+# OpenRune Studio
 
-RSPSi is being stabilized into an OSRS/OpenRune-focused desktop map editor.
-The existing JavaFX editor and renderer remain the compatibility surface while
-the cache, world model, editing history, scene, and UI contracts move behind
-small RSPSi-owned APIs.
+OpenRune Studio (repository `RSPSiSuite`, root Gradle project `RSPSi`) is a from-scratch Java
+OSRS map editor and content-authoring studio. It has its own per-triangle software renderer,
+a native OpenGL renderer, a Dear ImGui/GLFW desktop shell, and a plugin/settings architecture.
+It is not a RuneLite plugin and does not embed RuneLite's client.
 
-The supported build/runtime baseline is Java 21 with JavaFX 21. Gradle selects
-the Java 21 toolchain for all modules so a newer system JDK is not used to run
-the JavaFX desktop application accidentally.
+## Modules
 
-## Start here
+- **`Client`** - cache/definition loading, the world document model, the rendering pipeline
+  (software and OpenGL-neutral packet builders), editor tools, selection, and the public neutral
+  `EditorPlugin` extension point. No UI toolkit code; buildable and testable headless.
+- **`Editor`** - the native Dear ImGui/GLFW desktop shell ("Studio"): panels, HUDs, toolbars,
+  and the OpenGL scene renderer. Launched through `com.rspsi.studio.StudioMain`.
 
-- [Agent/contributor orientation - module layout, build commands, conventions](AGENTS.md)
-- [Roadmap and current priorities](docs/ROADMAP.md)
-- [Project launcher, startup lifecycle, and Dashboard contract](docs/PROJECT_LAUNCHER_AND_DASHBOARD.md)
-- [RuneLite/deob source lookup guide](docs/RUNELITE_REFERENCE_GUIDE.md)
-- [Rendering parity tracker (machine-readable gap list)](docs/RENDERING_PARITY_MANIFEST.json)
-- [Terraini reference notes (algorithms, not vendored source)](docs/TERRAINI_REFERENCE.md)
+The older JavaFX editor still ships inside `Editor` but is legacy; the native Studio shell is
+the product surface.
 
-The `docs/` folder was reset to a single living roadmap on 2026-09-21 - the previous
-audit-trail documents were retired rather than kept as a growing pile of point-in-time
-snapshots. `docs/ROADMAP.md` is meant to be edited in place as work lands.
+## Build, test, run
 
-## Verification
+Java 21 is required. Gradle pins the Java 21 toolchain, so a newer system JDK is not used by
+accident.
 
-```text
-./gradlew foundationGate
+```bash
+./gradlew :Client:compileJava :Editor:compileJava   # compile both modules
+./gradlew :Client:test :Editor:test                  # full test suite
+./gradlew foundationGate                             # the CI gate
+./gradlew :Editor:run                                # launch Studio
 ```
 
-To inspect an explicitly selected OSRS cache without modifying it:
+`foundationGate` is the required local/CI baseline. It runs the test suites, `check` (including
+the Client architecture-boundary checks), `verifyNativeBoundary`, and `renderingAuditGate`.
+It needs no external cache.
 
-```text
-RSPSI_OSRS_CACHE=/path/to/cache \\
-RSPSI_OSRS_REGION_X=16 RSPSI_OSRS_REGION_Y=33 RSPSI_OSRS_REVISION=240 \\
+Always compile and test **both** modules after a change, even a Client-only one: Editor consumes
+Client's public API and breaks silently otherwise.
+
+## Real-cache verification (opt-in)
+
+Real OSRS caches stay outside the repository. The following tasks are opt-in and never mutate the
+selected cache. Without `RSPSI_OSRS_CACHE`, `verifyOsrsRevision` runs only the deterministic
+fixtures and reports real-cache parity as pending.
+
+```bash
+RSPSI_OSRS_CACHE=/path/to/cache \
+RSPSI_OSRS_REGION_X=50 RSPSI_OSRS_REGION_Y=50 RSPSI_OSRS_REVISION=240 \
 ./gradlew verifyOsrsRevision
 ```
 
-Instance parity uses a separately exported reference fixture:
+`RSPSI_OSRS_REGION_X`, `RSPSI_OSRS_REGION_Y`, and `RSPSI_OSRS_REVISION` must be set together.
+A pinned reference cache can be acquired through OpenRune FileStore with
+`./gradlew prepareOsrsReferenceCache` (network access). See
+[PHASE0_LUMBRIDGE_ACCEPTANCE.md](docs/PHASE0_LUMBRIDGE_ACCEPTANCE.md) for the full recipe and the
+evidence a PR should record. Related tasks: `verifyOsrsRevisionMatrix`, `verifyOsrsTextures`,
+`verifyOsrsInstance`, `parityGate`.
 
-```text
-RSPSI_OSRS_CACHE=/path/to/cache \\
-RSPSI_OSRS_INSTANCE_FIXTURE=/tmp/instance.json RSPSI_OSRS_REVISION=240 \\
-./gradlew verifyOsrsInstance
-```
+## Documentation
 
-Real caches stay outside the repository. `RuneLite-melxin/` at the repo root is a genuine,
-BSD 2-Clause-licensed reference source tree (see `AGENTS.md`) kept for verifying OSRS-accurate
-behavior - it is not a build dependency and no external project becomes the RSPSi base.
-Resources with unclear licensing (e.g. decompiled third-party output) are deliberately kept
-out of the repository even for reference - see `docs/TERRAINI_REFERENCE.md` for how that's
-handled instead (written notes, not vendored files).
+Start with [AGENTS.md](AGENTS.md) for repository orientation and conventions. When documents
+disagree, the order of authority is:
 
-`foundationGate` is the required local/CI baseline. Without
-`RSPSI_OSRS_CACHE`, it runs the deterministic fixture suite and reports real
-cache parity as pending; release verification supplies an explicitly selected
-cache and, when required, `RSPSI_OSRS_REQUIRE_PARITY=true`.
+1. current production code plus passing tests
+2. [RENDERING_PARITY_MANIFEST.json](docs/RENDERING_PARITY_MANIFEST.json) - live rendering-correctness backlog
+3. [ROADMAP.md](docs/ROADMAP.md) - product order and near-term PR sequence
+4. [STUDIO_SEMANTIC_API.md](docs/STUDIO_SEMANTIC_API.md) - authored-world / resolved-scene API contract
+5. [PROJECT_LAUNCHER_AND_DASHBOARD.md](docs/PROJECT_LAUNCHER_AND_DASHBOARD.md) - startup and project lifecycle
+6. [UI_WORKSPACE_CONTRACT.md](docs/UI_WORKSPACE_CONTRACT.md) - in-project editor shell and plugin UI placement
+7. [CONTENT_STUDIO_FOUNDATION.md](docs/CONTENT_STUDIO_FOUNDATION.md) - advanced-authoring prerequisites
+8. [OPENRUNE_ECOSYSTEM_INTEGRATION.md](docs/OPENRUNE_ECOSYSTEM_INTEGRATION.md) - OpenRune Server/cache guardrails
+9. [OPENRUNE_MAVEN_CATALOG.md](docs/OPENRUNE_MAVEN_CATALOG.md) - OpenRune dependency inventory
+
+Reference material:
+
+- [RUNELITE_REFERENCE_GUIDE.md](docs/RUNELITE_REFERENCE_GUIDE.md) - problem-to-source lookup into the vendored RuneLite tree
+- [TERRAINI_REFERENCE.md](docs/TERRAINI_REFERENCE.md) - written algorithm notes (no vendored source)
+- [TEXTURE_PARITY_FIXTURE.md](docs/TEXTURE_PARITY_FIXTURE.md), [MAP_STUDIO_1_0_ACCEPTANCE.md](docs/MAP_STUDIO_1_0_ACCEPTANCE.md) - fixture and acceptance recipes
+
+## Reference sources and licensing
+
+`RuneLite-melxin/` is a genuine BSD 2-Clause-licensed RuneLite fork vendored as read-only
+reference material for OSRS-accurate behavior. It is not a build dependency. Material with
+unclear licensing (for example decompiled third-party output) is deliberately kept out of the
+repository; see `docs/TERRAINI_REFERENCE.md` for how that is handled instead.
