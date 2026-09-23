@@ -120,8 +120,10 @@ public record ObjectDefinitionView(
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(id, name, width, length, interactions, mapSceneId, interactive, varbit, varp, defaultTransform);
+        int result = Objects.hash(id, name, width, length, interactions, mapSceneId,
+                interactive, varbit, varp, defaultTransform);
         result = 31 * result + Arrays.hashCode(modelIds);
+        result = 31 * result + Arrays.hashCode(modelTypes);
         result = 31 * result + Arrays.hashCode(transforms);
         return result;
     }
