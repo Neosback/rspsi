@@ -1447,7 +1447,7 @@ Deliver:
 - placed definition versus display definition
 - transform-path diagnostics
 - resolved appearance from the display definition
-- classify missing definition, no default transform, missing transformed definition, transform cycles/depth, wrong/no model for shape, missing geometry
+- classify missing definition, no default transform, missing transformed definition, nested transform children (reported without recursive client rendering), wrong/no model for shape, missing geometry
 - trace packet creation, scene submission, visibility, and stable identity
 - build a real Lumbridge Castle entrance/bush fixture from actual map/cache placements rather than a guessed object count
 - correct stale object-type labels by deriving them from `OsrsLocShape`
