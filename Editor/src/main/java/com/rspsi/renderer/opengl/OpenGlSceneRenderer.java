@@ -1,5 +1,6 @@
 package com.rspsi.renderer.opengl;
 
+import com.rspsi.editor.render.BackfacePolicy;
 import com.rspsi.editor.render.GpuCommandGeometry;
 import com.rspsi.editor.render.GpuCommandVisibility;
 import com.rspsi.editor.render.GpuDrawCommand;
@@ -161,7 +162,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
      */
     private static final float DEPTH_BIAS_NUDGE = 1e-5f;
 
-    /** Back-face culling is unresolved, so it is exposed rather than assumed. */
+    /** Native model-facing modes. Terrain remains two-sided in every mode. */
     public static final int CULL_OFF = 0;
     public static final int CULL_FRONT_CCW = 1;
     public static final int CULL_FRONT_CW = 2;
@@ -172,7 +173,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int lastTextureMissing = -1;
     private int lastTerrain = -1;
     private int lastCull = -1;
-    private int cullMode = CULL_OFF;
+    private int cullMode = CULL_FRONT_CCW;
     private int lastNoDepth = -1;
     private int lastFaceBias = -1;
     private float lastTextureOffsetU = Float.NaN;
@@ -316,9 +317,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glDisable(GL_BLEND);
         glDepthMask(true);
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        // Winding parity is not proven for every shaped-tile and cache-model
-        // family. Keep the Phase 0 native baseline two-sided, matching the
-        // visibility contract of the CPU reference renderer.
+        // Client model faces use the verified GL_CCW mapping. Terrain does not
+        // share Model.draw0's facing contract and remains two-sided per draw.
         glClearColor(0.063f, 0.094f, 0.153f, 1.0f);
         captureGlError();
     }
@@ -387,9 +387,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             glFrontFace(cullMode == CULL_FRONT_CW ? GL_CW : GL_CCW);
             glCullFace(GL_BACK);
         }
-        // Begin each frame two-sided. applyDrawState() may enable culling for
-        // non-terrain commands when the validation mode is active, and turns
-        // it back off for terrain. Normal editing keeps cullMode=CULL_OFF.
+        // Begin each frame two-sided. applyDrawState() enables culling for
+        // model commands and turns it back off for terrain. Client-front is
+        // GL_CCW; reversed winding and fully two-sided rendering remain
+        // explicit diagnostics.
         //
         // The earlier global GL_CW experiment produced see-through walls,
         // missing roofs and bridge regressions. RuneLite-melxin Model.draw0
@@ -548,13 +549,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     /**
-     * Selects validation-only back-face culling for non-terrain geometry.
+     * Selects back-face culling for non-terrain model geometry.
      *
      * <p>{@link #applyDrawState(GpuUploadPlan, GpuDrawCommand, boolean, int)}
      * enables culling only for non-terrain commands and disables it again for
-     * terrain. The default is {@link #CULL_OFF}. Client-front validation uses
-     * GL_CCW via {@code BackfacePolicy}; the opposite winding exists only as a
-     * comparison mode for acceptance testing.</p>
+     * terrain. The default is client-front {@link #CULL_FRONT_CCW}; the
+     * opposite winding and two-sided modes remain diagnostics.</p>
      */
     public void setCullMode(int mode) {
         cullMode = mode < CULL_OFF || mode > CULL_FRONT_CW ? CULL_OFF : mode;
@@ -565,7 +565,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     static boolean cullEnabledFor(SceneLayer.Kind layer, int mode) {
-        return mode != CULL_OFF && layer != SceneLayer.Kind.TERRAIN;
+        BackfacePolicy.NativeCullingMode semanticMode = switch (mode) {
+            case CULL_FRONT_CCW -> BackfacePolicy.NativeCullingMode.CLIENT_FRONT;
+            case CULL_FRONT_CW -> BackfacePolicy.NativeCullingMode.REVERSED_DEBUG;
+            default -> BackfacePolicy.NativeCullingMode.TWO_SIDED;
+        };
+        return BackfacePolicy.cullsLayer(layer, semanticMode);
     }
 
     public Statistics statistics() {

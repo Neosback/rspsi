@@ -76,12 +76,12 @@ public final class RenderSettingKeys {
         registry.register(SettingSpec.of(WIREFRAME, false, SettingScope.VIEWPORT, "Wireframe",
                 "Show renderer geometry edges.", Set.of(SettingInvalidation.REDRAW)));
         registry.register(SettingSpec.enumeration(NATIVE_CULLING_MODE,
-                BackfacePolicy.NativeCullingMode.TWO_SIDED,
+                BackfacePolicy.defaultMode(),
                 List.of(BackfacePolicy.NativeCullingMode.values()), SettingScope.VIEWPORT,
                 "Native back-face culling",
-                "Validation-only native culling mode. Keep Two Sided for normal editing; "
-                        + "Client Front tests the verified RuneLite edge/winding mapping and "
-                        + "Reversed Debug provides an explicit comparison against the opposite winding.",
+                "Client Front is the normal model path and follows RuneLite Model.draw0 winding. "
+                        + "Terrain stays two-sided; Two Sided and Reversed Debug remain explicit "
+                        + "diagnostic modes for parity investigation.",
                 Set.of(SettingInvalidation.REDRAW)));
         registry.register(SettingSpec.integer(ACTIVE_PLANE, 0, 0, 3, SettingScope.VIEWPORT,
                 "Active plane", "Plane used by authored, effective, or client traversal projections.", visibility));

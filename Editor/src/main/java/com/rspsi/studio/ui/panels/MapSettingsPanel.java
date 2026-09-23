@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui.panels;
 
+import com.rspsi.editor.render.BackfacePolicy;
 import com.rspsi.editor.render.RenderSettingKeys;
 import com.rspsi.editor.render.SceneVisibilityPolicy;
 import com.rspsi.editor.settings.SettingKey;
@@ -153,16 +154,19 @@ public final class MapSettingsPanel implements StudioPanel {
             toggleSetting(settings, RenderSettingKeys.WIREFRAME, "Wireframe mode");
             toggleSetting(settings, RenderSettingKeys.COLLISION_VISIBLE, "Collision spots overlay");
 
-            if (context.viewport() != null) {
-                ImGui.textDisabled("BACKFACES");
-                String[] cullLabels = {"Off", "Cull CCW", "Cull CW"};
-                for (int m = 0; m < cullLabels.length; m++) {
-                    if (m > 0) ImGui.sameLine();
-                    if (ImGui.radioButton(cullLabels[m], context.viewport().cullMode() == m)) {
-                        context.viewport().setCullMode(m);
-                    }
+            ImGui.textDisabled("BACKFACES");
+            BackfacePolicy.NativeCullingMode current =
+                    settings.snapshot().get(RenderSettingKeys.NATIVE_CULLING_MODE);
+            BackfacePolicy.NativeCullingMode[] modes = BackfacePolicy.NativeCullingMode.values();
+            for (int m = 0; m < modes.length; m++) {
+                BackfacePolicy.NativeCullingMode mode = modes[m];
+                if (m > 0) ImGui.sameLine();
+                if (ImGui.radioButton(mode.toString(), current == mode)) {
+                    settings.set(RenderSettingKeys.NATIVE_CULLING_MODE, mode);
+                    current = mode;
                 }
             }
+            ImGui.textDisabled("Client Front culls model backfaces; terrain stays two-sided.");
         }
     }
 

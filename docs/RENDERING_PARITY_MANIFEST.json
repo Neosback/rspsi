@@ -824,7 +824,7 @@
       "id": "native.depthPriorityFacing",
       "domain": "native",
       "title": "Depth modes, face bias, priority ordering, and winding/facing",
-      "status": "partial",
+      "status": "covered",
       "priority": "p0",
       "runelite": [
         "net.runelite.api.Renderable#getRenderMode",
@@ -848,11 +848,14 @@
         "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
         "Client/src/test/java/com/rspsi/editor/render/RenderOrderKeyTest.java",
         "Client/src/test/java/com/rspsi/editor/render/BackfacePolicyTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Editor/src/test/java/com/rspsi/renderer/opengl/OpenGlSceneRendererStateTest.java",
+        "Editor/src/test/java/com/rspsi/renderer/opengl/OpenGlBackfaceAcceptanceTest.java",
         "RuneLite-melxin/runescape-client/src/main/java/Model.java#draw0",
         "Client/src/main/java/com/rspsi/editor/render/SoftwareSceneRenderer.java"
       ],
-      "reason": "Depth mode, scene/model category priority, face priority, and face bias are expressed in the backend-neutral RenderOrderKey and consumed by native ordering/batching. Facing is intentionally separate: BackfacePolicy defines the RuneLite-derived winding contract, while the viewport validation mode applies model-only culling and leaves terrain two-sided. RuneLite-melxin Model.draw0 stores edge <= 0 in its culled-face flag and only draws !culled faces, so visible client faces have edge > 0. The software renderer uses the same edge-function sign; converting its Y-down viewport to OpenGL Y-up makes those visible faces counter-clockwise (GL_CCW). Normal editing remains two-sided until live asymmetric-model acceptance validates the full upload/projection path.",
-      "nextAction": "Validate Client Front (GL_CCW) against one asymmetric real-cache model plus wall/roof/bridge-heavy views. Terrain remains two-sided until shaped-tile winding receives its own acceptance evidence; enable culling by default only where the evidence permits."
+      "reason": "Depth mode, scene/model category priority, face priority, face bias, and model-facing behavior are now covered. BackfacePolicy owns the RuneLite-derived facing contract; client-visible Model.draw0 faces map to GL_CCW after the Y-down client viewport to Y-up OpenGL conversion. Native model rendering defaults to Client Front, terrain remains deliberately two-sided, mirror/rotation variants preserve winding, and the Xvfb/Mesa pixel acceptance exercises the production OpenGL 3.3 path: Client Front renders the accepted face, Reversed Debug rejects it, Two Sided matches Client Front for that face, and terrain is unchanged by either diagnostic winding.",
+      "nextAction": "Keep client-front GL_CCW as the default model policy and keep terrain two-sided until shaped-tile winding is addressed as a separate lower-priority parity item."
     },
     {
       "id": "native.picking",
