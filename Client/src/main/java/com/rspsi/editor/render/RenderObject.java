@@ -101,18 +101,32 @@ public record RenderObject(
                                        ObjectDefinitionView definition,
                                        ObjectCollisionView collision,
                                        ObjectAppearanceView appearance) {
+        return resolve(object, definition, definition, collision, appearance);
+    }
+
+    /**
+     * Resolves a placed object's authored footprint separately from the
+     * definition that supplies its visible model. This matters for multilocs:
+     * scene occupancy belongs to the placed definition while model IDs and
+     * appearance belong to the resolved display definition.
+     */
+    public static RenderObject resolve(WorldObject object,
+                                       ObjectDefinitionView placementDefinition,
+                                       ObjectDefinitionView displayDefinition,
+                                       ObjectCollisionView collision,
+                                       ObjectAppearanceView appearance) {
         Objects.requireNonNull(object, "object");
-        int width = definition == null ? collision == null ? 1 : collision.width()
-                : Math.max(1, definition.width());
-        int length = definition == null ? collision == null ? 1 : collision.length()
-                : Math.max(1, definition.length());
+        int width = placementDefinition == null ? collision == null ? 1 : collision.width()
+                : Math.max(1, placementDefinition.width());
+        int length = placementDefinition == null ? collision == null ? 1 : collision.length()
+                : Math.max(1, placementDefinition.length());
         if ((object.rotation() & 1) != 0) {
             int swap = width;
             width = length;
             length = swap;
         }
         return new RenderObject(object, object.category(), object.shape(), width, length,
-                definition == null ? new int[0] : definition.modelIds(),
+                displayDefinition == null ? new int[0] : displayDefinition.modelIds(),
                 collision != null && collision.blockWalk() > 0,
                 collision != null && collision.blockProjectile(),
                 appearance == null ? ObjectAppearanceView.empty() : appearance);
