@@ -49,8 +49,9 @@ Editor consumes Client's public API surface and breaks silently otherwise.
 correctness gaps against real OSRS behavior (covered/partial/deferred, with a `nextAction` per
 entry). `./gradlew renderingAuditGate` validates its shape; treat it as the actual rendering
 backlog, not something to re-derive from scratch. `docs/ROADMAP.md` defines product order,
+`docs/PROJECT_LAUNCHER_AND_DASHBOARD.md` defines application startup/project lifecycle,
 `docs/CONTENT_STUDIO_FOUNDATION.md` defines advanced-authoring prerequisites, and
-`docs/UI_WORKSPACE_CONTRACT.md` defines the strict editor-shell/UI contribution contract.
+`docs/UI_WORKSPACE_CONTRACT.md` defines the strict in-project editor-shell/UI contribution contract.
 
 ## Reference source trees (not part of the build)
 
