@@ -100,6 +100,16 @@ public final class ObjectDefinitionEditCommand implements EditorCommand {
                 : "Edit object " + transaction.id() + " param " + paramId;
     }
 
+    @Override
+    public boolean savedBySessionSave() {
+        return false;
+    }
+
+    @Override
+    public boolean hasUnsavedExternalState() {
+        return transaction.dirty();
+    }
+
     private void mutate(ObjectDefinitionEditValue value) {
         if (target == Target.FIELD) {
             if (value == null) {
