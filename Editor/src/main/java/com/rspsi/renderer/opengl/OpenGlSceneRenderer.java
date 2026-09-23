@@ -252,6 +252,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int paletteLocation;
     private String uploadedFingerprint;
     private String uploadedTextureFingerprint;
+    private Map<Integer, RenderTextureResource> fingerprintedTextureResources;
+    private String fingerprintedTextureFingerprint;
+    private GpuCommandGeometry fogBoundsGeometry;
+    private SceneFog.Bounds cachedFogBounds;
     private int textureArray;
     private final Map<Integer, Integer> textureLayers = new HashMap<>();
     private final Map<Integer, float[]> textureScales = new HashMap<>();
@@ -459,7 +463,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             uploadedFingerprint = plan.fingerprint();
             orderedPlanFingerprint = null;
         }
-        String textureFingerprint = textureFingerprint(plan.textures());
+        String textureFingerprint = textureFingerprintCached(plan.textures());
         if (!textureFingerprint.equals(uploadedTextureFingerprint)) {
             uploadTextureArray(plan.textures());
             uploadedTextureFingerprint = textureFingerprint;
@@ -481,12 +485,15 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glUniform1f(brightnessLocation, (float) presentation.brightness());
         glUniform1f(exposureLocation, (float) presentation.exposure());
         glUniform1i(smoothBandingLocation, presentation.smoothBanding() ? 1 : 0);
-        SceneFog.Bounds fogBounds = SceneFog.bounds(runtimeGeometry);
-        glUniform1i(useFogLocation, presentation.fogDepthTiles() > 0 ? 1 : 0);
-        glUniform1f(fogWestLocation, fogBounds.minX());
-        glUniform1f(fogEastLocation, fogBounds.maxX());
-        glUniform1f(fogSouthLocation, fogBounds.minZ());
-        glUniform1f(fogNorthLocation, fogBounds.maxZ());
+        boolean fogEnabled = presentation.fogDepthTiles() > 0;
+        glUniform1i(useFogLocation, fogEnabled ? 1 : 0);
+        if (fogEnabled) {
+            SceneFog.Bounds fogBounds = fogBounds(runtimeGeometry);
+            glUniform1f(fogWestLocation, fogBounds.minX());
+            glUniform1f(fogEastLocation, fogBounds.maxX());
+            glUniform1f(fogSouthLocation, fogBounds.minZ());
+            glUniform1f(fogNorthLocation, fogBounds.maxZ());
+        }
         glUniform1f(fogDepthLocation, presentation.fogDepthTiles() * 128.0f);
         glUniform3f(fogColorLocation, ((presentation.fogColor() >>> 16) & 0xFF) / 255.0f,
                 ((presentation.fogColor() >>> 8) & 0xFF) / 255.0f,
@@ -518,8 +525,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 alphaIndices.put(command, index);
             }
         }
+        float alphaCosYaw = (float) Math.cos(camera.yaw());
+        float alphaSinYaw = (float) Math.sin(camera.yaw());
+        float alphaCosPitch = (float) Math.cos(camera.pitch());
+        float alphaSinPitch = (float) Math.sin(camera.pitch());
         alpha = RsFaceOrderPlanner.orderAlpha(alpha,
-                command -> averageDepth(runtimeGeometry, alphaIndices.get(command), command, camera),
+                command -> averageDepth(runtimeGeometry, alphaIndices.get(command), command, camera,
+                        alphaCosYaw, alphaSinYaw, alphaCosPitch, alphaSinPitch),
                 command -> command.wallDecorationPresentation().cameraOrder(command.tile(), camera));
         List<Integer> alphaOrder = new ArrayList<>(alpha.size());
         for (GpuDrawCommand command : alpha) {
@@ -755,13 +767,15 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
 
     private List<Integer> opaqueOrder(GpuUploadPlan plan, List<GpuDrawCommand> commands,
                                       GpuCommandVisibility visibility, CameraState camera) {
-        boolean cameraOrderedDecorations = commands.stream()
-                .anyMatch(command -> command.wallDecorationPresentation().cameraOrdered());
-        if (!cameraOrderedDecorations
-                && !visibility.occlusionApplied()
+        // A cached opaque order is only stored when the plan has no
+        // camera-ordered decorations and occlusion is inactive, so a matching
+        // fingerprint can return before scanning every command again.
+        if (!visibility.occlusionApplied()
                 && plan.fingerprint().equals(orderedPlanFingerprint)) {
             return cachedOpaqueOrder;
         }
+        boolean cameraOrderedDecorations = commands.stream()
+                .anyMatch(command -> command.wallDecorationPresentation().cameraOrdered());
         List<Integer> result = new ArrayList<>();
         for (int index = 0; index < commands.size(); index++) {
             if (commands.get(index).pass() == GpuDrawCommand.SubmissionPass.OPAQUE
@@ -885,11 +899,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             glUniform1i(textureLayerLocation, texLayer);
             lastTextureLayer = texLayer;
         }
-        float[] scale = textureScales.getOrDefault(command.textureId(), new float[]{1.0f, 1.0f});
-        if (scale[0] != lastTextureScaleX || scale[1] != lastTextureScaleY) {
-            glUniform2f(textureScaleLocation, scale[0], scale[1]);
-            lastTextureScaleX = scale[0];
-            lastTextureScaleY = scale[1];
+        float[] scale = textureScales.get(command.textureId());
+        float scaleX = scale == null ? 1.0f : scale[0];
+        float scaleY = scale == null ? 1.0f : scale[1];
+        if (scaleX != lastTextureScaleX || scaleY != lastTextureScaleY) {
+            glUniform2f(textureScaleLocation, scaleX, scaleY);
+            lastTextureScaleX = scaleX;
+            lastTextureScaleY = scaleY;
         }
     }
 
@@ -907,18 +923,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     private static float averageDepth(GpuCommandGeometry geometry, int commandIndex,
-                                      GpuDrawCommand command, CameraState camera) {
-        // The bounding-box center is a cheaper, more representative sort key
-        // than the average of every vertex (also avoids re-deriving cos/sin
-        // per vertex, which the previous version did) - reuses
-        // SceneOcclusionResolver.CommandBounds instead of a second bespoke
-        // per-vertex walk.
+                                      GpuDrawCommand command, CameraState camera,
+                                      float cosYaw, float sinYaw,
+                                      float cosPitch, float sinPitch) {
         SceneOcclusionResolver.CommandBounds bounds =
                 SceneOcclusionResolver.boundsOf(commandIndex, command, geometry);
-        float cosYaw = (float) Math.cos(camera.yaw());
-        float sinYaw = (float) Math.sin(camera.yaw());
-        float cosPitch = (float) Math.cos(camera.pitch());
-        float sinPitch = (float) Math.sin(camera.pitch());
         float dx = bounds.centerX() - camera.x();
         // OSRS world Y is a down-axis: smaller values are higher terrain.
         // Convert to camera-up space before applying pitch, matching the CPU
@@ -929,6 +938,23 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return upDelta * sinPitch + yawDepth * cosPitch;
     }
 
+    private SceneFog.Bounds fogBounds(GpuCommandGeometry geometry) {
+        if (geometry != fogBoundsGeometry || cachedFogBounds == null) {
+            cachedFogBounds = SceneFog.bounds(geometry);
+            fogBoundsGeometry = geometry;
+        }
+        return cachedFogBounds;
+    }
+
+    private String textureFingerprintCached(Map<Integer, RenderTextureResource> resources) {
+        if (resources == fingerprintedTextureResources && fingerprintedTextureFingerprint != null) {
+            return fingerprintedTextureFingerprint;
+        }
+        String fingerprint = textureFingerprint(resources);
+        fingerprintedTextureResources = resources;
+        fingerprintedTextureFingerprint = fingerprint;
+        return fingerprint;
+    }
 
     private static String textureFingerprint(Map<Integer, RenderTextureResource> resources) {
         StringBuilder value = new StringBuilder();
@@ -936,7 +962,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 .forEach(texture -> value.append(texture.id())
                         .append(':').append(texture.pixelStatus())
                         .append(':').append(texture.width()).append('x').append(texture.height())
-                        .append(':').append(java.util.Arrays.hashCode(texture.pixels())).append('|'));
+                        .append(':').append(texture.pixelHash()).append('|'));
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
                     .digest(value.toString().getBytes(StandardCharsets.UTF_8));
@@ -1053,6 +1079,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         vertexArray = vertexBuffer = indexBuffer = program = 0;
         uploadedFingerprint = null;
         uploadedTextureFingerprint = null;
+        fingerprintedTextureResources = null;
+        fingerprintedTextureFingerprint = null;
+        fogBoundsGeometry = null;
+        cachedFogBounds = null;
         orderedPlanFingerprint = null;
         cachedOpaqueOrder = List.of();
         diagnosticsLogged = false;

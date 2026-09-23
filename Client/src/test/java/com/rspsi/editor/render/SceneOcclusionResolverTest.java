@@ -6,11 +6,43 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SceneOcclusionResolverTest {
+    @Test
+    void boundedIdentityCacheKeepsCurrentGeometryAndBuildsOnlyRequestedCommands() {
+        SceneOcclusionResolver.clearBoundsCacheForTests();
+        List<CountingGeometry> geometries = new java.util.ArrayList<>();
+
+        for (int index = 0; index < 5; index++) {
+            CountingGeometry geometry = countingGeometry("bounds-" + index);
+            geometries.add(geometry);
+            SceneOcclusionResolver.boundsOf(0, geometry.command(0), geometry);
+            assertEquals(3, geometry.indexedVertexReads,
+                    "first lookup should inspect only the requested triangle");
+        }
+
+        CountingGeometry current = geometries.get(4);
+        for (int repeat = 0; repeat < 20; repeat++) {
+            SceneOcclusionResolver.boundsOf(0, current.command(0), current);
+        }
+        assertEquals(3, current.indexedVertexReads,
+                "the current geometry must remain cached after capacity eviction");
+        assertEquals(4, SceneOcclusionResolver.cachedGeometryCountForTests());
+
+        SceneOcclusionResolver.boundsOf(1, current.command(1), current);
+        assertEquals(6, current.indexedVertexReads,
+                "a cache entry must populate command bounds lazily rather than scene-wide");
+
+        CountingGeometry evicted = geometries.get(0);
+        SceneOcclusionResolver.boundsOf(0, evicted.command(0), evicted);
+        assertEquals(6, evicted.indexedVertexReads,
+                "the least-recently-used geometry should be rebuilt after eviction");
+    }
+
     @Test
     void typeOneWallOccludesCompleteGeometryBehindItsXPlane() {
         WorldTileAddress tile = WorldTileAddress.of(2, 0, 0);
@@ -96,6 +128,62 @@ class SceneOcclusionResolverTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new SceneOccluder(2, 0, 1, 0, 1, 0, 0,
                         0, 128, 128, 256, 0, 128));
+    }
+
+    private static CountingGeometry countingGeometry(String fingerprint) {
+        WorldTileAddress firstTile = WorldTileAddress.of(0, 0, 0);
+        WorldTileAddress secondTile = WorldTileAddress.of(1, 0, 0);
+        List<GpuSceneVertex> vertices = List.of(
+                vertex(0, 0, 0), vertex(64, 0, 0), vertex(0, 0, 64),
+                vertex(128, 0, 0), vertex(192, 0, 0), vertex(128, 0, 64));
+        List<Integer> indices = List.of(0, 1, 2, 3, 4, 5);
+        List<GpuDrawCommand> commands = List.of(
+                new GpuDrawCommand(firstTile, SceneLayer.Kind.GROUND_OBJECT,
+                        GpuDrawCommand.SubmissionPass.ALPHA, 0, 3, -1, 0, 1),
+                new GpuDrawCommand(secondTile, SceneLayer.Kind.GROUND_OBJECT,
+                        GpuDrawCommand.SubmissionPass.ALPHA, 3, 3, -1, 0, 2));
+        return new CountingGeometry(new GpuUploadPlan(
+                vertices, indices, commands, List.of(), Map.of(), List.of(), fingerprint));
+    }
+
+    private static final class CountingGeometry implements GpuCommandGeometry {
+        private final GpuUploadPlan delegate;
+        private int indexedVertexReads;
+
+        private CountingGeometry(GpuUploadPlan delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public int commandCount() {
+            return delegate.commandCount();
+        }
+
+        @Override
+        public GpuDrawCommand command(int commandIndex) {
+            return delegate.command(commandIndex);
+        }
+
+        @Override
+        public GpuSceneVertex indexedVertex(int commandIndex, int indexOffset) {
+            indexedVertexReads++;
+            return delegate.indexedVertex(commandIndex, indexOffset);
+        }
+
+        @Override
+        public int vertexCount() {
+            return delegate.vertexCount();
+        }
+
+        @Override
+        public int indexCount() {
+            return delegate.indexCount();
+        }
+
+        @Override
+        public void forEachUniqueVertex(java.util.function.Consumer<GpuSceneVertex> consumer) {
+            delegate.forEachUniqueVertex(consumer);
+        }
     }
 
     private static GpuSceneVertex vertex(float x, float y, float z) {

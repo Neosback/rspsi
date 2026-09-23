@@ -26,6 +26,7 @@ public final class RenderTextureResource {
     private final int width;
     private final int height;
     private final int[] pixels;
+    private final int pixelHash;
     private final PixelStatus pixelStatus;
     private final String diagnostic;
     private final boolean alphaChannel;
@@ -42,6 +43,7 @@ public final class RenderTextureResource {
         this.width = width;
         this.height = height;
         this.pixels = Objects.requireNonNull(pixels, "pixels").clone();
+        this.pixelHash = Arrays.hashCode(this.pixels);
         this.pixelStatus = Objects.requireNonNull(pixelStatus, "pixelStatus");
         this.diagnostic = diagnostic == null ? "" : diagnostic.trim();
         if (width < 0 || height < 0) {
@@ -153,6 +155,9 @@ public final class RenderTextureResource {
 
     public PixelStatus pixelStatus() { return pixelStatus; }
 
+    /** Stable hash of the immutable pixel payload without cloning it. */
+    public int pixelHash() { return pixelHash; }
+
     public String diagnostic() { return diagnostic; }
 
     public boolean hasPixels() { return pixelStatus == PixelStatus.AVAILABLE; }
@@ -197,7 +202,7 @@ public final class RenderTextureResource {
     @Override
     public int hashCode() {
         int result = Objects.hash(id, definition, width, height, pixelStatus, diagnostic);
-        result = 31 * result + Arrays.hashCode(pixels);
+        result = 31 * result + pixelHash;
         return result;
     }
 

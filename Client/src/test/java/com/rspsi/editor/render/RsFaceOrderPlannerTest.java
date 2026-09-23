@@ -27,6 +27,33 @@ class RsFaceOrderPlannerTest {
     }
 
     @Test
+    void evaluatesDepthAndTieBreakerOnlyOncePerCommand() {
+        List<GpuDrawCommand> commands = List.of(
+                command(0, 1), command(0, 2), command(1, 3),
+                command(2, 4), command(10, 5), command(11, 6));
+        java.util.IdentityHashMap<GpuDrawCommand, Integer> depthCalls =
+                new java.util.IdentityHashMap<>();
+        java.util.IdentityHashMap<GpuDrawCommand, Integer> tieCalls =
+                new java.util.IdentityHashMap<>();
+
+        RsFaceOrderPlanner.orderAlpha(
+                commands,
+                value -> {
+                    depthCalls.merge(value, 1, Integer::sum);
+                    return value.firstIndex();
+                },
+                value -> {
+                    tieCalls.merge(value, 1, Integer::sum);
+                    return value.priority();
+                });
+
+        for (GpuDrawCommand command : commands) {
+            assertEquals(1, depthCalls.get(command));
+            assertEquals(1, tieCalls.get(command));
+        }
+    }
+
+    @Test
     void continuesWithPriorityElevenAtTheSameLegacyCheckpoint() {
         GpuDrawCommand priorityZero = command(0, 1);
         GpuDrawCommand priorityOne = command(1, 2);
