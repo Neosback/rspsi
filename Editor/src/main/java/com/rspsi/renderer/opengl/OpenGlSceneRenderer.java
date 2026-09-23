@@ -1,5 +1,6 @@
 package com.rspsi.renderer.opengl;
 
+import com.rspsi.editor.render.BackfacePolicy;
 import com.rspsi.editor.render.GpuCommandGeometry;
 import com.rspsi.editor.render.GpuCommandVisibility;
 import com.rspsi.editor.render.GpuDrawCommand;
@@ -564,7 +565,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     static boolean cullEnabledFor(SceneLayer.Kind layer, int mode) {
-        return mode != CULL_OFF && layer != SceneLayer.Kind.TERRAIN;
+        BackfacePolicy.NativeCullingMode semanticMode = switch (mode) {
+            case CULL_FRONT_CCW -> BackfacePolicy.NativeCullingMode.CLIENT_FRONT;
+            case CULL_FRONT_CW -> BackfacePolicy.NativeCullingMode.REVERSED_DEBUG;
+            default -> BackfacePolicy.NativeCullingMode.TWO_SIDED;
+        };
+        return BackfacePolicy.cullsLayer(layer, semanticMode);
     }
 
     public Statistics statistics() {
