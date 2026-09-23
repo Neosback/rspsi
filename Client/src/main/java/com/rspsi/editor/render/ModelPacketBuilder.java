@@ -380,7 +380,7 @@ public final class ModelPacketBuilder {
         return total;
     }
 
-    static List<Integer> modelIdsFor(ObjectDefinitionView definition, int sourceType) {
+    private static List<Integer> modelIdsFor(ObjectDefinitionView definition, int sourceType) {
         int[] ids = definition.modelIds();
         int[] types = definition.modelTypes();
         List<Integer> selected = new ArrayList<>();
@@ -401,7 +401,7 @@ public final class ModelPacketBuilder {
      * Renderer code must consume these rules rather than maintain a second
      * shape/rotation/displacement switch.
      */
-    static List<WallRules.LocModelVariant> variantsFor(
+    private static List<WallRules.LocModelVariant> variantsFor(
             WorldObject object, int decorDisplacement) {
         return WallRules.expandVariants(object, decorDisplacement);
     }
