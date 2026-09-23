@@ -276,7 +276,16 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private final ArrayList<Integer> alphaOrder = new ArrayList<>();
     private final RsFaceOrderPlanner.Workspace alphaOrderWorkspace =
             new RsFaceOrderPlanner.Workspace();
+    private GpuCommandGeometry cachedAlphaGeometry;
+    private GpuCommandVisibility cachedAlphaVisibility;
+    private CameraState cachedAlphaCamera;
+    private List<GpuDrawCommand> cachedAlphaCommandList = List.of();
+    private List<Integer> cachedAlphaOrder = List.of();
     private final java.util.HashSet<Integer> missingTextureIds = new java.util.HashSet<>();
+    private GpuUploadPlan countedPlan;
+    private GpuCommandGeometry countedGeometry;
+    private GpuCommandVisibility countedVisibility;
+    private DerivedCounts cachedDerivedCounts = DerivedCounts.empty();
     private String glVendor = "unknown";
     private String glRenderer = "unknown";
     private String glVersion = "unknown";
@@ -531,29 +540,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // The software reference renderer composites transparent triangles
         // back-to-front. Keep opaque submission order stable, but apply the
         // same depth ordering to alpha ranges in the native backend.
-        alphaCommands.clear();
-        alphaOrder.clear();
-        ensureCommandIndices(commands);
-        for (int index = 0; index < commands.size(); index++) {
-            GpuDrawCommand command = commands.get(index);
-            if (command.pass() == GpuDrawCommand.SubmissionPass.ALPHA
-                    && visibility.visible(index)) {
-                alphaCommands.add(command);
-            }
-        }
-        float alphaCosYaw = (float) Math.cos(camera.yaw());
-        float alphaSinYaw = (float) Math.sin(camera.yaw());
-        float alphaCosPitch = (float) Math.cos(camera.pitch());
-        float alphaSinPitch = (float) Math.sin(camera.pitch());
-        List<GpuDrawCommand> orderedAlpha = RsFaceOrderPlanner.orderAlphaReusable(
-                alphaCommands,
-                command -> averageDepth(runtimeGeometry, alphaIndices.get(command), command, camera,
-                        alphaCosYaw, alphaSinYaw, alphaCosPitch, alphaSinPitch),
-                command -> command.wallDecorationPresentation().cameraOrder(command.tile(), camera),
-                alphaOrderWorkspace);
-        for (GpuDrawCommand command : orderedAlpha) {
-            alphaOrder.add(alphaIndices.get(command));
-        }
+        List<Integer> alphaOrder = alphaOrderFor(
+                runtimeGeometry, commands, visibility, camera);
         drawCalls += drawBatches(
                 plan, commands, alphaOrder, visibility, camera, true, clientCycle);
         // Alpha and no-depth submissions disable depth writes. Restore the
@@ -631,6 +619,78 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                                      boolean geometryUploaded, boolean textureUploaded,
                                      int drawCalls, int gpuZoneUploads,
                                      int gpuReusedAllocations) {
+        DerivedCounts counts = derivedCountsFor(plan, geometry, visibility);
+        int flatMaterializationCount = plan == null ? 0 : plan.flatMaterializationCount();
+        long flatMaterializationBytes = plan != null && plan.flatMaterialized()
+                ? geometryBytes(plan)
+                : 0L;
+
+        return new Statistics(counts.sourceVertices(), counts.sourceIndices(),
+                counts.renderedIndices(), counts.terrainTriangles(), counts.objectTriangles(),
+                counts.decodedTextures(), counts.fallbackTextures(),
+                counts.unavailableTextures(), counts.missingTextures(),
+                glVendor, glRenderer, glVersion,
+                firstGlError, framebufferStatus, lastFramePolygonMode, lastFrameDepthWrites,
+                geometryUploaded, textureUploaded, drawCalls,
+                counts.zonedGeometryBytes(), flatMaterializationCount, flatMaterializationBytes,
+                gpuZoneUploads, gpuReusedAllocations,
+                visibility != null && visibility.occlusionApplied());
+    }
+
+    List<Integer> alphaOrderFor(GpuCommandGeometry geometry,
+                                List<GpuDrawCommand> commands,
+                                GpuCommandVisibility visibility,
+                                CameraState camera) {
+        if (geometry == cachedAlphaGeometry
+                && commands == cachedAlphaCommandList
+                && visibility == cachedAlphaVisibility
+                && camera.equals(cachedAlphaCamera)) {
+            return cachedAlphaOrder;
+        }
+
+        alphaCommands.clear();
+        alphaOrder.clear();
+        ensureCommandIndices(commands);
+        for (int index = 0; index < commands.size(); index++) {
+            GpuDrawCommand command = commands.get(index);
+            if (command.pass() == GpuDrawCommand.SubmissionPass.ALPHA
+                    && visibility.visible(index)) {
+                alphaCommands.add(command);
+            }
+        }
+
+        float cosYaw = (float) Math.cos(camera.yaw());
+        float sinYaw = (float) Math.sin(camera.yaw());
+        float cosPitch = (float) Math.cos(camera.pitch());
+        float sinPitch = (float) Math.sin(camera.pitch());
+        List<GpuDrawCommand> orderedAlpha = RsFaceOrderPlanner.orderAlphaReusable(
+                alphaCommands,
+                command -> averageDepth(geometry, alphaIndices.get(command), command, camera,
+                        cosYaw, sinYaw, cosPitch, sinPitch),
+                command -> command.wallDecorationPresentation().cameraOrder(
+                        command.tile(), camera),
+                alphaOrderWorkspace);
+        for (GpuDrawCommand command : orderedAlpha) {
+            alphaOrder.add(alphaIndices.get(command));
+        }
+
+        cachedAlphaGeometry = geometry;
+        cachedAlphaCommandList = commands;
+        cachedAlphaVisibility = visibility;
+        cachedAlphaCamera = camera;
+        cachedAlphaOrder = List.copyOf(alphaOrder);
+        return cachedAlphaOrder;
+    }
+
+    DerivedCounts derivedCountsFor(GpuUploadPlan plan,
+                                   GpuCommandGeometry geometry,
+                                   GpuCommandVisibility visibility) {
+        if (plan == countedPlan
+                && geometry == countedGeometry
+                && visibility == countedVisibility) {
+            return cachedDerivedCounts;
+        }
+
         int sourceVertices = geometry == null ? 0 : geometry.vertexCount();
         int sourceIndices = geometry == null ? 0 : geometry.indexCount();
         int renderedIndices = 0;
@@ -643,13 +703,18 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 GpuDrawCommand command = commands.get(index);
                 int triangles = command.indexCount() / 3;
                 renderedIndices += command.indexCount();
-                if (command.layer() == SceneLayer.Kind.TERRAIN) terrainTriangles += triangles;
-                else objectTriangles += triangles;
+                if (command.layer() == SceneLayer.Kind.TERRAIN) {
+                    terrainTriangles += triangles;
+                } else {
+                    objectTriangles += triangles;
+                }
             }
         }
+
         int decoded = 0;
         int fallback = 0;
         int unavailable = 0;
+        int missing = 0;
         if (plan != null) {
             for (RenderTextureResource resource : plan.textures().values()) {
                 switch (resource.pixelStatus()) {
@@ -658,9 +723,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                     case UNAVAILABLE, INVALID -> unavailable++;
                 }
             }
-        }
-        int missing = 0;
-        if (plan != null) {
             missingTextureIds.clear();
             for (GpuDrawCommand command : plan.commands()) {
                 int textureId = command.textureId();
@@ -674,19 +736,24 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         long zonedGeometryBytes = geometry instanceof GpuZonedUploadPlan
                 ? geometryBytes(geometry)
                 : 0L;
-        int flatMaterializationCount = plan == null ? 0 : plan.flatMaterializationCount();
-        long flatMaterializationBytes = plan != null && plan.flatMaterialized()
-                ? geometryBytes(plan)
-                : 0L;
+        cachedDerivedCounts = new DerivedCounts(
+                sourceVertices, sourceIndices, renderedIndices,
+                terrainTriangles, objectTriangles,
+                decoded, fallback, unavailable, missing, zonedGeometryBytes);
+        countedPlan = plan;
+        countedGeometry = geometry;
+        countedVisibility = visibility;
+        return cachedDerivedCounts;
+    }
 
-        return new Statistics(sourceVertices, sourceIndices, renderedIndices,
-                terrainTriangles, objectTriangles, decoded, fallback, unavailable, missing,
-                glVendor, glRenderer, glVersion,
-                firstGlError, framebufferStatus, lastFramePolygonMode, lastFrameDepthWrites,
-                geometryUploaded, textureUploaded, drawCalls,
-                zonedGeometryBytes, flatMaterializationCount, flatMaterializationBytes,
-                gpuZoneUploads, gpuReusedAllocations,
-                visibility != null && visibility.occlusionApplied());
+    record DerivedCounts(int sourceVertices, int sourceIndices, int renderedIndices,
+                         int terrainTriangles, int objectTriangles,
+                         int decodedTextures, int fallbackTextures,
+                         int unavailableTextures, int missingTextures,
+                         long zonedGeometryBytes) {
+        private static DerivedCounts empty() {
+            return new DerivedCounts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0L);
+        }
     }
 
     private static long geometryBytes(GpuCommandGeometry geometry) {
@@ -1124,7 +1191,16 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         alphaIndices.clear();
         indexedCommands = List.of();
         alphaOrder.clear();
+        cachedAlphaGeometry = null;
+        cachedAlphaVisibility = null;
+        cachedAlphaCamera = null;
+        cachedAlphaCommandList = List.of();
+        cachedAlphaOrder = List.of();
         missingTextureIds.clear();
+        countedPlan = null;
+        countedGeometry = null;
+        countedVisibility = null;
+        cachedDerivedCounts = DerivedCounts.empty();
         diagnosticsLogged = false;
     }
 
