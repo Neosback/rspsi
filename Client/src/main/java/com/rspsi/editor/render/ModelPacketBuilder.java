@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectDefinitionResolver;
 import com.rspsi.cache.definition.AnimationFrameView;
 import com.rspsi.cache.definition.CachedSkeletalAnimationView;
 import com.rspsi.cache.definition.ModelSkeletalSkinView;
@@ -14,6 +15,7 @@ import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.osrs.rules.loc.WallRules;
+import com.rspsi.osrs.rules.loc.LocModelSelection;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +35,7 @@ import java.util.Optional;
  */
 public final class ModelPacketBuilder {
     private final DefinitionProvider definitions;
+    private final ObjectDefinitionResolver definitionResolver;
     private final LightingProfile lighting;
 
     public ModelPacketBuilder(DefinitionProvider definitions) {
@@ -41,6 +44,7 @@ public final class ModelPacketBuilder {
 
     public ModelPacketBuilder(DefinitionProvider definitions, LightingProfile lighting) {
         this.definitions = Objects.requireNonNull(definitions, "definitions");
+        this.definitionResolver = new ObjectDefinitionResolver(this.definitions);
         this.lighting = Objects.requireNonNull(lighting, "lighting");
     }
 
@@ -151,24 +155,50 @@ public final class ModelPacketBuilder {
         Objects.requireNonNull(object, "object");
         Objects.requireNonNull(document, "document");
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
-        Optional<ObjectDefinitionView> definition = definitions.object(object.id());
-        if (definition.isEmpty()) return null;
-        ObjectDefinitionView placementDefinition = definition.orElseThrow();
-        ObjectDefinitionView objectDefinition = resolveDisplayDefinition(placementDefinition);
-        ObjectAppearanceView appearance = definitions.objectAppearance(object.id())
+        ObjectDefinitionResolver.Resolution definitionResolution =
+                definitionResolver.resolveEditorDisplay(object.id());
+        if (!definitionResolution.resolved()) return null;
+        ObjectDefinitionView placementDefinition =
+                definitionResolution.placedDefinition().orElseThrow();
+        ObjectDefinitionView objectDefinition =
+                definitionResolution.displayDefinition().orElseThrow();
+
+        ObjectAppearanceView placementAppearance =
+                definitions.objectAppearance(placementDefinition.id())
+                        .orElseGet(ObjectAppearanceView::empty);
+        ObjectAppearanceView appearance = definitions.objectAppearance(objectDefinition.id())
                 .orElseGet(ObjectAppearanceView::empty);
-        ResolvedAnimation animation = resolveAnimation(appearance.animationId(), clientCycle);
-        int decorDisplacement = wallDecorationDisplacement(object, appearance, document);
-        // Scene occupancy belongs to the placed/base loc definition. A multiloc may
-        // resolve to another definition for its visible model, but the client creates
-        // the GameObject start/end tile rectangle before that runtime transform.
-        int footprintWidth = object.rotation() % 2 == 0
+
+        // FriendSystem.addObjects creates DynamicObject with the PLACED
+        // definition's animation id. DynamicObject.getModel() then resolves
+        // the transform and invokes getModelDynamic() on the DISPLAY
+        // definition, so scale/recolor/retexture/contour come from the child
+        // while animation state remains sourced from the placed definition.
+        int animationId = placementAppearance.animationId();
+        ResolvedAnimation animation = resolveAnimation(animationId, clientCycle);
+        int decorDisplacement =
+                wallDecorationDisplacement(object, placementAppearance, document);
+
+        // The scene GameObject/collision rectangle is created by addObjects()
+        // from the placed definition before DynamicObject resolves a transform.
+        int sceneFootprintWidth = object.rotation() % 2 == 0
                 ? placementDefinition.width() : placementDefinition.length();
-        int footprintLength = object.rotation() % 2 == 0
+        int sceneFootprintLength = object.rotation() % 2 == 0
                 ? placementDefinition.length() : placementDefinition.width();
-        return new ResolvedModelBuild(objectDefinition, appearance, animation.frame(),
-                animation.cachedSkeletal(), animation.skeleton(), animation.state(),
-                decorDisplacement, footprintWidth, footprintLength);
+
+        // DynamicObject.getModel() resolves the transformed definition first,
+        // then uses THAT definition's rotated size to compute model centre and
+        // sampled placement height. Keep this distinct from scene occupancy.
+        int modelFootprintWidth = object.rotation() % 2 == 0
+                ? objectDefinition.width() : objectDefinition.length();
+        int modelFootprintLength = object.rotation() % 2 == 0
+                ? objectDefinition.length() : objectDefinition.width();
+
+        return new ResolvedModelBuild(objectDefinition, appearance, animationId,
+                animation.frame(), animation.cachedSkeletal(), animation.skeleton(),
+                animation.state(), decorDisplacement,
+                sceneFootprintWidth, sceneFootprintLength,
+                modelFootprintWidth, modelFootprintLength);
     }
 
     private Optional<ModelRenderPacket> buildResolvedPacket(
@@ -190,7 +220,7 @@ public final class ModelPacketBuilder {
         PacketParts parts = new PacketParts();
         for (WallRules.LocModelVariant variant : variants) {
             int renderableBoundsStart = parts.clientBoundsVertices.size();
-            for (int modelId : modelIdsFor(resolved.objectDefinition(), variant.sourceType())) {
+            for (int modelId : LocModelSelection.select(resolved.objectDefinition(), variant.sourceType())) {
                 Optional<ModelGeometryView> geometry = definitions.modelGeometry(modelId);
                 if (geometry.isEmpty()) continue;
                 ModelGeometryView baseGeometry = geometry.orElseThrow();
@@ -215,7 +245,7 @@ public final class ModelPacketBuilder {
                 parts.animationTransformed |= animatedGeometry != baseGeometry;
                 int variantStart = parts.vertices.size();
                 append(parts, object, resolved.appearance(), animatedGeometry, document,
-                        variant, resolved.footprintWidth(), resolved.footprintLength());
+                        variant, resolved.modelFootprintWidth(), resolved.modelFootprintLength());
                 if (variant.sourceType() == 2 && parts.vertices.size() > variantStart) {
                     // TSPS keeps the two type-2 L-wall models separate until
                     // ModelData.mergeNormals(model0, model1, 0, 0, 0, false).
@@ -240,13 +270,13 @@ public final class ModelPacketBuilder {
         GameObjectSceneMetadata sceneMetadata = object.category()
                 == com.rspsi.editor.model.ObjectCategory.GROUND
                 ? GameObjectSceneMetadata.of(object.x(), object.y(),
-                        resolved.footprintWidth(), resolved.footprintLength(),
+                        resolved.sceneFootprintWidth(), resolved.sceneFootprintLength(),
                         object.rotation(), modelDrawOrientation)
                 : GameObjectSceneMetadata.none();
         SceneObjectIdentity sceneObjectIdentity = SceneObjectIdentity.of(
-                object, resolved.footprintWidth(), resolved.footprintLength(), occurrence);
+                object, resolved.sceneFootprintWidth(), resolved.sceneFootprintLength(), occurrence);
         int placementHeight = objectCenterHeight(
-                document, object, resolved.footprintWidth(), resolved.footprintLength());
+                document, object, resolved.modelFootprintWidth(), resolved.modelFootprintLength());
         ModelContourContract contourContract = resolved.appearance().contourGroundType() >= 0
                 ? ModelContourContract.of(
                         resolved.appearance().contourGroundType(),
@@ -256,7 +286,7 @@ public final class ModelPacketBuilder {
         ModelRenderPacket packet = new ModelRenderPacket(
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
-                resolved.appearance().animationId(), bounds[0], bounds[1], bounds[2],
+                resolved.animationId(), bounds[0], bounds[1], bounds[2],
                 bounds[3], bounds[4], bounds[5], resolved.animationState().active(), false,
                 placementHeight,
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
@@ -271,13 +301,16 @@ public final class ModelPacketBuilder {
 
     private record ResolvedModelBuild(ObjectDefinitionView objectDefinition,
                                       ObjectAppearanceView appearance,
+                                      int animationId,
                                       Optional<AnimationFrameView> animation,
                                       Optional<CachedSkeletalAnimationView> cachedSkeletal,
                                       Optional<SkeletonDefinitionView> animationSkeleton,
                                       ModelAnimationState animationState,
                                       int decorDisplacement,
-                                      int footprintWidth,
-                                      int footprintLength) {
+                                      int sceneFootprintWidth,
+                                      int sceneFootprintLength,
+                                      int modelFootprintWidth,
+                                      int modelFootprintLength) {
     }
 
     private record ResolvedAnimation(Optional<AnimationFrameView> frame,
@@ -348,22 +381,6 @@ public final class ModelPacketBuilder {
         return total;
     }
 
-    private static List<Integer> modelIdsFor(ObjectDefinitionView definition, int sourceType) {
-        int[] ids = definition.modelIds();
-        int[] types = definition.modelTypes();
-        List<Integer> selected = new ArrayList<>();
-        if (types.length == 0) {
-            if (sourceType == 10) {
-                for (int id : ids) selected.add(id);
-            }
-            return selected;
-        }
-        for (int index = 0; index < Math.min(ids.length, types.length); index++) {
-            if (types[index] == sourceType) selected.add(ids[index]);
-        }
-        return selected;
-    }
-
     /**
      * Delegates location variant decomposition to the formal OSRS rule layer.
      * Renderer code must consume these rules rather than maintain a second
@@ -385,27 +402,12 @@ public final class ModelPacketBuilder {
      * also reproduces the client's separate "8" diagonal default without a
      * second case.
      */
-    /**
-     * A "multiloc" definition (opcodes 77/92: {@code multiVarBit}/{@code
-     * multiVarp}/{@code transforms}) carries no models of its own - the
-     * client swaps in one of its {@code transforms} entries based on live
-     * varbit/varp state, falling back to {@code multiDefault} (an object id,
-     * not an index - see OpenRune's {@code Transforms.readTransforms}, which
-     * appends it as the array's own last slot) when no player state applies.
-     * An editor session has no player state at all, so {@code multiDefault}
-     * IS the client's "no state" case, not an approximation of it. Skipping
-     * this resolution renders such objects as nothing - Lumbridge's castle
-     * bushes are exactly this: the placed id is a bare multiloc shell.
-     */
-    private ObjectDefinitionView resolveDisplayDefinition(ObjectDefinitionView definition) {
-        ObjectDefinitionView current = definition;
-        for (int hop = 0; hop < 8 && current.modelIds().length == 0
-                && current.hasTransforms() && current.defaultTransform() >= 0; hop++) {
-            Optional<ObjectDefinitionView> next = definitions.object(current.defaultTransform());
-            if (next.isEmpty() || next.orElseThrow().id() == current.id()) break;
-            current = next.orElseThrow();
-        }
-        return current;
+    private ObjectAppearanceView resolvedAppearance(int placedObjectId) {
+        ObjectDefinitionResolver.Resolution resolution =
+                definitionResolver.resolveEditorDisplay(placedObjectId);
+        return resolution.displayDefinition()
+                .flatMap(definition -> definitions.objectAppearance(definition.id()))
+                .orElseGet(ObjectAppearanceView::empty);
     }
 
     private int wallDecorationDisplacement(WorldObject decoration,
@@ -601,8 +603,7 @@ public final class ModelPacketBuilder {
         boolean[] mergeEnabled = new boolean[packets.size()];
         for (int packetIndex = 0; packetIndex < packets.size(); packetIndex++) {
             ModelRenderPacket packet = packets.get(packetIndex);
-            mergeEnabled[packetIndex] = definitions.objectAppearance(packet.objectId())
-                    .map(ObjectAppearanceView::mergeNormals).orElse(false);
+            mergeEnabled[packetIndex] = resolvedAppearance(packet.objectId()).mergeNormals();
             for (int vertexIndex = 0; vertexIndex < packet.vertices().size(); vertexIndex++) {
                 ModelVertex vertex = packet.vertices().get(vertexIndex);
                 if (vertex.normalMagnitude() == 0) continue;
@@ -713,8 +714,7 @@ public final class ModelPacketBuilder {
 
     private ModelRenderPacket relight(ModelRenderPacket packet, List<ModelVertex> vertices,
                                       List<ModelTriangle> sourceTriangles) {
-        ObjectAppearanceView appearance = definitions.objectAppearance(packet.objectId())
-                .orElseGet(ObjectAppearanceView::empty);
+        ObjectAppearanceView appearance = resolvedAppearance(packet.objectId());
         List<ModelTriangle> triangles = new ArrayList<>(sourceTriangles.size());
         for (ModelTriangle face : sourceTriangles) {
             ModelVertex first = vertices.get(face.a());

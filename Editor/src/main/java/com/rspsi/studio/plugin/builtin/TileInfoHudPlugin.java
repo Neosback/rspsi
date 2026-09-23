@@ -1,6 +1,8 @@
 package com.rspsi.studio.plugin.builtin;
 
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.editor.inspector.ObjectResolutionSummary;
+import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.studio.NativeSceneViewport;
@@ -107,9 +109,27 @@ public final class TileInfoHudPlugin implements StudioPlugin {
             LoadedOsrsCacheSession cache = context.cache();
             String objName = "Object #" + hit.objectId();
             if (cache != null) {
-                var def = cache.bundle().definitions().object(hit.objectId());
-                if (def.isPresent() && !def.get().name().isBlank()) {
-                    objName = def.get().name() + " (#" + hit.objectId() + ")";
+                var definitions = cache.bundle().definitions();
+                var placed = definitions.object(hit.objectId());
+                String placedLabel = placed.map(def -> def.displayName())
+                        .orElse("Object #" + hit.objectId());
+
+                if (hit.hasSceneObjectIdentity()) {
+                    var identity = hit.sceneObjectIdentity();
+                    ObjectResolutionSummary resolution = ObjectResolutionSummary.capture(
+                            new WorldObject(identity.objectId(), identity.shape(),
+                                    identity.rotation(), identity.authoredPlane(),
+                                    identity.anchorX(), identity.anchorY()),
+                            definitions);
+                    if (resolution.transformed() && resolution.displayDefinition().isPresent()) {
+                        var display = resolution.displayDefinition().orElseThrow();
+                        objName = labelWithId(placedLabel, hit.objectId())
+                                + " -> " + labelWithId(display.name(), display.id());
+                    } else {
+                        objName = labelWithId(placedLabel, hit.objectId());
+                    }
+                } else {
+                    objName = labelWithId(placedLabel, hit.objectId());
                 }
             }
             if (sb.length() > 2) sb.append("  |  ");
@@ -149,6 +169,11 @@ public final class TileInfoHudPlugin implements StudioPlugin {
 
         // Text
         dl.addText(hudX + padX, hudY + padY, 0xFFE2E8F0, text);
+    }
+
+    private static String labelWithId(String displayName, int id) {
+        String fallback = "Object #" + id;
+        return fallback.equals(displayName) ? fallback : displayName + " (#" + id + ")";
     }
 
     @Override

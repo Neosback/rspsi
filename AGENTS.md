@@ -49,8 +49,9 @@ Editor consumes Client's public API surface and breaks silently otherwise.
 correctness gaps against real OSRS behavior (covered/partial/deferred, with a `nextAction` per
 entry). `./gradlew renderingAuditGate` validates its shape; treat it as the actual rendering
 backlog, not something to re-derive from scratch. `docs/ROADMAP.md` defines product order,
+`docs/PROJECT_LAUNCHER_AND_DASHBOARD.md` defines application startup/project lifecycle,
 `docs/CONTENT_STUDIO_FOUNDATION.md` defines advanced-authoring prerequisites, and
-`docs/UI_WORKSPACE_CONTRACT.md` defines the strict editor-shell/UI contribution contract.
+`docs/UI_WORKSPACE_CONTRACT.md` defines the strict in-project editor-shell/UI contribution contract.
 
 ## Reference source trees (not part of the build)
 
@@ -64,8 +65,10 @@ A full RuneLite fork (based on OpenOSRS, **BSD 2-Clause licensed** - see its own
 `RuneLite-melxin/README.md`), added at the repo root. This is genuine, correctly-licensed
 open-source client code and is safe to read, quote, and reimplement techniques from freely.
 
-Use it to verify or port real client behavior. Some concretely useful starting points found
-this cycle (see `docs/ROADMAP.md` and the parity manifest for current priority):
+Use it to verify or port real client behavior. Start with `docs/RUNELITE_REFERENCE_GUIDE.md`
+for the problem-to-source lookup table so the same deob/API/GPU paths are not rediscovered on
+every PR. Some concretely useful starting points found this cycle (see `docs/ROADMAP.md` and
+the parity manifest for current priority):
 
 - Terrain underlay color blending: `runelite-client/cache/.../MapImageDumper.java`
   (un-obfuscated re-implementation; the real client's is `runescape-client/.../class470.java`,
@@ -104,6 +107,7 @@ file.
 
 ## Conventions worth knowing before you hit them
 
+- **Connected OpenRune Server caches are generated artifacts, not generic Studio output directories.** In standalone mode a user may select any supported cache and publish to a separate explicit output cache. In connected OpenRune mode, `.data/cache/LIVE` is the read-only client/scene cache and `.data/cache/SERVER` is the separate read-only server cache. Do not directly patch either one and do not auto-run `FreshCache` on project open. Publish only through a supported OpenRune source representation, invoke the project's canonical `:or-cache:buildCache`, then reopen and verify both outputs. If no lossless source mapping exists for a resource, leave connected-project publishing disabled for that resource. See `docs/OPENRUNE_ECOSYSTEM_INTEGRATION.md`.
 - **Local document space vs. absolute OSRS world-tile space are different coordinate systems
   and the compiler will not catch mixing them up.** `WorldTile`/`ToolContext` speak absolute
   world tiles (what the camera and picker use); `LocalTile`/`WorldDocument` speak

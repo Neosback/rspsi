@@ -17,17 +17,17 @@ dependencies {
     implementation "dev.or2:osrs-fs:${openruneFileStoreVersion}"
     implementation "dev.or2:osrs:${openruneFileStoreVersion}"
     implementation "dev.or2:definition:${openruneFileStoreVersion}"
-    implementation "dev.or2:opcode:${openruneFileStoreVersion}"
     // OpenRune definition codecs expose ByteBuf in their public encode API,
     // but the module keeps Netty as an implementation dependency.
     implementation "io.netty:netty-buffer:4.1.107.Final"
-    // Explicit opt-in writable adapter. The normal FileStore filesystem
-    // remains read-only; this module exposes OpenRune's CacheDelegate for a
-    // separately selected output cache.
+    // Explicit OpenRune toolchain boundary. Production uses CacheDelegate for
+    // separately selected writable output caches; opt-in verification tooling
+    // also uses FreshCache/OpenRS2 to prepare external reference caches.
     implementation("dev.or2:tools:${openruneFileStoreVersion}") {
-        // The tools aggregate also pulls the later CS2 compiler, whose
-        // optional 4koma dependency is not published in the OpenRune host.
-        // CacheDelegate does not use that compiler.
+        // The tools module also brings the CS2 compiler toolchain. Studio's
+        // current CacheDelegate/FreshCache consumers do not use it, so keep
+        // that optional capability out until the CS2 authoring phase has a
+        // real production consumer.
         exclude group: 'me.filby', module: 'clientscript-compiler'
     }
 
@@ -96,6 +96,7 @@ def cacheBackendCompatibilityFiles = [
         'com/rspsi/cache/store/OpenRuneDefinitionProvider.java',
         'com/rspsi/cache/store/OpenRuneObjectDefinitionEditTransaction.java',
         'com/rspsi/cache/store/OpenRuneCacheInspector.java',
+        'com/rspsi/cache/store/OpenRuneReferenceCacheBootstrap.java',
         'com/rspsi/cache/store/OpenRuneSymbolicNameProvider.java',
         'org/displee/util/GZIPUtils.java'
 ].collect { file("src/main/java/${it}").canonicalPath }

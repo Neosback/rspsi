@@ -18,6 +18,7 @@ import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.minimap.MinimapBuilder;
 import com.rspsi.editor.minimap.MinimapImage;
 import com.rspsi.editor.minimap.MinimapParity;
+import com.rspsi.editor.inspector.ObjectSceneResolutionAudit;
 import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.RenderSceneBuilder;
 import com.rspsi.editor.render.RenderSceneFingerprint;
@@ -201,6 +202,19 @@ public final class OsrsRevisionVerifier {
             boolean sceneComplete = scene.terrainMeshes().size()
                     == document.width() * document.length() * document.planes();
             boolean objectProjectionComplete = scene.renderObjects().size() == scene.objects().size();
+            ObjectSceneResolutionAudit.Report objectResolutionAudit =
+                    ObjectSceneResolutionAudit.audit(document, definitions, scene);
+            List<ObjectSceneResolutionAudit.Entry> transformedObjects =
+                    objectResolutionAudit.transformedEntries();
+            messages.add("object resolution audit: authored=" + objectResolutionAudit.entries().size()
+                    + "; submitted=" + objectResolutionAudit.submittedCount()
+                    + "; transformed=" + transformedObjects.size()
+                    + "; warnings=" + objectResolutionAudit.warningCount()
+                    + "; failures=" + objectResolutionAudit.failureCount());
+            transformedObjects.stream().limit(8)
+                    .forEach(entry -> messages.add("object transform: " + entry.diagnostic()));
+            objectResolutionAudit.problems().stream().limit(8)
+                    .forEach(problem -> messages.add("object resolution: " + problem.diagnostic()));
             String sceneFingerprint = RenderSceneFingerprint.sha256(scene);
             messages.add("neutral scene meshes: " + scene.terrainMeshes().size()
                     + "; terrain materials: " + scene.terrainMaterials().size()
@@ -262,6 +276,18 @@ public final class OsrsRevisionVerifier {
                     errors.addAll(fixtureProblems);
                 }
             }
+            VerificationCheck objectResolution = check(
+                    "object.resolution",
+                    objectResolutionAudit.failureCount() > 0
+                            ? VerificationCheck.Status.FAIL
+                            : objectResolutionAudit.warningCount() > 0
+                            ? VerificationCheck.Status.WARN
+                            : VerificationCheck.Status.PASS,
+                    "authored=" + objectResolutionAudit.entries().size()
+                            + ", submitted=" + objectResolutionAudit.submittedCount()
+                            + ", transformed=" + transformedObjects.size()
+                            + ", warnings=" + objectResolutionAudit.warningCount()
+                            + ", failures=" + objectResolutionAudit.failureCount());
             VerificationCheck renderParity = renderParityCheck(fixture, fixtureProblems, sceneFingerprint);
             VerificationCheck terrainParity = terrainParityCheck(fixture, fixtureProblems, document, messages);
             VerificationCheck locationParity = locationParityCheck(fixture, fixtureProblems, document, messages);
@@ -273,6 +299,9 @@ public final class OsrsRevisionVerifier {
                     definitions, revision, messages);
             VerificationCheck minimapParity = minimapParityCheck(fixture, fixtureProblems,
                     document, definitions, minimaps, shapedMinimaps, messages, errors);
+            if (objectResolution.status() == VerificationCheck.Status.FAIL) {
+                errors.add("object resolution audit failed: " + objectResolution.detail());
+            }
             if (renderParity.status() == VerificationCheck.Status.FAIL) {
                 errors.add("render parity failed: " + renderParity.detail());
             }
@@ -388,6 +417,7 @@ public final class OsrsRevisionVerifier {
                                             ? VerificationCheck.Status.PASS : VerificationCheck.Status.FAIL,
                                     "neutral scene equality after round trip: " + sceneRoundTripEqual
                                             + " (" + sceneRoundTripReport.differenceCount() + " differences)"),
+                            objectResolution,
                             renderParity,
                             terrainParity,
                             locationParity,

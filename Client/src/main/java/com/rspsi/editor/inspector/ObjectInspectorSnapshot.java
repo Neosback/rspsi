@@ -31,7 +31,8 @@ public record ObjectInspectorSnapshot(
         Optional<OsrsLocShape> shape,
         Optional<ObjectDefinitionSummary> definition,
         Optional<ObjectCollisionSummary> collision,
-        Optional<ObjectAppearanceView> appearance
+        Optional<ObjectAppearanceView> appearance,
+        ObjectResolutionSummary resolution
 ) {
     public ObjectInspectorSnapshot {
         Objects.requireNonNull(category, "category");
@@ -39,6 +40,25 @@ public record ObjectInspectorSnapshot(
         definition = Objects.requireNonNull(definition, "definition");
         collision = Objects.requireNonNull(collision, "collision");
         appearance = Objects.requireNonNull(appearance, "appearance");
+        resolution = Objects.requireNonNull(resolution, "resolution");
+    }
+
+    /** Compatibility constructor for callers that do not yet supply resolution diagnostics. */
+    public ObjectInspectorSnapshot(
+            int id,
+            int x,
+            int y,
+            int plane,
+            int type,
+            int rotation,
+            ObjectCategory category,
+            Optional<OsrsLocShape> shape,
+            Optional<ObjectDefinitionSummary> definition,
+            Optional<ObjectCollisionSummary> collision,
+            Optional<ObjectAppearanceView> appearance
+    ) {
+        this(id, x, y, plane, type, rotation, category, shape, definition, collision,
+                appearance, unresolvedCompatibility(id));
     }
 
     public String categoryName() {
@@ -61,14 +81,26 @@ public record ObjectInspectorSnapshot(
                 definition.map(ObjectInspectorSnapshot::summary),
                 collision.map(value -> new ObjectCollisionSummary(
                         value.blockWalk(), value.blockProjectile(), value.breakRouteFinding())),
-                definitions.objectAppearance(object.id()));
+                definitions.objectAppearance(object.id()),
+                ObjectResolutionSummary.capture(object, definitions));
     }
 
-    private static ObjectDefinitionSummary summary(ObjectDefinitionView definition) {
+    static ObjectDefinitionSummary summary(ObjectDefinitionView definition) {
         List<Integer> models = Arrays.stream(definition.modelIds()).boxed().toList();
         List<Integer> modelTypes = Arrays.stream(definition.modelTypes()).boxed().toList();
-        return new ObjectDefinitionSummary(definition.id(), definition.name(),
+        return new ObjectDefinitionSummary(definition.id(), definition.displayName(),
                 Math.max(1, definition.width()), Math.max(1, definition.length()),
                 models, modelTypes, definition.interactions());
+    }
+
+    private static ObjectResolutionSummary unresolvedCompatibility(int id) {
+        return new ObjectResolutionSummary(
+                com.rspsi.cache.definition.ObjectDefinitionResolver.Status.MISSING_PLACED_DEFINITION,
+                List.of(Math.max(0, id)),
+                Optional.empty(),
+                ObjectResolutionSummary.GeometryStatus.DEFINITION_UNRESOLVED,
+                List.of(),
+                List.of(),
+                List.of());
     }
 }

@@ -85,6 +85,20 @@ public record ObjectDefinitionView(
         return (transforms != null && transforms.length > 0) || varbit != -1 || varp != -1;
     }
 
+    /** True when the cache supplies a human-meaningful object name. */
+    public boolean hasDisplayName() {
+        return name != null && !name.isBlank() && !"null".equalsIgnoreCase(name.trim());
+    }
+
+    /**
+     * Safe editor label. The client decoder uses the literal string "null"
+     * as the default object name, so UI code must not expose that sentinel as
+     * though it were an authored name.
+     */
+    public String displayName() {
+        return hasDisplayName() ? name : "Object #" + id;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
@@ -106,8 +120,10 @@ public record ObjectDefinitionView(
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(id, name, width, length, interactions, mapSceneId, interactive, varbit, varp, defaultTransform);
+        int result = Objects.hash(id, name, width, length, interactions, mapSceneId,
+                interactive, varbit, varp, defaultTransform);
         result = 31 * result + Arrays.hashCode(modelIds);
+        result = 31 * result + Arrays.hashCode(modelTypes);
         result = 31 * result + Arrays.hashCode(transforms);
         return result;
     }

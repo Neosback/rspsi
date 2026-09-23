@@ -8,7 +8,9 @@ import com.rspsi.cache.store.ObjectDefinitionOutputCacheBuilder;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.cache.workspace.ObjectDefinitionEditWorkspace;
 import com.rspsi.editor.ObjectDefinitionEditCommand;
+import com.rspsi.editor.inspector.ObjectResolutionSummary;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.OsrsLocShape;
 import com.rspsi.editor.selection.ObjectSelection;
 import com.rspsi.editor.selection.ObjectSetSelection;
 import com.rspsi.editor.selection.Selection;
@@ -92,13 +94,10 @@ public final class ObjectViewerPanel implements StudioPanel {
     private int lastTypeFilter = -1;
 
     private static final String[] FILTER_OPTIONS = {"All", "Interactive", "Solid", "Decorations", "Walls"};
-    private static final String[] OBJECT_TYPES = {
-            "0 - Straight wall", "1 - Diagonal wall corner", "2 - Entire wall corner",
-            "3 - Straight wall corner", "4 - Straight decor", "5 - Diagonal decor",
-            "6 - Diagonal corner decor", "7 - Straight internal decor", "8 - Diagonal in decor",
-            "9 - Diagonal wall", "10 - Straight solid objects", "11 - Ground decor",
-            "22 - Floor decor"
-    };
+    private static final String[] OBJECT_TYPES = java.util.Arrays.stream(OsrsLocShape.values())
+            .sorted(java.util.Comparator.comparingInt(OsrsLocShape::id))
+            .map(shape -> shape.id() + " - " + shape.displayName())
+            .toArray(String[]::new);
     private static final String[] ROTATIONS = {"West (0)", "North (1)", "East (2)", "South (3)"};
     private static final String[] PARAM_TYPES = {"String", "Int", "Long"};
 
@@ -200,6 +199,7 @@ public final class ObjectViewerPanel implements StudioPanel {
     }
 
     private static final float PREVIEW_HEIGHT = 200.0f;
+    private static final int GRID_PREVIEW_ANCHOR = 1;
     private static final float CELL_SIZE = 88.0f;
     private static final float CELL_SPACING = 8.0f;
 
@@ -247,12 +247,17 @@ public final class ObjectViewerPanel implements StudioPanel {
             if (texture != 0) {
                 ImGui.image((long) texture, size, size);
             } else {
+                ObjectResolutionSummary resolution = ObjectResolutionSummary.capture(
+                        new WorldObject(objId, objectType.get(), objectRotation.get(),
+                                0, GRID_PREVIEW_ANCHOR, GRID_PREVIEW_ANCHOR),
+                        cache.bundle().definitions());
+                String reason = resolution.renderableGeometryReady()
+                        ? "Model data resolved, but the preview produced no renderable packet"
+                        : resolution.diagnosticSummary();
                 draw.addText(StudioFonts.ui(), 12, cx + 12, cy + PREVIEW_HEIGHT * 0.5f - 16.0f,
                         StudioDrawColors.abgr(0xFFF59E0B), "No renderable model for #" + objId);
-                draw.addText(StudioFonts.mono(), 11, cx + 12, cy + PREVIEW_HEIGHT * 0.5f + 2.0f,
-                        StudioDrawColors.abgr(0xFF94A3B8), "(varbit/varp-driven appearance with no live game state,");
-                draw.addText(StudioFonts.mono(), 11, cx + 12, cy + PREVIEW_HEIGHT * 0.5f + 16.0f,
-                        StudioDrawColors.abgr(0xFF94A3B8), "and no configured default - nothing to fall back to)");
+                draw.addText(StudioFonts.mono(), 11, cx + 12, cy + PREVIEW_HEIGHT * 0.5f + 4.0f,
+                        StudioDrawColors.abgr(0xFF94A3B8), compactPreviewDiagnostic(reason));
             }
 
             // Drag-anywhere-on-the-preview to orbit; the invisible button
@@ -289,10 +294,11 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
 
         String objName = cache == null || objId < 0 ? null
-                : cache.bundle().definitions().object(objId).map(ObjectDefinitionView::name)
-                        .filter(n -> !n.isBlank()).orElse(null);
+                : cache.bundle().definitions().object(objId)
+                        .map(definition -> objectLabel(definition.displayName(), objId))
+                        .orElse(null);
         if (objId >= 0) {
-            ImGui.text((objName == null ? "Unnamed" : objName) + "  #" + objId);
+            ImGui.text(objName == null ? "Object #" + objId : objName);
         }
 
         ImGui.beginDisabled(objId < 0);
@@ -317,6 +323,20 @@ public final class ObjectViewerPanel implements StudioPanel {
             settings.set(EditorSettingKeys.OBJECT_ROTATION, objectRotation.get());
         }
         ImGui.popItemWidth();
+    }
+
+    private static String objectLabel(String name, int id) {
+        String fallback = "Object #" + id;
+        if (name == null || name.isBlank() || "null".equalsIgnoreCase(name.trim())
+                || fallback.equals(name)) {
+            return fallback;
+        }
+        return name + " (#" + id + ")";
+    }
+
+    private static String compactPreviewDiagnostic(String value) {
+        if (value == null || value.isBlank()) return "No diagnostic detail available";
+        return value.length() <= 64 ? value : value.substring(0, 61) + "...";
     }
 
     private static float clamp(float value, float min, float max) {
@@ -379,7 +399,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             var defOpt = cache.bundle().definitions().object(id);
             if (defOpt.isPresent()) {
                 var def = defOpt.get();
-                if (def.name() != null && !def.name().isBlank()) name = def.name();
+                if (def.hasDisplayName()) name = def.displayName();
                 hasModel = def.modelIds().length > 0 || def.hasTransforms();
             }
         }
@@ -449,8 +469,8 @@ public final class ObjectViewerPanel implements StudioPanel {
                     if (isNumeric) {
                         if (!String.valueOf(id).contains(query)) continue;
                     } else {
-                        if (defOpt.isEmpty() || defOpt.get().name() == null
-                                || !defOpt.get().name().toLowerCase().contains(query)) {
+                        if (defOpt.isEmpty() || !defOpt.get().hasDisplayName()
+                                || !defOpt.get().displayName().toLowerCase().contains(query)) {
                             continue;
                         }
                     }
@@ -488,13 +508,12 @@ public final class ObjectViewerPanel implements StudioPanel {
 
             String previewName = rawField(raw, "name")
                     .map(ObjectDefinitionRawView.Field::value)
-                    .orElse(def.name());
+                    .orElse(def.displayName());
             int previewSizeX = rawInt(raw, "sizeX").orElse(def.width());
             int previewSizeY = rawInt(raw, "sizeY").orElse(def.length());
 
             ImGui.pushFont(StudioFonts.mono(), 0.0f);
-            ImGui.textColored(0xFF38BDF8,
-                    previewName == null || previewName.isEmpty() ? "(unnamed)" : previewName);
+            ImGui.textColored(0xFF38BDF8, objectLabel(previewName, id));
             ImGui.text("Size:        " + previewSizeX + " x " + previewSizeY);
             ImGui.text("Interactive: " + def.interactive());
             ImGui.text("Models:      " + java.util.Arrays.toString(def.modelIds()));
