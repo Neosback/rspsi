@@ -13,6 +13,19 @@ Where it's a "target," it's a gap with a concrete next action, not a vague aspir
 
 ---
 
+## Architecture reference — OpenRune ecosystem integration
+
+Before implementing new cache-definition, source-authoring, gameval, packing, or
+server-content systems, read `docs/OPENRUNE_ECOSYSTEM_ARCHITECTURE.md`.
+
+The Studio direction is deliberately broader than FileStore byte access: reuse
+OpenRune definition builders/codecs, shared parameter support, RsConfig/TOML,
+gamevals/reference tooling, incremental cache tooling, and server-side content
+definitions where they fit. Keep OpenRune types behind the cache/backend boundary
+and keep the source cache read-only.
+
+---
+
 ## Part 1 — Rendering engine: real OSRS rules
 
 ### 1.1 What's already correct (confirmed this pass)
