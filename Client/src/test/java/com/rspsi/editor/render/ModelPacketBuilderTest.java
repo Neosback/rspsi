@@ -347,6 +347,12 @@ class ModelPacketBuilderTest {
         assertEquals(List.of(0, -128, -64), packet.contourContract().unskewedVertexY());
         assertEquals(-128, packet.contourContract().unskewedY(1));
         assertEquals(packet.vertices().size(), packet.contourContract().metadata().vertexCount());
+        List<ModelVertex> unskewed = packet.unskewedVertices().orElseThrow();
+        assertEquals(List.of(0, -128, -64),
+                unskewed.stream().map(ModelVertex::y).toList());
+        assertEquals(packet.vertices().get(1).x(), unskewed.get(1).x());
+        assertEquals(packet.vertices().get(1).z(), unskewed.get(1).z());
+        assertEquals(packet.vertices().get(1).normalY(), unskewed.get(1).normalY());
     }
 
     @Test
