@@ -106,6 +106,7 @@ class OpenRuneObjectDefinitionEditTransactionTest {
 
         assertTrue(transaction.dirty());
         assertFalse(transaction.hasUnpublishedChanges());
+        assertEquals(published, transaction.publishedPreview().orElseThrow());
         assertEquals("Published", field(transaction.preview(), "name").value());
 
         transaction.setField(
@@ -119,6 +120,10 @@ class OpenRuneObjectDefinitionEditTransactionTest {
         transaction.setField(
                 "name", ObjectDefinitionEditValue.stringValue("Original"));
         assertFalse(transaction.dirty());
+        assertTrue(transaction.hasUnpublishedChanges(),
+                "reverting a published output still needs to be republished to that output");
+
+        transaction.markPublished(transaction.preview());
         assertFalse(transaction.hasUnpublishedChanges());
     }
 
