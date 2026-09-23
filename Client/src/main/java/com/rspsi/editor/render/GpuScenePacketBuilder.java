@@ -32,10 +32,34 @@ public final class GpuScenePacketBuilder {
     /** Builds a packet and applies a renderer/frontend visibility projection. */
     public GpuScenePacket build(SceneWindow window, RenderScene scene,
                                 SceneVisibilityPolicy visibility) {
-        return visibility.apply(buildUnfiltered(window, scene));
+        return visibility.apply(buildUnfiltered(window, scene, false));
     }
 
-    private GpuScenePacket buildUnfiltered(SceneWindow window, RenderScene scene) {
+    /**
+     * Builds a native-ready packet from a materialized instance scene.
+     *
+     * <p>The legacy local RenderScene path intentionally retains local model
+     * anchors for compatibility. Instance geometry cannot use that convention:
+     * terrain is already projected through the SceneWindow base, so model
+     * anchors must be rebased too or the two geometry classes occupy different
+     * coordinate spaces.</p>
+     */
+    public GpuScenePacket buildInstance(SceneWindow window, RenderScene scene) {
+        return buildInstance(window, scene, SceneVisibilityPolicy.editor());
+    }
+
+    public GpuScenePacket buildInstance(SceneWindow window, RenderScene scene,
+                                        SceneVisibilityPolicy visibility) {
+        Objects.requireNonNull(window, "window");
+        if (!window.instance()) {
+            throw new IllegalArgumentException("Instance packet build requires instance templates");
+        }
+        return Objects.requireNonNull(visibility, "visibility")
+                .apply(buildUnfiltered(window, scene, true));
+    }
+
+    private GpuScenePacket buildUnfiltered(SceneWindow window, RenderScene scene,
+                                           boolean rebaseModelAnchors) {
         Objects.requireNonNull(window, "window");
         Objects.requireNonNull(scene, "scene");
         java.util.Set<WorldTileAddress> addresses = new java.util.LinkedHashSet<>();
@@ -63,6 +87,12 @@ public final class GpuScenePacketBuilder {
             List<ModelRenderPacket> models = scene.modelPackets().stream()
                     .filter(value -> value.anchor().equals(local))
                     .map(value -> {
+                        if (rebaseModelAnchors) {
+                            return value.withAnchor(new TileCoordinate(
+                                    value.anchor().plane(),
+                                    window.sceneBaseX() + value.anchor().x(),
+                                    window.sceneBaseY() + value.anchor().y()));
+                        }
                         ModelRenderPacket projected = value;
                         if (projected.gameObjectSceneMetadata().present()) {
                             projected = projected.withGameObjectSceneMetadata(
