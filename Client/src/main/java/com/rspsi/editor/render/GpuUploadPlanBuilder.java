@@ -83,7 +83,7 @@ public final class GpuUploadPlanBuilder {
                                               ModelRenderPacket model, ModelVertex vertex,
                                               float u, float v, int color, ModelTriangle face) {
         return new GpuSceneVertex(model.anchor().x() * 128.0f + vertex.x(),
-                model.placementHeight() + vertex.y(),
+                model.renderPlacementHeight() + vertex.y(),
                 model.anchor().y() * 128.0f + vertex.z(), u, v, color,
                 face.textureId() >= 0 ? GpuColorEncoding.TEXTURE_LIGHTNESS
                         : GpuColorEncoding.PACKED_JAGEX_HSL,
@@ -169,7 +169,7 @@ public final class GpuUploadPlanBuilder {
                         model.renderMode(), model.wallDecorationPresentation(),
                         model.gameObjectSceneMetadata(), model.clientRenderableBounds(),
                         model.clientRenderablePlacements(), model.contourContract().metadata(),
-                        model.sceneObjectIdentity(), model.placementHeight(),
+                        model.sceneObjectIdentity(), model.renderPlacementHeight(),
                         model.anchor().x(), model.anchor().y());
             }
         }
