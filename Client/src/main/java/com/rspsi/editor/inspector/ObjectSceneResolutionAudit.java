@@ -103,6 +103,12 @@ public final class ObjectSceneResolutionAudit {
                     .count();
         }
 
+        public List<Entry> transformedEntries() {
+            return entries.stream()
+                    .filter(entry -> entry.resolution().transformed())
+                    .toList();
+        }
+
         public List<Entry> problems() {
             return entries.stream()
                     .filter(entry -> entry.stage().severity() != Severity.PASS)
