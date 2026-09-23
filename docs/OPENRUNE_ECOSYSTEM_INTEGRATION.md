@@ -12,7 +12,7 @@ For the published artifact inventory, current versions, mirrored OpenRS2/compile
 
 OpenRune Studio should treat the OpenRune ecosystem as the underlying content toolchain, not merely use OpenRune-FileStore as a cache reader.
 
-The preferred flow is:
+The generic standalone persistence flow is:
 
 ```
 Studio UI
@@ -30,7 +30,161 @@ Explicit writable output cache
 Incremental packing / reference updates
 ```
 
+That flow applies when Studio is editing an independently selected cache and publishing to a separate Studio-managed output. It is **not** permission to write directly into an OpenRune Server project's generated cache directories. Connected OpenRune projects use the stricter source/build flow below.
+
 OpenRune-specific classes must remain behind cache/content adapters. Editor-facing APIs should continue to use RSPSi-owned neutral views and edit contracts.
+
+## Project modes and cache ownership
+
+Studio has two intentionally different cache workflows. They must not be collapsed into one generic "open cache and save it" path.
+
+### Standalone local-cache mode
+
+When OpenRune Server integration is disabled or no server project is connected:
+
+1. the user chooses a cache directory explicitly;
+2. Studio opens that selected cache read-only;
+3. authored edits live in Studio transactions/workspaces;
+4. persistence targets a separate, explicitly selected Studio output cache;
+5. copy-on-build, staging, provenance, stale-output checks, verification, and rollback protect both the selected source and prior output;
+6. OpenRS2/FreshCache is optional acquisition tooling only and is never invoked merely because the user opened Studio.
+
+This is the normal path for a user who only wants the map editor. No OpenRune Server project layout is required.
+
+### Connected OpenRune Server mode
+
+When the OpenRune integration plugin is enabled and the user connects an OpenRune Server project, the project already owns its cache lifecycle.
+
+Current OpenRune Server source establishes these roles:
+
+| Project path/resource | OpenRune role | Studio policy |
+| --- | --- | --- |
+| `.data/cache/LIVE` | full client-facing cache produced by the OpenRune cache build | read-only generated artifact; default scene/render/cache-definition input |
+| `.data/cache/SERVER` | server-oriented/minimized cache produced alongside the live cache | read-only server-semantic/runtime input; never substitute it for the client scene cache |
+| `.data/raw-cache/**` | resource-specific declarative/generated inputs consumed by OpenRune tooling | inspect and edit only through a resource-specific publisher that understands the exact schema |
+| `content/**/*-pack/src/main/resources/**` | source-controlled custom cache/content pack inputs | preferred authoring surface when a supported OpenRune publisher exists |
+| `content/**/gamevals.toml` | source-controlled custom symbolic ids | edit this source form when supported rather than overwriting generated GameVal outputs |
+| `.data/gamevals/**` and `.data/gamevals-binary/**` | generated/resolved GameVal data used by the project | primarily read/inspect; do not treat generated files as the universal source of custom symbols |
+| `game.yml` | project revision/environment configuration | inspect for project identity and compatibility; never silently rewrite it as part of map editing |
+
+The current upstream implementation can be re-verified in:
+
+- `OpenRune/OpenRune-Server/or-cache/src/main/kotlin/dev/openrune/CacheTools.kt`
+- `OpenRune/OpenRune-Server/or-cache/src/main/kotlin/dev/openrune/ServerCacheManager.kt`
+- `OpenRune/OpenRune-Server/server/app/src/main/kotlin/org/rsmod/server/app/GameServer.kt`
+
+`CacheTools.kt` explicitly targets both `.data/cache/LIVE` and `.data/cache/SERVER`, and its normal build path constructs the server cache separately from the client-facing cache. `ServerCacheManager` reads the server cache while also loading client JS5 groups from the live cache. The distinction is therefore part of OpenRune's runtime/build contract, not just a naming convention.
+
+### Canonical connected-project flow
+
+The connected workflow should be:
+
+```
+OpenRune project root
+   |
+   +-- game.yml
+   +-- content/**/*-pack/src/main/resources
+   +-- content/**/gamevals.toml
+   +-- .data/raw-cache/**              (resource-specific only)
+   |
+   | Studio discovers + fingerprints project/source state
+   | Studio reads LIVE and SERVER as generated inputs
+   v
+Studio edit transaction / ChangePlan
+   |
+   | supported, lossless project publisher only
+   v
+OpenRune-owned source/staging artifacts
+   |
+   | project Gradle wrapper
+   v
+:or-cache:buildCache
+   |
+   +------------------------------+
+   |                              |
+   v                              v
+.data/cache/LIVE             .data/cache/SERVER
+client-facing output         server-facing output
+   |                              |
+   +-------------+----------------+
+                 |
+                 | reopen + verify expected revision/content/fingerprints
+                 v
+          Studio marks publish successful
+```
+
+The OpenRune build owns synchronization between the two generated caches. Studio must not attempt to keep them synchronized by independently patching both binary directories.
+
+### No-clobber contract for connected projects
+
+The following rules are mandatory for OpenRune project integration:
+
+1. **Connecting is discovery/read-only.** Connecting a project must never download, replace, rebuild, or normalize an existing cache.
+2. **Never auto-run `FreshCache`.** `FreshCache` / `:or-cache:freshCache` is an explicit bootstrap/reset operation, not project-open behavior. An existing project may contain intentional custom content.
+3. **No direct Studio writes to `LIVE` or `SERVER`.** Both are generated build products in connected mode even though FileStore can technically open writable caches.
+4. **Read the correct binary for the concern.** Use `LIVE` for client scene/render/cache semantics. Use `SERVER` only for server-oriented semantics that genuinely come from that cache.
+5. **Publish source-first.** A resource may be published into an OpenRune project only when Studio has a defined, lossless mapping to an OpenRune-owned source/staging representation consumed by the project's normal build.
+6. **Stale-source detection is required.** Before modifying project source, compare the current source/project fingerprint with the baseline Studio inspected. If another tool or developer changed it, abort the write and surface the conflict rather than overwriting it.
+7. **Source writes are transactional.** Stage and validate source-file changes, replace atomically where possible, and retain enough provenance to revert or explain exactly what Studio changed.
+8. **Use the project's build entry point.** Invoke the detected project Gradle wrapper/task rather than recreating OpenRune's `CacheTool`, pack ordering, GameVal merge, or LIVE/SERVER synchronization inside Studio.
+9. **Build failure is not publication.** If the OpenRune build fails, Studio keeps the edit unpublished and must not advance its publication baseline.
+10. **Reopen and verify both outputs after a successful build.** A connected publication is complete only after the expected LIVE and SERVER artifacts can be reopened and the resource-specific acceptance checks pass.
+11. **External rebuilds invalidate cached assumptions.** If either generated cache or a source baseline changes while Studio is open, invalidate affected publication state and reload/reconcile before a subsequent publish.
+12. **Unsupported resource mappings stay read-only.** Studio must not patch `LIVE` as a fallback when it cannot safely express a change in OpenRune's project source model. It should report that connected-project publishing for that resource is not yet supported.
+
+The last rule is particularly important for map editing. OpenRune currently has resource-specific map/server packers and raw map data, but that must not be assumed to be a complete source representation for arbitrary client terrain/location archive edits. A full Studio map publisher needs an explicit OpenRune-consumed source format/build hook before integrated map publishing can be enabled safely.
+
+### Expected user experience
+
+Standalone:
+
+```
+Open Cache...
+   -> choose any supported OSRS cache directory
+   -> edit
+   -> Publish/Export...
+   -> choose a separate output cache
+```
+
+Connected OpenRune project:
+
+```
+Connect OpenRune Project...
+   -> choose project root
+   -> Studio discovers revision, LIVE, SERVER, source roots, build tasks
+   -> Studio binds LIVE to the map/scene automatically
+   -> Studio binds SERVER/source data to server-aware inspectors
+   -> edit
+   -> Publish to Project
+   -> update supported OpenRune source artifacts
+   -> run :or-cache:buildCache
+   -> reload and verify LIVE + SERVER
+```
+
+A connected user should not have to re-select `.data/cache/LIVE` manually under the normal layout. Non-standard projects may use explicit saved path overrides, but Studio should never silently search outside the connected project root.
+
+### Converge the existing integration paths
+
+The repository currently has two partially overlapping OpenRune integration implementations:
+
+- `OpenRuneServerPlugin` / `OpenRuneServerProvider` / `ServerIntegrationService` own the first-party plugin/session model and declarative symbol/content providers.
+- `OpenRuneServerAdapter` plus `ServerConnection`, `ServerProjectInspection`, `ServerPathKey`, and `ServerBuildTask` already model OpenRune project detection, LIVE/SERVER cache paths, path overrides, fingerprints, and Gradle build tasks.
+
+These must converge rather than continue as separate discovery stacks.
+
+The target is for the OpenRune plugin/provider to reuse one neutral project inspection/connection model for:
+
+- project identity and fingerprint;
+- LIVE/SERVER/raw/source path discovery;
+- revision/environment compatibility;
+- build-task discovery;
+- path/command overrides;
+- cache-role binding;
+- stale-project detection.
+
+`ServerIntegrationService` remains the application/session coordinator. The OpenRune provider should delegate project-layout/cache/build discovery to the shared neutral adapter/inspection layer instead of reimplementing it. `CacheSourceProvider` may then expose the connected project's LIVE cache as a read-only cache source, but it must not own project publishing.
+
+This convergence also prevents the UI, plugin, and legacy adapter paths from disagreeing about where a project's caches live or which build command is authoritative.
 
 ## OpenRune-FileStore
 
@@ -263,6 +417,11 @@ These should be checked before implementing developer UX, source tooling, remote
 11. Prefer FileStore `FreshCache` / `OpenRS2` for reference-cache acquisition rather than building another downloader.
 12. For the current FileStore workflow, revision 237+ does not require XTEA key acquisition; pre-237 cache support needs explicit key handling or preprocessing.
 13. Audit `OpenRune/hosting` before adding a new dependency or reimplementing a published OpenRune capability.
+14. Treat OpenRune project `LIVE` and `SERVER` caches as generated read-only artifacts in connected mode.
+15. Never auto-run `FreshCache` when connecting an existing OpenRune project.
+16. Publish connected-project changes through supported OpenRune source artifacts and the project's canonical cache build, not through Studio's generic writable-output cache.
+17. Reuse one neutral project inspection/path/build model across `OpenRuneServerProvider` and `OpenRuneServerAdapter`; do not maintain competing project-discovery implementations.
+18. If no lossless OpenRune source mapping exists for a resource, keep integrated publishing disabled for that resource rather than creating LIVE/SERVER drift.
 
 ## Immediate implementation sequence
 
@@ -293,7 +452,12 @@ No cache write occurs in this phase.
 
 ### Phase B implementation status
 
-The first verified Studio publishing path is now implemented with these invariants:
+The first verified Studio publishing path is now implemented for **standalone explicit-output mode** with these invariants. These rules must not be repurposed to mutate an OpenRune project's generated `LIVE` or `SERVER` cache directly:
+
+- the connected-project flow above remains source-first and build-owned by OpenRune;
+- a later OpenRune project publisher must reuse the same transaction/provenance discipline at the project-source boundary, then invoke the canonical OpenRune build and verify both generated caches.
+
+The standalone publishing path currently has these invariants:
 
 - `LoadedOsrsCacheSession` owns a cache-scoped `ObjectDefinitionEditWorkspace`; UI panels no longer own transaction lifetime.
 - `dirty()` means the preview differs from the immutable read-only source.
@@ -312,6 +476,21 @@ The first verified Studio publishing path is now implemented with these invarian
 - Studio close/dirty gating consults the cache-scoped workspace as well as the current map session, so changing regions cannot hide unpublished definition edits.
 
 The next persistence work should generalize this durable transactional publication model beyond object definitions and into a project-level dirty-resource/build registry.
+
+### Phase B.5: OpenRune connected-project publication
+
+Before enabling cache-changing Studio tools inside a connected OpenRune Server project:
+
+- converge `OpenRuneServerProvider` with the neutral `ServerProjectInspection` / `ServerConnection` path model;
+- bind the editor scene to detected `LIVE` read-only and server semantics to detected `SERVER` read-only;
+- define a project-source publisher contract with baseline hashes, atomic writes, diagnostics, and rollback metadata;
+- implement resource-specific OpenRune publishers only where a lossless source representation exists;
+- route publication through the detected `:or-cache:buildCache` task;
+- reload and verify LIVE plus SERVER before advancing publication provenance;
+- treat external source/cache rebuilds as baseline invalidation;
+- leave arbitrary terrain/location project publishing disabled until OpenRune has an explicit source/build hook Studio can target without patching generated caches.
+
+This phase is an integration-safety prerequisite, not a reason to interrupt the current Phase 0 object-correctness PR.
 
 ### Phase C: broader content studio
 
