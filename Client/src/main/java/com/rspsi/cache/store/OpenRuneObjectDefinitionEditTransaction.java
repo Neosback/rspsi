@@ -27,6 +27,8 @@ final class OpenRuneObjectDefinitionEditTransaction
     private final ObjectCodec codec;
     private final ObjectDefinitionRawView original;
     private ObjectTypeBuilder builder;
+    private ObjectDefinitionRawView cachedPreview;
+    private ObjectDefinitionRawView publishedPreview;
 
     OpenRuneObjectDefinitionEditTransaction(ObjectType source, int revision) {
         this.source = Objects.requireNonNull(source, "source");
@@ -50,7 +52,10 @@ final class OpenRuneObjectDefinitionEditTransaction
 
     @Override
     public ObjectDefinitionRawView preview() {
-        return OpenRuneDefinitionProvider.toRawView(builder.build());
+        if (cachedPreview == null) {
+            cachedPreview = OpenRuneDefinitionProvider.toRawView(builder.build());
+        }
+        return cachedPreview;
     }
 
     @Override
@@ -93,6 +98,27 @@ final class OpenRuneObjectDefinitionEditTransaction
     }
 
     @Override
+    public boolean hasUnpublishedChanges() {
+        ObjectDefinitionRawView current = preview();
+        if (current.equals(original)) {
+            return false;
+        }
+        return publishedPreview == null || !current.equals(publishedPreview);
+    }
+
+    @Override
+    public void markPublished(ObjectDefinitionRawView publishedPreview) {
+        ObjectDefinitionRawView checked =
+                Objects.requireNonNull(publishedPreview, "publishedPreview");
+        if (checked.id() != id()) {
+            throw new IllegalArgumentException(
+                    "Published object definition id " + checked.id()
+                            + " does not match transaction " + id());
+        }
+        this.publishedPreview = checked;
+    }
+
+    @Override
     public void setField(String fieldName, ObjectDefinitionEditValue value) {
         Objects.requireNonNull(fieldName, "fieldName");
         Objects.requireNonNull(value, "value");
@@ -122,6 +148,7 @@ final class OpenRuneObjectDefinitionEditTransaction
         Method setter = findSetter(name);
         Object backendValue = convertValue(value, setter.getParameterTypes()[0]);
         invoke(setter, builder, backendValue);
+        invalidatePreview();
     }
 
     @Override
@@ -142,6 +169,7 @@ final class OpenRuneObjectDefinitionEditTransaction
                     "Unsupported opcode 249 parameter type: " + value.type());
         });
         builder.setParams(params);
+        invalidatePreview();
     }
 
     @Override
@@ -150,11 +178,13 @@ final class OpenRuneObjectDefinitionEditTransaction
         Map<Integer, Object> params = mutableParams();
         params.remove(paramId);
         builder.setParams(params.isEmpty() ? null : params);
+        invalidatePreview();
     }
 
     @Override
     public void reset() {
         builder = source.toBuilder();
+        invalidatePreview();
     }
 
     @Override
@@ -180,6 +210,10 @@ final class OpenRuneObjectDefinitionEditTransaction
         } finally {
             buffer.release();
         }
+    }
+
+    private void invalidatePreview() {
+        cachedPreview = null;
     }
 
     private Method findSetter(String fieldName) {

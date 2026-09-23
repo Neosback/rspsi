@@ -55,6 +55,52 @@ class ObjectDefinitionEditCommandTest {
         assertTrue(transaction.dirty());
     }
 
+
+    @Test
+    void publishedDefinitionStateSurvivesUndoRedoWithoutResettingPreview() {
+        FakeTransaction transaction = new FakeTransaction();
+        EditorSession session = new EditorSession(new WorldDocument(1, 1, 1));
+
+        session.execute(ObjectDefinitionEditCommand.field(
+                transaction,
+                "name",
+                ObjectDefinitionEditValue.stringValue("Tree"),
+                ObjectDefinitionEditValue.stringValue("Published tree")));
+
+        ObjectDefinitionRawView published = transaction.preview();
+        transaction.markPublished(published);
+        assertTrue(transaction.dirty(),
+                "publishing must not reset the transaction back to the source");
+        assertFalse(transaction.hasUnpublishedChanges());
+        assertFalse(session.hasUnsavedExternalState());
+
+        session.execute(ObjectDefinitionEditCommand.field(
+                transaction,
+                "name",
+                ObjectDefinitionEditValue.stringValue("Published tree"),
+                ObjectDefinitionEditValue.stringValue("Newer tree")));
+        assertTrue(transaction.hasUnpublishedChanges());
+        assertTrue(session.hasUnsavedExternalState());
+
+        assertTrue(session.undo());
+        assertEquals("Published tree", transaction.field("name").value());
+        assertFalse(transaction.hasUnpublishedChanges());
+        assertFalse(session.hasUnsavedExternalState());
+
+        assertTrue(session.undo());
+        assertEquals("Tree", transaction.field("name").value());
+        assertFalse(transaction.dirty());
+        assertFalse(transaction.hasUnpublishedChanges());
+
+        assertTrue(session.redo());
+        assertEquals("Published tree", transaction.field("name").value());
+        assertFalse(transaction.hasUnpublishedChanges());
+
+        assertTrue(session.redo());
+        assertEquals("Newer tree", transaction.field("name").value());
+        assertTrue(transaction.hasUnpublishedChanges());
+    }
+
     @Test
     void parameterAddReplaceAndRemoveAreUndoable() {
         FakeTransaction transaction = new FakeTransaction();
@@ -91,6 +137,7 @@ class ObjectDefinitionEditCommandTest {
                 List.of());
 
         private String name = "Tree";
+        private ObjectDefinitionRawView publishedPreview;
         private final Map<Integer, ObjectDefinitionEditValue> params = new LinkedHashMap<>();
 
         @Override
@@ -123,6 +170,23 @@ class ObjectDefinitionEditCommandTest {
         @Override
         public Set<Integer> dirtyParams() {
             return Set.copyOf(new LinkedHashSet<>(params.keySet()));
+        }
+
+        @Override
+        public boolean hasUnpublishedChanges() {
+            ObjectDefinitionRawView current = preview();
+            if (current.equals(original())) {
+                return false;
+            }
+            return publishedPreview == null || !current.equals(publishedPreview);
+        }
+
+        @Override
+        public void markPublished(ObjectDefinitionRawView publishedPreview) {
+            if (publishedPreview.id() != id()) {
+                throw new IllegalArgumentException("Wrong published object id");
+            }
+            this.publishedPreview = publishedPreview;
         }
 
         @Override

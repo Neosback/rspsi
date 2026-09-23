@@ -4,7 +4,9 @@ import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
 import com.rspsi.cache.definition.ObjectDefinitionEditValue;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
+import com.rspsi.cache.store.ObjectDefinitionOutputCacheBuilder;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.cache.workspace.ObjectDefinitionEditWorkspace;
 import com.rspsi.editor.ObjectDefinitionEditCommand;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.selection.ObjectSelection;
@@ -36,6 +38,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Virtualized Object Viewer & Spawner panel matching Displee's Object Panel.
@@ -55,17 +60,18 @@ public final class ObjectViewerPanel implements StudioPanel {
     private final ImInt objectType = new ImInt(10);
     private final ImInt objectRotation = new ImInt(0);
 
-    // Definition editing stays isolated from the source cache. Transactions
-    // are retained while this cache session is active so switching between
-    // objects does not discard in-memory edits or break history references.
-    private LoadedOsrsCacheSession definitionEditCache;
-    private final Map<Integer, ObjectDefinitionEditTransaction> definitionEdits =
-            new HashMap<>();
+    // Definition transactions themselves are session-owned by
+    // LoadedOsrsCacheSession.objectDefinitions(). This panel keeps only
+    // transient widget/build state.
+    private LoadedOsrsCacheSession definitionUiCache;
     private final Map<String, ScalarEditState> scalarEditStates = new HashMap<>();
     private final ImInt newParamId = new ImInt(0);
     private final ImInt newParamType = new ImInt(0);
     private final ImString newParamValue = new ImString(512);
+    private final ImString outputCachePath = new ImString(1024);
+    private CompletableFuture<DefinitionBuildCompletion> definitionBuild;
     private String definitionEditStatus = "";
+    private String definitionBuildStatus = "";
     private int lastPropertiesObjectId = Integer.MIN_VALUE;
 
     private final ObjectPreviewRenderer previewRenderer = new ObjectPreviewRenderer();
@@ -131,7 +137,8 @@ public final class ObjectViewerPanel implements StudioPanel {
         LoadedOsrsCacheSession cache = context.cache();
         SettingsStore settings = context.settings();
 
-        syncDefinitionEditCache(cache);
+        syncDefinitionUiState(cache);
+        pollDefinitionBuild(context);
         syncFromViewportPick(context);
 
         // 1. Sub-tabs at top: [Viewer] [Properties]. The active tab reads as
@@ -496,7 +503,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             ImGui.popFont();
 
             if (transaction != null) {
-                renderDefinitionTransactionEditor(context, transaction);
+                renderDefinitionTransactionEditor(context, cache, transaction);
                 raw = displayPreview(transaction);
             } else {
                 ImGui.separator();
@@ -525,6 +532,7 @@ public final class ObjectViewerPanel implements StudioPanel {
     }
 
     private void renderDefinitionTransactionEditor(StudioPanelContext context,
+                                                   LoadedOsrsCacheSession cache,
                                                    ObjectDefinitionEditTransaction transaction) {
         ImGui.pushID(transaction.id());
         ImGui.separator();
@@ -534,13 +542,16 @@ public final class ObjectViewerPanel implements StudioPanel {
             ImGui.textColored(0xFF38BDF8,
                     "* " + transaction.dirtyFields().size() + " fields, "
                             + transaction.dirtyParams().size() + " params modified");
+            ImGui.sameLine();
+            ImGui.textDisabled(transaction.hasUnpublishedChanges()
+                    ? "(unpublished)" : "(published)");
         } else {
             ImGui.sameLine();
             ImGui.textDisabled("clean");
         }
 
         ImGui.textDisabled(
-                "Preview only. The source cache remains read-only until an explicit output-cache phase.");
+                "The source cache stays read-only. Publish edits to a separate verified output cache below.");
 
         boolean canEdit = context.session() != null && context.session().canEdit();
         if (!canEdit) {
@@ -570,6 +581,8 @@ public final class ObjectViewerPanel implements StudioPanel {
         if (!definitionEditStatus.isBlank()) {
             ImGui.textWrapped(definitionEditStatus);
         }
+
+        renderDefinitionOutputSection(context, cache);
         ImGui.popID();
     }
 
@@ -865,24 +878,172 @@ public final class ObjectViewerPanel implements StudioPanel {
         ImGui.popFont();
     }
 
-    private void syncDefinitionEditCache(LoadedOsrsCacheSession cache) {
-        if (definitionEditCache == cache) return;
-        definitionEditCache = cache;
-        definitionEdits.clear();
+    private void syncDefinitionUiState(LoadedOsrsCacheSession cache) {
+        if (definitionUiCache == cache) return;
+        definitionUiCache = cache;
         scalarEditStates.clear();
         definitionEditStatus = "";
+        definitionBuildStatus = "";
+        lastPropertiesObjectId = Integer.MIN_VALUE;
+        allObjectIds = null;
+        filteredObjectIds.clear();
+        lastFilterQuery = null;
+        lastTypeFilter = -1;
+        outputCachePath.set(cache == null ? "" : suggestedOutputPath(cache).toString());
     }
 
     private ObjectDefinitionEditTransaction definitionTransaction(
             LoadedOsrsCacheSession cache, int id) {
-        ObjectDefinitionEditTransaction existing = definitionEdits.get(id);
-        if (existing != null) return existing;
-        ObjectDefinitionEditTransaction created =
-                cache.bundle().definitions().editObject(id).orElse(null);
-        if (created != null) {
-            definitionEdits.put(id, created);
+        return cache.objectDefinitions().transaction(id).orElse(null);
+    }
+
+    private void renderDefinitionOutputSection(
+            StudioPanelContext context,
+            LoadedOsrsCacheSession cache) {
+        ObjectDefinitionEditWorkspace workspace = cache.objectDefinitions();
+        int modified = workspace.modifiedCount();
+        int unpublished = workspace.unpublishedCount();
+
+        ImGui.separator();
+        ImGui.text("Definition output cache");
+        ImGui.textDisabled("Modified: " + modified + "  |  Unpublished: " + unpublished);
+        ImGui.textDisabled(
+                "Builds a new verified cache. The selected source cache remains read-only.");
+
+        ImGui.inputTextWithHint(
+                "Output directory##definition-output-cache",
+                "Choose a new output cache directory...",
+                outputCachePath);
+
+        boolean buildRunning = definitionBuild != null;
+        Path candidate = outputPathOrNull();
+        boolean outputExists = candidate != null && Files.exists(candidate);
+        if (outputExists) {
+            ImGui.textColored(0xFF60A5FA,
+                    "That output path already exists. Choose a new directory.");
         }
-        return created;
+
+        if (ImGui.button("Suggest path##definition-output-suggest")) {
+            outputCachePath.set(suggestedOutputPath(cache).toString());
+            definitionBuildStatus = "";
+        }
+        ImGui.sameLine();
+
+        boolean canBuild = modified > 0
+                && !buildRunning
+                && candidate != null
+                && !outputExists;
+        ImGui.beginDisabled(!canBuild);
+        if (ImGui.button("Build output cache##definition-output-build")) {
+            startDefinitionBuild(cache);
+        }
+        ImGui.endDisabled();
+
+        if (buildRunning) {
+            ImGui.textDisabled("Building and verifying output cache...");
+        }
+        if (!definitionBuildStatus.isBlank()) {
+            ImGui.textWrapped(definitionBuildStatus);
+        }
+    }
+
+    private void startDefinitionBuild(LoadedOsrsCacheSession cache) {
+        try {
+            Path output = outputPathOrNull();
+            if (output == null) {
+                throw new IllegalArgumentException("Output cache path cannot be blank");
+            }
+
+            ObjectDefinitionEditWorkspace workspace = cache.objectDefinitions();
+            ObjectDefinitionOutputCacheBuilder.BuildPlan plan =
+                    ObjectDefinitionOutputCacheBuilder.plan(
+                            workspace.modifiedTransactions());
+            Path source = cache.path();
+            int revision = cache.identity().revision();
+
+            definitionBuildStatus = "Prepared " + plan.definitionCount()
+                    + " definition snapshot"
+                    + (plan.definitionCount() == 1 ? "" : "s") + " for output.";
+            definitionBuild = CompletableFuture.supplyAsync(() -> {
+                try {
+                    ObjectDefinitionOutputCacheBuilder.BuildResult result =
+                            ObjectDefinitionOutputCacheBuilder.buildNewOutput(
+                                    source, output, revision, plan);
+                    return DefinitionBuildCompletion.success(
+                            workspace, plan, result);
+                } catch (Exception failure) {
+                    return DefinitionBuildCompletion.failure(
+                            workspace, plan, failure);
+                }
+            });
+        } catch (RuntimeException failure) {
+            definitionBuildStatus =
+                    "Output build rejected: " + failureMessage(failure);
+        }
+    }
+
+    private void pollDefinitionBuild(StudioPanelContext context) {
+        if (definitionBuild == null || !definitionBuild.isDone()) {
+            return;
+        }
+
+        DefinitionBuildCompletion completion;
+        try {
+            completion = definitionBuild.join();
+        } catch (RuntimeException failure) {
+            definitionBuild = null;
+            definitionBuildStatus =
+                    "Output build failed: " + failureMessage(failure);
+            return;
+        }
+        definitionBuild = null;
+
+        if (completion.failure() != null) {
+            definitionBuildStatus = "Output build failed: "
+                    + failureMessage(completion.failure());
+            return;
+        }
+
+        for (ObjectDefinitionOutputCacheBuilder.PlannedObjectDefinition definition
+                : completion.plan().definitions()) {
+            completion.workspace().markPublished(
+                    definition.objectId(), definition.preview());
+        }
+        if (context.session() != null) {
+            context.session().externalStateChanged();
+        }
+
+        ObjectDefinitionOutputCacheBuilder.BuildResult result = completion.result();
+        definitionBuildStatus = "Built and verified " + result.definitionCount()
+                + " definition" + (result.definitionCount() == 1 ? "" : "s")
+                + " (" + result.encodedBytes() + " encoded bytes) at "
+                + result.outputCache();
+    }
+
+    private Path outputPathOrNull() {
+        String value = outputCachePath.get().trim();
+        if (value.isEmpty()) return null;
+        try {
+            return Path.of(value).toAbsolutePath().normalize();
+        } catch (RuntimeException invalid) {
+            return null;
+        }
+    }
+
+    private static Path suggestedOutputPath(LoadedOsrsCacheSession cache) {
+        Path source = cache.path().toAbsolutePath().normalize();
+        Path parent = source.getParent();
+        if (parent == null) {
+            parent = Path.of(".").toAbsolutePath().normalize();
+        }
+        String sourceName = source.getFileName() == null
+                ? "cache" : source.getFileName().toString();
+        Path candidate = parent.resolve(sourceName + "-studio-output");
+        int suffix = 2;
+        while (Files.exists(candidate)) {
+            candidate = parent.resolve(sourceName + "-studio-output-" + suffix++);
+        }
+        return candidate;
     }
 
     private ObjectDefinitionRawView displayPreview(
@@ -970,10 +1131,41 @@ public final class ObjectViewerPanel implements StudioPanel {
     }
 
     private static String failureMessage(RuntimeException failure) {
-        String message = failure.getMessage();
+        return failureMessage((Throwable) failure);
+    }
+
+    private static String failureMessage(Throwable failure) {
+        Throwable current = failure;
+        while (current.getCause() != null
+                && (current.getMessage() == null || current.getMessage().isBlank())) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
         return message == null || message.isBlank()
-                ? failure.getClass().getSimpleName()
+                ? current.getClass().getSimpleName()
                 : message;
+    }
+
+    private record DefinitionBuildCompletion(
+            ObjectDefinitionEditWorkspace workspace,
+            ObjectDefinitionOutputCacheBuilder.BuildPlan plan,
+            ObjectDefinitionOutputCacheBuilder.BuildResult result,
+            Throwable failure) {
+        private static DefinitionBuildCompletion success(
+                ObjectDefinitionEditWorkspace workspace,
+                ObjectDefinitionOutputCacheBuilder.BuildPlan plan,
+                ObjectDefinitionOutputCacheBuilder.BuildResult result) {
+            return new DefinitionBuildCompletion(
+                    workspace, plan, result, null);
+        }
+
+        private static DefinitionBuildCompletion failure(
+                ObjectDefinitionEditWorkspace workspace,
+                ObjectDefinitionOutputCacheBuilder.BuildPlan plan,
+                Throwable failure) {
+            return new DefinitionBuildCompletion(
+                    workspace, plan, null, failure);
+        }
     }
 
     private static final class ScalarEditState {

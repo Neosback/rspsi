@@ -107,7 +107,7 @@ public final class ObjectDefinitionEditCommand implements EditorCommand {
 
     @Override
     public boolean hasUnsavedExternalState() {
-        return transaction.dirty();
+        return transaction.hasUnpublishedChanges();
     }
 
     private void mutate(ObjectDefinitionEditValue value) {

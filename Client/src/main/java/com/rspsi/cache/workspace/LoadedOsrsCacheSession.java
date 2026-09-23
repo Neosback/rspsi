@@ -13,6 +13,7 @@ public final class LoadedOsrsCacheSession implements AutoCloseable {
     private final OsrsCacheMetadata identity;
     private final String backendName;
     private final int mapCount;
+    private final ObjectDefinitionEditWorkspace objectDefinitions;
 
     private LoadedOsrsCacheSession(Path path, OsrsBundle bundle) {
         this.path = Objects.requireNonNull(path, "path");
@@ -21,6 +22,8 @@ public final class LoadedOsrsCacheSession implements AutoCloseable {
                 () -> new IllegalArgumentException("Selected cache has no identity"));
         this.backendName = bundle.backendName();
         this.mapCount = bundle.mapCount();
+        this.objectDefinitions =
+                new ObjectDefinitionEditWorkspace(bundle.definitions());
     }
 
     public static LoadedOsrsCacheSession open(Path path) {
@@ -47,6 +50,10 @@ public final class LoadedOsrsCacheSession implements AutoCloseable {
     public String backendName() { return backendName; }
 
     public int mapCount() { return mapCount; }
+
+    public ObjectDefinitionEditWorkspace objectDefinitions() {
+        return objectDefinitions;
+    }
 
     public CacheDecoderSummary decoderSummary() { return bundle.decoderSummary(); }
 

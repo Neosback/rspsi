@@ -280,6 +280,20 @@ No cache write occurs in this phase.
 - reopen and verify written definition
 - integrate undo/redo at the project transaction layer
 
+### Phase B implementation status
+
+The first verified Studio publishing path is now implemented with these invariants:
+
+- `LoadedOsrsCacheSession` owns a cache-scoped `ObjectDefinitionEditWorkspace`; UI panels no longer own transaction lifetime.
+- `dirty()` means the preview differs from the immutable read-only source.
+- `hasUnpublishedChanges()` separately means the current preview is not durable in either the source or a successfully-built output snapshot.
+- Publishing records the exact decoded preview that was written; it does not reset the transaction, so normal `EditorCommand` undo/redo remains valid.
+- Output builds snapshot an immutable `BuildPlan` before filesystem work begins. Edits made while a build runs cannot alter the bytes in that build and remain unpublished afterward.
+- Output creation remains copy-on-build and create-only: source cache -> staging clone -> validated object payload writes -> flush -> read-only reopen -> byte/semantic/canonical verification -> publish staging directory.
+- Studio close/dirty gating consults the cache-scoped workspace as well as the current map session, so changing regions cannot hide unpublished definition edits.
+
+The next persistence extension should update an explicitly-selected existing output cache transactionally rather than silently making the source writable. It should preserve the same immutable planning and verification boundary.
+
 ### Phase C: broader content studio
 
 - NPC/item/struct/enum/varbit definition editors

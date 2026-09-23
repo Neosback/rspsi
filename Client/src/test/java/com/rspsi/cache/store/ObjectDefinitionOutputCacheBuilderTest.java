@@ -4,6 +4,7 @@ import com.displee.cache.CacheLibrary;
 import com.displee.compress.CompressionType;
 import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
 import com.rspsi.cache.definition.ObjectDefinitionEditValue;
+import com.rspsi.cache.definition.ObjectDefinitionRawView;
 import dev.openrune.definition.codec.ObjectCodec;
 import dev.openrune.definition.type.ObjectType;
 import dev.openrune.definition.type.builders.ObjectTypeBuilder;
@@ -73,6 +74,41 @@ class ObjectDefinitionOutputCacheBuilderTest {
                     outputStore.readObjectDefinitionPayload(OBJECT_ID));
             assertEquals(transaction.preview(),
                     OpenRuneDefinitionProvider.toRawView(decoded));
+        }
+    }
+
+    @Test
+    void buildPlanFreezesPreviewBeforeFilesystemWork() throws IOException {
+        Path source = temporaryDirectory.resolve("source-cache");
+        Path output = temporaryDirectory.resolve("built-cache");
+        ObjectType original = seedCache(source, "Copper rocks");
+
+        ObjectDefinitionEditTransaction transaction =
+                new OpenRuneObjectDefinitionEditTransaction(original, REVISION);
+        transaction.setField("name",
+                ObjectDefinitionEditValue.stringValue("Planned name"));
+
+        ObjectDefinitionOutputCacheBuilder.BuildPlan plan =
+                ObjectDefinitionOutputCacheBuilder.plan(java.util.List.of(transaction));
+        ObjectDefinitionRawView plannedPreview =
+                plan.definitions().get(0).preview();
+
+        transaction.setField("name",
+                ObjectDefinitionEditValue.stringValue("Edited while build runs"));
+        assertFalse(plannedPreview.equals(transaction.preview()));
+
+        ObjectDefinitionOutputCacheBuilder.buildNewOutput(
+                source, output, REVISION, plan);
+
+        try (OpenRuneCacheStore outputStore = OpenRuneCacheStore.open(output)) {
+            ObjectDefinitionRawView written =
+                    outputStore.decodeObjectDefinitionPayload(
+                            OBJECT_ID,
+                            outputStore.readObjectDefinitionPayload(OBJECT_ID),
+                            REVISION);
+            assertEquals(plannedPreview, written);
+            assertFalse(transaction.preview().equals(written),
+                    "later in-memory edits must not change an already-planned build");
         }
     }
 
