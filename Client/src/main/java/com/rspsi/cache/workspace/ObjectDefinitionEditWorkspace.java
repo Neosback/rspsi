@@ -272,6 +272,7 @@ public final class ObjectDefinitionEditWorkspace {
                     "No object definition transaction exists for id " + objectId);
         }
         transaction.markPublished(publishedPreview);
+        publishedSnapshots.put(objectId, publishedPreview);
     }
 
     /**
