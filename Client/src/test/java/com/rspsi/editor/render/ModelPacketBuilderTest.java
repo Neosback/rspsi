@@ -121,6 +121,41 @@ class ModelPacketBuilderTest {
     }
 
     @Test
+    void retainsRecoloredUnlitHslAlongsideClientSmoothLitColors() {
+        ModelTriangle face = colorParityPacket(0, -1, 0).triangles().get(0);
+
+        assertEquals(0x3456, face.unlitColor(),
+                "the post-recolor ModelData face HSL must survive as the unlit source color");
+        assertEquals(0x3433, face.colorA());
+        assertEquals(0x3433, face.colorB());
+        assertEquals(0x3433, face.colorC());
+    }
+
+    @Test
+    void flatUntexturedFaceUsesClientFaceNormalLightingAndMinusOneSentinel() {
+        ModelTriangle face = colorParityPacket(1, -1, 0).triangles().get(0);
+
+        assertEquals(0x3456, face.unlitColor());
+        assertEquals(0x3430, face.colorA(),
+                "flat lighting uses the client's 1.5x intensity denominator");
+        assertEquals(face.colorA(), face.colorB());
+        assertEquals(-1, face.colorC(),
+                "ModelData.toModel marks flat faces with faceColors3 = -1");
+    }
+
+    @Test
+    void texturedSmoothFaceCarriesLightnessScalarsInsteadOfHslColors() {
+        ModelTriangle face = colorParityPacket(0, 9, 0).triangles().get(0);
+
+        assertEquals(0x3456, face.unlitColor(),
+                "source HSL is retained even though the texture supplies final RGB");
+        assertEquals(76, face.colorA());
+        assertEquals(76, face.colorB());
+        assertEquals(76, face.colorC());
+        assertEquals(9, face.textureId());
+    }
+
+    @Test
     void retainsAccumulatedClientNormalMagnitudeForSmoothFaces() {
         WorldDocument document = new WorldDocument(1, 1, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
@@ -137,12 +172,16 @@ class ModelPacketBuilderTest {
     }
 
     @Test
-    void fullyTransparentFaceStaysOutOfBothSubmissionPasses() {
-        // 0xFF is invisible in the client - its transparency is spent before the
-        // write - and it arrives here as the signed byte -1.
+    void rawMinusOneAlphaSelectsClientHiddenFaceSentinel() {
+        // ModelData.toModel consumes the signed -1 before alpha normalization.
         ModelRenderPacket packet = singleFacePacket(-1);
+        ModelTriangle face = packet.triangles().get(0);
 
-        assertEquals(2, packet.triangles().get(0).renderType());
+        assertEquals(255, face.alpha());
+        assertEquals(2, face.renderType());
+        assertEquals(0, face.colorA());
+        assertEquals(0, face.colorB());
+        assertEquals(-2, face.colorC());
         assertTrue(packet.opaqueTriangleIndices().isEmpty());
         assertTrue(packet.transparentTriangleIndices().isEmpty());
     }
@@ -161,14 +200,19 @@ class ModelPacketBuilderTest {
     }
 
     @Test
-    void nearlyInvisibleFaceKeepsItsTransparencyInsteadOfBecomingFlatColour() {
-        // 0xFE (254/255 transparent) used to be promoted to render type 3 and
-        // drawn as an opaque flat colour.
+    void rawMinusTwoAlphaSelectsClientFlat128ColorSentinel() {
+        // ModelData.toModel consumes signed -2 as render type 3 before the
+        // same byte is interpreted as 254 transparency by the Model renderer.
         ModelRenderPacket packet = singleFacePacket(-2);
+        ModelTriangle face = packet.triangles().get(0);
 
-        assertEquals(254, packet.triangles().get(0).alpha());
-        assertEquals(0, packet.triangles().get(0).renderType());
+        assertEquals(254, face.alpha());
+        assertEquals(3, face.renderType());
+        assertEquals(128, face.colorA());
+        assertEquals(128, face.colorB());
+        assertEquals(-1, face.colorC());
         assertTrue(packet.opaqueTriangleIndices().isEmpty());
+        assertEquals(List.of(0), packet.transparentTriangleIndices());
     }
 
     private static ModelRenderPacket singleFacePacket(int faceAlpha) {
@@ -934,6 +978,27 @@ class ModelPacketBuilderTest {
         assertEquals(256, packet.clientRenderableBounds().get(0).drawAabb().orientation());
         assertEquals(256, packet.gameObjectSceneMetadata().modelOrientation());
         assertEquals(3 * 512 + 256, packet.gameObjectSceneMetadata().orientation());
+    }
+
+    private static ModelRenderPacket colorParityPacket(int renderType, int textureId,
+                                                       int rawAlpha) {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 0, 0))));
+        ObjectAppearanceView appearance = new ObjectAppearanceView(
+                -1, false, 128, 128, 128, 0, 0, 0,
+                Map.of(0x1234, 0x3456), Map.of(),
+                true, false, false, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{0, 0, 0, 128, 0, 0, 0, 0, 128},
+                new int[]{0, 1, 2}, new short[]{(short) 0x1234},
+                new int[]{rawAlpha}, new int[]{textureId},
+                new int[]{renderType}, new int[]{0},
+                null, null, null, null);
+
+        return new ModelPacketBuilder(definitions(appearance, geometry))
+                .build(document).get(0);
     }
 
     private static ModelGeometryView triangle(int id, int color) {
