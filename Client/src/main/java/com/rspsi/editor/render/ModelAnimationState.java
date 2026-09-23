@@ -56,12 +56,16 @@ public record ModelAnimationState(
     }
 
     public boolean active() {
-        return sequenceId >= 0 && frameIndex >= 0;
+        return sequenceId >= 0;
+    }
+
+    public boolean frameSelected() {
+        return frameIndex >= 0;
     }
 
     public ModelAnimationState withTransformed(boolean value) {
-        if (!active() && value) {
-            throw new IllegalArgumentException("Inactive animation cannot be transformed");
+        if (!frameSelected() && value) {
+            throw new IllegalArgumentException("Animation without a selected frame cannot be transformed");
         }
         return new ModelAnimationState(sequenceId, frameIndex, frameId, clientCycle,
                 animationHeightOffset, value);
