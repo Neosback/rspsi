@@ -59,6 +59,26 @@ class RenderTextureResourceTest {
     }
 
     @Test
+    void pixelHashIsStableWithoutExposingOrRehashingMutablePixelCopies() {
+        TextureDefinitionView definition = new TextureDefinitionView(9, false, 9, 0,
+                0, 0, false);
+        int[] pixels = {1, 2, 3, 4};
+        RenderTextureResource resource = new RenderTextureResource(
+                9, definition, 2, 2, pixels,
+                RenderTextureResource.PixelStatus.AVAILABLE, "");
+
+        int expected = java.util.Arrays.hashCode(pixels);
+        assertEquals(expected, resource.pixelHash());
+
+        int[] copy = resource.pixels();
+        copy[0] = 999;
+        assertEquals(expected, resource.pixelHash());
+        assertEquals(expected, resource.hashCode() - 31 * java.util.Objects.hash(
+                resource.id(), definition, resource.width(), resource.height(),
+                resource.pixelStatus(), resource.diagnostic()));
+    }
+
+    @Test
     void reportsUnavailableAndInvalidProviderResultsWithoutThrowing() {
         TextureDefinitionView definition = new TextureDefinitionView(4, false, 4, 0,
                 0, 0, false);
