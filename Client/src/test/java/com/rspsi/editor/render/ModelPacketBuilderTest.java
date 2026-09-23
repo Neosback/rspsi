@@ -1,10 +1,13 @@
 package com.rspsi.editor.render;
 
+import com.rspsi.cache.definition.AnimationFrameView;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.cache.definition.SequenceDefinitionView;
+import com.rspsi.cache.definition.SkeletonDefinitionView;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
@@ -30,6 +33,79 @@ class ModelPacketBuilderTest {
         assertEquals(2, ModelPacketBuilder.animationFrameIndex(3, lengths, 2, 6));
         assertEquals(1, ModelPacketBuilder.animationFrameIndex(3, lengths, 2, 9));
         assertEquals(1, ModelPacketBuilder.animationFrameIndex(3, lengths, 2, 10));
+    }
+
+    @Test
+    void retainsSelectedFrameHeightOffsetAndStableSceneIdentityAcrossCycles() {
+        WorldDocument document = new WorldDocument(2, 2, 1);
+        WorldObject object = new WorldObject(42, 10, 0, 0, 0, 0);
+        document.tile(0, 0, 0).restore(new TileSnapshot(40, 40, 40, 40,
+                0, 0, 0, 0, 0, List.of(object)));
+
+        ObjectAppearanceView appearance = new ObjectAppearanceView(
+                77, false, 128, 128, 128, 0, 0, 0,
+                Map.of(), Map.of(), true, false, false, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{0, 0, 0, 64, 0, 0, 0, 0, 64},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1})
+                .withVertexSkins(new int[]{1, 1, 1});
+        SequenceDefinitionView sequence = new SequenceDefinitionView(
+                77, new int[]{100, 101}, new int[]{1, 1}, 2, false,
+                -1, -1, 99, 0, 0, 2, -1, 6);
+        SkeletonDefinitionView skeleton = new SkeletonDefinitionView(
+                5, new int[]{1}, new int[][]{{1}});
+        AnimationFrameView firstFrame = new AnimationFrameView(
+                100, 5, new int[]{0}, new int[]{0}, new int[]{0}, new int[]{0}, false);
+        AnimationFrameView secondFrame = new AnimationFrameView(
+                101, 5, new int[]{0}, new int[]{10}, new int[]{0}, new int[]{0}, false);
+
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return Optional.of(new ObjectDefinitionView(id, "animated", 1, 1,
+                        List.of(), new int[]{7}, new int[]{10}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(appearance);
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(geometry);
+            }
+            @Override public Optional<SequenceDefinitionView> sequence(int id) {
+                return id == 77 ? Optional.of(sequence) : Optional.empty();
+            }
+            @Override public Optional<AnimationFrameView> animationFrame(int id) {
+                return switch (id) {
+                    case 100 -> Optional.of(firstFrame);
+                    case 101 -> Optional.of(secondFrame);
+                    default -> Optional.empty();
+                };
+            }
+            @Override public Optional<SkeletonDefinitionView> skeleton(int id) {
+                return id == 5 ? Optional.of(skeleton) : Optional.empty();
+            }
+        };
+
+        ModelPacketBuilder builder = new ModelPacketBuilder(definitions);
+        ModelRenderPacket cycleZero = builder.build(object, document, 0).orElseThrow();
+        ModelRenderPacket cycleTwo = builder.build(object, document, 2).orElseThrow();
+
+        assertEquals(cycleZero.sceneObjectIdentity(), cycleTwo.sceneObjectIdentity(),
+                "frame changes must not replace the stable placed-object identity");
+        assertNotEquals(cycleZero.vertices(), cycleTwo.vertices(),
+                "the selected frame must change rendered geometry");
+
+        ModelAnimationState state = cycleTwo.animationState();
+        assertEquals(77, state.sequenceId());
+        assertEquals(1, state.frameIndex());
+        assertEquals(101, state.frameId());
+        assertEquals(2, state.clientCycle());
+        assertEquals(6, state.animationHeightOffset());
+        assertTrue(state.transformed());
+        assertEquals(40, cycleTwo.placementHeight());
+        assertEquals(34, cycleTwo.renderPlacementHeight());
     }
 
     @Test
