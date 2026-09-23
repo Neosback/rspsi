@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
+import static dev.openrune.cache.ConfigTypeKt.OBJECT;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -187,7 +188,7 @@ class ObjectDefinitionOutputCacheBuilderTest {
             ObjectType object = objectType(name);
             library.put(
                     com.rspsi.cache.OsrsCacheIndexLayout.CONFIGS,
-                    6,
+                    OBJECT,
                     OBJECT_ID,
                     encode(object));
             library.update();
