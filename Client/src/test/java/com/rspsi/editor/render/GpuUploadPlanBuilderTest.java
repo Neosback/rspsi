@@ -113,9 +113,9 @@ class GpuUploadPlanBuilderTest {
                         new ModelVertex(0, 10, 32, 0, 0, 0, 0, 0, 0)),
                 0, false);
         ModelRenderPacket model = new ModelRenderPacket(coordinate, 42, ObjectCategory.GROUND,
-                List.of(new ModelVertex(0, 0, 0, 0, 0, 0, 1, 0, 0),
-                        new ModelVertex(64, 0, 0, 0, 0, 0, 1, 0, 0),
-                        new ModelVertex(0, 0, 64, 0, 0, 0, 1, 0, 0)),
+                List.of(new ModelVertex(0, 0, 0, 16, -32, 64, 2, 0, 0),
+                        new ModelVertex(64, 0, 0, 16, -32, 64, 2, 0, 0),
+                        new ModelVertex(0, 0, 64, 16, -32, 64, 2, 0, 0)),
                 List.of(new ModelTriangle(0, 1, 2, 100, 100, 100,
                         -1, 0, 0, 0)), List.of(), -1,
                 0, 0, 0, 64, 0, 64, false, false)
@@ -147,6 +147,10 @@ class GpuUploadPlanBuilderTest {
                 plan.commands().get(0).contourMetadata().mode());
         assertTrue(plan.commands().get(0).contourMetadata().applied());
         assertTrue(plan.commands().get(0).contourMetadata().hasUnskewedModel());
+        assertEquals(16, plan.vertices().get(0).normalX());
+        assertEquals(-32, plan.vertices().get(0).normalY());
+        assertEquals(64, plan.vertices().get(0).normalZ());
+        assertEquals(2, plan.vertices().get(0).normalMagnitude());
     }
 
     @Test
