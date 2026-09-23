@@ -3,6 +3,7 @@ package com.rspsi.cache.store;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectDefinitionRawView;
 import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ModelDefinitionView;
@@ -36,6 +37,7 @@ import dev.openrune.definition.type.TextureType;
 import dev.openrune.definition.type.UnderlayType;
 import dev.openrune.filesystem.Cache;
 
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +54,62 @@ import org.slf4j.LoggerFactory;
 public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenRuneDefinitionProvider.class);
     private static final int OSRS_SEQUENCE_REVISION = 226;
+    private static final Map<String, String> OBJECT_FIELD_OPCODES = Map.ofEntries(
+            Map.entry("name", "2"),
+            Map.entry("decorDisplacement", "28"),
+            Map.entry("isHollow", "74"),
+            Map.entry("objectModels", "1/5/6/7"),
+            Map.entry("objectTypes", "1/6"),
+            Map.entry("mapAreaId", "60/82"),
+            Map.entry("sizeX", "14"),
+            Map.entry("sizeY", "15"),
+            Map.entry("soundDistance", "78/79"),
+            Map.entry("soundRetain", "78/79"),
+            Map.entry("ambientSoundIds", "79"),
+            Map.entry("offsetX", "70"),
+            Map.entry("nonFlatShading", "22"),
+            Map.entry("interactive", "19"),
+            Map.entry("animationId", "24"),
+            Map.entry("ambient", "29"),
+            Map.entry("contrast", "39"),
+            Map.entry("actions", "30-34/100-102"),
+            Map.entry("solid", "17/27"),
+            Map.entry("mapSceneID", "68"),
+            Map.entry("clipMask", "69"),
+            Map.entry("clipped", "64"),
+            Map.entry("modelSizeX", "65"),
+            Map.entry("modelSizeZ", "66"),
+            Map.entry("modelSizeY", "67"),
+            Map.entry("offsetZ", "71"),
+            Map.entry("offsetY", "72"),
+            Map.entry("obstructive", "73"),
+            Map.entry("randomizeAnimStart", "89"),
+            Map.entry("clipType", "21/81"),
+            Map.entry("category", "61"),
+            Map.entry("supportsItems", "75"),
+            Map.entry("isRotated", "62"),
+            Map.entry("ambientSoundId", "78"),
+            Map.entry("modelClipped", "23"),
+            Map.entry("soundMin", "79"),
+            Map.entry("soundMax", "79"),
+            Map.entry("soundDistanceFadeCurve", "91"),
+            Map.entry("soundFadeInDuration", "93"),
+            Map.entry("soundFadeOutDuration", "93"),
+            Map.entry("soundFadeInCurve", "93"),
+            Map.entry("soundFadeOutCurve", "93"),
+            Map.entry("delayAnimationUpdate", "90"),
+            Map.entry("impenetrable", "17/18"),
+            Map.entry("soundVisibility", "95"),
+            Map.entry("rasie", "96"),
+            Map.entry("originalColours", "40"),
+            Map.entry("modifiedColours", "40"),
+            Map.entry("originalTextureColours", "41"),
+            Map.entry("modifiedTextureColours", "41"),
+            Map.entry("multiVarBit", "77/92"),
+            Map.entry("multiVarp", "77/92"),
+            Map.entry("multiDefault", "92"),
+            Map.entry("transforms", "77/92"),
+            Map.entry("params", "249"));
     private final Cache cache;
     private final int revision;
     private final Map<Integer, ObjectType> objects = new HashMap<>();
@@ -118,6 +176,12 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     public Optional<ObjectDefinitionView> object(int id) {
         ObjectType definition = objects.get(id);
         return definition == null ? Optional.empty() : Optional.of(toView(definition));
+    }
+
+    @Override
+    public Optional<ObjectDefinitionRawView> objectRaw(int id) {
+        ObjectType definition = objects.get(id);
+        return definition == null ? Optional.empty() : Optional.of(toRawView(definition));
     }
 
     static ObjectDefinitionView toView(ObjectType definition) {
@@ -208,6 +272,111 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     @Override
     public List<Integer> modelIds() {
         return modelIds;
+    }
+
+    static ObjectDefinitionRawView toRawView(ObjectType definition) {
+        Objects.requireNonNull(definition, "definition");
+        java.util.ArrayList<ObjectDefinitionRawView.Field> fields = new java.util.ArrayList<>();
+
+        for (Method method : ObjectType.class.getMethods()) {
+            if (method.getParameterCount() != 0 || method.getDeclaringClass() == Object.class) {
+                continue;
+            }
+            String propertyName = propertyName(method);
+            if (propertyName == null || propertyName.equals("params")) {
+                continue;
+            }
+
+            try {
+                Object value = method.invoke(definition);
+                fields.add(new ObjectDefinitionRawView.Field(
+                        propertyName,
+                        OBJECT_FIELD_OPCODES.getOrDefault(propertyName, ""),
+                        rawValueType(value),
+                        formatRawValue(value)));
+            } catch (ReflectiveOperationException failure) {
+                throw new IllegalStateException(
+                        "Unable to inspect OpenRune object property " + propertyName,
+                        failure);
+            }
+        }
+
+        fields.sort(java.util.Comparator
+                .comparingInt((ObjectDefinitionRawView.Field field) ->
+                        opcodeSortKey(field.opcode()))
+                .thenComparing(ObjectDefinitionRawView.Field::name));
+
+        java.util.ArrayList<ObjectDefinitionRawView.Param> params = new java.util.ArrayList<>();
+        Map<Integer, Object> sourceParams = definition.getParams();
+        if (sourceParams != null) {
+            sourceParams.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> params.add(new ObjectDefinitionRawView.Param(
+                            entry.getKey(),
+                            rawValueType(entry.getValue()),
+                            formatRawValue(entry.getValue()))));
+        }
+
+        return new ObjectDefinitionRawView(definition.getId(), fields, params);
+    }
+
+    private static String propertyName(Method method) {
+        String name = method.getName();
+        String stem;
+        if (name.startsWith("get") && name.length() > 3) {
+            stem = name.substring(3);
+        } else if (name.startsWith("is") && name.length() > 2
+                && (method.getReturnType() == boolean.class
+                    || method.getReturnType() == Boolean.class)) {
+            stem = name.substring(2);
+        } else {
+            return null;
+        }
+        if (stem.isEmpty()) return null;
+        if (stem.length() == 1) return stem.toLowerCase(java.util.Locale.ROOT);
+        return Character.toLowerCase(stem.charAt(0)) + stem.substring(1);
+    }
+
+    private static ObjectDefinitionRawView.ValueType rawValueType(Object value) {
+        if (value == null) return ObjectDefinitionRawView.ValueType.NULL;
+        if (value instanceof String) return ObjectDefinitionRawView.ValueType.STRING;
+        if (value instanceof Boolean) return ObjectDefinitionRawView.ValueType.BOOLEAN;
+        if (value instanceof Byte || value instanceof Short || value instanceof Integer) {
+            return ObjectDefinitionRawView.ValueType.INTEGER;
+        }
+        if (value instanceof Long) return ObjectDefinitionRawView.ValueType.LONG;
+        if (value instanceof java.util.Collection<?> || value.getClass().isArray()) {
+            return ObjectDefinitionRawView.ValueType.LIST;
+        }
+        if (value instanceof Map<?, ?>) return ObjectDefinitionRawView.ValueType.MAP;
+        return ObjectDefinitionRawView.ValueType.OTHER;
+    }
+
+    private static String formatRawValue(Object value) {
+        if (value == null) return "null";
+        if (value instanceof int[] array) return java.util.Arrays.toString(array);
+        if (value instanceof long[] array) return java.util.Arrays.toString(array);
+        if (value instanceof short[] array) return java.util.Arrays.toString(array);
+        if (value instanceof byte[] array) return java.util.Arrays.toString(array);
+        if (value instanceof boolean[] array) return java.util.Arrays.toString(array);
+        if (value instanceof Object[] array) return java.util.Arrays.deepToString(array);
+        return String.valueOf(value);
+    }
+
+    private static int opcodeSortKey(String opcode) {
+        if (opcode == null || opcode.isBlank()) return Integer.MAX_VALUE;
+        int value = 0;
+        boolean found = false;
+        for (int index = 0; index < opcode.length(); index++) {
+            char ch = opcode.charAt(index);
+            if (Character.isDigit(ch)) {
+                found = true;
+                value = value * 10 + (ch - '0');
+            } else if (found) {
+                break;
+            }
+        }
+        return found ? value : Integer.MAX_VALUE;
     }
 
     @Override
