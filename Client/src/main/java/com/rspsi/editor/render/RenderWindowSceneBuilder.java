@@ -363,6 +363,13 @@ public final class RenderWindowSceneBuilder {
             int rebuiltModelTiles,
             boolean fullModelRebuild
     ) {
+        /** Source-compatible constructor from before refresh-scope diagnostics. */
+        public AnimationRefreshResult(RenderWindowScene scene,
+                                      Set<WorldZoneCoordinate> dirtyZones,
+                                      int changedTiles) {
+            this(scene, dirtyZones, changedTiles, changedTiles, false);
+        }
+
         public AnimationRefreshResult {
             scene = Objects.requireNonNull(scene, "scene");
             dirtyZones = Set.copyOf(Objects.requireNonNull(dirtyZones, "dirtyZones"));
