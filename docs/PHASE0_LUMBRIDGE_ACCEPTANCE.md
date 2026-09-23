@@ -26,6 +26,19 @@ RSPSi already depends on `dev.or2:tools` at the pinned FileStore version, so
 Phase 0 must reuse that dependency behind the OpenRune cache-integration
 boundary rather than introduce another OpenRS2 client.
 
+Current OpenRune FileStore source defines the XTEA transition explicitly:
+
+    RemoveXteas.OBSOLETE_FROM_REVISION = 237
+
+and `FreshCache` follows the same rule:
+
+    revision < 237  -> download OpenRS2 keys.json as xteas.json
+    revision >= 237 -> no XTEA key download/removal step
+
+Revision 240 therefore does not require an XTEA sidecar in the current FileStore workflow.
+See `OPENRUNE_MAVEN_CATALOG.md` for the full artifact/dependency inventory and the
+historical pre-237 compatibility caveat.
+
 For provenance/debugging, the current OpenRS2 archive entry selected for build
 240 may be recorded in validation evidence, but **the cache ID is not the
 Studio API**. Revision/environment are the stable request; OpenRune's
@@ -98,6 +111,8 @@ When a provenance-controlled RuneLite/OpenRune/other independent export is avail
 For a release/merge validation, record in the PR:
 
 - cache ID and fingerprint
+- OpenRune FileStore version used
+- acquisition path (normally `FreshCache`)
 - revision
 - region
 - `object.resolution` status
