@@ -126,4 +126,52 @@ class RenderConfigCompilerTest {
                         || specification.scope() == SettingScope.VIEWPORT
                         || specification.scope() == SettingScope.TRANSIENT));
     }
+    @Test
+    void renderConfigConsumesTransientRoofRemovalStateWithoutPersistingIt() {
+        com.rspsi.editor.model.TileCoordinate lowerCoordinate =
+                new com.rspsi.editor.model.TileCoordinate(0, 1, 1);
+        SceneTileSnapshot lower = new SceneTileSnapshot(
+                lowerCoordinate,
+                com.rspsi.editor.model.WorldTileAddress.of(1, 1, 0),
+                com.rspsi.editor.model.OsrsTileFlags.REMOVE_ROOFS,
+                0, 0, 0, 0,
+                Optional.empty(), Optional.empty(), List.of(), List.of(), List.of(),
+                false, false);
+        com.rspsi.editor.model.TileCoordinate upperCoordinate =
+                new com.rspsi.editor.model.TileCoordinate(1, 1, 1);
+        SceneTileSnapshot upper = new SceneTileSnapshot(
+                upperCoordinate,
+                com.rspsi.editor.model.WorldTileAddress.of(1, 1, 1),
+                0,
+                1, 1, 1, 1,
+                Optional.empty(), Optional.empty(), List.of(), List.of(), List.of(),
+                false, false);
+
+        com.rspsi.editor.model.WorldRegionWindow source =
+                new com.rspsi.editor.model.WorldRegionWindow(0, 0, 1, 1, Map.of());
+        SceneWindow window = new SceneWindow(
+                source, 0, 0, 4, 0, 0, -1, Set.of(), List.of());
+        GpuScenePacket packet = new GpuScenePacket(
+                window, List.of(lower, upper), LightingProfile.osrs(),
+                "render-config-roof-state", Map.of());
+
+        RenderConfig config = new RenderConfigCompiler().compile(
+                RenderSettingKeys.registry().defaults()
+                        .with(RenderSettingKeys.ACTIVE_PLANE, 0)
+                        .with(RenderSettingKeys.PLANE_SELECTION,
+                                SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL));
+        RoofRemovalState state = new RoofRemovalState(
+                RoofRemovalState.POSITION,
+                new RoofRemovalState.ScenePoint(1, 1),
+                null, null, null, 200);
+
+        assertEquals(state, config.visibilityPolicy(state).roofRemovalState());
+        GpuScenePacket filtered = config.apply(packet, state);
+
+        assertEquals(1, filtered.tiles().size());
+        assertEquals(0, filtered.tiles().get(0).authoredPlane());
+        assertEquals(RoofRemovalState.disabled(), config.visibilityPolicy().roofRemovalState(),
+                "compiled settings remain free of transient player/camera state");
+    }
+
 }
