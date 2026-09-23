@@ -3,6 +3,7 @@ package com.rspsi.editor.render;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.map.OsrsRegionDecoder;
 import com.rspsi.editor.model.InstanceChunkTemplate;
 import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TerrainHeightSource;
@@ -121,6 +122,38 @@ class InstanceSceneMaterializerTest {
         assertEquals(-120, upper.southWestHeight(),
                 "plane-one explicit height must be applied as a delta from target plane zero");
         assertEquals(-120, upper.northEastHeight());
+    }
+
+    @Test
+    void generatedCacheHeightUsesRotatedSourceNoiseCoordinate() {
+        WorldDocument sourceDocument = new WorldDocument(64, 64, 1);
+        for (int x = 8; x < 16; x++) {
+            for (int y = 16; y < 24; y++) {
+                sourceDocument.tile(0, x, y).restore(new TileSnapshot(
+                        999, 999, 999, 999,
+                        0, 0, 0, 0, 0, List.of(),
+                        TerrainHeightSource.generatedSource()));
+            }
+        }
+        WorldRegion sourceRegion = new WorldRegion(0, 0, sourceDocument);
+        WorldRegionWindow source = new WorldRegionWindow(
+                0, 0, 1, 1, Map.of(sourceRegion.regionId(), sourceRegion));
+        SceneWindow window = new SceneWindow(
+                source, 3200, 3200, 1, 0, 0, -1,
+                Set.of(sourceRegion.regionId()),
+                List.of(new InstanceChunkTemplate(
+                        0, 2, 3, 0, 1, 2, 1)));
+
+        WorldDocument materialized =
+                new InstanceSceneMaterializer(definitions()).materialize(window);
+
+        // Source local (1,2) maps to target local (2,6) at rotation 1.
+        int targetX = 2 * 8 + 2;
+        int targetY = 3 * 8 + 6;
+        int expected = OsrsRegionDecoder.generatedHeightAtWorldNoiseCoordinate(
+                8 + 2, 16 + 6);
+        assertEquals(expected,
+                materialized.tile(0, targetX, targetY).snapshot().southWestHeight());
     }
 
     @Test
