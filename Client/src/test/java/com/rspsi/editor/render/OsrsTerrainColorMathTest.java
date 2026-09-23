@@ -26,25 +26,12 @@ class OsrsTerrainColorMathTest {
     }
 
     @Test
-    void texturedOverlayKeepsTextureHueAndSaturationAndUsesTheTileLight() {
-        // A blue-water texture average at half saturation.
-        int textureAverage = OsrsTerrainColorMath.packHsl(176, 128, 90);
-
-        int packed = OsrsTerrainColorMath.texturedOverlayHsl(textureAverage, 96);
-
-        // Hue and saturation come from the texture, so the palette lookup is
-        // no longer stuck on the greyscale axis...
-        assertEquals(textureAverage & 0xFF80, packed & 0xFF80);
-        // ...and the lightness slot carries the tile light, not the texture's
-        // own average brightness, so the texture cannot darken itself twice.
-        assertEquals(96, packed & 0x7F);
-    }
-
-    @Test
-    void texturedOverlayClampsTheTileLightIntoTheUsableRange() {
-        int textureAverage = OsrsTerrainColorMath.packHsl(176, 128, 90);
-
-        assertEquals(2, OsrsTerrainColorMath.texturedOverlayHsl(textureAverage, 0) & 0x7F);
-        assertEquals(126, OsrsTerrainColorMath.texturedOverlayHsl(textureAverage, 400) & 0x7F);
+    void texturedOverlayColourIsTheBareClampedLight() {
+        // runescape-client class470: a textured overlay's colour is -1, and
+        // the light adjustment turns it into a 7-bit light with no hue or
+        // saturation. The texture supplies colour at raster time.
+        assertEquals(96, OsrsTerrainColorMath.adjustOverlayHslLight(-1, 96));
+        assertEquals(2, OsrsTerrainColorMath.adjustOverlayHslLight(-1, 0));
+        assertEquals(126, OsrsTerrainColorMath.adjustOverlayHslLight(-1, 400));
     }
 }

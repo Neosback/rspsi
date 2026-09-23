@@ -227,9 +227,11 @@
       ],
       "evidence": [
         "Client/src/test/java/com/rspsi/editor/render/OsrsTerrainColorMathTest.java",
-        "docs/OSRS_MECHANICS_PARITY_AUDIT_2026-09-18.md"
+        "docs/OSRS_MECHANICS_PARITY_AUDIT_2026-09-18.md",
+        "Client/src/test/java/com/rspsi/editor/render/TerrainPacketBuilderTest.java"
       ],
-      "nextAction": "Lock byte-exact terrain light outputs in revision-240 fixtures."
+      "nextAction": "Lock byte-exact terrain light outputs in revision-240 fixtures, and compare a textured interior (e.g. Lumbridge castle 3232,3207) against a RuneLite GPU capture.",
+      "reason": "2026-09-23: textured floors were recoloured into the tile's hue (the shader rebuilt each texel from the tile HSL plus texel luminance, and TerrainPacketBuilder injected the texture average hue into the vertex colour). The client keeps the texture's own RGB and multiplies it by a bare 7-bit light: textured overlay colour is -1 (runescape-client class470 scene tile builder), the textured span multiplies each texel channel by the shade (class272), and RuneLite gpu/frag.glsl computes texture * (hsl / 127) with a < 1 discarded. Both are now matched."
     },
     {
       "id": "scene.roofs",

@@ -123,20 +123,12 @@ public final class TerrainPacketBuilder {
         int light = bilinearLight(source.x(), source.y(), lighting);
         int baseHsl;
         if (material == 1) {
-            // A textured overlay's render HSL is the client sentinel -1, and
-            // adjustOverlayHslLight turns that into the bare light value. A
-            // bare light packed as HSL has zero hue and saturation bits, so
-            // the palette lookup lands on the grey axis for every texel -
-            // which is why textured floors and water rendered flat grey.
-            // The client's tile colour for a textured tile still carries hue
-            // and saturation, derived from the texture it uses, so recover
-            // them from the texture's average HSL while leaving the lightness
-            // slot to the tile light exactly as the light-only path did.
-            baseHsl = appearance.overlayHsl() < 0 && appearance.textureId() >= 0
-                    && appearance.textureAverageHsl() >= 0
-                    ? OsrsTerrainColorMath.texturedOverlayHsl(
-                    appearance.textureAverageHsl(), light)
-                    : OsrsTerrainColorMath.adjustOverlayHslLight(appearance.overlayHsl(), light);
+            // A textured overlay's colour is the client sentinel -1, which
+            // adjustOverlayHslLight turns into the bare light value
+            // (runescape-client/class470 scene tile builder). The texture
+            // supplies the colour; the rasterizer multiplies its RGB by this
+            // light (class272 textured span, RuneLite gpu/frag.glsl).
+            baseHsl = OsrsTerrainColorMath.adjustOverlayHslLight(appearance.overlayHsl(), light);
         } else {
             baseHsl = OsrsTerrainColorMath.adjustPackedHslLight(
                     underlayHsl(sourceIndex, topology, appearance), light);

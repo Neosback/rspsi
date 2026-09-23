@@ -71,7 +71,7 @@ class TerrainPacketBuilderTest {
     }
 
     @Test
-    void texturedOverlayKeepsTextureHueAndUsesTileLightForLightness() {
+    void texturedOverlayVerticesCarryOnlyTheTileLight() {
         TileSnapshot tile = new TileSnapshot(0, 0, 0, 0,
                 0, 1, 0, 0, 0, List.of());
         TerrainAppearance appearance = new TerrainAppearance(
@@ -86,15 +86,14 @@ class TerrainPacketBuilderTest {
         assertEquals(0x1234, packet.overlayMinimapHsl());
         assertTrue(packet.faces().stream().anyMatch(face -> face.material() == 1
                 && face.textureId() == 9));
-        // The vertex colour must carry the texture's hue and saturation, or the
-        // palette lookup lands on the grey axis and every textured floor - water
-        // included - renders flat grey.
+        // runescape-client class470 gives a textured overlay the colour -1,
+        // which becomes a bare 7-bit light: no hue or saturation. The texture's
+        // own RGB supplies the colour when it is rasterised (class272), so the
+        // texture average must not leak into the vertex colour.
         assertTrue(packet.vertices().stream().allMatch(vertex ->
-                (vertex.packedHsl() & 0xFF80) == (0x1234 & 0xFF80)));
-        // The lightness slot stays the tile light rather than the texture's own
-        // average luminance, so the texture cannot darken itself twice.
+                (vertex.packedHsl() & 0xFF80) == 0));
         assertTrue(packet.vertices().stream().allMatch(vertex ->
-                (vertex.packedHsl() & 0x7F) >= 2 && (vertex.packedHsl() & 0x7F) <= 126));
+                vertex.packedHsl() >= 2 && vertex.packedHsl() <= 126));
         assertEquals(1, packet.shape());
         assertFalse(packet.flat());
     }

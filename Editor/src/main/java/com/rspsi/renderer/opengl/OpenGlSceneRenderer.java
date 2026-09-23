@@ -1392,46 +1392,21 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                         vec3 texCoord = vec3(textureUv * uTextureScale, float(uTextureLayer));
                         // Base LOD 0 alpha test prevents cutout erosion at distance
                         vec4 texel0 = textureLod(uTexture, texCoord, 0.0);
-                        if (uTerrain != 0) {
-                            // Client floor rule: render_texture_triangle passes
-                            // floor = true for tile tops, and a floor texel is
-                            // never blended into the framebuffer. A zero-alpha
-                            // texel leaves it untouched - so the underlay the
-                            // floor covers stays visible - and every other texel
-                            // is mixed toward the tile's own flat colour and
-                            // written opaquely (see below).
-                            if (texel0.a <= 0.0) discard;
-                        } else if (texel0.a < 1.0) {
-                            // RuneLite GPU frag.glsl rejects any model texture
-                            // texel whose base-LOD alpha is not fully opaque.
-                            // Keep cutouts in the opaque stream for depth
-                            // ownership, but do not let partially transparent
-                            // texels survive as opaque model fragments.
-                            discard;
-                        }
+                        // RuneLite GPU frag.glsl rejects any texel whose
+                        // base-LOD alpha is not fully opaque, for terrain and
+                        // models alike. Keep cutouts in the opaque stream for
+                        // depth ownership.
+                        if (texel0.a < 1.0) discard;
 
                         vec4 texel = texture(uTexture, texCoord);
-                        if (uTerrain != 0) {
-                            // Bank/shift integer texture shading: authentic client software rasterizer bit math
-                            ivec3 texRgb = ivec3(round(texel.rgb * 255.0));
-                            int texLum = ((texRgb.r >> 1) + (texRgb.g >> 1) + (texRgb.b >> 1) + 127) >> 2;
-                            int startCol = int(vEncodedColor);
-                            int shadedLight = clamp(((startCol & 0x7F) * texLum) >> 7, 0, 127);
-                            int shadedHsl = (startCol & 0xFF80) | shadedLight;
-                            vec3 shaded = texelFetch(uPalette, ivec2(shadedHsl & 255, (shadedHsl >> 8) & 255), 0).rgb;
-                            // The client mixes a partial texel toward the TILE's
-                            // flat colour - colourPalette[tile.getColour()] - and
-                            // then writes it opaquely; it does not blend into
-                            // whatever happens to be behind it. The flat colour
-                            // is the same hue and saturation at full lightness.
-                            int flatHsl = (startCol & 0xFF80) | 0x7F;
-                            vec3 tileColour =
-                                    texelFetch(uPalette, ivec2(flatHsl & 255, (flatHsl >> 8) & 255), 0).rgb;
-                            color = mix(tileColour, shaded, texel0.a);
-                        } else {
-                            float lightness = clamp(vEncodedColor / 127.0, 0.0, 1.0);
-                            color = texel.rgb * lightness;
-                        }
+                        // Textured triangles keep the texture's own RGB and
+                        // scale it by a 7-bit light (2-126): the client's
+                        // textured span multiplies each texel channel by the
+                        // shade (runescape-client class272), and RuneLite
+                        // GPU computes texture * (hsl / 127). Terrain vertices
+                        // carry that light in the low 7 bits of their HSL.
+                        float lightness = clamp(float(int(vEncodedColor) & 0x7F) / 127.0, 0.0, 1.0);
+                        color = texel.rgb * lightness;
                     } else if (uTextureMissing != 0) {
                         float lightness = clamp(vEncodedColor / 127.0, 0.0, 1.0);
                         color = vec3(1.0, 0.0, 1.0) * lightness;
