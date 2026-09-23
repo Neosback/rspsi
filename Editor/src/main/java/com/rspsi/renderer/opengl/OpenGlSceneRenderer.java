@@ -270,6 +270,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private final ArrayList<GpuDrawCommand> alphaCommands = new ArrayList<>();
     private final java.util.IdentityHashMap<GpuDrawCommand, Integer> alphaIndices =
             new java.util.IdentityHashMap<>();
+    private List<GpuDrawCommand> indexedCommands = List.of();
     private final ArrayList<Integer> alphaOrder = new ArrayList<>();
     private final RsFaceOrderPlanner.Workspace alphaOrderWorkspace =
             new RsFaceOrderPlanner.Workspace();
@@ -530,14 +531,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // back-to-front. Keep opaque submission order stable, but apply the
         // same depth ordering to alpha ranges in the native backend.
         alphaCommands.clear();
-        alphaIndices.clear();
         alphaOrder.clear();
+        ensureCommandIndices(commands);
         for (int index = 0; index < commands.size(); index++) {
             GpuDrawCommand command = commands.get(index);
             if (command.pass() == GpuDrawCommand.SubmissionPass.ALPHA
                     && visibility.visible(index)) {
                 alphaCommands.add(command);
-                alphaIndices.put(command, index);
             }
         }
         float alphaCosYaw = (float) Math.cos(camera.yaw());
@@ -781,6 +781,17 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             drawCalls++;
         }
         return drawCalls;
+    }
+
+    private void ensureCommandIndices(List<GpuDrawCommand> commands) {
+        if (commands == indexedCommands) {
+            return;
+        }
+        alphaIndices.clear();
+        for (int index = 0; index < commands.size(); index++) {
+            alphaIndices.put(commands.get(index), index);
+        }
+        indexedCommands = commands;
     }
 
     private static long drawStateKey(GpuDrawCommand command, boolean alpha) {
