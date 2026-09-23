@@ -52,6 +52,26 @@ public final class AnimationResolver {
         return frameCount - 1;
     }
 
+    /**
+     * Selects the current frame for the client's cached-model skeletal path.
+     * Cached sequences advance one frame per client cycle and use the same
+     * frameCount loop-back field as the current AnimationSequence state machine.
+     */
+    public static int cachedFrameIndex(int frameCount, int frameStep, int clientCycle) {
+        if (frameCount <= 0) return 0;
+        long position = Math.max(0L, clientCycle);
+        if (position < frameCount) return (int) position;
+
+        if (frameStep > 0 && frameStep <= frameCount) {
+            int loopStart = frameCount - frameStep;
+            return loopStart + (int) ((position - frameCount) % frameStep);
+        }
+
+        // The client resets an invalid post-wrap frame to zero. Subsequent
+        // cycles then advance normally until the next end crossing.
+        return (int) (position % frameCount);
+    }
+
     private static long sum(long[] values, int from, int count) {
         long total = 0;
         for (int index = from; index < from + count; index++) total += values[index];
