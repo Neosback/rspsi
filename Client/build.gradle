@@ -18,7 +18,10 @@ dependencies {
     implementation "dev.or2:osrs:${openruneFileStoreVersion}"
     implementation "dev.or2:definition:${openruneFileStoreVersion}"
     implementation "dev.or2:opcode:${openruneFileStoreVersion}"
-    // OpenRune definition codecs expose ByteBuf in their public encode API,\n    // but the module keeps Netty as an implementation dependency.\n    implementation "io.netty:netty-buffer:4.1.107.Final"\n    // Explicit opt-in writable adapter. The normal FileStore filesystem
+    // OpenRune definition codecs expose ByteBuf in their public encode API,
+    // but the module keeps Netty as an implementation dependency.
+    implementation "io.netty:netty-buffer:4.1.107.Final"
+    // Explicit opt-in writable adapter. The normal FileStore filesystem
     // remains read-only; this module exposes OpenRune's CacheDelegate for a
     // separately selected output cache.
     implementation("dev.or2:tools:${openruneFileStoreVersion}") {
