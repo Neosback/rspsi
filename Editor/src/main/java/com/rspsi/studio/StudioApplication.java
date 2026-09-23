@@ -198,7 +198,9 @@ public final class StudioApplication implements AutoCloseable {
                 sceneViewport.setZonedPlan(currentZonedPlan);
                 mapEditor.render(cache, currentPlan, sceneViewport, sceneStatus,
                         this::openDashboard, renderSettings, pluginLifecycle,
-                        loadedScene != null && loadedScene.session().isDirty(),
+                        loadedScene != null
+                                && (loadedScene.session().isDirty()
+                                || cache.objectDefinitions().unpublishedCount() > 0),
                         this::openInterfaceStudio, this::openObjectStudio,
                         () -> integrationCenterOpen.set(true),
                         simulation, symbols, references, spawns, integrations,
@@ -660,7 +662,11 @@ public final class StudioApplication implements AutoCloseable {
     /** Closes one workspace tab, gated by an unsaved-changes prompt for Map Studio. */
     private void requestCloseWorkspace(WorkspaceManager.Workspace workspace) {
         if (workspace == WorkspaceManager.Workspace.MAP_EDITOR) {
-            if (loadedScene != null && loadedScene.session().isDirty()) {
+            LoadedOsrsCacheSession cache = cacheSessions.current().orElse(null);
+            boolean definitionDirty = cache != null
+                    && cache.objectDefinitions().unpublishedCount() > 0;
+            if (loadedScene != null
+                    && (loadedScene.session().isDirty() || definitionDirty)) {
                 closePrompt = true;
                 return;
             }
@@ -687,13 +693,17 @@ public final class StudioApplication implements AutoCloseable {
         if (!ImGui.beginPopupModal("Unsaved Studio changes##dashboard")) return;
 
         EditorSession session = loadedScene == null ? null : loadedScene.session();
-        boolean externalDirty = session != null && session.hasUnsavedExternalState();
+        LoadedOsrsCacheSession cache = cacheSessions.current().orElse(null);
+        boolean definitionDirty = cache != null
+                && cache.objectDefinitions().unpublishedCount() > 0;
+        boolean externalDirty = definitionDirty
+                || (session != null && session.hasUnsavedExternalState());
         if (externalDirty) {
             ImGui.textWrapped(
-                    "This Studio session contains in-memory definition edits. "
-                            + "Map Save does not write those definitions yet. "
-                            + "Save Map can persist map changes only; Discard & Close "
-                            + "will lose the definition preview.");
+                    "This Studio session contains unpublished definition edits. "
+                            + "Map Save does not write those definitions. "
+                            + "Publish them from Object Viewer > Properties to a separate "
+                            + "output cache, or Discard & Close to lose the in-memory preview.");
         } else {
             ImGui.textWrapped("This map has unsaved changes. Save before closing Map Studio?");
         }
@@ -705,8 +715,10 @@ public final class StudioApplication implements AutoCloseable {
         if (ImGui.button(externalDirty ? "Save Map" : "Save")) {
             try {
                 session.save();
-                if (session.hasUnsavedExternalState()) {
-                    sceneStatus = "Map changes saved. Definition edits remain in-memory only.";
+                boolean definitionsRemain = cache != null
+                        && cache.objectDefinitions().unpublishedCount() > 0;
+                if (session.hasUnsavedExternalState() || definitionsRemain) {
+                    sceneStatus = "Map changes saved. Definition edits still need an output-cache build.";
                 } else {
                     ImGui.closeCurrentPopup();
                     closeMapEditorTab();
