@@ -30,6 +30,8 @@ class RenderConfigCompilerTest {
         // (GlFramebuffer); it was 0 only while the setting was clamped
         // unavailable pending the FBO acceptance gate.
         assertEquals(4, config.msaaSamples());
+        assertEquals(BackfacePolicy.NativeCullingMode.CLIENT_FRONT,
+                RenderSettingKeys.registry().defaults().get(RenderSettingKeys.NATIVE_CULLING_MODE));
     }
 
     @Test
