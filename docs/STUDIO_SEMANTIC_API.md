@@ -317,10 +317,12 @@ Do not expose GPU upload offsets through this normal API.
 
 ### 5.6 SceneObjectView
 
+RuneLite's `TileObject` is the useful conceptual base here: all scene-object layers should share one stable object identity and world-placement contract before layer-specific presentation is added.
+
 Target responsibilities:
 
     SceneObjectIdentity identity()
-    WorldTile anchor()
+    WorldTile authoredAnchor()
     ObjectCategory category()
     OsrsLocShape shape()
     int rotation()
@@ -329,14 +331,18 @@ Target responsibilities:
     Optional<ObjectDefinitionView> displayDefinition()
     ObjectResolutionView resolution()
 
-    int footprintWidth()
-    int footprintLength()
+    SceneFootprint sceneFootprint()
+    ModelFootprint modelFootprint()
 
     List<ModelReferenceView> selectedModels()
-    ObjectAppearanceView appearance()
-    ObjectCollisionView collision()
+    ObjectAppearanceView displayAppearance()
+    ObjectCollisionView placedCollision()
 
-The visible appearance must come from the resolved display definition where the client transforms the object before model construction.
+Do **not** collapse scene footprint and model footprint into one value. RuneLite's map loader establishes scene occupancy/collision from the placed definition, while `DynamicObject.getModel()` resolves the transform and uses the display definition's dimensions for model centering and height sampling.
+
+Likewise, do not call a single ambiguous `appearance()` field authoritative for every runtime property. The current client path sources the DynamicObject animation id from the placed definition but constructs the visible model from the transformed/display definition's model appearance.
+
+Layer-specific APIs such as wall orientation pairs or wall-decoration displacement should be added only when a concrete tool needs those semantics. The common `SceneObjectView` remains the normal plugin abstraction.
 
 ### 5.7 ObjectResolutionView
 
@@ -388,12 +394,19 @@ Studio should deliberately reuse established OSRS vocabulary where it improves c
 | `Tile` | `SceneTileView` | adds authored/resolved distinctions |
 | `SceneTilePaint` | `TilePaintView` | no public GPU offsets |
 | `SceneTileModel` | `TileModelView` | semantic geometry, no ordinary GPU bookkeeping |
-| `GameObject` | `SceneObjectView` | retains placed + transformed definition identity |
-| `WallObject` | `WallView` | semantic wall layer |
-| `DecorativeObject` | `WallDecorationView` | semantic wall-decoration layer |
-| `GroundObject` | `GroundDecorationView` | semantic ground-decoration layer |
-| `WorldPoint` | existing `WorldTile` family | absolute world identity remains first-class |
-| collision APIs | `CollisionView` | immutable semantic projection |
+| `TileObject` | common `SceneObjectView` contract | stable id, world placement, layer/category, definition/action semantics |
+| `GameObject` | `SceneObjectView` + scene footprint | existing `GameObjectSceneMetadata` already carries occupied scene min/max/size |
+| `WallObject` | common object view + optional wall presentation | existing wall rules already model multi-part orientations; do not add a class until a consumer needs it |
+| `DecorativeObject` | common object view + wall-decoration presentation | existing `WallDecorationPresentation` / rules already carry displacement and two-renderable cases |
+| `GroundObject` | common `SceneObjectView` | no separate public type needed unless ground-layer-only behavior emerges |
+| `WorldPoint` | existing `WorldTile` / `WorldTileAddress` | absolute world, region, chunk, and local breakdown already exists |
+| `WorldArea` | future world-space bounds/query value | Phase 3 should add a world-area type rather than misuse local `TileBounds` |
+| `ObjectComposition` transforms | `ObjectDefinitionResolver` / resolution view | one-step client transform is implemented; future simulated var state should be an explicit resolution context |
+| collision APIs / flags | existing `CollisionTileSnapshot` / `CollisionFlag` | reuse existing OSRS bit vocabulary |
+| `JagexColor` | existing `OsrsTerrainColorMath` where terrain-specific | do not conflate generic packed-HSL helpers with source-domain terrain blending |
+| `Model` / `AABB` | existing `ClientModelBounds` + semantic geometry | keep screen projection/backend details out of normal scene API |
+| `Perspective` / clickbox helpers | internal projection + canonical `SurfaceHit` | plugins should consume semantic hit/geometry instead of rebuilding viewport projection |
+| instance template/source mapping | existing instance model/builders; future scene provenance view | expose source/template coordinates only when instance authoring/debugging consumes them |
 | draw callbacks | optional render-extension capability | separate from normal semantic API |
 
 ---
@@ -423,6 +436,38 @@ Do not rewrite working foundations.
 `TerrainRenderPacket` and `ModelRenderPacket` remain excellent renderer-neutral compilation artifacts, but public plugins should normally consume higher-level semantic views.
 
 Renderer packets may still be available to internal diagnostics and parity tests.
+
+### RuneLite API coverage review
+
+The vendored RuneLite API contains many live-client concepts that Studio should **not** mirror simply because they exist. The map/content-editor relevant subset is now explicitly accounted for:
+
+- **Scene/tile semantics:** tile paint, shaped tile model, heights, flags, bridge/render levels, roofs and scene visibility feed the planned tile/surface views.
+- **Tile-object semantics:** common identity, world location, layer, actions, footprint, wall/decor presentation, and click geometry feed `SceneObjectView`, `SurfaceHit`, and existing scene metadata.
+- **Definitions/multilocs:** name/actions, size, varbit/varp transforms, map scene and other definition metadata stay behind neutral definition views and resolution services.
+- **Collision:** reuse existing collision snapshots/flags and route services.
+- **Coordinates/areas:** reuse `WorldTile`, `LocalTile`, `WorldTileAddress`; add a world-space area/bounds type with the query engine instead of overloading local `TileBounds`.
+- **Model geometry/bounds:** reuse `ModelRenderPacket`, `ClientModelBounds`, and semantic geometry adapters; do not surface raw GPU buffers.
+- **Color/texture:** reuse client-backed terrain color math and texture resources; generic RuneLite color helpers are references, not automatic replacement APIs.
+- **Instances:** reuse existing `InstanceChunkTemplate`, transforms, materializer, and instance parity fixtures. Public source/template provenance waits for an instance-aware tool.
+- **Projection/canvas helpers:** remain frontend/internal. A plugin should normally ask for `SurfaceHit`, world geometry, or overlay primitives rather than calculate RuneLite-style canvas clickboxes itself.
+- **Actors, players, NPCs, projectiles, widgets, menus, chat, social, inventory, game ticks, client vars and networking:** live-client domains are intentionally outside the static map-editor semantic API. Add them later only through the simulation/content-runtime roadmap when a Studio feature requires them.
+
+Definition fields such as interaction access masks, map-area/map-icon IDs, sound metadata, parameters, and support-item flags already remain available through decoded/raw definition data even when they are not promoted into `ObjectDefinitionView`. Promote one into the stable semantic view only when a first-party or public capability consumes it.
+
+### API liveness rule
+
+A semantic API is not considered implemented merely because a type or method exists.
+
+Before a new neutral/public member is promoted:
+
+1. it must have at least one real first-party, verifier, or plugin-facing consumer;
+2. its semantics must have a focused test or trusted fixture;
+3. it must not duplicate an existing neutral service or renderer-neutral contract;
+4. visibility must remain as narrow as practical until a second component needs it;
+5. speculative convenience methods should be removed rather than preserved "for later";
+6. compatibility shims are retained only when an existing caller or versioned public contract requires them.
+
+Tests alone prove semantics, not product usefulness. Conversely, a production consumer without semantic tests is not enough for a stable plugin contract.
 
 ---
 
@@ -459,6 +504,8 @@ A plugin should never need Dear ImGui, GLFW, OpenGL, OpenRune backend classes, o
 Do not promise binary/source compatibility with RuneLite plugins.
 
 Most RuneLite plugins depend on a live game client, ticks, actors, widgets, varbits, events, menus, or network/client state that does not exist in a map editor.
+
+A future object-resolution context may optionally supply simulated varbit/varp state so the editor's simulator can resolve non-default multiloc states. The current static editor resolver intentionally uses the definition's default transform because no live player state exists. Do not add a generic var-state API until the simulator or another first-party consumer requires it.
 
 A later optional compatibility/adaptation module may make scene-oriented RuneLite algorithms easier to port:
 
