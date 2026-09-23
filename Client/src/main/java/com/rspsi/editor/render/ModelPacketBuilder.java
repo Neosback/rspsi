@@ -161,11 +161,13 @@ public final class ModelPacketBuilder {
             for (int modelId : modelIdsFor(resolved.objectDefinition(), variant.sourceType())) {
                 Optional<ModelGeometryView> geometry = definitions.modelGeometry(modelId);
                 if (geometry.isEmpty()) continue;
-                ModelGeometryView animatedGeometry = geometry.orElseThrow();
+                ModelGeometryView baseGeometry = geometry.orElseThrow();
+                ModelGeometryView animatedGeometry = baseGeometry;
                 if (resolved.animation().isPresent() && resolved.animationSkeleton().isPresent()) {
-                    animatedGeometry = ModelAnimation.apply(animatedGeometry,
+                    animatedGeometry = ModelAnimation.apply(baseGeometry,
                             resolved.animation().orElseThrow(),
                             resolved.animationSkeleton().orElseThrow());
+                    parts.animationTransformed |= animatedGeometry != baseGeometry;
                 }
                 int variantStart = parts.vertices.size();
                 append(parts, object, resolved.appearance(), animatedGeometry, document,
@@ -211,12 +213,14 @@ public final class ModelPacketBuilder {
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
                 resolved.appearance().animationId(), bounds[0], bounds[1], bounds[2],
-                bounds[3], bounds[4], bounds[5], resolved.animationState().transformed(), false,
+                bounds[3], bounds[4], bounds[5], resolved.animationState().active(), false,
                 placementHeight,
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
                 GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata,
                 clientRenderableBounds, parts.clientRenderablePlacements,
-                contourContract, resolved.animationState(), sceneObjectIdentity);
+                contourContract,
+                resolved.animationState().withTransformed(parts.animationTransformed),
+                sceneObjectIdentity);
         return Optional.of(resolved.appearance().mergeNormals()
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }
@@ -264,8 +268,7 @@ public final class ModelPacketBuilder {
                 : Optional.empty();
         return new ResolvedAnimation(frame, skeleton,
                 ModelAnimationState.selected(animationId, selectedIndex, selectedFrameId,
-                        clientCycle, value.animationHeightOffset(),
-                        frame.isPresent() && skeleton.isPresent()));
+                        clientCycle, value.animationHeightOffset(), false));
     }
 
     /**
@@ -1510,6 +1513,7 @@ public final class ModelPacketBuilder {
         private final List<ClientRenderablePlacement> clientRenderablePlacements = new ArrayList<>();
         private final List<Integer> unskewedVertexY = new ArrayList<>();
         private boolean contourApplied;
+        private boolean animationTransformed;
         private final List<ModelTriangle> triangles = new ArrayList<>();
         private final List<TextureTriangle> textureTriangles = new ArrayList<>();
         private final List<VertexRange> wallVariantRanges = new ArrayList<>();
