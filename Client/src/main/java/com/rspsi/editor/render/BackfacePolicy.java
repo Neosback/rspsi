@@ -1,5 +1,7 @@
 package com.rspsi.editor.render;
 
+import java.util.Objects;
+
 /**
  * RuneScape projected-face visibility shared by software/native scene backends.
  *
@@ -15,8 +17,9 @@ package com.rspsi.editor.render;
  * area once, so a positive client edge maps to positive conventional OpenGL
  * window area: counter-clockwise.</p>
  *
- * <p>Native culling remains disabled until asymmetric real-cache model and
- * shaped-tile fixtures validate the complete upload/projection path.</p>
+ * <p>Native model geometry uses the client-front winding by default. Terrain
+ * intentionally remains two-sided because shaped-tile winding is a separate
+ * contract from client {@code Model.draw0}.</p>
  */
 public final class BackfacePolicy {
     private static final float DEGENERATE_EPSILON = 0.0001f;
@@ -34,10 +37,32 @@ public final class BackfacePolicy {
         return NativeWinding.COUNTER_CLOCKWISE;
     }
 
+    /** Default native policy for ordinary editing. */
+    public static NativeCullingMode defaultMode() {
+        return NativeCullingMode.CLIENT_FRONT;
+    }
+
+    /** Winding selected by one native culling mode. */
+    public static NativeWinding nativeWinding(NativeCullingMode mode) {
+        Objects.requireNonNull(mode, "native culling mode");
+        return mode == NativeCullingMode.REVERSED_DEBUG
+                ? NativeWinding.CLOCKWISE
+                : NativeWinding.COUNTER_CLOCKWISE;
+    }
+
     /**
-     * Native viewport validation mode. Normal editing remains two-sided until
-     * the real-cache model and shaped-tile acceptance checks are complete.
+     * Whether a semantic scene layer participates in native back-face culling.
+     *
+     * <p>Only client model geometry is covered by the {@code Model.draw0}
+     * facing contract. Terrain is therefore always two-sided, even while
+     * client-front model culling is active.</p>
      */
+    public static boolean cullsLayer(SceneLayer.Kind layer, NativeCullingMode mode) {
+        Objects.requireNonNull(layer, "scene layer");
+        Objects.requireNonNull(mode, "native culling mode");
+        return layer != SceneLayer.Kind.TERRAIN && mode != NativeCullingMode.TWO_SIDED;
+    }
+
     public enum NativeCullingMode {
         TWO_SIDED("Two Sided"),
         CLIENT_FRONT("Client Front"),
@@ -56,6 +81,7 @@ public final class BackfacePolicy {
     }
 
     public enum NativeWinding {
-        COUNTER_CLOCKWISE
+        COUNTER_CLOCKWISE,
+        CLOCKWISE
     }
 }
