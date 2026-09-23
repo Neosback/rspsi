@@ -684,6 +684,10 @@ class ModelPacketBuilderTest {
         // retain the two-face normal contribution at both copies.
         assertEquals(2, packet.vertices().get(0).normalMagnitude());
         assertEquals(2, packet.vertices().get(3).normalMagnitude());
+        assertEquals(100, packet.triangles().get(0).unlitColor(),
+                "relighting after merged normals must retain the source face HSL");
+        assertEquals(100, packet.triangles().get(1).unlitColor(),
+                "both wall variants retain their source color through relighting");
     }
 
     @Test
