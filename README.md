@@ -13,6 +13,7 @@ the JavaFX desktop application accidentally.
 
 - [Agent/contributor orientation - module layout, build commands, conventions](AGENTS.md)
 - [Roadmap and current priorities](docs/ROADMAP.md)
+- [Project launcher, startup lifecycle, and Dashboard contract](docs/PROJECT_LAUNCHER_AND_DASHBOARD.md)
 - [Rendering parity tracker (machine-readable gap list)](docs/RENDERING_PARITY_MANIFEST.json)
 - [Terraini reference notes (algorithms, not vendored source)](docs/TERRAINI_REFERENCE.md)
 
