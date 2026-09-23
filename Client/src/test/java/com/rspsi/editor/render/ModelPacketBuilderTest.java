@@ -255,6 +255,10 @@ class ModelPacketBuilderTest {
                 .build(document).get(0);
 
         assertEquals(0, packet.vertices().get(0).y());
+        assertTrue(packet.contourContract().present());
+        assertTrue(!packet.contourContract().applied());
+        assertEquals(ModelContourContract.Mode.FULL, packet.contourContract().mode());
+        assertTrue(!packet.contourContract().hasUnskewedModel());
     }
 
     /**
@@ -295,6 +299,11 @@ class ModelPacketBuilderTest {
         // Middle vertex: ratio 32768, warp scaled by (65536-32768)/65536:
         // -64 + 32768 * 32 / 65536 = -48.
         assertEquals(-48, packet.vertices().get(2).y());
+        assertEquals(ModelContourContract.Mode.PARTIAL, packet.contourContract().mode());
+        assertEquals(2, packet.contourContract().type());
+        assertEquals(65536, packet.contourContract().parameter());
+        assertTrue(packet.contourContract().applied());
+        assertEquals(List.of(0, -128, -64), packet.contourContract().unskewedVertexY());
     }
 
     /** clipType 0 (full contour) attaches every vertex regardless of height. */
@@ -329,6 +338,15 @@ class ModelPacketBuilderTest {
         assertEquals(64, contouredBounds.height(),
                 "client cylinder bounds must be recalculated from the contoured model");
         assertEquals(0, contouredBounds.bottomY());
+        assertTrue(packet.contourContract().present());
+        assertTrue(packet.contourContract().applied());
+        assertEquals(ModelContourContract.Mode.FULL, packet.contourContract().mode());
+        assertEquals(1, packet.contourContract().type());
+        assertEquals(0, packet.contourContract().parameter());
+        assertEquals(64, packet.contourContract().placementHeight());
+        assertEquals(List.of(0, -128, -64), packet.contourContract().unskewedVertexY());
+        assertEquals(-128, packet.contourContract().unskewedY(1));
+        assertEquals(packet.vertices().size(), packet.contourContract().metadata().vertexCount());
     }
 
     @Test
