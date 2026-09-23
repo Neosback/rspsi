@@ -204,10 +204,15 @@ public final class OsrsRevisionVerifier {
             boolean objectProjectionComplete = scene.renderObjects().size() == scene.objects().size();
             ObjectSceneResolutionAudit.Report objectResolutionAudit =
                     ObjectSceneResolutionAudit.audit(document, definitions, scene);
+            List<ObjectSceneResolutionAudit.Entry> transformedObjects =
+                    objectResolutionAudit.transformedEntries();
             messages.add("object resolution audit: authored=" + objectResolutionAudit.entries().size()
                     + "; submitted=" + objectResolutionAudit.submittedCount()
+                    + "; transformed=" + transformedObjects.size()
                     + "; warnings=" + objectResolutionAudit.warningCount()
                     + "; failures=" + objectResolutionAudit.failureCount());
+            transformedObjects.stream().limit(8)
+                    .forEach(entry -> messages.add("object transform: " + entry.diagnostic()));
             objectResolutionAudit.problems().stream().limit(8)
                     .forEach(problem -> messages.add("object resolution: " + problem.diagnostic()));
             String sceneFingerprint = RenderSceneFingerprint.sha256(scene);
@@ -280,6 +285,7 @@ public final class OsrsRevisionVerifier {
                             : VerificationCheck.Status.PASS,
                     "authored=" + objectResolutionAudit.entries().size()
                             + ", submitted=" + objectResolutionAudit.submittedCount()
+                            + ", transformed=" + transformedObjects.size()
                             + ", warnings=" + objectResolutionAudit.warningCount()
                             + ", failures=" + objectResolutionAudit.failureCount());
             VerificationCheck renderParity = renderParityCheck(fixture, fixtureProblems, sceneFingerprint);
