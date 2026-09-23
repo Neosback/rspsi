@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.StudioToolPlugin;
 import com.rspsi.studio.theme.StudioFonts;
@@ -75,8 +76,8 @@ public final class LeftBrushRail {
         ImGui.setNextWindowSize(RAIL_WIDTH, height, imgui.flag.ImGuiCond.Always);
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
-        ImGui.pushStyleColor(ImGuiCol.WindowBg, 0xF50E1015);
-        ImGui.pushStyleColor(ImGuiCol.Border, 0xD0272C38);
+        ImGui.pushStyleColor(ImGuiCol.WindowBg, StudioDrawColors.abgr(0xF50E1015));
+        ImGui.pushStyleColor(ImGuiCol.Border, StudioDrawColors.abgr(0xD0272C38));
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 4.0f, 8.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 0.0f, 6.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
@@ -91,15 +92,15 @@ public final class LeftBrushRail {
         boolean open = hud != null && !hud.isMinimized();
 
         if (open) {
-            ImGui.pushStyleColor(ImGuiCol.Button, 0xFF6366F1);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF818CF8);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF4F46E5);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF6366F1));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF818CF8));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF4F46E5));
             ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
         } else {
-            ImGui.pushStyleColor(ImGuiCol.Button, 0xFF181A22);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF262A37);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF1E212B);
-            ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF181A22));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF262A37));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF1E212B));
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
         }
 
         ImGui.pushFont(StudioFonts.icon(), 0.0f);

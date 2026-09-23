@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui.hud;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.editor.model.FloorId;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.brush.BrushAwareTool;
@@ -227,7 +228,7 @@ public final class BrushSettingsHud implements StudioPlugin {
         String shapeName = resolveActiveBrushName(context, brushTool, brushes);
 
         ImGui.alignTextToFramePadding();
-        ImGui.textColored(0xFF38BDF8, StudioIcons.BRUSH + " " + shapeName + " R:" + radius);
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.BRUSH + " " + shapeName + " R:" + radius);
 
         ImGui.sameLine(0.0f, 6.0f);
         if (ImGui.button(StudioIcons.REMOVE + "##min-dec", 20.0f, 20.0f)) {
@@ -298,9 +299,9 @@ public final class BrushSettingsHud implements StudioPlugin {
 
         ImGui.sameLine(0.0f, 10.0f);
         if (pinned) {
-            ImGui.pushStyleColor(ImGuiCol.Text, 0xFF38BDF8);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF38BDF8));
         } else {
-            ImGui.pushStyleColor(ImGuiCol.Text, 0xFF64748B);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF64748B));
         }
         if (ImGui.smallButton(StudioIcons.PIN + "##pin-btn")) {
             pinned = !pinned;
@@ -338,7 +339,7 @@ public final class BrushSettingsHud implements StudioPlugin {
         if (ImGui.isItemHovered()) ImGui.setTooltip("More brushes (Checker, Slope, Terrace)");
 
         if (ImGui.beginPopup("hud_more_brushes_popup")) {
-            ImGui.textColored(0xFF38BDF8, StudioIcons.BRUSH + "  Additional Brushes");
+            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.BRUSH + "  Additional Brushes");
             ImGui.separator();
             if (brushes != null) {
                 for (EditorBrush brush : brushes.enabledBrushes()) {
@@ -357,9 +358,9 @@ public final class BrushSettingsHud implements StudioPlugin {
                                    String activeShapeId, String tooltip) {
         boolean active = brushId.equals(activeShapeId);
         if (active) {
-            ImGui.pushStyleColor(ImGuiCol.Button, 0xFF0284C7);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF0369A1);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF075985);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF0284C7));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF0369A1));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF075985));
         }
         if (ImGui.button(label + "##shp-" + brushId, 54.0f, 22.0f)) {
             applyBrush(context, brushTool, brushes, brushId);
@@ -487,14 +488,14 @@ public final class BrushSettingsHud implements StudioPlugin {
 
         // Palette popups
         if (ImGui.beginPopup("hud_underlay_palette")) {
-            ImGui.textColored(0xFF38BDF8, StudioIcons.PALETTE + "  Select Underlay Material");
+            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.PALETTE + "  Select Underlay Material");
             ImGui.separator();
             renderGridPopup(cache, painter, palette, true);
             ImGui.endPopup();
         }
 
         if (ImGui.beginPopup("hud_overlay_palette")) {
-            ImGui.textColored(0xFF38BDF8, StudioIcons.PALETTE + "  Select Overlay Material");
+            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.PALETTE + "  Select Overlay Material");
             ImGui.separator();
             renderGridPopup(cache, painter, palette, false);
             ImGui.endPopup();
@@ -650,9 +651,9 @@ public final class BrushSettingsHud implements StudioPlugin {
                                        String label, HeightToolPanel.HeightMode current) {
         boolean active = (mode == current);
         if (active) {
-            ImGui.pushStyleColor(ImGuiCol.Button, 0xFF0284C7);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF0369A1);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF075985);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF0284C7));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF0369A1));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF075985));
         }
         if (ImGui.button(label + "##hm-btn-" + mode.name())) {
             if (context.activateTool() != null) {
@@ -682,9 +683,9 @@ public final class BrushSettingsHud implements StudioPlugin {
         for (SplineBrushStyle styleOption : SplineBrushStyle.values()) {
             boolean active = (currentStyle == styleOption);
             if (active) {
-                ImGui.pushStyleColor(ImGuiCol.Button, 0xFF0284C7);
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF0369A1);
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF075985);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF0284C7));
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF0369A1));
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF075985));
             }
             if (ImGui.button(styleOption.displayName() + "##hud-spl-" + styleOption.name())) {
                 if (pathTool != null) pathTool.setStyle(styleOption);
@@ -707,8 +708,8 @@ public final class BrushSettingsHud implements StudioPlugin {
         ImGui.sameLine(0.0f, 10.0f);
         boolean canBuild = (pathTool != null && nodeCount >= 2);
         if (!canBuild) ImGui.pushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
-        ImGui.pushStyleColor(ImGuiCol.Button, 0xFF16A34A);
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF15803D);
+        ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF16A34A));
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF15803D));
 
         if (ImGui.button(StudioIcons.CHECK + " Build [Enter]##hud-build-path", 96.0f, 22.0f)) {
             if (canBuild) pathTool.buildPath();
@@ -748,7 +749,7 @@ public final class BrushSettingsHud implements StudioPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, StudioIcons.TUNE + "  Brush Settings HUD Preferences");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.TUNE + "  Brush Settings HUD Preferences");
         ImGui.separator();
 
         String[] cornerNames = { "Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right" };

@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.StudioToolPlugin;
 import com.rspsi.studio.theme.StudioFonts;
@@ -164,7 +165,7 @@ public final class FloatingToolbar {
 
         // Right-click context menu on grip
         if (ImGui.beginPopupContextItem("ftb_options_ctx")) {
-            ImGui.textColored(0xFF38BDF8, "Flying Tool Rail");
+            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Flying Tool Rail");
             ImGui.separator();
             if (ImGui.menuItem("Reset Position")) resetPosition();
             if (ImGui.menuItem("Minimize Toolbar")) collapsed = true;
@@ -227,7 +228,7 @@ public final class FloatingToolbar {
             ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.15f, 0.18f, 0.24f, 0.85f));
             ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.22f, 0.26f, 0.34f, 0.9f));
             ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.12f, 0.15f, 0.20f, 0.9f));
-            ImGui.pushStyleColor(ImGuiCol.Text, 0xFFCBD5E1);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFFCBD5E1));
         }
 
         ImGui.pushFont(StudioFonts.icon(), 0.0f);

@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui.panels;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.editor.ChangeHeightCommand;
 import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.EditorCommand;
@@ -120,15 +121,15 @@ public final class HeightToolPanel implements StudioPanel {
         for (HeightMode m : HeightMode.values()) {
             boolean isCur = this.mode == m;
             if (isCur) {
-                ImGui.pushStyleColor(ImGuiCol.Button, 0xFF6366F1);
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF818CF8);
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF4F46E5);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF6366F1));
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF818CF8));
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF4F46E5));
                 ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
             } else {
-                ImGui.pushStyleColor(ImGuiCol.Button, 0xFF181A22);
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF262A37);
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF1E212B);
-                ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF181A22));
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF262A37));
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF1E212B));
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
             }
             if (ImGui.button(m.label() + "##hm-" + m.name())) {
                 this.mode = m;

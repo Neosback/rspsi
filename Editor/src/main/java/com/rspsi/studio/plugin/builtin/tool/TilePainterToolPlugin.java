@@ -1,5 +1,6 @@
 package com.rspsi.studio.plugin.builtin.tool;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.plugin.StudioToolPlugin;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.StudioPanelContext;
@@ -92,7 +93,7 @@ public final class TilePainterToolPlugin implements StudioToolPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, StudioIcons.TUNE + "  Tile Painter Preferences");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.TUNE + "  Tile Painter Preferences");
         ImGui.separator();
 
         ImGui.inputInt("Default Underlay ID", defaultUnderlay);

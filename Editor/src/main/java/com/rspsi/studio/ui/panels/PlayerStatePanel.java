@@ -1,10 +1,12 @@
 package com.rspsi.studio.ui.panels;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.api.runtime.SimulatedClient;
 import com.rspsi.api.runtime.VarDependencies;
 import com.rspsi.cache.definition.VarbitDefinitionView;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.ui.DockRegion;
+import com.rspsi.studio.theme.SettingRows;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
@@ -47,57 +49,38 @@ public final class PlayerStatePanel implements StudioPanel {
         var definitions = context.cache().bundle().definitions();
         SimulatedClient client = new SimulatedClient(context.simulation(), definitions);
 
-        ImGui.textWrapped("The map is shown as this player sees it. Player variables decide which "
-                + "state multi-state objects show (bushes, doors, quest scenery). Changes rebuild "
-                + "the scene and are never saved into the map.");
-        if (ImGui.button("Reset to fresh account")) {
+        ImGui.textWrapped("Shows the map as this player sees it. Variables pick the state of "
+                + "multi-state objects; changes rebuild the scene and are never saved.");
+        if (ImGui.button("Reset to fresh account", -Float.MIN_VALUE, 0.0f)) {
             client.resetVars();
         }
-        ImGui.sameLine();
-        ImGui.textDisabled("(every variable 0)");
-
         ImGui.spacing();
-        ImGui.separator();
         renderMapDependencies(context, client);
-
-        ImGui.spacing();
-        ImGui.separator();
         renderManualVars(client, definitions);
     }
 
     private void renderMapDependencies(StudioPanelContext context, SimulatedClient client) {
         WorldDocument world = context.session() == null ? null : context.session().world();
-        if (world == null) {
-            ImGui.textDisabled("Open a map to see which variables its objects use.");
-            return;
-        }
-        if (world != scannedWorld) {
+        if (world != null && world != scannedWorld) {
             dependencies = VarDependencies.scan(world, client.definitions());
             scannedWorld = world;
         }
-        ImGui.textColored(0xFF38BDF8, "Variables used by objects in this map (" + dependencies.size() + ")");
-        if (ImGui.smallButton("Rescan##player-rescan")) {
-            dependencies = VarDependencies.scan(world, client.definitions());
-        }
-        if (dependencies.isEmpty()) {
-            ImGui.textDisabled("No multi-state objects in this map.");
+        if (!SettingRows.begin("Objects in this map (" + dependencies.size() + ")###player-map-vars", true)) {
             return;
+        }
+        if (world == null) {
+            SettingRows.value("Map", "Open a map to see which variables its objects use.");
+        } else if (dependencies.isEmpty()) {
+            SettingRows.value("Map", "No multi-state objects in this map.");
         }
         for (VarDependencies.Dependency dependency : dependencies) {
             int current = dependency.kind() == VarDependencies.Kind.VARBIT
                     ? client.getVarbitValue(dependency.id()) : client.getVarpValue(dependency.id());
-            ImGui.pushID(dependency.key());
-            ImGui.spacing();
-            ImGui.text(dependency.key() + " = " + current);
-            ImGui.sameLine();
-            ImGui.textDisabled(dependency.placements() + " placement(s)");
+            List<Integer> values = new java.util.ArrayList<>();
+            List<String> labels = new java.util.ArrayList<>();
             for (VarDependencies.State state : dependency.states()) {
-                boolean active = state.value() == current;
-                if (active) ImGui.pushStyleColor(imgui.flag.ImGuiCol.Button, 0xFF2563EB);
-                if (ImGui.smallButton(state.value() + ": " + state.label())) {
-                    set(client, dependency, state.value());
-                }
-                if (active) ImGui.popStyleColor();
+                values.add(state.value());
+                labels.add(state.value() + ": " + state.label());
             }
             // The default entry is reached by a value past the last state; a
             // narrow varbit (e.g. one bit) cannot hold such a value at all.
@@ -106,43 +89,42 @@ public final class PlayerStatePanel implements StudioPanel {
                     || client.definitions().varbit(dependency.id())
                     .map(varbit -> defaultValue <= varbit.mask()).orElse(false);
             if (representable) {
-                boolean onDefault = current >= defaultValue;
-                if (onDefault) ImGui.pushStyleColor(imgui.flag.ImGuiCol.Button, 0xFF2563EB);
-                if (ImGui.smallButton("default (out of range)")) {
-                    set(client, dependency, defaultValue);
-                }
-                if (onDefault) ImGui.popStyleColor();
+                values.add(defaultValue);
+                labels.add(defaultValue + ": default");
             }
-            ImGui.popID();
+            int selected = values.indexOf(current);
+            if (selected < 0) {
+                values.add(current);
+                labels.add(current + ": (no state)");
+                selected = values.size() - 1;
+            }
+            ImInt choice = new ImInt(selected);
+            String label = dependency.key() + "  (" + dependency.placements() + " placed)";
+            if (SettingRows.combo(label, choice, labels.toArray(String[]::new)) && choice.get() != selected) {
+                set(client, dependency, values.get(choice.get()));
+            }
         }
+        if (SettingRows.button("Map changed?", "Rescan") && world != null) {
+            dependencies = VarDependencies.scan(world, client.definitions());
+        }
+        SettingRows.end();
     }
 
     private void renderManualVars(SimulatedClient client, com.rspsi.cache.definition.DefinitionProvider definitions) {
-        ImGui.textColored(0xFF38BDF8, "Set any variable");
-        ImGui.pushItemWidth(90.0f);
-        ImGui.inputInt("varbit##manual-varbit", varbitId);
-        ImGui.sameLine();
-        ImGui.inputInt("value##manual-varbit-value", varbitValue);
-        ImGui.popItemWidth();
-        ImGui.sameLine();
+        if (!SettingRows.begin("Set any variable", false)) return;
+        SettingRows.inputInt("Varbit id", varbitId);
         var layout = definitions.varbit(varbitId.get());
-        if (ImGui.button("Set##manual-varbit-set") && layout.isPresent()) {
+        SettingRows.value("Layout", layout.map(PlayerStatePanel::describe).orElse("no such varbit"));
+        SettingRows.inputInt("Varbit value (now " + client.getVarbitValue(varbitId.get()) + ")", varbitValue);
+        if (SettingRows.button("Apply varbit", "Set") && layout.isPresent()) {
             client.setVarbit(varbitId.get(), varbitValue.get());
         }
-        ImGui.textDisabled(layout.map(PlayerStatePanel::describe)
-                .orElse("No varbit " + varbitId.get() + " in this cache")
-                + "   current = " + client.getVarbitValue(varbitId.get()));
-
-        ImGui.pushItemWidth(90.0f);
-        ImGui.inputInt("varp##manual-varp", varpId);
-        ImGui.sameLine();
-        ImGui.inputInt("value##manual-varp-value", varpValue);
-        ImGui.popItemWidth();
-        ImGui.sameLine();
-        if (ImGui.button("Set##manual-varp-set")) {
+        SettingRows.inputInt("Varp id", varpId);
+        SettingRows.inputInt("Varp value (now " + client.getVarpValue(varpId.get()) + ")", varpValue);
+        if (SettingRows.button("Apply varp", "Set")) {
             client.setVarpValue(varpId.get(), varpValue.get());
         }
-        ImGui.textDisabled("current = " + client.getVarpValue(varpId.get()));
+        SettingRows.end();
     }
 
     private static void set(SimulatedClient client, VarDependencies.Dependency dependency, int value) {

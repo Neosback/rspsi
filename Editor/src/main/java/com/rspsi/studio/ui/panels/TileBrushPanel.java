@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui.panels;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.api.runtime.SimulatedClient;
@@ -89,7 +90,7 @@ public final class TileBrushPanel implements StudioPanel {
                 ImGui.textDisabled("No tile selected.");
                 ImGui.textDisabled("Use Single Select or Multi Select on the floating tool rail to inspect tiles.");
             } else {
-                ImGui.textColored(0xFF38BDF8, selected.size() + " tile(s) selected");
+                ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), selected.size() + " tile(s) selected");
                 ImGui.sameLine(0.0f, 12.0f);
                 if (ImGui.smallButton("Clear Selection##tile-insp-clr")) {
                     session.selection().clear();
@@ -152,7 +153,7 @@ public final class TileBrushPanel implements StudioPanel {
         ImGui.text("Coordinate: " + coord.x() + ", " + coord.y() + "  (plane " + coord.plane() + ")");
         if (effectivePlane != coord.plane()) {
             ImGui.sameLine();
-            ImGui.textColored(0xFFF59E0B, "  (renders as plane " + effectivePlane + " - bridge on plane 1)");
+            ImGui.textColored(StudioDrawColors.abgr(0xFFF59E0B), "  (renders as plane " + effectivePlane + " - bridge on plane 1)");
         }
         ImGui.text("Height (SW/SE/NE/NW): " + snapshot.southWestHeight() + " / " + snapshot.southEastHeight()
                 + " / " + snapshot.northEastHeight() + " / " + snapshot.northWestHeight());
@@ -330,7 +331,7 @@ public final class TileBrushPanel implements StudioPanel {
         var def = underlay ? cache.bundle().definitions().underlay(definitionId)
                 : cache.bundle().definitions().overlay(definitionId);
         if (def.isEmpty()) {
-            ImGui.textColored(0xFFEF4444, label + ": #" + definitionId + "  (no definition found - dangling id)");
+            ImGui.textColored(StudioDrawColors.abgr(0xFFEF4444), label + ": #" + definitionId + "  (no definition found - dangling id)");
             return;
         }
         FloorDefinitionView view = def.get();
@@ -408,7 +409,7 @@ public final class TileBrushPanel implements StudioPanel {
             String label = "Plane " + plane + (effective != plane ? "  (renders on scene plane " + effective + ")" : "")
                     + (plane == selectedPlane ? "  - selected" : "");
             if (plane == selectedPlane) {
-                ImGui.textColored(0xFF38BDF8, label);
+                ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), label);
             } else {
                 ImGui.textDisabled(label);
             }

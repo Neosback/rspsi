@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui.panels;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.editor.model.FloorId;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.EditorSession;
@@ -113,7 +114,7 @@ public final class TilePainterPalette implements StudioPanel {
             }
         }
 
-        ImGui.textColored(0xFFE2E8F0, "Tile Painter");
+        ImGui.textColored(StudioDrawColors.abgr(0xFFE2E8F0), "Tile Painter");
         ImGui.sameLine(0.0f, 20.0f);
         renderPresets();
         ImGui.separator();
@@ -363,7 +364,7 @@ public final class TilePainterPalette implements StudioPanel {
 
         for (int i = 0; i < SHAPE_NAMES.length; i++) {
             boolean current = state.shape() == i;
-            if (current) ImGui.pushStyleColor(ImGuiCol.Button, 0xFF3B82F6);
+            if (current) ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF3B82F6));
             if (ImGui.button(SHAPE_NAMES[i] + "##shp-" + i, 140.0f, 28.0f)) {
                 state.setShape(i); state.setApplyShape(true);
             }
@@ -381,7 +382,7 @@ public final class TilePainterPalette implements StudioPanel {
 
         for (int i = 0; i < ROTATION_NAMES.length; i++) {
             boolean current = state.rotation() == i;
-            if (current) ImGui.pushStyleColor(ImGuiCol.Button, 0xFF3B82F6);
+            if (current) ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF3B82F6));
             if (ImGui.button(ROTATION_NAMES[i] + "##rot-" + i, 160.0f, 32.0f)) {
                 state.setRotation(i); state.setApplyRotation(true);
             }

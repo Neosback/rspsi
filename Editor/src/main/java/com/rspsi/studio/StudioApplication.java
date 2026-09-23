@@ -434,8 +434,11 @@ public final class StudioApplication implements AutoCloseable {
             }
         }
 
+        // A pending edit or simulated-var change takes priority: animated scenes
+        // would otherwise schedule back-to-back refreshes and starve the
+        // rebuild, so var changes appeared only after unrelated input.
         if (loadedScene == null || cache == null || pendingSceneRebuild != null
-                || sceneDirty.get()) {
+                || sceneDirty.get() || !simulation.state().equals(renderedVarState)) {
             return;
         }
 

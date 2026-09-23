@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui.panels;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.plugin.EditorPlugin;
 import com.rspsi.editor.plugin.EditorPluginDescriptor;
@@ -92,7 +93,7 @@ public final class PluginManagerPanel implements StudioPanel {
         if (studioPlugins != null) {
             List<StudioPlugin> allStudio = studioPlugins.allPlugins();
             if (!allStudio.isEmpty()) {
-                ImGui.textColored(0xFF38BDF8, StudioIcons.VIEWPORT + "  STUDIO EXTENSIONS & TOOLS (" + allStudio.size() + ")");
+                ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.VIEWPORT + "  STUDIO EXTENSIONS & TOOLS (" + allStudio.size() + ")");
 
                 for (StudioPlugin plugin : allStudio) {
                     if (!matchesStudioCategory(plugin)) continue;
@@ -134,7 +135,7 @@ public final class PluginManagerPanel implements StudioPanel {
 
                     // Description (word-wrapped)
                     if (!pdesc.isBlank()) {
-                        ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
+                        ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
                         ImGui.textWrapped(pdesc);
                         ImGui.popStyleColor();
                     }
@@ -152,7 +153,7 @@ public final class PluginManagerPanel implements StudioPanel {
             List<EditorPlugin> candidates = clientLifecycle.candidates();
             if (!candidates.isEmpty()) {
                 ImGui.spacing();
-                ImGui.textColored(0xFF38BDF8, StudioIcons.CODE + "  ENGINE PLUGINS (" + candidates.size() + ")");
+                ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.CODE + "  ENGINE PLUGINS (" + candidates.size() + ")");
 
                 for (EditorPlugin plugin : candidates) {
                     EditorPluginDescriptor desc = plugin.descriptor();
@@ -184,7 +185,7 @@ public final class PluginManagerPanel implements StudioPanel {
                     }
 
                     if (!descText.isBlank()) {
-                        ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
+                        ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
                         ImGui.textWrapped(descText);
                         ImGui.popStyleColor();
                     }
@@ -234,7 +235,7 @@ public final class PluginManagerPanel implements StudioPanel {
         if (brushes.isEmpty()) return;
 
         ImGui.spacing();
-        ImGui.textColored(0xFF38BDF8, StudioIcons.BRUSH + "  BRUSHES (" + brushes.size() + ")");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.BRUSH + "  BRUSHES (" + brushes.size() + ")");
         ImGui.textDisabled("Brushes are neutral tool capabilities shared by terrain painters and sculptors.");
 
         for (EditorBrush brush : brushes) {
@@ -262,7 +263,7 @@ public final class PluginManagerPanel implements StudioPanel {
             }
 
             if (!brush.description().isBlank()) {
-                ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
                 ImGui.textWrapped(brush.description());
                 ImGui.popStyleColor();
             }
@@ -300,7 +301,7 @@ public final class PluginManagerPanel implements StudioPanel {
         ImGui.spacing();
 
         // 2. Header with Icon, Name, and Badges
-        ImGui.textColored(0xFF38BDF8, plugin.icon() + "  " + plugin.name());
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), plugin.icon() + "  " + plugin.name());
         ImGui.sameLine();
         StudioWidgets.badge("v" + plugin.version(), 0.20f, 0.40f, 0.60f);
         ImGui.sameLine();
@@ -315,7 +316,7 @@ public final class PluginManagerPanel implements StudioPanel {
 
         // Word-wrapped description
         if (!plugin.description().isBlank()) {
-            ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
             ImGui.textWrapped(plugin.description());
             ImGui.popStyleColor();
         }
@@ -326,7 +327,7 @@ public final class PluginManagerPanel implements StudioPanel {
         if (plugin instanceof com.rspsi.studio.plugin.StudioToolPlugin toolPlugin) {
             ImGui.separator();
             ImGui.spacing();
-            ImGui.textColored(0xFF38BDF8, "Placement");
+            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Placement");
             Set<com.rspsi.studio.plugin.StudioToolPlugin.ToolSurface> active =
                     new HashSet<>(studioPlugins.effectiveSurfaces(toolPlugin));
 
@@ -363,7 +364,7 @@ public final class PluginManagerPanel implements StudioPanel {
         try {
             plugin.renderSettings(context);
         } catch (Throwable t) {
-            ImGui.pushStyleColor(ImGuiCol.Text, 0xFFEF4444);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFFEF4444));
             ImGui.text(StudioIcons.BUG_REPORT + "  Plugin Settings Error:");
             ImGui.textWrapped(t.getMessage() != null ? t.getMessage() : t.toString());
             ImGui.popStyleColor();

@@ -1,5 +1,6 @@
 package com.rspsi.studio.plugin.builtin.tool;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.plugin.StudioToolPlugin;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.StudioPanelContext;
@@ -86,7 +87,7 @@ public final class ObjectPlacementToolPlugin implements StudioToolPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, StudioIcons.TUNE + "  Object Tool Preferences");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.TUNE + "  Object Tool Preferences");
         ImGui.separator();
 
         ImGui.sliderInt("Default Spawn Rotation", defaultRotation.getData(), 0, 3);
@@ -103,7 +104,7 @@ public final class ObjectPlacementToolPlugin implements StudioToolPlugin {
 
     @Override
     public void renderContextDrawer(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, StudioIcons.OBJECT + "  Object Placement Controls");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.OBJECT + "  Object Placement Controls");
         ImGui.sameLine(0.0f, 12.0f);
         ImGui.textDisabled("Click in the 3D viewport to spawn or manipulate objects. Use the Outliner or Object Viewer for full definitions.");
 
@@ -116,6 +117,6 @@ public final class ObjectPlacementToolPlugin implements StudioToolPlugin {
             defaultRotation.set((defaultRotation.get() + 3) % 4);
         }
         ImGui.sameLine(0.0f, 12.0f);
-        ImGui.textColored(0xFFD49B35, "Active Rotation: " + (defaultRotation.get() * 90) + "° (" + defaultRotation.get() + ")");
+        ImGui.textColored(StudioDrawColors.abgr(0xFFD49B35), "Active Rotation: " + (defaultRotation.get() * 90) + "° (" + defaultRotation.get() + ")");
     }
 }

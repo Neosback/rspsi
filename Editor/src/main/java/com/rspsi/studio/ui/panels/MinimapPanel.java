@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui.panels;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.model.TileCoordinate;
@@ -92,7 +93,7 @@ public final class MinimapPanel implements StudioPanel {
         int worldL = session != null ? session.world().length() : 64;
 
         // 1. Header with absolute camera info & plane switcher
-        ImGui.textColored(0xFF38BDF8, String.format(
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), String.format(
                 "World: (%d, %d)  Pl: %d", cameraWorldX, cameraWorldY, activePlane));
         ImGui.sameLine();
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 4.0f, 2.0f);

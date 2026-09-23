@@ -1,5 +1,6 @@
 package com.rspsi.studio.plugin.builtin;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.inspector.ObjectResolutionSummary;
 import com.rspsi.editor.model.WorldObject;
@@ -178,14 +179,14 @@ public final class TileInfoHudPlugin implements StudioPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, StudioIcons.TUNE + "  HUD Display Elements");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.TUNE + "  HUD Display Elements");
         ImGui.checkbox("Show Tile Coordinates##hud-coords", showCoordinates);
         ImGui.checkbox("Show Plane##hud-plane", showPlane);
         ImGui.checkbox("Show Elevation / Height##hud-height", showHeight);
         ImGui.checkbox("Show Hovered Object##hud-obj", showObject);
 
         ImGui.separator();
-        ImGui.textColored(0xFF38BDF8, StudioIcons.SETTINGS + "  Layout & Style");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.SETTINGS + "  Layout & Style");
         ImGui.combo("Anchor Position##hud-anchor", anchorCorner, ANCHOR_NAMES);
         ImGui.sliderFloat("Background Opacity##hud-alpha", bgAlpha.getData(), 0.1f, 1.0f, "%.2f");
 

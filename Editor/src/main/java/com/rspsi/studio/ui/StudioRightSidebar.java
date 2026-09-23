@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
@@ -75,20 +76,20 @@ public final class StudioRightSidebar {
             boolean isPinned = p.id().equals(pinnedTopPanelId);
 
             if (isSel) {
-                ImGui.pushStyleColor(ImGuiCol.Button, 0xFF6366F1); // Indigo 500
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF818CF8);
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF4F46E5);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF6366F1)); // Indigo 500
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF818CF8));
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF4F46E5));
                 ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
             } else if (isPinned) {
-                ImGui.pushStyleColor(ImGuiCol.Button, 0xFFD97706); // Amber 600
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFFF59E0B);
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFFB45309);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFFD97706)); // Amber 600
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFFF59E0B));
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFFB45309));
                 ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
             } else {
-                ImGui.pushStyleColor(ImGuiCol.Button, 0xFF181A22); // Zinc dark surface
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF262A37);
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF1E212B);
-                ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF181A22)); // Zinc dark surface
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF262A37));
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF1E212B));
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
             }
 
             ImGui.pushFont(StudioFonts.icon(), 0.0f);
@@ -108,7 +109,7 @@ public final class StudioRightSidebar {
 
             // Right-click context menu to pin or reassign slot
             if (ImGui.beginPopupContextItem("panel-ctx-" + p.id())) {
-                ImGui.textColored(0xFF38BDF8, p.title());
+                ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), p.title());
                 ImGui.separator();
                 if (isPinned) {
                     if (ImGui.menuItem("Unpin from Top Split")) {
@@ -156,9 +157,11 @@ public final class StudioRightSidebar {
 
             // --- Top Pinned Section ---
             ImGui.beginChild("right-split-top", contentW, topH, true);
-            ImGui.textColored(0xFFD49B35, StudioIcons.PIN + " " + pinnedPanel.title());
-            ImGui.sameLine(contentW - 60.0f);
-            if (ImGui.smallButton(StudioIcons.CLOSE + " Unpin##unpin-top")) {
+            ImGui.textColored(StudioDrawColors.abgr(0xFFD49B35), StudioIcons.PIN + " " + pinnedPanel.title());
+            String unpin = StudioIcons.CLOSE + " Unpin";
+            ImGui.sameLine(Math.max(0.0f, ImGui.getWindowContentRegionMaxX()
+                    - ImGui.calcTextSize(unpin).x - ImGui.getStyle().getFramePaddingX() * 2.0f));
+            if (ImGui.smallButton(unpin + "##unpin-top")) {
                 pinnedTopPanelId = null;
             }
             ImGui.separator();
@@ -175,7 +178,7 @@ public final class StudioRightSidebar {
                     .orElse(rightPanels.get(0));
 
             ImGui.beginChild("right-split-bottom", contentW, botH, true);
-            ImGui.textColored(0xFF38BDF8, activePanel.title());
+            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), activePanel.title());
             ImGui.separator();
             ImGui.pushTextWrapPos(0.0f);
             activePanel.render(context);

@@ -1,5 +1,6 @@
 package com.rspsi.studio;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.EditorSession;
@@ -580,7 +581,7 @@ public final class MapEditorView {
             return;
         }
 
-        ImGui.textColored(0xFF38BDF8, String.format("Tile (%d, %d, Pl %d)", contextTile.x(), contextTile.y(), contextTile.plane()));
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), String.format("Tile (%d, %d, Pl %d)", contextTile.x(), contextTile.y(), contextTile.plane()));
         ImGui.separator();
 
         LocalTile contextLocal = s.coordinates().toLocal(contextTile).orElse(null);
@@ -758,8 +759,8 @@ public final class MapEditorView {
         ImGui.setNextWindowPos(center.x, center.y - 100.0f, ImGuiCond.Appearing, 0.5f, 0.5f);
         ImGui.setNextWindowSize(560.0f, 360.0f, ImGuiCond.Appearing);
 
-        ImGui.pushStyleColor(ImGuiCol.PopupBg, 0xF80E1015);
-        ImGui.pushStyleColor(ImGuiCol.Border, 0xD0272C38);
+        ImGui.pushStyleColor(ImGuiCol.PopupBg, StudioDrawColors.abgr(0xF80E1015));
+        ImGui.pushStyleColor(ImGuiCol.Border, StudioDrawColors.abgr(0xD0272C38));
         ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.WindowRounding, 12.0f);
         ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.WindowPadding, 14.0f, 14.0f);
         ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.WindowBorderSize, 1.0f);
@@ -774,9 +775,9 @@ public final class MapEditorView {
         // Spotlight search input
         ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.FramePadding, 12.0f, 8.0f);
         ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.FrameRounding, 8.0f);
-        ImGui.pushStyleColor(ImGuiCol.FrameBg, 0xFF181A22);
-        ImGui.pushStyleColor(ImGuiCol.FrameBgHovered, 0xFF222634);
-        ImGui.pushStyleColor(ImGuiCol.FrameBgActive, 0xFF262B3B);
+        ImGui.pushStyleColor(ImGuiCol.FrameBg, StudioDrawColors.abgr(0xFF181A22));
+        ImGui.pushStyleColor(ImGuiCol.FrameBgHovered, StudioDrawColors.abgr(0xFF222634));
+        ImGui.pushStyleColor(ImGuiCol.FrameBgActive, StudioDrawColors.abgr(0xFF262B3B));
         ImGui.setNextItemWidth(-1.0f);
         ImGui.inputTextWithHint("##cmd-query", StudioIcons.SEARCH + "  Type a tool, command, or region ID (e.g. 50,50)...", commandQuery, ImGuiInputTextFlags.None);
         ImGui.popStyleColor(3);

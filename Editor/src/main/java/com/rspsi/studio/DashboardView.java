@@ -1,5 +1,6 @@
 package com.rspsi.studio;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.cache.workspace.CacheDecoderSummary;
 import com.rspsi.cache.workspace.CacheDecoderSummary.IndexEntry;
 import com.rspsi.cache.workspace.CacheSessionState;
@@ -88,7 +89,7 @@ public final class DashboardView {
         if (ready && !editingCachePath) {
             status.currentSession().ifPresent(session -> {
                 StudioWidgets.beginCard("cache-summary", -1.0f, 48.0f);
-                ImGui.textColored(0xFF4ADE80, StudioIcons.CHECK + "  Cache Ready:");
+                ImGui.textColored(StudioDrawColors.abgr(0xFF4ADE80), StudioIcons.CHECK + "  Cache Ready:");
                 ImGui.sameLine();
                 ImGui.text(session.path().toString());
                 ImGui.sameLine(0.0f, 12.0f);
@@ -154,7 +155,7 @@ public final class DashboardView {
         // Card 1: Map Studio
         StudioWidgets.beginCard("ws-map", cardWidth, cardHeight);
         {
-            ImGui.textColored(0xFF818CF8, StudioIcons.MAP);
+            ImGui.textColored(StudioDrawColors.abgr(0xFF818CF8), StudioIcons.MAP);
             ImGui.sameLine();
             ImGui.text("Map Studio");
             ImGui.sameLine(0.0f, 8.0f);
@@ -188,7 +189,7 @@ public final class DashboardView {
         // Card 2: Interface Studio
         StudioWidgets.beginCard("ws-interface", cardWidth, cardHeight);
         {
-            ImGui.textColored(0xFF38BDF8, StudioIcons.PREFAB);
+            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.PREFAB);
             ImGui.sameLine();
             ImGui.text("Interface Studio");
             ImGui.sameLine(0.0f, 8.0f);
@@ -218,7 +219,7 @@ public final class DashboardView {
         // Card 3: Object Studio
         StudioWidgets.beginCard("ws-object", cardWidth, cardHeight);
         {
-            ImGui.textColored(0xFFFBBF24, StudioIcons.OBJECT);
+            ImGui.textColored(StudioDrawColors.abgr(0xFFFBBF24), StudioIcons.OBJECT);
             ImGui.sameLine();
             ImGui.text("Object Studio");
             ImGui.sameLine(0.0f, 8.0f);

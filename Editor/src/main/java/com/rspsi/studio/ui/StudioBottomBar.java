@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.plugin.StudioPluginManager;
@@ -157,15 +158,15 @@ public final class StudioBottomBar {
                 boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
 
                 if (isActive) {
-                    ImGui.pushStyleColor(ImGuiCol.Button, 0xFF6366F1); // Indigo 500
-                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF818CF8);
-                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF4F46E5);
+                    ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF6366F1)); // Indigo 500
+                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF818CF8));
+                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF4F46E5));
                     ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
                 } else {
-                    ImGui.pushStyleColor(ImGuiCol.Button, 0xFF181A22); // Zinc dark surface
-                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF262A37);
-                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF1E212B);
-                    ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
+                    ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF181A22)); // Zinc dark surface
+                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF262A37));
+                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF1E212B));
+                    ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
                 }
 
                 ImGui.pushFont(StudioFonts.icon(), 0.0f);
@@ -198,7 +199,7 @@ public final class StudioBottomBar {
             var selected = context.session().selection().selectedCoordinates();
             if (!selected.isEmpty()) {
                 ImGui.sameLine(0.0f, 12.0f);
-                ImGui.textColored(0xFF38BDF8, "(" + selected.size() + " selected)");
+                ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "(" + selected.size() + " selected)");
                 ImGui.sameLine(0.0f, 4.0f);
                 if (ImGui.smallButton("Clear##clr-sel-hdr")) {
                     context.session().selection().clear();
@@ -245,7 +246,7 @@ public final class StudioBottomBar {
                 ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
             } else {
                 ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.18f, 0.22f, 0.28f, 1.0f));
-                ImGui.pushStyleColor(ImGuiCol.Text, 0xFF94A3B8);
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
             }
 
             ImGui.pushFont(StudioFonts.icon(), 0.0f);
@@ -292,7 +293,7 @@ public final class StudioBottomBar {
                 try {
                     toolPluginOpt.get().renderContextDrawer(context);
                 } catch (Throwable t) {
-                    ImGui.pushStyleColor(ImGuiCol.Text, 0xFFEF4444);
+                    ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFFEF4444));
                     ImGui.text(StudioIcons.BUG_REPORT + " Tool Drawer Error: " + t.getMessage());
                     ImGui.popStyleColor();
                 }
@@ -334,7 +335,7 @@ public final class StudioBottomBar {
     }
 
     private void renderSplineRampShelf(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, "Spline Path & Incline Ramp Builder");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Spline Path & Incline Ramp Builder");
         ImGui.sameLine();
         ImGui.textDisabled("Click tiles sequentially to plot points. Double-click or press Enter to generate terrain gradient.");
         ImGui.separator();
@@ -354,7 +355,7 @@ public final class StudioBottomBar {
 
     private void renderSelectionShelf(StudioPanelContext context) {
         int selCount = context.session() != null ? context.session().selection().selectedCoordinates().size() : 0;
-        ImGui.textColored(0xFF38BDF8, "Selection Inspector: " + selCount + " tiles selected.");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Selection Inspector: " + selCount + " tiles selected.");
         ImGui.sameLine();
         if (ImGui.button("Clear Selection##clr-sel-btn")) {
             if (context.session() != null) context.session().selection().clear();
@@ -370,7 +371,7 @@ public final class StudioBottomBar {
     }
 
     private void renderObjectToolShelf(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, "Object Placement Controls");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Object Placement Controls");
         ImGui.sameLine();
         ImGui.textDisabled("Click viewport to spawn or manipulate objects. Use Outliner or Object Viewer for full definitions.");
     }
@@ -395,19 +396,19 @@ public final class StudioBottomBar {
     }
 
     private void renderTasksDrawer(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, "Background Tasks & Scene Cache Operations");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Background Tasks & Scene Cache Operations");
         ImGui.separator();
         ImGui.textDisabled("All background scene and asset threads are currently idle.");
     }
 
     private void renderNotificationsDrawer(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, "System Notifications & Warnings");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "System Notifications & Warnings");
         ImGui.separator();
         ImGui.text("Scene loaded successfully from local OSRS cache.");
     }
 
     private void renderDiagnosticsDrawer(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, "OpenGL & Frame Timing Diagnostics");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "OpenGL & Frame Timing Diagnostics");
         ImGui.separator();
         ImGui.text("Native Scene Renderer: Direct FBO Color Attachment");
         ImGui.text("FPS: " + String.format("%.1f", ImGui.getIO().getFramerate()) + " | Frame Time: " + String.format("%.2f ms", 1000.0f / Math.max(1.0f, ImGui.getIO().getFramerate())));

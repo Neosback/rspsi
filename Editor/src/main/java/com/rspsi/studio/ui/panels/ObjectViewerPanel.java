@@ -515,7 +515,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             int previewSizeY = rawInt(raw, "sizeY").orElse(def.length());
 
             if (transaction != null && !transaction.dirtyFields().isEmpty()) {
-                ImGui.textColored(0xFFF59E0B, "Unsaved edits: " + objectLabel(previewName, id)
+                ImGui.textColored(StudioDrawColors.abgr(0xFFF59E0B), "Unsaved edits: " + objectLabel(previewName, id)
                         + "  size " + previewSizeX + " x " + previewSizeY);
             }
             PropertyGrid.render("obj-props", ObjectReport.forDefinition(id, definitions));
@@ -557,7 +557,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         ImGui.text("Definition edit transaction");
         if (transaction.dirty()) {
             ImGui.sameLine();
-            ImGui.textColored(0xFF38BDF8,
+            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8),
                     "* " + transaction.dirtyFields().size() + " fields, "
                             + transaction.dirtyParams().size() + " params modified");
             ImGui.sameLine();
@@ -649,7 +649,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
 
         if (!state.error.isBlank()) {
-            ImGui.textColored(0xFF60A5FA, state.error);
+            ImGui.textColored(StudioDrawColors.abgr(0xFF60A5FA), state.error);
         }
     }
 
@@ -842,7 +842,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
 
         if (!state.error.isBlank()) {
-            ImGui.textColored(0xFF60A5FA, state.error);
+            ImGui.textColored(StudioDrawColors.abgr(0xFF60A5FA), state.error);
         }
     }
 
@@ -956,13 +956,13 @@ public final class ObjectViewerPanel implements StudioPanel {
             ImGui.textDisabled("Session output: " + publicationTarget);
         }
         if (targetMissing) {
-            ImGui.textColored(0xFF60A5FA,
+            ImGui.textColored(StudioDrawColors.abgr(0xFF60A5FA),
                     "The bound output cache is missing. Reload the source session before publishing elsewhere.");
         } else if (targetMismatch) {
-            ImGui.textColored(0xFF60A5FA,
+            ImGui.textColored(StudioDrawColors.abgr(0xFF60A5FA),
                     "This cache session is already bound to " + publicationTarget);
         } else if (outputExists && !outputDirectory) {
-            ImGui.textColored(0xFF60A5FA,
+            ImGui.textColored(StudioDrawColors.abgr(0xFF60A5FA),
                     "That output path exists but is not a cache directory.");
         } else if (outputDirectory) {
             ImGui.textDisabled(

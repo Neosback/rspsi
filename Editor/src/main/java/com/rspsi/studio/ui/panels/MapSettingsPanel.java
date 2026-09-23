@@ -6,12 +6,10 @@ import com.rspsi.editor.render.SceneVisibilityPolicy;
 import com.rspsi.editor.settings.SettingKey;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.ui.DockRegion;
+import com.rspsi.studio.theme.SettingRows;
 import com.rspsi.studio.theme.StudioIcons;
-import com.rspsi.studio.theme.StudioWidgets;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
-import imgui.ImGui;
-import imgui.flag.ImGuiTreeNodeFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 
@@ -19,164 +17,132 @@ import java.util.EnumSet;
 import java.util.Set;
 
 /**
- * Native Map Settings panel mirroring Displee's Settings panel (Gear icon).
- * Houses all map-specific view, terrain, object, minimap, and player options.
+ * Map Settings (gear icon), laid out like Displee's settings panel: label on
+ * the left, control on the right, no horizontal scrolling.
+ *
+ * <p>Every live control is bound to a typed render setting. Controls from
+ * Displee's panel that Studio does not implement yet are listed greyed out
+ * with the reason, instead of being checkboxes that silently do nothing.</p>
  */
 public final class MapSettingsPanel implements StudioPanel {
     public static final String ID = "studio.settings";
 
-    private final ImBoolean showCollisionSpots = new ImBoolean(false);
-    private final ImBoolean showMapSquareIds = new ImBoolean(true);
-    private final ImBoolean showMapSquareGrid = new ImBoolean(true);
-    private final ImBoolean highWaterDetail = new ImBoolean(true);
-    private final ImBoolean lightingDetail = new ImBoolean(true);
-    private final ImBoolean shadows = new ImBoolean(true);
-    private final ImBoolean terrainTextures = new ImBoolean(true);
-    private final ImBoolean blending = new ImBoolean(true);
-    private final ImBoolean showGridHelper = new ImBoolean(false);
-    private final ImBoolean animateObjects = new ImBoolean(true);
-    private final ImBoolean highlightPlayerTile = new ImBoolean(true);
+    private static final String[] PLANES = {"Level 0", "Level 1", "Level 2", "Level 3"};
+    private static final String[] PLANE_MODES = {"All levels", "Authored level", "Effective level", "Client traversal"};
+    private static final SceneVisibilityPolicy.PlaneSelection[] PLANE_MODE_VALUES = {
+            SceneVisibilityPolicy.PlaneSelection.ALL,
+            SceneVisibilityPolicy.PlaneSelection.AUTHORED_PLANE,
+            SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
+            SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL};
+    private static final String[] MSAA = {"Off", "2x", "4x", "8x"};
+    private static final int[] MSAA_VALUES = {0, 2, 4, 8};
 
-    private final ImInt emptyTilesSelection = new ImInt(0);
-    private final ImInt invisibleTilesSelection = new ImInt(0);
-    private final ImInt hiddenTilesSelection = new ImInt(0);
-    private final ImInt sceneryShadowSelection = new ImInt(0);
-
-    private static final String[] TILE_LEVEL_OPTIONS = {"All visible levels", "Current level only", "None"};
-    private static final String[] SHADOW_OPTIONS = {"None", "Simple", "Full"};
-
-    @Override
-    public String id() {
-        return ID;
-    }
-
-    @Override
-    public String title() {
-        return "Map Settings";
-    }
-
-    @Override
-    public String icon() {
-        return StudioIcons.TUNE;
-    }
-
-    @Override
-    public DockRegion preferredRegion() {
-        return DockRegion.RIGHT;
-    }
-
-    @Override
-    public Set<DockRegion> allowedRegions() {
-        return EnumSet.of(DockRegion.RIGHT, DockRegion.BOTTOM);
-    }
-
-    @Override
-    public int order() {
-        return 40;
-    }
+    @Override public String id() { return ID; }
+    @Override public String title() { return "Map Settings"; }
+    @Override public String icon() { return StudioIcons.TUNE; }
+    @Override public DockRegion preferredRegion() { return DockRegion.RIGHT; }
+    @Override public Set<DockRegion> allowedRegions() { return EnumSet.of(DockRegion.RIGHT, DockRegion.BOTTOM); }
+    @Override public int order() { return 40; }
 
     @Override
     public void render(StudioPanelContext context) {
         SettingsStore settings = context.settings();
 
-        // 1. Map settings
-        if (ImGui.collapsingHeader("Map settings", ImGuiTreeNodeFlags.DefaultOpen)) {
-            ImGui.textDisabled("Size: 64 x 64 tiles");
-        }
-
-        // 2. Minimap settings
-        if (ImGui.collapsingHeader("Minimap settings", ImGuiTreeNodeFlags.DefaultOpen)) {
-            ImGui.checkbox("Show collision spots", showCollisionSpots);
-        }
-
-        // 3. World map settings
-        if (ImGui.collapsingHeader("World map settings", ImGuiTreeNodeFlags.DefaultOpen)) {
-            ImGui.checkbox("Show map square ids", showMapSquareIds);
-            ImGui.checkbox("Show map square grid", showMapSquareGrid);
-        }
-
-        // 4. Terrain settings
-        if (ImGui.collapsingHeader("Terrain settings", ImGuiTreeNodeFlags.DefaultOpen)) {
-            int currentPlane = settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
-            ImInt planeVal = new ImInt(currentPlane);
-            String[] planes = {"Level 0", "Level 1", "Level 2", "Level 3"};
-            if (ImGui.combo("Player level", planeVal, planes)) {
-                settings.set(RenderSettingKeys.ACTIVE_PLANE, planeVal.get());
+        if (SettingRows.begin("Terrain", true)) {
+            ImInt plane = new ImInt(settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE));
+            if (SettingRows.combo("Player level", plane, PLANES)) {
+                settings.set(RenderSettingKeys.ACTIVE_PLANE, plane.get());
             }
-
-            boolean showAll = settings.snapshot().get(RenderSettingKeys.PLANE_SELECTION)
-                    == SceneVisibilityPolicy.PlaneSelection.ALL;
-            ImBoolean showAllVal = new ImBoolean(showAll);
-            if (ImGui.checkbox("Show all levels", showAllVal)) {
-                settings.set(RenderSettingKeys.PLANE_SELECTION,
-                        showAllVal.get() ? SceneVisibilityPolicy.PlaneSelection.ALL
-                                : SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE);
+            ImInt mode = new ImInt(indexOf(settings.snapshot().get(RenderSettingKeys.PLANE_SELECTION)));
+            if (SettingRows.combo("Levels shown", mode, PLANE_MODES)) {
+                settings.set(RenderSettingKeys.PLANE_SELECTION, PLANE_MODE_VALUES[mode.get()]);
             }
+            toggle(settings, RenderSettingKeys.TERRAIN_VISIBLE, "Terrain surfaces");
+            toggle(settings, RenderSettingKeys.BRIDGE_TILES_VISIBLE, "Bridge tiles");
+            toggle(settings, RenderSettingKeys.HIDDEN_TILES_VISIBLE, "Hidden tiles");
+            toggle(settings, RenderSettingKeys.ROOFS_VISIBLE, "Roofs");
+            SettingRows.notImplemented("Textures", "Terrain textures cannot be switched off yet.");
+            SettingRows.notImplemented("Blending", "Scene-wide underlay blending toggle is not wired; "
+                    + "the Tile Inspector preview has a per-tile blending switch.");
+            SettingRows.notImplemented("High water detail", "No water detail levels yet.");
+            SettingRows.notImplemented("Lighting detail", "Low-detail lighting is not simulated yet.");
+            SettingRows.notImplemented("Shadows", "Terrain shadow toggle is not wired yet.");
+            SettingRows.notImplemented("Grid helper", "Tile grid overlay is not implemented yet.");
+            SettingRows.end();
+        }
 
-            ImGui.checkbox("High water detail", highWaterDetail);
-            ImGui.checkbox("Lighting detail", lightingDetail);
-            ImGui.checkbox("Shadows", shadows);
+        if (SettingRows.begin("Objects", true)) {
+            toggle(settings, RenderSettingKeys.OBJECTS_VISIBLE, "Show objects");
+            toggle(settings, RenderSettingKeys.WALLS_VISIBLE, "Walls");
+            toggle(settings, RenderSettingKeys.WALL_DECORATIONS_VISIBLE, "Wall decorations");
+            toggle(settings, RenderSettingKeys.GROUND_OBJECTS_VISIBLE, "Game objects");
+            toggle(settings, RenderSettingKeys.GROUND_DECORATIONS_VISIBLE, "Ground decorations");
+            toggle(settings, RenderSettingKeys.INVISIBLE_OBJECTS_VISIBLE, "Invisible objects (collision only)");
+            SettingRows.notImplemented("Textures", "Object textures cannot be switched off yet.");
+            SettingRows.notImplemented("Scenery shadows", "Object shadow modes are not implemented yet.");
+            SettingRows.notImplemented("Animate", "Animation always runs; a pause toggle is not wired yet.");
+            SettingRows.end();
+        }
 
-            toggleSetting(settings, RenderSettingKeys.TERRAIN_VISIBLE, "Terrain surfaces");
-            ImGui.checkbox("Textures##terrain-tex", terrainTextures);
-            ImGui.checkbox("Blending", blending);
-            ImGui.checkbox("Show grid helper", showGridHelper);
-
-            if (ImGui.treeNode("Show tile settings")) {
-                ImGui.combo("Show empty tiles", emptyTilesSelection, TILE_LEVEL_OPTIONS);
-                ImGui.combo("Show invisible tiles", invisibleTilesSelection, TILE_LEVEL_OPTIONS);
-                ImGui.combo("Show hidden tiles", hiddenTilesSelection, TILE_LEVEL_OPTIONS);
-                toggleSetting(settings, RenderSettingKeys.HIDDEN_TILES_VISIBLE, "Display hidden tiles");
-                toggleSetting(settings, RenderSettingKeys.BRIDGE_TILES_VISIBLE, "Display bridge tiles");
-                toggleSetting(settings, RenderSettingKeys.ROOFS_VISIBLE, "Display roofs");
-                ImGui.treePop();
+        if (SettingRows.begin("Display", true)) {
+            float[] brightness = {settings.snapshot().get(RenderSettingKeys.BRIGHTNESS).floatValue()};
+            if (SettingRows.sliderFloat("Brightness", brightness, 0.0f, 4.0f, "%.2f")) {
+                settings.set(RenderSettingKeys.BRIGHTNESS, (double) brightness[0]);
             }
+            float[] exposure = {settings.snapshot().get(RenderSettingKeys.EXPOSURE).floatValue()};
+            if (SettingRows.sliderFloat("Exposure", exposure, -8.0f, 8.0f, "%.1f")) {
+                settings.set(RenderSettingKeys.EXPOSURE, (double) exposure[0]);
+            }
+            int[] fog = {settings.snapshot().get(RenderSettingKeys.FOG_DEPTH_TILES)};
+            if (SettingRows.sliderInt("Fog depth (tiles, 0 = off)", fog, 0, 200)) {
+                settings.set(RenderSettingKeys.FOG_DEPTH_TILES, fog[0]);
+            }
+            ImInt msaa = new ImInt(msaaIndex(settings.snapshot().get(RenderSettingKeys.MSAA_SAMPLES)));
+            if (SettingRows.combo("Anti-aliasing", msaa, MSAA)) {
+                settings.set(RenderSettingKeys.MSAA_SAMPLES, MSAA_VALUES[msaa.get()]);
+            }
+            SettingRows.end();
         }
 
-        // 5. Object settings
-        if (ImGui.collapsingHeader("Object settings", ImGuiTreeNodeFlags.DefaultOpen)) {
-            toggleSetting(settings, RenderSettingKeys.OBJECTS_VISIBLE, "Show objects");
-            toggleSetting(settings, RenderSettingKeys.WALLS_VISIBLE, "Show walls");
-            toggleSetting(settings, RenderSettingKeys.WALL_DECORATIONS_VISIBLE, "Show wall decorations");
-            toggleSetting(settings, RenderSettingKeys.GROUND_OBJECTS_VISIBLE, "Show ground objects");
-            toggleSetting(settings, RenderSettingKeys.GROUND_DECORATIONS_VISIBLE, "Show ground decorations");
-            toggleSetting(settings, RenderSettingKeys.INVISIBLE_OBJECTS_VISIBLE,
-                    "Show invisible objects (collision-only walls and floor blockers)");
-            ImGui.combo("Scenery shadows", sceneryShadowSelection, SHADOW_OPTIONS);
-            ImGui.checkbox("Animate", animateObjects);
+        if (SettingRows.begin("Minimap & world map", false)) {
+            SettingRows.notImplemented("Collision spots", "Minimap collision spots are not implemented yet.");
+            SettingRows.notImplemented("Map square ids", "World map square labels are not implemented yet.");
+            SettingRows.notImplemented("Map square grid", "World map square grid is not implemented yet.");
+            SettingRows.end();
         }
 
-        // 6. Player settings
-        if (ImGui.collapsingHeader("Player settings", ImGuiTreeNodeFlags.DefaultOpen)) {
-            ImGui.checkbox("Highlight player tile", highlightPlayerTile);
-        }
-
-        // 7. Extra view & debug settings
-        if (ImGui.collapsingHeader("Diagnostics & Culling", ImGuiTreeNodeFlags.None)) {
-            toggleSetting(settings, RenderSettingKeys.WIREFRAME, "Wireframe mode");
-            toggleSetting(settings, RenderSettingKeys.COLLISION_VISIBLE, "Collision spots overlay");
-
-            ImGui.textDisabled("BACKFACES");
-            BackfacePolicy.NativeCullingMode current =
-                    settings.snapshot().get(RenderSettingKeys.NATIVE_CULLING_MODE);
+        if (SettingRows.begin("Diagnostics", false)) {
+            toggle(settings, RenderSettingKeys.WIREFRAME, "Wireframe");
+            toggle(settings, RenderSettingKeys.COLLISION_VISIBLE, "Collision overlay");
             BackfacePolicy.NativeCullingMode[] modes = BackfacePolicy.NativeCullingMode.values();
-            for (int m = 0; m < modes.length; m++) {
-                BackfacePolicy.NativeCullingMode mode = modes[m];
-                if (m > 0) ImGui.sameLine();
-                if (ImGui.radioButton(mode.toString(), current == mode)) {
-                    settings.set(RenderSettingKeys.NATIVE_CULLING_MODE, mode);
-                    current = mode;
-                }
+            String[] labels = new String[modes.length];
+            int current = 0;
+            for (int i = 0; i < modes.length; i++) {
+                labels[i] = modes[i].toString();
+                if (modes[i] == settings.snapshot().get(RenderSettingKeys.NATIVE_CULLING_MODE)) current = i;
             }
-            ImGui.textDisabled("Client Front culls model backfaces; terrain stays two-sided.");
+            ImInt culling = new ImInt(current);
+            if (SettingRows.combo("Backface culling", culling, labels)) {
+                settings.set(RenderSettingKeys.NATIVE_CULLING_MODE, modes[culling.get()]);
+            }
+            SettingRows.end();
         }
     }
 
-    private static void toggleSetting(SettingsStore settings, SettingKey<Boolean> key, String label) {
-        boolean val = settings.snapshot().get(key);
-        ImBoolean imVal = new ImBoolean(val);
-        if (ImGui.checkbox(label + "##" + key.id(), imVal)) {
-            settings.set(key, imVal.get());
+    private static void toggle(SettingsStore settings, SettingKey<Boolean> key, String label) {
+        ImBoolean value = new ImBoolean(settings.snapshot().get(key));
+        if (SettingRows.checkbox(label, value)) {
+            settings.set(key, value.get());
         }
+    }
+
+    private static int indexOf(SceneVisibilityPolicy.PlaneSelection selection) {
+        for (int i = 0; i < PLANE_MODE_VALUES.length; i++) if (PLANE_MODE_VALUES[i] == selection) return i;
+        return 2;
+    }
+
+    private static int msaaIndex(int samples) {
+        for (int i = 0; i < MSAA_VALUES.length; i++) if (MSAA_VALUES[i] == samples) return i;
+        return 0;
     }
 }

@@ -1,5 +1,6 @@
 package com.rspsi.studio.plugin.builtin.tool;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.editor.model.FloorId;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.tool.SplinePathTool;
@@ -98,7 +99,7 @@ public final class PathToolPlugin implements StudioToolPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, StudioIcons.TUNE + "  Path Builder Preferences");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.TUNE + "  Path Builder Preferences");
         ImGui.separator();
 
         ImGui.sliderInt("Default Path Width (Tiles)", defaultPathWidth.getData(), 1, 8);
@@ -157,7 +158,7 @@ public final class PathToolPlugin implements StudioToolPlugin {
     public void renderContextDrawer(StudioPanelContext context) {
         SplinePathTool tool = (context.toolController().activeTool() instanceof SplinePathTool t) ? t : null;
 
-        ImGui.textColored(0xFF38BDF8, StudioIcons.PATH + "  Catmull-Rom Spline Path Builder");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.PATH + "  Catmull-Rom Spline Path Builder");
         ImGui.sameLine(0.0f, 16.0f);
         ImGui.textDisabled("Left-click ground (or Shift+click) to drop nodes. Drag nodes to move. Right-click or Alt+click a node to delete.");
         ImGui.separator();
@@ -220,7 +221,7 @@ public final class PathToolPlugin implements StudioToolPlugin {
 
         // Palette popover with 128 overlay swatches
         if (ImGui.beginPopup("path_overlay_palette_popup")) {
-            ImGui.textColored(0xFF38BDF8, StudioIcons.PALETTE + "  Select Cache Overlay Material");
+            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.PALETTE + "  Select Cache Overlay Material");
             ImGui.separator();
             renderOverlayGridPopup(context.cache(), tool);
             ImGui.endPopup();
@@ -254,9 +255,9 @@ public final class PathToolPlugin implements StudioToolPlugin {
         for (SplineBrushStyle styleOption : SplineBrushStyle.values()) {
             boolean active = (currentStyle == styleOption);
             if (active) {
-                ImGui.pushStyleColor(ImGuiCol.Button, 0xFF0284C7);
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF0369A1);
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF075985);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF0284C7));
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF0369A1));
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF075985));
             }
 
             if (ImGui.button(styleOption.displayName() + "##btn-style-" + styleOption.name())) {
@@ -288,9 +289,9 @@ public final class PathToolPlugin implements StudioToolPlugin {
             ImGui.pushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
         }
 
-        ImGui.pushStyleColor(ImGuiCol.Button, 0xFF16A34A); // Emerald green for Build
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0xFF15803D);
-        ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0xFF166534);
+        ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF16A34A)); // Emerald green for Build
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF15803D));
+        ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF166534));
 
         if (ImGui.button(StudioIcons.CHECK + "  Build Path [Enter]##btn-build", 160.0f, 26.0f)) {
             if (canBuild) {

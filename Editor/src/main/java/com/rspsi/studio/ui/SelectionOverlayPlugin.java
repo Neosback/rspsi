@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui;
 
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.ObjectCategory;
@@ -163,7 +164,7 @@ public final class SelectionOverlayPlugin implements StudioPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(0xFF38BDF8, StudioIcons.OBJECT + "  Selection Overlay");
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.OBJECT + "  Selection Overlay");
         ImGui.separator();
 
         style.setObjectHullEnabled(ImGui.checkbox("Highlight selected objects##sel-ov-enabled", style.objectHullEnabled()));
