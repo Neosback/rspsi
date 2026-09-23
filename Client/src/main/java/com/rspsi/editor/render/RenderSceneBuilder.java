@@ -137,9 +137,13 @@ public final class RenderSceneBuilder {
         WorldDocument document = previous.document();
         for (TileCoordinate coordinate : activeTiles) {
             for (WorldObject object : document.tile(coordinate).objects()) {
-                if (definitions.objectAppearance(object.id())
+                ObjectDefinitionResolver.Resolution resolution =
+                        definitionResolver.resolveEditorDisplay(object.id());
+                boolean mergeNormals = resolution.displayDefinition()
+                        .flatMap(definition -> definitions.objectAppearance(definition.id()))
                         .map(ObjectAppearanceView::mergeNormals)
-                        .orElse(false)) {
+                        .orElse(false);
+                if (mergeNormals) {
                     return refreshAnimationsFull(previous, clientCycle);
                 }
             }
@@ -331,11 +335,14 @@ public final class RenderSceneBuilder {
         // during map load, while visible model metadata comes from the
         // one-step transformed display definition used by DynamicObject.
         ObjectCollisionView collision = definitions.objectCollision(object.id()).orElse(null);
-        ObjectAppearanceView appearance = displayDefinition == null
-                ? null
-                : definitions.objectAppearance(displayDefinition.id()).orElse(null);
+        // Preserve the existing RenderObject.appearance() contract: this neutral
+        // projection historically exposes placed-definition appearance. The
+        // model renderer and ObjectResolutionSummary carry display-definition
+        // appearance/resolution semantics separately.
+        ObjectAppearanceView placementAppearance =
+                definitions.objectAppearance(object.id()).orElse(null);
 
         return RenderObject.resolve(object, placementDefinition, displayDefinition,
-                collision, appearance);
+                collision, placementAppearance);
     }
 }
