@@ -342,6 +342,91 @@ public final class StudioApplication implements AutoCloseable {
         }
     }
 
+    private void pollAnimationRefresh(LoadedOsrsCacheSession cache) {
+        if (pendingAnimationRefresh != null) {
+            if (!pendingAnimationRefresh.isDone()) return;
+            try {
+                loadedScene = pendingAnimationRefresh.join();
+                currentPlan = loadedScene.plan();
+                currentZonedPlan = loadedScene.zonedPlan();
+                renderedSettingsRevision = loadedScene.settingsRevision();
+            } catch (RuntimeException failure) {
+                LOGGER.error("Animation refresh failed", failure);
+            } finally {
+                pendingAnimationRefresh = null;
+            }
+        }
+
+        if (loadedScene == null || cache == null || pendingSceneRebuild != null
+                || sceneDirty.get() || !hasActiveModelAnimations(loadedScene.windowScene())) {
+            return;
+        }
+
+        int clientCycle = currentClientCycle();
+        if (clientCycle == loadedScene.animationCycle()) return;
+        LoadedMapScene baseScene = loadedScene;
+        pendingAnimationRefresh = CompletableFuture.supplyAsync(
+                () -> refreshMapAnimation(cache, baseScene, clientCycle), sceneExecutor);
+    }
+
+    private LoadedMapScene refreshMapAnimation(LoadedOsrsCacheSession cache,
+                                                LoadedMapScene baseScene,
+                                                int clientCycle) {
+        var definitions = cache.bundle().definitions();
+        RenderWindowSceneBuilder windowBuilder = new RenderWindowSceneBuilder(definitions);
+        RenderWindowSceneBuilder.AnimationRefreshResult animation =
+                windowBuilder.refreshAnimations(baseScene.windowScene(), clientCycle);
+        RenderWindowScene scene = animation.scene();
+        RenderScene renderScene = new RenderSceneBuilder(definitions)
+                .refreshAnimations(baseScene.renderScene(), clientCycle);
+
+        GpuScenePacket packet = baseScene.packet();
+        long settingsRevision = renderSettings.revision();
+        boolean settingsChanged = settingsRevision != baseScene.settingsRevision();
+        if (!animation.dirtyZones().isEmpty()) {
+            SceneWindow sceneWindow = SceneWindow.from(scene.window());
+            packet = new GpuScenePacketBuilder().buildIncremental(
+                    baseScene.packet(), sceneWindow, scene, animation.dirtyZones()).packet();
+        }
+
+        GpuUploadPlan plan = baseScene.plan();
+        GpuZonedUploadPlan zonedPlan = baseScene.zonedPlan();
+        IncrementalGpuUploadPlanBuilder incrementalPlanBuilder = baseScene.planBuilder();
+        if (settingsChanged || !animation.dirtyZones().isEmpty()) {
+            RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
+            GpuScenePacket visiblePacket = config.apply(packet);
+            incrementalPlanBuilder = baseScene.planBuilder().fork();
+            IncrementalGpuUploadPlanBuilder.BuildResult planUpdate;
+            if (settingsChanged) {
+                incrementalPlanBuilder.invalidateAll();
+                planUpdate = incrementalPlanBuilder.buildInitial(visiblePacket);
+            } else {
+                planUpdate = incrementalPlanBuilder.build(visiblePacket, animation.dirtyZones());
+            }
+            plan = planUpdate.plan();
+            zonedPlan = planUpdate.zonedPlan();
+        }
+
+        if (!animation.dirtyZones().isEmpty()) {
+            LOGGER.debug("Animation cycle {} changed {} model tiles across {} GPU zones",
+                    clientCycle, animation.changedTiles(), animation.dirtyZones().size());
+        }
+        return new LoadedMapScene(
+                baseScene.opened(), baseScene.session(), scene, renderScene, packet, plan,
+                zonedPlan, incrementalPlanBuilder, settingsRevision,
+                baseScene.camera(), clientCycle);
+    }
+
+    private static boolean hasActiveModelAnimations(RenderWindowScene scene) {
+        return scene.modelPackets().values().stream()
+                .flatMap(List::stream)
+                .anyMatch(packet -> packet.animationState().active());
+    }
+
+    private int currentClientCycle() {
+        return (int) (simulation.clock().clientCycles() & Integer.MAX_VALUE);
+    }
+
     private void pollSceneRebuild(LoadedOsrsCacheSession cache) {
         if (pendingSceneRebuild != null) {
             if (!pendingSceneRebuild.isDone()) return;
