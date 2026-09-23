@@ -1380,14 +1380,12 @@ class ModelPacketBuilderTest {
     }
 
     @Test
-    void resolvesMultilocDefaultTransformWhenBaseDefinitionHasNoModels() {
+    void resolvesMultilocFreshAccountStateWhenBaseDefinitionHasNoModels() {
         // A bare multiloc shell (Lumbridge's castle bushes are exactly this):
         // its own definition carries no models at all - the client swaps in
-        // one of its varbit/varp-selected "transforms" ids, falling back to
-        // multiDefault (5000 here) when no player state applies, which is
-        // always the case in an editor session. Object 5001 exists only to
-        // prove the resolver follows multiDefault specifically, not just the
-        // first transforms entry.
+        // transforms[var] for its varbit (ObjectComposition.transform()). The
+        // editor resolves a fresh account, var 0, so state 0 (5000) is shown
+        // and the default entry (5001, last) is not.
         WorldDocument document = new WorldDocument(2, 2, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
                 0, 0, 0, 0, 0, List.of(new WorldObject(10778, 10, 0, 0, 0, 0))));
@@ -1398,7 +1396,7 @@ class ModelPacketBuilderTest {
                 if (id == 10778) {
                     return Optional.of(new ObjectDefinitionView(id, null, 1, 1,
                             List.of(), new int[0], new int[0], -1, false,
-                            1234, -1, new int[]{5001, 5000}, 5000));
+                            1234, -1, new int[]{5000, 5001}, 5001));
                 }
                 if (id == 5000) {
                     return Optional.of(new ObjectDefinitionView(id, "Bush", 1, 1,

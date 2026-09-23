@@ -25,7 +25,8 @@ class ObjectDefinitionResolverTest {
     }
 
     @Test
-    void transformedDefinitionUsesDefaultEvenWhenPlacedShellHasModels() {
+    void freshAccountSelectsStateZeroEvenWhenPlacedShellHasModels() {
+        // Client layout: transforms[0..n] are states, the last entry is the default.
         DefinitionProvider definitions = definitions(
                 object(100, "Shell", new int[]{1}, new int[]{10}, 200, new int[]{201, 200}),
                 object(200, "Bush", new int[]{7}, new int[]{10}, -1, new int[0]),
@@ -35,28 +36,48 @@ class ObjectDefinitionResolverTest {
                 new ObjectDefinitionResolver(definitions).resolveEditorDisplay(100);
 
         assertEquals(ObjectDefinitionResolver.Status.RESOLVED, resolution.status());
-        assertEquals(200, resolution.displayDefinition().orElseThrow().id());
-        assertEquals(List.of(100, 200), resolution.transformPath());
-        assertEquals(2, resolution.transformPath().size());
+        assertEquals(201, resolution.displayDefinition().orElseThrow().id(),
+                "ObjectComposition.transform(): var 0 selects transforms[0]");
+        assertEquals(List.of(100, 201), resolution.transformPath());
     }
 
     @Test
-    void missingDefaultIsExplicitlyUnresolved() {
+    void outOfRangeVarFallsBackToTheDefaultEntry() {
         DefinitionProvider definitions = definitions(
-                object(100, "Shell", new int[0], new int[0], -1, new int[]{200}));
+                object(100, "Shell", new int[0], new int[0], 200, new int[]{201, 200}),
+                object(200, "Bush", new int[]{7}, new int[]{10}, -1, new int[0]),
+                object(201, "Other state", new int[]{8}, new int[]{10}, -1, new int[0]));
+        ObjectVarState state = new ObjectVarState() {
+            @Override public int varbitValue(int varbitId) { return 5; }
+            @Override public int varpValue(int varpId) { return 5; }
+        };
 
         ObjectDefinitionResolver.Resolution resolution =
-                new ObjectDefinitionResolver(definitions).resolveEditorDisplay(100);
+                new ObjectDefinitionResolver(definitions, state).resolveEditorDisplay(100);
 
-        assertEquals(ObjectDefinitionResolver.Status.NO_DEFAULT_TRANSFORM, resolution.status());
+        assertEquals(200, resolution.displayDefinition().orElseThrow().id());
+    }
+
+    @Test
+    void stateSelectingMinusOneIsHiddenButKeepsAVisibleStateForGhosts() {
+        // Revision 240 object 10818 has this shape: [-1, 2738, -1].
+        DefinitionProvider definitions = definitions(
+                object(100, "Shell", new int[0], new int[0], -1, new int[]{-1, 200, -1}),
+                object(200, "Later state", new int[]{7}, new int[]{22}, -1, new int[0]));
+
+        ObjectDefinitionResolver resolver = new ObjectDefinitionResolver(definitions);
+        ObjectDefinitionResolver.Resolution resolution = resolver.resolveEditorDisplay(100);
+
+        assertEquals(ObjectDefinitionResolver.Status.HIDDEN_IN_VAR_STATE, resolution.status());
         assertFalse(resolution.resolved());
         assertTrue(resolution.displayDefinition().isEmpty());
+        assertEquals(200, resolver.firstVisibleState(100).orElseThrow().id());
     }
 
     @Test
     void missingTransformedDefinitionIsExplicitlyUnresolved() {
         DefinitionProvider definitions = definitions(
-                object(100, "Shell", new int[0], new int[0], 999, new int[]{999}));
+                object(100, "Shell", new int[0], new int[0], 999, new int[]{999, 999}));
 
         ObjectDefinitionResolver.Resolution resolution =
                 new ObjectDefinitionResolver(definitions).resolveEditorDisplay(100);
@@ -70,8 +91,8 @@ class ObjectDefinitionResolverTest {
     @Test
     void nestedTransformChildIsReportedButNotRecursivelyResolved() {
         DefinitionProvider definitions = definitions(
-                object(100, "Shell", new int[0], new int[0], 200, new int[]{200}),
-                object(200, "Nested shell", new int[]{7}, new int[]{10}, 300, new int[]{300}),
+                object(100, "Shell", new int[0], new int[0], 200, new int[]{200, 200}),
+                object(200, "Nested shell", new int[]{7}, new int[]{10}, 300, new int[]{300, 300}),
                 object(300, "Grandchild", new int[]{8}, new int[]{10}, -1, new int[0]));
 
         ObjectDefinitionResolver.Resolution resolution =

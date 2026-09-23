@@ -59,7 +59,7 @@ public record ObjectResolutionSummary(
         if (!definitionResolved()) {
             return switch (definitionStatus) {
                 case MISSING_PLACED_DEFINITION -> "Object definition is missing";
-                case NO_DEFAULT_TRANSFORM -> "Multiloc has no default transform for editor state";
+                case HIDDEN_IN_VAR_STATE -> "Multiloc shows nothing in the current var state (fresh account)";
                 case MISSING_TRANSFORM_DEFINITION -> "Default transform definition is missing";
                 default -> "Object definition could not be resolved: " + definitionStatus;
             };

@@ -6,19 +6,28 @@ import java.util.Optional;
 
 /**
  * Resolves a placed OSRS object definition to the definition that supplies its
- * visible editor appearance when no live varbit/varp state is available.
+ * visible appearance for an explicit {@link ObjectVarState}.
  *
  * <p>The game client always transforms an object whose definition has a
- * transform table before asking that definition for its model. Studio has no
- * player var state, so the transform table's default/fallback entry is the
- * only deterministic client-compatible choice. A missing default is an
- * explicit unresolved state, not permission to render the placed shell.</p>
+ * transform table before asking that definition for its model
+ * ({@code runescape-client/ObjectComposition.transform()}): the var value
+ * selects {@code transforms[value]} when it is in range, otherwise the last
+ * entry (the default). The editor uses a fresh account (every var 0) unless a
+ * caller supplies another state. A state that selects {@code -1} is an
+ * explicit "hidden in this state" result, not permission to render the placed
+ * shell.</p>
  */
 public final class ObjectDefinitionResolver {
     private final DefinitionProvider definitions;
+    private final ObjectVarState varState;
 
     public ObjectDefinitionResolver(DefinitionProvider definitions) {
+        this(definitions, ObjectVarState.freshAccount());
+    }
+
+    public ObjectDefinitionResolver(DefinitionProvider definitions, ObjectVarState varState) {
         this.definitions = Objects.requireNonNull(definitions, "definitions");
+        this.varState = Objects.requireNonNull(varState, "varState");
     }
 
     public Resolution resolveEditorDisplay(int placedId) {
@@ -43,9 +52,9 @@ public final class ObjectDefinitionResolver {
         // ObjectComposition.transform() before invoking getModelDynamic() on
         // the returned definition. It does not recursively transform a child
         // that itself owns another transform table.
-        int nextId = placedDefinition.defaultTransform();
+        int nextId = transform(placedDefinition);
         if (nextId < 0) {
-            return new Resolution(placedId, Status.NO_DEFAULT_TRANSFORM,
+            return new Resolution(placedId, Status.HIDDEN_IN_VAR_STATE,
                     Optional.of(placedDefinition), Optional.empty(),
                     List.of(placedId));
         }
@@ -66,10 +75,38 @@ public final class ObjectDefinitionResolver {
                 List.of(placedId, nextId));
     }
 
+    /** {@code ObjectComposition.transform()} for this resolver's var state. */
+    private int transform(ObjectDefinitionView definition) {
+        int[] transforms = definition.transforms();
+        if (transforms.length == 0) return definition.defaultTransform();
+        int value = definition.varbit() != -1 ? varState.varbitValue(definition.varbit())
+                : definition.varp() != -1 ? varState.varpValue(definition.varp())
+                : -1;
+        return value >= 0 && value < transforms.length - 1
+                ? transforms[value]
+                : transforms[transforms.length - 1];
+    }
+
+    /**
+     * First state of a multiloc that shows a definition, for editor ghosts of
+     * locs hidden in the current state; empty when every state is hidden.
+     */
+    public Optional<ObjectDefinitionView> firstVisibleState(int placedId) {
+        return definitions.object(placedId).flatMap(placed -> {
+            for (int child : placed.transforms()) {
+                if (child < 0) continue;
+                Optional<ObjectDefinitionView> definition = definitions.object(child);
+                if (definition.isPresent()) return definition;
+            }
+            return Optional.empty();
+        });
+    }
+
     public enum Status {
         RESOLVED,
         MISSING_PLACED_DEFINITION,
-        NO_DEFAULT_TRANSFORM,
+        /** The var state selects -1: the client draws nothing for this loc right now. */
+        HIDDEN_IN_VAR_STATE,
         MISSING_TRANSFORM_DEFINITION,
         RESOLVED_NESTED_TRANSFORM_CHILD
     }

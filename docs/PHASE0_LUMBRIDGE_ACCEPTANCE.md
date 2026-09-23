@@ -16,7 +16,13 @@ transformed=2, warnings=220, failures=0. Every warning falls in one reviewed gro
 | Count | Stage | Cause | Disposition |
 |---|---|---|---|
 | 206 | `EMPTY_RENDERABLE_GEOMETRY` | models 2214, 2215, 4873 (24-byte files, 0 vertices / 0 faces) and 1105 (4 vertices, 0 faces) | Authored-empty models: invisible blockers and icon-only floor decorations. The client draws nothing either. |
-| 14 | `DEFINITION_UNRESOLVED` / `NO_DEFAULT_TRANSFORM` | multilocs whose transform table ends in `-1`, e.g. 10586/10778/29715 (Bush), 34738 (STASH bush), 27291 (Bank booth) | Needs a var-state policy. With var value 0 the client picks `transforms[0]` (`runescape-client/ObjectComposition.transform()`), so a "fresh state" profile would render these bushes. The policy is still open. |
+| 14 | `DEFINITION_UNRESOLVED` / `NO_DEFAULT_TRANSFORM` (now `HIDDEN_IN_VAR_STATE`) | multilocs whose transform table ends in `-1`, e.g. 10586/10778/29715 (Bush), 34738 (STASH bush), 27291 (Bank booth) | Needs a var-state policy. With var value 0 the client picks `transforms[0]` (`runescape-client/ObjectComposition.transform()`), so a "fresh state" profile would render these bushes. The policy is still open. |
+
+**Update (same day):** multilocs now resolve through an explicit `ObjectVarState`, a fresh account (every
+var 0) by default, exactly as `ObjectComposition.transform()` selects `transforms[var]`. The re-run reports
+submitted=4517, transformed=13, warnings=209: the castle bushes and the STASH bush now render, and only
+10818, 12354 and 29714 remain `HIDDEN_IN_VAR_STATE`. That is correct for a fresh account; the editor shows
+them as translucent ghosts.
 
 The first run on this cache (before the classification fix) reported 206 FAILs. They
 were traced to these cache models rather than a decoder defect by reading the raw

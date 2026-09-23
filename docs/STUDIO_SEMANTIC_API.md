@@ -351,7 +351,7 @@ Initial Phase 0 statuses must distinguish at least:
 - RESOLVED
 - MISSING_PLACED_DEFINITION
 - BLANK_OR_SENTINEL_NAME
-- NO_DEFAULT_TRANSFORM
+- HIDDEN_IN_VAR_STATE (the var state selects -1; resolved with a fresh-account `ObjectVarState` by default)
 - MISSING_TRANSFORM_DEFINITION
 - RESOLVED_NESTED_TRANSFORM_CHILD
 - NO_MODEL_FOR_SHAPE
