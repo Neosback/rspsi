@@ -31,36 +31,116 @@ public final class GpuDrawBatchPlanner {
         if (orderedIndices.isEmpty()) return List.of();
 
         List<Batch> batches = new ArrayList<>();
-        int cursor = 0;
-        while (cursor < orderedIndices.size()) {
-            int firstIndex = checkedIndex(commands, orderedIndices.get(cursor));
-            GpuDrawCommand first = commands.get(firstIndex);
-            if (first.pass() != pass) {
-                throw new IllegalArgumentException("Ordered command does not belong to " + pass
-                        + " pass: " + firstIndex);
+        BatchCursor cursor = cursor(commands, orderedIndices, pass, zoneKeyForCommand);
+        while (cursor.next()) {
+            List<Integer> batchCommands = new ArrayList<>(cursor.commandCount());
+            for (int offset = 0; offset < cursor.commandCount(); offset++) {
+                batchCommands.add(cursor.commandIndexAt(offset));
+            }
+            batches.add(new Batch(cursor.zoneKey(), batchCommands));
+        }
+        return List.copyOf(batches);
+    }
+
+    /**
+     * Allocation-light cursor over native draw batches.
+     *
+     * <p>The compatibility {@link #plan} API materializes immutable batch
+     * records. Native render loops should prefer this cursor: it groups the
+     * caller's already-ordered command indices in place and exposes each
+     * contiguous batch without copying command indices into nested lists.</p>
+     */
+    public static BatchCursor cursor(List<GpuDrawCommand> commands,
+                                     List<Integer> orderedIndices,
+                                     GpuDrawCommand.SubmissionPass pass,
+                                     IntToLongFunction zoneKeyForCommand) {
+        return new BatchCursor(commands, orderedIndices, pass, zoneKeyForCommand);
+    }
+
+    public static final class BatchCursor {
+        private final List<GpuDrawCommand> commands;
+        private final List<Integer> orderedIndices;
+        private final GpuDrawCommand.SubmissionPass pass;
+        private final IntToLongFunction zoneKeyForCommand;
+        private int cursor;
+        private int start;
+        private int end;
+        private long zoneKey;
+        private boolean positioned;
+
+        private BatchCursor(List<GpuDrawCommand> commands,
+                            List<Integer> orderedIndices,
+                            GpuDrawCommand.SubmissionPass pass,
+                            IntToLongFunction zoneKeyForCommand) {
+            this.commands = Objects.requireNonNull(commands, "commands");
+            this.orderedIndices = Objects.requireNonNull(orderedIndices, "orderedIndices");
+            this.pass = Objects.requireNonNull(pass, "pass");
+            this.zoneKeyForCommand = Objects.requireNonNull(
+                    zoneKeyForCommand, "zoneKeyForCommand");
+        }
+
+        public boolean next() {
+            if (cursor >= orderedIndices.size()) {
+                positioned = false;
+                return false;
             }
 
-            long zoneKey = zoneKeyForCommand.applyAsLong(firstIndex);
-            List<Integer> batchCommands = new ArrayList<>();
-            batchCommands.add(firstIndex);
+            start = cursor;
+            int firstIndex = checkedIndex(commands, orderedIndices.get(start));
+            GpuDrawCommand first = commands.get(firstIndex);
+            if (first.pass() != pass) {
+                throw new IllegalArgumentException(
+                        "Ordered command does not belong to " + pass
+                                + " pass: " + firstIndex);
+            }
 
-            int end = cursor + 1;
+            zoneKey = zoneKeyForCommand.applyAsLong(firstIndex);
+            end = start + 1;
             while (end < orderedIndices.size()) {
-                int candidateIndex = checkedIndex(commands, orderedIndices.get(end));
+                int candidateIndex =
+                        checkedIndex(commands, orderedIndices.get(end));
                 GpuDrawCommand candidate = commands.get(candidateIndex);
                 if (candidate.pass() != pass
                         || zoneKeyForCommand.applyAsLong(candidateIndex) != zoneKey
                         || !sameDrawState(first, candidate)) {
                     break;
                 }
-                batchCommands.add(candidateIndex);
                 end++;
             }
 
-            batches.add(new Batch(zoneKey, batchCommands));
             cursor = end;
+            positioned = true;
+            return true;
         }
-        return List.copyOf(batches);
+
+        public long zoneKey() {
+            ensurePositioned();
+            return zoneKey;
+        }
+
+        public int firstCommandIndex() {
+            return commandIndexAt(0);
+        }
+
+        public int commandCount() {
+            ensurePositioned();
+            return end - start;
+        }
+
+        public int commandIndexAt(int offset) {
+            ensurePositioned();
+            if (offset < 0 || start + offset >= end) {
+                throw new IndexOutOfBoundsException(
+                        "Batch command offset outside current range: " + offset);
+            }
+            return checkedIndex(commands, orderedIndices.get(start + offset));
+        }
+
+        private void ensurePositioned() {
+            if (!positioned) {
+                throw new IllegalStateException("Batch cursor is not positioned");
+            }
+        }
     }
 
     private static int checkedIndex(List<GpuDrawCommand> commands, int index) {
