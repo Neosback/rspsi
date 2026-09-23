@@ -38,8 +38,14 @@ public record ModelAnimationState(
     }
 
     public static ModelAnimationState unresolved(int sequenceId, int clientCycle) {
+        return unresolved(sequenceId, clientCycle, 0);
+    }
+
+    public static ModelAnimationState unresolved(int sequenceId, int clientCycle,
+                                                 int animationHeightOffset) {
         if (sequenceId < 0) return none();
-        return new ModelAnimationState(sequenceId, -1, -1, clientCycle, 0, false);
+        return new ModelAnimationState(sequenceId, -1, -1, clientCycle,
+                animationHeightOffset, false);
     }
 
     public static ModelAnimationState selected(int sequenceId, int frameIndex, int frameId,
