@@ -1118,6 +1118,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         cachedFogBounds = null;
         orderedPlanFingerprint = null;
         cachedOpaqueOrder = List.of();
+        alphaCommands.clear();
+        alphaIndices.clear();
+        indexedCommands = List.of();
+        alphaOrder.clear();
+        missingTextureIds.clear();
         diagnosticsLogged = false;
     }
 
