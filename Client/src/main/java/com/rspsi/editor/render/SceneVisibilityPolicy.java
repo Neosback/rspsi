@@ -89,7 +89,14 @@ public record SceneVisibilityPolicy(
                 hideRoofGeometry, Objects.requireNonNull(state, "roofRemovalState"));
     }
 
-    /** Returns whether one immutable tile projection should be submitted. */
+    /**
+     * Context-free tile gate used by editor/debug callers.
+     *
+     * <p>Connected roof removal needs neighbouring tile context, so when that
+     * mode is enabled this method intentionally leaves upper physical levels
+     * eligible; {@link #apply(GpuScenePacket)} performs the exact region-aware
+     * decision.</p>
+     */
     public boolean includes(SceneTileSnapshot tile) {
         Objects.requireNonNull(tile, "tile");
         if (planeSelection == PlaneSelection.AUTHORED_PLANE
@@ -101,7 +108,8 @@ public record SceneVisibilityPolicy(
             return false;
         }
         if (planeSelection == PlaneSelection.CLIENT_TRAVERSAL
-                && tile.planeCullLevel() > selectedPlane) {
+                && tile.planeCullLevel() > selectedPlane
+                && !roofRemovalState.enabled()) {
             return false;
         }
         if (hideBridgeUpperGeometry && tile.visibleBelow()) {
