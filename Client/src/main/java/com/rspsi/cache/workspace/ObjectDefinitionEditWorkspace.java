@@ -107,6 +107,15 @@ public final class ObjectDefinitionEditWorkspace {
         Path target = Objects.requireNonNull(outputCache, "outputCache")
                 .toAbsolutePath().normalize();
         Objects.requireNonNull(snapshots, "snapshots");
+        if (snapshots.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Restored publication requires at least one snapshot");
+        }
+        if (publicationTarget != null) {
+            throw new IllegalStateException(
+                    "Definition publication state is already bound to "
+                            + publicationTarget);
+        }
 
         LinkedHashMap<Integer, ObjectDefinitionRawView> checked =
                 new LinkedHashMap<>();
