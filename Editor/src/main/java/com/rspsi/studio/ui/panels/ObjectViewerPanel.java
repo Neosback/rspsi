@@ -551,7 +551,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
 
         ImGui.textDisabled(
-                "Preview only. The source cache remains read-only until an explicit output-cache phase.");
+                "The source cache stays read-only. Publish edits to a separate verified output cache below.");
 
         boolean canEdit = context.session() != null && context.session().canEdit();
         if (!canEdit) {
@@ -971,9 +971,9 @@ public final class ObjectViewerPanel implements StudioPanel {
                                     source, output, revision, plan);
                     return DefinitionBuildCompletion.success(
                             workspace, plan, result);
-                } catch (Throwable failure) {
+                } catch (Exception failure) {
                     return DefinitionBuildCompletion.failure(
-                            workspace, plan, output, failure);
+                            workspace, plan, failure);
                 }
             });
         } catch (RuntimeException failure) {
@@ -1150,23 +1150,21 @@ public final class ObjectViewerPanel implements StudioPanel {
             ObjectDefinitionEditWorkspace workspace,
             ObjectDefinitionOutputCacheBuilder.BuildPlan plan,
             ObjectDefinitionOutputCacheBuilder.BuildResult result,
-            Path output,
             Throwable failure) {
         private static DefinitionBuildCompletion success(
                 ObjectDefinitionEditWorkspace workspace,
                 ObjectDefinitionOutputCacheBuilder.BuildPlan plan,
                 ObjectDefinitionOutputCacheBuilder.BuildResult result) {
             return new DefinitionBuildCompletion(
-                    workspace, plan, result, result.outputCache(), null);
+                    workspace, plan, result, null);
         }
 
         private static DefinitionBuildCompletion failure(
                 ObjectDefinitionEditWorkspace workspace,
                 ObjectDefinitionOutputCacheBuilder.BuildPlan plan,
-                Path output,
                 Throwable failure) {
             return new DefinitionBuildCompletion(
-                    workspace, plan, null, output, failure);
+                    workspace, plan, null, failure);
         }
     }
 
