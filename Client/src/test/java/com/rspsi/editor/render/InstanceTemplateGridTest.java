@@ -74,6 +74,16 @@ class InstanceTemplateGridTest {
     }
 
     @Test
+    void rejectsPackedSourceValuesThatWouldTruncate() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new InstanceChunkTemplate(0, 0, 0, 4, 10, 20, 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> new InstanceChunkTemplate(0, 0, 0, 0, 0x400, 20, 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> new InstanceChunkTemplate(0, 0, 0, 0, 10, 0x800, 0));
+    }
+
+    @Test
     void defensiveArrayCannotMutateTheSceneApiView() {
         InstanceChunkTemplate template = new InstanceChunkTemplate(
                 0, 0, 0, 0, 10, 20, 1);
