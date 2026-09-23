@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectVarState;
 import com.rspsi.editor.model.OsrsLocShape;
 import com.rspsi.editor.model.WorldObject;
 
@@ -41,12 +42,18 @@ public record ObjectReport(String title, List<Section> sections) {
 
     /** Definition-only report (object browser). */
     public static ObjectReport forDefinition(int id, DefinitionProvider definitions) {
-        return build(id, null, definitions);
+        return build(id, null, definitions, ObjectVarState.freshAccount());
     }
 
     /** Report for one placed object (tile inspector, selection). */
     public static ObjectReport forPlacement(WorldObject object, DefinitionProvider definitions) {
-        return build(Objects.requireNonNull(object, "object").id(), object, definitions);
+        return forPlacement(object, definitions, ObjectVarState.freshAccount());
+    }
+
+    /** Report for one placed object as it appears in {@code varState}. */
+    public static ObjectReport forPlacement(WorldObject object, DefinitionProvider definitions,
+                                            ObjectVarState varState) {
+        return build(Objects.requireNonNull(object, "object").id(), object, definitions, varState);
     }
 
     public String toText() {
@@ -60,7 +67,8 @@ public record ObjectReport(String title, List<Section> sections) {
         return text.toString();
     }
 
-    private static ObjectReport build(int id, WorldObject placement, DefinitionProvider definitions) {
+    private static ObjectReport build(int id, WorldObject placement, DefinitionProvider definitions,
+                                      ObjectVarState varState) {
         Objects.requireNonNull(definitions, "definitions");
         Optional<ObjectDefinitionView> found = definitions.object(id);
         if (found.isEmpty()) {
@@ -88,12 +96,15 @@ public record ObjectReport(String title, List<Section> sections) {
 
         List<Row> appearance = new ArrayList<>();
         if (definition.hasTransforms()) {
-            appearance.add(row("State variable", definition.varbit() != -1 ? "varbit " + definition.varbit()
-                    : definition.varp() != -1 ? "varp " + definition.varp() : "none"));
+            appearance.add(row("State variable", definition.varbit() != -1
+                    ? "varbit " + definition.varbit() + " = " + varState.varbitValue(definition.varbit())
+                    : definition.varp() != -1
+                    ? "varp " + definition.varp() + " = " + varState.varpValue(definition.varp())
+                    : "none"));
             appearance.add(row("States", states(definition, definitions)));
         }
         if (placement != null) {
-            ObjectResolutionSummary resolution = ObjectResolutionSummary.capture(placement, definitions);
+            ObjectResolutionSummary resolution = ObjectResolutionSummary.capture(placement, definitions, varState);
             appearance.add(new Row("Draws", resolution.diagnosticSummary(), !resolution.renderableGeometryReady()));
             if (!resolution.selectedModelIds().isEmpty()) {
                 appearance.add(row("Models used", resolution.selectedModelIds().toString()));

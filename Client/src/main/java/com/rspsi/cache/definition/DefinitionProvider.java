@@ -139,4 +139,9 @@ public interface DefinitionProvider {
             message = message == null ? "decode failed" : message;
         }
     }
+
+    /** Varbit layout (varp and bit range), for resolving multiloc and other var-driven state. */
+    default Optional<VarbitDefinitionView> varbit(int id) {
+        return Optional.empty();
+    }
 }

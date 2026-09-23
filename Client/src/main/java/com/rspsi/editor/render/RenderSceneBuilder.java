@@ -67,9 +67,10 @@ public final class RenderSceneBuilder {
                               LightingProfile lightingProfile, ScenePresentation presentation) {
         this.terrainMeshes = Objects.requireNonNull(terrainMeshes, "terrainMeshes");
         this.definitions = definitions;
-        this.definitionResolver = definitions == null ? null : new ObjectDefinitionResolver(definitions);
-        this.lightingProfile = Objects.requireNonNull(lightingProfile, "lightingProfile");
         this.presentation = Objects.requireNonNull(presentation, "presentation");
+        this.definitionResolver = definitions == null ? null
+                : new ObjectDefinitionResolver(definitions, presentation.varState());
+        this.lightingProfile = Objects.requireNonNull(lightingProfile, "lightingProfile");
     }
 
     /**

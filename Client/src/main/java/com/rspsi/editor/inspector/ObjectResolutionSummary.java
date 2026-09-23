@@ -79,11 +79,17 @@ public record ObjectResolutionSummary(
     }
 
     public static ObjectResolutionSummary capture(WorldObject object, DefinitionProvider definitions) {
+        return capture(object, definitions, com.rspsi.cache.definition.ObjectVarState.freshAccount());
+    }
+
+    /** Resolution for a specific player var state (e.g. the Studio's simulated player). */
+    public static ObjectResolutionSummary capture(WorldObject object, DefinitionProvider definitions,
+                                                  com.rspsi.cache.definition.ObjectVarState varState) {
         Objects.requireNonNull(object, "object");
         Objects.requireNonNull(definitions, "definitions");
 
         ObjectDefinitionResolver.Resolution resolution =
-                new ObjectDefinitionResolver(definitions).resolveEditorDisplay(object.id());
+                new ObjectDefinitionResolver(definitions, varState).resolveEditorDisplay(object.id());
         if (!resolution.resolved()) {
             return new ObjectResolutionSummary(
                     resolution.status(), resolution.transformPath(), Optional.empty(),

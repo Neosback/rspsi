@@ -46,8 +46,14 @@ public final class IncrementalRenderWindowSceneCompiler {
     private final TerrainPacketBuilder packetBuilder = new TerrainPacketBuilder();
 
     public IncrementalRenderWindowSceneCompiler(DefinitionProvider definitions) {
+        this(definitions, com.rspsi.editor.render.ScenePresentation.PARITY);
+    }
+
+    /** Studio viewports pass their editor presentation so full rebuilds keep ghosts and var state. */
+    public IncrementalRenderWindowSceneCompiler(DefinitionProvider definitions,
+                                                com.rspsi.editor.render.ScenePresentation presentation) {
         this.definitions = Objects.requireNonNull(definitions, "definitions");
-        this.fullBuilder = new RenderWindowSceneBuilder(definitions);
+        this.fullBuilder = new RenderWindowSceneBuilder(definitions, presentation);
     }
 
     /**
@@ -179,6 +185,12 @@ public final class IncrementalRenderWindowSceneCompiler {
 
         return new UpdateResult(scene, false, compiledVisibleTiles,
                 Set.copyOf(dirtyZones), Set.copyOf(dirtyWorldZones), "incremental terrain");
+    }
+
+    /** Rebuilds the whole window, e.g. after the simulated player's var state changed. */
+    public UpdateResult compileFull(WorldRegionWindow source, int clientCycle, String reason) {
+        Objects.requireNonNull(source, "source");
+        return full(source, clientCycle, Objects.requireNonNull(reason, "reason"));
     }
 
     private UpdateResult full(WorldRegionWindow source, int clientCycle, String reason) {

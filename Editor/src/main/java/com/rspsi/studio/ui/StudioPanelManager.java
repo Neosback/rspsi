@@ -5,6 +5,7 @@ import com.rspsi.editor.plugin.ui.UiSurfaceContribution;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.ui.panels.HeightToolPanel;
 import com.rspsi.studio.ui.panels.KnowledgePanel;
+import com.rspsi.studio.ui.panels.PlayerStatePanel;
 import com.rspsi.studio.ui.panels.MapSettingsPanel;
 import com.rspsi.studio.ui.panels.MinimapPanel;
 import com.rspsi.studio.ui.panels.ObjectViewerPanel;
@@ -41,6 +42,7 @@ public final class StudioPanelManager {
         register(new ObjectViewerPanel());
         register(new OutlinerPanel());
         register(new KnowledgePanel());
+        register(new PlayerStatePanel());
         register(new MapSettingsPanel());
         register(new PluginManagerPanel());
         register(new TilePainterPalette());

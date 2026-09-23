@@ -51,6 +51,8 @@ import com.rspsi.editor.integration.ServerIntegrationService;
 import com.rspsi.editor.integration.npc.NpcSpawnService;
 import com.rspsi.editor.integration.reference.ReferenceService;
 import com.rspsi.editor.simulation.SimulationEngine;
+import com.rspsi.editor.simulation.state.RuntimeState;
+import com.rspsi.api.runtime.SimulatedClient;
 import com.rspsi.editor.symbols.CacheGamevalProvider;
 import com.rspsi.editor.symbols.SymbolService;
 import com.rspsi.editor.plugin.builtin.tool.TilePainterToolPlugin;
@@ -97,6 +99,10 @@ public final class StudioApplication implements AutoCloseable {
     private final ReferenceService references = new ReferenceService();
     private final NpcSpawnService spawns = new NpcSpawnService();
     private final SimulationEngine simulation = new SimulationEngine();
+    /** RuneLite-shaped view of the simulated player; scenes resolve multilocs against it. */
+    private SimulatedClient player;
+    /** Var state the current scene was built with; a difference triggers a rebuild. */
+    private RuntimeState renderedVarState = RuntimeState.EMPTY;
     private final ServerIntegrationService integrations;
     private final NativeSceneViewport sceneViewport = new NativeSceneViewport();
     private final SettingsStore renderSettings = new SettingsStore(EditorSettingKeys.registry());
@@ -335,7 +341,7 @@ public final class StudioApplication implements AutoCloseable {
 
         long windowStart = System.nanoTime();
         RenderWindowScene scene = new RenderWindowSceneBuilder(
-                cache.bundle().definitions(), ScenePresentation.EDITOR).build(window, clientCycle);
+                cache.bundle().definitions(), editorPresentation(cache)).build(window, clientCycle);
         long windowNanos = System.nanoTime() - windowStart;
 
         SceneWindow sceneWindow = SceneWindow.from(window);
@@ -361,7 +367,7 @@ public final class StudioApplication implements AutoCloseable {
 
         long renderSceneStart = System.nanoTime();
         RenderScene renderScene = new RenderSceneBuilder(
-                cache.bundle().definitions(), ScenePresentation.EDITOR).build(region.document(), clientCycle);
+                cache.bundle().definitions(), editorPresentation(cache)).build(region.document(), clientCycle);
         long renderSceneNanos = System.nanoTime() - renderSceneStart;
 
         EditorSession session = opened.region().session();
@@ -388,6 +394,7 @@ public final class StudioApplication implements AutoCloseable {
         if (pendingScene == null || !pendingScene.isDone()) return;
         try {
             loadedScene = pendingScene.join();
+            renderedVarState = simulation.state();
             sceneViewport.setCamera(loadedScene.camera());
             currentPlan = loadedScene.plan();
             currentZonedPlan = loadedScene.zonedPlan();
@@ -446,11 +453,11 @@ public final class StudioApplication implements AutoCloseable {
                                                 LoadedMapScene baseScene,
                                                 int clientCycle) {
         var definitions = cache.bundle().definitions();
-        RenderWindowSceneBuilder windowBuilder = new RenderWindowSceneBuilder(definitions, ScenePresentation.EDITOR);
+        RenderWindowSceneBuilder windowBuilder = new RenderWindowSceneBuilder(definitions, editorPresentation(cache));
         RenderWindowSceneBuilder.AnimationRefreshResult animation =
                 windowBuilder.refreshAnimations(baseScene.windowScene(), clientCycle);
         RenderWindowScene scene = animation.scene();
-        RenderScene renderScene = new RenderSceneBuilder(definitions, ScenePresentation.EDITOR)
+        RenderScene renderScene = new RenderSceneBuilder(definitions, editorPresentation(cache))
                 .refreshAnimations(baseScene.renderScene(), clientCycle);
 
         GpuScenePacket packet = baseScene.packet();
@@ -494,6 +501,17 @@ public final class StudioApplication implements AutoCloseable {
                 baseScene.camera(), clientCycle, nextAnimationRefreshCycle);
     }
 
+    /** Editor presentation bound to the simulated player of this cache session. */
+    private ScenePresentation editorPresentation(LoadedOsrsCacheSession cache) {
+        var definitions = cache.bundle().definitions();
+        SimulatedClient current = player;
+        if (current == null || current.definitions() != definitions) {
+            current = new SimulatedClient(simulation, definitions);
+            player = current;
+        }
+        return ScenePresentation.EDITOR.withVarState(current);
+    }
+
     private int currentClientCycle() {
         return (int) (simulation.clock().clientCycles() & Integer.MAX_VALUE);
     }
@@ -519,6 +537,16 @@ public final class StudioApplication implements AutoCloseable {
             }
         }
         if (pendingAnimationRefresh != null) return;
+        RuntimeState vars = simulation.state();
+        if (loadedScene != null && cache != null && !vars.equals(renderedVarState)) {
+            // The simulated player's vars changed: multilocs may show another
+            // state, which authored-tile deltas cannot see, so rebuild fully.
+            renderedVarState = vars;
+            LoadedMapScene baseScene = loadedScene;
+            pendingSceneRebuild = CompletableFuture.supplyAsync(
+                    () -> rebuildMapScene(cache, baseScene, Set.of(), true), sceneExecutor);
+            return;
+        }
         if (sceneDirty.compareAndSet(true, false)) {
             if (loadedScene != null && cache != null) {
                 LoadedMapScene baseScene = loadedScene;
@@ -526,7 +554,7 @@ public final class StudioApplication implements AutoCloseable {
                 if (!changedTiles.isEmpty()) {
                     pendingRebuildChanges = changedTiles;
                     pendingSceneRebuild = CompletableFuture.supplyAsync(
-                            () -> rebuildMapScene(cache, baseScene, changedTiles), sceneExecutor);
+                            () -> rebuildMapScene(cache, baseScene, changedTiles, false), sceneExecutor);
                 }
             }
         }
@@ -541,7 +569,7 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private LoadedMapScene rebuildMapScene(LoadedOsrsCacheSession cache, LoadedMapScene baseScene,
-                                           Set<TileCoordinate> changedTiles) {
+                                           Set<TileCoordinate> changedTiles, boolean varStateChanged) {
         long totalStart = System.nanoTime();
         WorldRegion region = baseScene.opened().worldRegion();
         WorldRegionWindow window = new WorldRegionWindow(region.regionX(), region.regionY(), 1, 1,
@@ -555,9 +583,11 @@ public final class StudioApplication implements AutoCloseable {
 
         long windowStart = System.nanoTime();
         IncrementalRenderWindowSceneCompiler windowCompiler =
-                new IncrementalRenderWindowSceneCompiler(cache.bundle().definitions());
-        IncrementalRenderWindowSceneCompiler.UpdateResult windowUpdate =
-                windowCompiler.compile(baseScene.windowScene(), window, changedWorldTiles,
+                new IncrementalRenderWindowSceneCompiler(cache.bundle().definitions(),
+                        editorPresentation(cache));
+        IncrementalRenderWindowSceneCompiler.UpdateResult windowUpdate = varStateChanged
+                ? windowCompiler.compileFull(window, baseScene.animationCycle(), "simulated var state changed")
+                : windowCompiler.compile(baseScene.windowScene(), window, changedWorldTiles,
                         baseScene.animationCycle());
         RenderWindowScene scene = windowUpdate.scene();
         long windowNanos = System.nanoTime() - windowStart;
@@ -594,10 +624,12 @@ public final class StudioApplication implements AutoCloseable {
         long planNanos = System.nanoTime() - planStart;
 
         long renderSceneStart = System.nanoTime();
-        RenderScene renderScene = new RenderSceneBuilder(
-                cache.bundle().definitions(), ScenePresentation.EDITOR).update(
-                baseScene.renderScene(), new RenderChanges(changedTiles),
-                baseScene.animationCycle());
+        RenderSceneBuilder renderSceneBuilder = new RenderSceneBuilder(
+                cache.bundle().definitions(), editorPresentation(cache));
+        RenderScene renderScene = varStateChanged
+                ? renderSceneBuilder.build(region.document(), baseScene.animationCycle())
+                : renderSceneBuilder.update(baseScene.renderScene(), new RenderChanges(changedTiles),
+                        baseScene.animationCycle());
         long renderSceneNanos = System.nanoTime() - renderSceneStart;
 
         SceneBuildMetrics metrics = new SceneBuildMetrics(

@@ -53,9 +53,9 @@ public final class ModelPacketBuilder {
     public ModelPacketBuilder(DefinitionProvider definitions, LightingProfile lighting,
                               ScenePresentation presentation) {
         this.definitions = Objects.requireNonNull(definitions, "definitions");
-        this.definitionResolver = new ObjectDefinitionResolver(this.definitions);
-        this.lighting = Objects.requireNonNull(lighting, "lighting");
         this.presentation = Objects.requireNonNull(presentation, "presentation");
+        this.definitionResolver = new ObjectDefinitionResolver(this.definitions, presentation.varState());
+        this.lighting = Objects.requireNonNull(lighting, "lighting");
     }
 
     /** Builds every available static model packet in document order. */

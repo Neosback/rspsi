@@ -32,6 +32,7 @@ public final class StudioIcons {
     public static final String SLIDERS = "\ue429";          // tune
     public static final String TUNE = "\ue429";             // tune
     public static final String INFO = "\ue88e";             // info
+    public static final String PLAYER = "\ue7fd";           // person
     public static final String HELP = "\ue887";             // help
     public static final String PIN = "\uf10d";              // push_pin
     public static final String CLOSE = "\ue5cd";            // close

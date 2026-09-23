@@ -36,6 +36,7 @@ import dev.openrune.definition.type.OverlayType;
 import dev.openrune.definition.type.SpriteType;
 import dev.openrune.definition.type.TextureType;
 import dev.openrune.definition.type.UnderlayType;
+import dev.openrune.definition.type.VarBitType;
 import dev.openrune.filesystem.Cache;
 
 import java.lang.reflect.Method;
@@ -117,6 +118,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     private final Map<Integer, UnderlayType> underlays = new HashMap<>();
     private final Map<Integer, OverlayType> overlays = new HashMap<>();
     private final Map<Integer, TextureType> textures = new HashMap<>();
+    private volatile Map<Integer, VarBitType> varbits;
     private final java.util.List<DecodeFailure> decodeFailures =
             java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private volatile Map<Integer, SpriteType> textureSprites;
@@ -157,6 +159,26 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         mapScenes = loadMapScenes(cache);
         sequenceIds = archiveFileIds(cache, SEQUENCE);
         mapElementIds = archiveFileIds(cache, MAP_ELEMENT);
+    }
+
+    /** Varbits decode lazily on first use: map viewing does not need them. */
+    @Override
+    public Optional<com.rspsi.cache.definition.VarbitDefinitionView> varbit(int id) {
+        Map<Integer, VarBitType> loaded = varbits;
+        if (loaded == null) {
+            synchronized (this) {
+                if (varbits == null) {
+                    Map<Integer, VarBitType> decoded = new HashMap<>();
+                    decodeEager("varbit", () -> new OsrsCacheProvider.VarBitDecoder().load(cache, decoded));
+                    varbits = decoded;
+                }
+                loaded = varbits;
+            }
+        }
+        VarBitType type = loaded.get(id);
+        if (type == null) return Optional.empty();
+        return Optional.of(new com.rspsi.cache.definition.VarbitDefinitionView(
+                id, type.getVarp(), type.getStartBit(), type.getEndBit()));
     }
 
     public static OpenRuneDefinitionProvider load(Cache cache, int revision) {

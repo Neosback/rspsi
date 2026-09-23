@@ -2,6 +2,7 @@ package com.rspsi.studio.ui.panels;
 
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.api.runtime.SimulatedClient;
 import com.rspsi.editor.inspector.ObjectReport;
 import com.rspsi.studio.ui.PropertyGrid;
 import com.rspsi.editor.model.FloorId;
@@ -180,7 +181,7 @@ public final class TileBrushPanel implements StudioPanel {
         ImGui.spacing();
         ImGui.separator();
         ImGui.spacing();
-        renderObjectsOnTile(cache, snapshot.objects());
+        renderObjectsOnTile(context, cache, snapshot.objects());
     }
 
     /**
@@ -351,7 +352,8 @@ public final class TileBrushPanel implements StudioPanel {
      * {@link ObjectReport} - definition, collision, and appearance data straight from
      * the cache, for tracking a misconfigured type/rule or a rendering bug back to its source.
      */
-    private void renderObjectsOnTile(LoadedOsrsCacheSession cache, java.util.List<WorldObject> objects) {
+    private void renderObjectsOnTile(StudioPanelContext context, LoadedOsrsCacheSession cache,
+                                    java.util.List<WorldObject> objects) {
         if (!ImGui.collapsingHeader("Objects On Tile (" + objects.size() + ")",
                 objects.isEmpty() ? 0 : ImGuiTreeNodeFlags.DefaultOpen)) {
             return;
@@ -367,7 +369,9 @@ public final class TileBrushPanel implements StudioPanel {
         int index = 0;
         for (WorldObject object : objects) {
             ImGui.pushID(index);
-            ObjectReport report = ObjectReport.forPlacement(object, cache.bundle().definitions());
+            ObjectReport report = ObjectReport.forPlacement(object, cache.bundle().definitions(),
+                    context.simulation() == null ? com.rspsi.cache.definition.ObjectVarState.freshAccount()
+                            : new SimulatedClient(context.simulation(), cache.bundle().definitions()));
             String label = report.title() + "   [" + object.category().displayName() + "]";
             if (ImGui.treeNode(label)) {
                 PropertyGrid.render("tile-obj-" + index, report);
