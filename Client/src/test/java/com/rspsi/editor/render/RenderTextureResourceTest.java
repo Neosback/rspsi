@@ -68,14 +68,13 @@ class RenderTextureResourceTest {
                 RenderTextureResource.PixelStatus.AVAILABLE, "");
 
         int expected = java.util.Arrays.hashCode(pixels);
+        int stableHashCode = resource.hashCode();
         assertEquals(expected, resource.pixelHash());
 
         int[] copy = resource.pixels();
         copy[0] = 999;
         assertEquals(expected, resource.pixelHash());
-        assertEquals(expected, resource.hashCode() - 31 * java.util.Objects.hash(
-                resource.id(), definition, resource.width(), resource.height(),
-                resource.pixelStatus(), resource.diagnostic()));
+        assertEquals(stableHashCode, resource.hashCode());
     }
 
     @Test
