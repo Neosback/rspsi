@@ -68,6 +68,8 @@
       "rspsi": [
         "Client/src/main/java/com/rspsi/editor/render/SceneContract.java",
         "Client/src/main/java/com/rspsi/editor/render/SceneWindow.java",
+        "Client/src/main/java/com/rspsi/editor/render/RoofRegionMap.java",
+        "Client/src/main/java/com/rspsi/editor/render/RoofRemovalState.java",
         "Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java",
         "Client/src/main/java/com/rspsi/editor/render/RenderConfig.java"
       ],
@@ -78,11 +80,13 @@
       ],
       "evidence": [
         "Client/src/test/java/com/rspsi/editor/render/SceneContractTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/RoofRegionMapTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/RoofRemovalStateTest.java",
         "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md",
         "docs/RENDERING_PARITY_INDEX.md"
       ],
-      "reason": "The tracked RuneLite Scene API surface is explicitly classified as semantic, presentation-only, mutation, or deferred. Base coordinates, map regions, instance identity, world-view identity, scene minimum render level, current scene plane, render level, and physical/cull level are first-class and are now consumed by the client traversal and occlusion paths. Extended scene arrays, connected roof-region data, roof-removal-mode mutation, and other mutation APIs remain intentionally outside the neutral semantic core until a concrete editor consumer requires them.",
-      "nextAction": "Keep the core SceneContract stable; add connected roof-region/removal-mode state only with a concrete Map Studio consumer, and keep extended-scene/mutation surfaces deferred until needed."
+      "reason": "The tracked RuneLite Scene API surface is explicitly classified as semantic, presentation-only, mutation, or deferred. Base coordinates, map regions, instance identity, world-view identity, scene minimum render level, current scene plane, render level, physical/cull level, connected roof-region data, and roof-removal frame state are now first-class and consumed by the traversal path. The remaining incompleteness is the extended-scene border arrays/traversal, instance-template projection fixtures, and editor-irrelevant mutation/presentation surfaces that do not yet have a concrete Map Studio consumer.",
+      "nextAction": "Keep the core SceneContract stable. Close the remaining API-surface gap through the separately tracked extended-scene border and instance-template fixtures; add mutation-only APIs only when a concrete editor workflow requires them."
     },
     {
       "id": "scene.extendedTiles",
@@ -214,28 +218,34 @@
       "id": "scene.roofs",
       "domain": "visibility",
       "title": "Roof removal, minimum level, and camera visibility",
-      "status": "partial",
+      "status": "covered",
       "priority": "p1",
       "runelite": [
-        "net.runelite.api.Scene#getRoofRemovalMode",
-        "net.runelite.api.Scene#getMinLevel",
-        "net.runelite.api.Tile#getRenderLevel"
+        "RuneLite-melxin/runelite-mixins/src/main/java/net/runelite/mixins/RSSceneMixin.java#buildRoofs",
+        "RuneLite-melxin/runelite-mixins/src/main/java/net/runelite/mixins/RSSceneMixin.java#updateVisibleTilesAndOccluders",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/Constants.java#ROOF_FLAG_POSITION",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/Scene.java#getRoofRemovalMode",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/Scene.java#getMinLevel"
       ],
       "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/RoofRegionMap.java",
+        "Client/src/main/java/com/rspsi/editor/render/RoofRemovalState.java",
         "Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java",
-        "Client/src/main/java/com/rspsi/editor/render/RenderConfig.java"
+        "Client/src/main/java/com/rspsi/editor/render/RenderConfig.java",
+        "Client/src/main/java/com/rspsi/editor/render/SceneContract.java"
       ],
       "tsps": [
         "render/render/camera/roof.ts",
         "rs/scene/SceneLocs.ts"
       ],
       "evidence": [
+        "Client/src/test/java/com/rspsi/editor/render/RoofRegionMapTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/RoofRemovalStateTest.java",
         "Client/src/test/java/com/rspsi/editor/render/SceneVisibilityPolicyTest.java",
-        "Client/src/test/java/com/rspsi/editor/render/RenderConfigCompilerTest.java",
-        "RuneLite-melxin/runelite-mixins/src/main/java/net/runelite/mixins/RSSceneMixin.java#buildRoofs"
+        "Client/src/test/java/com/rspsi/editor/render/RenderConfigCompilerTest.java"
       ],
-      "reason": "The vanilla camera traversal prerequisite is now implemented: SceneContract.minimumRenderLevel gates current scene planes and SceneTileSnapshot.planeCullLevel gates them against the active scene/camera plane, matching the client distinction between Scene.minPlane and Tile.minPlane. Static roof-geometry hiding also remains available as an editor presentation choice. Full RuneLite roof-removal parity is still incomplete because RSSceneMixin builds connected 0x4 roof-region IDs and selectively removes regions for position, hovered tile, destination, and camera-to-player BETWEEN tracing.",
-      "nextAction": "Model RuneLite's connected 0x4 roof-region map and POSITION/HOVERED/DESTINATION/BETWEEN removal state if Map Studio needs plugin-style dynamic roof removal; do not conflate that feature with the now-covered vanilla min/cull traversal."
+      "reason": "RuneLite roof removal is modeled as derived scene semantics plus transient frame state. RoofRegionMap reproduces buildRoofs() from tile flag 0x4 with plane/y/x region numbering, eight-neighbour blocking connectivity, and the one-tile non-blocking perimeter. RoofRemovalState reproduces POSITION, HOVERED, DESTINATION, and the camera-to-player BETWEEN mode, including the exact if/else walk, blocking-only region selection, camera-pitch < 310 gate, final-player-tile exclusion, and coordinate-bounds behavior across sparse scene tiles. CLIENT_TRAVERSAL now preserves vanilla physical-level culling when the mode is disabled and, when enabled, replaces it with the selected connected-region test used by RSSceneMixin. Scene minimum-level traversal and the editor-wide static roof-geometry toggle remain separate concerns.",
+      "nextAction": "Keep RoofRegionMap and RoofRemovalState as the shared roof contract. Instance-template coordinate projection remains tracked separately under scene.instances, and extended-border traversal remains tracked under scene.extendedTiles."
     },
     {
       "id": "scene.instances",
