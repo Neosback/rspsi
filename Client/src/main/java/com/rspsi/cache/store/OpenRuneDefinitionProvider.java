@@ -4,6 +4,9 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
+import com.rspsi.cache.definition.DefinitionEditValue;
+import com.rspsi.cache.definition.ObjectDefinitionEditPreview;
+import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
 import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ModelDefinitionView;
@@ -31,14 +34,19 @@ import dev.openrune.definition.game.render.model.FaceNormal;
 import dev.openrune.definition.game.render.model.VertexNormal;
 import dev.openrune.OsrsCacheProvider;
 import dev.openrune.definition.type.ObjectType;
+import dev.openrune.definition.type.builders.ObjectTypeBuilder;
+import dev.openrune.definition.codec.ObjectCodec;
 import dev.openrune.definition.type.OverlayType;
 import dev.openrune.definition.type.SpriteType;
 import dev.openrune.definition.type.TextureType;
 import dev.openrune.definition.type.UnderlayType;
 import dev.openrune.filesystem.Cache;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -182,6 +190,204 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     public Optional<ObjectDefinitionRawView> objectRaw(int id) {
         ObjectType definition = objects.get(id);
         return definition == null ? Optional.empty() : Optional.of(toRawView(definition));
+    }
+
+    @Override
+    public Optional<ObjectDefinitionEditPreview> previewObjectEdit(
+            ObjectDefinitionEditTransaction transaction) {
+        Objects.requireNonNull(transaction, "transaction");
+        ObjectType source = objects.get(transaction.objectId());
+        return source == null
+                ? Optional.empty()
+                : Optional.of(previewObjectEdit(source, revision, transaction));
+    }
+
+    static ObjectDefinitionEditPreview previewObjectEdit(
+            ObjectType source,
+            int revision,
+            ObjectDefinitionEditTransaction transaction) {
+        Objects.requireNonNull(source, "source");
+        Objects.requireNonNull(transaction, "transaction");
+        if (revision <= 0) {
+            throw new IllegalArgumentException("OSRS cache revision must be positive");
+        }
+        if (source.getId() != transaction.objectId()) {
+            throw new IllegalArgumentException(
+                    "Transaction object id does not match source definition");
+        }
+
+        ObjectTypeBuilder builder = source.toBuilder();
+        for (ObjectDefinitionEditTransaction.Mutation mutation : transaction.mutations()) {
+            applyObjectMutation(builder, mutation);
+        }
+        ObjectType edited = builder.build();
+
+        ObjectCodec codec = new ObjectCodec(revision);
+        ByteBuf writer = Unpooled.buffer(512);
+        byte[] encoded;
+        try {
+            codec.encode(writer, edited);
+            encoded = new byte[writer.readableBytes()];
+            writer.getBytes(writer.readerIndex(), encoded);
+        } finally {
+            writer.release();
+        }
+
+        ObjectType decoded = codec.loadData(source.getId(), encoded);
+        ObjectDefinitionRawView before = toRawView(source);
+        ObjectDefinitionRawView after = toRawView(decoded);
+        verifyObjectEditRoundTrip(transaction, after);
+        return new ObjectDefinitionEditPreview(before, after, encoded);
+    }
+
+    private static void applyObjectMutation(
+            ObjectTypeBuilder builder,
+            ObjectDefinitionEditTransaction.Mutation mutation) {
+        switch (mutation) {
+            case ObjectDefinitionEditTransaction.SetField set ->
+                    applyObjectField(builder, set.field(), set.value());
+            case ObjectDefinitionEditTransaction.SetParam set ->
+                    setObjectParam(builder, set.id(), set.value());
+            case ObjectDefinitionEditTransaction.RemoveParam remove ->
+                    removeObjectParam(builder, remove.id());
+        }
+    }
+
+    private static void applyObjectField(
+            ObjectTypeBuilder builder,
+            String field,
+            DefinitionEditValue value) {
+        switch (field) {
+            case "name" -> builder.setName(requireString(field, value));
+            case "sizeX" -> builder.setSizeX(requireRange(
+                    field, requireInt(field, value), 1, 255));
+            case "sizeY" -> builder.setSizeY(requireRange(
+                    field, requireInt(field, value), 1, 255));
+            case "animationId" -> builder.setAnimationId(requireRange(
+                    field, requireInt(field, value), -1, 65534));
+            case "isHollow" -> builder.setHollow(requireBoolean(field, value));
+            case "isRotated" -> builder.setRotated(requireBoolean(field, value));
+            default -> throw new IllegalArgumentException(
+                    "Object field is not enabled for editing yet: " + field);
+        }
+    }
+
+    private static void setObjectParam(
+            ObjectTypeBuilder builder,
+            int id,
+            DefinitionEditValue value) {
+        Map<Integer, Object> params = builder.getParams() == null
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(builder.getParams());
+        Object nativeValue = switch (value) {
+            case DefinitionEditValue.StringValue text -> text.value();
+            case DefinitionEditValue.IntValue number -> number.value();
+            case DefinitionEditValue.LongValue number -> number.value();
+            case DefinitionEditValue.BooleanValue ignored -> throw new IllegalArgumentException(
+                    "Opcode 249 params do not support boolean values");
+        };
+        params.put(id, nativeValue);
+        builder.setParams(params);
+    }
+
+    private static void removeObjectParam(ObjectTypeBuilder builder, int id) {
+        if (builder.getParams() == null || builder.getParams().isEmpty()) {
+            return;
+        }
+        Map<Integer, Object> params = new LinkedHashMap<>(builder.getParams());
+        params.remove(id);
+        builder.setParams(params.isEmpty() ? null : params);
+    }
+
+    private static void verifyObjectEditRoundTrip(
+            ObjectDefinitionEditTransaction transaction,
+            ObjectDefinitionRawView after) {
+        for (ObjectDefinitionEditTransaction.Mutation mutation : transaction.mutations()) {
+            switch (mutation) {
+                case ObjectDefinitionEditTransaction.SetField set -> {
+                    ObjectDefinitionRawView.Field field = after.fields().stream()
+                            .filter(value -> value.name().equals(set.field()))
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "Edited field disappeared after codec round-trip: "
+                                            + set.field()));
+                    if (!field.value().equals(editValueText(set.value()))) {
+                        throw new IllegalStateException(
+                                "Edited field changed during codec round-trip: "
+                                        + set.field() + " expected="
+                                        + editValueText(set.value()) + " actual="
+                                        + field.value());
+                    }
+                }
+                case ObjectDefinitionEditTransaction.SetParam set -> {
+                    ObjectDefinitionRawView.Param param = after.params().stream()
+                            .filter(value -> value.id() == set.id())
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "Edited param disappeared after codec round-trip: "
+                                            + set.id()));
+                    if (!param.value().equals(editValueText(set.value()))
+                            || param.type() != editValueType(set.value())) {
+                        throw new IllegalStateException(
+                                "Edited param changed during codec round-trip: " + set.id());
+                    }
+                }
+                case ObjectDefinitionEditTransaction.RemoveParam remove -> {
+                    if (after.params().stream().anyMatch(value -> value.id() == remove.id())) {
+                        throw new IllegalStateException(
+                                "Removed param survived codec round-trip: " + remove.id());
+                    }
+                }
+            }
+        }
+    }
+
+    private static String requireString(String field, DefinitionEditValue value) {
+        if (value instanceof DefinitionEditValue.StringValue text) return text.value();
+        throw wrongEditType(field, "string", value);
+    }
+
+    private static int requireInt(String field, DefinitionEditValue value) {
+        if (value instanceof DefinitionEditValue.IntValue number) return number.value();
+        throw wrongEditType(field, "int", value);
+    }
+
+    private static boolean requireBoolean(String field, DefinitionEditValue value) {
+        if (value instanceof DefinitionEditValue.BooleanValue flag) return flag.value();
+        throw wrongEditType(field, "boolean", value);
+    }
+
+    private static int requireRange(String field, int value, int minimum, int maximum) {
+        if (value < minimum || value > maximum) {
+            throw new IllegalArgumentException(
+                    field + " outside [" + minimum + ", " + maximum + "]: " + value);
+        }
+        return value;
+    }
+
+    private static IllegalArgumentException wrongEditType(
+            String field, String expected, DefinitionEditValue actual) {
+        return new IllegalArgumentException(
+                "Field " + field + " requires " + expected + ", got "
+                        + actual.getClass().getSimpleName());
+    }
+
+    private static String editValueText(DefinitionEditValue value) {
+        return switch (value) {
+            case DefinitionEditValue.StringValue text -> text.value();
+            case DefinitionEditValue.IntValue number -> Integer.toString(number.value());
+            case DefinitionEditValue.LongValue number -> Long.toString(number.value());
+            case DefinitionEditValue.BooleanValue flag -> Boolean.toString(flag.value());
+        };
+    }
+
+    private static ObjectDefinitionRawView.ValueType editValueType(DefinitionEditValue value) {
+        return switch (value) {
+            case DefinitionEditValue.StringValue ignored -> ObjectDefinitionRawView.ValueType.STRING;
+            case DefinitionEditValue.IntValue ignored -> ObjectDefinitionRawView.ValueType.INTEGER;
+            case DefinitionEditValue.LongValue ignored -> ObjectDefinitionRawView.ValueType.LONG;
+            case DefinitionEditValue.BooleanValue ignored -> ObjectDefinitionRawView.ValueType.BOOLEAN;
+        };
     }
 
     static ObjectDefinitionView toView(ObjectType definition) {
