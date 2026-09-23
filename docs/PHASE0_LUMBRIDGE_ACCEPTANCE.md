@@ -4,25 +4,34 @@
 >
 > This is an execution recipe, not a bundled fixture. Third-party/Jagex cache bytes remain external to the repository.
 
-## Pinned reference
+## Pinned reference and acquisition path
 
-The current pinned acceptance cache is:
+The acceptance content is OSRS revision `240`, live English, region `50,50`
+(world tiles 3200..3263 x 3200..3263).
 
-- OpenRS2 cache ID: `2710`
-- Scope: `runescape`
-- Game: `oldschool`
-- Environment: `live`
-- Language: `en`
-- OSRS build/revision: `240`
-- Source: Jagex via OpenRS2
-- Source timestamp: `2026-09-16T10:30:13Z`
-- Region under test: `50,50` (world tiles 3200..3263 x 3200..3263)
+The preferred acquisition path is **OpenRune FileStore's existing tools module**,
+not Studio-owned HTTP/download code.
 
-OpenRS2 cache page:
+OpenRune FileStore already provides:
 
-    https://archive.openrs2.org/caches/runescape/2710
+- `dev.openrune.cache.tools.OpenRS2`
+- `OpenRS2.loadCaches()`
+- `OpenRS2.findRevision(..., GameType.OLDSCHOOL, ...)`
+- `OpenRS2.downloadCacheByRevision(...)`
+- `FreshCache`, which resolves an OSRS revision through OpenRS2, caches the
+  downloaded disk archive, downloads XTEAs for revisions that need them, and
+  prepares a working cache directory.
 
-Do not commit the downloaded cache.
+RSPSi already depends on `dev.or2:tools` at the pinned FileStore version, so
+Phase 0 must reuse that dependency behind the OpenRune cache-integration
+boundary rather than introduce another OpenRS2 client.
+
+For provenance/debugging, the current OpenRS2 archive entry selected for build
+240 may be recorded in validation evidence, but **the cache ID is not the
+Studio API**. Revision/environment are the stable request; OpenRune's
+`findRevision` selects the appropriate archive candidate.
+
+Do not commit downloaded cache bytes.
 
 ## Why the count is not hardcoded
 
@@ -45,13 +54,19 @@ A separate external `locations.json` fixture can additionally prove the decoded 
 
 ## Execution
 
-Download/extract the OpenRS2 disk cache so the path points at its `cache` directory, then run:
+Acquire/prepare revision 240 through the pinned OpenRune FileStore tools
+(`FreshCache` / `OpenRS2`) and point the existing verifier at the prepared
+cache directory:
 
-    RSPSI_OSRS_CACHE=/absolute/path/to/cache \
+    RSPSI_OSRS_CACHE=/absolute/path/to/prepared/openrune/cache \
     RSPSI_OSRS_REGION_X=50 \
     RSPSI_OSRS_REGION_Y=50 \
     RSPSI_OSRS_REVISION=240 \
     ./gradlew verifyOsrsRevision
+
+A small RSPSi cache-acquisition adapter or Gradle convenience task may wrap
+`FreshCache` later if a real CI/developer workflow consumes it. Do not build a
+second downloader merely for this fixture.
 
 The verifier must report the `object.resolution` check.
 
