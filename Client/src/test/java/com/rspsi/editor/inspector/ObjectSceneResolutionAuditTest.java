@@ -73,6 +73,40 @@ class ObjectSceneResolutionAuditTest {
     }
 
     @Test
+    void partialGeometryFailsEvenWhenRendererCanSubmitRemainingModel() {
+        WorldObject object = new WorldObject(500, 10, 0, 0, 0, 0);
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(tile(object));
+
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return Optional.of(new ObjectDefinitionView(
+                        id, "partial", 1, 1, List.of(), new int[]{7, 8}));
+            }
+
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return id == 7 ? Optional.of(triangle(7)) : Optional.empty();
+            }
+
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+        };
+
+        RenderScene scene = new RenderSceneBuilder(definitions).build(document);
+        assertTrue(!scene.modelPackets().isEmpty(),
+                "renderer should still submit the available model");
+
+        ObjectSceneResolutionAudit.Report report =
+                ObjectSceneResolutionAudit.audit(document, definitions, scene);
+
+        assertEquals(1, report.failureCount());
+        assertEquals(ObjectSceneResolutionAudit.Stage.PARTIAL_MODEL_GEOMETRY,
+                report.entries().get(0).stage());
+        assertEquals(List.of(8),
+                report.entries().get(0).resolution().missingGeometryIds());
+    }
+
+    @Test
     void exactDuplicatePlacementsRemainIndividuallyAccounted() {
         WorldObject duplicate = new WorldObject(100, 10, 0, 0, 0, 0);
         WorldDocument document = new WorldDocument(1, 1, 1);
