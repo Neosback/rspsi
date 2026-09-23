@@ -77,6 +77,28 @@ class IncrementalGpuUploadPlanBuilderTest {
     }
 
     @Test
+    void animationFrameChangeRebuildsTileAndPreservesFullCommandMetadata() {
+        SceneTileSnapshot first = animatedObjectTile(1, 1, 42, 0, 0);
+        SceneTileSnapshot second = animatedObjectTile(1, 1, 42, 1, 10);
+        IncrementalGpuUploadPlanBuilder incremental = new IncrementalGpuUploadPlanBuilder();
+
+        var seeded = incremental.buildInitial(packet(List.of(first), "animation-frame-0"));
+        var updated = incremental.build(packet(List.of(second), "animation-frame-1"), Set.of());
+        GpuUploadPlan expected = new GpuUploadPlanBuilder()
+                .build(packet(List.of(second), "animation-frame-1"));
+
+        assertEquals(1, updated.rebuiltTiles(),
+                "animation state/geometry changes must invalidate the cached tile fragment");
+        assertEquals(0, updated.reusedTiles());
+        assertEquals(expected.commands(), updated.plan().commands(),
+                "incremental assembly must retain bounds, identity, contour and placement metadata");
+        assertEquals(expected.vertices(), updated.plan().vertices());
+        assertTrue(updated.plan().commands().get(0).sceneObjectIdentity().present());
+        assertEquals(34, updated.plan().commands().get(0).placementHeight());
+        assertNotEquals(seeded.plan().fingerprint(), updated.plan().fingerprint());
+    }
+
+    @Test
     void assemblyPreservesFullBuilderMergingInsideOneWorldZone() {
         SceneTileSnapshot first = terrainTile(1, 1, 100);
         SceneTileSnapshot second = terrainTile(1, 2, 100);
@@ -140,6 +162,39 @@ class IncrementalGpuUploadPlanBuilderTest {
                                 new ModelVertex(20, -20, 36, 0, 0, 0, 0, 0, 0),
                                 new ModelVertex(0, 20, 36, 0, 0, 0, 0, 0, 0)),
                         0, false))
+                .withSceneObjectIdentity(identity);
+        return new SceneTileSnapshot(
+                coordinate, address, 0, 0, 0, 0, 0,
+                Optional.empty(), Optional.empty(), List.of(model),
+                List.of(new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0))),
+                List.of(), false, false);
+    }
+
+    private static SceneTileSnapshot animatedObjectTile(int worldX, int worldY, int objectId,
+                                                        int frameIndex, int vertexShift) {
+        WorldTileAddress address = WorldTileAddress.of(worldX, worldY, 0);
+        TileCoordinate coordinate = new TileCoordinate(0, worldX, worldY);
+        SceneObjectIdentity identity = SceneObjectIdentity.of(
+                new WorldObject(objectId, 10, 0, 0, worldX, worldY), 1, 1);
+        List<ModelVertex> vertices = List.of(
+                new ModelVertex(44 + vertexShift, -20, 36, 0, 0, 0, 1, 0, 0),
+                new ModelVertex(84 + vertexShift, -20, 36, 0, 0, 0, 1, 0, 0),
+                new ModelVertex(64 + vertexShift, 20, 36, 0, 0, 0, 1, 0, 0));
+        ModelRenderPacket model = new ModelRenderPacket(
+                coordinate, objectId, ObjectCategory.GROUND,
+                vertices,
+                List.of(new ModelTriangle(0, 1, 2, 100, 100, 100,
+                        -1, 0, 0, 0)),
+                List.of(), 77,
+                44 + vertexShift, -20, 36, 84 + vertexShift, 20, 36,
+                true, false, 40, false)
+                .withClientModelBounds(ClientModelBounds.calculate(
+                        List.of(new ModelVertex(-20, -20, 36, 0, 0, 0, 0, 0, 0),
+                                new ModelVertex(20, -20, 36, 0, 0, 0, 0, 0, 0),
+                                new ModelVertex(0, 20, 36, 0, 0, 0, 0, 0, 0)),
+                        0, false))
+                .withAnimationState(ModelAnimationState.selected(
+                        77, frameIndex, 100 + frameIndex, frameIndex * 2, 6, true))
                 .withSceneObjectIdentity(identity);
         return new SceneTileSnapshot(
                 coordinate, address, 0, 0, 0, 0, 0,
