@@ -21,13 +21,13 @@ dependencies {
     // OpenRune definition codecs expose ByteBuf in their public encode API,
     // but the module keeps Netty as an implementation dependency.
     implementation "io.netty:netty-buffer:4.1.107.Final"
-    // Explicit opt-in writable adapter. The normal FileStore filesystem
-    // remains read-only; this module exposes OpenRune's CacheDelegate for a
-    // separately selected output cache.
+    // Explicit OpenRune toolchain boundary. Production uses CacheDelegate for
+    // separately selected writable output caches; opt-in verification tooling
+    // also uses FreshCache/OpenRS2 to prepare external reference caches.
     implementation("dev.or2:tools:${openruneFileStoreVersion}") {
         // The tools aggregate also pulls the later CS2 compiler, whose
         // optional 4koma dependency is not published in the OpenRune host.
-        // CacheDelegate does not use that compiler.
+        // CacheDelegate/FreshCache do not use that compiler.
         exclude group: 'me.filby', module: 'clientscript-compiler'
     }
 
