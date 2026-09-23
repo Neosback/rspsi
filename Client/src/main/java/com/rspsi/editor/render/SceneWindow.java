@@ -76,6 +76,16 @@ public record SceneWindow(
         return sourceRegions.complete();
     }
 
+    /** Client-shaped RuneLite instance-template API view. */
+    public InstanceTemplateGrid instanceTemplateGrid() {
+        return InstanceTemplateGrid.from(this);
+    }
+
+    /** RuneLite's documented 104x104 normal / 184x184 extended coordinate layout. */
+    public ExtendedSceneLayout extendedSceneLayout() {
+        return ExtendedSceneLayout.runeLite();
+    }
+
     public SceneContract contract() {
         return SceneContract.from(this);
     }
