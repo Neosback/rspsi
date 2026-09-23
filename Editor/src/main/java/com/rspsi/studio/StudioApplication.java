@@ -415,8 +415,10 @@ public final class StudioApplication implements AutoCloseable {
         }
 
         if (!animation.dirtyZones().isEmpty()) {
-            LOGGER.debug("Animation cycle {} changed {} model tiles across {} GPU zones",
-                    clientCycle, animation.changedTiles(), animation.dirtyZones().size());
+            LOGGER.debug("Animation cycle {} changed {} model tiles across {} GPU zones "
+                            + "(rebuiltModelTiles={}, fullModelRebuild={})",
+                    clientCycle, animation.changedTiles(), animation.dirtyZones().size(),
+                    animation.rebuiltModelTiles(), animation.fullModelRebuild());
         }
         int nextAnimationRefreshCycle = AnimationRefreshScheduler.nextPresentationCycle(
                 scene, definitions, clientCycle);
