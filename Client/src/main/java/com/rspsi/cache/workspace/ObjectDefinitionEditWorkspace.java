@@ -5,7 +5,6 @@ import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +22,8 @@ public final class ObjectDefinitionEditWorkspace {
     private final DefinitionProvider definitions;
     private final Map<Integer, ObjectDefinitionEditTransaction> transactions =
             new LinkedHashMap<>();
+    private final Map<Integer, ObjectDefinitionRawView> publishedSnapshots =
+            new LinkedHashMap<>();
     private Path publicationTarget;
 
     public ObjectDefinitionEditWorkspace(DefinitionProvider definitions) {
@@ -39,7 +40,13 @@ public final class ObjectDefinitionEditWorkspace {
             return Optional.of(existing);
         }
         Optional<ObjectDefinitionEditTransaction> created = definitions.editObject(objectId);
-        created.ifPresent(transaction -> transactions.put(objectId, transaction));
+        created.ifPresent(transaction -> {
+            ObjectDefinitionRawView published = publishedSnapshots.get(objectId);
+            if (published != null) {
+                transaction.markPublished(published);
+            }
+            transactions.put(objectId, transaction);
+        });
         return created;
     }
 
@@ -83,6 +90,50 @@ public final class ObjectDefinitionEditWorkspace {
         return Optional.ofNullable(publicationTarget);
     }
 
+    /** Exact verified publication snapshots known for this loaded cache session. */
+    public synchronized Map<Integer, ObjectDefinitionRawView> publishedSnapshots() {
+        return Map.copyOf(publishedSnapshots);
+    }
+
+    /**
+     * Restores a previously persisted publication target and its already
+     * revalidated snapshots. Transactions remain lazy; when one is opened, its
+     * restored publication baseline is applied before editing begins.
+     */
+    public synchronized void restorePublication(
+            Path outputCache,
+            Map<Integer, ObjectDefinitionRawView> snapshots) {
+        Path target = Objects.requireNonNull(outputCache, "outputCache")
+                .toAbsolutePath().normalize();
+        Objects.requireNonNull(snapshots, "snapshots");
+
+        LinkedHashMap<Integer, ObjectDefinitionRawView> checked =
+                new LinkedHashMap<>();
+        snapshots.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> {
+                    int objectId = entry.getKey();
+                    ObjectDefinitionRawView snapshot =
+                            Objects.requireNonNull(entry.getValue(), "published snapshot");
+                    if (objectId < 0 || snapshot.id() != objectId) {
+                        throw new IllegalArgumentException(
+                                "Published object snapshot does not match id " + objectId);
+                    }
+                    checked.put(objectId, snapshot);
+                });
+
+        publicationTarget = target;
+        publishedSnapshots.clear();
+        publishedSnapshots.putAll(checked);
+        for (Map.Entry<Integer, ObjectDefinitionEditTransaction> entry
+                : transactions.entrySet()) {
+            ObjectDefinitionRawView published = publishedSnapshots.get(entry.getKey());
+            if (published != null) {
+                entry.getValue().markPublished(published);
+            }
+        }
+    }
+
     /**
      * Marks a successfully-published snapshot and binds publication state to
      * the explicit output cache. Later publishes in this loaded-cache session
@@ -106,6 +157,7 @@ public final class ObjectDefinitionEditWorkspace {
                     "No object definition transaction exists for id " + objectId);
         }
         transaction.markPublished(publishedPreview);
+        publishedSnapshots.put(objectId, publishedPreview);
         publicationTarget = target;
     }
 
@@ -131,6 +183,7 @@ public final class ObjectDefinitionEditWorkspace {
      */
     public synchronized void clear() {
         transactions.clear();
+        publishedSnapshots.clear();
         publicationTarget = null;
     }
 }
