@@ -25,6 +25,7 @@ public final class EditorSession {
     private final List<SessionChangeListener> changeListeners = new CopyOnWriteArrayList<>();
     private final List<SessionStateListener> stateListeners = new CopyOnWriteArrayList<>();
     private final Map<DirtyChunkKey, DirtyRegion> dirtyRegions = new LinkedHashMap<>();
+    private List<EditorCommand> savedSessionCommands = List.of();
     private int savedHistoryPosition;
 
     public EditorSession(WorldDocument world) {
@@ -150,6 +151,7 @@ public final class EditorSession {
     }
 
     public void markSaved() {
+        savedSessionCommands = currentSessionSaveState();
         savedHistoryPosition = history.position();
         notifyStateChanged();
     }
@@ -172,13 +174,42 @@ public final class EditorSession {
         saveHandler.save(this);
     }
 
+    /**
+     * Returns whether the normal session save handler has durable changes to
+     * write. External transactions are deliberately excluded from this check.
+     */
+    public boolean isSessionSaveDirty() {
+        return !currentSessionSaveState().equals(savedSessionCommands);
+    }
+
+    /**
+     * Returns whether an applied command owns dirty state outside the normal
+     * session save handler, such as an in-memory definition transaction.
+     */
+    public boolean hasUnsavedExternalState() {
+        return appliedCommands().stream()
+                .filter(command -> !command.savedBySessionSave())
+                .anyMatch(EditorCommand::hasUnsavedExternalState);
+    }
+
     public boolean isDirty() {
-        return history.position() != savedHistoryPosition;
+        return isSessionSaveDirty() || hasUnsavedExternalState();
     }
 
     /** Provides the saved-history marker to neutral status/diagnostic views. */
     public int savedHistoryPosition() {
         return savedHistoryPosition;
+    }
+
+    private List<EditorCommand> currentSessionSaveState() {
+        return appliedCommands().stream()
+                .filter(EditorCommand::savedBySessionSave)
+                .toList();
+    }
+
+    private List<EditorCommand> appliedCommands() {
+        List<EditorCommand> commands = history.commands();
+        return List.copyOf(commands.subList(0, history.position()));
     }
 
     /** Returns a stable snapshot of chunks whose derived data needs rebuilding. */
