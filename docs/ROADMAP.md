@@ -8,6 +8,7 @@ Detailed supporting contracts:
 
 - CONTENT_STUDIO_FOUNDATION.md - advanced authoring foundation and future Theme/Context Engine direction
 - UI_WORKSPACE_CONTRACT.md - strict Contextual Multi-Rail Workspace layout and plugin UI rules
+- PROJECT_LAUNCHER_AND_DASHBOARD.md - project-first startup, recent-project launcher, loading gate, project wizard, and in-project Dashboard contract
 - STUDIO_SEMANTIC_API.md - Studio-owned authored-world/resolved-scene API contract and RuneLite reference policy
 - PHASE0_LUMBRIDGE_ACCEPTANCE.md - pinned real-cache object-resolution acceptance for Lumbridge region 50,50
 - OPENRUNE_ECOSYSTEM_INTEGRATION.md - OpenRune Server/cache/source integration guardrails
@@ -24,11 +25,12 @@ When project documents disagree, use this order:
 2. RENDERING_PARITY_MANIFEST.json for rendering-status claims
 3. ROADMAP.md for project execution order and architectural sequencing
 4. STUDIO_SEMANTIC_API.md for the stable authored-world/resolved-scene boundary
-5. UI_WORKSPACE_CONTRACT.md for editor-shell and plugin UI placement
-6. CONTENT_STUDIO_FOUNDATION.md for advanced-authoring prerequisite detail
-7. OPENRUNE_ECOSYSTEM_INTEGRATION.md for OpenRune subsystem integration detail
-8. OPENRUNE_MAVEN_CATALOG.md for published OpenRune dependency/capability inventory
-9. explicitly historical acceptance/reference documents for background only
+5. PROJECT_LAUNCHER_AND_DASHBOARD.md for application startup/project lifecycle and Dashboard behavior
+6. UI_WORKSPACE_CONTRACT.md for in-project editor-shell and plugin UI placement
+7. CONTENT_STUDIO_FOUNDATION.md for advanced-authoring prerequisite detail
+8. OPENRUNE_ECOSYSTEM_INTEGRATION.md for OpenRune subsystem integration detail
+9. OPENRUNE_MAVEN_CATALOG.md for published OpenRune dependency/capability inventory
+10. explicitly historical acceptance/reference documents for background only
 
 A lower item must not silently override a higher item. When work makes a lower document stale, update it in the same PR when practical.
 
@@ -66,6 +68,7 @@ The target includes:
 - deterministic noise/scatter/ground-decoration workflows
 - biome generation and WFC-assisted world building
 - rich object and definition inspection/editing
+- project-first IDE-style startup with persistent recent projects and a real project loading lifecycle
 - plugin-first extensibility
 - a stable Studio-owned semantic API for authored-world and resolved-scene access
 - later, an explainable Theme/Context Engine learned from real OSRS world placement
@@ -439,6 +442,145 @@ By the end of Phase 0:
 - no public contract requires OpenGL/VBO knowledge
 - the semantic API remains internal/provisional until first-party callers prove it
 - public plugin ABI freeze waits until Phase 6
+
+---
+
+# PHASE 0.5 - Project Lifecycle, Launcher, Loading Gate, and Dashboard
+
+This is the application-shell foundation that sits between Phase 0 correctness and the deeper workspace redesign.
+
+The application should open **projects**, not raw cache paths.
+
+Use PROJECT_LAUNCHER_AND_DASHBOARD.md as the detailed contract.
+
+## 0.5.1 Application lifecycle
+
+Introduce an application-level state separate from `WorkspaceManager`:
+
+```
+LAUNCHER
+   |
+   v
+PROJECT_LOADING
+   |
+   v
+PROJECT_OPEN
+   |
+   v
+Dashboard / workspaces
+```
+
+The Project Launcher is not a Dashboard workspace.
+
+The Dashboard is the home workspace of an already-loaded project.
+
+Remove direct recent-cache auto-loading from the normal startup path.
+
+## 0.5.2 Persistent Studio projects
+
+Extend the existing project metadata/layout foundation into a real project descriptor with:
+
+- stable project ID;
+- project name;
+- project kind;
+- standalone cache binding or connected server-project binding;
+- project/integration policy;
+- Studio-owned data location;
+- cache/revision identity expectations;
+- versioned migration.
+
+Replace `recent-cache.txt` with a lightweight recent-project registry.
+
+Linked external OpenRune projects should not be modified merely to store Studio launcher metadata; default to a Studio-owned per-project data directory unless the user explicitly opts into project-local metadata later.
+
+## 0.5.3 Project types
+
+Initial project creation supports:
+
+### Standalone OSRS Cache
+
+- explicit existing cache selection;
+- selected source remains read-only;
+- separate Studio output/publish path;
+- optional explicit reference-cache acquisition later.
+
+### OpenRune Server
+
+- link an existing OpenRune project root;
+- auto-detect revision/environment;
+- auto-resolve LIVE and SERVER cache roles;
+- discover source/content/GameVal roots;
+- discover canonical build tasks;
+- save the project connection;
+- do not ask the user to manually select LIVE under the normal layout.
+
+A later maintained bootstrap may create/clone a new OpenRune Server checkout. Do not make unowned shell cloning part of the initial wizard.
+
+## 0.5.4 Integration/control presets
+
+Expose understandable presets backed by granular capabilities:
+
+- **Inspect** - read-only project/cache/content integration;
+- **Author** - supported source writes, but no automatic build execution;
+- **Managed Build** - supported source writes plus canonical OpenRune build/reload/verification;
+- **Developer** - additional explicit development/build/runtime controls.
+
+`:or-cache:freshCache` remains an explicit destructive/reset-style action even in Developer mode and is never an automatic project-open permission.
+
+## 0.5.5 Loading gate
+
+Selecting a project must enter a dedicated full-window loading state before the Dashboard.
+
+The project loader orchestrates:
+
+- descriptor read;
+- project validation;
+- OpenRune inspection where applicable;
+- LIVE/SERVER role resolution;
+- cache filesystem open;
+- cache identity verification;
+- definition/asset preparation;
+- provenance restoration;
+- required project/integration service binding.
+
+Only after the required state is ready does the Dashboard appear.
+
+Do not show a fake fine-grained percentage. Add real loading instrumentation/stages and show truthful phase progress.
+
+## 0.5.6 Dashboard overhaul
+
+The Dashboard becomes project home, not project configuration.
+
+Primary content:
+
+- project name/type/root;
+- revision and health;
+- Continue last work;
+- workspace launchers;
+- LIVE/SERVER/integration health where applicable;
+- dirty/unpublished/build status;
+- recent regions/assets;
+- project actions;
+- Project Settings;
+- Diagnostics.
+
+Move the current exhaustive cache decoder/index census into a dedicated diagnostics surface.
+
+Raw cache path editing, OpenRune connection setup, capability toggles, and repair flows belong in project creation/settings, not the normal Dashboard.
+
+## 0.5.7 Acceptance
+
+- application can start without decoding any cache;
+- recent projects are shown from lightweight metadata;
+- New/Open/Link creates or resolves a project descriptor;
+- selecting a project shows PROJECT_LOADING before Dashboard;
+- Dashboard cannot appear until required cache/project initialization succeeds;
+- project failures have repair/retry/back-to-launcher flows;
+- standalone projects reopen without reselecting their cache;
+- OpenRune projects reopen without reselecting LIVE/SERVER;
+- project name is visible in launcher, loading view, title/project shell, and Dashboard;
+- integration/control capabilities persist per project;
+- no project creation/open path silently runs FreshCache or writes generated OpenRune caches.
 
 ---
 
@@ -1571,7 +1713,42 @@ Acceptance:
 - footprint/tile scale visualization
 - diagnostics for unresolved models
 
-## PR E - Workspace state model
+## PR E - Studio project descriptor, registry, and OpenRune project inspection convergence
+
+- stable named project descriptor and project kind
+- Studio-owned per-project data location
+- recent-project registry
+- migrate/retire raw `recent-cache.txt` identity
+- converge `OpenRuneServerProvider` with `ServerConnection` / `ServerProjectInspection`
+- persist OpenRune connection paths, overrides, fingerprint, and integration capabilities
+- no launcher/UI redesign yet beyond what is needed to test the model
+
+## PR F - Project Launcher, New/Open Project wizard, and loading lifecycle
+
+- application states: LAUNCHER / PROJECT_LOADING / PROJECT_OPEN
+- JetBrains-style recent-project launcher
+- New Project wizard
+- standalone cache project flow
+- link existing OpenRune Server project flow
+- Inspect / Author / Managed Build / Developer policies
+- dedicated project loading screen
+- project-specific failure/repair flow
+- orchestrate `OsrsCacheSessionService` through project loading instead of Dashboard cache controls
+
+## PR G - Dashboard overhaul and project settings/diagnostics split
+
+- Dashboard becomes loaded-project home
+- project identity/health header
+- Continue experience
+- workspace launch cards
+- dirty/unpublished/build status
+- OpenRune LIVE/SERVER/integration status
+- recent regions/assets
+- Project Settings
+- move exhaustive decoder/index data to Project/Cache Diagnostics
+- remove raw cache selector and ad hoc server-connect section from normal Dashboard
+
+## PR H - Workspace state model
 
 - implement capability-based ToolUiDescriptor
 - one drawer mutex
@@ -1580,7 +1757,7 @@ Acceptance:
 - Inspector routing
 - HUD independence
 
-## PR F - First-party UI migration
+## PR I - First-party UI migration
 
 - Tile Painter
 - Height Sculpt
@@ -1589,9 +1766,9 @@ Acceptance:
 - Flags/Collision
 - Path tool
 
-After those correctness and workspace foundations are stable:
+After those correctness, project-shell, and workspace foundations are stable:
 
-## PR G - Multi-region authored world boundary
+## PR J - Multi-region authored world boundary
 
 - absolute-world authored region lookup
 - explicit unloaded neighbors
@@ -1600,7 +1777,7 @@ After those correctness and workspace foundations are stable:
 - dirty-region ownership
 - batched persistence
 
-## PR H - Query/condition engine
+## PR K - Query/condition engine
 
 - shared tile/object/spatial predicates
 - AND/OR/NOT composition
@@ -1608,7 +1785,7 @@ After those correctness and workspace foundations are stable:
 - selection integration
 - serializable preset-friendly condition data where practical
 
-## PR I - General ChangePlan
+## PR L - General ChangePlan
 
 - calculate/validate/preview/commit boundary
 - conflicts and unloaded-data diagnostics
@@ -1616,7 +1793,7 @@ After those correctness and workspace foundations are stable:
 - deterministic provenance
 - one undo entry across all affected regions
 
-## PR J - Fragment transform foundation
+## PR M - Fragment transform foundation
 
 - rotate/mirror complete multi-plane fragments
 - transform object type/rotation and tile shape/rotation correctly
@@ -1624,7 +1801,7 @@ After those correctness and workspace foundations are stable:
 - paste/merge/elevation policies
 - preview through ChangePlan
 
-## PR K - Semantic API public hardening
+## PR N - Semantic API public hardening
 
 Only after Phase 0 and first-party migration have proved the contracts:
 
@@ -1635,7 +1812,7 @@ Only after Phase 0 and first-party migration have proved the contracts:
 - keep renderer internals privileged/internal
 - add an optional RuneLite-scene compatibility adapter only if real porting use cases justify it
 
-## PR L - Shared procedural primitives
+## PR O - Shared procedural primitives
 
 - AutoTileService
 - linear-feature geometry
@@ -1643,7 +1820,7 @@ Only after Phase 0 and first-party migration have proved the contracts:
 - world-coordinate sampling
 - plugin extension points
 
-After PR L, build advanced Tile Painter, Replace, Scatter, Path, Stream, Fence, Bridge, Structure, Biome, WFC, and later Theme/Context workflows as thin consumers of the shared services.
+After PR O, build advanced Tile Painter, Replace, Scatter, Path, Stream, Fence, Bridge, Structure, Biome, WFC, and later Theme/Context workflows as thin consumers of the shared services.
 
 ---
 
