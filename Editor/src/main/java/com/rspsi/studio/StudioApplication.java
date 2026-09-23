@@ -37,6 +37,7 @@ import com.rspsi.editor.render.RenderConfig;
 import com.rspsi.editor.render.RenderConfigCompiler;
 import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.RenderSceneBuilder;
+import com.rspsi.editor.render.ScenePresentation;
 import com.rspsi.editor.render.RenderWindowScene;
 import com.rspsi.editor.render.RenderWindowSceneBuilder;
 import com.rspsi.editor.render.RenderChanges;
@@ -334,7 +335,7 @@ public final class StudioApplication implements AutoCloseable {
 
         long windowStart = System.nanoTime();
         RenderWindowScene scene = new RenderWindowSceneBuilder(
-                cache.bundle().definitions()).build(window, clientCycle);
+                cache.bundle().definitions(), ScenePresentation.EDITOR).build(window, clientCycle);
         long windowNanos = System.nanoTime() - windowStart;
 
         SceneWindow sceneWindow = SceneWindow.from(window);
@@ -360,7 +361,7 @@ public final class StudioApplication implements AutoCloseable {
 
         long renderSceneStart = System.nanoTime();
         RenderScene renderScene = new RenderSceneBuilder(
-                cache.bundle().definitions()).build(region.document(), clientCycle);
+                cache.bundle().definitions(), ScenePresentation.EDITOR).build(region.document(), clientCycle);
         long renderSceneNanos = System.nanoTime() - renderSceneStart;
 
         EditorSession session = opened.region().session();
@@ -445,11 +446,11 @@ public final class StudioApplication implements AutoCloseable {
                                                 LoadedMapScene baseScene,
                                                 int clientCycle) {
         var definitions = cache.bundle().definitions();
-        RenderWindowSceneBuilder windowBuilder = new RenderWindowSceneBuilder(definitions);
+        RenderWindowSceneBuilder windowBuilder = new RenderWindowSceneBuilder(definitions, ScenePresentation.EDITOR);
         RenderWindowSceneBuilder.AnimationRefreshResult animation =
                 windowBuilder.refreshAnimations(baseScene.windowScene(), clientCycle);
         RenderWindowScene scene = animation.scene();
-        RenderScene renderScene = new RenderSceneBuilder(definitions)
+        RenderScene renderScene = new RenderSceneBuilder(definitions, ScenePresentation.EDITOR)
                 .refreshAnimations(baseScene.renderScene(), clientCycle);
 
         GpuScenePacket packet = baseScene.packet();
@@ -593,7 +594,8 @@ public final class StudioApplication implements AutoCloseable {
         long planNanos = System.nanoTime() - planStart;
 
         long renderSceneStart = System.nanoTime();
-        RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).update(
+        RenderScene renderScene = new RenderSceneBuilder(
+                cache.bundle().definitions(), ScenePresentation.EDITOR).update(
                 baseScene.renderScene(), new RenderChanges(changedTiles),
                 baseScene.animationCycle());
         long renderSceneNanos = System.nanoTime() - renderSceneStart;

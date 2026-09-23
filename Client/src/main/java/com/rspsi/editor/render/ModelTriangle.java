@@ -70,6 +70,12 @@ public record ModelTriangle(
                 baseColor, depthBias);
     }
 
+    public ModelTriangle withAlpha(int newAlpha) {
+        return new ModelTriangle(a, b, c, colorA, colorB, colorC,
+                textureId, newAlpha, priority, renderType, uA, vA, uB, vB, uC, vC,
+                baseColor, depthBias);
+    }
+
     public ModelTriangle withRenderType(int newRenderType) {
         return new ModelTriangle(a, b, c, colorA, colorB, colorC,
                 textureId, alpha, priority, newRenderType, uA, vA, uB, vB, uC, vC,

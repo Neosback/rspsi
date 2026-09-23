@@ -40,7 +40,13 @@ public record GpuDrawCommand(
         SORTED,
         SORTED_NO_DEPTH,
         UNSORTED,
-        UNSORTED_NO_DEPTH;
+        UNSORTED_NO_DEPTH,
+        /**
+         * Editor-only translucent stand-in for a placed loc that draws nothing
+         * (hidden in the current var state, or authored-empty geometry). Draws
+         * like a depth-tested alpha model; never part of parity or exports.
+         */
+        EDITOR_GHOST;
 
         public boolean noDepth() {
             return this == SORTED_NO_DEPTH || this == UNSORTED_NO_DEPTH;

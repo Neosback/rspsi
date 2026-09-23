@@ -26,15 +26,23 @@ public final class RenderWindowSceneBuilder {
     private static final int TERRAIN_CONTEXT_BORDER = 5;
     private final RenderSceneBuilder regions;
     private final DefinitionProvider definitions;
+    private final ScenePresentation presentation;
 
     public RenderWindowSceneBuilder() {
         this.regions = new RenderSceneBuilder();
         this.definitions = null;
+        this.presentation = ScenePresentation.PARITY;
     }
 
     public RenderWindowSceneBuilder(DefinitionProvider definitions) {
+        this(definitions, ScenePresentation.PARITY);
+    }
+
+    /** Studio viewports pass {@link ScenePresentation#EDITOR}; everything else keeps parity. */
+    public RenderWindowSceneBuilder(DefinitionProvider definitions, ScenePresentation presentation) {
         this.definitions = Objects.requireNonNull(definitions, "definitions");
-        this.regions = new RenderSceneBuilder(this.definitions);
+        this.presentation = Objects.requireNonNull(presentation, "presentation");
+        this.regions = new RenderSceneBuilder(this.definitions, presentation);
     }
 
     /**
@@ -181,7 +189,7 @@ public final class RenderWindowSceneBuilder {
             return refreshAnimationsFull(previous, prepared, worldDocument, clientCycle);
         }
 
-        ModelPacketBuilder modelBuilder = new ModelPacketBuilder(definitions);
+        ModelPacketBuilder modelBuilder = new ModelPacketBuilder(definitions, LightingProfile.osrs(), presentation);
         Map<WorldTileAddress, List<ModelRenderPacket>> nextModels =
                 new LinkedHashMap<>(previous.modelPackets());
 
@@ -344,7 +352,7 @@ public final class RenderWindowSceneBuilder {
     private Map<WorldTileAddress, List<ModelRenderPacket>> buildWorldModelPackets(
             WorldRegionWindow prepared, WorldDocument worldDocument, int clientCycle) {
         var modelPackets = new LinkedHashMap<WorldTileAddress, List<ModelRenderPacket>>();
-        ModelPacketBuilder worldModelBuilder = new ModelPacketBuilder(definitions);
+        ModelPacketBuilder worldModelBuilder = new ModelPacketBuilder(definitions, LightingProfile.osrs(), presentation);
         for (ModelRenderPacket packet : worldModelBuilder.build(worldDocument, clientCycle)) {
             ModelRenderPacket worldPacket = toWorldPacket(prepared, packet);
             if (worldPacket == null) continue;

@@ -37,15 +37,25 @@ public final class ModelPacketBuilder {
     private final DefinitionProvider definitions;
     private final ObjectDefinitionResolver definitionResolver;
     private final LightingProfile lighting;
+    private final ScenePresentation presentation;
+
+    /** Editor ghost transparency (model alpha: 0 opaque, 255 invisible). */
+    static final int GHOST_TRANSPARENCY = 150;
 
     public ModelPacketBuilder(DefinitionProvider definitions) {
         this(definitions, LightingProfile.osrs());
     }
 
     public ModelPacketBuilder(DefinitionProvider definitions, LightingProfile lighting) {
+        this(definitions, lighting, ScenePresentation.PARITY);
+    }
+
+    public ModelPacketBuilder(DefinitionProvider definitions, LightingProfile lighting,
+                              ScenePresentation presentation) {
         this.definitions = Objects.requireNonNull(definitions, "definitions");
         this.definitionResolver = new ObjectDefinitionResolver(this.definitions);
         this.lighting = Objects.requireNonNull(lighting, "lighting");
+        this.presentation = Objects.requireNonNull(presentation, "presentation");
     }
 
     /** Builds every available static model packet in document order. */
@@ -128,7 +138,44 @@ public final class ModelPacketBuilder {
     private List<ModelRenderPacket> buildScenePackets(WorldObject object, WorldDocument document,
                                                        int clientCycle, int occurrence) {
         ResolvedModelBuild resolved = resolveBuild(object, document, clientCycle);
-        if (resolved == null) return List.of();
+        List<ModelRenderPacket> packets = resolved == null
+                ? List.of() : scenePackets(object, document, resolved, occurrence);
+        if (!packets.isEmpty() || !presentation.editorGhosts()) return packets;
+        return editorGhostPackets(object, document, clientCycle, occurrence);
+    }
+
+    /**
+     * Editor-only stand-ins for a placed loc that submitted no geometry: a
+     * multiloc hidden in the current var state ghosts its first visible
+     * state; anything else (authored-empty models, no model for the shape,
+     * missing definition) gets a translucent footprint marker.
+     */
+    private List<ModelRenderPacket> editorGhostPackets(WorldObject object, WorldDocument document,
+                                                       int clientCycle, int occurrence) {
+        ObjectDefinitionResolver.Resolution resolution =
+                definitionResolver.resolveEditorDisplay(object.id());
+        if (resolution.status() == ObjectDefinitionResolver.Status.HIDDEN_IN_VAR_STATE) {
+            Optional<ObjectDefinitionView> visible = definitionResolver.firstVisibleState(object.id());
+            if (visible.isPresent()) {
+                ResolvedModelBuild ghost = resolveBuild(object, document, clientCycle, visible.orElseThrow());
+                if (ghost != null) {
+                    List<ModelRenderPacket> packets = scenePackets(object, document, ghost, occurrence);
+                    if (!packets.isEmpty()) {
+                        return packets.stream().map(packet -> packet.asEditorGhost(GHOST_TRANSPARENCY)).toList();
+                    }
+                }
+            }
+        }
+        RenderObject footprint = RenderObject.resolve(object,
+                definitions.object(object.id()).orElse(null), null,
+                definitions.objectCollision(object.id()).orElse(null), null);
+        return List.of(EditorGhostMarker.build(object, definitions, occurrence,
+                objectCenterHeight(document, object,
+                        footprint.footprintWidth(), footprint.footprintLength())));
+    }
+
+    private List<ModelRenderPacket> scenePackets(WorldObject object, WorldDocument document,
+                                                 ResolvedModelBuild resolved, int occurrence) {
         List<WallRules.LocModelVariant> variants = variantsFor(object, resolved.decorDisplacement());
         if (object.type() == 8 && variants.size() == 2) {
             WallRules.LocModelVariant primaryVariant = variants.get(0);
@@ -152,16 +199,23 @@ public final class ModelPacketBuilder {
 
     private ResolvedModelBuild resolveBuild(WorldObject object, WorldDocument document,
                                             int clientCycle) {
+        return resolveBuild(object, document, clientCycle, null);
+    }
+
+    /** {@code displayOverride} replaces the resolved display definition (editor ghosts only). */
+    private ResolvedModelBuild resolveBuild(WorldObject object, WorldDocument document,
+                                            int clientCycle, ObjectDefinitionView displayOverride) {
         Objects.requireNonNull(object, "object");
         Objects.requireNonNull(document, "document");
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         ObjectDefinitionResolver.Resolution definitionResolution =
                 definitionResolver.resolveEditorDisplay(object.id());
-        if (!definitionResolution.resolved()) return null;
+        if (displayOverride == null && !definitionResolution.resolved()) return null;
+        if (definitionResolution.placedDefinition().isEmpty()) return null;
         ObjectDefinitionView placementDefinition =
                 definitionResolution.placedDefinition().orElseThrow();
-        ObjectDefinitionView objectDefinition =
-                definitionResolution.displayDefinition().orElseThrow();
+        ObjectDefinitionView objectDefinition = displayOverride != null
+                ? displayOverride : definitionResolution.displayDefinition().orElseThrow();
 
         ObjectAppearanceView placementAppearance =
                 definitions.objectAppearance(placementDefinition.id())

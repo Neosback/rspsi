@@ -220,6 +220,24 @@ public record ModelRenderPacket(
     }
 
     /** Returns this packet with an explicit RuneLite-compatible render mode. */
+    /** True for an editor-only ghost; see {@link GpuDrawCommand.RenderMode#EDITOR_GHOST}. */
+    public boolean editorGhost() {
+        return renderMode == GpuDrawCommand.RenderMode.EDITOR_GHOST;
+    }
+
+    /** Returns this packet as a translucent editor ghost with at least {@code transparency} alpha. */
+    public ModelRenderPacket asEditorGhost(int transparency) {
+        List<ModelTriangle> ghosted = triangles.stream()
+                .map(triangle -> triangle.withAlpha(Math.max(triangle.alpha(), transparency)))
+                .toList();
+        return new ModelRenderPacket(anchor, objectId, category, vertices, ghosted,
+                textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
+                supportsAnimation, supportsParticles, placementHeight, roofRelated,
+                GpuDrawCommand.RenderMode.EDITOR_GHOST, wallDecorationPresentation,
+                gameObjectSceneMetadata, clientRenderableBounds, clientRenderablePlacements,
+                contourContract, animationState, sceneObjectIdentity);
+    }
+
     public ModelRenderPacket withRenderMode(GpuDrawCommand.RenderMode newRenderMode) {
         return new ModelRenderPacket(anchor, objectId, category, vertices, triangles,
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,

@@ -32,6 +32,7 @@ public final class RenderSceneBuilder {
     private final DefinitionProvider definitions;
     private final ObjectDefinitionResolver definitionResolver;
     private final LightingProfile lightingProfile;
+    private final ScenePresentation presentation;
 
     public RenderSceneBuilder() {
         this(new TerrainMeshBuilder(), null, LightingProfile.osrs());
@@ -53,10 +54,22 @@ public final class RenderSceneBuilder {
 
     public RenderSceneBuilder(TerrainMeshBuilder terrainMeshes, DefinitionProvider definitions,
                               LightingProfile lightingProfile) {
+        this(terrainMeshes, definitions, lightingProfile, ScenePresentation.PARITY);
+    }
+
+    /** Studio viewports pass {@link ScenePresentation#EDITOR}; everything else keeps parity. */
+    public RenderSceneBuilder(DefinitionProvider definitions, ScenePresentation presentation) {
+        this(new TerrainMeshBuilder(), Objects.requireNonNull(definitions, "definitions"),
+                LightingProfile.osrs(), presentation);
+    }
+
+    public RenderSceneBuilder(TerrainMeshBuilder terrainMeshes, DefinitionProvider definitions,
+                              LightingProfile lightingProfile, ScenePresentation presentation) {
         this.terrainMeshes = Objects.requireNonNull(terrainMeshes, "terrainMeshes");
         this.definitions = definitions;
         this.definitionResolver = definitions == null ? null : new ObjectDefinitionResolver(definitions);
         this.lightingProfile = Objects.requireNonNull(lightingProfile, "lightingProfile");
+        this.presentation = Objects.requireNonNull(presentation, "presentation");
     }
 
     /**
@@ -106,7 +119,7 @@ public final class RenderSceneBuilder {
                         Map.Entry::getKey, entry -> entry.getValue().lighting(),
                         (first, second) -> first, LinkedHashMap::new));
         List<ModelRenderPacket> modelPackets = definitions == null
-                ? List.of() : new ModelPacketBuilder(definitions, lightingProfile).build(document, clientCycle);
+                ? List.of() : new ModelPacketBuilder(definitions, lightingProfile, presentation).build(document, clientCycle);
         if (definitions != null) {
             compiledTerrain.forEach((coordinate, compiled) ->
                     packets.put(coordinate, compiled.renderPacket()));
@@ -149,7 +162,7 @@ public final class RenderSceneBuilder {
             }
         }
 
-        ModelPacketBuilder builder = new ModelPacketBuilder(definitions, lightingProfile);
+        ModelPacketBuilder builder = new ModelPacketBuilder(definitions, lightingProfile, presentation);
         Map<TileCoordinate, List<ModelRenderPacket>> packetsByTile = new LinkedHashMap<>();
         for (ModelRenderPacket packet : previous.modelPackets()) {
             packetsByTile.computeIfAbsent(packet.anchor(), ignored -> new ArrayList<>())
@@ -182,7 +195,7 @@ public final class RenderSceneBuilder {
 
     private RenderScene refreshAnimationsFull(RenderScene previous, int clientCycle) {
         List<ModelRenderPacket> modelPackets =
-                new ModelPacketBuilder(definitions, lightingProfile)
+                new ModelPacketBuilder(definitions, lightingProfile, presentation)
                         .build(previous.document(), clientCycle);
         if (modelPackets.equals(previous.modelPackets())) return previous;
 
@@ -259,7 +272,7 @@ public final class RenderSceneBuilder {
         List<WorldObject> objects = collectObjects(document);
         for (WorldObject object : objects) renderObjects.add(resolve(object));
         List<ModelRenderPacket> modelPackets = definitions == null
-                ? List.of() : new ModelPacketBuilder(definitions, lightingProfile).build(document, clientCycle);
+                ? List.of() : new ModelPacketBuilder(definitions, lightingProfile, presentation).build(document, clientCycle);
         if (definitions != null) {
             compiledTerrain.forEach((coordinate, compiled) ->
                     packets.put(coordinate, compiled.renderPacket()));

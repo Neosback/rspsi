@@ -33,7 +33,7 @@ abstract class ResolvedTileObject implements TileObject {
     /** One placement; {@code packets} is empty when it submitted no geometry. */
     static ResolvedTileObject of(ResolvedTile tile, SceneObjectIdentity identity,
                                  List<ModelRenderPacket> packets) {
-        boolean rendered = !packets.isEmpty();
+        boolean rendered = packets.stream().anyMatch(packet -> !packet.editorGhost());
         return switch (identity.category()) {
             case WALL -> new Wall(tile, identity, rendered);
             case WALL_DECOR -> new Decoration(tile, identity, rendered, primaryPresentation(packets));

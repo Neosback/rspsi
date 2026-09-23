@@ -46,7 +46,8 @@ public final class ObjectSceneResolutionAudit {
         Map<IdentityKey, Integer> packetCounts = new HashMap<>();
         for (ModelRenderPacket packet : scene.modelPackets()) {
             SceneObjectIdentity identity = packet.sceneObjectIdentity();
-            if (!identity.present()) continue;
+            // Editor ghosts stand in for locs that draw nothing; never count them.
+            if (!identity.present() || packet.editorGhost()) continue;
             packetCounts.merge(IdentityKey.of(identity), 1, Integer::sum);
         }
 
