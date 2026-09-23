@@ -34,7 +34,15 @@ class ObjectDefinitionEditCommandTest {
         assertEquals("Copper rocks", transaction.field("name").value());
         assertTrue(transaction.dirty());
         assertTrue(session.isDirty());
+        assertFalse(session.isSessionSaveDirty());
+        assertTrue(session.hasUnsavedExternalState());
         assertEquals(1, session.history().size());
+
+        session.markSaved();
+        assertTrue(session.isDirty(),
+                "a map/session save must not mark an in-memory definition edit as durable");
+        assertFalse(session.isSessionSaveDirty());
+        assertTrue(session.hasUnsavedExternalState());
 
         assertTrue(session.undo());
         assertEquals("Tree", transaction.field("name").value());
