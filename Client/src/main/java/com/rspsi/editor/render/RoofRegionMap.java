@@ -143,10 +143,14 @@ public final class RoofRegionMap {
         return regionCount;
     }
 
-    public boolean contains(int plane, int sceneX, int sceneY) {
+    public boolean inBounds(int plane, int sceneX, int sceneY) {
         return plane >= 0 && plane < planes
                 && sceneX >= 0 && sceneX < width
-                && sceneY >= 0 && sceneY < length
+                && sceneY >= 0 && sceneY < length;
+    }
+
+    public boolean contains(int plane, int sceneX, int sceneY) {
+        return inBounds(plane, sceneX, sceneY)
                 && present[index(plane, sceneX, sceneY, width, length)];
     }
 
