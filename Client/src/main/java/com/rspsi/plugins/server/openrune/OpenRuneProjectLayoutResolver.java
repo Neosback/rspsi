@@ -19,7 +19,7 @@ import java.util.stream.Stream;
  * <p>The resolver follows the modern OpenRune cache/content build layout:
  * base client configs under {@code .data/raw-cache}, server-only overlays
  * under {@code .data/raw-cache/server}, plugin pack configs under
- * {@code content/**/src/main/resources/pack/configs}, and symbolic mappings
+ * {@code content/<module>/.../src/main/resources/pack/configs}, and symbolic mappings
  * from both generated RSCM files and per-plugin {@code gamevals.toml}.
  * Kotlin source is never treated as a content input.</p>
  */
