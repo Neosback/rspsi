@@ -114,6 +114,7 @@ public final class StudioApplication implements AutoCloseable {
     private final Set<TileCoordinate> pendingSceneChanges = new LinkedHashSet<>();
     private CompletableFuture<LoadedMapScene> pendingScene;
     private CompletableFuture<LoadedMapScene> pendingSceneRebuild;
+    private CompletableFuture<LoadedMapScene> pendingAnimationRefresh;
     private Set<TileCoordinate> pendingRebuildChanges = Set.of();
     private LoadedMapScene loadedScene;
     private EditorPluginLifecycleManager pluginLifecycle;
@@ -185,6 +186,7 @@ public final class StudioApplication implements AutoCloseable {
             }
             case MAP_EDITOR -> {
                 pollSceneLoad();
+                pollAnimationRefresh(cache);
                 pollSceneRebuild(cache);
                 if (loadedScene != null && renderedSettingsRevision != renderSettings.revision()) {
                     RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
@@ -251,10 +253,13 @@ public final class StudioApplication implements AutoCloseable {
             sceneStatus = "Cache session is no longer available.";
             return;
         }
-        pendingScene = CompletableFuture.supplyAsync(() -> buildMapScene(cache, region[0], region[1]), sceneExecutor);
+        int clientCycle = currentClientCycle();
+        pendingScene = CompletableFuture.supplyAsync(
+                () -> buildMapScene(cache, region[0], region[1], clientCycle), sceneExecutor);
     }
 
-    private LoadedMapScene buildMapScene(LoadedOsrsCacheSession cache, int regionX, int regionY) {
+    private LoadedMapScene buildMapScene(LoadedOsrsCacheSession cache, int regionX, int regionY,
+                                         int clientCycle) {
         long totalStart = System.nanoTime();
         OsrsProjectSessionLoader.OpenedProject opened = cache.openRegion(regionX, regionY);
         WorldRegion region = opened.worldRegion();
@@ -262,7 +267,8 @@ public final class StudioApplication implements AutoCloseable {
                 Map.of(region.regionId(), region));
 
         long windowStart = System.nanoTime();
-        RenderWindowScene scene = new RenderWindowSceneBuilder(cache.bundle().definitions()).build(window);
+        RenderWindowScene scene = new RenderWindowSceneBuilder(
+                cache.bundle().definitions()).build(window, clientCycle);
         long windowNanos = System.nanoTime() - windowStart;
 
         SceneWindow sceneWindow = SceneWindow.from(window);
@@ -287,7 +293,8 @@ public final class StudioApplication implements AutoCloseable {
         double centerZ = sceneWindow.sceneBaseY() * 128.0 + window.worldWindow().length() * 64.0;
 
         long renderSceneStart = System.nanoTime();
-        RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).build(region.document());
+        RenderScene renderScene = new RenderSceneBuilder(
+                cache.bundle().definitions()).build(region.document(), clientCycle);
         long renderSceneNanos = System.nanoTime() - renderSceneStart;
 
         EditorSession session = opened.region().session();
@@ -304,7 +311,7 @@ public final class StudioApplication implements AutoCloseable {
                 initialPlan.zonedPlan(), incrementalPlanBuilder, settingsRevision,
                 new com.rspsi.editor.render.CameraState(
                 (float) centerX, -2400.0f, (float) centerZ - 4200.0f,
-                (float) -Math.toRadians(28.0), 0.0f));
+                (float) -Math.toRadians(28.0), 0.0f), clientCycle);
     }
 
     private void pollSceneLoad() {
@@ -355,6 +362,7 @@ public final class StudioApplication implements AutoCloseable {
                 pendingSceneRebuild = null;
             }
         }
+        if (pendingAnimationRefresh != null) return;
         if (sceneDirty.compareAndSet(true, false)) {
             if (loadedScene != null && cache != null) {
                 LoadedMapScene baseScene = loadedScene;
@@ -393,7 +401,8 @@ public final class StudioApplication implements AutoCloseable {
         IncrementalRenderWindowSceneCompiler windowCompiler =
                 new IncrementalRenderWindowSceneCompiler(cache.bundle().definitions());
         IncrementalRenderWindowSceneCompiler.UpdateResult windowUpdate =
-                windowCompiler.compile(baseScene.windowScene(), window, changedWorldTiles, 0);
+                windowCompiler.compile(baseScene.windowScene(), window, changedWorldTiles,
+                        baseScene.animationCycle());
         RenderWindowScene scene = windowUpdate.scene();
         long windowNanos = System.nanoTime() - windowStart;
 
@@ -430,7 +439,8 @@ public final class StudioApplication implements AutoCloseable {
 
         long renderSceneStart = System.nanoTime();
         RenderScene renderScene = new RenderSceneBuilder(cache.bundle().definitions()).update(
-                baseScene.renderScene(), new RenderChanges(changedTiles), 0);
+                baseScene.renderScene(), new RenderChanges(changedTiles),
+                baseScene.animationCycle());
         long renderSceneNanos = System.nanoTime() - renderSceneStart;
 
         SceneBuildMetrics metrics = new SceneBuildMetrics(
@@ -447,8 +457,9 @@ public final class StudioApplication implements AutoCloseable {
                 windowUpdate.dirtyWorldZones().size(), windowUpdate.compiledVisibleTiles(),
                 packetUpdate.rebuiltTiles(), packetUpdate.reusedTiles(),
                 planUpdate.rebuiltTiles(), planUpdate.reusedTiles());
-        return new LoadedMapScene(baseScene.opened(), baseScene.session(), scene, renderScene, packet, plan,
-                planUpdate.zonedPlan(), incrementalPlanBuilder, settingsRevision, baseScene.camera());
+        return new LoadedMapScene(baseScene.opened(), baseScene.session(), scene, renderScene,
+                packet, plan, planUpdate.zonedPlan(), incrementalPlanBuilder,
+                settingsRevision, baseScene.camera(), baseScene.animationCycle());
     }
 
     private static int[] parseRegion(String value) {
@@ -613,6 +624,8 @@ public final class StudioApplication implements AutoCloseable {
         pendingScene = null;
         if (pendingSceneRebuild != null) pendingSceneRebuild.cancel(true);
         pendingSceneRebuild = null;
+        if (pendingAnimationRefresh != null) pendingAnimationRefresh.cancel(true);
+        pendingAnimationRefresh = null;
         pendingRebuildChanges = Set.of();
         sceneDirty.set(false);
         synchronized (sceneChangeLock) {
@@ -687,5 +700,12 @@ public final class StudioApplication implements AutoCloseable {
                                   GpuZonedUploadPlan zonedPlan,
                                   IncrementalGpuUploadPlanBuilder planBuilder,
                                   long settingsRevision,
-                                  com.rspsi.editor.render.CameraState camera) { }
+                                  com.rspsi.editor.render.CameraState camera,
+                                  int animationCycle) {
+        private LoadedMapScene {
+            if (animationCycle < 0) {
+                throw new IllegalArgumentException("Animation cycle cannot be negative");
+            }
+        }
+    }
 }
