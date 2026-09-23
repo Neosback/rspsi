@@ -295,9 +295,10 @@ public final class ObjectViewerPanel implements StudioPanel {
 
         String objName = cache == null || objId < 0 ? null
                 : cache.bundle().definitions().object(objId)
-                        .map(ObjectDefinitionView::displayName).orElse(null);
+                        .map(definition -> objectLabel(definition.displayName(), objId))
+                        .orElse(null);
         if (objId >= 0) {
-            ImGui.text((objName == null ? "Object #" + objId : objName));
+            ImGui.text(objName == null ? "Object #" + objId : objName);
         }
 
         ImGui.beginDisabled(objId < 0);
@@ -322,6 +323,15 @@ public final class ObjectViewerPanel implements StudioPanel {
             settings.set(EditorSettingKeys.OBJECT_ROTATION, objectRotation.get());
         }
         ImGui.popItemWidth();
+    }
+
+    private static String objectLabel(String name, int id) {
+        String fallback = "Object #" + id;
+        if (name == null || name.isBlank() || "null".equalsIgnoreCase(name.trim())
+                || fallback.equals(name)) {
+            return fallback;
+        }
+        return name + " (#" + id + ")";
     }
 
     private static String compactPreviewDiagnostic(String value) {
@@ -503,8 +513,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             int previewSizeY = rawInt(raw, "sizeY").orElse(def.length());
 
             ImGui.pushFont(StudioFonts.mono(), 0.0f);
-            ImGui.textColored(0xFF38BDF8,
-                    previewName == null || previewName.isEmpty() ? "(unnamed)" : previewName);
+            ImGui.textColored(0xFF38BDF8, objectLabel(previewName, id));
             ImGui.text("Size:        " + previewSizeX + " x " + previewSizeY);
             ImGui.text("Interactive: " + def.interactive());
             ImGui.text("Models:      " + java.util.Arrays.toString(def.modelIds()));
