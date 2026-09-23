@@ -964,25 +964,39 @@
       "id": "dynamic.animation",
       "domain": "dynamic",
       "title": "Sequence frames, animation height offset, and frame-time transforms",
-      "status": "partial",
+      "status": "covered",
       "priority": "p2",
       "runelite": [
         "net.runelite.api.Renderable#getAnimationHeightOffset",
         "net.runelite.api.Model"
       ],
       "rspsi": [
-        "Client/src/main/java/com/rspsi/editor/render/ModelAnimation.java",
-        "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java"
+        "Client/src/main/java/com/rspsi/cache/store/OpenRuneDefinitionProvider.java",
+        "Client/src/main/java/com/rspsi/cache/definition/CachedSkeletalAnimationView.java",
+        "Client/src/main/java/com/rspsi/cache/definition/SkeletalRigView.java",
+        "Client/src/main/java/com/rspsi/editor/render/CachedSkeletalModelAnimation.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelAnimationState.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java",
+        "Client/src/main/java/com/rspsi/editor/render/RenderWindowSceneBuilder.java"
       ],
       "tsps": [
         "render/render/anim",
         "rs/model/ModelData.ts"
       ],
       "evidence": [
-        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"
+        "Client/src/test/java/com/rspsi/cache/store/OpenRuneCachedSkeletalDecoderTest.java",
+        "Client/src/test/java/com/rspsi/cache/definition/AnimationCurveViewTest.java",
+        "Client/src/test/java/com/rspsi/cache/definition/SequenceDefinitionViewTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/CachedSkeletalModelAnimationTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/IncrementalGpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ModelAnimationStateTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/RenderWindowSceneBuilderTest.java",
+        "Client/src/test/java/com/rspsi/osrs/rules/model/AnimationResolverTest.java"
       ],
-      "reason": "Sequence transforms are applied for static previews, but animation height offsets and runtime scene identity are not packet fields.",
-      "nextAction": "Add animated model metadata and frame-time native fixtures after static wall parity."
+      "reason": "Covered by raw sequence/skeleton/cached-animation decoding plus legacy and cached frame selection, signed animation-height offsets, stable scene identity, animation-before-contour ordering, frame-time scene refresh, cached curve/bone/alpha application, and incremental GPU rebuild acceptance.",
+      "nextAction": "Keep these fixtures as regressions. Actor dual-animation blending, NPC/player animation systems, instances, and unrelated runtime animation work remain separately scoped."
     },
     {
       "id": "dynamic.materials",
