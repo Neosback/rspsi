@@ -438,48 +438,14 @@ public final class ModelPacketBuilder {
             int priority = clamp(valueAt(priorities, face, renderPriority), 0, 255);
             int bias = clamp(valueAt(depthBias, face, 0), 0, 255);
             Normal faceNormal = faceNormal(transformed.get(a), transformed.get(b), transformed.get(c));
-            int colorA;
-            int colorB;
-            int colorC;
-            if (texture >= 0) {
-                // Textured ModelData faces carry lightness scalars into the
-                // textured rasterizer; the texture itself supplies color.
-                // Applying HSL blendLight here would darken/shift textured
-                // models a second time.
-                if (renderType == 0) {
-                    colorA = clamp(lightness(normals.get(a), appearance), 2, 126);
-                    colorB = clamp(lightness(normals.get(b), appearance), 2, 126);
-                    colorC = clamp(lightness(normals.get(c), appearance), 2, 126);
-                } else if (renderType == 1) {
-                    int light = clamp(flatLightness(faceNormal, appearance), 2, 126);
-                    colorA = light;
-                    colorB = light;
-                    colorC = -1;
-                } else {
-                    colorA = 0;
-                    colorB = 0;
-                    colorC = -2;
-                }
-            } else if (renderType == 1) {
-                int light = flatLightness(faceNormal, appearance);
-                colorA = blendLight(color, light);
-                colorB = colorA;
-                colorC = -1;
-            } else if (renderType == 3) {
-                colorA = 128;
-                colorB = 128;
-                colorC = -1;
-            } else if (renderType == 2) {
-                colorA = 0;
-                colorB = 0;
-                colorC = -2;
-            } else {
-                colorA = blendLight(color, lightness(normals.get(a), appearance));
-                colorB = blendLight(color, lightness(normals.get(b), appearance));
-                colorC = blendLight(color, lightness(normals.get(c), appearance));
-            }
+            ModelFaceColorContract.LitFace lit = ModelFaceColorContract.shade(
+                    color, texture >= 0, renderType,
+                    lightness(normals.get(a), appearance),
+                    lightness(normals.get(b), appearance),
+                    lightness(normals.get(c), appearance),
+                    flatLightness(faceNormal, appearance));
             parts.triangles.add(new ModelTriangle(vertexOffset + a, vertexOffset + b,
-                    vertexOffset + c, colorA, colorB, colorC,
+                    vertexOffset + c, lit.colorA(), lit.colorB(), lit.colorC(),
                     texture < 0 ? -1 : retexture(texture, appearance.retextures()),
                     alpha, priority, renderType, uv.u0, uv.v0, uv.u1, uv.v1, uv.u2, uv.v2,
                     color, bias));
