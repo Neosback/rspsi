@@ -184,6 +184,19 @@ class ObjectDefinitionOutputCacheBuilderTest {
                         index);
             }
 
+            // OpenRune FileCache's single-file fast path assumes the only
+            // file has an identity-style id. A synthetic archive containing
+            // only sparse file 1276 therefore does not model a real object
+            // config archive correctly. Seed file 0 too so the fixture takes
+            // the normal multi-file config path used by production caches.
+            ObjectTypeBuilder paddingBuilder = new ObjectTypeBuilder(0);
+            paddingBuilder.setName("Fixture padding");
+            library.put(
+                    com.rspsi.cache.OsrsCacheIndexLayout.CONFIGS,
+                    OBJECT,
+                    0,
+                    encode(paddingBuilder.build()));
+
             ObjectType object = objectType(name);
             byte[] payload = encode(object);
             library.put(
