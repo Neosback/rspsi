@@ -11,7 +11,7 @@ dependencies {
 
     // Isolated compatibility spike; OpenRune types must not leak into editor APIs.
     // The version is pinned in the root gradle.properties; overriding it is a
-    // parity event governed by docs/FILESTORE_CAPABILITY_AUDIT.md.
+    // parity event governed by docs/OPENRUNE_ECOSYSTEM_ARCHITECTURE.md.
     implementation "dev.or2:filesystem:${openruneFileStoreVersion}"
     implementation "dev.or2:filestore:${openruneFileStoreVersion}"
     implementation "dev.or2:osrs-fs:${openruneFileStoreVersion}"
