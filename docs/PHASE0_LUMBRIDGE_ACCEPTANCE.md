@@ -4,6 +4,27 @@
 >
 > This is an execution recipe, not a bundled fixture. Third-party/Jagex cache bytes remain external to the repository.
 
+## Status (2026-09-23)
+
+First real-cache run recorded: revision 240 cache fingerprint
+`6237edbbdc128ea42ddaf4b214dce92922181dc5724363363da1f5429017f0e2`
+(OpenRune FileStore 3.0.2, read-only), region 50,50.
+
+`object.resolution` = **WARN**: authored=4726, submitted=4506,
+transformed=2, warnings=220, failures=0. Every warning falls in one reviewed group:
+
+| Count | Stage | Cause | Disposition |
+|---|---|---|---|
+| 206 | `EMPTY_RENDERABLE_GEOMETRY` | models 2214, 2215, 4873 (24-byte files, 0 vertices / 0 faces) and 1105 (4 vertices, 0 faces) | Authored-empty models: invisible blockers and icon-only floor decorations. The client draws nothing either. |
+| 14 | `DEFINITION_UNRESOLVED` / `NO_DEFAULT_TRANSFORM` | multilocs whose transform table ends in `-1`, e.g. 10586/10778/29715 (Bush), 34738 (STASH bush), 27291 (Bank booth) | Needs a var-state policy. With var value 0 the client picks `transforms[0]` (`runescape-client/ObjectComposition.transform()`), so a "fresh state" profile would render these bushes. The policy is still open. |
+
+The first run on this cache (before the classification fix) reported 206 FAILs. They
+were traced to these cache models rather than a decoder defect by reading the raw
+index-7 bytes.
+
+Reproduce with `RSPSI_OSRS_PARITY_OUTPUT=<dir>` to get the per-placement
+`object-resolution-audit.txt` in addition to the grouped console summary.
+
 ## Pinned reference and acquisition path
 
 The acceptance content is OSRS revision `240`, live English, region `50,50`

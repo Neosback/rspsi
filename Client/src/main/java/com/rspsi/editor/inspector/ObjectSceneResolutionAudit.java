@@ -1,6 +1,7 @@
 package com.rspsi.editor.inspector;
 
 import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.cache.definition.ObjectDefinitionResolver;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.render.ModelRenderPacket;
@@ -9,7 +10,9 @@ import com.rspsi.editor.render.RenderScene;
 import com.rspsi.editor.render.SceneObjectIdentity;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -20,8 +23,10 @@ import java.util.Objects;
  *
  * <p>Camera-dependent occlusion and final native draw visibility deliberately
  * remain outside this audit. A missing packet for geometry that is otherwise
- * ready is an error; a state-dependent/unresolved definition is retained as an
- * explicit warning instead of silently disappearing.</p>
+ * ready is an error, as is a placement whose definition does not exist in the
+ * selected cache. State-dependent definitions and loc definitions whose cache
+ * models are authored empty are retained as explicit warnings instead of
+ * silently disappearing: the client draws nothing for them either.</p>
  */
 public final class ObjectSceneResolutionAudit {
     private ObjectSceneResolutionAudit() {
@@ -85,7 +90,10 @@ public final class ObjectSceneResolutionAudit {
         // from the remaining models; that must not turn an incomplete object
         // into a passing audit.
         return switch (resolution.geometryStatus()) {
-            case DEFINITION_UNRESOLVED -> Stage.DEFINITION_UNRESOLVED;
+            case DEFINITION_UNRESOLVED -> resolution.definitionStatus()
+                    == ObjectDefinitionResolver.Status.MISSING_PLACED_DEFINITION
+                    ? Stage.PLACED_DEFINITION_MISSING
+                    : Stage.DEFINITION_UNRESOLVED;
             case NO_MODEL_FOR_SHAPE -> Stage.NO_MODEL_FOR_SHAPE;
             case MISSING_MODEL_GEOMETRY -> Stage.MISSING_MODEL_GEOMETRY;
             case EMPTY_RENDERABLE_GEOMETRY -> Stage.EMPTY_RENDERABLE_GEOMETRY;
@@ -119,6 +127,50 @@ public final class ObjectSceneResolutionAudit {
                     .filter(entry -> entry.stage().severity() != Severity.PASS)
                     .toList();
         }
+
+        /**
+         * Problems grouped by stage and selected models, largest group first,
+         * so every distinct failure cause can be reviewed without reading one
+         * line per placement.
+         */
+        public List<ProblemGroup> problemGroups() {
+            Map<ProblemKey, List<Entry>> grouped = new LinkedHashMap<>();
+            for (Entry entry : problems()) {
+                grouped.computeIfAbsent(new ProblemKey(entry.stage(),
+                                entry.resolution().definitionStatus(),
+                                entry.resolution().selectedModelIds()),
+                        key -> new ArrayList<>()).add(entry);
+            }
+            return grouped.entrySet().stream()
+                    .map(group -> new ProblemGroup(group.getKey().stage(),
+                            group.getKey().definitionStatus(),
+                            group.getKey().selectedModelIds(), group.getValue()))
+                    .sorted(Comparator.comparingInt((ProblemGroup group) -> group.entries().size())
+                            .reversed())
+                    .toList();
+        }
+
+        private record ProblemKey(Stage stage, ObjectDefinitionResolver.Status definitionStatus,
+                                  List<Integer> selectedModelIds) {
+        }
+    }
+
+    public record ProblemGroup(Stage stage, ObjectDefinitionResolver.Status definitionStatus,
+                               List<Integer> selectedModelIds, List<Entry> entries) {
+        public ProblemGroup {
+            Objects.requireNonNull(stage, "stage");
+            Objects.requireNonNull(definitionStatus, "definitionStatus");
+            selectedModelIds = List.copyOf(Objects.requireNonNull(selectedModelIds, "selectedModelIds"));
+            entries = List.copyOf(Objects.requireNonNull(entries, "entries"));
+        }
+
+        public String diagnostic() {
+            return entries.size() + "x " + stage + " (" + stage.severity() + ")"
+                    + " definition=" + definitionStatus
+                    + " models=" + selectedModelIds
+                    + " objectIds=" + entries.stream()
+                    .map(entry -> entry.object().id()).distinct().sorted().toList();
+        }
     }
 
     public record Entry(
@@ -147,6 +199,7 @@ public final class ObjectSceneResolutionAudit {
                     + " y=" + object.y()
                     + " occurrence=" + occurrence
                     + " stage=" + stage
+                    + " definition=" + resolution.definitionStatus()
                     + " transform=" + resolution.transformPath()
                     + " models=" + resolution.selectedModelIds();
         }
@@ -160,11 +213,19 @@ public final class ObjectSceneResolutionAudit {
 
     public enum Stage {
         PACKET_SUBMITTED(Severity.PASS),
+        /** The map places an id the selected cache does not define. */
+        PLACED_DEFINITION_MISSING(Severity.FAIL),
+        /** State-dependent multiloc without an editor default, or a missing transform target. */
         DEFINITION_UNRESOLVED(Severity.WARN),
         NO_MODEL_FOR_SHAPE(Severity.WARN),
         MISSING_MODEL_GEOMETRY(Severity.FAIL),
         PARTIAL_MODEL_GEOMETRY(Severity.FAIL),
-        EMPTY_RENDERABLE_GEOMETRY(Severity.FAIL),
+        /**
+         * Every selected model decodes but has no triangles. Real caches use
+         * such authored-empty models for invisible blockers and icon-only
+         * floor decorations (revision 240 models 1105, 2214, 2215, 4873).
+         */
+        EMPTY_RENDERABLE_GEOMETRY(Severity.WARN),
         PACKET_MISSING(Severity.FAIL),
         SCENE_PROJECTION_MISSING(Severity.FAIL);
 

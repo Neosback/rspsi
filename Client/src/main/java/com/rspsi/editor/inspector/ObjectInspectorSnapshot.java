@@ -19,6 +19,13 @@ import java.util.Optional;
  * <p>Definitions are resolved at the boundary and flattened into small
  * immutable summaries. A missing definition remains explicit instead of being
  * replaced with guessed size or collision data.</p>
+ *
+ * <p>{@link #definition()}, {@link #collision()} and {@link #appearance()}
+ * describe the <em>placed</em> definition (scene footprint, collision and the
+ * animation id the client takes from it). {@link #displayAppearance()} is the
+ * appearance of the transformed display definition that supplies the visible
+ * model's scale, offset and recolors; it equals the placed appearance for an
+ * object without transforms. See STUDIO_SEMANTIC_API.md section 5.6.</p>
  */
 public record ObjectInspectorSnapshot(
         int id,
@@ -32,7 +39,8 @@ public record ObjectInspectorSnapshot(
         Optional<ObjectDefinitionSummary> definition,
         Optional<ObjectCollisionSummary> collision,
         Optional<ObjectAppearanceView> appearance,
-        ObjectResolutionSummary resolution
+        ObjectResolutionSummary resolution,
+        Optional<ObjectAppearanceView> displayAppearance
 ) {
     public ObjectInspectorSnapshot {
         Objects.requireNonNull(category, "category");
@@ -41,6 +49,7 @@ public record ObjectInspectorSnapshot(
         collision = Objects.requireNonNull(collision, "collision");
         appearance = Objects.requireNonNull(appearance, "appearance");
         resolution = Objects.requireNonNull(resolution, "resolution");
+        displayAppearance = Objects.requireNonNull(displayAppearance, "displayAppearance");
     }
 
     /** Compatibility constructor for callers that do not yet supply resolution diagnostics. */
@@ -58,7 +67,7 @@ public record ObjectInspectorSnapshot(
             Optional<ObjectAppearanceView> appearance
     ) {
         this(id, x, y, plane, type, rotation, category, shape, definition, collision,
-                appearance, unresolvedCompatibility(id));
+                appearance, unresolvedCompatibility(id), Optional.empty());
     }
 
     public String categoryName() {
@@ -74,6 +83,9 @@ public record ObjectInspectorSnapshot(
         Objects.requireNonNull(definitions, "definitions");
         Optional<ObjectDefinitionView> definition = definitions.object(object.id());
         Optional<ObjectCollisionView> collision = definitions.objectCollision(object.id());
+        ObjectResolutionSummary resolution = ObjectResolutionSummary.capture(object, definitions);
+        Optional<ObjectAppearanceView> displayAppearance = resolution.displayDefinition()
+                .flatMap(display -> definitions.objectAppearance(display.id()));
 
         return new ObjectInspectorSnapshot(
                 object.id(), object.x(), object.y(), object.plane(), object.type(), object.rotation(),
@@ -82,7 +94,8 @@ public record ObjectInspectorSnapshot(
                 collision.map(value -> new ObjectCollisionSummary(
                         value.blockWalk(), value.blockProjectile(), value.breakRouteFinding())),
                 definitions.objectAppearance(object.id()),
-                ObjectResolutionSummary.capture(object, definitions));
+                resolution,
+                displayAppearance);
     }
 
     static ObjectDefinitionSummary summary(ObjectDefinitionView definition) {

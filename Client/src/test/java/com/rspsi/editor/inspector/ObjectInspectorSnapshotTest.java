@@ -58,9 +58,15 @@ class ObjectInspectorSnapshotTest {
             }
 
             @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
-                return id == 2000
-                        ? Optional.of(ObjectAppearanceView.empty())
-                        : Optional.empty();
+                return switch (id) {
+                    // Placed shell owns the animation the client plays.
+                    case 1000 -> Optional.of(new ObjectAppearanceView(1234, false,
+                            128, 128, 128, 0, 0, 0, java.util.Map.of(), java.util.Map.of()));
+                    // Display child owns the visible model's scale and recolors.
+                    case 2000 -> Optional.of(new ObjectAppearanceView(-1, false,
+                            256, 128, 256, 0, 0, 0, java.util.Map.of(10, 20), java.util.Map.of()));
+                    default -> Optional.empty();
+                };
             }
 
             @Override public Optional<ModelGeometryView> modelGeometry(int id) {
@@ -85,6 +91,17 @@ class ObjectInspectorSnapshotTest {
         assertEquals(List.of(7), snapshot.resolution().selectedModelIds());
         assertEquals(ObjectResolutionSummary.GeometryStatus.READY,
                 snapshot.resolution().geometryStatus());
+        assertEquals(1234, snapshot.appearance().orElseThrow().animationId());
+        assertEquals(256, snapshot.displayAppearance().orElseThrow().scaleX());
+        assertEquals(java.util.Map.of(10, 20), snapshot.displayAppearance().orElseThrow().recolors());
+    }
+
+    @Test
+    void displayAppearanceMatchesPlacedAppearanceWithoutTransforms() {
+        ObjectInspectorSnapshot snapshot = ObjectInspectorSnapshot.capture(
+                new WorldObject(42, 10, 1, 2, 3208, 3218), new Definitions());
+
+        assertEquals(snapshot.appearance(), snapshot.displayAppearance());
     }
 
     @Test

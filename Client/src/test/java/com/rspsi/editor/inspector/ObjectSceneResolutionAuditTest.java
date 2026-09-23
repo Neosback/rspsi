@@ -58,14 +58,14 @@ class ObjectSceneResolutionAuditTest {
 
         assertEquals(4, report.entries().size());
         assertEquals(1, report.submittedCount());
-        assertEquals(1, report.failureCount());
-        assertEquals(2, report.warningCount());
+        assertEquals(2, report.failureCount());
+        assertEquals(1, report.warningCount());
 
         assertEquals(ObjectSceneResolutionAudit.Stage.PACKET_SUBMITTED,
                 report.entries().get(0).stage());
         assertEquals(ObjectSceneResolutionAudit.Stage.MISSING_MODEL_GEOMETRY,
                 report.entries().get(1).stage());
-        assertEquals(ObjectSceneResolutionAudit.Stage.DEFINITION_UNRESOLVED,
+        assertEquals(ObjectSceneResolutionAudit.Stage.PLACED_DEFINITION_MISSING,
                 report.entries().get(2).stage());
         assertEquals(ObjectSceneResolutionAudit.Stage.NO_MODEL_FOR_SHAPE,
                 report.entries().get(3).stage());
@@ -107,6 +107,75 @@ class ObjectSceneResolutionAuditTest {
     }
 
     @Test
+    void authoredEmptyModelsWarnAndDoNotMakeUsableSelectionsPartial() {
+        // Revision 240 ships zero-face models (e.g. 2214) for invisible blockers;
+        // the client draws nothing for them, so they are reviewed warnings.
+        WorldObject invisible = new WorldObject(600, 10, 0, 0, 0, 0);
+        WorldObject mixed = new WorldObject(700, 10, 0, 0, 1, 0);
+        WorldDocument document = new WorldDocument(2, 1, 1);
+        document.tile(0, 0, 0).restore(tile(invisible));
+        document.tile(0, 1, 0).restore(tile(mixed));
+
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return Optional.of(new ObjectDefinitionView(id, null, 1, 1, List.of(),
+                        id == 600 ? new int[]{9} : new int[]{7, 9}));
+            }
+
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(id == 9 ? empty(9) : triangle(id));
+            }
+
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+        };
+
+        RenderScene scene = new RenderSceneBuilder(definitions).build(document);
+        ObjectSceneResolutionAudit.Report report =
+                ObjectSceneResolutionAudit.audit(document, definitions, scene);
+
+        assertEquals(0, report.failureCount());
+        assertEquals(1, report.warningCount());
+        assertEquals(ObjectSceneResolutionAudit.Stage.EMPTY_RENDERABLE_GEOMETRY,
+                report.entries().get(0).stage());
+        assertEquals(ObjectSceneResolutionAudit.Stage.PACKET_SUBMITTED,
+                report.entries().get(1).stage());
+        assertEquals(List.of(9), report.entries().get(1).resolution().emptyGeometryIds());
+    }
+
+    @Test
+    void problemGroupsCollapsePlacementsSharingOneCause() {
+        WorldDocument document = new WorldDocument(3, 1, 1);
+        document.tile(0, 0, 0).restore(tile(new WorldObject(600, 10, 0, 0, 0, 0)));
+        document.tile(0, 1, 0).restore(tile(new WorldObject(601, 10, 0, 0, 1, 0)));
+        document.tile(0, 2, 0).restore(tile(new WorldObject(300, 10, 0, 0, 2, 0)));
+
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return id == 300 ? Optional.empty()
+                        : Optional.of(new ObjectDefinitionView(id, null, 1, 1, List.of(), new int[]{9}));
+            }
+
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(empty(id));
+            }
+
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+        };
+
+        RenderScene scene = new RenderSceneBuilder(definitions).build(document);
+        List<ObjectSceneResolutionAudit.ProblemGroup> groups =
+                ObjectSceneResolutionAudit.audit(document, definitions, scene).problemGroups();
+
+        assertEquals(2, groups.size());
+        assertEquals(ObjectSceneResolutionAudit.Stage.EMPTY_RENDERABLE_GEOMETRY, groups.get(0).stage());
+        assertEquals(2, groups.get(0).entries().size());
+        assertTrue(groups.get(0).diagnostic().contains("objectIds=[600, 601]"));
+        assertEquals(ObjectSceneResolutionAudit.Stage.PLACED_DEFINITION_MISSING, groups.get(1).stage());
+    }
+
+    @Test
     void exactDuplicatePlacementsRemainIndividuallyAccounted() {
         WorldObject duplicate = new WorldObject(100, 10, 0, 0, 0, 0);
         WorldDocument document = new WorldDocument(1, 1, 1);
@@ -141,6 +210,11 @@ class ObjectSceneResolutionAuditTest {
     private static TileSnapshot tile(WorldObject object) {
         return new TileSnapshot(0, 0, 0, 0,
                 0, 0, 0, 0, 0, List.of(object));
+    }
+
+    private static ModelGeometryView empty(int id) {
+        return new ModelGeometryView(id, new int[]{0, 0, 0}, new int[0],
+                new short[0], new int[0], new int[0]);
     }
 
     private static ModelGeometryView triangle(int id) {

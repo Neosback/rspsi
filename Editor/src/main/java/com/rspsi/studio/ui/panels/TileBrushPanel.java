@@ -396,6 +396,23 @@ public final class TileBrushPanel implements StudioPanel {
         }
 
         ImGui.spacing();
+        ImGui.textColored(0xFF38BDF8, "Resolution");
+        var resolution = snapshot.resolution();
+        if (resolution.renderableGeometryReady()) {
+            ImGui.text(resolution.diagnosticSummary());
+        } else {
+            ImGui.textColored(0xFFEF4444, resolution.diagnosticSummary());
+        }
+        if (resolution.transformed()) {
+            ImGui.text("Transform path: " + resolution.transformPath());
+            resolution.displayDefinition().ifPresent(display ->
+                    ImGui.text("Display definition: " + display.name() + " (#" + display.id() + ")"));
+        }
+        if (!resolution.selectedModelIds().isEmpty()) {
+            ImGui.text("Selected models: " + resolution.selectedModelIds());
+        }
+
+        ImGui.spacing();
         ImGui.textColored(0xFF38BDF8, "Collision");
         if (snapshot.collision().isEmpty()) {
             ImGui.textDisabled("No collision data.");
@@ -429,6 +446,21 @@ public final class TileBrushPanel implements StudioPanel {
                 ImGui.text("Retextures: " + a.retextures());
             }
         }
+        // The visible model's scale/offset/recolors come from the display
+        // definition; only call it out when it differs from the placed one.
+        snapshot.displayAppearance()
+                .filter(display -> !snapshot.appearance().equals(java.util.Optional.of(display)))
+                .ifPresent(d -> {
+                    ImGui.textColored(0xFF38BDF8, "Display appearance (visible model)");
+                    ImGui.text("Scale: " + d.scaleX() + ", " + d.scaleY() + ", " + d.scaleZ()
+                            + "   Offset: " + d.offsetX() + ", " + d.offsetY() + ", " + d.offsetZ());
+                    if (!d.recolors().isEmpty()) {
+                        ImGui.text("Recolors: " + d.recolors());
+                    }
+                    if (!d.retextures().isEmpty()) {
+                        ImGui.text("Retextures: " + d.retextures());
+                    }
+                });
     }
 
     private String objectInfoText(WorldObject object, ObjectInspectorSnapshot snapshot) {
@@ -446,6 +478,9 @@ public final class TileBrushPanel implements StudioPanel {
                         .append(" modelIds=").append(def.modelIds())
                         .append(" actions=").append(def.actions()).append('\n'),
                 () -> sb.append("Definition: NOT FOUND (dangling id)\n"));
+        sb.append("Resolution: ").append(snapshot.resolution().diagnosticSummary())
+                .append(" transformPath=").append(snapshot.resolution().transformPath())
+                .append(" selectedModels=").append(snapshot.resolution().selectedModelIds()).append('\n');
         snapshot.collision().ifPresent(c -> sb.append("Collision: blockWalk=").append(c.blockWalk())
                 .append(" blockProjectile=").append(c.blockProjectile())
                 .append(" breaksRouteFinding=").append(c.breakRouteFinding()).append('\n'));

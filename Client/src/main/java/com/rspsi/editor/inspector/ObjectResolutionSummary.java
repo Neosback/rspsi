@@ -68,10 +68,12 @@ public record ObjectResolutionSummary(
             case DEFINITION_UNRESOLVED -> "Object definition could not be resolved";
             case NO_MODEL_FOR_SHAPE -> "Definition has no model for this loc shape";
             case MISSING_MODEL_GEOMETRY -> "Selected model geometry is missing: " + missingGeometryIds;
-            case EMPTY_RENDERABLE_GEOMETRY -> "Selected models contain no renderable triangles";
+            case EMPTY_RENDERABLE_GEOMETRY -> "Selected models are authored empty (invisible loc): " + emptyGeometryIds;
             case PARTIAL_GEOMETRY -> "Some selected model geometry is unavailable";
             case READY -> transformed()
                     ? "Resolved transform " + transformPath.get(0) + " -> " + transformPath.get(transformPath.size() - 1)
+                    + (definitionStatus == ObjectDefinitionResolver.Status.RESOLVED_NESTED_TRANSFORM_CHILD
+                    ? " (display definition has its own transforms; not applied)" : "")
                     : "Renderable model data resolved";
         };
     }
@@ -121,8 +123,10 @@ public record ObjectResolutionSummary(
             usable++;
         }
 
+        // An authored-empty model renders nothing in the client either, so it
+        // does not make an otherwise usable selection partial.
         GeometryStatus geometryStatus;
-        if (usable == selected.size()) {
+        if (usable > 0 && missing.isEmpty()) {
             geometryStatus = GeometryStatus.READY;
         } else if (usable > 0) {
             geometryStatus = GeometryStatus.PARTIAL_GEOMETRY;

@@ -213,8 +213,14 @@ public final class OsrsRevisionVerifier {
                     + "; failures=" + objectResolutionAudit.failureCount());
             transformedObjects.stream().limit(8)
                     .forEach(entry -> messages.add("object transform: " + entry.diagnostic()));
-            objectResolutionAudit.problems().stream().limit(8)
-                    .forEach(problem -> messages.add("object resolution: " + problem.diagnostic()));
+            if (transformedObjects.size() > 8) {
+                messages.add("object transform: ... " + (transformedObjects.size() - 8) + " more");
+            }
+            // Every distinct problem cause is listed; per-placement detail goes
+            // to the explicitly requested parity output directory.
+            objectResolutionAudit.problemGroups()
+                    .forEach(group -> messages.add("object resolution: " + group.diagnostic()));
+            exportObjectResolutionAudit(parityOutputPath(), objectResolutionAudit, messages, errors);
             String sceneFingerprint = RenderSceneFingerprint.sha256(scene);
             messages.add("neutral scene meshes: " + scene.terrainMeshes().size()
                     + "; terrain materials: " + scene.terrainMaterials().size()
@@ -723,6 +729,30 @@ public final class OsrsRevisionVerifier {
     private static Path parityOutputPath() {
         String value = System.getenv("RSPSI_OSRS_PARITY_OUTPUT");
         return value == null || value.isBlank() ? null : Path.of(value);
+    }
+
+    /** Writes the per-placement object audit only when a parity output directory was requested. */
+    private static void exportObjectResolutionAudit(Path output,
+                                                    ObjectSceneResolutionAudit.Report audit,
+                                                    List<String> messages,
+                                                    List<String> errors) {
+        if (output == null) {
+            if (!audit.problems().isEmpty() || !audit.transformedEntries().isEmpty()) {
+                messages.add("object resolution: set RSPSI_OSRS_PARITY_OUTPUT for the per-placement audit");
+            }
+            return;
+        }
+        List<String> lines = new ArrayList<>();
+        audit.transformedEntries().forEach(entry -> lines.add("transform " + entry.diagnostic()));
+        audit.problems().forEach(entry -> lines.add(entry.stage().severity() + " " + entry.diagnostic()));
+        try {
+            Files.createDirectories(output);
+            Path target = output.resolve("object-resolution-audit.txt");
+            Files.write(target, lines);
+            messages.add("object resolution audit exported: " + target);
+        } catch (IOException | RuntimeException exception) {
+            errors.add("could not export object resolution audit: " + exception.getMessage());
+        }
     }
 
     /** Writes only explicitly requested, derived rasters for visual parity review. */

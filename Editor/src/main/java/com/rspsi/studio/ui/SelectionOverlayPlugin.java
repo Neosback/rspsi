@@ -123,9 +123,9 @@ public final class SelectionOverlayPlugin implements StudioPlugin {
         float centerX = sumX / worldVertices.size();
         float centerZ = sumZ / worldVertices.size();
         String name = definitions.object(object.id())
-                .map(def -> def.name() == null || def.name().isBlank() ? "Unnamed" : def.name())
-                .orElse("Unknown");
-        String label = "#" + object.id() + " " + name + " (" + object.category().displayName() + ")";
+                .map(def -> def.hasDisplayName() ? "#" + object.id() + " " + def.displayName() : def.displayName())
+                .orElse("Object #" + object.id() + " (no definition)");
+        String label = name + " (" + object.category().displayName() + ")";
         draw.worldLabel(label, centerX, topY - 24.0f, centerZ, 0xFFFFFFFF, (color & 0xFFFFFF00) | 0xD0);
     }
 

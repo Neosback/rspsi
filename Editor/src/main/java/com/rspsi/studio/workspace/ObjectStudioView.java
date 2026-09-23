@@ -95,7 +95,7 @@ public final class ObjectStudioView {
 
         if (cache != null) {
             cache.bundle().definitions().object(selectedObjectId.get()).ifPresent(def -> {
-                ImGui.textColored(0xFF66FF66, def.name().isEmpty() ? "(unnamed)" : def.name());
+                ImGui.textColored(0xFF66FF66, def.displayName());
                 ImGui.textDisabled("Size: " + def.width() + "x" + def.length() + " | Interactive: " + def.interactive());
             });
         }
@@ -140,7 +140,7 @@ public final class ObjectStudioView {
         if (cache != null) {
             cache.bundle().definitions().object(selectedObjectId.get()).ifPresent(def -> {
                 ImGui.pushFont(StudioFonts.mono(), 0.0f);
-                ImGui.text("Object Name:     " + def.name());
+                ImGui.text("Object Name:     " + def.displayName());
                 ImGui.text("Model IDs:       " + java.util.Arrays.toString(def.modelIds()));
                 ImGui.text("Dimensions:      " + def.width() + "x" + def.length());
                 ImGui.text("Animation ID:    " + (selectedSequenceId.get() >= 0 ? selectedSequenceId.get() : "None"));

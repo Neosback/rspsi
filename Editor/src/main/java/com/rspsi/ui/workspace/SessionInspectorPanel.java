@@ -182,6 +182,9 @@ public final class SessionInspectorPanel extends VBox implements AutoCloseable {
             row("Models", definition.modelIds().toString());
             row("Actions", definition.actions().toString());
         });
+        if (definitions != null) {
+            row("Resolution", snapshot.resolution().diagnosticSummary());
+        }
         snapshot.collision().ifPresent(collision -> {
             row("Movement collision", Integer.toString(collision.blockWalk()));
             row("Projectile collision", collision.blockProjectile() ? "Yes" : "No");

@@ -162,4 +162,78 @@ class MultilocModelSemanticsTest {
                 java.util.Arrays.stream(object.modelIds()).boxed().toList());
         assertEquals(placedAppearance, object.appearance());
     }
+
+    @Test
+    void transformedObjectKeepsPlacedIdentityAcrossSceneRebuilds() {
+        WorldDocument document = new WorldDocument(4, 4, 1);
+        WorldObject placed = new WorldObject(1000, 10, 0, 0, 1, 1);
+        document.tile(0, 1, 1).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(placed)));
+        DefinitionProvider definitions = transformingDefinitions();
+
+        SceneObjectIdentity first = identityOf(
+                new RenderSceneBuilder(definitions).build(document), 1000);
+
+        // An unrelated edit elsewhere forces a full rebuild with new neighbours.
+        document.tile(0, 3, 3).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0,
+                List.of(new WorldObject(2000, 10, 0, 0, 3, 3))));
+        SceneObjectIdentity second = identityOf(
+                new RenderSceneBuilder(definitions).build(document), 1000);
+
+        assertEquals(1000, first.objectId(), "identity is the placed id, not the display child");
+        assertEquals(first.stableId(), second.stableId());
+    }
+
+    private static SceneObjectIdentity identityOf(RenderScene scene, int placedId) {
+        List<SceneObjectIdentity> matches = scene.modelPackets().stream()
+                .map(ModelRenderPacket::sceneObjectIdentity)
+                .filter(identity -> identity.present() && identity.objectId() == placedId)
+                .distinct()
+                .toList();
+        assertEquals(1, matches.size(), "one submitted identity for the placement");
+        return matches.get(0);
+    }
+
+    private static DefinitionProvider transformingDefinitions() {
+        ModelGeometryView geometry = new ModelGeometryView(
+                7,
+                new int[]{0, 0, 0, 64, 0, 0, 0, 0, 64},
+                new int[]{0, 1, 2},
+                new short[]{100},
+                new int[]{0},
+                new int[]{-1});
+        return new DefinitionProvider() {
+            @Override
+            public Optional<ObjectDefinitionView> object(int id) {
+                if (id == 1000) {
+                    return Optional.of(new ObjectDefinitionView(
+                            id, "Placed shell", 1, 1, List.of(),
+                            new int[0], new int[0], -1, false,
+                            1234, -1, new int[]{2000}, 2000));
+                }
+                if (id == 2000) {
+                    return Optional.of(new ObjectDefinitionView(
+                            id, "Display child", 1, 1, List.of(),
+                            new int[]{7}, new int[]{10}, -1, false));
+                }
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<ModelGeometryView> modelGeometry(int id) {
+                return id == 7 ? Optional.of(geometry) : Optional.empty();
+            }
+
+            @Override
+            public Optional<FloorDefinitionView> underlay(int id) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<FloorDefinitionView> overlay(int id) {
+                return Optional.empty();
+            }
+        };
+    }
 }
