@@ -166,8 +166,9 @@ public final class GpuUploadPlanBuilder {
                         submissionDepthBias(layer.kind(), face.priority(), face.depthBias()), model.objectId(),
                         model.renderMode(), model.wallDecorationPresentation(),
                         model.gameObjectSceneMetadata(), model.clientRenderableBounds(),
-                        model.clientRenderablePlacements(), model.sceneObjectIdentity(),
-                        model.placementHeight(), model.anchor().x(), model.anchor().y());
+                        model.clientRenderablePlacements(), model.contourContract().metadata(),
+                        model.sceneObjectIdentity(), model.placementHeight(),
+                        model.anchor().x(), model.anchor().y());
             }
         }
     }
@@ -255,7 +256,7 @@ public final class GpuUploadPlanBuilder {
                 gameObjectSceneMetadata, clientRenderableBounds,
                 java.util.stream.IntStream.range(0, clientRenderableBounds.size())
                         .mapToObj(ignored -> ClientRenderablePlacement.none()).toList(),
-                SceneObjectIdentity.none(), 0,
+                ModelContourContract.Metadata.none(), SceneObjectIdentity.none(), 0,
                 tile.worldAddress().worldX(), tile.worldAddress().worldY());
     }
 
@@ -267,6 +268,7 @@ public final class GpuUploadPlanBuilder {
                                       GameObjectSceneMetadata gameObjectSceneMetadata,
                                       List<ClientModelBounds> clientRenderableBounds,
                                       List<ClientRenderablePlacement> clientRenderablePlacements,
+                                      ModelContourContract.Metadata contourMetadata,
                                       SceneObjectIdentity sceneObjectIdentity,
                                       int placementHeight,
                                       int modelAnchorX,
@@ -282,7 +284,8 @@ public final class GpuUploadPlanBuilder {
                     tile.planeCullLevel(), layer, pass, textureId, priority, depthBias,
                     objectId, firstIndex, renderMode, wallDecorationPresentation,
                     gameObjectSceneMetadata, clientRenderableBounds, clientRenderablePlacements,
-                    sceneObjectIdentity, placementHeight, modelAnchorX, modelAnchorY)) {
+                    contourMetadata, sceneObjectIdentity, placementHeight,
+                    modelAnchorX, modelAnchorY)) {
                 commands.set(last, previous.extend(3));
                 return;
             }
@@ -291,8 +294,8 @@ public final class GpuUploadPlanBuilder {
                 tile.planeCullLevel(), layer, pass, firstIndex, 3,
                 textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                clientRenderablePlacements, sceneObjectIdentity, placementHeight,
-                modelAnchorX, modelAnchorY));
+                clientRenderablePlacements, contourMetadata, sceneObjectIdentity,
+                placementHeight, modelAnchorX, modelAnchorY));
     }
 
     static String fingerprint(String packetFingerprint, List<GpuSceneVertex> vertices,
@@ -333,7 +336,7 @@ public final class GpuUploadPlanBuilder {
             if (!commands.isEmpty()) {
                 for (GpuDrawCommand cmd : commands) {
                     ByteBuffer cmdBuffer = ByteBuffer.allocate(
-                            160 + cmd.clientRenderableBounds().size() * 68);
+                            192 + cmd.clientRenderableBounds().size() * 68);
                     cmdBuffer.putInt(cmd.tile().plane())
                             .putInt(cmd.tile().worldX())
                             .putInt(cmd.tile().worldY())
@@ -359,6 +362,14 @@ public final class GpuUploadPlanBuilder {
                             .putInt(cmd.gameObjectSceneMetadata().maxTileY())
                             .putInt(cmd.gameObjectSceneMetadata().modelOrientation())
                             .putInt(cmd.gameObjectSceneMetadata().orientation())
+                            .putInt(cmd.contourMetadata().present() ? 1 : 0)
+                            .putInt(cmd.contourMetadata().type())
+                            .putInt(cmd.contourMetadata().parameter())
+                            .putInt(cmd.contourMetadata().mode().ordinal())
+                            .putInt(cmd.contourMetadata().placementHeight())
+                            .putInt(cmd.contourMetadata().applied() ? 1 : 0)
+                            .putInt(cmd.contourMetadata().hasUnskewedModel() ? 1 : 0)
+                            .putInt(cmd.contourMetadata().vertexCount())
                             .putInt(cmd.sceneObjectIdentity().present() ? 1 : 0)
                             .putInt(cmd.sceneObjectIdentity().objectId())
                             .putInt(cmd.sceneObjectIdentity().category().ordinal())
