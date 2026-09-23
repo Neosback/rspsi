@@ -56,10 +56,11 @@ Do not mix a dependency upgrade into an unrelated correctness PR unless the upgr
 | `dev.or2:osrs-fs` | OSRS-specific FileStore integration |
 | `dev.or2:osrs` | OSRS definition codecs/types |
 | `dev.or2:definition` | neutral definition foundation/builders/codecs |
-| `dev.or2:opcode` | opcode framework used by definition codecs |
 | `dev.or2:tools` | writable `CacheDelegate` today; also publishes many additional tools described below |
 
 The project additionally declares Netty explicitly because OpenRune definition encode APIs expose `ByteBuf` in their signatures.
+
+`dev.or2:opcode` remains published and useful as an OpenRune capability, but it is no longer a direct Studio dependency because current Studio code does not consume its API and current OSRS codec paths do not require it transitively. Re-add it only with a concrete consumer.
 
 The `tools` dependency currently excludes `me.filby:clientscript-compiler` because the previously referenced optional compiler dependency chain was not needed for the writable-cache adapter. Revisit that exclusion only when Studio actually implements CS2/source compilation.
 
