@@ -79,44 +79,81 @@ public final class SceneOcclusionResolver {
      */
     /*
      * GpuUploadPlan is a value record whose generated hashCode walks every
-     * vertex, index, command, texture, and occluder.  Using it as a normal
-     * WeakHashMap key makes the supposedly cheap per-frame lookup O(scene
-     * size), which can completely starve the UI thread on a real region.
+     * vertex, index, command, texture, and occluder. Using it as a normal
+     * hash-map key turns a supposedly cheap per-frame lookup back into
+     * O(scene-size) work, so geometry identity is intentionally the key.
      *
-     * Plans are immutable and renderers replace the plan when a scene is
-     * rebuilt, so identity is the correct cache key here.  The cache is
-     * bounded to the most recent plans below rather than retaining every
-     * scene ever opened.
+     * Do not use IdentityHashMap + arbitrary iterator eviction here. Zoned
+     * animation refreshes create a fresh GpuZonedUploadPlan identity every
+     * few seconds; once the cache exceeded its old four-entry limit, the
+     * arbitrary eviction could remove the entry that had just been inserted.
+     * Alpha-sort comparator calls then rebuilt every command bound over and
+     * over on the same frame.
+     *
+     * A tiny explicit identity-LRU makes eviction deterministic and keeps the
+     * current geometry resident. Each entry is also lazy per command: an alpha
+     * sort only computes bounds for alpha commands instead of walking every
+     * draw command in the scene up front.
      */
-    private static final java.util.Map<GpuCommandGeometry, CommandBounds[]> BOUNDS_CACHE =
-            java.util.Collections.synchronizedMap(new java.util.IdentityHashMap<>());
     private static final int MAX_CACHED_PLANS = 4;
+    private static final java.util.List<BoundsCacheEntry> BOUNDS_CACHE =
+            new java.util.ArrayList<>(MAX_CACHED_PLANS);
 
     public static CommandBounds boundsOf(int commandIndex, GpuDrawCommand command,
                                          GpuCommandGeometry geometry) {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(geometry, "geometry");
-        CommandBounds[] cached = BOUNDS_CACHE.computeIfAbsent(geometry, value -> {
-            CommandBounds[] array = new CommandBounds[value.commandCount()];
-            for (int i = 0; i < value.commandCount(); i++) {
-                array[i] = CommandBounds.of(i, value.command(i), value);
-            }
-            return array;
-        });
-        if (BOUNDS_CACHE.size() > MAX_CACHED_PLANS) {
-            synchronized (BOUNDS_CACHE) {
-                while (BOUNDS_CACHE.size() > MAX_CACHED_PLANS) {
-                    java.util.Iterator<GpuCommandGeometry> iterator = BOUNDS_CACHE.keySet().iterator();
-                    if (!iterator.hasNext()) break;
-                    iterator.next();
-                    iterator.remove();
-                }
-            }
-        }
-        if (commandIndex >= 0 && commandIndex < cached.length) {
-            return cached[commandIndex];
+        if (commandIndex >= 0 && commandIndex < geometry.commandCount()) {
+            return boundsCacheEntry(geometry).boundsOf(commandIndex, command);
         }
         return CommandBounds.of(command, geometry);
+    }
+
+    private static synchronized BoundsCacheEntry boundsCacheEntry(GpuCommandGeometry geometry) {
+        for (int index = 0; index < BOUNDS_CACHE.size(); index++) {
+            BoundsCacheEntry entry = BOUNDS_CACHE.get(index);
+            if (entry.geometry == geometry) {
+                if (index != BOUNDS_CACHE.size() - 1) {
+                    BOUNDS_CACHE.remove(index);
+                    BOUNDS_CACHE.add(entry);
+                }
+                return entry;
+            }
+        }
+
+        BoundsCacheEntry entry = new BoundsCacheEntry(geometry);
+        BOUNDS_CACHE.add(entry);
+        while (BOUNDS_CACHE.size() > MAX_CACHED_PLANS) {
+            BOUNDS_CACHE.remove(0);
+        }
+        return entry;
+    }
+
+    static synchronized void clearBoundsCacheForTests() {
+        BOUNDS_CACHE.clear();
+    }
+
+    static synchronized int cachedGeometryCountForTests() {
+        return BOUNDS_CACHE.size();
+    }
+
+    private static final class BoundsCacheEntry {
+        private final GpuCommandGeometry geometry;
+        private final CommandBounds[] bounds;
+
+        private BoundsCacheEntry(GpuCommandGeometry geometry) {
+            this.geometry = geometry;
+            this.bounds = new CommandBounds[geometry.commandCount()];
+        }
+
+        private synchronized CommandBounds boundsOf(int commandIndex, GpuDrawCommand command) {
+            CommandBounds cached = bounds[commandIndex];
+            if (cached == null) {
+                cached = CommandBounds.of(commandIndex, command, geometry);
+                bounds[commandIndex] = cached;
+            }
+            return cached;
+        }
     }
 
     public static boolean occludesCommand(int commandIndex, GpuDrawCommand command,
@@ -152,14 +189,20 @@ public final class SceneOcclusionResolver {
 
     private static boolean occludesAllCorners(CommandBounds bounds, CameraState camera,
                                                SceneOccluder occluder) {
-        for (float x : new float[]{bounds.minX(), bounds.maxX()}) {
-            for (float y : new float[]{bounds.minY(), bounds.maxY()}) {
-                for (float z : new float[]{bounds.minZ(), bounds.maxZ()}) {
-                    if (!occludesPoint(x, y, z, camera, occluder)) return false;
-                }
-            }
-        }
-        return true;
+        float minX = bounds.minX();
+        float maxX = bounds.maxX();
+        float minY = bounds.minY();
+        float maxY = bounds.maxY();
+        float minZ = bounds.minZ();
+        float maxZ = bounds.maxZ();
+        return occludesPoint(minX, minY, minZ, camera, occluder)
+                && occludesPoint(minX, minY, maxZ, camera, occluder)
+                && occludesPoint(minX, maxY, minZ, camera, occluder)
+                && occludesPoint(minX, maxY, maxZ, camera, occluder)
+                && occludesPoint(maxX, minY, minZ, camera, occluder)
+                && occludesPoint(maxX, minY, maxZ, camera, occluder)
+                && occludesPoint(maxX, maxY, minZ, camera, occluder)
+                && occludesPoint(maxX, maxY, maxZ, camera, occluder);
     }
 
     /** Returns true only when the complete triangle is behind one occluder. */
