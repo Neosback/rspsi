@@ -59,6 +59,14 @@ public record ModelAnimationState(
         return sequenceId >= 0 && frameIndex >= 0;
     }
 
+    public ModelAnimationState withTransformed(boolean value) {
+        if (!active() && value) {
+            throw new IllegalArgumentException("Inactive animation cannot be transformed");
+        }
+        return new ModelAnimationState(sequenceId, frameIndex, frameId, clientCycle,
+                animationHeightOffset, value);
+    }
+
     /** Client draw-space Y after Renderable#getAnimationHeightOffset is applied. */
     public int renderPlacementHeight(int placementHeight) {
         return active() ? placementHeight - animationHeightOffset : placementHeight;
