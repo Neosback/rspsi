@@ -1,6 +1,6 @@
 # OpenRune Studio Roadmap
 
-_Rewritten 2026-09-23 after the content-authoring foundation review and UI workspace review._
+_Expanded 2026-09-23 after the content-authoring foundation review, UI workspace review, Phase 0 trust review, and RuneLite-inspired semantic API review._
 
 This document is the single prioritized product roadmap for OpenRune Studio.
 
@@ -8,6 +8,7 @@ Detailed supporting contracts:
 
 - CONTENT_STUDIO_FOUNDATION.md - advanced authoring foundation and future Theme/Context Engine direction
 - UI_WORKSPACE_CONTRACT.md - strict Contextual Multi-Rail Workspace layout and plugin UI rules
+- STUDIO_SEMANTIC_API.md - Studio-owned authored-world/resolved-scene API contract and RuneLite reference policy
 - OPENRUNE_ECOSYSTEM_INTEGRATION.md - OpenRune Server/cache/source integration guardrails
 - RENDERING_PARITY_MANIFEST.json - live rendering correctness backlog
 
@@ -20,12 +21,30 @@ When project documents disagree, use this order:
 1. current production code plus passing tests for what the repository actually does
 2. RENDERING_PARITY_MANIFEST.json for rendering-status claims
 3. ROADMAP.md for project execution order and architectural sequencing
-4. UI_WORKSPACE_CONTRACT.md for editor-shell and plugin UI placement
-5. CONTENT_STUDIO_FOUNDATION.md for advanced-authoring prerequisite detail
-6. OPENRUNE_ECOSYSTEM_INTEGRATION.md for OpenRune subsystem integration detail
-7. explicitly historical acceptance/reference documents for background only
+4. STUDIO_SEMANTIC_API.md for the stable authored-world/resolved-scene boundary
+5. UI_WORKSPACE_CONTRACT.md for editor-shell and plugin UI placement
+6. CONTENT_STUDIO_FOUNDATION.md for advanced-authoring prerequisite detail
+7. OPENRUNE_ECOSYSTEM_INTEGRATION.md for OpenRune subsystem integration detail
+8. explicitly historical acceptance/reference documents for background only
 
 A lower item must not silently override a higher item. When work makes a lower document stale, update it in the same PR when practical.
+
+## Reference authority by concern
+
+Use the correct reference for the question being answered. Do not treat all external projects as equivalent evidence.
+
+1. **Real OSRS cache/map fixtures** are the final acceptance evidence for authored placements, definition availability, and representative scene behavior.
+2. **Vendored RuneLite `runescape-client` source** is the primary reproducible reference for OSRS client scene semantics: object transforms, tile paint/model construction, loc-shape model selection, plane/bridge behavior, contouring, lighting order, scene traversal, visibility, and related client rules.
+3. **Vendored RuneLite `runelite-api` and public Javadocs** are the primary naming/concept reference for stable semantic API design. They are not by themselves proof of implementation behavior.
+4. **Vendored RuneLite mixins/GPU/client renderer code** is consulted when the question is specifically how RuneLite exposes or submits client scene/render state.
+5. **OpenRune FileStore/definitions/builders** are the primary backend reference for cache decoding, encoding, writable definition semantics, reference-table updates, and OpenRune project/content integration.
+6. **TSPS and other open implementations** are secondary algorithm/architecture cross-checks, not the final source of OSRS truth.
+7. **Legacy RSPSi behavior** is historical evidence only unless locked by current tests or independently validated.
+8. **OSRS Wiki/data tools** are useful for IDs, names, locations, and human context, not for renderer math or client traversal semantics.
+
+Prefer the vendored RuneLite revision for reproducibility. The public RuneLite API documentation may be newer and is useful for discovering concepts, but a parity claim must identify the pinned source or fixture that supports it.
+
+Do not copy RuneLite interfaces wholesale. Reuse established OSRS vocabulary where useful, implement behavior behind Studio-owned neutral contracts, and keep live-client/GPU bookkeeping out of ordinary editor APIs.
 
 ---
 
@@ -45,6 +64,7 @@ The target includes:
 - biome generation and WFC-assisted world building
 - rich object and definition inspection/editing
 - plugin-first extensibility
+- a stable Studio-owned semantic API for authored-world and resolved-scene access
 - later, an explainable Theme/Context Engine learned from real OSRS world placement
 - later, broader OpenRune content-studio workflows for server/content data
 
@@ -115,6 +135,53 @@ Direct cache backend types, Dear ImGui, GLFW, and OpenGL remain implementation d
 Plugins contribute into host-owned workspace slots defined by UI_WORKSPACE_CONTRACT.md.
 
 The editor does not grow by adding arbitrary permanent panels around the viewport.
+
+### 2.7 The semantic API is the scene boundary
+
+Studio must distinguish:
+
+    canonical authored world
+            |
+            v
+    OSRS resolution / scene semantics
+            |
+            v
+    Studio Semantic API
+            |
+            +---- first-party tools
+            +---- inspectors / HUDs
+            +---- parity tests
+            +---- public plugins
+            |
+            v
+    renderer/backend internals
+
+`EditorSceneSnapshot`, `SceneTileSnapshot`, `TerrainRenderPacket`, `ModelRenderPacket`, and related neutral types are foundations to adapt, not reasons to expose renderer packets as the public plugin contract.
+
+The public semantic API should answer questions such as:
+
+- what was authored on this tile?
+- what plane does the client effectively/render it on?
+- is the surface simple paint or a shaped tile model?
+- what are the resolved corner colors and texture?
+- what placed object definition is this?
+- what transform/display definition supplies its visible appearance?
+- what model/type resolution occurred?
+- why did an authored object fail to render or become unpickable?
+
+See STUDIO_SEMANTIC_API.md.
+
+### 2.8 Scene reads are immutable; edits use plans
+
+RuneLite exposes setters because it integrates with a live client. Studio public APIs must not copy that mutation model.
+
+Scene/world semantic views are read-only.
+
+Edits flow through EditorCommand today and the generalized ChangePlan boundary as it matures:
+
+    calculate -> validate -> preview -> commit -> undo
+
+A plugin must not mutate a tile, scene paint, object definition, or renderer packet directly merely because a RuneLite API exposes a similarly named setter.
 
 ---
 
@@ -290,6 +357,59 @@ Current issues:
 - no near-plane clipping
 - large/tall/wide objects remain visible
 - clear unresolved-model reason instead of blank content
+
+## 0.6 Bootstrap the Studio Semantic API from trust work
+
+Do not pause Phase 0 to create a speculative framework.
+
+Instead, every trust fix must publish the smallest reusable semantic contract needed by the next caller.
+
+Phase 0 should establish:
+
+### Object semantics
+
+- shared object-definition transform resolution
+- placed definition versus display/transformed definition
+- transform path and explicit unresolved status
+- safe display labels that treat the client sentinel name `"null"` as unnamed
+- loc shape and model-type selection diagnostics
+- selected model IDs and geometry availability
+- stable SceneObjectIdentity
+- packet/submission/visibility diagnostic stages
+
+### Surface semantics
+
+- one canonical SurfaceHit used by hover, click selection, inspectors, and tools
+- actual hit position
+- sampled surface height
+- authored/effective/render/cull plane where applicable
+- tile surface kind
+- stable object identity when an object was hit
+
+### Tile semantics
+
+Adapt existing scene compilation into Studio-owned views conceptually equivalent to:
+
+- SceneView
+- SceneTileView
+- TileSurfaceView
+- TilePaintView
+- TileModelView
+- SceneObjectView
+- ObjectResolutionView
+
+RuneLite `Tile`, `SceneTilePaint`, and `SceneTileModel` are design references. Studio must omit ordinary public GPU buffer offsets and retain editor-specific authored/resolved state.
+
+### Phase 0 semantic acceptance
+
+By the end of Phase 0:
+
+- first-party trust/debug UI can explain an authored object's end-to-end resolution
+- interior parity tests can compare semantic tile paint/model values before pixel debugging
+- pick/hover consumers share one surface result
+- no public contract requires OpenGL/VBO knowledge
+- the semantic API remains internal/provisional until first-party callers prove it
+- public plugin ABI freeze waits until Phase 6
 
 ---
 
@@ -748,6 +868,8 @@ Correct rule:
 
 Expose future shared foundations through PluginServices:
 
+- authored world reads
+- resolved scene reads through the proven Studio Semantic API
 - worldEdit
 - queries
 - fragments
@@ -756,9 +878,13 @@ Expose future shared foundations through PluginServices:
 - linearFeatures
 - modifiers
 - brushes
-- assets
+- assets/definitions
 - knowledge
 - generators
+- overlays
+- permissioned diagnostics
+
+Public plugins should normally inspect tiles/objects through semantic views rather than `TerrainRenderPacket`, `ModelRenderPacket`, `GpuScenePacket`, OpenRune backend classes, or native renderer state.
 
 ## 6.4 Permission enforcement
 
@@ -802,6 +928,10 @@ Rules:
 - internal StudioPlugin/native APIs may change more aggressively because they are not the supported third-party boundary
 
 A workspace redesign is not permission to silently break external plugins.
+
+Before freezing the next public Plugin API version, first-party tools must exercise the semantic scene contracts introduced during Phase 0. The public surface should be promoted from proven internal contracts, not designed speculatively.
+
+A later optional `studio-runelite-compat` adapter may ease porting scene-oriented RuneLite algorithms, but RuneLite plugin source/binary compatibility is not a product requirement. Live-client concepts such as actors, widgets, ticks, varbits, menus, and game networking do not map directly to a map editor.
 
 ---
 
@@ -1235,6 +1365,43 @@ Verify:
 - capability-based surface resolution
 - no stale settings/resources
 
+## 14.5 Semantic parity boundary
+
+Before debugging final pixels, compare the Studio semantic scene against trusted reference behavior.
+
+For simple tile paint validate:
+
+- south-west, south-east, north-west, north-east resolved colors
+- texture ID
+- flatness
+- minimap color
+- authored underlay/overlay IDs
+- effective/render plane
+
+For shaped tile models validate:
+
+- shape and rotation
+- vertex positions/heights
+- face topology
+- per-face colors
+- texture IDs
+- resolved underlay/overlay semantics
+
+For objects validate:
+
+- placed definition
+- transform path
+- display definition
+- shape/model-type compatibility
+- selected model IDs
+- geometry decode
+- packet creation
+- scene submission
+- visibility
+- stable identity/picking
+
+This semantic checkpoint determines whether a defect is in authored/cache resolution versus final rendering.
+
 ---
 
 # 15. Execution discipline
@@ -1253,39 +1420,101 @@ Rules:
 8. Keep first-party tools on the same public-neutral APIs we want community plugins to use whenever practical.
 9. Native/UI exceptions must be explicit.
 10. Run foundationGate and live Studio validation for UI/rendering changes.
+11. For OSRS semantic behavior, cite the vendored RuneLite/OpenRune source path or real-cache fixture used as evidence in the PR.
+12. Prefer semantic parity fixtures before adding renderer-specific compensations.
+13. Do not expose a new public plugin API merely because an equivalent RuneLite method exists; prove the Studio use case with first-party callers first.
 
 ---
 
 # 16. Near-term PR order
 
-This is the recommended immediate sequence from the current main branch.
+This is the dependency-ordered implementation sequence from the current main branch.
 
-## PR A - Scene object completeness diagnostics
+The sequence deliberately grows the Studio Semantic API out of correctness work. Do not open a separate "copy RuneLite API" project or stop feature work for a speculative API rewrite.
 
-- build real fixtures for missing/null/invisible placed objects
-- classify resolution failures
-- eliminate silent null/blank object states
-- verify multiloc/default-transform handling
-- verify scene submission and identity
+## PR A - Scene object completeness diagnostics and resolution foundation
 
-## PR B - Canonical pick/hover/surface snapshot
+Primary references:
 
-- separate hover from selection
-- actual hit world position
-- sampled hit height
-- authored/effective/render plane
+- vendored RuneLite `ObjectComposition` / dynamic object transform behavior
+- OpenRune decoded object definitions
+- real Lumbridge/representative map placements
+
+Deliver:
+
+- shared object transform resolver
+- safe object display labels
+- placed definition versus display definition
+- transform-path diagnostics
+- resolved appearance from the display definition
+- classify missing definition, no default transform, missing transformed definition, transform cycles/depth, wrong/no model for shape, missing geometry
+- trace packet creation, scene submission, visibility, and stable identity
+- build a real Lumbridge Castle entrance/bush fixture from actual map/cache placements rather than a guessed object count
+- correct stale object-type labels by deriving them from `OsrsLocShape`
+
+Acceptance:
+
+- every authored fixture object is accounted for
+- no object silently displays client sentinel `null`
+- unresolved objects report a reason
+- multiloc/default resolution matches pinned client semantics
+- display appearance and selected models come from the same resolved definition
+- stable placed identity survives scene rebuilds
+
+## PR B - Canonical SurfaceHit and pick/hover contract
+
+Primary references:
+
+- RuneLite tile/world/render-level concepts
+- existing GpuPlanPicker exact-triangle behavior
+- Studio bridge/effective-plane rules
+
+Deliver:
+
+- canonical `SurfaceHit`
+- separate hover from click selection
+- actual hit world/local position
+- barycentric/surface sampled hit height, not south-west-corner height
+- authored/effective/render/cull plane where applicable
 - stable object identity
-- route HUD/inspector/pickers through it
+- active-plane pick restriction
+- show-all-planes rendering without pick stealing
+- route TileInfo HUD, inspector, object picker, and tool hover through the same semantic result
 
-## PR C - Interior rendering parity
+Acceptance:
 
-- real interior golden scenes
-- isolate color/material discrepancy
-- fix actual parity bug
-- update manifest entries as evidence warrants
+- building floors no longer report unrelated corner heights
+- bridge/interior plane identity is explicit
+- hover and selection do not fight each other
+- all first-party picking consumers agree on the same hit
 
-## PR D - Object preview framing and scale
+## PR C - Tile semantic views and interior rendering parity
 
+Primary references:
+
+- vendored RuneLite `SceneTilePaint`, `SceneTileModel`, scene/tile construction source
+- OpenRune floor/texture definitions
+- real OSRS interior fixtures
+
+Deliver:
+
+- provisional `SceneTileView`, `TileSurfaceView`, `TilePaintView`, and `TileModelView`
+- adapt existing `SceneTileSnapshot` / `TerrainRenderPacket` rather than duplicate rendering compilation
+- expose resolved four-corner paint colors, texture, flatness, shape, rotation, model vertices/faces, and plane semantics
+- real stone/castle, wood, textured-floor, shaped-overlay, decoration, roof-transition fixtures
+- semantic comparison before pixel comparison
+- isolate whether the observed interior mismatch is HSL/blend math, texture handling, lighting, shape composition, plane/roof behavior, or final renderer state
+- fix the actual discrepancy
+- update parity manifest only where evidence warrants
+
+Acceptance:
+
+- trusted fixture semantic values match before final pixels are considered correct
+- Studio-specific color tuning is not used to hide a semantic mismatch
+
+## PR D - Object preview framing, scale, and resolution reuse
+
+- consume PR A object resolution instead of inventing preview-only transform logic
 - correct the confirmed local-bounds vs anchored-GPU-geometry camera mismatch
 - include render placement height in preview-space bounds
 - derive/verify bounds from the same coordinate space submitted to the preview renderer
@@ -1316,7 +1545,57 @@ After those correctness and workspace foundations are stable:
 
 ## PR G - Multi-region authored world boundary
 
-Then proceed into Query/Condition, ChangePlan, Fragment Transform, and shared procedural services in that order.
+- absolute-world authored region lookup
+- explicit unloaded neighbors
+- multi-region transaction
+- one undo history entry
+- dirty-region ownership
+- batched persistence
+
+## PR H - Query/condition engine
+
+- shared tile/object/spatial predicates
+- AND/OR/NOT composition
+- world-coordinate evaluation
+- selection integration
+- serializable preset-friendly condition data where practical
+
+## PR I - General ChangePlan
+
+- calculate/validate/preview/commit boundary
+- conflicts and unloaded-data diagnostics
+- stale-source preconditions where needed
+- deterministic provenance
+- one undo entry across all affected regions
+
+## PR J - Fragment transform foundation
+
+- rotate/mirror complete multi-plane fragments
+- transform object type/rotation and tile shape/rotation correctly
+- pivot/origin policy
+- paste/merge/elevation policies
+- preview through ChangePlan
+
+## PR K - Semantic API public hardening
+
+Only after Phase 0 and first-party migration have proved the contracts:
+
+- stabilize `SceneView`, tile/surface/object views
+- expose them through public EditorPlugin capabilities
+- enforce WORLD_READ / ASSET_READ boundaries
+- define compatibility/deprecation policy
+- keep renderer internals privileged/internal
+- add an optional RuneLite-scene compatibility adapter only if real porting use cases justify it
+
+## PR L - Shared procedural primitives
+
+- AutoTileService
+- linear-feature geometry
+- deterministic modifier/noise stack
+- world-coordinate sampling
+- plugin extension points
+
+After PR L, build advanced Tile Painter, Replace, Scatter, Path, Stream, Fence, Bridge, Structure, Biome, WFC, and later Theme/Context workflows as thin consumers of the shared services.
 
 ---
 
@@ -1343,6 +1622,7 @@ Already-established strengths include:
 - plugin dependency/version/update infrastructure
 - HUD manager
 - stable scene object identity groundwork
+- provisional neutral scene snapshots and renderer-neutral terrain/model packets
 - OpenRune source/cache integration boundaries
 
 The roadmap is about connecting and hardening these pieces, not replacing them.
@@ -1352,6 +1632,8 @@ The roadmap is about connecting and hardening these pieces, not replacing them.
 # 18. Definition of success
 
 OpenRune Studio reaches the intended architecture when a community plugin can implement an advanced world-authoring feature by combining stable services instead of reaching into editor internals.
+
+For scene-aware plugins specifically, success means they can answer "what tile/object is this, how did OSRS semantics resolve it, and what can I safely edit?" through Studio-owned authored-world and resolved-scene APIs without importing OpenRune backend types, RuneLite live-client types, or renderer/GPU packets.
 
 The ideal plugin should be able to:
 
