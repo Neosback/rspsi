@@ -104,7 +104,7 @@ public final class SceneOcclusionResolver {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(geometry, "geometry");
         if (commandIndex >= 0 && commandIndex < geometry.commandCount()) {
-            return boundsCacheEntry(geometry).boundsOf(commandIndex, command);
+            return boundsCacheEntry(geometry).boundsOf(commandIndex);
         }
         return CommandBounds.of(command, geometry);
     }
@@ -146,9 +146,10 @@ public final class SceneOcclusionResolver {
             this.bounds = new CommandBounds[geometry.commandCount()];
         }
 
-        private synchronized CommandBounds boundsOf(int commandIndex, GpuDrawCommand command) {
+        private synchronized CommandBounds boundsOf(int commandIndex) {
             CommandBounds cached = bounds[commandIndex];
             if (cached == null) {
+                GpuDrawCommand command = geometry.command(commandIndex);
                 cached = CommandBounds.of(commandIndex, command, geometry);
                 bounds[commandIndex] = cached;
             }
