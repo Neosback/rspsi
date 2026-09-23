@@ -7,6 +7,14 @@ import java.util.List;
 public interface DefinitionProvider {
     Optional<ObjectDefinitionView> object(int id);
 
+    /**
+     * Optional backend-neutral raw decoded object metadata for inspector/debug
+     * tooling. Implementations should not expose backend library types here.
+     */
+    default Optional<ObjectDefinitionRawView> objectRaw(int id) {
+        return Optional.empty();
+    }
+
     /** Looks up the zero-based cache definition ID for a non-empty underlay. */
     Optional<FloorDefinitionView> underlay(int id);
 

@@ -1,6 +1,7 @@
 package com.rspsi.studio.ui.panels;
 
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectDefinitionRawView;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.selection.ObjectSelection;
@@ -40,6 +41,7 @@ public final class ObjectViewerPanel implements StudioPanel {
     private int activeSubTab = 0; // 0: Object viewer, 1: Object properties
     private final ImInt typeFilter = new ImInt(0);
     private final ImString searchFilter = new ImString(64);
+    private final ImString rawPropertyFilter = new ImString(64);
     // No selection by default - a hardcoded "always Bank booth" default made
     // every fresh session look like it had already picked something.
     private final ImInt selectedObjectId = new ImInt(-1);
@@ -438,16 +440,101 @@ public final class ObjectViewerPanel implements StudioPanel {
         ImGui.inputInt("Object ID##prop-obj-id", selectedObjectId);
         int id = selectedObjectId.get();
 
-        if (cache != null) {
-            cache.bundle().definitions().object(id).ifPresentOrElse(def -> {
-                ImGui.pushFont(StudioFonts.mono(), 0.0f);
-                ImGui.textColored(0xFF38BDF8, def.name().isEmpty() ? "(unnamed)" : def.name());
-                ImGui.text("Size:        " + def.width() + " x " + def.length());
-                ImGui.text("Interactive: " + def.interactive());
-                ImGui.text("Models:      " + java.util.Arrays.toString(def.modelIds()));
-                ImGui.text("Actions:     " + String.join(", ", def.interactions().stream().filter(a -> !a.isBlank()).toList()));
-                ImGui.popFont();
-            }, () -> ImGui.textDisabled("Object definition not found for ID " + id));
+        if (cache == null) {
+            ImGui.textDisabled("Load an OSRS cache to inspect object definitions.");
+            return;
         }
+
+        var definitions = cache.bundle().definitions();
+        definitions.object(id).ifPresentOrElse(def -> {
+            ImGui.pushFont(StudioFonts.mono(), 0.0f);
+            ImGui.textColored(0xFF38BDF8, def.name().isEmpty() ? "(unnamed)" : def.name());
+            ImGui.text("Size:        " + def.width() + " x " + def.length());
+            ImGui.text("Interactive: " + def.interactive());
+            ImGui.text("Models:      " + java.util.Arrays.toString(def.modelIds()));
+            ImGui.text("Actions:     " + String.join(", ",
+                    def.interactions().stream().filter(a -> !a.isBlank()).toList()));
+            ImGui.popFont();
+
+            ImGui.separator();
+            ImGui.textDisabled("Raw decoded definition");
+            ImGui.inputTextWithHint("##raw-object-filter",
+                    StudioIcons.SEARCH + "  Filter field, opcode, param or value...",
+                    rawPropertyFilter);
+
+            definitions.objectRaw(id).ifPresentOrElse(
+                    this::renderRawObjectDefinition,
+                    () -> ImGui.textDisabled(
+                            "Raw definition metadata is unavailable for this cache backend."));
+        }, () -> ImGui.textDisabled("Object definition not found for ID " + id));
+    }
+
+    private void renderRawObjectDefinition(ObjectDefinitionRawView raw) {
+        String filter = rawPropertyFilter.get().trim().toLowerCase(java.util.Locale.ROOT);
+
+        ImGui.pushFont(StudioFonts.mono(), 0.0f);
+        ImGui.textDisabled("OPCODE       FIELD                    TYPE       VALUE");
+
+        int visibleFields = 0;
+        for (ObjectDefinitionRawView.Field field : raw.fields()) {
+            if (!matchesRawFilter(filter, field.name(), field.opcode(),
+                    field.type().name(), field.value())) {
+                continue;
+            }
+            visibleFields++;
+            String opcode = field.opcode().isBlank() ? "-" : field.opcode();
+            ImGui.text(formatRawRow(opcode, field.name(),
+                    field.type().name().toLowerCase(java.util.Locale.ROOT),
+                    compactRawValue(field.value())));
+        }
+
+        ImGui.separator();
+        ImGui.textDisabled("Opcode 249 parameters (" + raw.params().size() + ")");
+        int visibleParams = 0;
+        for (ObjectDefinitionRawView.Param param : raw.params()) {
+            String paramId = Integer.toString(param.id());
+            if (!matchesRawFilter(filter, "param", "249", paramId,
+                    param.type().name(), param.value())) {
+                continue;
+            }
+            visibleParams++;
+            ImGui.text(formatRawRow(
+                    "249",
+                    "param[" + param.id() + "]",
+                    param.type().name().toLowerCase(java.util.Locale.ROOT),
+                    compactRawValue(param.value())));
+        }
+
+        if (visibleFields == 0 && visibleParams == 0) {
+            ImGui.textDisabled("No raw fields match the current filter.");
+        } else if (raw.params().isEmpty() && filter.isEmpty()) {
+            ImGui.textDisabled("No opcode 249 parameters.");
+        }
+        ImGui.popFont();
+    }
+
+    private static boolean matchesRawFilter(String filter, String... values) {
+        if (filter == null || filter.isBlank()) return true;
+        for (String value : values) {
+            if (value != null
+                    && value.toLowerCase(java.util.Locale.ROOT).contains(filter)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String formatRawRow(String opcode, String field,
+                                       String type, String value) {
+        return String.format(java.util.Locale.ROOT, "%-12s %-24s %-10s %s",
+                opcode, field, type, value);
+    }
+
+    private static String compactRawValue(String value) {
+        if (value == null) return "null";
+        String normalized = value.replace('\n', ' ').replace('\r', ' ');
+        return normalized.length() <= 180
+                ? normalized
+                : normalized.substring(0, 177) + "...";
     }
 }
