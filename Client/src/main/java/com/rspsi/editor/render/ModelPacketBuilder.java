@@ -5,6 +5,8 @@ import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.AnimationFrameView;
+import com.rspsi.cache.definition.CachedSkeletalAnimationView;
+import com.rspsi.cache.definition.ModelSkeletalSkinView;
 import com.rspsi.cache.definition.SkeletonDefinitionView;
 import com.rspsi.cache.definition.SequenceDefinitionView;
 import com.rspsi.editor.model.TileCoordinate;
@@ -125,7 +127,7 @@ public final class ModelPacketBuilder {
         ObjectDefinitionView objectDefinition = resolveDisplayDefinition(placementDefinition);
         ObjectAppearanceView appearance = definitions.objectAppearance(object.id())
                 .orElseGet(ObjectAppearanceView::empty);
-        Optional<AnimationFrameView> animation = animationFrame(appearance.animationId(), clientCycle);
+        ResolvedAnimation animation = resolveAnimation(appearance.animationId(), clientCycle);
         int decorDisplacement = wallDecorationDisplacement(object, appearance, document);
         // Scene occupancy belongs to the placed/base loc definition. A multiloc may
         // resolve to another definition for its visible model, but the client creates
@@ -134,7 +136,8 @@ public final class ModelPacketBuilder {
                 ? placementDefinition.width() : placementDefinition.length();
         int footprintLength = object.rotation() % 2 == 0
                 ? placementDefinition.length() : placementDefinition.width();
-        return new ResolvedModelBuild(objectDefinition, appearance, animation,
+        return new ResolvedModelBuild(objectDefinition, appearance, animation.frame(),
+                animation.cachedSkeletal(), animation.skeleton(), animation.state(),
                 decorDisplacement, footprintWidth, footprintLength);
     }
 
@@ -160,14 +163,26 @@ public final class ModelPacketBuilder {
             for (int modelId : modelIdsFor(resolved.objectDefinition(), variant.sourceType())) {
                 Optional<ModelGeometryView> geometry = definitions.modelGeometry(modelId);
                 if (geometry.isEmpty()) continue;
-                ModelGeometryView animatedGeometry = geometry.orElseThrow();
-                if (resolved.animation().isPresent()) {
-                    AnimationFrameView frame = resolved.animation().orElseThrow();
-                    Optional<SkeletonDefinitionView> skeleton = definitions.skeleton(frame.skeletonId());
-                    if (skeleton.isPresent()) {
-                        animatedGeometry = ModelAnimation.apply(animatedGeometry, frame, skeleton.orElseThrow());
+                ModelGeometryView baseGeometry = geometry.orElseThrow();
+                ModelGeometryView animatedGeometry = baseGeometry;
+                if (resolved.cachedSkeletal().isPresent()
+                        && resolved.animationSkeleton().isPresent()) {
+                    Optional<ModelSkeletalSkinView> skin =
+                            definitions.modelSkeletalSkin(modelId);
+                    if (skin.isPresent()) {
+                        animatedGeometry = CachedSkeletalModelAnimation.apply(
+                                baseGeometry, skin.orElseThrow(),
+                                resolved.animationSkeleton().orElseThrow(),
+                                resolved.cachedSkeletal().orElseThrow(),
+                                resolved.animationState().frameIndex());
                     }
+                } else if (resolved.animation().isPresent()
+                        && resolved.animationSkeleton().isPresent()) {
+                    animatedGeometry = ModelAnimation.apply(baseGeometry,
+                            resolved.animation().orElseThrow(),
+                            resolved.animationSkeleton().orElseThrow());
                 }
+                parts.animationTransformed |= animatedGeometry != baseGeometry;
                 int variantStart = parts.vertices.size();
                 append(parts, object, resolved.appearance(), animatedGeometry, document,
                         variant, resolved.footprintWidth(), resolved.footprintLength());
@@ -212,12 +227,14 @@ public final class ModelPacketBuilder {
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
                 resolved.appearance().animationId(), bounds[0], bounds[1], bounds[2],
-                bounds[3], bounds[4], bounds[5], resolved.animation().isPresent(), false,
+                bounds[3], bounds[4], bounds[5], resolved.animationState().active(), false,
                 placementHeight,
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
                 GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata,
                 clientRenderableBounds, parts.clientRenderablePlacements,
-                contourContract, sceneObjectIdentity);
+                contourContract,
+                resolved.animationState().withTransformed(parts.animationTransformed),
+                sceneObjectIdentity);
         return Optional.of(resolved.appearance().mergeNormals()
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }
@@ -225,26 +242,63 @@ public final class ModelPacketBuilder {
     private record ResolvedModelBuild(ObjectDefinitionView objectDefinition,
                                       ObjectAppearanceView appearance,
                                       Optional<AnimationFrameView> animation,
+                                      Optional<CachedSkeletalAnimationView> cachedSkeletal,
+                                      Optional<SkeletonDefinitionView> animationSkeleton,
+                                      ModelAnimationState animationState,
                                       int decorDisplacement,
                                       int footprintWidth,
                                       int footprintLength) {
     }
 
-    private Optional<AnimationFrameView> animationFrame(int animationId, int clientCycle) {
-        if (animationId < 0) return Optional.empty();
-        Optional<SequenceDefinitionView> sequence = definitions.sequence(animationId);
-        if (sequence.isEmpty() || sequence.orElseThrow().frameIds().length == 0) return Optional.empty();
-        SequenceDefinitionView value = sequence.orElseThrow();
-        int[] frameIds = value.frameIds();
-        int[] lengths = value.frameLengths();
-        int selectedIndex = animationFrameIndex(frameIds.length, lengths, value.frameStep(), clientCycle);
-        Optional<AnimationFrameView> frame = definitions.animationFrame(frameIds[selectedIndex]);
-        if (frame.isPresent()) return frame;
-        for (int frameId : frameIds) {
-            Optional<AnimationFrameView> fallback = definitions.animationFrame(frameId);
-            if (fallback.isPresent()) return fallback;
+    private record ResolvedAnimation(Optional<AnimationFrameView> frame,
+                                     Optional<CachedSkeletalAnimationView> cachedSkeletal,
+                                     Optional<SkeletonDefinitionView> skeleton,
+                                     ModelAnimationState state) {
+    }
+
+    private ResolvedAnimation resolveAnimation(int animationId, int clientCycle) {
+        if (animationId < 0) {
+            return new ResolvedAnimation(Optional.empty(), Optional.empty(), Optional.empty(),
+                    ModelAnimationState.none());
         }
-        return Optional.empty();
+        Optional<SequenceDefinitionView> sequence = definitions.sequence(animationId);
+        if (sequence.isEmpty()) {
+            return new ResolvedAnimation(Optional.empty(), Optional.empty(), Optional.empty(),
+                    ModelAnimationState.unresolved(animationId, clientCycle));
+        }
+
+        SequenceDefinitionView value = sequence.orElseThrow();
+        if (value.cachedSkeletal() && value.cachedFrameCount() > 0) {
+            int selectedIndex = com.rspsi.osrs.rules.model.AnimationResolver.cachedFrameIndex(
+                    value.cachedFrameCount(), value.frameStep(), clientCycle);
+            Optional<CachedSkeletalAnimationView> cached =
+                    definitions.cachedSkeletalAnimation(value.skeletalId());
+            Optional<SkeletonDefinitionView> skeleton = cached.isPresent()
+                    ? definitions.skeleton(cached.orElseThrow().skeletonId())
+                    : Optional.empty();
+            return new ResolvedAnimation(Optional.empty(), cached, skeleton,
+                    ModelAnimationState.selected(animationId, selectedIndex,
+                            value.skeletalId(), clientCycle,
+                            value.animationHeightOffset(), false));
+        }
+
+        int[] frameIds = value.frameIds();
+        if (frameIds.length == 0) {
+            return new ResolvedAnimation(Optional.empty(), Optional.empty(), Optional.empty(),
+                    ModelAnimationState.unresolved(animationId, clientCycle,
+                            value.animationHeightOffset()));
+        }
+
+        int selectedIndex = animationFrameIndex(
+                frameIds.length, value.frameLengths(), value.frameStep(), clientCycle);
+        int selectedFrameId = frameIds[selectedIndex];
+        Optional<AnimationFrameView> frame = definitions.animationFrame(selectedFrameId);
+        Optional<SkeletonDefinitionView> skeleton = frame.isPresent()
+                ? definitions.skeleton(frame.orElseThrow().skeletonId())
+                : Optional.empty();
+        return new ResolvedAnimation(frame, Optional.empty(), skeleton,
+                ModelAnimationState.selected(animationId, selectedIndex, selectedFrameId,
+                        clientCycle, value.animationHeightOffset(), false));
     }
 
     /**
@@ -651,7 +705,7 @@ public final class ModelPacketBuilder {
                 packet.placementHeight(), packet.roofRelated(), packet.renderMode(),
                 packet.wallDecorationPresentation(), packet.gameObjectSceneMetadata(),
                 packet.clientRenderableBounds(), packet.clientRenderablePlacements(),
-                packet.contourContract(), packet.sceneObjectIdentity());
+                packet.contourContract(), packet.animationState(), packet.sceneObjectIdentity());
     }
 
     /**
@@ -1489,6 +1543,7 @@ public final class ModelPacketBuilder {
         private final List<ClientRenderablePlacement> clientRenderablePlacements = new ArrayList<>();
         private final List<Integer> unskewedVertexY = new ArrayList<>();
         private boolean contourApplied;
+        private boolean animationTransformed;
         private final List<ModelTriangle> triangles = new ArrayList<>();
         private final List<TextureTriangle> textureTriangles = new ArrayList<>();
         private final List<VertexRange> wallVariantRanges = new ArrayList<>();
