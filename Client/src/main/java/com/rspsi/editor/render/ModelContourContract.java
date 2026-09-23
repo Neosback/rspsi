@@ -32,6 +32,28 @@ public record ModelContourContract(
         UNKNOWN_FULL
     }
 
+    public record Metadata(
+            boolean present,
+            int type,
+            int parameter,
+            Mode mode,
+            int placementHeight,
+            boolean applied,
+            boolean hasUnskewedModel,
+            int vertexCount
+    ) {
+        public Metadata {
+            mode = Objects.requireNonNull(mode, "mode");
+            if (vertexCount < 0) {
+                throw new IllegalArgumentException("Contour vertex count cannot be negative");
+            }
+        }
+
+        public static Metadata none() {
+            return new Metadata(false, -1, 0, Mode.NONE, 0, false, false, 0);
+        }
+    }
+
     private static final ModelContourContract NONE =
             new ModelContourContract(false, -1, 0, Mode.NONE, 0, false, List.of());
 
@@ -77,6 +99,13 @@ public record ModelContourContract(
         if (type == 4) return Mode.ABOVE_PLANE_OFFSET;
         if (type == 5) return Mode.ABOVE_PLANE_BLEND;
         return Mode.UNKNOWN_FULL;
+    }
+
+    public Metadata metadata() {
+        return present
+                ? new Metadata(true, type, parameter, mode, placementHeight,
+                        applied, hasUnskewedModel(), unskewedVertexY.size())
+                : Metadata.none();
     }
 
     public boolean hasUnskewedModel() {
