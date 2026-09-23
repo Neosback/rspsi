@@ -117,6 +117,36 @@ public final class RenderSceneBuilder {
     }
 
     /**
+     * Rebuilds only derived model animation geometry for a new client cycle.
+     * Terrain, collision, authored objects, and texture resources remain unchanged.
+     */
+    public RenderScene refreshAnimations(RenderScene previous, int clientCycle) {
+        Objects.requireNonNull(previous, "previous");
+        if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
+        if (definitions == null) return previous;
+
+        List<ModelRenderPacket> modelPackets =
+                new ModelPacketBuilder(definitions, lightingProfile)
+                        .build(previous.document(), clientCycle);
+        if (modelPackets.equals(previous.modelPackets())) return previous;
+
+        return new RenderScene(
+                previous.document(),
+                previous.terrainMeshes(),
+                previous.terrainMaterials(),
+                previous.terrainAppearances(),
+                previous.terrainLighting(),
+                previous.terrainPackets(),
+                previous.lightingProfile(),
+                previous.collision(),
+                previous.objects(),
+                previous.renderObjects(),
+                modelPackets,
+                previous.bridges(),
+                previous.textures());
+    }
+
+    /**
      * Rebuilds only the requested terrain tiles while refreshing the object
      * list from the document. Callers can include neighbouring tiles when a
      * floor blend or shared edge makes them part of the affected region.
