@@ -534,6 +534,38 @@ class GpuUploadPlanBuilderTest {
     }
 
     @Test
+    void animationHeightOffsetMovesNativeGeometryAndPickingPlacementTogether() {
+        WorldTileAddress address = WorldTileAddress.of(3200, 3200, 0);
+        TileCoordinate coordinate = new TileCoordinate(0, 3200, 3200);
+        ModelRenderPacket model = new ModelRenderPacket(
+                coordinate, 8, ObjectCategory.GROUND,
+                List.of(new ModelVertex(0, 5, 0, 1, 0, 0, 1, 0, 0),
+                        new ModelVertex(64, 5, 0, 1, 0, 0, 1, 1, 0),
+                        new ModelVertex(0, 5, 64, 1, 0, 0, 1, 0, 1)),
+                List.of(new ModelTriangle(0, 1, 2, 100, 100, 100, -1, 0, 0, 0)),
+                List.of(), 77,
+                0, 5, 0, 64, 5, 64, true, false, 100, false)
+                .withAnimationState(ModelAnimationState.selected(
+                        77, 0, 100, 0, 12, true));
+        SceneTileSnapshot tile = new SceneTileSnapshot(
+                coordinate, address, 0, 0, Optional.empty(), Optional.empty(),
+                List.of(model),
+                List.of(new SceneLayer(SceneLayer.Kind.GROUND_OBJECT, List.of(0))),
+                List.of(), false, false);
+        GpuScenePacket packet = new GpuScenePacket(
+                new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(
+                        50, 50, 1, 1, Map.of()), 3200, 3200, 1, 0,
+                        java.util.Set.of(), List.of()),
+                List.of(tile), LightingProfile.osrs(), "animation-height-offset", Map.of());
+
+        GpuUploadPlan plan = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(93.0f, plan.vertices().get(0).y(), 0.0001f);
+        assertEquals(88, plan.commands().get(0).placementHeight(),
+                "client animation-height offset must also move the bounds/picking origin");
+    }
+
+    @Test
     void textureAndGeometryChangesProduceDifferentUploadFingerprints() {
         GpuScenePacket empty = new GpuScenePacket(
                 new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1,
