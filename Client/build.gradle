@@ -91,6 +91,7 @@ def cacheBackendCompatibilityFiles = [
         'com/rspsi/cache/store/OpenRuneCacheStore.java',
         'com/rspsi/cache/store/OpenRuneTextureDefinitionDecoder.java',
         'com/rspsi/cache/store/OpenRuneDefinitionProvider.java',
+        'com/rspsi/cache/store/OpenRuneObjectDefinitionEditTransaction.java',
         'com/rspsi/cache/store/OpenRuneCacheInspector.java',
         'com/rspsi/cache/store/OpenRuneSymbolicNameProvider.java',
         'org/displee/util/GZIPUtils.java'
