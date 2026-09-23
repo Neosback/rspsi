@@ -1,5 +1,7 @@
 package com.rspsi.editor.render;
 
+import com.rspsi.editor.model.WorldTileAddress;
+
 import java.util.Objects;
 import java.util.Optional;
 
@@ -59,6 +61,24 @@ public final class ExtendedSceneZoneTraversal {
     }
 
     /**
+     * Allocation-free command/tile form used by the hot per-frame renderer.
+     */
+    public boolean includes(WorldTileAddress tile) {
+        Objects.requireNonNull(tile, "tile");
+        if (!applies()) {
+            return true;
+        }
+        if (tile.plane() < 0 || tile.plane() >= window.planes()) {
+            return false;
+        }
+        int extendedX = (tile.worldX() >> 3) - (window.sceneBaseX() >> 3)
+                + layout.sceneZoneOffset();
+        int extendedY = (tile.worldY() >> 3) - (window.sceneBaseY() >> 3)
+                + layout.sceneZoneOffset();
+        return layout.containsExtendedZone(extendedX, extendedY);
+    }
+
+    /**
      * Captures the camera's current extended-zone location while preserving the
      * camera-independent resident-zone gate.
      */
@@ -100,7 +120,7 @@ public final class ExtendedSceneZoneTraversal {
 
         public boolean includes(GpuDrawCommand command) {
             Objects.requireNonNull(command, "command");
-            return includes(WorldZoneCoordinate.from(command.tile()));
+            return traversal.includes(command.tile());
         }
 
         public boolean cameraInExtendedScene() {
