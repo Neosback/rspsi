@@ -4,6 +4,11 @@ _Started fresh 2026-09-21. The previous 43-file `docs/` audit trail was retired 
 single document is the new source of truth for direction. It is meant to be edited in
 place as work lands, not archived-and-replaced like the old one._
 
+> **OpenRune integration reference:** see [OPENRUNE_ECOSYSTEM_INTEGRATION.md](OPENRUNE_ECOSYSTEM_INTEGRATION.md)
+> before designing cache-definition editing, project/source integration, symbolic references,
+> incremental packing, or OpenRune Server content bindings. It records the broader ecosystem
+> capabilities and the current Studio integration guardrails.
+
 ## How to read this
 
 Every claim below is grounded in something checked against the actual repository or a

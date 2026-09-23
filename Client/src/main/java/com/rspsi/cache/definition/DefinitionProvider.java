@@ -15,6 +15,15 @@ public interface DefinitionProvider {
         return Optional.empty();
     }
 
+    /**
+     * Starts an isolated in-memory edit transaction when the backend supports
+     * writable object-definition semantics. The transaction itself never
+     * persists to the source cache.
+     */
+    default Optional<ObjectDefinitionEditTransaction> editObject(int id) {
+        return Optional.empty();
+    }
+
     /** Looks up the zero-based cache definition ID for a non-empty underlay. */
     Optional<FloorDefinitionView> underlay(int id);
 

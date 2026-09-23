@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
+import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
 import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ModelDefinitionView;
@@ -182,6 +183,15 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     public Optional<ObjectDefinitionRawView> objectRaw(int id) {
         ObjectType definition = objects.get(id);
         return definition == null ? Optional.empty() : Optional.of(toRawView(definition));
+    }
+
+    @Override
+    public Optional<ObjectDefinitionEditTransaction> editObject(int id) {
+        ObjectType definition = objects.get(id);
+        return definition == null
+                ? Optional.empty()
+                : Optional.of(new OpenRuneObjectDefinitionEditTransaction(
+                        definition, revision));
     }
 
     static ObjectDefinitionView toView(ObjectType definition) {
