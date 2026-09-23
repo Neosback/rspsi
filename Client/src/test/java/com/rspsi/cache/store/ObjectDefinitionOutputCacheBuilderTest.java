@@ -185,13 +185,19 @@ class ObjectDefinitionOutputCacheBuilderTest {
             }
 
             ObjectType object = objectType(name);
+            byte[] payload = encode(object);
             library.put(
                     com.rspsi.cache.OsrsCacheIndexLayout.CONFIGS,
                     OBJECT,
                     OBJECT_ID,
-                    encode(object));
+                    payload);
             library.update();
-            return object;
+
+            // Production edit transactions always originate from decoded cache
+            // definitions. Decode the seeded payload too so OpenRune's default
+            // normalization cannot make the fixture look like a different
+            // source definition.
+            return new ObjectCodec(REVISION).loadData(OBJECT_ID, payload);
         } finally {
             library.close();
         }
