@@ -15,6 +15,7 @@ import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.osrs.rules.loc.WallRules;
+import com.rspsi.osrs.rules.loc.LocModelSelection;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -219,7 +220,7 @@ public final class ModelPacketBuilder {
         PacketParts parts = new PacketParts();
         for (WallRules.LocModelVariant variant : variants) {
             int renderableBoundsStart = parts.clientBoundsVertices.size();
-            for (int modelId : modelIdsFor(resolved.objectDefinition(), variant.sourceType())) {
+            for (int modelId : LocModelSelection.select(resolved.objectDefinition(), variant.sourceType())) {
                 Optional<ModelGeometryView> geometry = definitions.modelGeometry(modelId);
                 if (geometry.isEmpty()) continue;
                 ModelGeometryView baseGeometry = geometry.orElseThrow();
@@ -378,22 +379,6 @@ public final class ModelPacketBuilder {
         long total = 0;
         for (int index = from; index < from + count; index++) total += values[index];
         return total;
-    }
-
-    private static List<Integer> modelIdsFor(ObjectDefinitionView definition, int sourceType) {
-        int[] ids = definition.modelIds();
-        int[] types = definition.modelTypes();
-        List<Integer> selected = new ArrayList<>();
-        if (types.length == 0) {
-            if (sourceType == 10) {
-                for (int id : ids) selected.add(id);
-            }
-            return selected;
-        }
-        for (int index = 0; index < Math.min(ids.length, types.length); index++) {
-            if (types[index] == sourceType) selected.add(ids[index]);
-        }
-        return selected;
     }
 
     /**
