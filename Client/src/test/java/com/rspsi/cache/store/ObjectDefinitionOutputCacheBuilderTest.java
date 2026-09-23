@@ -15,7 +15,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 
 import static dev.openrune.cache.ConfigTypeKt.OBJECT;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -204,9 +203,10 @@ class ObjectDefinitionOutputCacheBuilderTest {
         builder.setSizeX(1);
         builder.setSizeY(1);
         builder.setAnimationId(-1);
-        builder.setParams(new java.util.TreeMap<>(Map.of(
-                100, "original",
-                101, 7)));
+        java.util.TreeMap<Integer, Object> params = new java.util.TreeMap<>();
+        params.put(100, "original");
+        params.put(101, 7);
+        builder.setParams(params);
         return builder.build();
     }
 
