@@ -5,6 +5,7 @@ import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.editor.model.InstanceChunkTemplate;
 import com.rspsi.editor.model.OsrsTileFlags;
+import com.rspsi.editor.model.TerrainHeightSource;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
@@ -24,9 +25,27 @@ class InstanceSceneMaterializerTest {
     @Test
     void rotatesTileCoordinatesCornersAndOverlayOrientationForAllFourChunkRotations() {
         WorldDocument sourceDocument = new WorldDocument(64, 64, 3);
-        sourceDocument.tile(1, 9, 18).restore(new TileSnapshot(
-                10, 20, 30, 40,
-                1, 2, 5, 1, 7, List.of()));
+        int[][] cornerHeights = new int[9][9];
+        cornerHeights[1][2] = 10;
+        cornerHeights[2][2] = 20;
+        cornerHeights[2][3] = 30;
+        cornerHeights[1][3] = 40;
+        for (int x = 0; x < 8; x++) {
+            for (int y = 0; y < 8; y++) {
+                boolean marked = x == 1 && y == 2;
+                sourceDocument.tile(1, 8 + x, 16 + y).restore(new TileSnapshot(
+                        cornerHeights[x][y],
+                        cornerHeights[x + 1][y],
+                        cornerHeights[x + 1][y + 1],
+                        cornerHeights[x][y + 1],
+                        marked ? 1 : 0,
+                        marked ? 2 : 0,
+                        marked ? 5 : 0,
+                        marked ? 1 : 0,
+                        marked ? 7 : 0,
+                        List.of()));
+            }
+        }
         WorldRegion sourceRegion = new WorldRegion(0, 0, sourceDocument);
         WorldRegionWindow source = new WorldRegionWindow(
                 0, 0, 1, 1, Map.of(sourceRegion.regionId(), sourceRegion));
@@ -66,6 +85,69 @@ class InstanceSceneMaterializerTest {
             assertEquals((1 + rotation) & 3, tile.overlayRotation());
             assertEquals(7, tile.flags());
         }
+    }
+
+    @Test
+    void cacheEncodedHeightsReplayAgainstTheTargetPlaneLikeLoadTerrain() {
+        WorldDocument sourceDocument = new WorldDocument(64, 64, 2);
+        for (int plane = 0; plane < 2; plane++) {
+            int explicit = plane == 0 ? 10 : 5;
+            for (int x = 0; x < 8; x++) {
+                for (int y = 0; y < 8; y++) {
+                    sourceDocument.tile(plane, x, y).restore(new TileSnapshot(
+                            999, 999, 999, 999,
+                            0, 0, 0, 0, 0, List.of(),
+                            TerrainHeightSource.explicitSource(explicit)));
+                }
+            }
+        }
+        WorldRegion sourceRegion = new WorldRegion(0, 0, sourceDocument);
+        WorldRegionWindow source = new WorldRegionWindow(
+                0, 0, 1, 1, Map.of(sourceRegion.regionId(), sourceRegion));
+        SceneWindow window = new SceneWindow(
+                source, 3200, 3200, 2, 0, 0, -1,
+                Set.of(sourceRegion.regionId()),
+                List.of(
+                        new InstanceChunkTemplate(0, 0, 0, 0, 0, 0, 0),
+                        new InstanceChunkTemplate(1, 0, 0, 1, 0, 0, 0)));
+
+        WorldDocument materialized =
+                new InstanceSceneMaterializer(definitions()).materialize(window);
+
+        TileSnapshot lower = materialized.tile(0, 2, 2).snapshot();
+        TileSnapshot upper = materialized.tile(1, 2, 2).snapshot();
+        assertEquals(-80, lower.southWestHeight());
+        assertEquals(-80, lower.northEastHeight());
+        assertEquals(-120, upper.southWestHeight(),
+                "plane-one explicit height must be applied as a delta from target plane zero");
+        assertEquals(-120, upper.northEastHeight());
+    }
+
+    @Test
+    void absentChunkCopiesClientStyleBoundaryHeightsInsteadOfMakingAHardSeam() {
+        WorldDocument sourceDocument = new WorldDocument(64, 64, 1);
+        for (int x = 0; x < 8; x++) {
+            for (int y = 0; y < 8; y++) {
+                sourceDocument.tile(0, x, y).restore(new TileSnapshot(
+                        88, 88, 88, 88,
+                        0, 0, 0, 0, 0, List.of()));
+            }
+        }
+        WorldRegion sourceRegion = new WorldRegion(0, 0, sourceDocument);
+        WorldRegionWindow source = new WorldRegionWindow(
+                0, 0, 1, 1, Map.of(sourceRegion.regionId(), sourceRegion));
+        SceneWindow window = new SceneWindow(
+                source, 3200, 3200, 1, 0, 0, -1,
+                Set.of(sourceRegion.regionId()),
+                List.of(new InstanceChunkTemplate(
+                        0, 0, 0, 0, 0, 0, 0)));
+
+        WorldDocument materialized =
+                new InstanceSceneMaterializer(definitions()).materialize(window);
+
+        assertEquals(88, materialized.tile(0, 7, 2).snapshot().southWestHeight());
+        assertEquals(88, materialized.tile(0, 8, 2).snapshot().southWestHeight(),
+                "missing chunk west edge must inherit the populated neighbour boundary");
     }
 
     @Test
