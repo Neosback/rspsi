@@ -3,6 +3,7 @@ package com.rspsi.editor.render;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Immutable, API-neutral CPU upload plan. Native renderers turn this into
@@ -21,7 +22,8 @@ public record GpuUploadPlan(
         List<GpuTextureTriangle> textureTriangles,
         Map<Integer, RenderTextureResource> textures,
         List<SceneOccluder> occluders,
-        String fingerprint
+        String fingerprint,
+        Optional<SceneWindow> sceneWindow
 ) implements GpuCommandGeometry {
     @Override
     public int commandCount() {
@@ -98,17 +100,39 @@ public record GpuUploadPlan(
                               List<GpuTextureTriangle> textureTriangles,
                               Map<Integer, RenderTextureResource> textures,
                               List<SceneOccluder> occluders,
-                              String fingerprint) {
+                              String fingerprint,
+                              SceneWindow sceneWindow) {
         Objects.requireNonNull(geometry, "geometry");
         return new GpuUploadPlan(geometry.verticesView(), geometry.indicesView(), commands,
-                textureTriangles, textures, occluders, fingerprint);
+                textureTriangles, textures, occluders, fingerprint,
+                Optional.ofNullable(sceneWindow));
+    }
+
+    /** Compatibility overload before scene-window traversal metadata was retained. */
+    static GpuUploadPlan lazy(LazyGpuFlatGeometry geometry,
+                              List<GpuDrawCommand> commands,
+                              List<GpuTextureTriangle> textureTriangles,
+                              Map<Integer, RenderTextureResource> textures,
+                              List<SceneOccluder> occluders,
+                              String fingerprint) {
+        return lazy(geometry, commands, textureTriangles, textures, occluders, fingerprint, null);
+    }
+
+    /** Compatibility constructor before scene-window traversal metadata was retained. */
+    public GpuUploadPlan(List<GpuSceneVertex> vertices, List<Integer> indices,
+                         List<GpuDrawCommand> commands, List<GpuTextureTriangle> textureTriangles,
+                         Map<Integer, RenderTextureResource> textures,
+                         List<SceneOccluder> occluders, String fingerprint) {
+        this(vertices, indices, commands, textureTriangles, textures, occluders, fingerprint,
+                Optional.empty());
     }
 
     /** Compatibility constructor for callers that do not carry occluder inputs. */
     public GpuUploadPlan(List<GpuSceneVertex> vertices, List<Integer> indices,
                          List<GpuDrawCommand> commands, List<GpuTextureTriangle> textureTriangles,
                          Map<Integer, RenderTextureResource> textures, String fingerprint) {
-        this(vertices, indices, commands, textureTriangles, textures, List.of(), fingerprint);
+        this(vertices, indices, commands, textureTriangles, textures, List.of(), fingerprint,
+                Optional.empty());
     }
 
     public GpuUploadPlan {
@@ -119,6 +143,7 @@ public record GpuUploadPlan(
         textures = Map.copyOf(Objects.requireNonNull(textures, "textures"));
         occluders = List.copyOf(Objects.requireNonNull(occluders, "occluders"));
         fingerprint = Objects.requireNonNull(fingerprint, "fingerprint").trim();
+        sceneWindow = Objects.requireNonNull(sceneWindow, "sceneWindow");
         if (fingerprint.isEmpty()) throw new IllegalArgumentException("GPU upload fingerprint cannot be empty");
 
         LazyGpuFlatGeometry vertexOwner = LazyGpuFlatGeometry.ownerOf(vertices);
