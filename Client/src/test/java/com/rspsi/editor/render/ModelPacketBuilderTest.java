@@ -1221,4 +1221,61 @@ class ModelPacketBuilderTest {
         assertTrue(face.flatShaded());
     }
 
+
+    @Test
+    void texturedFlatFaceKeepsClientZeroSecondSlotAndFlatSentinel() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 0, 0))));
+        ModelGeometryView geometry = new ModelGeometryView(
+                7,
+                new int[]{0, 0, 0, 128, 0, 0, 0, 0, 128},
+                new int[]{0, 1, 2},
+                new short[]{100},
+                new int[]{0},
+                new int[]{5},
+                new int[]{1},
+                new int[0],
+                new int[0],
+                new int[0],
+                null, null);
+
+        ModelTriangle face = new ModelPacketBuilder(
+                definitions(ObjectAppearanceView.empty(), geometry))
+                .build(document).get(0).triangles().get(0);
+
+        assertEquals(0, face.colorB());
+        assertEquals(ModelFaceColorContract.FLAT_SENTINEL, face.colorC());
+        assertTrue(face.flatShaded());
+    }
+
+    @Test
+    void texturedRenderTypeThreeUsesSkipSentinelAndNeverSubmits() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 0, 0))));
+        ModelGeometryView geometry = new ModelGeometryView(
+                7,
+                new int[]{0, 0, 0, 128, 0, 0, 0, 0, 128},
+                new int[]{0, 1, 2},
+                new short[]{100},
+                new int[]{0},
+                new int[]{5},
+                new int[]{3},
+                new int[0],
+                new int[0],
+                new int[0],
+                null, null);
+
+        ModelRenderPacket packet = new ModelPacketBuilder(
+                definitions(ObjectAppearanceView.empty(), geometry))
+                .build(document).get(0);
+        ModelTriangle face = packet.triangles().get(0);
+
+        assertEquals(ModelFaceColorContract.SKIP_SENTINEL, face.colorC());
+        assertTrue(face.skippedByColorContract());
+        assertTrue(packet.opaqueTriangleIndices().isEmpty());
+        assertTrue(packet.transparentTriangleIndices().isEmpty());
+    }
+
 }
