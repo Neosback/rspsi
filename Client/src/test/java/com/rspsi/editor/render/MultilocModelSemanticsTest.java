@@ -103,12 +103,15 @@ class MultilocModelSemanticsTest {
     }
 
     @Test
-    void neutralRenderObjectUsesDisplayModelsAndAppearanceButPlacedFootprint() {
+    void neutralRenderObjectUsesDisplayModelsButPreservesPlacedAppearanceContract() {
         WorldDocument document = new WorldDocument(4, 4, 1);
         WorldObject placed = new WorldObject(1000, 10, 0, 0, 1, 1);
         document.tile(0, 1, 1).restore(new TileSnapshot(
                 0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(placed)));
 
+        ObjectAppearanceView placedAppearance = new ObjectAppearanceView(
+                77, false, 128, 128, 128,
+                0, 0, 0, Map.of(), Map.of());
         ObjectAppearanceView displayAppearance = new ObjectAppearanceView(
                 -1, false, 192, 128, 128,
                 4, 0, 0, Map.of(), Map.of());
@@ -132,7 +135,11 @@ class MultilocModelSemanticsTest {
 
             @Override
             public Optional<ObjectAppearanceView> objectAppearance(int id) {
-                return id == 2000 ? Optional.of(displayAppearance) : Optional.empty();
+                return switch (id) {
+                    case 1000 -> Optional.of(placedAppearance);
+                    case 2000 -> Optional.of(displayAppearance);
+                    default -> Optional.empty();
+                };
             }
 
             @Override
@@ -153,6 +160,6 @@ class MultilocModelSemanticsTest {
         assertEquals(3, object.footprintLength());
         assertEquals(List.of(7),
                 java.util.Arrays.stream(object.modelIds()).boxed().toList());
-        assertEquals(displayAppearance, object.appearance());
+        assertEquals(placedAppearance, object.appearance());
     }
 }
