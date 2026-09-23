@@ -67,9 +67,17 @@ A separate external `locations.json` fixture can additionally prove the decoded 
 
 ## Execution
 
-Acquire/prepare revision 240 through the pinned OpenRune FileStore tools
-(`FreshCache` / `OpenRS2`) and point the existing verifier at the prepared
-cache directory:
+Studio now exposes an opt-in convenience task that delegates acquisition to
+OpenRune FileStore `FreshCache`. It is not part of `foundationGate` because it
+performs network/cache acquisition.
+
+Prepare revision 240:
+
+    RSPSI_OSRS_CACHE=/absolute/path/to/prepared/openrune/cache \
+    RSPSI_OSRS_REVISION=240 \
+    ./gradlew prepareOsrsReferenceCache
+
+Then run the verifier against the prepared cache:
 
     RSPSI_OSRS_CACHE=/absolute/path/to/prepared/openrune/cache \
     RSPSI_OSRS_REGION_X=50 \
@@ -77,9 +85,11 @@ cache directory:
     RSPSI_OSRS_REVISION=240 \
     ./gradlew verifyOsrsRevision
 
-A small RSPSi cache-acquisition adapter or Gradle convenience task may wrap
-`FreshCache` later if a real CI/developer workflow consumes it. Do not build a
-second downloader merely for this fixture.
+`RSPSI_OSRS_SUBREVISION` may be supplied to `prepareOsrsReferenceCache` when
+an explicit FileStore/OpenRS2 sub-revision candidate is required.
+
+The bootstrap class lives inside the OpenRune cache-adapter boundary and calls
+FileStore directly; Studio does not implement its own OpenRS2 HTTP client.
 
 The verifier must report the `object.resolution` check.
 
