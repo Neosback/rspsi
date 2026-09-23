@@ -1,5 +1,9 @@
 # OpenRune Ecosystem Integration Notes
 
+> **Scope:** this is a subsystem integration reference, not the project execution order.
+> `docs/ROADMAP.md` decides what is worked on next. Phase labels in this document describe
+> OpenRune integration dependencies only.
+
 This document records the OpenRune capabilities that are relevant to RSPSi / OpenRune Studio so implementation work does not repeatedly rediscover the same backend features or build competing abstractions.
 
 ## Architectural direction
