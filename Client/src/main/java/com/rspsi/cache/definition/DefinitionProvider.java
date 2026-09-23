@@ -64,6 +64,16 @@ public interface DefinitionProvider {
         return Optional.empty();
     }
 
+    /** Optional decoded current-client cached-model skeletal animation. */
+    default Optional<CachedSkeletalAnimationView> cachedSkeletalAnimation(int id) {
+        return Optional.empty();
+    }
+
+    /** Optional per-vertex cached-model bone indices and influence weights. */
+    default Optional<ModelSkeletalSkinView> modelSkeletalSkin(int modelId) {
+        return Optional.empty();
+    }
+
     /** Available sequence IDs when the backend exposes a sequence index. */
     default List<Integer> sequenceIds() {
         return List.of();
