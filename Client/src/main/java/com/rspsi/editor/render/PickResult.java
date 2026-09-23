@@ -17,6 +17,7 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
                          SceneLayer.Kind layer, int priority, int depthBias, int textureId,
                          GameObjectSceneMetadata gameObjectSceneMetadata,
                          List<ClientModelBounds> clientRenderableBounds,
+                         ModelContourContract.Metadata contourMetadata,
                          SceneObjectIdentity sceneObjectIdentity) {
     /** Compatibility constructor for tile-only legacy viewport picking. */
     public PickResult(WorldTile tile, int plane) {
@@ -58,7 +59,19 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
                       GameObjectSceneMetadata gameObjectSceneMetadata,
                       List<ClientModelBounds> clientRenderableBounds) {
         this(tile, objectTile, plane, objectId, distance, layer, priority, depthBias, textureId,
-                gameObjectSceneMetadata, clientRenderableBounds, SceneObjectIdentity.none());
+                gameObjectSceneMetadata, clientRenderableBounds,
+                ModelContourContract.Metadata.none(), SceneObjectIdentity.none());
+    }
+
+    /** Compatibility constructor from before contour metadata was carried. */
+    public PickResult(WorldTile tile, WorldTile objectTile, int plane, int objectId, float distance,
+                      SceneLayer.Kind layer, int priority, int depthBias, int textureId,
+                      GameObjectSceneMetadata gameObjectSceneMetadata,
+                      List<ClientModelBounds> clientRenderableBounds,
+                      SceneObjectIdentity sceneObjectIdentity) {
+        this(tile, objectTile, plane, objectId, distance, layer, priority, depthBias, textureId,
+                gameObjectSceneMetadata, clientRenderableBounds,
+                ModelContourContract.Metadata.none(), sceneObjectIdentity);
     }
 
     public PickResult {
@@ -66,6 +79,7 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
                 gameObjectSceneMetadata, "gameObjectSceneMetadata");
         clientRenderableBounds = List.copyOf(Objects.requireNonNull(
                 clientRenderableBounds, "clientRenderableBounds"));
+        contourMetadata = Objects.requireNonNull(contourMetadata, "contourMetadata");
         sceneObjectIdentity = Objects.requireNonNull(sceneObjectIdentity, "sceneObjectIdentity");
         if (clientRenderableBounds.stream().anyMatch(value -> value == null || !value.present())) {
             throw new IllegalArgumentException("Client renderable bounds must be present");
@@ -107,6 +121,10 @@ public record PickResult(WorldTile tile, WorldTile objectTile, int plane, int ob
 
     public boolean hasClientModelBounds() {
         return !clientRenderableBounds.isEmpty();
+    }
+
+    public boolean hasContourMetadata() {
+        return contourMetadata.present();
     }
 
     public boolean hasSceneObjectIdentity() {
