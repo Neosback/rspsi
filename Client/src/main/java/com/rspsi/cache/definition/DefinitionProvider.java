@@ -15,6 +15,16 @@ public interface DefinitionProvider {
         return Optional.empty();
     }
 
+    /**
+     * Applies a backend-neutral object edit in memory, encodes it through the
+     * backend's production codec, decodes the produced bytes again, and
+     * returns the canonical round-trip result without mutating cache state.
+     */
+    default Optional<ObjectDefinitionEditPreview> previewObjectEdit(
+            ObjectDefinitionEditTransaction transaction) {
+        return Optional.empty();
+    }
+
     /** Looks up the zero-based cache definition ID for a non-empty underlay. */
     Optional<FloorDefinitionView> underlay(int id);
 
