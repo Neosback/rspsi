@@ -6,6 +6,9 @@ import com.rspsi.cache.CacheStoreCapabilities;
 import com.rspsi.cache.CacheWriteMode;
 import com.rspsi.cache.OsrsCacheMetadata;
 import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.cache.definition.ObjectDefinitionRawView;
+import dev.openrune.definition.codec.ObjectCodec;
+import dev.openrune.definition.type.ObjectType;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.assets.DefinitionAssetRepository;
 import com.rspsi.editor.assets.SymbolicNameProvider;
@@ -16,6 +19,8 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Objects;
+
+import static dev.openrune.cache.ConfigTypeKt.OBJECT;
 
 /**
  * OpenRune FileStore compatibility adapter.
@@ -175,6 +180,77 @@ public final class OpenRuneCacheStore implements CacheStore {
     public byte[] read(int index, int archive, int file) {
         byte[] data = cache.data(index, archive, file, null);
         return data == null ? null : data.clone();
+    }
+
+    /**
+     * Reads one OSRS object definition from OpenRune's canonical config
+     * location without exposing the backend's CONFIG/OBJECT constants.
+     */
+    public byte[] readObjectDefinitionPayload(int objectId) {
+        if (objectId < 0) {
+            throw new IllegalArgumentException("Object definition id cannot be negative");
+        }
+        return read(com.rspsi.cache.OsrsCacheIndexLayout.CONFIGS, OBJECT, objectId);
+    }
+
+    /**
+     * Writes one validated object-definition payload to an explicitly writable
+     * output cache. Source/read-only stores still reject this through
+     * {@link #write(int, int, int, byte[])}.
+     */
+    public void writeObjectDefinitionPayload(int objectId, byte[] data) {
+        if (objectId < 0) {
+            throw new IllegalArgumentException("Object definition id cannot be negative");
+        }
+        write(com.rspsi.cache.OsrsCacheIndexLayout.CONFIGS, OBJECT, objectId, data);
+    }
+
+    /**
+     * Decodes an object payload through OpenRune's production codec and
+     * reduces it immediately to the neutral Studio raw view.
+     */
+    public ObjectDefinitionRawView decodeObjectDefinitionPayload(
+            int objectId, byte[] data, int revision) {
+        Objects.requireNonNull(data, "data");
+        if (objectId < 0) {
+            throw new IllegalArgumentException("Object definition id cannot be negative");
+        }
+        if (revision <= 0) {
+            throw new IllegalArgumentException("OSRS revision must be positive");
+        }
+        try {
+            ObjectType decoded = new ObjectCodec(revision).loadData(objectId, data.clone());
+            return OpenRuneDefinitionProvider.toRawView(decoded);
+        } catch (RuntimeException failure) {
+            throw new IllegalArgumentException(
+                    "Unable to decode object definition " + objectId,
+                    failure);
+        }
+    }
+
+    /**
+     * Returns the canonical OpenRune encoding for a supplied object payload.
+     * The decode/re-encode validation remains inside the cache adapter boundary.
+     */
+    public byte[] canonicalObjectDefinitionPayload(
+            int objectId, byte[] data, int revision) {
+        Objects.requireNonNull(data, "data");
+        if (objectId < 0) {
+            throw new IllegalArgumentException("Object definition id cannot be negative");
+        }
+        if (revision <= 0) {
+            throw new IllegalArgumentException("OSRS revision must be positive");
+        }
+        ObjectType decoded;
+        try {
+            decoded = new ObjectCodec(revision).loadData(objectId, data.clone());
+        } catch (RuntimeException failure) {
+            throw new IllegalArgumentException(
+                    "Unable to decode object definition " + objectId,
+                    failure);
+        }
+        return new OpenRuneObjectDefinitionEditTransaction(decoded, revision)
+                .encodeValidated();
     }
 
     @Override
