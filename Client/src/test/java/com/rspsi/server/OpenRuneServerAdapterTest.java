@@ -67,8 +67,12 @@ class OpenRuneServerAdapterTest {
         Files.writeString(root.resolve("content/events/example/src/main/resources/gamevals.toml"), "[gamevals.obj]");
         Files.writeString(root.resolve("content/events/example/Example.kt"), "class Example");
         Files.createDirectories(root.resolve(".data/raw-cache/map"));
+        Files.createDirectories(root.resolve(".data/raw-cache/server"));
         Files.writeString(root.resolve(".data/raw-cache/map/m50_50.dat"), "x");
-        Files.writeString(root.resolve(".data/gamevals/obj.rscm"), "obj.example=63000");
+        Path serverConfig = root.resolve(".data/raw-cache/server/items.toml");
+        Files.writeString(serverConfig, "[[item]]\nid = 63000\n");
+        Path rscm = root.resolve(".data/gamevals/obj.rscm");
+        Files.writeString(rscm, "obj.example=63000");
         Path plugin = root.resolve("plugins/example-plugin");
         Files.createDirectories(plugin);
         Files.writeString(plugin.resolve("plugin.properties"),
@@ -85,6 +89,12 @@ class OpenRuneServerAdapterTest {
         assertTrue(inspection.content().stream().anyMatch(e -> e.kind() == ServerContentKind.CONFIG));
         assertTrue(inspection.content().stream().anyMatch(e -> e.kind() == ServerContentKind.MODEL));
         assertTrue(inspection.content().stream().anyMatch(e -> e.kind() == ServerContentKind.CS2));
+        assertTrue(inspection.content().stream().anyMatch(e ->
+                e.path().equals(serverConfig)
+                        && e.kind() == ServerContentKind.CONFIG));
+        assertTrue(inspection.content().stream().anyMatch(e ->
+                e.path().equals(rscm)
+                        && e.kind() == ServerContentKind.GAMEVAL));
         assertEquals(1, inspection.plugins().size());
         assertEquals("Example", inspection.plugins().get(0).name());
         assertTrue(inspection.plugins().get(0).external());
