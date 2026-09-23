@@ -19,9 +19,9 @@ class ObjectDefinitionResolverTest {
                 new ObjectDefinitionResolver(definitions).resolveEditorDisplay(100);
 
         assertEquals(ObjectDefinitionResolver.Status.RESOLVED, resolution.status());
-        assertEquals(100, resolution.displayId());
+        assertEquals(100, resolution.displayDefinition().orElseThrow().id());
         assertEquals(List.of(100), resolution.transformPath());
-        assertFalse(resolution.transformed());
+        assertEquals(1, resolution.transformPath().size());
     }
 
     @Test
@@ -35,9 +35,9 @@ class ObjectDefinitionResolverTest {
                 new ObjectDefinitionResolver(definitions).resolveEditorDisplay(100);
 
         assertEquals(ObjectDefinitionResolver.Status.RESOLVED, resolution.status());
-        assertEquals(200, resolution.displayId());
+        assertEquals(200, resolution.displayDefinition().orElseThrow().id());
         assertEquals(List.of(100, 200), resolution.transformPath());
-        assertTrue(resolution.transformed());
+        assertEquals(2, resolution.transformPath().size());
     }
 
     @Test
@@ -50,7 +50,7 @@ class ObjectDefinitionResolverTest {
 
         assertEquals(ObjectDefinitionResolver.Status.NO_DEFAULT_TRANSFORM, resolution.status());
         assertFalse(resolution.resolved());
-        assertEquals(-1, resolution.displayId());
+        assertTrue(resolution.displayDefinition().isEmpty());
     }
 
     @Test
@@ -63,7 +63,7 @@ class ObjectDefinitionResolverTest {
 
         assertEquals(ObjectDefinitionResolver.Status.MISSING_TRANSFORM_DEFINITION,
                 resolution.status());
-        assertEquals(999, resolution.unresolvedDefinitionId());
+        assertEquals(List.of(100, 999), resolution.transformPath());
         assertFalse(resolution.resolved());
     }
 
@@ -80,7 +80,7 @@ class ObjectDefinitionResolverTest {
         assertEquals(ObjectDefinitionResolver.Status.RESOLVED_NESTED_TRANSFORM_CHILD,
                 resolution.status());
         assertTrue(resolution.resolved());
-        assertEquals(200, resolution.displayId(),
+        assertEquals(200, resolution.displayDefinition().orElseThrow().id(),
                 "DynamicObject performs one ObjectComposition.transform() step");
         assertEquals(List.of(100, 200), resolution.transformPath());
     }
