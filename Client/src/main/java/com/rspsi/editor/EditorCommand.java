@@ -37,6 +37,6 @@ public interface EditorCommand {
      * returning true because a historical command exists.</p>
      */
     default boolean hasUnsavedExternalState() {
-        return false;
+        return !savedBySessionSave();
     }
 }
