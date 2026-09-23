@@ -215,7 +215,8 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata.translated(deltaX, deltaY),
-                clientRenderableBounds, clientRenderablePlacements, contourContract, sceneObjectIdentity.withAnchor(newAnchor));
+                clientRenderableBounds, clientRenderablePlacements, contourContract,
+                animationState, sceneObjectIdentity.withAnchor(newAnchor));
     }
 
     /** Returns this packet with an explicit RuneLite-compatible render mode. */
@@ -235,7 +236,8 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, Objects.requireNonNull(presentation, "presentation"),
-                gameObjectSceneMetadata, clientRenderableBounds, clientRenderablePlacements, contourContract, sceneObjectIdentity);
+                gameObjectSceneMetadata, clientRenderableBounds, clientRenderablePlacements,
+                contourContract, animationState, sceneObjectIdentity);
     }
 
     /** Returns this packet with explicit client game-object scene metadata. */
