@@ -97,10 +97,6 @@ public final class ObjectSceneResolutionAudit {
             }
         }
 
-        public boolean passes() {
-            return failureCount == 0;
-        }
-
         public int submittedCount() {
             return (int) entries.stream()
                     .filter(entry -> entry.stage() == Stage.PACKET_SUBMITTED)
