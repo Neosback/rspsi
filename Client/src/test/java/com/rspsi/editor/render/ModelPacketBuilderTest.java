@@ -41,6 +41,12 @@ class ModelPacketBuilderTest {
         WorldObject object = new WorldObject(42, 10, 0, 0, 0, 0);
         document.tile(0, 0, 0).restore(new TileSnapshot(40, 40, 40, 40,
                 0, 0, 0, 0, 0, List.of(object)));
+        document.tile(0, 1, 0).restore(new TileSnapshot(40, 40, 40, 40,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 0, 1).restore(new TileSnapshot(40, 40, 40, 40,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 1, 1).restore(new TileSnapshot(40, 40, 40, 40,
+                0, 0, 0, 0, 0, List.of()));
 
         ObjectAppearanceView appearance = new ObjectAppearanceView(
                 77, false, 128, 128, 128, 0, 0, 0,
