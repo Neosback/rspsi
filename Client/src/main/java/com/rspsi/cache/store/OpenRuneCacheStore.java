@@ -6,6 +6,9 @@ import com.rspsi.cache.CacheStoreCapabilities;
 import com.rspsi.cache.CacheWriteMode;
 import com.rspsi.cache.OsrsCacheMetadata;
 import com.rspsi.cache.definition.DefinitionProvider;
+import com.rspsi.cache.definition.ObjectDefinitionRawView;
+import dev.openrune.definition.codec.ObjectCodec;
+import dev.openrune.definition.type.ObjectType;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.assets.DefinitionAssetRepository;
 import com.rspsi.editor.assets.SymbolicNameProvider;
@@ -200,6 +203,54 @@ public final class OpenRuneCacheStore implements CacheStore {
             throw new IllegalArgumentException("Object definition id cannot be negative");
         }
         write(com.rspsi.cache.OsrsCacheIndexLayout.CONFIGS, OBJECT, objectId, data);
+    }
+
+    /**
+     * Decodes an object payload through OpenRune's production codec and
+     * reduces it immediately to the neutral Studio raw view.
+     */
+    public ObjectDefinitionRawView decodeObjectDefinitionPayload(
+            int objectId, byte[] data, int revision) {
+        Objects.requireNonNull(data, "data");
+        if (objectId < 0) {
+            throw new IllegalArgumentException("Object definition id cannot be negative");
+        }
+        if (revision <= 0) {
+            throw new IllegalArgumentException("OSRS revision must be positive");
+        }
+        try {
+            ObjectType decoded = new ObjectCodec(revision).loadData(objectId, data.clone());
+            return OpenRuneDefinitionProvider.toRawView(decoded);
+        } catch (RuntimeException failure) {
+            throw new IllegalArgumentException(
+                    "Unable to decode object definition " + objectId,
+                    failure);
+        }
+    }
+
+    /**
+     * Returns the canonical OpenRune encoding for a supplied object payload.
+     * The decode/re-encode validation remains inside the cache adapter boundary.
+     */
+    public byte[] canonicalObjectDefinitionPayload(
+            int objectId, byte[] data, int revision) {
+        Objects.requireNonNull(data, "data");
+        if (objectId < 0) {
+            throw new IllegalArgumentException("Object definition id cannot be negative");
+        }
+        if (revision <= 0) {
+            throw new IllegalArgumentException("OSRS revision must be positive");
+        }
+        ObjectType decoded;
+        try {
+            decoded = new ObjectCodec(revision).loadData(objectId, data.clone());
+        } catch (RuntimeException failure) {
+            throw new IllegalArgumentException(
+                    "Unable to decode object definition " + objectId,
+                    failure);
+        }
+        return new OpenRuneObjectDefinitionEditTransaction(decoded, revision)
+                .encodeValidated();
     }
 
     @Override
