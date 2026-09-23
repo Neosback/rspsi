@@ -2,7 +2,6 @@ package com.rspsi.editor.inspector;
 
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.ModelGeometryView;
-import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ObjectDefinitionResolver;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.editor.model.WorldObject;
@@ -27,7 +26,6 @@ public record ObjectResolutionSummary(
         ObjectDefinitionResolver.Status definitionStatus,
         List<Integer> transformPath,
         Optional<ObjectDefinitionSummary> displayDefinition,
-        Optional<ObjectAppearanceView> displayAppearance,
         GeometryStatus geometryStatus,
         List<Integer> selectedModelIds,
         List<Integer> missingGeometryIds,
@@ -37,7 +35,6 @@ public record ObjectResolutionSummary(
         definitionStatus = Objects.requireNonNull(definitionStatus, "definitionStatus");
         transformPath = List.copyOf(Objects.requireNonNull(transformPath, "transformPath"));
         displayDefinition = Objects.requireNonNull(displayDefinition, "displayDefinition");
-        displayAppearance = Objects.requireNonNull(displayAppearance, "displayAppearance");
         geometryStatus = Objects.requireNonNull(geometryStatus, "geometryStatus");
         selectedModelIds = List.copyOf(Objects.requireNonNull(selectedModelIds, "selectedModelIds"));
         missingGeometryIds = List.copyOf(Objects.requireNonNull(missingGeometryIds, "missingGeometryIds"));
@@ -88,7 +85,7 @@ public record ObjectResolutionSummary(
         if (!resolution.resolved()) {
             return new ObjectResolutionSummary(
                     resolution.status(), resolution.transformPath(), Optional.empty(),
-                    Optional.empty(), GeometryStatus.DEFINITION_UNRESOLVED,
+                    GeometryStatus.DEFINITION_UNRESOLVED,
                     List.of(), List.of(), List.of());
         }
 
@@ -103,7 +100,6 @@ public record ObjectResolutionSummary(
             return new ObjectResolutionSummary(
                     resolution.status(), resolution.transformPath(),
                     Optional.of(ObjectInspectorSnapshot.summary(display)),
-                    definitions.objectAppearance(display.id()),
                     GeometryStatus.NO_MODEL_FOR_SHAPE,
                     List.of(), List.of(), List.of());
         }
@@ -139,7 +135,6 @@ public record ObjectResolutionSummary(
         return new ObjectResolutionSummary(
                 resolution.status(), resolution.transformPath(),
                 Optional.of(ObjectInspectorSnapshot.summary(display)),
-                definitions.objectAppearance(display.id()),
                 geometryStatus, List.copyOf(selected), missing, empty);
     }
 
