@@ -79,13 +79,18 @@ public final class ObjectSceneResolutionAudit {
     private static Stage stage(ObjectResolutionSummary resolution,
                                boolean projected, int packetCount) {
         if (!projected) return Stage.SCENE_PROJECTION_MISSING;
-        if (packetCount > 0) return Stage.PACKET_SUBMITTED;
+
+        // Geometry completeness is checked before packet presence. The renderer
+        // intentionally skips an unavailable model and may still emit a packet
+        // from the remaining models; that must not turn an incomplete object
+        // into a passing audit.
         return switch (resolution.geometryStatus()) {
             case DEFINITION_UNRESOLVED -> Stage.DEFINITION_UNRESOLVED;
             case NO_MODEL_FOR_SHAPE -> Stage.NO_MODEL_FOR_SHAPE;
             case MISSING_MODEL_GEOMETRY -> Stage.MISSING_MODEL_GEOMETRY;
             case EMPTY_RENDERABLE_GEOMETRY -> Stage.EMPTY_RENDERABLE_GEOMETRY;
-            case PARTIAL_GEOMETRY, READY -> Stage.PACKET_MISSING;
+            case PARTIAL_GEOMETRY -> Stage.PARTIAL_MODEL_GEOMETRY;
+            case READY -> packetCount > 0 ? Stage.PACKET_SUBMITTED : Stage.PACKET_MISSING;
         };
     }
 
@@ -158,6 +163,7 @@ public final class ObjectSceneResolutionAudit {
         DEFINITION_UNRESOLVED(Severity.WARN),
         NO_MODEL_FOR_SHAPE(Severity.WARN),
         MISSING_MODEL_GEOMETRY(Severity.FAIL),
+        PARTIAL_MODEL_GEOMETRY(Severity.FAIL),
         EMPTY_RENDERABLE_GEOMETRY(Severity.FAIL),
         PACKET_MISSING(Severity.FAIL),
         SCENE_PROJECTION_MISSING(Severity.FAIL);
