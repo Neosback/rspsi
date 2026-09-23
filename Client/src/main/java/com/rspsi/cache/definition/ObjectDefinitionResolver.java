@@ -1,11 +1,8 @@
 package com.rspsi.cache.definition;
 
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Resolves a placed OSRS object definition to the definition that supplies its
@@ -18,8 +15,6 @@ import java.util.Set;
  * explicit unresolved state, not permission to render the placed shell.</p>
  */
 public final class ObjectDefinitionResolver {
-    private static final int MAX_TRANSFORM_HOPS = 8;
-
     private final DefinitionProvider definitions;
 
     public ObjectDefinitionResolver(DefinitionProvider definitions) {
@@ -38,45 +33,37 @@ public final class ObjectDefinitionResolver {
         }
 
         ObjectDefinitionView placedDefinition = placed.orElseThrow();
-        ObjectDefinitionView current = placedDefinition;
-        List<Integer> path = new ArrayList<>();
-        path.add(current.id());
-        Set<Integer> visited = new HashSet<>();
-        visited.add(current.id());
-
-        for (int hop = 0; current.hasTransforms(); hop++) {
-            if (hop >= MAX_TRANSFORM_HOPS) {
-                return new Resolution(placedId, Status.TRANSFORM_DEPTH_EXCEEDED,
-                        Optional.of(placedDefinition), Optional.of(current),
-                        List.copyOf(path), current.id());
-            }
-
-            int nextId = current.defaultTransform();
-            if (nextId < 0) {
-                return new Resolution(placedId, Status.NO_DEFAULT_TRANSFORM,
-                        Optional.of(placedDefinition), Optional.empty(),
-                        List.copyOf(path), -1);
-            }
-            if (!visited.add(nextId)) {
-                path.add(nextId);
-                return new Resolution(placedId, Status.TRANSFORM_CYCLE,
-                        Optional.of(placedDefinition), Optional.of(current),
-                        List.copyOf(path), nextId);
-            }
-
-            Optional<ObjectDefinitionView> next = definitions.object(nextId);
-            path.add(nextId);
-            if (next.isEmpty()) {
-                return new Resolution(placedId, Status.MISSING_TRANSFORM_DEFINITION,
-                        Optional.of(placedDefinition), Optional.empty(),
-                        List.copyOf(path), nextId);
-            }
-            current = next.orElseThrow();
+        if (!placedDefinition.hasTransforms()) {
+            return new Resolution(placedId, Status.RESOLVED,
+                    Optional.of(placedDefinition), Optional.of(placedDefinition),
+                    List.of(placedId), -1);
         }
 
-        return new Resolution(placedId, Status.RESOLVED,
-                Optional.of(placedDefinition), Optional.of(current),
-                List.copyOf(path), -1);
+        // RuneLite DynamicObject.getModel() performs exactly one
+        // ObjectComposition.transform() before invoking getModelDynamic() on
+        // the returned definition. It does not recursively transform a child
+        // that itself owns another transform table.
+        int nextId = placedDefinition.defaultTransform();
+        if (nextId < 0) {
+            return new Resolution(placedId, Status.NO_DEFAULT_TRANSFORM,
+                    Optional.of(placedDefinition), Optional.empty(),
+                    List.of(placedId), -1);
+        }
+
+        Optional<ObjectDefinitionView> next = definitions.object(nextId);
+        if (next.isEmpty()) {
+            return new Resolution(placedId, Status.MISSING_TRANSFORM_DEFINITION,
+                    Optional.of(placedDefinition), Optional.empty(),
+                    List.of(placedId, nextId), nextId);
+        }
+
+        ObjectDefinitionView displayDefinition = next.orElseThrow();
+        return new Resolution(placedId,
+                displayDefinition.hasTransforms()
+                        ? Status.RESOLVED_NESTED_TRANSFORM_CHILD
+                        : Status.RESOLVED,
+                Optional.of(placedDefinition), Optional.of(displayDefinition),
+                List.of(placedId, nextId), -1);
     }
 
     public enum Status {
@@ -84,8 +71,7 @@ public final class ObjectDefinitionResolver {
         MISSING_PLACED_DEFINITION,
         NO_DEFAULT_TRANSFORM,
         MISSING_TRANSFORM_DEFINITION,
-        TRANSFORM_CYCLE,
-        TRANSFORM_DEPTH_EXCEEDED
+        RESOLVED_NESTED_TRANSFORM_CHILD
     }
 
     public record Resolution(
@@ -110,7 +96,8 @@ public final class ObjectDefinitionResolver {
         }
 
         public boolean resolved() {
-            return status == Status.RESOLVED && displayDefinition.isPresent();
+            return (status == Status.RESOLVED || status == Status.RESOLVED_NESTED_TRANSFORM_CHILD)
+                    && displayDefinition.isPresent();
         }
 
         public boolean transformed() {
