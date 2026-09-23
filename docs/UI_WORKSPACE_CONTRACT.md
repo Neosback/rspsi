@@ -1,6 +1,6 @@
 # OpenRune Studio UI Workspace Contract
 
-_This document defines the layout contract for the native OpenRune Studio map/content editor. It is intentionally stricter than a collection of movable panels._
+_This document defines the layout contract for the native OpenRune Studio map/content editor **after a project is open**. The pre-project launcher and project-loading lifecycle are defined by `PROJECT_LAUNCHER_AND_DASHBOARD.md`. It is intentionally stricter than a collection of movable panels._
 
 ## 1. Name and scope
 
@@ -18,7 +18,11 @@ The shell must remain predictable. Plugins contribute into known slots instead o
 
 ## 2. Workspace hierarchy
 
-The canonical layout is:
+The Project Launcher and project-loading screen are outside this hierarchy.
+
+Once a project reaches `PROJECT_OPEN`, the Dashboard is the home workspace and the editing workspaces use the shell below.
+
+The canonical editing layout is:
 
     +--------------------------------------------------------------------------------+
     | Top Status Strip: coordinates | plane | project | build/dirty | diagnostics   |
