@@ -547,6 +547,72 @@ class ModelPacketBuilderTest {
     }
 
     @Test
+    void wallDecorationDisplacementDoesNotAffectContourSampling() {
+        WorldDocument document = new WorldDocument(6, 6, 1);
+        WorldObject wall = new WorldObject(100, 0, 0, 0, 2, 2);
+        WorldObject attached = new WorldObject(42, 4, 0, 0, 2, 2);
+        WorldObject displaced = new WorldObject(43, 5, 0, 0, 2, 2);
+        document.tile(0, 2, 2).restore(new TileSnapshot(0, 128, 128, 0,
+                0, 0, 0, 0, 0, List.of(wall, attached, displaced)));
+        document.tile(0, 3, 2).restore(new TileSnapshot(128, 128, 128, 128,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 2, 3).restore(new TileSnapshot(0, 128, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 3, 3).restore(new TileSnapshot(128, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+
+        ObjectAppearanceView contourAppearance = new ObjectAppearanceView(
+                -1, false, 128, 128, 128, 0, 0, 0, Map.of(), Map.of(),
+                true, false, false, false, 0, 0, 16, 1, 0,
+                false, false, false, 0);
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{0, 0, 0, 64, -128, 0, 32, -64, 48},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                if (id == 100) {
+                    return Optional.of(new ObjectDefinitionView(id, "wall", 1, 1,
+                            List.of(), new int[0], new int[0], -1, false));
+                }
+                return Optional.of(new ObjectDefinitionView(id, "decor", 1, 1,
+                        List.of(), new int[]{7}, new int[]{4}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) {
+                return Optional.empty();
+            }
+            @Override public Optional<FloorDefinitionView> overlay(int id) {
+                return Optional.empty();
+            }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(id == 100 ? appearanceWithDisplacement(32)
+                        : contourAppearance);
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(geometry);
+            }
+        };
+
+        List<ModelRenderPacket> packets = new ModelPacketBuilder(definitions).build(document);
+
+        assertEquals(2, packets.size());
+        ModelRenderPacket attachedPacket = packets.get(0);
+        ModelRenderPacket displacedPacket = packets.get(1);
+        assertEquals(List.of(0, -64, -32),
+                attachedPacket.vertices().stream().map(ModelVertex::y).toList());
+        assertEquals(attachedPacket.vertices().stream().map(ModelVertex::y).toList(),
+                displacedPacket.vertices().stream().map(ModelVertex::y).toList(),
+                "Scene wall-decoration displacement must be applied after contourGround");
+        assertEquals(ClientRenderablePlacement.none(),
+                attachedPacket.clientRenderablePlacements().get(0));
+        assertEquals(new ClientRenderablePlacement(32, 0),
+                displacedPacket.clientRenderablePlacements().get(0));
+        assertTrue(displacedPacket.vertices().get(0).x() != attachedPacket.vertices().get(0).x(),
+                "the later Scene placement must still move the displaced decoration");
+        assertTrue(attachedPacket.contourContract().applied());
+        assertTrue(displacedPacket.contourContract().applied());
+    }
+
+    @Test
     void mergesNormalsAcrossTheTwoModelsOfAnLWallBeforeLighting() {
         WorldDocument document = new WorldDocument(1, 1, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
