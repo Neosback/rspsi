@@ -210,11 +210,21 @@ Observed supporting groups include:
 - `runescript-parser`
 - `runescript-runtime`
 
-These are relevant to future CS2/RuneScript authoring and should be revisited when that roadmap phase begins.
+The host currently publishes `clientscript-compiler` through `0.0.7-openrune`.
+The pinned `dev.or2:tools:3.0.2` metadata depends on
+`clientscript-compiler:0.0.6-openrune`, but Studio intentionally excludes that
+toolchain because no current production consumer compiles CS2.
+
+These artifacts are relevant to future CS2/RuneScript authoring and should be
+revisited when that roadmap phase begins.
 
 ### `cc.ekblad`
 
-- `4koma`
+- `4koma` (latest observed `1.2.2-openrune`)
+
+The compiler dependency chain referenced by the pinned tools release uses
+`4koma:1.2.0-openrune`. Both are present in the OpenRune host. An older Studio
+comment claiming 4koma was unpublished was stale and has been removed.
 
 This is a supporting library, not a Studio capability by itself.
 
