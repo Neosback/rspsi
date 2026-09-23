@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.ModelGeometryView;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectDefinitionResolver;
 import com.rspsi.cache.definition.AnimationFrameView;
 import com.rspsi.cache.definition.CachedSkeletalAnimationView;
 import com.rspsi.cache.definition.ModelSkeletalSkinView;
@@ -33,6 +34,7 @@ import java.util.Optional;
  */
 public final class ModelPacketBuilder {
     private final DefinitionProvider definitions;
+    private final ObjectDefinitionResolver definitionResolver;
     private final LightingProfile lighting;
 
     public ModelPacketBuilder(DefinitionProvider definitions) {
@@ -41,6 +43,7 @@ public final class ModelPacketBuilder {
 
     public ModelPacketBuilder(DefinitionProvider definitions, LightingProfile lighting) {
         this.definitions = Objects.requireNonNull(definitions, "definitions");
+        this.definitionResolver = new ObjectDefinitionResolver(this.definitions);
         this.lighting = Objects.requireNonNull(lighting, "lighting");
     }
 
@@ -151,11 +154,17 @@ public final class ModelPacketBuilder {
         Objects.requireNonNull(object, "object");
         Objects.requireNonNull(document, "document");
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
-        Optional<ObjectDefinitionView> definition = definitions.object(object.id());
-        if (definition.isEmpty()) return null;
-        ObjectDefinitionView placementDefinition = definition.orElseThrow();
-        ObjectDefinitionView objectDefinition = resolveDisplayDefinition(placementDefinition);
-        ObjectAppearanceView appearance = definitions.objectAppearance(object.id())
+        ObjectDefinitionResolver.Resolution definitionResolution =
+                definitionResolver.resolveEditorDisplay(object.id());
+        if (!definitionResolution.resolved()) return null;
+        ObjectDefinitionView placementDefinition =
+                definitionResolution.placedDefinition().orElseThrow();
+        ObjectDefinitionView objectDefinition =
+                definitionResolution.displayDefinition().orElseThrow();
+        // RuneLite transforms ObjectComposition before model construction, so
+        // scale/recolor/animation/contour metadata belongs to the resolved
+        // display definition, not the placed multiloc shell.
+        ObjectAppearanceView appearance = definitions.objectAppearance(objectDefinition.id())
                 .orElseGet(ObjectAppearanceView::empty);
         ResolvedAnimation animation = resolveAnimation(appearance.animationId(), clientCycle);
         int decorDisplacement = wallDecorationDisplacement(object, appearance, document);
@@ -348,7 +357,7 @@ public final class ModelPacketBuilder {
         return total;
     }
 
-    private static List<Integer> modelIdsFor(ObjectDefinitionView definition, int sourceType) {
+    static List<Integer> modelIdsFor(ObjectDefinitionView definition, int sourceType) {
         int[] ids = definition.modelIds();
         int[] types = definition.modelTypes();
         List<Integer> selected = new ArrayList<>();
@@ -369,7 +378,7 @@ public final class ModelPacketBuilder {
      * Renderer code must consume these rules rather than maintain a second
      * shape/rotation/displacement switch.
      */
-    private static List<WallRules.LocModelVariant> variantsFor(
+    static List<WallRules.LocModelVariant> variantsFor(
             WorldObject object, int decorDisplacement) {
         return WallRules.expandVariants(object, decorDisplacement);
     }
@@ -385,27 +394,12 @@ public final class ModelPacketBuilder {
      * also reproduces the client's separate "8" diagonal default without a
      * second case.
      */
-    /**
-     * A "multiloc" definition (opcodes 77/92: {@code multiVarBit}/{@code
-     * multiVarp}/{@code transforms}) carries no models of its own - the
-     * client swaps in one of its {@code transforms} entries based on live
-     * varbit/varp state, falling back to {@code multiDefault} (an object id,
-     * not an index - see OpenRune's {@code Transforms.readTransforms}, which
-     * appends it as the array's own last slot) when no player state applies.
-     * An editor session has no player state at all, so {@code multiDefault}
-     * IS the client's "no state" case, not an approximation of it. Skipping
-     * this resolution renders such objects as nothing - Lumbridge's castle
-     * bushes are exactly this: the placed id is a bare multiloc shell.
-     */
-    private ObjectDefinitionView resolveDisplayDefinition(ObjectDefinitionView definition) {
-        ObjectDefinitionView current = definition;
-        for (int hop = 0; hop < 8 && current.modelIds().length == 0
-                && current.hasTransforms() && current.defaultTransform() >= 0; hop++) {
-            Optional<ObjectDefinitionView> next = definitions.object(current.defaultTransform());
-            if (next.isEmpty() || next.orElseThrow().id() == current.id()) break;
-            current = next.orElseThrow();
-        }
-        return current;
+    private ObjectAppearanceView resolvedAppearance(int placedObjectId) {
+        ObjectDefinitionResolver.Resolution resolution =
+                definitionResolver.resolveEditorDisplay(placedObjectId);
+        return resolution.displayDefinition()
+                .flatMap(definition -> definitions.objectAppearance(definition.id()))
+                .orElseGet(ObjectAppearanceView::empty);
     }
 
     private int wallDecorationDisplacement(WorldObject decoration,
@@ -601,8 +595,7 @@ public final class ModelPacketBuilder {
         boolean[] mergeEnabled = new boolean[packets.size()];
         for (int packetIndex = 0; packetIndex < packets.size(); packetIndex++) {
             ModelRenderPacket packet = packets.get(packetIndex);
-            mergeEnabled[packetIndex] = definitions.objectAppearance(packet.objectId())
-                    .map(ObjectAppearanceView::mergeNormals).orElse(false);
+            mergeEnabled[packetIndex] = resolvedAppearance(packet.objectId()).mergeNormals();
             for (int vertexIndex = 0; vertexIndex < packet.vertices().size(); vertexIndex++) {
                 ModelVertex vertex = packet.vertices().get(vertexIndex);
                 if (vertex.normalMagnitude() == 0) continue;
@@ -713,8 +706,7 @@ public final class ModelPacketBuilder {
 
     private ModelRenderPacket relight(ModelRenderPacket packet, List<ModelVertex> vertices,
                                       List<ModelTriangle> sourceTriangles) {
-        ObjectAppearanceView appearance = definitions.objectAppearance(packet.objectId())
-                .orElseGet(ObjectAppearanceView::empty);
+        ObjectAppearanceView appearance = resolvedAppearance(packet.objectId());
         List<ModelTriangle> triangles = new ArrayList<>(sourceTriangles.size());
         for (ModelTriangle face : sourceTriangles) {
             ModelVertex first = vertices.get(face.a());
