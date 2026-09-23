@@ -257,6 +257,14 @@ public final class EditorSession {
         stateListeners.remove(listener);
     }
 
+    /**
+     * Re-emits session state after an external persistence boundary changes,
+     * such as publishing definition transactions to a separate output cache.
+     */
+    public void externalStateChanged() {
+        notifyStateChanged();
+    }
+
     private void notifyChanged(EditorCommand command) {
         notifyChanged(command.changedTiles());
     }
