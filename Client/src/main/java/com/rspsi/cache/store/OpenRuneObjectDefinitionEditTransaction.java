@@ -27,6 +27,7 @@ final class OpenRuneObjectDefinitionEditTransaction
     private final ObjectCodec codec;
     private final ObjectDefinitionRawView original;
     private ObjectTypeBuilder builder;
+    private ObjectDefinitionRawView publishedPreview;
 
     OpenRuneObjectDefinitionEditTransaction(ObjectType source, int revision) {
         this.source = Objects.requireNonNull(source, "source");
@@ -90,6 +91,27 @@ final class OpenRuneObjectDefinitionEditTransaction
             }
         }
         return Set.copyOf(dirty);
+    }
+
+    @Override
+    public boolean hasUnpublishedChanges() {
+        ObjectDefinitionRawView current = preview();
+        if (current.equals(original)) {
+            return false;
+        }
+        return publishedPreview == null || !current.equals(publishedPreview);
+    }
+
+    @Override
+    public void markPublished(ObjectDefinitionRawView publishedPreview) {
+        ObjectDefinitionRawView checked =
+                Objects.requireNonNull(publishedPreview, "publishedPreview");
+        if (checked.id() != id()) {
+            throw new IllegalArgumentException(
+                    "Published object definition id " + checked.id()
+                            + " does not match transaction " + id());
+        }
+        this.publishedPreview = checked;
     }
 
     @Override
