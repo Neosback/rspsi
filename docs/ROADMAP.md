@@ -186,6 +186,32 @@ Edits flow through EditorCommand today and the generalized ChangePlan boundary a
 
 A plugin must not mutate a tile, scene paint, object definition, or renderer packet directly merely because a RuneLite API exposes a similarly named setter.
 
+### 2.9 Cache ownership follows project mode
+
+Standalone cache editing and connected OpenRune Server editing are different persistence modes.
+
+**Standalone mode**
+
+- the user explicitly selects a supported OSRS cache directory;
+- the selected source remains read-only;
+- Studio publishes only to a separate explicitly selected output cache;
+- OpenRS2/FreshCache is optional acquisition tooling, never implicit open/save behavior.
+
+**Connected OpenRune Server mode**
+
+- the user connects the OpenRune project root rather than manually selecting one of its generated caches;
+- Studio discovers and binds `.data/cache/LIVE` as the read-only client scene/cache input;
+- `.data/cache/SERVER` remains a separate read-only server-oriented cache and is never substituted for LIVE rendering semantics;
+- Studio never directly mutates either generated cache;
+- supported edits publish into an OpenRune-consumed source representation, then the project's canonical `:or-cache:buildCache` regenerates LIVE and SERVER together;
+- `FreshCache` is explicit bootstrap/reset behavior only and must never run automatically against an existing connected project;
+- source/project baselines are fingerprinted and stale external changes block publication instead of being overwritten;
+- if Studio does not yet have a lossless source mapping/build hook for a resource, connected-project publishing for that resource remains disabled rather than patching LIVE alone.
+
+The first-party OpenRune plugin/provider and the existing neutral server adapter/inspection model must converge on one project identity, path discovery, fingerprint, and build-task contract. Do not maintain separate implementations that can disagree about LIVE/SERVER paths or build ownership.
+
+See OPENRUNE_ECOSYSTEM_INTEGRATION.md for the detailed connected-project flow and no-clobber contract.
+
 ---
 
 # PHASE 0 - Editor Trust Gate
@@ -1283,7 +1309,16 @@ Potential domains:
 - OpenRune plugin/source scanning
 - content validation
 - simulated server ticks/NPC behavior
+- source-first OpenRune project publishing
+- canonical OpenRune cache build invocation and LIVE/SERVER reload verification
 - build/publish pipeline
+
+Before broader publishing is considered mature:
+
+- converge `OpenRuneServerProvider` with the existing `ServerConnection` / `ServerProjectInspection` / `OpenRuneServerAdapter` discovery and build-task model;
+- expose project cache roles through neutral capabilities rather than raw OpenRune backend types;
+- add resource-specific source publishers with stale-source checks and atomic writes;
+- keep resources without a lossless OpenRune source mapping read-only in connected-project mode.
 
 Use OPENRUNE_ECOSYSTEM_INTEGRATION.md as the guardrail.
 
@@ -1292,6 +1327,13 @@ Use OPENRUNE_ECOSYSTEM_INTEGRATION.md as the guardrail.
 # 13. Project-level build and dirty-resource model
 
 Map edits, definition edits, interfaces, scripts, GameVals, and future authored resources should eventually participate in one project build lifecycle.
+
+That lifecycle has two publishers:
+
+- a standalone publisher that writes to an explicit Studio output cache;
+- a connected-project publisher that writes supported OpenRune project source artifacts and delegates binary cache generation to the OpenRune project build.
+
+They may share ChangePlan, dirty-state, provenance, verification, and rollback infrastructure, but they do not share binary-output ownership.
 
 Target:
 
