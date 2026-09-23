@@ -113,6 +113,34 @@ class ObjectDefinitionEditWorkspaceTest {
         assertTrue(transaction.hasUnpublishedChanges());
     }
 
+
+    @Test
+    void staleRestoreCannotReplacePublicationThatWonTheStartupRace() {
+        FakeProvider provider = new FakeProvider();
+        ObjectDefinitionEditWorkspace workspace =
+                new ObjectDefinitionEditWorkspace(provider);
+        ObjectDefinitionEditTransaction transaction =
+                workspace.transaction(7).orElseThrow();
+        transaction.setField(
+                "name", ObjectDefinitionEditValue.stringValue("Live publish"));
+        ObjectDefinitionRawView live = transaction.preview();
+        Path liveOutput = Path.of("build", "live-output");
+        workspace.markPublished(liveOutput, 7, live);
+
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> workspace.restorePublication(
+                        Path.of("build", "stale-output"),
+                        Map.of(7, rawName("Stale publish"))));
+
+        assertTrue(failure.getMessage().contains("already bound"));
+        assertEquals(
+                liveOutput.toAbsolutePath().normalize(),
+                workspace.publicationTarget().orElseThrow());
+        assertEquals(live, workspace.publishedSnapshots().get(7));
+        assertFalse(transaction.hasUnpublishedChanges());
+    }
+
     private static ObjectDefinitionRawView rawName(String name) {
         return new ObjectDefinitionRawView(
                 7,
