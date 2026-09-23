@@ -386,20 +386,23 @@ Target responsibilities:
 
 ## 6. RuneLite concept mapping
 
-Studio should deliberately reuse established OSRS vocabulary where it improves clarity, without inheriting live-client implementation details.
+**Decision (2026-09-23):** the Studio scene API uses RuneLite's names and getter shapes. It lives in
+`com.rspsi.api` (interfaces, coordinates, `Perspective`), with the implementation in
+`com.rspsi.api.scene` over the resolved `GpuScenePacket` plus authored tiles. The types are
+Studio-owned: RuneLite is the vendored BSD reference, not a dependency. They add editor extras
+(authored plane, stable placement id, `isRendered`) and omit GPU buffer bookkeeping.
+RuneLite-style setters are allowed but must record undoable editor commands against the authored
+world; they never mutate a snapshot.
 
-| RuneLite concept | Studio target | Notes |
+| RuneLite concept | Studio type | Status / notes |
 | --- | --- | --- |
-| `Scene` | `SceneView` | immutable semantic scene |
-| `Tile` | `SceneTileView` | adds authored/resolved distinctions |
-| `SceneTilePaint` | `TilePaintView` | no public GPU offsets |
-| `SceneTileModel` | `TileModelView` | semantic geometry, no ordinary GPU bookkeeping |
-| `TileObject` | common `SceneObjectView` contract | stable id, world placement, layer/category, definition/action semantics |
-| `GameObject` | `SceneObjectView` + scene footprint | existing `GameObjectSceneMetadata` already carries occupied scene min/max/size |
-| `WallObject` | common object view + optional wall presentation | existing wall rules already model multi-part orientations; do not add a class until a consumer needs it |
-| `DecorativeObject` | common object view + wall-decoration presentation | existing `WallDecorationPresentation` / rules already carry displacement and two-renderable cases |
-| `GroundObject` | common `SceneObjectView` | no separate public type needed unless ground-layer-only behavior emerges |
-| `WorldPoint` | existing `WorldTile` / `WorldTileAddress` | absolute world, region, chunk, and local breakdown already exists |
+| `WorldView` + `Scene` | `com.rspsi.api.WorldView`, `Scene`; impl `api.scene.SceneView` | **implemented** read side; bridge columns shift down exactly as `Scene.setLinkBelow` |
+| `Tile` | `com.rspsi.api.Tile` | **implemented**: `getPlane`/`getRenderLevel`/`getPhysicalLevel` from `ScenePlaneSemantics`, `getBridge`, the four object layers; extras `getAuthoredPlane`, `getTileSettings` |
+| `SceneTilePaint` | `com.rspsi.api.SceneTilePaint` | **implemented**: scene shape 0/1 per `runescape-client/Scene.addTile`, lit packed-HSL corners, client flatness; `getRBG` replaced by `getMinimapHsl` until a palette service exists |
+| `SceneTileModel` | `com.rspsi.api.SceneTileModel` | **implemented**: scene-local vertices, faces, per-corner colours, textures; no buffer offsets |
+| `TileObject` + `GameObject`/`WallObject`/`DecorativeObject`/`GroundObject` | same names in `com.rspsi.api` | **implemented**: built from authored placements, so invisible/unresolved locs remain objects (`isRendered() == false`), as in the client; `GameObject.getOrientation` per `RSGameObjectMixin`; stable 64-bit `getHash` from the placement identity (not the client tag) |
+| `WorldPoint` / `LocalPoint` / `Point` | `com.rspsi.api.coords.*`, `com.rspsi.api.Point` | **implemented** |
+| `Perspective.getTileHeight` | `com.rspsi.api.Perspective.getTileHeight` | **implemented** bit-for-bit, including bridge-level promotion |
 | `WorldArea` | future world-space bounds/query value | Phase 3 should add a world-area type rather than misuse local `TileBounds` |
 | `ObjectComposition` transforms | `ObjectDefinitionResolver` / resolution view | one-step client transform is implemented; future simulated var state should be an explicit resolution context |
 | collision APIs / flags | existing `CollisionTileSnapshot` / `CollisionFlag` | reuse existing OSRS bit vocabulary |
@@ -501,25 +504,18 @@ A plugin should never need Dear ImGui, GLFW, OpenGL, OpenRune backend classes, o
 
 ## 9. RuneLite compatibility policy
 
-Do not promise binary/source compatibility with RuneLite plugins.
+Studio mirrors RuneLite's scene API **shape** (section 6) so RuneLite plugin authors meet familiar names. It
+does not promise binary/source compatibility: Studio types live in `com.rspsi.api`, not
+`net.runelite.api`.
 
-Most RuneLite plugins depend on a live game client, ticks, actors, widgets, varbits, events, menus, or network/client state that does not exist in a map editor.
+Live-client concepts (var state, NPCs, items, ticks) stay in scope for a future **simulation mode**. Design
+new types so they can host that state later rather than designing it out. The first concrete case is
+multiloc var state: the static resolver uses the definition's default transform, and multilocs without a
+default render nothing. The client's fresh-state (`var == 0`) behaviour is documented in
+PHASE0_LUMBRIDGE_ACCEPTANCE.md and should arrive as an explicit resolution/var-state context.
 
-A future object-resolution context may optionally supply simulated varbit/varp state so the editor's simulator can resolve non-default multiloc states. The current static editor resolver intentionally uses the definition's default transform because no live player state exists. Do not add a generic var-state API until the simulator or another first-party consumer requires it.
-
-A later optional compatibility/adaptation module may make scene-oriented RuneLite algorithms easier to port:
-
-    studio-runelite-compat
-
-Potential targets:
-
-- tile/world coordinate adapters
-- tile paint/model read adapters
-- scene-object adapters
-- polygon/model-bounds helpers
-- overlay geometry helpers
-
-This is an adapter/convenience layer, not the Studio public API itself.
+A later optional `studio-runelite-compat` module may implement `net.runelite.api` interfaces over the Studio
+types, to port scene-oriented RuneLite code. That adapter is a convenience layer, not the Studio public API.
 
 ---
 

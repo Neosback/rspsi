@@ -32,6 +32,13 @@ Dear ImGui, GLFW, and OpenGL remain internal Studio implementation details. `Stu
 is a transitional/internal presentation API, not the public plugin model to teach new plugin
 authors. See `docs/UI_WORKSPACE_CONTRACT.md` for where plugin UI contributions belong.
 
+**RuneLite-shaped scene API**: `Client/src/main/java/com/rspsi/api` mirrors `net.runelite.api`
+names and getters (`WorldView`, `Scene`, `Tile`, `SceneTilePaint`, `SceneTileModel`, `TileObject`
+layers, `WorldPoint`/`LocalPoint`, `Perspective`), implemented by `com.rspsi.api.scene.SceneView`
+over a resolved `GpuScenePacket`. It is Studio-owned, not a RuneLite dependency. Any RuneLite-style
+setters must record undoable editor commands. Cite the `runescape-client`/`runelite-mixins` source
+behind every value you add. See `docs/STUDIO_SEMANTIC_API.md` section 6.
+
 ## Build, test, run
 
 ```bash
