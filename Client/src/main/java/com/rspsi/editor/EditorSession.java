@@ -6,6 +6,8 @@ import com.rspsi.editor.model.DirtyRegion;
 import com.rspsi.editor.model.DocumentCoordinates;
 import com.rspsi.editor.model.WorldWindow;
 
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -25,7 +27,9 @@ public final class EditorSession {
     private final List<SessionChangeListener> changeListeners = new CopyOnWriteArrayList<>();
     private final List<SessionStateListener> stateListeners = new CopyOnWriteArrayList<>();
     private final Map<DirtyChunkKey, DirtyRegion> dirtyRegions = new LinkedHashMap<>();
-    private List<EditorCommand> savedSessionCommands = List.of();
+    private final Set<EditorCommand> appliedExternalCommands =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+    private long savedSessionStateToken;
     private int savedHistoryPosition;
 
     public EditorSession(WorldDocument world) {
@@ -103,6 +107,9 @@ public final class EditorSession {
         }
         EditorCommand checked = Objects.requireNonNull(command, "command");
         history.execute(checked, this);
+        if (!checked.savedBySessionSave()) {
+            appliedExternalCommands.add(checked);
+        }
         notifyChanged(checked);
         notifyStateChanged();
     }
@@ -113,6 +120,9 @@ public final class EditorSession {
         }
         EditorCommand command = history.previousCommand();
         boolean changed = history.undo(this);
+        if (changed && !command.savedBySessionSave()) {
+            appliedExternalCommands.remove(command);
+        }
         if (changed) {
             notifyChanged(command);
         }
@@ -128,6 +138,9 @@ public final class EditorSession {
         }
         EditorCommand command = history.nextCommand();
         boolean changed = history.redo(this);
+        if (changed && !command.savedBySessionSave()) {
+            appliedExternalCommands.add(command);
+        }
         if (changed) {
             notifyChanged(command);
         }
@@ -144,14 +157,19 @@ public final class EditorSession {
         }
         int before = history.position();
         if (before == position) return false;
-        java.util.Set<com.rspsi.editor.model.TileCoordinate> changed = history.moveTo(position, this);
+        java.util.Set<com.rspsi.editor.model.TileCoordinate> changed;
+        try {
+            changed = history.moveTo(position, this);
+        } finally {
+            rebuildAppliedExternalCommands();
+        }
         notifyChanged(changed);
         notifyStateChanged();
         return true;
     }
 
     public void markSaved() {
-        savedSessionCommands = currentSessionSaveState();
+        savedSessionStateToken = history.sessionSaveStateToken();
         savedHistoryPosition = history.position();
         notifyStateChanged();
     }
@@ -179,7 +197,7 @@ public final class EditorSession {
      * write. External transactions are deliberately excluded from this check.
      */
     public boolean isSessionSaveDirty() {
-        return !currentSessionSaveState().equals(savedSessionCommands);
+        return history.sessionSaveStateToken() != savedSessionStateToken;
     }
 
     /**
@@ -187,8 +205,7 @@ public final class EditorSession {
      * session save handler, such as an in-memory definition transaction.
      */
     public boolean hasUnsavedExternalState() {
-        return appliedCommands().stream()
-                .filter(command -> !command.savedBySessionSave())
+        return appliedExternalCommands.stream()
                 .anyMatch(EditorCommand::hasUnsavedExternalState);
     }
 
@@ -201,15 +218,15 @@ public final class EditorSession {
         return savedHistoryPosition;
     }
 
-    private List<EditorCommand> currentSessionSaveState() {
-        return appliedCommands().stream()
-                .filter(EditorCommand::savedBySessionSave)
-                .toList();
-    }
-
-    private List<EditorCommand> appliedCommands() {
+    private void rebuildAppliedExternalCommands() {
+        appliedExternalCommands.clear();
         List<EditorCommand> commands = history.commands();
-        return List.copyOf(commands.subList(0, history.position()));
+        for (int index = 0; index < history.position(); index++) {
+            EditorCommand command = commands.get(index);
+            if (!command.savedBySessionSave()) {
+                appliedExternalCommands.add(command);
+            }
+        }
     }
 
     /** Returns a stable snapshot of chunks whose derived data needs rebuilding. */
