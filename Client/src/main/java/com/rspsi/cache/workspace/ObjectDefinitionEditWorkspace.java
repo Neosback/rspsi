@@ -132,6 +132,25 @@ public final class ObjectDefinitionEditWorkspace {
                     checked.put(objectId, snapshot);
                 });
 
+        /*
+         * Preflight hydration against fresh transactions before mutating any live
+         * workspace state. Studio deliberately treats failed provenance restore
+         * as ignorable, so a failure here must leave the workspace completely
+         * unbound and existing previews untouched.
+         */
+        for (Map.Entry<Integer, ObjectDefinitionEditTransaction> entry
+                : transactions.entrySet()) {
+            ObjectDefinitionRawView published = checked.get(entry.getKey());
+            if (published == null || entry.getValue().dirty()) {
+                continue;
+            }
+            ObjectDefinitionEditTransaction probe = definitions.editObject(entry.getKey())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Persisted publication cannot reopen object "
+                                    + entry.getKey()));
+            applyRestoredPublication(probe, published);
+        }
+
         publicationTarget = target;
         publishedSnapshots.clear();
         publishedSnapshots.putAll(checked);
