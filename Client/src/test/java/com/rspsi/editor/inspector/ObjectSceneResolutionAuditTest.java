@@ -69,7 +69,7 @@ class ObjectSceneResolutionAuditTest {
                 report.entries().get(2).stage());
         assertEquals(ObjectSceneResolutionAudit.Stage.NO_MODEL_FOR_SHAPE,
                 report.entries().get(3).stage());
-        assertTrue(!report.passes());
+        assertTrue(report.failureCount() > 0);
     }
 
     @Test
