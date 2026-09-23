@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,6 +23,7 @@ public final class ObjectDefinitionEditWorkspace {
     private final DefinitionProvider definitions;
     private final Map<Integer, ObjectDefinitionEditTransaction> transactions =
             new LinkedHashMap<>();
+    private Path publicationTarget;
 
     public ObjectDefinitionEditWorkspace(DefinitionProvider definitions) {
         this.definitions = Objects.requireNonNull(definitions, "definitions");
@@ -73,6 +75,41 @@ public final class ObjectDefinitionEditWorkspace {
     }
 
     /**
+     * Output directory bound to this cache session after its first successful
+     * definition publication. Publication snapshots are meaningful only
+     * relative to this target during the session.
+     */
+    public synchronized Optional<Path> publicationTarget() {
+        return Optional.ofNullable(publicationTarget);
+    }
+
+    /**
+     * Marks a successfully-published snapshot and binds publication state to
+     * the explicit output cache. Later publishes in this loaded-cache session
+     * must target the same directory.
+     */
+    public synchronized void markPublished(
+            Path outputCache,
+            int objectId,
+            ObjectDefinitionRawView publishedPreview) {
+        Path target = Objects.requireNonNull(outputCache, "outputCache")
+                .toAbsolutePath().normalize();
+        if (publicationTarget != null && !publicationTarget.equals(target)) {
+            throw new IllegalArgumentException(
+                    "Definition publication is already bound to output cache "
+                            + publicationTarget);
+        }
+
+        ObjectDefinitionEditTransaction transaction = transactions.get(objectId);
+        if (transaction == null) {
+            throw new IllegalArgumentException(
+                    "No object definition transaction exists for id " + objectId);
+        }
+        transaction.markPublished(publishedPreview);
+        publicationTarget = target;
+    }
+
+    /**
      * Marks a successfully-published snapshot without mutating the current
      * transaction preview. If the user edited again while an output build was
      * running, the newer preview remains unpublished.
@@ -94,5 +131,6 @@ public final class ObjectDefinitionEditWorkspace {
      */
     public synchronized void clear() {
         transactions.clear();
+        publicationTarget = null;
     }
 }
