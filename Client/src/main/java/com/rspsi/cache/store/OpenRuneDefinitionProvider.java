@@ -13,6 +13,10 @@ import com.rspsi.cache.definition.MapElementDefinitionView;
 import com.rspsi.cache.definition.SequenceDefinitionView;
 import com.rspsi.cache.definition.AnimationFrameView;
 import com.rspsi.cache.definition.SkeletonDefinitionView;
+import com.rspsi.cache.definition.SkeletalRigView;
+import com.rspsi.cache.definition.ModelSkeletalSkinView;
+import com.rspsi.cache.definition.AnimationCurveView;
+import com.rspsi.cache.definition.CachedSkeletalAnimationView;
 import com.rspsi.cache.OsrsCacheIndexLayout;
 import dev.openrune.cache.filestore.definition.ModelDecoder;
 import dev.openrune.cache.filestore.definition.SpriteDecoder;
@@ -68,6 +72,8 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     private final Map<Integer, Optional<SequenceDefinitionView>> sequences = new HashMap<>();
     private final Map<Integer, Optional<AnimationFrameView>> animationFrames = new HashMap<>();
     private final Map<Integer, Optional<SkeletonDefinitionView>> skeletons = new HashMap<>();
+    private final Map<Integer, Optional<CachedSkeletalAnimationView>> cachedSkeletalAnimations = new HashMap<>();
+    private final Map<Integer, Optional<ModelSkeletalSkinView>> modelSkeletalSkins = new HashMap<>();
     private final Map<Integer, Optional<MapElementDefinitionView>> mapElements = new HashMap<>();
 
     private OpenRuneDefinitionProvider(Cache cache, int revision) {
@@ -635,6 +641,8 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             int priority = -1;
             int replyMode = 2;
             int skeletalId = -1;
+            int skeletalRangeBegin = 0;
+            int skeletalRangeEnd = 0;
             int animationHeightOffset = 0;
             while (cursor.remaining() > 0) {
                 int opcode = cursor.readUnsignedByte();
@@ -678,8 +686,12 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                         else skeletalId = cursor.readInt();
                     }
                     case 15 -> {
-                        if (revision >= OSRS_SEQUENCE_REVISION) cursor.skip(4);
-                        else skipSparseFrameSounds(cursor, false);
+                        if (revision >= OSRS_SEQUENCE_REVISION) {
+                            skeletalRangeBegin = cursor.readUnsignedShort();
+                            skeletalRangeEnd = cursor.readUnsignedShort();
+                        } else {
+                            skipSparseFrameSounds(cursor, false);
+                        }
                     }
                     case 16 -> {
                         if (revision < OSRS_SEQUENCE_REVISION) cursor.skip(4);
@@ -699,11 +711,119 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                     frameStep, stretches, normalizeSentinel(leftHandItem),
                     normalizeSentinel(rightHandItem), maxLoops,
                     normalizeSentinel(precedenceAnimating), normalizeSentinel(priority),
-                    replyMode, skeletalId, animationHeightOffset));
+                    replyMode, skeletalId, skeletalRangeBegin, skeletalRangeEnd,
+                    animationHeightOffset));
         } catch (RuntimeException failure) {
             recordFailure("sequence", id, failure);
             return Optional.empty();
         }
+    }
+
+    @Override
+    public synchronized Optional<CachedSkeletalAnimationView> cachedSkeletalAnimation(int id) {
+        if (id < 0) return Optional.empty();
+        return cachedSkeletalAnimations.computeIfAbsent(id, this::decodeCachedSkeletalAnimation);
+    }
+
+    private Optional<CachedSkeletalAnimationView> decodeCachedSkeletalAnimation(int id) {
+        int archive = id >>> 16;
+        int file = id & 0xFFFF;
+        byte[] data;
+        try {
+            data = cache.data(OsrsCacheIndexLayout.ANIMATIONS, archive, file, null);
+        } catch (RuntimeException failure) {
+            recordFailure("cached skeletal animation", id, failure);
+            return Optional.empty();
+        }
+        if (data == null || data.length < 3) return Optional.empty();
+
+        try {
+            ByteCursor cursor = new ByteCursor(data);
+            int version = cursor.readUnsignedByte();
+            int skeletonId = cursor.readUnsignedShort();
+            SkeletonDefinitionView skeleton = skeleton(skeletonId).orElseThrow(
+                    () -> new IllegalArgumentException("Missing cached-animation skeleton " + skeletonId));
+            SkeletalRigView rig = skeleton.rig().orElseThrow(
+                    () -> new IllegalArgumentException("Skeleton " + skeletonId + " has no cached-model rig"));
+
+            // The current client reads but does not retain these two header values.
+            cursor.readUnsignedShort();
+            cursor.readUnsignedShort();
+            int poseIndex = cursor.readUnsignedByte();
+            if (poseIndex >= rig.poseCount()) {
+                throw new IllegalArgumentException("Cached animation pose index exceeds rig");
+            }
+            int curveCount = cursor.readUnsignedShort();
+            AnimationCurveView[][] boneCurves =
+                    new AnimationCurveView[rig.boneCount()][9];
+            AnimationCurveView[] alphaCurves =
+                    new AnimationCurveView[skeleton.transformTypes().length];
+
+            for (int index = 0; index < curveCount; index++) {
+                int type = cursor.readUnsignedByte();
+                int target = cursor.readShortSmart();
+                int channel = cursor.readUnsignedByte();
+                AnimationCurveView curve = decodeAnimationCurve(cursor, version);
+
+                if (type == 1) {
+                    int boneChannel = channel >= 1 && channel <= 9 ? channel - 1 : -1;
+                    if (target < 0 || target >= boneCurves.length || boneChannel < 0) {
+                        throw new IllegalArgumentException("Invalid cached bone curve target");
+                    }
+                    boneCurves[target][boneChannel] = curve;
+                } else if (type == 4) {
+                    if (target < 0 || target >= alphaCurves.length) {
+                        throw new IllegalArgumentException("Invalid cached alpha curve target");
+                    }
+                    alphaCurves[target] = curve;
+                }
+            }
+
+            return Optional.of(new CachedSkeletalAnimationView(
+                    id, skeletonId, poseIndex, boneCurves, alphaCurves));
+        } catch (RuntimeException failure) {
+            recordFailure("cached skeletal animation", id, failure);
+            return Optional.empty();
+        }
+    }
+
+    private static AnimationCurveView decodeAnimationCurve(ByteCursor cursor, int version) {
+        int count = cursor.readUnsignedShort();
+        if (count <= 0) throw new IllegalArgumentException("Cached animation curve has no keys");
+        cursor.readUnsignedByte(); // class147 interpolation metadata; client curve math is tangent-driven.
+        AnimationCurveView.Extrapolation before =
+                AnimationCurveView.Extrapolation.fromOrdinal(cursor.readUnsignedByte());
+        AnimationCurveView.Extrapolation after =
+                AnimationCurveView.Extrapolation.fromOrdinal(cursor.readUnsignedByte());
+        boolean bezier = cursor.readUnsignedByte() != 0;
+        AnimationCurveView.Key[] keys = new AnimationCurveView.Key[count];
+        for (int index = 0; index < count; index++) {
+            keys[index] = new AnimationCurveView.Key(
+                    cursor.readShort(),
+                    cursor.readFloat(),
+                    cursor.readFloat(),
+                    cursor.readFloat(),
+                    cursor.readFloat(),
+                    cursor.readFloat());
+        }
+        return new AnimationCurveView(before, after, bezier, keys);
+    }
+
+    @Override
+    public synchronized Optional<ModelSkeletalSkinView> modelSkeletalSkin(int modelId) {
+        if (modelId < 0) return Optional.empty();
+        return modelSkeletalSkins.computeIfAbsent(modelId, key ->
+                decodedModel(key).flatMap(this::skeletalSkinView));
+    }
+
+    private Optional<ModelSkeletalSkinView> skeletalSkinView(ModelType model) {
+        int[][] bones = model.getSkeletalBones();
+        int[][] weights = model.getSkeletalScales();
+        if (bones == null || weights == null || bones.length != model.getVertexCount()
+                || weights.length != model.getVertexCount()) {
+            return Optional.empty();
+        }
+        return Optional.of(new ModelSkeletalSkinView(model.getId(), bones, weights));
     }
 
     @Override
@@ -740,7 +860,33 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                     labels[index][label] = cursor.readUnsignedByte();
                 }
             }
-            return Optional.of(new SkeletonDefinitionView(id, types, labels));
+
+            Optional<SkeletalRigView> rig = Optional.empty();
+            if (cursor.remaining() > 0) {
+                int boneCount = cursor.readUnsignedShort();
+                if (boneCount > 0) {
+                    int poseCount = cursor.readUnsignedByte();
+                    if (poseCount <= 0) throw new IllegalArgumentException("Invalid skeletal pose count");
+                    int[] parents = new int[boneCount];
+                    float[][][] bindMatrices = new float[boneCount][poseCount][16];
+                    for (int bone = 0; bone < boneCount; bone++) {
+                        parents[bone] = cursor.readShort();
+                        for (int pose = 0; pose < poseCount; pose++) {
+                            for (int value = 0; value < 16; value++) {
+                                bindMatrices[bone][pose][value] = cursor.readFloat();
+                            }
+                            // class136 retains these auxiliary vectors for client-side
+                            // decomposition caches. The skinning contract derives the same
+                            // values from the bind matrix, so they need not escape this adapter.
+                            cursor.readFloat();
+                            cursor.readFloat();
+                            cursor.readFloat();
+                        }
+                    }
+                    rig = Optional.of(new SkeletalRigView(poseCount, parents, bindMatrices));
+                }
+            }
+            return Optional.of(new SkeletonDefinitionView(id, types, labels, rig));
         } catch (RuntimeException failure) {
             recordFailure("skeleton", id, failure);
             return Optional.empty();
@@ -963,6 +1109,15 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
 
         private int readUnsignedShort() {
             return (readUnsignedByte() << 8) | readUnsignedByte();
+        }
+
+        private int readShort() {
+            int value = readUnsignedShort();
+            return value > 32767 ? value - 65536 : value;
+        }
+
+        private float readFloat() {
+            return Float.intBitsToFloat(readInt());
         }
 
         private int readShortSmart() {
