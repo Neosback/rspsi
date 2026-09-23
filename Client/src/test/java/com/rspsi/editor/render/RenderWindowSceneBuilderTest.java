@@ -186,6 +186,28 @@ class RenderWindowSceneBuilderTest {
     }
 
     @Test
+    void animationRefreshFallsBackWhenActiveTileRequiresSceneWideNormalMerge() {
+        WorldDocument document = new WorldDocument(64, 64, 1);
+        WorldObject animated = new WorldObject(42, 10, 0, 0, 8, 8);
+        document.tile(0, 8, 8).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(animated)));
+        WorldRegion loaded = new WorldRegion(10, 20, document);
+        WorldRegionWindow window = new WorldRegionWindow(
+                10, 20, 1, 1, Map.of(loaded.regionId(), loaded));
+        RenderWindowSceneBuilder builder =
+                new RenderWindowSceneBuilder(animatedDefinitions(true));
+
+        RenderWindowScene initial = builder.build(window, 0);
+        RenderWindowSceneBuilder.AnimationRefreshResult refresh =
+                builder.refreshAnimations(initial, 2);
+
+        assertTrue(refresh.fullModelRebuild(),
+                "mergeNormals animation tiles must preserve the scene-wide normal merge pass");
+        assertEquals(1, refresh.changedTiles());
+        assertTrue(refresh.rebuiltModelTiles() >= 1);
+    }
+
+    @Test
     void stitchesEastNeighborBeforeBuildingSharedGeometry() {
         WorldDocument westDocument = new WorldDocument(64, 64, 4);
         WorldDocument eastDocument = new WorldDocument(64, 64, 4);
@@ -263,11 +285,15 @@ class RenderWindowSceneBuilderTest {
     }
 
     private static DefinitionProvider animatedDefinitions() {
+        return animatedDefinitions(false);
+    }
+
+    private static DefinitionProvider animatedDefinitions(boolean mergeNormals) {
         com.rspsi.cache.definition.ObjectAppearanceView appearance =
                 new com.rspsi.cache.definition.ObjectAppearanceView(
                         77, false, 128, 128, 128,
                         0, 0, 0, Map.of(), Map.of(),
-                        true, false, false, false,
+                        true, false, mergeNormals, false,
                         0, 0, 16, -1, 0,
                         false, false, false, 0);
         com.rspsi.cache.definition.ObjectAppearanceView staticAppearance =
