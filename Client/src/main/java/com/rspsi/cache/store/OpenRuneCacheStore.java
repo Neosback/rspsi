@@ -17,6 +17,8 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Objects;
 
+import static dev.openrune.cache.ConfigTypeKt.OBJECT;
+
 /**
  * OpenRune FileStore compatibility adapter.
  *
@@ -175,6 +177,29 @@ public final class OpenRuneCacheStore implements CacheStore {
     public byte[] read(int index, int archive, int file) {
         byte[] data = cache.data(index, archive, file, null);
         return data == null ? null : data.clone();
+    }
+
+    /**
+     * Reads one OSRS object definition from OpenRune's canonical config
+     * location without exposing the backend's CONFIG/OBJECT constants.
+     */
+    public byte[] readObjectDefinitionPayload(int objectId) {
+        if (objectId < 0) {
+            throw new IllegalArgumentException("Object definition id cannot be negative");
+        }
+        return read(com.rspsi.cache.OsrsCacheIndexLayout.CONFIGS, OBJECT, objectId);
+    }
+
+    /**
+     * Writes one validated object-definition payload to an explicitly writable
+     * output cache. Source/read-only stores still reject this through
+     * {@link #write(int, int, int, byte[])}.
+     */
+    public void writeObjectDefinitionPayload(int objectId, byte[] data) {
+        if (objectId < 0) {
+            throw new IllegalArgumentException("Object definition id cannot be negative");
+        }
+        write(com.rspsi.cache.OsrsCacheIndexLayout.CONFIGS, OBJECT, objectId, data);
     }
 
     @Override
