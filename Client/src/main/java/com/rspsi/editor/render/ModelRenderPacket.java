@@ -31,8 +31,29 @@ public record ModelRenderPacket(
         List<ClientModelBounds> clientRenderableBounds,
         List<ClientRenderablePlacement> clientRenderablePlacements,
         ModelContourContract contourContract,
+        ModelAnimationState animationState,
         SceneObjectIdentity sceneObjectIdentity
 ) {
+    /** Compatibility constructor before frame-time animation state was retained. */
+    public ModelRenderPacket(TileCoordinate anchor, int objectId, ObjectCategory category,
+                             List<ModelVertex> vertices, List<ModelTriangle> triangles,
+                             List<TextureTriangle> textureTriangles, int animationId,
+                             int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
+                             boolean supportsAnimation, boolean supportsParticles,
+                             int placementHeight, boolean roofRelated,
+                             GpuDrawCommand.RenderMode renderMode,
+                             WallDecorationPresentation wallDecorationPresentation,
+                             GameObjectSceneMetadata gameObjectSceneMetadata,
+                             List<ClientModelBounds> clientRenderableBounds,
+                             List<ClientRenderablePlacement> clientRenderablePlacements,
+                             ModelContourContract contourContract,
+                             SceneObjectIdentity sceneObjectIdentity) {
+        this(anchor, objectId, category, vertices, triangles, textureTriangles, animationId,
+                minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles,
+                placementHeight, roofRelated, renderMode, wallDecorationPresentation,
+                gameObjectSceneMetadata, clientRenderableBounds, clientRenderablePlacements,
+                contourContract, ModelAnimationState.none(), sceneObjectIdentity);
+    }
     /** Compatibility constructor before contour metadata was retained. */
     public ModelRenderPacket(TileCoordinate anchor, int objectId, ObjectCategory category,
                              List<ModelVertex> vertices, List<ModelTriangle> triangles,
@@ -50,7 +71,7 @@ public record ModelRenderPacket(
                 minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles,
                 placementHeight, roofRelated, renderMode, wallDecorationPresentation,
                 gameObjectSceneMetadata, clientRenderableBounds, clientRenderablePlacements,
-                ModelContourContract.none(), sceneObjectIdentity);
+                ModelContourContract.none(), ModelAnimationState.none(), sceneObjectIdentity);
     }
 
     /** Compatibility constructor before stable scene-object identity was retained. */
@@ -69,7 +90,7 @@ public record ModelRenderPacket(
                 placementHeight, roofRelated, renderMode, wallDecorationPresentation,
                 gameObjectSceneMetadata, clientRenderableBounds,
                 defaultPlacements(clientRenderableBounds), ModelContourContract.none(),
-                SceneObjectIdentity.none());
+                ModelAnimationState.none(), SceneObjectIdentity.none());
     }
 
     /** Compatibility constructor before client model bounds metadata was retained. */
@@ -156,6 +177,7 @@ public record ModelRenderPacket(
         clientRenderablePlacements = List.copyOf(Objects.requireNonNull(
                 clientRenderablePlacements, "clientRenderablePlacements"));
         contourContract = Objects.requireNonNull(contourContract, "contourContract");
+        animationState = Objects.requireNonNull(animationState, "animationState");
         sceneObjectIdentity = Objects.requireNonNull(sceneObjectIdentity, "sceneObjectIdentity");
         if (clientRenderableBounds.stream().anyMatch(value -> value == null || !value.present())) {
             throw new IllegalArgumentException("Client renderable bounds must be present");
@@ -167,6 +189,9 @@ public record ModelRenderPacket(
         contourContract.validateVertexCount(vertices.size());
         if (objectId < 0 || animationId < -1 || minX > maxX || minY > maxY || minZ > maxZ) {
             throw new IllegalArgumentException("Invalid model packet identity or bounds");
+        }
+        if (animationState.sequenceId() >= 0 && animationState.sequenceId() != animationId) {
+            throw new IllegalArgumentException("Animation state sequence must match packet animation id");
         }
         for (ModelTriangle triangle : triangles) {
             if (triangle.a() >= vertices.size() || triangle.b() >= vertices.size()
@@ -199,7 +224,8 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 newRenderMode, wallDecorationPresentation, gameObjectSceneMetadata,
-                clientRenderableBounds, clientRenderablePlacements, contourContract, sceneObjectIdentity);
+                clientRenderableBounds, clientRenderablePlacements, contourContract,
+                animationState, sceneObjectIdentity);
     }
 
     /** Returns this packet with explicit wall-decoration renderable identity. */
@@ -218,7 +244,8 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, Objects.requireNonNull(metadata, "metadata"),
-                clientRenderableBounds, clientRenderablePlacements, contourContract, sceneObjectIdentity);
+                clientRenderableBounds, clientRenderablePlacements, contourContract,
+                animationState, sceneObjectIdentity);
     }
 
     /** Returns this packet with one client-local bounds entry per client renderable. */
@@ -230,7 +257,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
-                copied, placements, contourContract, sceneObjectIdentity);
+                copied, placements, contourContract, animationState, sceneObjectIdentity);
     }
 
     /** Returns this packet with per-renderable scene placement offsets. */
@@ -240,7 +267,7 @@ public record ModelRenderPacket(
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
                 clientRenderableBounds, List.copyOf(Objects.requireNonNull(placements, "placements")),
-                contourContract, sceneObjectIdentity);
+                contourContract, animationState, sceneObjectIdentity);
     }
 
     /** Convenience for the common one-renderable packet. */
@@ -255,7 +282,7 @@ public record ModelRenderPacket(
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
                 clientRenderableBounds, clientRenderablePlacements,
-                Objects.requireNonNull(contract, "contract"), sceneObjectIdentity);
+                Objects.requireNonNull(contract, "contract"), animationState, sceneObjectIdentity);
     }
 
     /** Returns this packet with the semantic identity of its placed object. */
@@ -265,7 +292,22 @@ public record ModelRenderPacket(
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
                 clientRenderableBounds, clientRenderablePlacements, contourContract,
-                Objects.requireNonNull(identity, "identity"));
+                animationState, Objects.requireNonNull(identity, "identity"));
+    }
+
+    /** Returns this packet with explicit frame-time animation state. */
+    public ModelRenderPacket withAnimationState(ModelAnimationState state) {
+        return new ModelRenderPacket(anchor, objectId, category, vertices, triangles,
+                textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
+                supportsAnimation, supportsParticles, placementHeight, roofRelated,
+                renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
+                clientRenderableBounds, clientRenderablePlacements, contourContract,
+                Objects.requireNonNull(state, "state"), sceneObjectIdentity);
+    }
+
+    /** Placement height after the client's animation-height offset is applied. */
+    public int renderPlacementHeight() {
+        return animationState.renderPlacementHeight(placementHeight);
     }
 
     private static List<ClientRenderablePlacement> defaultPlacements(
