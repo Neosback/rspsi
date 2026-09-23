@@ -53,6 +53,18 @@ class RoofRemovalStateTest {
     }
 
     @Test
+    void betweenUsesRuneLiteIfElseBresenhamStairStep() {
+        RoofRegionMap map = RoofRegionMap.build(
+                window(), tilesWithBlocking(Set.of(key(1, 0))));
+        RoofRemovalState state = new RoofRemovalState(
+                RoofRemovalState.BETWEEN,
+                point(4, 4), null, null, point(0, 0), 200);
+
+        assertEquals(Set.of(map.regionId(0, 1, 0)), state.selectedRegionIds(map, 0),
+                "RuneLite moves one axis per loop iteration, so the diagonal trace visits (1,0)");
+    }
+
+    @Test
     void betweenStopsAtPitch310AndDoesNotIncludeThePlayerFinalTile() {
         RoofRegionMap map = RoofRegionMap.build(window(), tiles());
 
@@ -86,15 +98,23 @@ class RoofRemovalStateTest {
     }
 
     private static List<SceneTileSnapshot> tiles() {
+        return tilesWithBlocking(Set.of(key(1, 1), key(8, 1)));
+    }
+
+    private static List<SceneTileSnapshot> tilesWithBlocking(Set<Long> blocking) {
         List<SceneTileSnapshot> tiles = new ArrayList<>();
         for (int x = 0; x < 12; x++) {
-            for (int y = 0; y < 4; y++) {
-                int flags = (x == 1 && y == 1) || (x == 8 && y == 1)
+            for (int y = 0; y < 6; y++) {
+                int flags = blocking.contains(key(x, y))
                         ? OsrsTileFlags.REMOVE_ROOFS : 0;
                 tiles.add(tile(0, x, y, flags));
             }
         }
         return tiles;
+    }
+
+    private static long key(int x, int y) {
+        return ((long) x << 32) | (y & 0xFFFFFFFFL);
     }
 
     private static SceneTileSnapshot tile(int plane, int x, int y, int flags) {
