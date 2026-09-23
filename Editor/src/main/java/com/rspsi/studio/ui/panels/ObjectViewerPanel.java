@@ -9,6 +9,7 @@ import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.cache.workspace.ObjectDefinitionEditWorkspace;
 import com.rspsi.editor.ObjectDefinitionEditCommand;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.OsrsLocShape;
 import com.rspsi.editor.selection.ObjectSelection;
 import com.rspsi.editor.selection.ObjectSetSelection;
 import com.rspsi.editor.selection.Selection;
@@ -92,13 +93,10 @@ public final class ObjectViewerPanel implements StudioPanel {
     private int lastTypeFilter = -1;
 
     private static final String[] FILTER_OPTIONS = {"All", "Interactive", "Solid", "Decorations", "Walls"};
-    private static final String[] OBJECT_TYPES = {
-            "0 - Straight wall", "1 - Diagonal wall corner", "2 - Entire wall corner",
-            "3 - Straight wall corner", "4 - Straight decor", "5 - Diagonal decor",
-            "6 - Diagonal corner decor", "7 - Straight internal decor", "8 - Diagonal in decor",
-            "9 - Diagonal wall", "10 - Straight solid objects", "11 - Ground decor",
-            "22 - Floor decor"
-    };
+    private static final String[] OBJECT_TYPES = java.util.Arrays.stream(OsrsLocShape.values())
+            .sorted(java.util.Comparator.comparingInt(OsrsLocShape::id))
+            .map(shape -> shape.id() + " - " + shape.displayName())
+            .toArray(String[]::new);
     private static final String[] ROTATIONS = {"West (0)", "North (1)", "East (2)", "South (3)"};
     private static final String[] PARAM_TYPES = {"String", "Int", "Long"};
 
