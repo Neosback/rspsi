@@ -104,6 +104,28 @@ class EditorSessionTest {
     }
 
     @Test
+    void replacementBranchAtSameCursorRemainsDirtyAfterSavePoint() {
+        WorldModel world = new WorldModel(2, 2);
+        EditorSession session = new EditorSession(world);
+        TileCoordinate coordinate = new TileCoordinate(0, 0, 0);
+        TileSnapshot initial = world.tile(coordinate).snapshot();
+        TileSnapshot first = new TileSnapshot(1, 0, 0, 0, 1, 0, 0, 0, 0, List.of());
+        TileSnapshot replacement = new TileSnapshot(2, 0, 0, 0, 2, 0, 0, 0, 0, List.of());
+
+        session.execute(new SetTileCommand(coordinate, initial, first, "first"));
+        session.markSaved();
+        assertFalse(session.isDirty());
+
+        assertTrue(session.undo());
+        session.execute(new SetTileCommand(coordinate, initial, replacement, "replacement"));
+
+        assertEquals(session.savedHistoryPosition(), session.history().position());
+        assertTrue(session.isSessionSaveDirty(),
+                "a replacement branch must not become clean just because it has the saved cursor index");
+        assertTrue(session.isDirty());
+    }
+
+    @Test
     void historyCanJumpAcrossMultipleCommandsAndReturnsToSavedPosition() {
         WorldModel world = new WorldModel(2, 2);
         EditorSession session = new EditorSession(world);
