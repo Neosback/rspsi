@@ -91,6 +91,31 @@ class OpenRuneObjectDefinitionEditTransactionTest {
     }
 
     @Test
+    void revertingIndividualEditsClearsTheirDirtyMarkers() {
+        ObjectTypeBuilder builder = new ObjectTypeBuilder(88);
+        builder.setName("Door");
+        builder.setSizeX(1);
+        builder.setParams(new HashMap<>(Map.of(10, 5)));
+
+        OpenRuneObjectDefinitionEditTransaction transaction =
+                new OpenRuneObjectDefinitionEditTransaction(builder.build(), 240);
+
+        transaction.setField("name", ObjectDefinitionEditValue.stringValue("Edited door"));
+        transaction.putParam(10, ObjectDefinitionEditValue.intValue(9));
+        transaction.putParam(11, ObjectDefinitionEditValue.stringValue("temp"));
+        assertEquals(Set.of("name"), transaction.dirtyFields());
+        assertEquals(Set.of(10, 11), transaction.dirtyParams());
+
+        transaction.setField("name", ObjectDefinitionEditValue.stringValue("Door"));
+        transaction.putParam(10, ObjectDefinitionEditValue.intValue(5));
+        transaction.removeParam(11);
+
+        assertTrue(transaction.dirtyFields().isEmpty());
+        assertTrue(transaction.dirtyParams().isEmpty());
+        assertFalse(transaction.dirty());
+    }
+
+    @Test
     void rejectsComplexFieldsAndUnsupportedBooleanParams() {
         ObjectTypeBuilder builder = new ObjectTypeBuilder(77);
         builder.setObjectModels(java.util.List.of(1, 2));
