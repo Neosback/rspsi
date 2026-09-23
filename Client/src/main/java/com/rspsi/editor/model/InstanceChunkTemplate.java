@@ -27,6 +27,12 @@ public record InstanceChunkTemplate(
                 || sourcePlane < 0 || sourceChunkX < 0 || sourceChunkY < 0) {
             throw new IllegalArgumentException("Instance chunk coordinates cannot be negative");
         }
+        if (targetPlane > 3 || sourcePlane > 3) {
+            throw new IllegalArgumentException("Instance chunk planes must fit the OSRS 2-bit plane range");
+        }
+        if (sourceChunkX > 0x3ff || sourceChunkY > 0x7ff) {
+            throw new IllegalArgumentException("Instance source chunk coordinates exceed the OSRS packed layout");
+        }
         if (rotation < 0 || rotation > 3) {
             throw new IllegalArgumentException("Instance chunk rotation must be between 0 and 3");
         }

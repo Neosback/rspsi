@@ -52,7 +52,29 @@ class SceneContractTest {
         assertEquals(SceneContract.ApiClass.PRESENTATION_ONLY, surface.get("getDrawDistance"));
         assertEquals(SceneContract.ApiClass.PRESENTATION_ONLY, surface.get("getRoofRemovalMode"));
         assertEquals(SceneContract.ApiClass.SEMANTIC, surface.get("getRoofs"));
+        assertEquals(SceneContract.ApiClass.SEMANTIC, surface.get("getInstanceTemplateChunks"));
         assertEquals(SceneContract.ApiClass.MUTATION, surface.get("buildRoofs"));
         assertEquals(SceneContract.ApiClass.DEFERRED, surface.get("getExtendedTiles"));
+        assertEquals(SceneContract.ApiClass.DEFERRED, surface.get("getExtendedTileSettings"));
     }
+    @Test
+    void sceneWindowExposesClientShapedApiViewsWithoutMergingRenderingConcerns() {
+        com.rspsi.editor.model.InstanceChunkTemplate template =
+                new com.rspsi.editor.model.InstanceChunkTemplate(
+                        1, 2, 3, 2, 400, 500, 1);
+        WorldRegionWindow regions = new WorldRegionWindow(10, 20, 1, 1, Map.of());
+        SceneWindow window = new SceneWindow(
+                regions, 640, 1280, 4, 5,
+                0, -1, Set.of(), List.of(template));
+
+        assertTrue(window.instance());
+        assertEquals(template.encode(), window.instanceTemplateGrid().packedAt(1, 2, 3));
+        assertEquals(13, window.instanceTemplateGrid().chunksPerAxis());
+
+        ExtendedSceneLayout layout = window.extendedSceneLayout();
+        assertEquals(104, layout.sceneSize());
+        assertEquals(184, layout.extendedSceneSize());
+        assertEquals(40, layout.offset());
+    }
+
 }
