@@ -36,7 +36,7 @@ A lower item must not silently override a higher item. When work makes a lower d
 
 Use the correct reference for the question being answered. Do not treat all external projects as equivalent evidence.
 
-1. **Real OSRS cache/map fixtures** are the final acceptance evidence for authored placements, definition availability, and representative scene behavior.
+1. **Real OSRS cache/map fixtures** are the final acceptance evidence for authored placements, definition availability, and representative scene behavior. Acquire revisioned OSRS caches through OpenRune FileStore's existing OpenRS2 tooling when practical; OpenRS2 is a cache/provenance source, not a renderer-behavior oracle.
 2. **Vendored RuneLite `runescape-client` source** is the primary reproducible reference for OSRS client scene semantics: object transforms, tile paint/model construction, loc-shape model selection, plane/bridge behavior, contouring, lighting order, scene traversal, visibility, and related client rules.
 3. **Vendored RuneLite `runelite-api` and public Javadocs** are the primary naming/concept reference for stable semantic API design. They are not by themselves proof of implementation behavior.
 4. **Vendored RuneLite mixins/GPU/client renderer code** is consulted when the question is specifically how RuneLite exposes or submits client scene/render state.
