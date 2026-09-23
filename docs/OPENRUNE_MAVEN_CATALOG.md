@@ -284,13 +284,15 @@ and the higher-level working-cache bootstrap in:
 
 For Studio's real-cache verification/bootstrap path, prefer this OpenRune-owned acquisition layer over custom HTTP/OpenRS2 code.
 
-Studio still owns:
+Studio still owns for standalone/reference-cache workflows:
 
-- where verification/project caches live;
+- where Studio-managed verification/reference caches live;
 - whether acquisition is opt-in;
 - provenance/fingerprint recording;
 - verification/acceptance policy;
-- read-only versus explicit writable-output policy.
+- read-only source versus explicit Studio-managed output policy.
+
+A connected OpenRune Server project is different: its `.data/cache/LIVE` and `.data/cache/SERVER` locations and their synchronization are owned by the OpenRune project/build. Studio discovers those paths and reads them, but does not replace them with its standalone writable-output model. See `OPENRUNE_ECOSYSTEM_INTEGRATION.md`.
 
 ---
 
@@ -385,7 +387,8 @@ Use this matrix before adding new infrastructure.
 
 For Phase 0 and the semantic API work:
 
-- use FileStore `FreshCache`/OpenRS2 tooling as the preferred reference-cache bootstrap;
+- use FileStore `FreshCache`/OpenRS2 tooling as the preferred **reference-cache** bootstrap;
+- never treat that bootstrap as OpenRune Server project-open behavior;
 - use revision 240 without XTEA-key requirements;
 - keep the external-cache verifier responsible for semantic/render acceptance;
 - do not add direct OpenRS2 dependencies for cache downloading;
