@@ -77,18 +77,14 @@ public final class ObjectDefinitionOutputCacheBuilder {
         Path staging = Files.createTempDirectory(
                 outputParent,
                 "." + output.getFileName() + "-staging-");
-        boolean moved = false;
         try {
             copyCacheDirectory(sourceReal, staging);
             writeStagedDefinitions(staging, edits);
+
+            // Reopen and verify the complete staged cache before the requested
+            // output path exists. The move below is the publication boundary.
             verifyCache(staging, revision, edits);
-
             moveIntoPlace(staging, output);
-            moved = true;
-
-            // Verify the exact directory that callers will consume, not only
-            // the pre-move staging path.
-            verifyCache(output, revision, edits);
 
             long bytes = edits.stream().mapToLong(edit -> edit.payload().length).sum();
             return new BuildResult(
@@ -96,7 +92,7 @@ public final class ObjectDefinitionOutputCacheBuilder {
                     edits.stream().map(EncodedEdit::objectId).toList(),
                     bytes);
         } catch (IOException | RuntimeException failure) {
-            cleanupTree(moved ? output : staging, failure);
+            cleanupTree(staging, failure);
             throw failure;
         }
     }
