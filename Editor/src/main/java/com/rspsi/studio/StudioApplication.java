@@ -240,8 +240,7 @@ public final class StudioApplication implements AutoCloseable {
 
     private void loadCache(Path path) {
         if (path == null) return;
-        cacheSessions.load(path)
-                .thenAccept(this::restoreDefinitionPublicationState);
+        cacheSessions.load(path, this::restoreDefinitionPublicationState);
     }
 
     private void restoreDefinitionPublicationState(
