@@ -47,6 +47,8 @@ class ObjectDefinitionEditCommandTest {
         assertTrue(session.undo());
         assertEquals("Tree", transaction.field("name").value());
         assertFalse(transaction.dirty());
+        assertFalse(session.isDirty());
+        assertFalse(session.hasUnsavedExternalState());
 
         assertTrue(session.redo());
         assertEquals("Copper rocks", transaction.field("name").value());
