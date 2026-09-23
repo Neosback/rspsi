@@ -493,7 +493,8 @@ public final class ModelPacketBuilder {
         // The client gates on clipType >= 0, not on the legacy boolean.
         if (appearance.contourGroundType() >= 0) {
             List<RawVertex> contoured = applyContour(document, object, footprintWidth,
-                    footprintLength, transformed, appearance);
+                    footprintLength, transformed, appearance,
+                    variant.decorX(), variant.decorZ());
             if (contoured != null) {
                 transformed = contoured;
                 parts.contourApplied = true;
@@ -1233,23 +1234,31 @@ public final class ModelPacketBuilder {
     private List<RawVertex> applyContour(WorldDocument document, WorldObject object,
                                          int footprintWidth, int footprintLength,
                                          List<RawVertex> transformed,
-                                         ObjectAppearanceView appearance) {
+                                         ObjectAppearanceView appearance,
+                                         int decorX, int decorZ) {
         int type = appearance.contourGroundType();
         int parameter = appearance.contourGroundParameter();
         if (type < 0) return null;
         boolean usesAbovePlane = type == 4 || type == 5;
         if (usesAbovePlane && document.planes() <= object.plane() + 1) return null;
 
-        // Client bounds cylinder (calculateBoundsCylinder): height = max(-y)
-        // drives the partial ratio, xzRadius = max(sqrt(x^2+z^2)) grown by
-        // +0.99 bounds the footprint box used for the skip checks.
+        // Client contourGround calculates its cylinder from Model-local
+        // coordinates, then receives the Scene placement centre separately.
+        // RSPSi's neutral packet has already baked footprint-centre and wall-
+        // decoration displacement into X/Z, so remove both before calculating
+        // the client radius. Wall-decoration displacement is Scene-only and
+        // must not participate in contour sampling.
+        int centerX = footprintWidth * 64;
+        int centerZ = footprintLength * 64;
         int downwardHeight = 0;
         long radiusSquared = 0L;
         int modelMinY = Integer.MAX_VALUE;
         int modelMaxY = Integer.MIN_VALUE;
         for (RawVertex vertex : transformed) {
+            int localX = vertex.x() - centerX - decorX;
+            int localZ = vertex.z() - centerZ - decorZ;
             if (-vertex.y() > downwardHeight) downwardHeight = -vertex.y();
-            long squared = (long) vertex.x() * vertex.x() + (long) vertex.z() * vertex.z();
+            long squared = (long) localX * localX + (long) localZ * localZ;
             if (squared > radiusSquared) radiusSquared = squared;
             modelMinY = Math.min(modelMinY, vertex.y());
             modelMaxY = Math.max(modelMaxY, vertex.y());
@@ -1258,13 +1267,13 @@ public final class ModelPacketBuilder {
         int xzRadius = (int) (Math.sqrt((double) radiusSquared) + 0.99D);
         int verticalSpan = Math.max(1, modelMaxY - modelMinY);
 
-        int anchorX = object.x() * 128;
-        int anchorZ = object.y() * 128;
+        int contourCenterX = object.x() * 128 + centerX;
+        int contourCenterZ = object.y() * 128 + centerZ;
         int plane = object.plane();
-        int minWorldX = anchorX - xzRadius;
-        int maxWorldX = anchorX + xzRadius;
-        int minWorldZ = anchorZ - xzRadius;
-        int maxWorldZ = anchorZ + xzRadius;
+        int minWorldX = contourCenterX - xzRadius;
+        int maxWorldX = contourCenterX + xzRadius;
+        int minWorldZ = contourCenterZ - xzRadius;
+        int maxWorldZ = contourCenterZ + xzRadius;
         // Out-of-scene footprints are left untouched (client bounds guard:
         // every vertex satisfies tx+1 < width because xzRadius bounds them).
         if (minWorldX < 0 || (maxWorldX + 128) >> 7 >= document.width()
@@ -1289,8 +1298,10 @@ public final class ModelPacketBuilder {
 
         List<RawVertex> result = new ArrayList<>(transformed.size());
         for (RawVertex vertex : transformed) {
-            int worldX = anchorX + vertex.x();
-            int worldZ = anchorZ + vertex.z();
+            int localX = vertex.x() - centerX - decorX;
+            int localZ = vertex.z() - centerZ - decorZ;
+            int worldX = contourCenterX + localX;
+            int worldZ = contourCenterZ + localZ;
             int fractionX = worldX & 127;
             int fractionZ = worldZ & 127;
             int tileX = worldX >> 7;
