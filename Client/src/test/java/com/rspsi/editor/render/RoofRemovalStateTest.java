@@ -65,6 +65,18 @@ class RoofRemovalStateTest {
     }
 
     @Test
+    void betweenDoesNotRequireEndpointTileObjectsToExist() {
+        RoofRegionMap map = RoofRegionMap.build(
+                window(), java.util.List.of(tile(0, 2, 0, OsrsTileFlags.REMOVE_ROOFS)));
+        RoofRemovalState state = new RoofRemovalState(
+                RoofRemovalState.BETWEEN,
+                point(4, 0), null, null, point(0, 0), 200);
+
+        assertEquals(Set.of(map.regionId(0, 2, 0)), state.selectedRegionIds(map, 0),
+                "RuneLite checks scene bounds for endpoints and can cross sparse/null scene tiles");
+    }
+
+    @Test
     void betweenStopsAtPitch310AndDoesNotIncludeThePlayerFinalTile() {
         RoofRegionMap map = RoofRegionMap.build(window(), tiles());
 
