@@ -26,6 +26,7 @@ public final class RenderSettingKeys {
     public static final SettingKey<Boolean> BRIDGE_TILES_VISIBLE = bool("viewport.scene.bridges.visible");
     public static final SettingKey<Boolean> HIDDEN_TILES_VISIBLE = bool("viewport.scene.hidden-tiles.visible");
     public static final SettingKey<Boolean> COLLISION_VISIBLE = bool("viewport.debug.collision.visible");
+    public static final SettingKey<Boolean> INVISIBLE_OBJECTS_VISIBLE = bool("viewport.scene.invisible-objects.visible");
     public static final SettingKey<Boolean> WIREFRAME = bool("viewport.debug.wireframe");
     public static final SettingKey<BackfacePolicy.NativeCullingMode> NATIVE_CULLING_MODE =
             new SettingKey<>("viewport.debug.native-culling", BackfacePolicy.NativeCullingMode.class);
@@ -71,6 +72,9 @@ public final class RenderSettingKeys {
                 "Render geometry authored above bridge-effective planes.", visibility));
         registry.register(SettingSpec.of(HIDDEN_TILES_VISIBLE, false, SettingScope.VIEWPORT, "Hidden tiles",
                 "Include tiles marked hidden by scene flags.", visibility));
+        registry.register(SettingSpec.of(INVISIBLE_OBJECTS_VISIBLE, false, SettingScope.VIEWPORT, "Invisible objects",
+                "Show markers for collision-only locs the client draws nothing for "
+                        + "(invisible walls and floor blockers).", visibility));
         registry.register(SettingSpec.of(COLLISION_VISIBLE, false, SettingScope.VIEWPORT, "Collision",
                 "Show collision diagnostics.", Set.of(SettingInvalidation.REDRAW)));
         registry.register(SettingSpec.of(WIREFRAME, false, SettingScope.VIEWPORT, "Wireframe",
@@ -121,7 +125,7 @@ public final class RenderSettingKeys {
         consumers.register("render-config", PROFILE, TERRAIN_VISIBLE, OBJECTS_VISIBLE,
                 WALLS_VISIBLE, WALL_DECORATIONS_VISIBLE, GROUND_OBJECTS_VISIBLE,
                 GROUND_DECORATIONS_VISIBLE, ROOFS_VISIBLE, BRIDGE_TILES_VISIBLE,
-                HIDDEN_TILES_VISIBLE, COLLISION_VISIBLE, WIREFRAME, ACTIVE_PLANE,
+                HIDDEN_TILES_VISIBLE, INVISIBLE_OBJECTS_VISIBLE, COLLISION_VISIBLE, WIREFRAME, ACTIVE_PLANE,
                 PLANE_SELECTION, BRIGHTNESS, EXPOSURE, MSAA_SAMPLES, FOG_DEPTH_TILES,
                 FOG_COLOR);
         consumers.register("native-viewport-validation", NATIVE_CULLING_MODE);

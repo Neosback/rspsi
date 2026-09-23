@@ -28,7 +28,8 @@ public final class RenderConfigCompiler {
                 settings.getOrDefault(RenderSettingKeys.EXPOSURE, 0.0),
                 settings.getOrDefault(RenderSettingKeys.MSAA_SAMPLES, 0),
                 settings.getOrDefault(RenderSettingKeys.FOG_DEPTH_TILES, 0),
-                settings.getOrDefault(RenderSettingKeys.FOG_COLOR, 0x101827));
+                settings.getOrDefault(RenderSettingKeys.FOG_COLOR, 0x101827),
+                settings.getOrDefault(RenderSettingKeys.INVISIBLE_OBJECTS_VISIBLE, false));
     }
 
     public RenderConfig defaultConfig() {

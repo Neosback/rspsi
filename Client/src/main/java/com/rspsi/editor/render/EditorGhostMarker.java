@@ -65,7 +65,7 @@ final class EditorGhostMarker {
                 false, false, placementHeight, false)
                 .withSceneObjectIdentity(SceneObjectIdentity.of(object,
                         footprint.footprintWidth(), footprint.footprintLength(), occurrence))
-                .asEditorGhost(ModelPacketBuilder.GHOST_TRANSPARENCY);
+                .asEditorMarker(ModelPacketBuilder.GHOST_TRANSPARENCY);
     }
 
     /** Axis-aligned box from (x0,z0) to (x1,z1), standing {@code height} units up. */

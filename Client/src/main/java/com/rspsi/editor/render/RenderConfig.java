@@ -31,7 +31,8 @@ public record RenderConfig(
         double exposure,
         int msaaSamples,
         int fogDepthTiles,
-        int fogColor
+        int fogColor,
+        boolean invisibleObjectsVisible
 ) {
     public RenderConfig {
         profile = Objects.requireNonNull(profile, "render profile");
@@ -60,7 +61,7 @@ public record RenderConfig(
         this(profile, terrainVisible, objectsVisible, wallsVisible, wallDecorationsVisible,
                 groundObjectsVisible, groundDecorationsVisible, roofsVisible, bridgeTilesVisible,
                 hiddenTilesVisible, collisionVisible, wireframe, activePlane, planeSelection,
-                brightness, exposure, msaaSamples, 0, 0x101827);
+                brightness, exposure, msaaSamples, 0, 0x101827, false);
     }
 
     /** Converts the frame settings into the shared scene projection policy. */
@@ -144,6 +145,7 @@ public record RenderConfig(
 
     private boolean modelVisible(ModelRenderPacket model) {
         if (!objectsVisible) return false;
+        if (model.editorMarker() && !invisibleObjectsVisible) return false;
         if (!roofsVisible && model.roofRelated()) return false;
         return switch (model.category()) {
             case WALL -> wallsVisible;
@@ -188,6 +190,6 @@ public record RenderConfig(
         return new RenderConfig(RenderProfile.VANILLA_COMPATIBILITY,
                 true, true, true, true, true, true, true, true, false,
                 false, false, 0, SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL,
-                1.0, 0.0, 0, 0, 0x101827);
+                1.0, 0.0, 0, 0, 0x101827, false);
     }
 }

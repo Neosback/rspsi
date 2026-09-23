@@ -111,6 +111,7 @@ class RenderConfigCompilerTest {
                 RenderSettingKeys.WALL_DECORATIONS_VISIBLE.id(), RenderSettingKeys.GROUND_OBJECTS_VISIBLE.id(),
                 RenderSettingKeys.GROUND_DECORATIONS_VISIBLE.id(), RenderSettingKeys.ROOFS_VISIBLE.id(),
                 RenderSettingKeys.BRIDGE_TILES_VISIBLE.id(), RenderSettingKeys.HIDDEN_TILES_VISIBLE.id(),
+                RenderSettingKeys.INVISIBLE_OBJECTS_VISIBLE.id(),
                 RenderSettingKeys.COLLISION_VISIBLE.id(), RenderSettingKeys.WIREFRAME.id(),
                 RenderSettingKeys.ACTIVE_PLANE.id(), RenderSettingKeys.PLANE_SELECTION.id(),
                 RenderSettingKeys.BRIGHTNESS.id(), RenderSettingKeys.EXPOSURE.id(),

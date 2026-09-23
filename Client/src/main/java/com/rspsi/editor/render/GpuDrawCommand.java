@@ -46,7 +46,13 @@ public record GpuDrawCommand(
          * (hidden in the current var state, or authored-empty geometry). Draws
          * like a depth-tested alpha model; never part of parity or exports.
          */
-        EDITOR_GHOST;
+        EDITOR_GHOST,
+        /**
+         * Editor-only marker for a collision-only loc with nothing to draw
+         * (invisible walls and floor blockers). Shown only when the
+         * "Show invisible objects" viewport setting is on.
+         */
+        EDITOR_MARKER;
 
         public boolean noDepth() {
             return this == SORTED_NO_DEPTH || this == UNSORTED_NO_DEPTH;

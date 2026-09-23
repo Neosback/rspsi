@@ -140,6 +140,8 @@ public final class MapSettingsPanel implements StudioPanel {
             toggleSetting(settings, RenderSettingKeys.WALL_DECORATIONS_VISIBLE, "Show wall decorations");
             toggleSetting(settings, RenderSettingKeys.GROUND_OBJECTS_VISIBLE, "Show ground objects");
             toggleSetting(settings, RenderSettingKeys.GROUND_DECORATIONS_VISIBLE, "Show ground decorations");
+            toggleSetting(settings, RenderSettingKeys.INVISIBLE_OBJECTS_VISIBLE,
+                    "Show invisible objects (collision-only walls and floor blockers)");
             ImGui.combo("Scenery shadows", sceneryShadowSelection, SHADOW_OPTIONS);
             ImGui.checkbox("Animate", animateObjects);
         }

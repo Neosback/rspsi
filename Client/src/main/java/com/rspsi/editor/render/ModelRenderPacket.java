@@ -220,20 +220,35 @@ public record ModelRenderPacket(
     }
 
     /** Returns this packet with an explicit RuneLite-compatible render mode. */
-    /** True for an editor-only ghost; see {@link GpuDrawCommand.RenderMode#EDITOR_GHOST}. */
+    /** True for any editor-only stand-in (ghost or invisible-object marker). */
     public boolean editorGhost() {
-        return renderMode == GpuDrawCommand.RenderMode.EDITOR_GHOST;
+        return renderMode == GpuDrawCommand.RenderMode.EDITOR_GHOST
+                || renderMode == GpuDrawCommand.RenderMode.EDITOR_MARKER;
+    }
+
+    /** True for a collision-only loc marker; see {@link GpuDrawCommand.RenderMode#EDITOR_MARKER}. */
+    public boolean editorMarker() {
+        return renderMode == GpuDrawCommand.RenderMode.EDITOR_MARKER;
     }
 
     /** Returns this packet as a translucent editor ghost with at least {@code transparency} alpha. */
     public ModelRenderPacket asEditorGhost(int transparency) {
+        return translucent(transparency, GpuDrawCommand.RenderMode.EDITOR_GHOST);
+    }
+
+    /** Returns this packet as a translucent invisible-object marker. */
+    public ModelRenderPacket asEditorMarker(int transparency) {
+        return translucent(transparency, GpuDrawCommand.RenderMode.EDITOR_MARKER);
+    }
+
+    private ModelRenderPacket translucent(int transparency, GpuDrawCommand.RenderMode mode) {
         List<ModelTriangle> ghosted = triangles.stream()
                 .map(triangle -> triangle.withAlpha(Math.max(triangle.alpha(), transparency)))
                 .toList();
         return new ModelRenderPacket(anchor, objectId, category, vertices, ghosted,
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
-                GpuDrawCommand.RenderMode.EDITOR_GHOST, wallDecorationPresentation,
+                mode, wallDecorationPresentation,
                 gameObjectSceneMetadata, clientRenderableBounds, clientRenderablePlacements,
                 contourContract, animationState, sceneObjectIdentity);
     }

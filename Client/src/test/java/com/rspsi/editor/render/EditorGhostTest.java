@@ -35,6 +35,8 @@ class EditorGhostTest {
 
         assertFalse(packets.isEmpty());
         assertTrue(packets.stream().allMatch(ModelRenderPacket::editorGhost));
+        assertTrue(packets.stream().noneMatch(ModelRenderPacket::editorMarker),
+                "hidden multilocs are real-model ghosts, always shown");
         assertTrue(packets.stream().flatMap(packet -> packet.triangles().stream())
                 .allMatch(triangle -> triangle.alpha() >= ModelPacketBuilder.GHOST_TRANSPARENCY));
         assertEquals(100, packets.get(0).sceneObjectIdentity().objectId(),
@@ -47,6 +49,7 @@ class EditorGhostTest {
                 .filter(packet -> packet.objectId() == 300).findFirst().orElseThrow();
 
         assertTrue(marker.editorGhost());
+        assertTrue(marker.editorMarker(), "collision-only locs are markers, hidden by default");
         // Straight wall, rotation 0: wall orientation A = 1 (west edge).
         assertTrue(marker.vertices().stream().allMatch(vertex -> vertex.x() >= 0 && vertex.x() <= 16));
         assertTrue(marker.vertices().stream().anyMatch(vertex -> vertex.y() < 0), "stands up from the floor");
@@ -62,6 +65,27 @@ class EditorGhostTest {
 
         assertEquals(0, report.submittedCount());
         assertEquals(2, report.warningCount());
+    }
+
+    @Test
+    void invisibleObjectMarkersAreHiddenUntilTheSettingIsOn() {
+        WorldDocument document = document();
+        RenderScene scene = new RenderSceneBuilder(new Definitions(), ScenePresentation.EDITOR).build(document);
+        SceneWindow window = new SceneWindow(new com.rspsi.editor.model.WorldRegionWindow(
+                50, 50, 1, 1, java.util.Map.of()), 3200, 3200, 1, 0, java.util.Set.of(), List.of());
+        GpuScenePacket packet = new GpuScenePacketBuilder().build(window, scene);
+        RenderConfigCompiler compiler = new RenderConfigCompiler();
+
+        GpuScenePacket byDefault = compiler.defaultConfig().apply(packet);
+        var on = RenderSettingKeys.registry().defaults().with(RenderSettingKeys.INVISIBLE_OBJECTS_VISIBLE, true);
+        GpuScenePacket shown = compiler.compile(on).apply(packet);
+
+        assertTrue(byDefault.tiles().stream().flatMap(tile -> tile.models().stream())
+                .noneMatch(ModelRenderPacket::editorMarker));
+        assertTrue(byDefault.tiles().stream().flatMap(tile -> tile.models().stream())
+                .anyMatch(model -> model.objectId() == 100), "state ghosts stay visible");
+        assertTrue(shown.tiles().stream().flatMap(tile -> tile.models().stream())
+                .anyMatch(ModelRenderPacket::editorMarker));
     }
 
     private static List<ModelRenderPacket> editorPackets() {
