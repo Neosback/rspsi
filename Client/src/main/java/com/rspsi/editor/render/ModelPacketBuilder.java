@@ -419,19 +419,15 @@ public final class ModelPacketBuilder {
             }
             int rawAlpha = valueAt(alphas, face, 0);
             int renderType = valueAt(renderTypes, face, 0);
-            // The cache stores one SIGNED byte of per-face transparency and the
-            // client normalises it to 0..255 while loading (MeshOSRSType3:
-            // `if (faceTransparencies[face] < 0) faceTransparencies[face] += 256`).
-            // The definition provider hands that raw signed byte through, so
-            // 0x80..0xFF arrives negative. Clamping it to zero instead drew
-            // every translucent face fully opaque - which is what made gates and
-            // doors read as solid slabs and left translucent wall trim fighting
-            // the wall it decorates. 0xFF is invisible in the client (its
-            // transparency is spent before the write), so it stays out of both
-            // submission passes exactly as the old -1 sentinel did.
+            // ModelData.toModel consumes two SIGNED alpha-byte sentinels before
+            // normalising transparency: -2 selects render type 3 (the flat 128
+            // colour sentinel) and -1 selects render type 2 (hidden face).
+            // OpenRune preserves the signed byte at the ModelGeometryView
+            // boundary, so this decision must happen before '& 0xFF'. Other
+            // negative alpha bytes are ordinary 128..253 transparency values.
+            if (rawAlpha == -2) renderType = 3;
+            if (rawAlpha == -1 || rawAlpha == 255 || renderType == -1) renderType = 2;
             int alpha = rawAlpha & 0xFF;
-            if (renderType == -1) renderType = 2;
-            if (alpha == 255) renderType = 2;
             int texture = valueAt(textures, face, -1);
             int color = valueAt(colors, face, 0);
             color = recolor(color, appearance.recolors());
