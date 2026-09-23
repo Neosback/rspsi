@@ -347,8 +347,7 @@ Initial Phase 0 statuses must distinguish at least:
 - BLANK_OR_SENTINEL_NAME
 - NO_DEFAULT_TRANSFORM
 - MISSING_TRANSFORM_DEFINITION
-- TRANSFORM_CYCLE
-- TRANSFORM_DEPTH_EXCEEDED
+- RESOLVED_NESTED_TRANSFORM_CHILD
 - NO_MODEL_FOR_SHAPE
 - MISSING_MODEL_GEOMETRY
 - EMPTY_RENDERABLE_GEOMETRY
@@ -358,7 +357,7 @@ Initial Phase 0 statuses must distinguish at least:
 - HIDDEN_BY_OCCLUSION
 - PICK_IDENTITY_UNRESOLVED
 
-Not every status needs to live in one enum. Definition resolution, model resolution, scene submission, and visibility may be separate diagnostic stages. The important requirement is that an authored loc can be traced end-to-end without a silent null.
+Not every status needs to live in one enum. Definition resolution, model resolution, scene submission, and visibility may be separate diagnostic stages. A nested transform child should be reported, but the display resolver must not recursively apply it because RuneLite's DynamicObject performs one ObjectComposition.transform() step before model construction. The important requirement is that an authored loc can be traced end-to-end without a silent null.
 
 ### 5.8 SurfaceHit
 
