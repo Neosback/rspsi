@@ -33,6 +33,26 @@ public record ModelRenderPacket(
         ModelContourContract contourContract,
         SceneObjectIdentity sceneObjectIdentity
 ) {
+    /** Compatibility constructor before contour metadata was retained. */
+    public ModelRenderPacket(TileCoordinate anchor, int objectId, ObjectCategory category,
+                             List<ModelVertex> vertices, List<ModelTriangle> triangles,
+                             List<TextureTriangle> textureTriangles, int animationId,
+                             int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
+                             boolean supportsAnimation, boolean supportsParticles,
+                             int placementHeight, boolean roofRelated,
+                             GpuDrawCommand.RenderMode renderMode,
+                             WallDecorationPresentation wallDecorationPresentation,
+                             GameObjectSceneMetadata gameObjectSceneMetadata,
+                             List<ClientModelBounds> clientRenderableBounds,
+                             List<ClientRenderablePlacement> clientRenderablePlacements,
+                             SceneObjectIdentity sceneObjectIdentity) {
+        this(anchor, objectId, category, vertices, triangles, textureTriangles, animationId,
+                minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles,
+                placementHeight, roofRelated, renderMode, wallDecorationPresentation,
+                gameObjectSceneMetadata, clientRenderableBounds, clientRenderablePlacements,
+                ModelContourContract.none(), sceneObjectIdentity);
+    }
+
     /** Compatibility constructor before stable scene-object identity was retained. */
     public ModelRenderPacket(TileCoordinate anchor, int objectId, ObjectCategory category,
                              List<ModelVertex> vertices, List<ModelTriangle> triangles,
