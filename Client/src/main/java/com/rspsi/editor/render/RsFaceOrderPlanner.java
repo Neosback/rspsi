@@ -2,6 +2,8 @@ package com.rspsi.editor.render;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.ToDoubleFunction;
@@ -39,14 +41,25 @@ public final class RsFaceOrderPlanner {
 
         List<List<GpuDrawCommand>> groups = new ArrayList<>(12);
         for (int index = 0; index < 12; index++) groups.add(new ArrayList<>());
+
+        // Comparator callbacks are intentionally memoized once per command.
+        // The native depth function can consult geometry bounds, and Java's
+        // TimSort may call a comparator O(n log n) times. Re-running scene
+        // geometry work from the comparator is both unnecessary and capable
+        // of amplifying a cache miss into a render-thread stall.
+        Map<GpuDrawCommand, Double> depths = new IdentityHashMap<>(commands.size());
+        Map<GpuDrawCommand, Integer> tieBreakers = new IdentityHashMap<>(commands.size());
         for (GpuDrawCommand command : commands) {
             int priority = Math.max(0, Math.min(11, command.priority()));
             groups.get(priority).add(command);
+            depths.put(command, depth.applyAsDouble(command));
+            tieBreakers.put(command, tieBreaker.applyAsInt(command));
         }
+        ToDoubleFunction<GpuDrawCommand> cachedDepth = command -> depths.get(command);
         Comparator<GpuDrawCommand> farToNear = Comparator
-                .comparingDouble((GpuDrawCommand command) -> depth.applyAsDouble(command))
+                .comparingDouble((GpuDrawCommand command) -> depths.get(command))
                 .reversed()
-                .thenComparingInt(tieBreaker)
+                .thenComparingInt(command -> tieBreakers.get(command))
                 .thenComparingInt(GpuDrawCommand::firstIndex);
         for (List<GpuDrawCommand> group : groups) group.sort(farToNear);
 
@@ -58,9 +71,9 @@ public final class RsFaceOrderPlanner {
             special = groups.get(specialStream);
         }
 
-        double pair12 = average(groups.get(1), groups.get(2), depth);
-        double pair34 = average(groups.get(3), groups.get(4), depth);
-        double pair68 = average(groups.get(6), groups.get(8), depth);
+        double pair12 = average(groups.get(1), groups.get(2), cachedDepth);
+        double pair34 = average(groups.get(3), groups.get(4), cachedDepth);
+        double pair68 = average(groups.get(6), groups.get(8), cachedDepth);
         List<GpuDrawCommand> result = new ArrayList<>(commands.size());
         for (int priority = 0; priority < 10; priority++) {
             // The legacy client only drains the priority-10/11 stream at
@@ -68,7 +81,7 @@ public final class RsFaceOrderPlanner {
             // checkpoint changes ordering for priorities 1/2, 4, and 6-8.
             double threshold = checkpoint(priority, pair12, pair34, pair68);
             while (specialIndex < special.size()
-                    && depth.applyAsDouble(special.get(specialIndex)) > threshold) {
+                    && cachedDepth.applyAsDouble(special.get(specialIndex)) > threshold) {
                 result.add(special.get(specialIndex++));
                 if (specialIndex == special.size() && specialStream == 10 && !groups.get(11).isEmpty()) {
                     specialStream = 11;
