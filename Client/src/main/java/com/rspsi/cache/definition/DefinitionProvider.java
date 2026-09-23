@@ -144,4 +144,14 @@ public interface DefinitionProvider {
     default Optional<VarbitDefinitionView> varbit(int id) {
         return Optional.empty();
     }
+
+    /** Map element (map function icon, e.g. a bank) an object shows on the minimap/world map. */
+    default java.util.OptionalInt objectMapElement(int objectId) {
+        return java.util.OptionalInt.empty();
+    }
+
+    /** One frame of a sprite group as opaque-palette ARGB (index 0 transparent). */
+    default Optional<MapSceneSpriteView> sprite(int groupId, int frame) {
+        return Optional.empty();
+    }
 }

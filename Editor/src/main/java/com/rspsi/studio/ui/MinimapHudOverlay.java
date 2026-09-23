@@ -32,6 +32,10 @@ public final class MinimapHudOverlay {
     private Runnable onWorldMapClick;
 
     private final MinimapTextureService textureService = new MinimapTextureService();
+    private final SpriteTextureCache iconTextures = new SpriteTextureCache();
+    private java.util.List<com.rspsi.editor.minimap.MinimapIcons.Icon> icons;
+    private WorldDocument iconWorld;
+    private int iconPlane = -1;
     private EditorSession listenedSession;
 
     public void setOnWorldMapClick(Runnable callback) {
@@ -100,7 +104,10 @@ public final class MinimapHudOverlay {
         if (session == null || viewport == null) return;
         if (session != listenedSession) {
             listenedSession = session;
-            listenedSession.addChangeListener(changed -> textureService.markDirty());
+            listenedSession.addChangeListener(changed -> {
+                textureService.markDirty();
+                icons = null;
+            });
         }
 
         WorldDocument world = session.world();
@@ -165,6 +172,40 @@ public final class MinimapHudOverlay {
                         u1, v1,
                         uCenter, vCenter);
             }
+        }
+        if (context.cache() != null) {
+            renderMapIcons(dl, context, world, activePlane, radarX, radarY,
+                    uCenter, vCenter, cosY, sinY, scale * docW, docW, docL);
+        }
+    }
+
+    /**
+     * Map-function icons (bank, shop, altar...) at their objects' tiles, placed
+     * with the inverse of the terrain fan's rotation so they stay on their
+     * tiles as the camera turns, and clipped to the radar circle.
+     */
+    private void renderMapIcons(ImDrawList dl, StudioPanelContext context, WorldDocument world, int plane,
+                                float radarX, float radarY, float uCenter, float vCenter,
+                                float cosY, float sinY, float pixelsPerUv, float docW, float docL) {
+        var definitions = context.cache().bundle().definitions();
+        if (icons == null || iconWorld != world || iconPlane != plane) {
+            icons = com.rspsi.editor.minimap.MinimapIcons.locate(world, definitions, plane);
+            iconWorld = world;
+            iconPlane = plane;
+        }
+        for (var icon : icons) {
+            float du = (icon.x() + 0.5f) / docW - uCenter;
+            float dv = (docL - (icon.y() + 0.5f)) / docL - vCenter;
+            float px = radarX + (cosY * du + sinY * dv) * pixelsPerUv;
+            float py = radarY + (-sinY * du + cosY * dv) * pixelsPerUv;
+            float dx = px - radarX;
+            float dy = py - radarY;
+            if (dx * dx + dy * dy > (RADAR_RADIUS - 6.0f) * (RADAR_RADIUS - 6.0f)) continue;
+            SpriteTextureCache.Texture texture = iconTextures.get(definitions, icon.spriteId());
+            if (texture == null) continue;
+            float halfW = texture.width() * 0.5f;
+            float halfH = texture.height() * 0.5f;
+            dl.addImage(texture.id(), px - halfW, py - halfH, px + halfW, py + halfH);
         }
     }
 

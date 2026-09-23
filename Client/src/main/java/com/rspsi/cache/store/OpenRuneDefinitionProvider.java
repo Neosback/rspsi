@@ -515,17 +515,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                  * general-purpose image concern, while the OSRS minimap
                  * compositor deliberately ignores that alpha channel.
                  */
-                byte[] raster = sprite.getRaster();
-                int[] palette = sprite.getPalette();
-                int[] argb = new int[sprite.getWidth() * sprite.getHeight()];
-                for (int pixel = 0; pixel < argb.length; pixel++) {
-                    int paletteIndex = raster[pixel] & 0xFF;
-                    if (paletteIndex != 0) {
-                        argb[pixel] = 0xFF000000 | (palette[paletteIndex] & 0x00FFFFFF);
-                    }
-                }
-                result.put(id, new MapSceneSpriteView(id, sprite.getWidth(), sprite.getHeight(),
-                        sprite.getOffsetX(), sprite.getOffsetY(), argb));
+                result.put(id, argbView(id, sprite));
             }
             return Map.copyOf(result);
         } catch (RuntimeException ignored) {
@@ -534,6 +524,39 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             // definitions unavailable.
             return Map.of();
         }
+    }
+
+    /** Palette sprite to ARGB: index zero transparent, every other index opaque. */
+    private static MapSceneSpriteView argbView(int id, IndexedSprite sprite) {
+        byte[] raster = sprite.getRaster();
+        int[] palette = sprite.getPalette();
+        int[] argb = new int[sprite.getWidth() * sprite.getHeight()];
+        for (int pixel = 0; pixel < argb.length; pixel++) {
+            int paletteIndex = raster[pixel] & 0xFF;
+            if (paletteIndex != 0) {
+                argb[pixel] = 0xFF000000 | (palette[paletteIndex] & 0x00FFFFFF);
+            }
+        }
+        return new MapSceneSpriteView(id, sprite.getWidth(), sprite.getHeight(),
+                sprite.getOffsetX(), sprite.getOffsetY(), argb);
+    }
+
+    @Override
+    public java.util.OptionalInt objectMapElement(int objectId) {
+        ObjectType type = objects.get(objectId);
+        return type == null || type.getMapAreaId() < 0
+                ? java.util.OptionalInt.empty() : java.util.OptionalInt.of(type.getMapAreaId());
+    }
+
+    @Override
+    public Optional<MapSceneSpriteView> sprite(int groupId, int frame) {
+        SpriteType group = textureSprites().get(groupId);
+        if (group == null || group.getSprites() == null || frame < 0 || frame >= group.getSprites().length) {
+            return Optional.empty();
+        }
+        IndexedSprite sprite = group.getSprites()[frame];
+        if (sprite == null || sprite.getWidth() <= 0 || sprite.getHeight() <= 0) return Optional.empty();
+        return Optional.of(argbView(groupId, sprite));
     }
 
     /** Reads opcode 2 from the OSRS graphics-defaults file. */
