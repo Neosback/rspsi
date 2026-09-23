@@ -1,5 +1,6 @@
 package com.rspsi.renderer.opengl;
 
+import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.SceneLayer;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,29 @@ class OpenGlSceneRendererStateTest {
             assertFalse(alpha.depthWrite());
             assertTrue(alpha.blend());
         }
+    }
+
+    @Test
+    void frameMetricsAccumulateSubmissionCountsWithoutASecondSceneWalk() {
+        OpenGlSceneRenderer.FrameMetrics metrics = new OpenGlSceneRenderer.FrameMetrics();
+        GpuDrawCommand terrain = new GpuDrawCommand(
+                WorldTileAddress.of(3200, 3200, 0), SceneLayer.Kind.TERRAIN,
+                GpuDrawCommand.SubmissionPass.OPAQUE, 0, 6, -1, 0, -1);
+        GpuDrawCommand object = new GpuDrawCommand(
+                WorldTileAddress.of(3201, 3200, 0), SceneLayer.Kind.GROUND_OBJECT,
+                GpuDrawCommand.SubmissionPass.ALPHA, 6, 9, -1, 0, 42);
+
+        metrics.record(terrain);
+        metrics.record(object);
+
+        assertEquals(15, metrics.renderedIndices());
+        assertEquals(2, metrics.terrainTriangles());
+        assertEquals(3, metrics.objectTriangles());
+
+        metrics.reset();
+        assertEquals(0, metrics.renderedIndices());
+        assertEquals(0, metrics.terrainTriangles());
+        assertEquals(0, metrics.objectTriangles());
     }
 
     @Test
