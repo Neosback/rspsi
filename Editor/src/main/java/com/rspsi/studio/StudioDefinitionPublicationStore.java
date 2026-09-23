@@ -51,7 +51,7 @@ public final class StudioDefinitionPublicationStore {
                     .filter(state -> state.sourceCache().equals(source))
                     .filter(state -> state.identity().equals(identity))
                     .findFirst();
-        } catch (RuntimeException failure) {
+        } catch (IOException | RuntimeException failure) {
             return Optional.empty();
         }
     }
