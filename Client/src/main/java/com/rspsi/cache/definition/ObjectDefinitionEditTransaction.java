@@ -1,5 +1,6 @@
 package com.rspsi.cache.definition;
 
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -32,6 +33,15 @@ public interface ObjectDefinitionEditTransaction {
      */
     default boolean hasUnpublishedChanges() {
         return dirty();
+    }
+
+    /**
+     * Returns the last preview successfully published for this transaction when
+     * the backend tracks publication state. Persistence code uses this as the
+     * expected base when transactionally updating an existing output cache.
+     */
+    default Optional<ObjectDefinitionRawView> publishedPreview() {
+        return Optional.empty();
     }
 
     /**
