@@ -79,6 +79,26 @@ public record GpuDrawCommand(
         }
     }
 
+    /** Compatibility constructor before contour metadata was retained. */
+    public GpuDrawCommand(WorldTileAddress tile, int scenePlane, int planeCullLevel,
+                          SceneLayer.Kind layer, SubmissionPass pass,
+                          int firstIndex, int indexCount, int textureId, int priority,
+                          int depthBias, int objectId, RenderMode renderMode,
+                          WallDecorationPresentation wallDecorationPresentation,
+                          GameObjectSceneMetadata gameObjectSceneMetadata,
+                          List<ClientModelBounds> clientRenderableBounds,
+                          List<ClientRenderablePlacement> clientRenderablePlacements,
+                          SceneObjectIdentity sceneObjectIdentity,
+                          int placementHeight,
+                          int modelAnchorX,
+                          int modelAnchorY) {
+        this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
+                textureId, priority, depthBias, objectId, renderMode,
+                wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
+                clientRenderablePlacements, ModelContourContract.Metadata.none(),
+                sceneObjectIdentity, placementHeight, modelAnchorX, modelAnchorY);
+    }
+
     /** Compatibility constructor before render-space model anchors were explicit. */
     public GpuDrawCommand(WorldTileAddress tile, int scenePlane, int planeCullLevel,
                           SceneLayer.Kind layer, SubmissionPass pass,
