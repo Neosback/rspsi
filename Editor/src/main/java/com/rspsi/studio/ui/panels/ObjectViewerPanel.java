@@ -287,10 +287,10 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
 
         String objName = cache == null || objId < 0 ? null
-                : cache.bundle().definitions().object(objId).map(ObjectDefinitionView::name)
-                        .filter(n -> !n.isBlank()).orElse(null);
+                : cache.bundle().definitions().object(objId)
+                        .map(ObjectDefinitionView::displayName).orElse(null);
         if (objId >= 0) {
-            ImGui.text((objName == null ? "Unnamed" : objName) + "  #" + objId);
+            ImGui.text((objName == null ? "Object #" + objId : objName));
         }
 
         ImGui.beginDisabled(objId < 0);
@@ -377,7 +377,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             var defOpt = cache.bundle().definitions().object(id);
             if (defOpt.isPresent()) {
                 var def = defOpt.get();
-                if (def.name() != null && !def.name().isBlank()) name = def.name();
+                if (def.hasDisplayName()) name = def.displayName();
                 hasModel = def.modelIds().length > 0 || def.hasTransforms();
             }
         }
@@ -447,8 +447,8 @@ public final class ObjectViewerPanel implements StudioPanel {
                     if (isNumeric) {
                         if (!String.valueOf(id).contains(query)) continue;
                     } else {
-                        if (defOpt.isEmpty() || defOpt.get().name() == null
-                                || !defOpt.get().name().toLowerCase().contains(query)) {
+                        if (defOpt.isEmpty() || !defOpt.get().hasDisplayName()
+                                || !defOpt.get().displayName().toLowerCase().contains(query)) {
                             continue;
                         }
                     }
@@ -486,7 +486,7 @@ public final class ObjectViewerPanel implements StudioPanel {
 
             String previewName = rawField(raw, "name")
                     .map(ObjectDefinitionRawView.Field::value)
-                    .orElse(def.name());
+                    .orElse(def.displayName());
             int previewSizeX = rawInt(raw, "sizeX").orElse(def.width());
             int previewSizeY = rawInt(raw, "sizeY").orElse(def.length());
 
