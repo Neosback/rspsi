@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.editor.model.InstanceChunkTemplate;
+import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
@@ -65,6 +66,32 @@ class InstanceSceneMaterializerTest {
             assertEquals((1 + rotation) & 3, tile.overlayRotation());
             assertEquals(7, tile.flags());
         }
+    }
+
+    @Test
+    void projectedPlaneOneBridgeFlagKeepsOrdinaryEffectivePlaneSemantics() {
+        WorldDocument sourceDocument = new WorldDocument(64, 64, 2);
+        sourceDocument.tile(1, 1, 2).restore(new TileSnapshot(
+                0, 0, 0, 0,
+                0, 0, 0, 0, OsrsTileFlags.BRIDGE, List.of()));
+        WorldRegion sourceRegion = new WorldRegion(0, 0, sourceDocument);
+        WorldRegionWindow source = new WorldRegionWindow(
+                0, 0, 1, 1, Map.of(sourceRegion.regionId(), sourceRegion));
+        SceneWindow window = new SceneWindow(
+                source, 3200, 3200, 2, 0, 0, -1,
+                Set.of(sourceRegion.regionId()),
+                List.of(new InstanceChunkTemplate(
+                        1, 2, 3, 1, 0, 0, 1)));
+
+        WorldDocument materialized =
+                new InstanceSceneMaterializer(definitions()).materialize(window);
+        int targetX = 2 * 8 + 2;
+        int targetY = 3 * 8 + 6;
+
+        assertEquals(OsrsTileFlags.BRIDGE,
+                materialized.tile(1, targetX, targetY).snapshot().flags());
+        assertEquals(0, materialized.effectivePlane(1, targetX, targetY),
+                "target-plane bridge flags must flow through the normal bridge resolver");
     }
 
     @Test
