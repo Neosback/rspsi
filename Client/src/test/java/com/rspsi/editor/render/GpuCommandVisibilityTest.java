@@ -121,6 +121,29 @@ class GpuCommandVisibilityTest {
     }
 
     @Test
+    void cacheInvalidatesWhenGeometryIdentityChanges() {
+        WorldTileAddress tile = WorldTileAddress.of(2, 0, 0);
+        GpuDrawCommand command = new GpuDrawCommand(
+                tile, SceneLayer.Kind.GROUND_OBJECT,
+                GpuDrawCommand.SubmissionPass.OPAQUE, 0, 3, -1, 0, 1);
+        GpuUploadPlan firstPlan = new GpuUploadPlan(
+                List.of(vertex(0, 0, 0), vertex(64, 0, 0), vertex(0, 64, 0)),
+                List.of(0, 1, 2), List.of(command), List.of(), Map.of(),
+                List.of(), "cache-geometry-a");
+        GpuUploadPlan secondPlan = new GpuUploadPlan(
+                List.of(vertex(0, 0, 0), vertex(64, 0, 0), vertex(0, 64, 0)),
+                List.of(0, 1, 2), List.of(command), List.of(), Map.of(),
+                List.of(), "cache-geometry-b");
+        GpuCommandVisibility.Cache cache = new GpuCommandVisibility.Cache();
+        CameraState camera = new CameraState(0, 64, 0, 0, 0);
+
+        GpuCommandVisibility first = cache.resolve(firstPlan, camera);
+        GpuCommandVisibility second = cache.resolve(secondPlan, camera);
+
+        assertNotSame(first, second);
+    }
+
+    @Test
     void extendedSceneMembershipMaskIsNotRescannedWhenOnlyCameraMoves() {
         com.rspsi.editor.model.WorldRegionWindow source =
                 new com.rspsi.editor.model.WorldRegionWindow(50, 50, 1, 1, Map.of());
