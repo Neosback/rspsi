@@ -477,7 +477,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             ObjectDefinitionEditTransaction transaction = definitionTransaction(cache, id);
             ObjectDefinitionRawView raw = transaction == null
                     ? definitions.objectRaw(id).orElse(null)
-                    : transaction.preview();
+                    : displayPreview(transaction);
 
             String previewName = rawField(raw, "name")
                     .map(ObjectDefinitionRawView.Field::value)
@@ -497,7 +497,7 @@ public final class ObjectViewerPanel implements StudioPanel {
 
             if (transaction != null) {
                 renderDefinitionTransactionEditor(context, transaction);
-                raw = transaction.preview();
+                raw = displayPreview(transaction);
             } else {
                 ImGui.separator();
                 ImGui.textDisabled(
@@ -883,6 +883,30 @@ public final class ObjectViewerPanel implements StudioPanel {
             definitionEdits.put(id, created);
         }
         return created;
+    }
+
+    private ObjectDefinitionRawView displayPreview(
+            ObjectDefinitionEditTransaction transaction) {
+        ObjectDefinitionRawView base = transaction.preview();
+        List<ObjectDefinitionRawView.Field> fields = base.fields().stream()
+                .map(field -> {
+                    ScalarEditState state = scalarEditStates.get(
+                            "field:" + transaction.id() + ":" + field.name());
+                    if (state == null || !state.editing) return field;
+                    return new ObjectDefinitionRawView.Field(
+                            field.name(), field.opcode(), field.type(), state.input.get());
+                })
+                .toList();
+        List<ObjectDefinitionRawView.Param> params = base.params().stream()
+                .map(param -> {
+                    ScalarEditState state = scalarEditStates.get(
+                            paramStateKey(transaction.id(), param.id()));
+                    if (state == null || !state.editing) return param;
+                    return new ObjectDefinitionRawView.Param(
+                            param.id(), param.type(), state.input.get());
+                })
+                .toList();
+        return new ObjectDefinitionRawView(base.id(), fields, params);
     }
 
     private static Optional<ObjectDefinitionRawView.Field> rawField(
