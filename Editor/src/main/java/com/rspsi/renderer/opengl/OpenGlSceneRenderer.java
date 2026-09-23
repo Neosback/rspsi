@@ -167,6 +167,24 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     public static final int CULL_FRONT_CCW = 1;
     public static final int CULL_FRONT_CW = 2;
 
+    /**
+     * Native state implied by one RuneLite-style submission pass and render
+     * mode. Sorted versus unsorted affects command ordering upstream; the
+     * OpenGL depth/blend contract differs only for no-depth modes and alpha.
+     */
+    static NativeDrawState nativeDrawState(GpuDrawCommand.SubmissionPass pass,
+                                           GpuDrawCommand.RenderMode renderMode) {
+        if (pass == null || renderMode == null) {
+            throw new IllegalArgumentException("Native draw state requires pass and render mode");
+        }
+        boolean alpha = pass == GpuDrawCommand.SubmissionPass.ALPHA;
+        boolean depthTest = !renderMode.noDepth();
+        return new NativeDrawState(depthTest, depthTest && !alpha, alpha);
+    }
+
+    record NativeDrawState(boolean depthTest, boolean depthWrite, boolean blend) {
+    }
+
     private int lastAlpha = -1;
     private int lastTextured = -1;
     private int lastTextureAvailable = -1;
@@ -791,32 +809,35 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
 
     private void applyDrawState(GpuUploadPlan plan, GpuDrawCommand command,
                                 boolean alpha, int clientCycle) {
-        int isAlpha = alpha ? 1 : 0;
-        int noDepth = command.renderMode().noDepth() ? 1 : 0;
-        if (noDepth != lastNoDepth) {
-            if (noDepth != 0) {
-                glDisable(GL_DEPTH_TEST);
-                glDepthMask(false);
-            } else {
-                glEnable(GL_DEPTH_TEST);
-                glDepthMask(alpha ? false : true);
-            }
+        boolean expectedAlpha = command.pass() == GpuDrawCommand.SubmissionPass.ALPHA;
+        if (alpha != expectedAlpha) {
+            throw new IllegalArgumentException("Draw pass does not match command submission pass");
+        }
+        NativeDrawState state = nativeDrawState(command.pass(), command.renderMode());
+        int isAlpha = state.blend() ? 1 : 0;
+        int noDepth = state.depthTest() ? 0 : 1;
+        boolean depthStateChanged = noDepth != lastNoDepth;
+        if (depthStateChanged) {
+            if (state.depthTest()) glEnable(GL_DEPTH_TEST);
+            else glDisable(GL_DEPTH_TEST);
             lastNoDepth = noDepth;
         }
-        if (isAlpha != lastAlpha) {
-            if (alpha) {
+        boolean alphaStateChanged = isAlpha != lastAlpha;
+        if (alphaStateChanged) {
+            if (state.blend()) {
                 glEnable(GL_BLEND);
                 // Preserve destination alpha in the resolved scene texture.
                 // ImGui composites that texture later, so plain glBlendFunc
                 // would progressively erode alpha across overlapping water,
                 // canopy, and other transparent surfaces.
                 glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
-                glDepthMask(false);
             } else {
                 glDisable(GL_BLEND);
-                glDepthMask(noDepth == 0);
             }
             lastAlpha = isAlpha;
+        }
+        if (depthStateChanged || alphaStateChanged) {
+            glDepthMask(state.depthWrite());
         }
         int layer = textureLayers.getOrDefault(command.textureId(), -1);
         int textured = command.textureId() < 0 ? 0 : 1;
