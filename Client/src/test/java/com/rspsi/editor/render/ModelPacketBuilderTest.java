@@ -1165,4 +1165,117 @@ class ModelPacketBuilderTest {
         assertEquals(4, metadata.maxTileX());
         assertEquals(4, metadata.maxTileY());
     }
+
+    @Test
+    void recolorBecomesUnlitFaceColorBeforeClientLighting() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 0, 0))));
+        ObjectAppearanceView appearance = new ObjectAppearanceView(
+                -1, false, 128, 128, 128, 0, 0, 0,
+                Map.of(100, 200), Map.of(), true, false, false, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{0, 0, 0, 128, 0, 0, 0, 0, 128},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+
+        ModelTriangle face = new ModelPacketBuilder(definitions(appearance, geometry))
+                .build(document).get(0).triangles().get(0);
+
+        // Recolor happens on ModelData before toModel/light. RuneLite's
+        // unlit face-color view therefore exposes the replacement HSL.
+        assertEquals(200, face.unlitColor());
+        // This fixture's smooth normal produces client light 76 at each
+        // vertex. method5263(200, 76) = 170.
+        assertEquals(170, face.colorA());
+        assertEquals(170, face.colorB());
+        assertEquals(170, face.colorC());
+    }
+
+    @Test
+    void flatFaceRetainsExactClientColorSlotsBeforeGpuExpansion() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 0, 0))));
+        ModelGeometryView geometry = new ModelGeometryView(
+                7,
+                new int[]{0, 0, 0, 128, 0, 0, 0, 0, 128},
+                new int[]{0, 1, 2},
+                new short[]{100},
+                new int[]{0},
+                new int[]{-1},
+                new int[]{1},
+                new int[0],
+                new int[0],
+                new int[0],
+                null, null);
+
+        ModelTriangle face = new ModelPacketBuilder(
+                definitions(ObjectAppearanceView.empty(), geometry))
+                .build(document).get(0).triangles().get(0);
+
+        assertEquals(100, face.unlitColor());
+        assertEquals(0, face.colorB(),
+                "ModelData.toModel leaves faceColors2 zero for flat faces");
+        assertEquals(ModelFaceColorContract.FLAT_SENTINEL, face.colorC());
+        assertTrue(face.flatShaded());
+    }
+
+
+    @Test
+    void texturedFlatFaceKeepsClientZeroSecondSlotAndFlatSentinel() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 0, 0))));
+        ModelGeometryView geometry = new ModelGeometryView(
+                7,
+                new int[]{0, 0, 0, 128, 0, 0, 0, 0, 128},
+                new int[]{0, 1, 2},
+                new short[]{100},
+                new int[]{0},
+                new int[]{5},
+                new int[]{1},
+                new int[0],
+                new int[0],
+                new int[0],
+                null, null);
+
+        ModelTriangle face = new ModelPacketBuilder(
+                definitions(ObjectAppearanceView.empty(), geometry))
+                .build(document).get(0).triangles().get(0);
+
+        assertEquals(0, face.colorB());
+        assertEquals(ModelFaceColorContract.FLAT_SENTINEL, face.colorC());
+        assertTrue(face.flatShaded());
+    }
+
+    @Test
+    void texturedRenderTypeThreeUsesSkipSentinelAndNeverSubmits() {
+        WorldDocument document = new WorldDocument(1, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 0, 0))));
+        ModelGeometryView geometry = new ModelGeometryView(
+                7,
+                new int[]{0, 0, 0, 128, 0, 0, 0, 0, 128},
+                new int[]{0, 1, 2},
+                new short[]{100},
+                new int[]{0},
+                new int[]{5},
+                new int[]{3},
+                new int[0],
+                new int[0],
+                new int[0],
+                null, null);
+
+        ModelRenderPacket packet = new ModelPacketBuilder(
+                definitions(ObjectAppearanceView.empty(), geometry))
+                .build(document).get(0);
+        ModelTriangle face = packet.triangles().get(0);
+
+        assertEquals(ModelFaceColorContract.SKIP_SENTINEL, face.colorC());
+        assertTrue(face.skippedByColorContract());
+        assertTrue(packet.opaqueTriangleIndices().isEmpty());
+        assertTrue(packet.transparentTriangleIndices().isEmpty());
+    }
+
 }

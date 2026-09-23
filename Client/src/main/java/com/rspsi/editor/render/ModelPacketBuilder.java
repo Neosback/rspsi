@@ -438,48 +438,14 @@ public final class ModelPacketBuilder {
             int priority = clamp(valueAt(priorities, face, renderPriority), 0, 255);
             int bias = clamp(valueAt(depthBias, face, 0), 0, 255);
             Normal faceNormal = faceNormal(transformed.get(a), transformed.get(b), transformed.get(c));
-            int colorA;
-            int colorB;
-            int colorC;
-            if (texture >= 0) {
-                // Textured ModelData faces carry lightness scalars into the
-                // textured rasterizer; the texture itself supplies color.
-                // Applying HSL blendLight here would darken/shift textured
-                // models a second time.
-                if (renderType == 0) {
-                    colorA = clamp(lightness(normals.get(a), appearance), 2, 126);
-                    colorB = clamp(lightness(normals.get(b), appearance), 2, 126);
-                    colorC = clamp(lightness(normals.get(c), appearance), 2, 126);
-                } else if (renderType == 1) {
-                    int light = clamp(flatLightness(faceNormal, appearance), 2, 126);
-                    colorA = light;
-                    colorB = light;
-                    colorC = -1;
-                } else {
-                    colorA = 0;
-                    colorB = 0;
-                    colorC = -2;
-                }
-            } else if (renderType == 1) {
-                int light = flatLightness(faceNormal, appearance);
-                colorA = blendLight(color, light);
-                colorB = colorA;
-                colorC = -1;
-            } else if (renderType == 3) {
-                colorA = 128;
-                colorB = 128;
-                colorC = -1;
-            } else if (renderType == 2) {
-                colorA = 0;
-                colorB = 0;
-                colorC = -2;
-            } else {
-                colorA = blendLight(color, lightness(normals.get(a), appearance));
-                colorB = blendLight(color, lightness(normals.get(b), appearance));
-                colorC = blendLight(color, lightness(normals.get(c), appearance));
-            }
+            ModelFaceColorContract.LitFace lit = ModelFaceColorContract.shade(
+                    color, texture >= 0, renderType,
+                    lightness(normals.get(a), appearance),
+                    lightness(normals.get(b), appearance),
+                    lightness(normals.get(c), appearance),
+                    flatLightness(faceNormal, appearance));
             parts.triangles.add(new ModelTriangle(vertexOffset + a, vertexOffset + b,
-                    vertexOffset + c, colorA, colorB, colorC,
+                    vertexOffset + c, lit.colorA(), lit.colorB(), lit.colorC(),
                     texture < 0 ? -1 : retexture(texture, appearance.retextures()),
                     alpha, priority, renderType, uv.u0, uv.v0, uv.u1, uv.v1, uv.u2, uv.v2,
                     color, bias));
@@ -667,42 +633,16 @@ public final class ModelPacketBuilder {
                 .orElseGet(ObjectAppearanceView::empty);
         List<ModelTriangle> triangles = new ArrayList<>(sourceTriangles.size());
         for (ModelTriangle face : sourceTriangles) {
-            if (face.textureId() >= 0) {
-                if (face.renderType() == 0) {
-                    triangles.add(face.withColors(
-                            clamp(lightness(normal(vertices.get(face.a())), appearance), 2, 126),
-                            clamp(lightness(normal(vertices.get(face.b())), appearance), 2, 126),
-                            clamp(lightness(normal(vertices.get(face.c())), appearance), 2, 126)));
-                } else if (face.renderType() == 1) {
-                    int light = clamp(flatLightness(faceNormal(vertices.get(face.a()),
-                            vertices.get(face.b()), vertices.get(face.c())), appearance), 2, 126);
-                    triangles.add(face.withColors(light, light, -1));
-                } else {
-                    triangles.add(face.withColors(0, 0, -2));
-                }
-                continue;
-            }
-            if (face.renderType() == 2) {
-                triangles.add(face.withColors(0, 0, -2));
-                continue;
-            }
-            if (face.renderType() == 3) {
-                triangles.add(face.withColors(128, 128, -1));
-                continue;
-            }
             ModelVertex first = vertices.get(face.a());
             ModelVertex second = vertices.get(face.b());
             ModelVertex third = vertices.get(face.c());
-            if (face.renderType() == 1) {
-                int light = flatLightness(faceNormal(first, second, third), appearance);
-                int color = blendLight(face.baseColor(), light);
-                triangles.add(face.withColors(color, color, -1));
-            } else {
-                triangles.add(face.withColors(
-                        blendLight(face.baseColor(), lightness(normal(first), appearance)),
-                        blendLight(face.baseColor(), lightness(normal(second), appearance)),
-                        blendLight(face.baseColor(), lightness(normal(third), appearance))));
-            }
+            ModelFaceColorContract.LitFace lit = ModelFaceColorContract.shade(
+                    face.baseColor(), face.textureId() >= 0, face.renderType(),
+                    lightness(normal(first), appearance),
+                    lightness(normal(second), appearance),
+                    lightness(normal(third), appearance),
+                    flatLightness(faceNormal(first, second, third), appearance));
+            triangles.add(face.withColors(lit.colorA(), lit.colorB(), lit.colorC()));
         }
         return new ModelRenderPacket(packet.anchor(), packet.objectId(), packet.category(),
                 vertices, triangles, packet.textureTriangles(), packet.animationId(),
@@ -1489,11 +1429,6 @@ public final class ModelPacketBuilder {
         int denominator = Math.max(1, intensity + (intensity >> 1));
         return ambient + (lighting.lightX() * normal.x + lighting.lightY() * normal.y
                 + lighting.lightZ() * normal.z) / denominator;
-    }
-
-    private static int blendLight(int hsl, int lightness) {
-        int light = (hsl & 127) * lightness >> 7;
-        return (hsl & 0xFF80) + clamp(light, 2, 126);
     }
 
     private static int recolor(int color, Map<Integer, Integer> replacements) {

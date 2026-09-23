@@ -126,10 +126,12 @@ public final class GpuUploadPlanBuilder {
         for (int modelIndex : modelIndices) {
             ModelRenderPacket model = tile.models().get(modelIndex);
             for (ModelTriangle face : model.triangles()) {
-                // Model alpha follows the RuneScape convention: zero is
-                // opaque and 255 is fully invisible. Terrain alpha is a
-                // separate opacity convention and is handled above.
-                if (face.renderType() == 2 || face.alpha() == 255) continue;
+                // ModelData encodes omitted/special faces with
+                // faceColors3 == -2. Use the color contract rather than the
+                // source renderType: textured renderType 3 also becomes -2,
+                // while a decoded 254-alpha face remains an ordinary shaded
+                // face and must not be discarded.
+                if (face.skippedByColorContract() || face.alpha() == 255) continue;
                 // Match RuneLite's GPU uploader: texture cutouts stay in the
                 // opaque/depth-writing stream and the fragment shader
                 // discards transparent texels. Moving the entire triangle to
@@ -150,13 +152,12 @@ public final class GpuUploadPlanBuilder {
                 // a source-format sentinel, not a third interpolated vertex
                 // color. Expand the constant color at the upload boundary so
                 // every backend receives ordinary vertex data.
-                int flatColor = face.renderType() == 1 || face.renderType() == 3
-                        ? face.colorA() : face.colorC();
+                int flatColor = face.flatShaded() ? face.colorA() : face.colorC();
                 int first = indices.size();
                 int base = vertices.size();
                 vertices.add(modelVertex(tile.worldAddress(), layer.kind(), model, a, face.uA(), face.vA(), face.colorA(), face));
                 vertices.add(modelVertex(tile.worldAddress(), layer.kind(), model, b, face.uB(), face.vB(),
-                        face.renderType() == 1 || face.renderType() == 3 ? flatColor : face.colorB(), face));
+                        face.flatShaded() ? flatColor : face.colorB(), face));
                 vertices.add(modelVertex(tile.worldAddress(), layer.kind(), model, c, face.uC(), face.vC(), flatColor, face));
                 indices.add(base);
                 indices.add(base + 1);

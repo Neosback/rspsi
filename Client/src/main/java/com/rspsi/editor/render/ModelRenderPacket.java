@@ -306,9 +306,10 @@ public record ModelRenderPacket(
         java.util.ArrayList<Integer> indices = new java.util.ArrayList<>();
         for (int index = 0; index < triangles.size(); index++) {
             ModelTriangle face = triangles.get(index);
-            // Render type 2 is an intentionally hidden face, not an opaque
-            // submission.
-            if (face.renderType() == 2 || face.alpha() == 255) continue;
+            // ModelData's faceColors3 == -2 is the authoritative
+            // skipped-face sentinel. It also covers textured renderType 3,
+            // which a renderType-only test misses.
+            if (face.skippedByColorContract() || face.alpha() == 255) continue;
             // Render type is a shading selector, never an opacity, so only
             // real model alpha decides the blend stream.
             boolean faceTransparent = face.alpha() != 0;
