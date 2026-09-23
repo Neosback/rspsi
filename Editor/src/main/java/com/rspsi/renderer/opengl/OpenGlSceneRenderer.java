@@ -248,6 +248,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int fogDepthLocation;
     private int fogColorLocation;
     private final ZoneVboManager zoneManager = new ZoneVboManager();
+    private final GpuCommandVisibility.Cache visibilityCache =
+            new GpuCommandVisibility.Cache();
     private int paletteTexture;
     private int paletteLocation;
     private String uploadedFingerprint;
@@ -483,9 +485,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             uploadedTextureFingerprint = textureFingerprint;
             textureUploaded = true;
         }
-        GpuCommandVisibility visibility =
-                GpuCommandVisibility.of(runtimeGeometry, camera, plan.occluders(),
-                        plan.sceneWindow());
+        GpuCommandVisibility visibility = visibilityCache.resolve(
+                runtimeGeometry, camera, plan.occluders(), plan.sceneWindow());
 
         glUseProgram(program);
         glUniform3f(cameraLocation, camera.x(), camera.y(), camera.z());
@@ -1099,6 +1100,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     @Override
     public void close() {
         zoneManager.close();
+        visibilityCache.clear();
         if (paletteTexture != 0) org.lwjgl.opengl.GL11.glDeleteTextures(paletteTexture);
         paletteTexture = 0;
         if (textureArray != 0) org.lwjgl.opengl.GL11.glDeleteTextures(textureArray);
