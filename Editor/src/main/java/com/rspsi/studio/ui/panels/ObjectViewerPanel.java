@@ -889,7 +889,11 @@ public final class ObjectViewerPanel implements StudioPanel {
         filteredObjectIds.clear();
         lastFilterQuery = null;
         lastTypeFilter = -1;
-        outputCachePath.set(cache == null ? "" : suggestedOutputPath(cache).toString());
+        outputCachePath.set(cache == null
+                ? ""
+                : cache.objectDefinitions().publicationTarget()
+                        .orElseGet(() -> suggestedOutputPath(cache))
+                        .toString());
     }
 
     private ObjectDefinitionEditTransaction definitionTransaction(
@@ -911,16 +915,35 @@ public final class ObjectViewerPanel implements StudioPanel {
                 "Builds a new cache or transactionally updates an existing output. "
                         + "The selected source cache remains read-only.");
 
+        boolean buildRunning = definitionBuild != null;
+        Path publicationTarget = workspace.publicationTarget().orElse(null);
+
+        ImGui.beginDisabled(buildRunning || publicationTarget != null);
         ImGui.inputTextWithHint(
                 "Output directory##definition-output-cache",
                 "Choose a new or existing output cache directory...",
                 outputCachePath);
+        ImGui.endDisabled();
 
-        boolean buildRunning = definitionBuild != null;
         Path candidate = outputPathOrNull();
         boolean outputExists = candidate != null && Files.exists(candidate);
         boolean outputDirectory = outputExists && Files.isDirectory(candidate);
-        if (outputExists && !outputDirectory) {
+        boolean targetMismatch = publicationTarget != null
+                && candidate != null
+                && !publicationTarget.equals(candidate);
+        boolean targetMissing = publicationTarget != null
+                && !Files.isDirectory(publicationTarget);
+
+        if (publicationTarget != null) {
+            ImGui.textDisabled("Session output: " + publicationTarget);
+        }
+        if (targetMissing) {
+            ImGui.textColored(0xFF60A5FA,
+                    "The bound output cache is missing. Reload the source session before publishing elsewhere.");
+        } else if (targetMismatch) {
+            ImGui.textColored(0xFF60A5FA,
+                    "This cache session is already bound to " + publicationTarget);
+        } else if (outputExists && !outputDirectory) {
             ImGui.textColored(0xFF60A5FA,
                     "That output path exists but is not a cache directory.");
         } else if (outputDirectory) {
@@ -928,15 +951,19 @@ public final class ObjectViewerPanel implements StudioPanel {
                     "Existing output selected: Studio will stage, verify, and replace it transactionally.");
         }
 
+        ImGui.beginDisabled(buildRunning || publicationTarget != null);
         if (ImGui.button("Suggest path##definition-output-suggest")) {
             outputCachePath.set(suggestedOutputPath(cache).toString());
             definitionBuildStatus = "";
         }
+        ImGui.endDisabled();
         ImGui.sameLine();
 
         boolean canBuild = unpublished > 0
                 && !buildRunning
                 && candidate != null
+                && !targetMismatch
+                && !targetMissing
                 && (!outputExists || outputDirectory);
         ImGui.beginDisabled(!canBuild);
         String publishLabel = outputDirectory
@@ -962,13 +989,24 @@ public final class ObjectViewerPanel implements StudioPanel {
                 throw new IllegalArgumentException("Output cache path cannot be blank");
             }
 
+            ObjectDefinitionEditWorkspace workspace = cache.objectDefinitions();
+            Path publicationTarget = workspace.publicationTarget().orElse(null);
+            if (publicationTarget != null && !publicationTarget.equals(output)) {
+                throw new IllegalArgumentException(
+                        "Definition publication is already bound to output cache "
+                                + publicationTarget);
+            }
+
             boolean updateExisting = Files.exists(output);
+            if (publicationTarget != null && !updateExisting) {
+                throw new IllegalArgumentException(
+                        "The bound output cache no longer exists: " + publicationTarget);
+            }
             if (updateExisting && !Files.isDirectory(output)) {
                 throw new IllegalArgumentException(
                         "Existing output path is not a directory: " + output);
             }
 
-            ObjectDefinitionEditWorkspace workspace = cache.objectDefinitions();
             ObjectDefinitionOutputCacheBuilder.BuildPlan plan =
                     ObjectDefinitionOutputCacheBuilder.plan(
                             workspace.unpublishedTransactions());
@@ -1025,7 +1063,9 @@ public final class ObjectViewerPanel implements StudioPanel {
         for (ObjectDefinitionOutputCacheBuilder.PlannedObjectDefinition definition
                 : completion.plan().definitions()) {
             completion.workspace().markPublished(
-                    definition.objectId(), definition.preview());
+                    completion.result().outputCache(),
+                    definition.objectId(),
+                    definition.preview());
         }
         if (context.session() != null) {
             context.session().externalStateChanged();
