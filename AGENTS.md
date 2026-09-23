@@ -65,8 +65,10 @@ A full RuneLite fork (based on OpenOSRS, **BSD 2-Clause licensed** - see its own
 `RuneLite-melxin/README.md`), added at the repo root. This is genuine, correctly-licensed
 open-source client code and is safe to read, quote, and reimplement techniques from freely.
 
-Use it to verify or port real client behavior. Some concretely useful starting points found
-this cycle (see `docs/ROADMAP.md` and the parity manifest for current priority):
+Use it to verify or port real client behavior. Start with `docs/RUNELITE_REFERENCE_GUIDE.md`
+for the problem-to-source lookup table so the same deob/API/GPU paths are not rediscovered on
+every PR. Some concretely useful starting points found this cycle (see `docs/ROADMAP.md` and
+the parity manifest for current priority):
 
 - Terrain underlay color blending: `runelite-client/cache/.../MapImageDumper.java`
   (un-obfuscated re-implementation; the real client's is `runescape-client/.../class470.java`,
