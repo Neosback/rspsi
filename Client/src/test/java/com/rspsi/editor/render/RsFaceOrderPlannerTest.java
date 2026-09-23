@@ -7,6 +7,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 class RsFaceOrderPlannerTest {
     @Test
@@ -51,6 +52,32 @@ class RsFaceOrderPlannerTest {
             assertEquals(1, depthCalls.get(command));
             assertEquals(1, tieCalls.get(command));
         }
+    }
+
+    @Test
+    void reusableWorkspaceRetainsItsResultContainerAcrossFrames() {
+        GpuDrawCommand low = command(0, 1);
+        GpuDrawCommand special = command(10, 2);
+        GpuDrawCommand second = command(2, 3);
+        RsFaceOrderPlanner.Workspace workspace = new RsFaceOrderPlanner.Workspace();
+
+        List<GpuDrawCommand> first = RsFaceOrderPlanner.orderAlphaReusable(
+                List.of(low, special, second),
+                value -> value.priority() == 10 ? 20.0
+                        : value.priority() == 2 ? 5.0 : 0.0,
+                ignored -> 0,
+                workspace);
+        assertIterableEquals(List.of(special, low, second), first);
+
+        List<GpuDrawCommand> secondFrame = RsFaceOrderPlanner.orderAlphaReusable(
+                List.of(second, low),
+                value -> value.priority(),
+                ignored -> 0,
+                workspace);
+
+        assertSame(first, secondFrame,
+                "render-loop workspace should reuse the same result list");
+        assertIterableEquals(List.of(low, second), secondFrame);
     }
 
     @Test

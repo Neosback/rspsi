@@ -49,6 +49,42 @@ class GpuDrawBatchPlannerTest {
     }
 
     @Test
+    void cursorExposesTheSameBatchesWithoutMaterializingNestedLists() {
+        WorldTileAddress zoneA0 = WorldTileAddress.of(3200, 3200, 0);
+        WorldTileAddress zoneA1 = WorldTileAddress.of(3201, 3200, 0);
+        WorldTileAddress zoneB = WorldTileAddress.of(3208, 3200, 0);
+        List<GpuDrawCommand> commands = List.of(
+                command(zoneA0, GpuDrawCommand.SubmissionPass.OPAQUE, 7, 0,
+                        GpuDrawCommand.RenderMode.DEFAULT, 0),
+                command(zoneA1, GpuDrawCommand.SubmissionPass.OPAQUE, 7, 0,
+                        GpuDrawCommand.RenderMode.DEFAULT, 3),
+                command(zoneA1, GpuDrawCommand.SubmissionPass.OPAQUE, 9, 0,
+                        GpuDrawCommand.RenderMode.DEFAULT, 3),
+                command(zoneB, GpuDrawCommand.SubmissionPass.OPAQUE, 7, 0,
+                        GpuDrawCommand.RenderMode.DEFAULT, 4));
+
+        GpuDrawBatchPlanner.BatchCursor cursor = GpuDrawBatchPlanner.cursor(
+                commands, List.of(0, 1, 2, 3),
+                GpuDrawCommand.SubmissionPass.OPAQUE,
+                index -> zoneKey(commands.get(index).tile()));
+
+        assertEquals(true, cursor.next());
+        assertEquals(2, cursor.commandCount());
+        assertEquals(0, cursor.firstCommandIndex());
+        assertEquals(1, cursor.commandIndexAt(1));
+
+        assertEquals(true, cursor.next());
+        assertEquals(1, cursor.commandCount());
+        assertEquals(2, cursor.firstCommandIndex());
+
+        assertEquals(true, cursor.next());
+        assertEquals(1, cursor.commandCount());
+        assertEquals(3, cursor.firstCommandIndex());
+
+        assertEquals(false, cursor.next());
+    }
+
+    @Test
     void rejectsCommandsFromTheWrongSubmissionPass() {
         WorldTileAddress tile = WorldTileAddress.of(3200, 3200, 0);
         List<GpuDrawCommand> commands = List.of(

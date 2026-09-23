@@ -267,9 +267,23 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int lastFramePolygonMode = GL_FILL;
     private String orderedPlanFingerprint;
     private List<Integer> cachedOpaqueOrder = List.of();
+    private final ArrayList<GpuDrawCommand> alphaCommands = new ArrayList<>();
+    private final java.util.IdentityHashMap<GpuDrawCommand, Integer> alphaIndices =
+            new java.util.IdentityHashMap<>();
+    private List<GpuDrawCommand> indexedCommands = List.of();
+    private final ArrayList<Integer> alphaOrder = new ArrayList<>();
+    private final RsFaceOrderPlanner.Workspace alphaOrderWorkspace =
+            new RsFaceOrderPlanner.Workspace();
+    private final java.util.HashSet<Integer> missingTextureIds = new java.util.HashSet<>();
+    private String glVendor = "unknown";
+    private String glRenderer = "unknown";
+    private String glVersion = "unknown";
 
     public void initialize() {
         GLCapabilities capabilities = GL.createCapabilities();
+        glVendor = safeGlString(GL_VENDOR);
+        glRenderer = safeGlString(GL_RENDERER);
+        glVersion = safeGlString(GL_VERSION);
         if (!capabilities.OpenGL33) {
             throw new IllegalStateException("RSPSi requires an OpenGL 3.3 core context; detected "
                     + org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_VERSION));
@@ -516,28 +530,31 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // The software reference renderer composites transparent triangles
         // back-to-front. Keep opaque submission order stable, but apply the
         // same depth ordering to alpha ranges in the native backend.
-        List<GpuDrawCommand> alpha = new ArrayList<>();
-        Map<GpuDrawCommand, Integer> alphaIndices = new java.util.IdentityHashMap<>();
+        alphaCommands.clear();
+        alphaOrder.clear();
+        ensureCommandIndices(commands);
         for (int index = 0; index < commands.size(); index++) {
             GpuDrawCommand command = commands.get(index);
-            if (command.pass() == GpuDrawCommand.SubmissionPass.ALPHA && visibility.visible(index)) {
-                alpha.add(command);
-                alphaIndices.put(command, index);
+            if (command.pass() == GpuDrawCommand.SubmissionPass.ALPHA
+                    && visibility.visible(index)) {
+                alphaCommands.add(command);
             }
         }
         float alphaCosYaw = (float) Math.cos(camera.yaw());
         float alphaSinYaw = (float) Math.sin(camera.yaw());
         float alphaCosPitch = (float) Math.cos(camera.pitch());
         float alphaSinPitch = (float) Math.sin(camera.pitch());
-        alpha = RsFaceOrderPlanner.orderAlpha(alpha,
+        List<GpuDrawCommand> orderedAlpha = RsFaceOrderPlanner.orderAlphaReusable(
+                alphaCommands,
                 command -> averageDepth(runtimeGeometry, alphaIndices.get(command), command, camera,
                         alphaCosYaw, alphaSinYaw, alphaCosPitch, alphaSinPitch),
-                command -> command.wallDecorationPresentation().cameraOrder(command.tile(), camera));
-        List<Integer> alphaOrder = new ArrayList<>(alpha.size());
-        for (GpuDrawCommand command : alpha) {
+                command -> command.wallDecorationPresentation().cameraOrder(command.tile(), camera),
+                alphaOrderWorkspace);
+        for (GpuDrawCommand command : orderedAlpha) {
             alphaOrder.add(alphaIndices.get(command));
         }
-        drawCalls += drawBatches(plan, commands, alphaOrder, visibility, camera, true, clientCycle);
+        drawCalls += drawBatches(
+                plan, commands, alphaOrder, visibility, camera, true, clientCycle);
         // Alpha and no-depth submissions disable depth writes. Restore the
         // baseline before handing the context back to ImGui and before the
         // next frame's clear.
@@ -643,11 +660,14 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
         int missing = 0;
         if (plan != null) {
-            missing = (int) plan.commands().stream()
-                    .map(GpuDrawCommand::textureId)
-                    .filter(id -> id >= 0 && !plan.textures().containsKey(id))
-                    .distinct()
-                    .count();
+            missingTextureIds.clear();
+            for (GpuDrawCommand command : plan.commands()) {
+                int textureId = command.textureId();
+                if (textureId >= 0 && !plan.textures().containsKey(textureId)) {
+                    missingTextureIds.add(textureId);
+                }
+            }
+            missing = missingTextureIds.size();
         }
 
         long zonedGeometryBytes = geometry instanceof GpuZonedUploadPlan
@@ -660,7 +680,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
 
         return new Statistics(sourceVertices, sourceIndices, renderedIndices,
                 terrainTriangles, objectTriangles, decoded, fallback, unavailable, missing,
-                safeGlString(GL_VENDOR), safeGlString(GL_RENDERER), safeGlString(GL_VERSION),
+                glVendor, glRenderer, glVersion,
                 firstGlError, framebufferStatus, lastFramePolygonMode, lastFrameDepthWrites,
                 geometryUploaded, textureUploaded, drawCalls,
                 zonedGeometryBytes, flatMaterializationCount, flatMaterializationBytes,
@@ -721,15 +741,15 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         GpuDrawCommand.SubmissionPass pass = alpha
                 ? GpuDrawCommand.SubmissionPass.ALPHA
                 : GpuDrawCommand.SubmissionPass.OPAQUE;
-        List<GpuDrawBatchPlanner.Batch> batches = GpuDrawBatchPlanner.plan(
+        GpuDrawBatchPlanner.BatchCursor batches = GpuDrawBatchPlanner.cursor(
                 commands, orderedIndices, pass, zoneManager::zoneKeyForCommand);
 
         int drawCalls = 0;
         int lastBoundVao = -1;
-        for (GpuDrawBatchPlanner.Batch batch : batches) {
-            int firstIndex = batch.firstCommandIndex();
+        while (batches.next()) {
+            int firstIndex = batches.firstCommandIndex();
             GpuDrawCommand first = commands.get(firstIndex);
-            ZoneVboManager.ZoneAllocation alloc = zoneManager.allocation(batch.zoneKey());
+            ZoneVboManager.ZoneAllocation alloc = zoneManager.allocation(batches.zoneKey());
             if (alloc == null) {
                 continue;
             }
@@ -738,18 +758,20 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 lastBoundVao = alloc.vao();
             }
             applyDrawState(plan, first, alpha, clientCycle);
-            if (batch.commandCount() == 1) {
+            if (batches.commandCount() == 1) {
                 int localFirst = zoneManager.localFirstIndex(firstIndex);
                 glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
                         (long) localFirst * Integer.BYTES);
             } else {
                 try (MemoryStack stack = MemoryStack.stackPush()) {
-                    IntBuffer counts = stack.mallocInt(batch.commandCount());
-                    PointerBuffer offsets = stack.mallocPointer(batch.commandCount());
-                    for (int commandIndex : batch.commandIndices()) {
+                    IntBuffer counts = stack.mallocInt(batches.commandCount());
+                    PointerBuffer offsets = stack.mallocPointer(batches.commandCount());
+                    for (int offset = 0; offset < batches.commandCount(); offset++) {
+                        int commandIndex = batches.commandIndexAt(offset);
                         GpuDrawCommand command = commands.get(commandIndex);
                         counts.put(command.indexCount());
-                        offsets.put((long) zoneManager.localFirstIndex(commandIndex) * Integer.BYTES);
+                        offsets.put((long) zoneManager.localFirstIndex(commandIndex)
+                                * Integer.BYTES);
                     }
                     counts.flip();
                     offsets.flip();
@@ -759,6 +781,17 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             drawCalls++;
         }
         return drawCalls;
+    }
+
+    private void ensureCommandIndices(List<GpuDrawCommand> commands) {
+        if (commands == indexedCommands) {
+            return;
+        }
+        alphaIndices.clear();
+        for (int index = 0; index < commands.size(); index++) {
+            alphaIndices.put(commands.get(index), index);
+        }
+        indexedCommands = commands;
     }
 
     private static long drawStateKey(GpuDrawCommand command, boolean alpha) {
@@ -1085,6 +1118,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         cachedFogBounds = null;
         orderedPlanFingerprint = null;
         cachedOpaqueOrder = List.of();
+        alphaCommands.clear();
+        alphaIndices.clear();
+        indexedCommands = List.of();
+        alphaOrder.clear();
+        missingTextureIds.clear();
         diagnosticsLogged = false;
     }
 
