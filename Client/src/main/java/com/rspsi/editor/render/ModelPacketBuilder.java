@@ -200,15 +200,24 @@ public final class ModelPacketBuilder {
                 : GameObjectSceneMetadata.none();
         SceneObjectIdentity sceneObjectIdentity = SceneObjectIdentity.of(
                 object, resolved.footprintWidth(), resolved.footprintLength(), occurrence);
+        int placementHeight = objectCenterHeight(
+                document, object, resolved.footprintWidth(), resolved.footprintLength());
+        ModelContourContract contourContract = resolved.appearance().contourGroundType() >= 0
+                ? ModelContourContract.of(
+                        resolved.appearance().contourGroundType(),
+                        resolved.appearance().contourGroundParameter(),
+                        placementHeight, parts.contourApplied, parts.unskewedVertexY)
+                : ModelContourContract.none();
         ModelRenderPacket packet = new ModelRenderPacket(
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
                 resolved.appearance().animationId(), bounds[0], bounds[1], bounds[2],
                 bounds[3], bounds[4], bounds[5], resolved.animation().isPresent(), false,
-                objectCenterHeight(document, object, resolved.footprintWidth(), resolved.footprintLength()),
+                placementHeight,
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
                 GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata,
-                clientRenderableBounds, parts.clientRenderablePlacements, sceneObjectIdentity);
+                clientRenderableBounds, parts.clientRenderablePlacements,
+                contourContract, sceneObjectIdentity);
         return Optional.of(resolved.appearance().mergeNormals()
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }
@@ -477,16 +486,23 @@ public final class ModelPacketBuilder {
         }
         // Lighting and face colors are locked in above from pre-contour
         // geometry; the client warps vertex Y afterwards (SceneBuilder applies
-        // contourGround to the already-lit model). The client gates on
-        // clipType >= 0, not on the legacy boolean.
+        // contourGround to the already-lit model). Retain that pre-contour Y
+        // stream so HILLSKEW-style consumers can reconstruct the unskewed
+        // model when the client actually creates a contoured copy.
+        List<RawVertex> unskewed = List.copyOf(transformed);
+        // The client gates on clipType >= 0, not on the legacy boolean.
         if (appearance.contourGroundType() >= 0) {
             List<RawVertex> contoured = applyContour(document, object, footprintWidth,
                     footprintLength, transformed, appearance);
-            if (contoured != null) transformed = contoured;
+            if (contoured != null) {
+                transformed = contoured;
+                parts.contourApplied = true;
+            }
         }
         for (int vertex = 0; vertex < transformed.size(); vertex++) {
             RawVertex value = transformed.get(vertex);
             Normal normal = normals.get(vertex);
+            parts.unskewedVertexY.add(unskewed.get(vertex).y());
             parts.vertices.add(new ModelVertex(value.x, value.y, value.z,
                     normal.x, normal.y, normal.z, normal.magnitude,
                     normalized(value.x, transformed, true),
@@ -694,7 +710,7 @@ public final class ModelPacketBuilder {
                 packet.placementHeight(), packet.roofRelated(), packet.renderMode(),
                 packet.wallDecorationPresentation(), packet.gameObjectSceneMetadata(),
                 packet.clientRenderableBounds(), packet.clientRenderablePlacements(),
-                packet.sceneObjectIdentity());
+                packet.contourContract(), packet.sceneObjectIdentity());
     }
 
     /**
@@ -1525,6 +1541,8 @@ public final class ModelPacketBuilder {
         private final List<ModelVertex> clientBoundsVertices = new ArrayList<>();
         private final List<VertexRange> clientRenderableRanges = new ArrayList<>();
         private final List<ClientRenderablePlacement> clientRenderablePlacements = new ArrayList<>();
+        private final List<Integer> unskewedVertexY = new ArrayList<>();
+        private boolean contourApplied;
         private final List<ModelTriangle> triangles = new ArrayList<>();
         private final List<TextureTriangle> textureTriangles = new ArrayList<>();
         private final List<VertexRange> wallVariantRanges = new ArrayList<>();
