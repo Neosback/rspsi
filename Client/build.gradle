@@ -18,6 +18,11 @@ dependencies {
     implementation "dev.or2:osrs:${openruneFileStoreVersion}"
     implementation "dev.or2:definition:${openruneFileStoreVersion}"
     implementation "dev.or2:opcode:${openruneFileStoreVersion}"
+    // OpenRune's DefinitionCodec public encode API is ByteBuf-based, but the
+    // definition artifact keeps Netty as an implementation dependency. Pin
+    // the same buffer version used by OpenRune-FileStore 3.0.x so the adapter
+    // can invoke the production codecs directly without reflection.
+    implementation "io.netty:netty-buffer:4.1.107.Final"
     // Explicit opt-in writable adapter. The normal FileStore filesystem
     // remains read-only; this module exposes OpenRune's CacheDelegate for a
     // separately selected output cache.
