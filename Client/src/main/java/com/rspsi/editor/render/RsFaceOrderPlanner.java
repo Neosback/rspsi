@@ -75,6 +75,7 @@ public final class RsFaceOrderPlanner {
             int priority = Math.max(0, Math.min(11, command.priority()));
             workspace.groups.get(priority).add(ranked);
         }
+        workspace.usedSlots = commands.size();
         for (List<RankedCommand> group : workspace.groups) {
             group.sort(workspace.farToNear);
         }
@@ -126,6 +127,7 @@ public final class RsFaceOrderPlanner {
         private final ArrayList<RankedCommand> slots = new ArrayList<>();
         private final ArrayList<GpuDrawCommand> result = new ArrayList<>();
         private final Comparator<RankedCommand> farToNear;
+        private int usedSlots;
 
         public Workspace() {
             for (int index = 0; index < 12; index++) {
@@ -149,6 +151,13 @@ public final class RsFaceOrderPlanner {
                 group.clear();
             }
             result.clear();
+            for (int index = 0; index < usedSlots; index++) {
+                RankedCommand ranked = slots.get(index);
+                ranked.command = null;
+                ranked.depth = 0.0;
+                ranked.tieBreaker = 0;
+            }
+            usedSlots = 0;
         }
     }
 
