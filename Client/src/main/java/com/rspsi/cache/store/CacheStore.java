@@ -54,7 +54,7 @@ public interface CacheStore extends AutoCloseable {
 
     /**
      * Stable backend name for audit and status surfaces. This identifies the
-     * adapter/backend pair (for example {@code OpenRune FileStore 3.0.2}); it
+     * adapter/backend pair (for example {@code OpenRune FileStore 3.0.3}); it
      * is deliberately a display/audit value and never an API selector.
      */
     default String backendName() {

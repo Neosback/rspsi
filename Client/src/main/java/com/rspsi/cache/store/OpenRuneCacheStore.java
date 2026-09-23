@@ -32,7 +32,7 @@ import static dev.openrune.cache.ConfigTypeKt.OBJECT;
 public final class OpenRuneCacheStore implements CacheStore {
 
     /** Keep the runtime identity visible in diagnostics alongside the Gradle pin. */
-    public static final String FILESTORE_VERSION = "3.0.2";
+    public static final String FILESTORE_VERSION = "3.0.3";
     /**
      * FileStore intentionally exposes bytes and archive structure, not the
      * game build number. This is the audited decoder profile used by the

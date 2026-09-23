@@ -27,11 +27,12 @@ Before implementing cache acquisition, packing, definitions, source tooling, JS5
 
 `gradle.properties` currently pins:
 
-    openruneFileStoreVersion=3.0.2
+    openruneFileStoreVersion=3.0.3
 
-The core OpenRune FileStore family published in `OpenRune/hosting` currently has **3.0.3** as the latest/release version for the main 3.x modules.
-
-That makes 3.0.3 an upgrade candidate, not an automatic upgrade.
+This is the latest/release version of the main 3.x modules published in `OpenRune/hosting`
+(adopted 2026-09-23). `foundationGate` passed on 3.0.3, and the revision 240 region 50,50
+verifier run was re-checked against the 3.0.2 results recorded in
+PHASE0_LUMBRIDGE_ACCEPTANCE.md.
 
 A FileStore version change is a parity event and must run:
 
@@ -47,7 +48,7 @@ Do not mix a dependency upgrade into an unrelated correctness PR unless the upgr
 
 ## 3. What Studio declares today
 
-`Client/build.gradle` directly declares the following OpenRune 3.0.2 modules:
+`Client/build.gradle` directly declares the following OpenRune 3.0.3 modules:
 
 | Artifact | Current use/direction |
 | --- | --- |
@@ -392,8 +393,7 @@ For Phase 0 and the semantic API work:
 - use revision 240 without XTEA-key requirements;
 - keep the external-cache verifier responsible for semantic/render acceptance;
 - do not add direct OpenRS2 dependencies for cache downloading;
-- do not upgrade from FileStore 3.0.2 to 3.0.3 inside PR #47 unless a verified 3.0.3 fix is required;
-- separately schedule a 3.0.3 compatibility spike after the current correctness PR if we want the latest FileStore fixes.
+- track the latest `OpenRune/hosting` FileStore release (3.0.3 as of 2026-09-23) in its own dependency commit, following the parity-event checklist above.
 
 For later content-studio phases:
 
