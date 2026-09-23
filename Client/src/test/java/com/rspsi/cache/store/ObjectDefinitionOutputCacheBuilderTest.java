@@ -191,8 +191,146 @@ class ObjectDefinitionOutputCacheBuilderTest {
                 () -> ObjectDefinitionOutputCacheBuilder.buildNewOutput(
                         source, output, REVISION, java.util.List.of(clean)));
 
-        assertTrue(failure.getMessage().contains("dirty"));
+        assertTrue(failure.getMessage().contains("unpublished"));
         assertFalse(Files.exists(output));
+    }
+
+    @Test
+    void updatesExistingOutputFromExpectedPublishedBaseline() throws IOException {
+        Path source = temporaryDirectory.resolve("source-cache");
+        Path output = temporaryDirectory.resolve("development-cache");
+        ObjectType original = seedCache(source, "Copper rocks");
+        byte[] sourceBytes = encode(original);
+
+        ObjectDefinitionEditTransaction transaction =
+                new OpenRuneObjectDefinitionEditTransaction(original, REVISION);
+        transaction.setField("name",
+                ObjectDefinitionEditValue.stringValue("First publish"));
+
+        ObjectDefinitionOutputCacheBuilder.BuildPlan firstPlan =
+                ObjectDefinitionOutputCacheBuilder.plan(java.util.List.of(transaction));
+        ObjectDefinitionOutputCacheBuilder.buildNewOutput(
+                source, output, REVISION, firstPlan);
+        transaction.markPublished(firstPlan.definitions().get(0).preview());
+
+        Path marker = output.resolve("studio-marker.txt");
+        Files.writeString(marker, "preserve me");
+
+        transaction.setField("name",
+                ObjectDefinitionEditValue.stringValue("Second publish"));
+        ObjectDefinitionOutputCacheBuilder.BuildPlan secondPlan =
+                ObjectDefinitionOutputCacheBuilder.plan(java.util.List.of(transaction));
+
+        assertEquals(
+                firstPlan.definitions().get(0).preview(),
+                secondPlan.definitions().get(0).expectedOutputBase());
+
+        ObjectDefinitionOutputCacheBuilder.BuildResult result =
+                ObjectDefinitionOutputCacheBuilder.updateExistingOutput(
+                        source, output, REVISION, secondPlan);
+
+        assertEquals(java.util.List.of(OBJECT_ID), result.objectIds());
+        assertEquals("preserve me", Files.readString(marker));
+        try (OpenRuneCacheStore sourceStore = OpenRuneCacheStore.open(source)) {
+            assertArrayEquals(sourceBytes,
+                    sourceStore.readObjectDefinitionPayload(OBJECT_ID));
+        }
+        try (OpenRuneCacheStore outputStore = OpenRuneCacheStore.open(output)) {
+            ObjectDefinitionRawView written =
+                    outputStore.decodeObjectDefinitionPayload(
+                            OBJECT_ID,
+                            outputStore.readObjectDefinitionPayload(OBJECT_ID),
+                            REVISION);
+            assertEquals(transaction.preview(), written);
+        }
+    }
+
+    @Test
+    void rejectsStaleExistingOutputBeforeReplacingIt() throws IOException {
+        Path source = temporaryDirectory.resolve("source-cache");
+        Path expectedOutput = temporaryDirectory.resolve("expected-output");
+        Path staleOutput = temporaryDirectory.resolve("stale-output");
+        ObjectType original = seedCache(source, "Copper rocks");
+
+        ObjectDefinitionEditTransaction transaction =
+                new OpenRuneObjectDefinitionEditTransaction(original, REVISION);
+        transaction.setField("name",
+                ObjectDefinitionEditValue.stringValue("Published baseline"));
+        ObjectDefinitionOutputCacheBuilder.BuildPlan publishedPlan =
+                ObjectDefinitionOutputCacheBuilder.plan(java.util.List.of(transaction));
+        ObjectDefinitionOutputCacheBuilder.buildNewOutput(
+                source, expectedOutput, REVISION, publishedPlan);
+        transaction.markPublished(publishedPlan.definitions().get(0).preview());
+
+        ObjectDefinitionEditTransaction unrelated =
+                new OpenRuneObjectDefinitionEditTransaction(original, REVISION);
+        unrelated.setField("name",
+                ObjectDefinitionEditValue.stringValue("Different cache state"));
+        ObjectDefinitionOutputCacheBuilder.buildNewOutput(
+                source, staleOutput, REVISION, java.util.List.of(unrelated));
+        Path marker = staleOutput.resolve("keep.txt");
+        Files.writeString(marker, "untouched");
+
+        transaction.setField("name",
+                ObjectDefinitionEditValue.stringValue("Next publish"));
+        ObjectDefinitionOutputCacheBuilder.BuildPlan nextPlan =
+                ObjectDefinitionOutputCacheBuilder.plan(java.util.List.of(transaction));
+
+        IllegalArgumentException failure = assertThrows(
+                IllegalArgumentException.class,
+                () -> ObjectDefinitionOutputCacheBuilder.updateExistingOutput(
+                        source, staleOutput, REVISION, nextPlan));
+
+        assertTrue(failure.getMessage().contains("unexpected prior value"));
+        assertEquals("untouched", Files.readString(marker));
+        try (OpenRuneCacheStore outputStore = OpenRuneCacheStore.open(staleOutput)) {
+            ObjectDefinitionRawView written =
+                    outputStore.decodeObjectDefinitionPayload(
+                            OBJECT_ID,
+                            outputStore.readObjectDefinitionPayload(OBJECT_ID),
+                            REVISION);
+            assertEquals(unrelated.preview(), written);
+        }
+    }
+
+    @Test
+    void canPublishReversionBackToSourceIntoExistingOutput() throws IOException {
+        Path source = temporaryDirectory.resolve("source-cache");
+        Path output = temporaryDirectory.resolve("development-cache");
+        ObjectType original = seedCache(source, "Copper rocks");
+
+        ObjectDefinitionEditTransaction transaction =
+                new OpenRuneObjectDefinitionEditTransaction(original, REVISION);
+        transaction.setField("name",
+                ObjectDefinitionEditValue.stringValue("Temporary edit"));
+
+        ObjectDefinitionOutputCacheBuilder.BuildPlan firstPlan =
+                ObjectDefinitionOutputCacheBuilder.plan(java.util.List.of(transaction));
+        ObjectDefinitionOutputCacheBuilder.buildNewOutput(
+                source, output, REVISION, firstPlan);
+        transaction.markPublished(firstPlan.definitions().get(0).preview());
+
+        transaction.setField("name",
+                ObjectDefinitionEditValue.stringValue("Copper rocks"));
+        assertFalse(transaction.dirty());
+        assertTrue(transaction.hasUnpublishedChanges());
+
+        ObjectDefinitionOutputCacheBuilder.BuildPlan revertPlan =
+                ObjectDefinitionOutputCacheBuilder.plan(java.util.List.of(transaction));
+        assertEquals(transaction.original(),
+                revertPlan.definitions().get(0).preview());
+
+        ObjectDefinitionOutputCacheBuilder.updateExistingOutput(
+                source, output, REVISION, revertPlan);
+
+        try (OpenRuneCacheStore outputStore = OpenRuneCacheStore.open(output)) {
+            ObjectDefinitionRawView written =
+                    outputStore.decodeObjectDefinitionPayload(
+                            OBJECT_ID,
+                            outputStore.readObjectDefinitionPayload(OBJECT_ID),
+                            REVISION);
+            assertEquals(transaction.original(), written);
+        }
     }
 
     private static ObjectType seedCache(Path directory, String name)
