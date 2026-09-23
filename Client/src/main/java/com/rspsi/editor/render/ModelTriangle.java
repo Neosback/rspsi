@@ -49,6 +49,21 @@ public record ModelTriangle(
         }
     }
 
+    /** Post-recolor unlit Jagex HSL corresponding to RuneLite Model#getUnlitFaceColors. */
+    public int unlitColor() {
+        return baseColor;
+    }
+
+    /** True when colorC carries the client's flat-shading sentinel. */
+    public boolean flatShaded() {
+        return colorC == ModelFaceColorContract.FLAT_SENTINEL;
+    }
+
+    /** True when colorC carries the client's skipped-face sentinel. */
+    public boolean skippedByColorContract() {
+        return colorC == ModelFaceColorContract.SKIP_SENTINEL;
+    }
+
     public ModelTriangle withColors(int newColorA, int newColorB, int newColorC) {
         return new ModelTriangle(a, b, c, newColorA, newColorB, newColorC,
                 textureId, alpha, priority, renderType, uA, vA, uB, vB, uC, vC,
