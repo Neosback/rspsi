@@ -88,7 +88,7 @@ public final class GpuPlanPicker {
                 best.distance, best.command.layer(), best.command.priority(),
                 best.command.depthBias(), best.command.textureId(),
                 best.command.gameObjectSceneMetadata(), best.command.clientRenderableBounds(),
-                best.command.sceneObjectIdentity()));
+                best.command.contourMetadata(), best.command.sceneObjectIdentity()));
     }
 
     private static Ray ray(CameraState camera, int width, int height,
