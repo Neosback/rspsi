@@ -108,8 +108,8 @@ public final class TileInfoHudPlugin implements StudioPlugin {
             String objName = "Object #" + hit.objectId();
             if (cache != null) {
                 var def = cache.bundle().definitions().object(hit.objectId());
-                if (def.isPresent() && !def.get().name().isBlank()) {
-                    objName = def.get().name() + " (#" + hit.objectId() + ")";
+                if (def.isPresent()) {
+                    objName = def.get().displayName() + " (#" + hit.objectId() + ")";
                 }
             }
             if (sb.length() > 2) sb.append("  |  ");
