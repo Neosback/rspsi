@@ -4,6 +4,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
+import com.rspsi.cache.definition.ObjectDefinitionResolver;
 import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.editor.collision.CollisionMap;
 import com.rspsi.editor.collision.CollisionTileSnapshot;
@@ -29,6 +30,7 @@ import java.util.Set;
 public final class RenderSceneBuilder {
     private final TerrainMeshBuilder terrainMeshes;
     private final DefinitionProvider definitions;
+    private final ObjectDefinitionResolver definitionResolver;
     private final LightingProfile lightingProfile;
 
     public RenderSceneBuilder() {
@@ -53,6 +55,7 @@ public final class RenderSceneBuilder {
                               LightingProfile lightingProfile) {
         this.terrainMeshes = Objects.requireNonNull(terrainMeshes, "terrainMeshes");
         this.definitions = definitions;
+        this.definitionResolver = definitions == null ? null : new ObjectDefinitionResolver(definitions);
         this.lightingProfile = Objects.requireNonNull(lightingProfile, "lightingProfile");
     }
 
@@ -313,12 +316,26 @@ public final class RenderSceneBuilder {
     }
 
     private RenderObject resolve(WorldObject object) {
-        ObjectDefinitionView definition = definitions == null
-                ? null : definitions.object(object.id()).orElse(null);
-        ObjectCollisionView collision = definitions == null
-                ? null : definitions.objectCollision(object.id()).orElse(null);
-        ObjectAppearanceView appearance = definitions == null
-                ? null : definitions.objectAppearance(object.id()).orElse(null);
-        return RenderObject.resolve(object, definition, collision, appearance);
+        if (definitions == null) {
+            return RenderObject.resolve(object, null, null, null);
+        }
+
+        ObjectDefinitionResolver.Resolution resolution =
+                definitionResolver.resolveEditorDisplay(object.id());
+        ObjectDefinitionView placementDefinition =
+                resolution.placedDefinition().orElse(null);
+        ObjectDefinitionView displayDefinition =
+                resolution.displayDefinition().orElse(null);
+
+        // Collision/scene occupancy are established by the placed definition
+        // during map load, while visible model metadata comes from the
+        // one-step transformed display definition used by DynamicObject.
+        ObjectCollisionView collision = definitions.objectCollision(object.id()).orElse(null);
+        ObjectAppearanceView appearance = displayDefinition == null
+                ? null
+                : definitions.objectAppearance(displayDefinition.id()).orElse(null);
+
+        return RenderObject.resolve(object, placementDefinition, displayDefinition,
+                collision, appearance);
     }
 }
