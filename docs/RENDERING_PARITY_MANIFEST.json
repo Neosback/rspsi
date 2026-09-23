@@ -42,7 +42,7 @@
       "id": "scene.apiSurface",
       "domain": "scene",
       "title": "Complete RuneLite Scene API surface",
-      "status": "partial",
+      "status": "covered",
       "priority": "p1",
       "runelite": [
         "net.runelite.api.Scene#getBaseX",
@@ -68,6 +68,8 @@
       "rspsi": [
         "Client/src/main/java/com/rspsi/editor/render/SceneContract.java",
         "Client/src/main/java/com/rspsi/editor/render/SceneWindow.java",
+        "Client/src/main/java/com/rspsi/editor/render/InstanceTemplateGrid.java",
+        "Client/src/main/java/com/rspsi/editor/render/ExtendedSceneLayout.java",
         "Client/src/main/java/com/rspsi/editor/render/RoofRegionMap.java",
         "Client/src/main/java/com/rspsi/editor/render/RoofRemovalState.java",
         "Client/src/main/java/com/rspsi/editor/render/SceneVisibilityPolicy.java",
@@ -80,13 +82,15 @@
       ],
       "evidence": [
         "Client/src/test/java/com/rspsi/editor/render/SceneContractTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/InstanceTemplateGridTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ExtendedSceneLayoutTest.java",
         "Client/src/test/java/com/rspsi/editor/render/RoofRegionMapTest.java",
         "Client/src/test/java/com/rspsi/editor/render/RoofRemovalStateTest.java",
-        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md",
-        "docs/RENDERING_PARITY_INDEX.md"
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/Scene.java",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/coords/WorldPoint.java"
       ],
-      "reason": "The tracked RuneLite Scene API surface is explicitly classified as semantic, presentation-only, mutation, or deferred. Base coordinates, map regions, instance identity, world-view identity, scene minimum render level, current scene plane, render level, physical/cull level, connected roof-region data, and roof-removal frame state are now first-class and consumed by the traversal path. The remaining incompleteness is the extended-scene border arrays/traversal, instance-template projection fixtures, and editor-irrelevant mutation/presentation surfaces that do not yet have a concrete Map Studio consumer.",
-      "nextAction": "Keep the core SceneContract stable. Close the remaining API-surface gap through the separately tracked extended-scene border and instance-template fixtures; add mutation-only APIs only when a concrete editor workflow requires them."
+      "reason": "The tracked RuneLite rendering-relevant Scene API surface now has an explicit neutral disposition and concrete contracts for every semantic shape needed by Map Studio. SceneContract carries base coordinates, map-region identity, minimum level, world-view identity, instance identity, and API classification; roof regions/removal are first-class; InstanceTemplateGrid exposes the exact client-shaped [plane][13][13] packed template view with the current OSRS bit layout and -1 sentinel; and ExtendedSceneLayout models RuneLite's documented 104x104 normal scene inside the 184x184 extended coordinate space at offset 40. Presentation-only and mutation-only APIs remain deliberately outside authored scene state, while the actual extended-border traversal and rotated instance rendering are independently tracked under scene.extendedTiles and scene.instances rather than being hidden inside this umbrella item.",
+      "nextAction": "Keep SceneContract, InstanceTemplateGrid, ExtendedSceneLayout, and the roof contracts stable as the Scene API boundary. Complete extended-border camera traversal under scene.extendedTiles and rotated instance rendering under scene.instances without reopening the API-surface contract."
     },
     {
       "id": "scene.extendedTiles",
