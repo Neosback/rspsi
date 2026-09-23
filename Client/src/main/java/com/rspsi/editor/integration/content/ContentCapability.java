@@ -6,6 +6,9 @@ import java.util.Locale;
 public enum ContentCapability {
     NPC_SPAWNS("spawns"),
     AREAS("areas"),
+    SERVER_DEFINITIONS("server-definitions"),
+    PACK_DEFINITIONS("pack-definitions"),
+    CACHE_DEFINITIONS("cache-definitions"),
     DROP_TABLES("drops"),
     SKILL_NODES("skill-nodes"),
     GAMEVALS("gamevals"),
