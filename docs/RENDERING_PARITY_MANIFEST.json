@@ -1032,8 +1032,8 @@
       "evidence": [
         "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
       ],
-      "reason": "Opaque/alpha and normal data are present; pre-alpha, HILLSKEW, and callback negotiation remain explicit gaps.",
-      "nextAction": "Add only source-backed optional passes after fixture evidence requires them."
+      "reason": "Opaque/alpha submission and normal data are present, and the model contour contract now exposes HILLSKEW-compatible unskewed-model metadata. Callback-mode negotiation, pre-alpha callback behavior, and source-backed optional callback passes remain explicit gaps.",
+      "nextAction": "Add callback negotiation and optional passes only when source-backed fixtures require them; consume the existing contour/unskewed-model contract rather than duplicating HILLSKEW geometry."
     }
   ]
 }
