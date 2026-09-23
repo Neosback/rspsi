@@ -19,14 +19,6 @@ import java.util.Optional;
  * at the same granularity {@link GpuUploadPlanBuilder} produced them.</p>
  */
 public final class GpuCommandVisibility {
-    /**
-     * Occlusion is an optimization, never a prerequisite for drawing. A real
-     * region can contain hundreds of thousands of triangles and thousands of
-     * wall planes; evaluating every command against every plane would stall
-     * the UI thread during the first frame. Keep the exact resolver for small
-     * fixtures and deliberately draw all commands when the broad-phase budget
-     * is exceeded.
-     */
     private static final int MAX_OCCLUSION_COMMANDS = 10_000;
     private static final long MAX_OCCLUSION_TESTS = 250_000L;
 
@@ -62,26 +54,45 @@ public final class GpuCommandVisibility {
     public static GpuCommandVisibility of(GpuCommandGeometry geometry, CameraState camera,
                                           List<SceneOccluder> occluders,
                                           Optional<SceneWindow> sceneWindow) {
+        return compute(geometry, camera, occluders, sceneWindow,
+                null, null, false);
+    }
+
+    private static GpuCommandVisibility compute(
+            GpuCommandGeometry geometry,
+            CameraState camera,
+            List<SceneOccluder> occluders,
+            Optional<SceneWindow> sceneWindow,
+            BitSet precomputedExtendedHidden,
+            ExtendedSceneZoneTraversal precomputedTraversal,
+            boolean precomputedExtendedApplied) {
         Objects.requireNonNull(geometry, "geometry");
         Objects.requireNonNull(camera, "camera");
         Objects.requireNonNull(occluders, "occluders");
         Objects.requireNonNull(sceneWindow, "sceneWindow");
-        int commandCount = geometry.commandCount();
-        BitSet hidden = new BitSet(commandCount);
 
-        ExtendedSceneZoneTraversal.Frame extendedFrame = sceneWindow
-                .map(ExtendedSceneZoneTraversal::new)
-                .map(traversal -> traversal.frame(camera))
-                .orElse(null);
-        boolean extendedSceneApplied = extendedFrame != null
-                && extendedFrame.traversal().applies();
-        if (extendedSceneApplied) {
-            for (int index = 0; index < commandCount; index++) {
-                if (!extendedFrame.includes(geometry.command(index))) {
-                    hidden.set(index);
+        int commandCount = geometry.commandCount();
+        BitSet hidden;
+        ExtendedSceneZoneTraversal traversal = precomputedTraversal;
+        boolean extendedSceneApplied = precomputedExtendedApplied;
+
+        if (precomputedExtendedHidden != null) {
+            hidden = (BitSet) precomputedExtendedHidden.clone();
+        } else {
+            hidden = new BitSet(commandCount);
+            traversal = sceneWindow.map(ExtendedSceneZoneTraversal::new).orElse(null);
+            extendedSceneApplied = traversal != null && traversal.applies();
+            if (extendedSceneApplied) {
+                for (int index = 0; index < commandCount; index++) {
+                    if (!traversal.includes(geometry.command(index).tile())) {
+                        hidden.set(index);
+                    }
                 }
             }
         }
+
+        ExtendedSceneZoneTraversal.Frame extendedFrame =
+                traversal == null ? null : traversal.frame(camera);
 
         long estimatedTests = (long) commandCount * occluders.size();
         boolean occlusionApplied = !occluders.isEmpty()
@@ -89,9 +100,7 @@ public final class GpuCommandVisibility {
                 && estimatedTests <= MAX_OCCLUSION_TESTS;
         if (occlusionApplied) {
             for (int index = 0; index < commandCount; index++) {
-                if (hidden.get(index)) {
-                    continue;
-                }
+                if (hidden.get(index)) continue;
                 GpuDrawCommand command = geometry.command(index);
                 if (SceneOcclusionResolver.occludesCommand(
                         index, command, geometry, camera, occluders)) {
@@ -99,33 +108,119 @@ public final class GpuCommandVisibility {
                 }
             }
         }
+
         return new GpuCommandVisibility(hidden, commandCount, occlusionApplied,
                 extendedSceneApplied,
                 extendedFrame == null || extendedFrame.cameraInExtendedScene(),
                 extendedFrame != null && extendedFrame.cameraInBorder());
     }
 
-    /** True when the camera-dependent occluder resolver ran for this frame. */
+    /**
+     * One-entry visibility snapshot cache for a live renderer.
+     *
+     * <p>The extended-scene membership mask depends only on geometry and the
+     * scene window, not on the camera, so it is retained separately across
+     * camera movement. The final visibility snapshot is reused completely
+     * while geometry, camera, occluders and scene-window identity are
+     * unchanged. This removes the steady-frame BitSet allocation and command
+     * scan without making visibility global or long-lived.</p>
+     */
+    public static final class Cache {
+        private GpuCommandGeometry geometry;
+        private Optional<SceneWindow> sceneWindow = Optional.empty();
+        private ExtendedSceneZoneTraversal traversal;
+        private BitSet extendedHidden = new BitSet();
+        private boolean extendedSceneApplied;
+
+        private CameraState camera;
+        private List<SceneOccluder> occluders;
+        private GpuCommandVisibility visibility;
+
+        public GpuCommandVisibility resolve(
+                GpuCommandGeometry geometry,
+                CameraState camera,
+                List<SceneOccluder> occluders,
+                Optional<SceneWindow> sceneWindow) {
+            Objects.requireNonNull(geometry, "geometry");
+            Objects.requireNonNull(camera, "camera");
+            Objects.requireNonNull(occluders, "occluders");
+            Objects.requireNonNull(sceneWindow, "sceneWindow");
+
+            boolean geometryChanged = this.geometry != geometry;
+            boolean windowChanged = this.sceneWindow != sceneWindow;
+            if (geometryChanged || windowChanged) {
+                rebuildExtendedMask(geometry, sceneWindow);
+                this.geometry = geometry;
+                this.sceneWindow = sceneWindow;
+                this.visibility = null;
+                this.camera = null;
+                this.occluders = null;
+            }
+
+            boolean cameraIndependent = occluders.isEmpty() && traversal == null;
+            if (visibility != null
+                    && this.occluders == occluders
+                    && (cameraIndependent || camera.equals(this.camera))) {
+                return visibility;
+            }
+
+            visibility = compute(
+                    geometry, camera, occluders, sceneWindow,
+                    extendedHidden, traversal, extendedSceneApplied);
+            this.camera = camera;
+            this.occluders = occluders;
+            return visibility;
+        }
+
+        public GpuCommandVisibility resolve(GpuUploadPlan plan, CameraState camera) {
+            Objects.requireNonNull(plan, "plan");
+            return resolve(plan, camera, plan.occluders(), plan.sceneWindow());
+        }
+
+        public void clear() {
+            geometry = null;
+            sceneWindow = Optional.empty();
+            traversal = null;
+            extendedHidden.clear();
+            extendedSceneApplied = false;
+            camera = null;
+            occluders = null;
+            visibility = null;
+        }
+
+        private void rebuildExtendedMask(
+                GpuCommandGeometry geometry,
+                Optional<SceneWindow> sceneWindow) {
+            traversal = sceneWindow.map(ExtendedSceneZoneTraversal::new).orElse(null);
+            extendedSceneApplied = traversal != null && traversal.applies();
+            extendedHidden.clear();
+            if (!extendedSceneApplied) return;
+
+            int commandCount = geometry.commandCount();
+            for (int index = 0; index < commandCount; index++) {
+                if (!traversal.includes(geometry.command(index).tile())) {
+                    extendedHidden.set(index);
+                }
+            }
+        }
+    }
+
     public boolean occlusionApplied() {
         return occlusionApplied;
     }
 
-    /** True when the top-level 184x184 extended scene gate participated this frame. */
     public boolean extendedSceneApplied() {
         return extendedSceneApplied;
     }
 
-    /** True when the camera lies within the current extended scene traversal window. */
     public boolean cameraInExtendedScene() {
         return cameraInExtendedScene;
     }
 
-    /** True when the camera currently occupies the five-zone extended border. */
     public boolean cameraInExtendedBorder() {
         return cameraInExtendedBorder;
     }
 
-    /** Returns true when the command at {@code commandIndex} should be drawn this frame. */
     public boolean visible(int commandIndex) {
         if (commandIndex < 0 || commandIndex >= commandCount) {
             throw new IndexOutOfBoundsException("commandIndex " + commandIndex);
