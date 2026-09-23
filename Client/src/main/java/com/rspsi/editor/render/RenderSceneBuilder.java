@@ -125,6 +125,55 @@ public final class RenderSceneBuilder {
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         if (definitions == null) return previous;
 
+        Set<TileCoordinate> activeTiles = previous.modelPackets().stream()
+                .filter(packet -> packet.animationState().active())
+                .map(ModelRenderPacket::anchor)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        if (activeTiles.isEmpty()) return previous;
+
+        WorldDocument document = previous.document();
+        for (TileCoordinate coordinate : activeTiles) {
+            for (WorldObject object : document.tile(coordinate).objects()) {
+                if (definitions.objectAppearance(object.id())
+                        .map(ObjectAppearanceView::mergeNormals)
+                        .orElse(false)) {
+                    return refreshAnimationsFull(previous, clientCycle);
+                }
+            }
+        }
+
+        ModelPacketBuilder builder = new ModelPacketBuilder(definitions, lightingProfile);
+        Map<TileCoordinate, List<ModelRenderPacket>> packetsByTile = new LinkedHashMap<>();
+        for (ModelRenderPacket packet : previous.modelPackets()) {
+            packetsByTile.computeIfAbsent(packet.anchor(), ignored -> new ArrayList<>())
+                    .add(packet);
+        }
+        for (TileCoordinate coordinate : activeTiles) {
+            packetsByTile.put(coordinate, builder.buildTile(document, coordinate, clientCycle));
+        }
+
+        List<ModelRenderPacket> modelPackets = packetsByTile.values().stream()
+                .flatMap(List::stream)
+                .toList();
+        if (modelPackets.equals(previous.modelPackets())) return previous;
+
+        return new RenderScene(
+                previous.document(),
+                previous.terrainMeshes(),
+                previous.terrainMaterials(),
+                previous.terrainAppearances(),
+                previous.terrainLighting(),
+                previous.terrainPackets(),
+                previous.lightingProfile(),
+                previous.collision(),
+                previous.objects(),
+                previous.renderObjects(),
+                modelPackets,
+                previous.bridges(),
+                previous.textures());
+    }
+
+    private RenderScene refreshAnimationsFull(RenderScene previous, int clientCycle) {
         List<ModelRenderPacket> modelPackets =
                 new ModelPacketBuilder(definitions, lightingProfile)
                         .build(previous.document(), clientCycle);
