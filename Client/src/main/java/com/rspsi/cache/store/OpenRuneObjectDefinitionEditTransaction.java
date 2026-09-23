@@ -17,6 +17,7 @@ import java.util.TreeMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /** OpenRune-backed in-memory object-definition transaction. */
@@ -100,10 +101,14 @@ final class OpenRuneObjectDefinitionEditTransaction
     @Override
     public boolean hasUnpublishedChanges() {
         ObjectDefinitionRawView current = preview();
-        if (current.equals(original)) {
-            return false;
-        }
-        return publishedPreview == null || !current.equals(publishedPreview);
+        return publishedPreview == null
+                ? !current.equals(original)
+                : !current.equals(publishedPreview);
+    }
+
+    @Override
+    public Optional<ObjectDefinitionRawView> publishedPreview() {
+        return Optional.ofNullable(publishedPreview);
     }
 
     @Override

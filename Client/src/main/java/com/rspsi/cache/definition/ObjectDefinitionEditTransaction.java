@@ -1,5 +1,6 @@
 package com.rspsi.cache.definition;
 
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -25,19 +26,29 @@ public interface ObjectDefinitionEditTransaction {
     }
 
     /**
-     * Returns whether the current preview exists only in memory. A transaction
-     * may remain different from the read-only source after it has been
-     * published to an explicit output cache, so this is intentionally distinct
-     * from {@link #dirty()}.
+     * Returns whether the current preview differs from the publication baseline.
+     * Before the first successful publish, the immutable source definition is
+     * the baseline. After publication, the exact published preview is the
+     * baseline, so undoing back to the source can still require an output-cache
+     * update. This is intentionally distinct from {@link #dirty()}.
      */
     default boolean hasUnpublishedChanges() {
         return dirty();
     }
 
     /**
-     * Records the exact decoded preview that was successfully published.
-     * Backends that do not track publication state may ignore this signal and
-     * continue reporting {@link #dirty()} as unpublished.
+     * Returns the last preview successfully published for this transaction when
+     * the backend tracks publication state. Persistence code uses this as the
+     * expected base when transactionally updating an existing output cache.
+     */
+    default Optional<ObjectDefinitionRawView> publishedPreview() {
+        return Optional.empty();
+    }
+
+    /**
+     * Records the exact decoded preview that was successfully published as the
+     * new output baseline. Backends that do not track publication state may
+     * ignore this signal and continue reporting {@link #dirty()} as unpublished.
      */
     default void markPublished(ObjectDefinitionRawView publishedPreview) {
         java.util.Objects.requireNonNull(publishedPreview, "publishedPreview");
