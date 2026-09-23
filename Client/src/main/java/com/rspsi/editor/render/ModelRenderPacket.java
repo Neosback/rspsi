@@ -276,6 +276,22 @@ public record ModelRenderPacket(
                 .toList();
     }
 
+    /**
+     * Reconstructs RuneLite's HILLSKEW unskewed model vertex stream when the
+     * client contour pass actually produced a warped copy.
+     */
+    public java.util.Optional<List<ModelVertex>> unskewedVertices() {
+        if (!contourContract.hasUnskewedModel()) return java.util.Optional.empty();
+        java.util.ArrayList<ModelVertex> result = new java.util.ArrayList<>(vertices.size());
+        for (int index = 0; index < vertices.size(); index++) {
+            ModelVertex vertex = vertices.get(index);
+            result.add(new ModelVertex(vertex.x(), contourContract.unskewedY(index), vertex.z(),
+                    vertex.normalX(), vertex.normalY(), vertex.normalZ(),
+                    vertex.normalMagnitude(), vertex.u(), vertex.v()));
+        }
+        return java.util.Optional.of(List.copyOf(result));
+    }
+
     /** Triangle indices suitable for the opaque submission pass. */
     public List<Integer> opaqueTriangleIndices() {
         return triangleIndices(false);
