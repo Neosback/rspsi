@@ -21,6 +21,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.GL_NO_ERROR;
 import static org.lwjgl.opengl.GL11.GL_RGBA;
@@ -44,8 +45,9 @@ class OpenGlBackfaceAcceptanceTest {
     static void createContext() {
         boolean initialized = glfwInit();
         if (!initialized) {
-            Assumptions.assumeFalse("true".equalsIgnoreCase(System.getenv("CI")),
-                    "CI must provide a working GLFW/OpenGL context");
+            if ("true".equalsIgnoreCase(System.getenv("CI"))) {
+                fail("CI must provide a working GLFW/OpenGL context");
+            }
             Assumptions.assumeTrue(false, "No GLFW display/context available");
         }
         glfwDefaultWindowHints();
@@ -56,8 +58,9 @@ class OpenGlBackfaceAcceptanceTest {
         window = glfwCreateWindow(SIZE, SIZE, "rspsi-native-facing-acceptance", 0L, 0L);
         if (window == 0L) {
             glfwTerminate();
-            Assumptions.assumeFalse("true".equalsIgnoreCase(System.getenv("CI")),
-                    "CI must create an OpenGL 3.3 core context");
+            if ("true".equalsIgnoreCase(System.getenv("CI"))) {
+                fail("CI must create an OpenGL 3.3 core context");
+            }
             Assumptions.assumeTrue(false, "OpenGL 3.3 core context unavailable");
         }
         glfwMakeContextCurrent(window);
