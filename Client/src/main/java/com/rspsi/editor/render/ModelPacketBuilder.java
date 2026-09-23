@@ -135,7 +135,8 @@ public final class ModelPacketBuilder {
         int footprintLength = object.rotation() % 2 == 0
                 ? placementDefinition.length() : placementDefinition.width();
         return new ResolvedModelBuild(objectDefinition, appearance, animation.frame(),
-                animation.state(), decorDisplacement, footprintWidth, footprintLength);
+                animation.skeleton(), animation.state(),
+                decorDisplacement, footprintWidth, footprintLength);
     }
 
     private Optional<ModelRenderPacket> buildResolvedPacket(
@@ -161,12 +162,10 @@ public final class ModelPacketBuilder {
                 Optional<ModelGeometryView> geometry = definitions.modelGeometry(modelId);
                 if (geometry.isEmpty()) continue;
                 ModelGeometryView animatedGeometry = geometry.orElseThrow();
-                if (resolved.animation().isPresent()) {
-                    AnimationFrameView frame = resolved.animation().orElseThrow();
-                    Optional<SkeletonDefinitionView> skeleton = definitions.skeleton(frame.skeletonId());
-                    if (skeleton.isPresent()) {
-                        animatedGeometry = ModelAnimation.apply(animatedGeometry, frame, skeleton.orElseThrow());
-                    }
+                if (resolved.animation().isPresent() && resolved.animationSkeleton().isPresent()) {
+                    animatedGeometry = ModelAnimation.apply(animatedGeometry,
+                            resolved.animation().orElseThrow(),
+                            resolved.animationSkeleton().orElseThrow());
                 }
                 int variantStart = parts.vertices.size();
                 append(parts, object, resolved.appearance(), animatedGeometry, document,
@@ -212,7 +211,7 @@ public final class ModelPacketBuilder {
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
                 resolved.appearance().animationId(), bounds[0], bounds[1], bounds[2],
-                bounds[3], bounds[4], bounds[5], resolved.animation().isPresent(), false,
+                bounds[3], bounds[4], bounds[5], resolved.animationState().transformed(), false,
                 placementHeight,
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
                 GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata,
@@ -225,6 +224,7 @@ public final class ModelPacketBuilder {
     private record ResolvedModelBuild(ObjectDefinitionView objectDefinition,
                                       ObjectAppearanceView appearance,
                                       Optional<AnimationFrameView> animation,
+                                      Optional<SkeletonDefinitionView> animationSkeleton,
                                       ModelAnimationState animationState,
                                       int decorDisplacement,
                                       int footprintWidth,
@@ -232,23 +232,25 @@ public final class ModelPacketBuilder {
     }
 
     private record ResolvedAnimation(Optional<AnimationFrameView> frame,
+                                     Optional<SkeletonDefinitionView> skeleton,
                                      ModelAnimationState state) {
     }
 
     private ResolvedAnimation resolveAnimation(int animationId, int clientCycle) {
         if (animationId < 0) {
-            return new ResolvedAnimation(Optional.empty(), ModelAnimationState.none());
+            return new ResolvedAnimation(Optional.empty(), Optional.empty(),
+                    ModelAnimationState.none());
         }
         Optional<SequenceDefinitionView> sequence = definitions.sequence(animationId);
         if (sequence.isEmpty()) {
-            return new ResolvedAnimation(Optional.empty(),
+            return new ResolvedAnimation(Optional.empty(), Optional.empty(),
                     ModelAnimationState.unresolved(animationId, clientCycle));
         }
 
         SequenceDefinitionView value = sequence.orElseThrow();
         int[] frameIds = value.frameIds();
         if (frameIds.length == 0) {
-            return new ResolvedAnimation(Optional.empty(),
+            return new ResolvedAnimation(Optional.empty(), Optional.empty(),
                     ModelAnimationState.unresolved(animationId, clientCycle,
                             value.animationHeightOffset()));
         }
@@ -257,9 +259,13 @@ public final class ModelPacketBuilder {
                 frameIds.length, value.frameLengths(), value.frameStep(), clientCycle);
         int selectedFrameId = frameIds[selectedIndex];
         Optional<AnimationFrameView> frame = definitions.animationFrame(selectedFrameId);
-        return new ResolvedAnimation(frame,
+        Optional<SkeletonDefinitionView> skeleton = frame.isPresent()
+                ? definitions.skeleton(frame.orElseThrow().skeletonId())
+                : Optional.empty();
+        return new ResolvedAnimation(frame, skeleton,
                 ModelAnimationState.selected(animationId, selectedIndex, selectedFrameId,
-                        clientCycle, value.animationHeightOffset(), frame.isPresent()));
+                        clientCycle, value.animationHeightOffset(),
+                        frame.isPresent() && skeleton.isPresent()));
     }
 
     /**
