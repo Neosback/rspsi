@@ -115,6 +115,97 @@ class ModelPacketBuilderTest {
     }
 
     @Test
+    void missingSelectedAnimationFrameDoesNotFallBackToAnotherSequenceFrame() {
+        WorldDocument document = new WorldDocument(2, 2, 1);
+        WorldObject object = new WorldObject(42, 10, 0, 0, 0, 0);
+        for (int x = 0; x < 2; x++) {
+            for (int y = 0; y < 2; y++) {
+                document.tile(0, x, y).restore(new TileSnapshot(
+                        40, 40, 40, 40, 0, 0, 0, 0, 0,
+                        x == 0 && y == 0 ? List.of(object) : List.of()));
+            }
+        }
+
+        ObjectAppearanceView appearance = new ObjectAppearanceView(
+                77, false, 128, 128, 128, 0, 0, 0,
+                Map.of(), Map.of(), true, false, false, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
+        ModelGeometryView geometry = new ModelGeometryView(
+                7, new int[]{0, 0, 0, 64, 0, 0, 0, 0, 64},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1})
+                .withVertexSkins(new int[]{1, 1, 1});
+        SequenceDefinitionView sequence = new SequenceDefinitionView(
+                77, new int[]{100, 101}, new int[]{1, 1}, 2, false,
+                -1, -1, 99, 0, 0, 2, -1, 6);
+        SkeletonDefinitionView skeleton =
+                new SkeletonDefinitionView(5, new int[]{1}, new int[][]{{1}});
+        AnimationFrameView available = new AnimationFrameView(
+                100, 5, new int[]{0}, new int[]{12},
+                new int[]{0}, new int[]{0}, false);
+        DefinitionProvider definitions = animatedDefinitions(
+                appearance, geometry, sequence, Map.of(100, available), skeleton);
+
+        ModelPacketBuilder builder = new ModelPacketBuilder(definitions);
+        ModelRenderPacket first = builder.build(object, document, 0).orElseThrow();
+        ModelRenderPacket missing = builder.build(object, document, 2).orElseThrow();
+
+        assertEquals(100, first.animationState().frameId());
+        assertTrue(first.animationState().transformed());
+        assertEquals(101, missing.animationState().frameId(),
+                "state must retain the frame selected by the sequence");
+        assertTrue(!missing.animationState().transformed(),
+                "missing selected data must not substitute a different sequence frame");
+        assertNotEquals(first.vertices(), missing.vertices(),
+                "the available frame transform must not leak into the missing selected frame");
+        assertEquals(34, missing.renderPlacementHeight(),
+                "active sequence height offset still applies when frame bytes are unavailable");
+    }
+
+    @Test
+    void animationTransformsBeforeContourAndUnskewedContractKeepsAnimatedPose() {
+        WorldDocument document = new WorldDocument(6, 6, 1);
+        document.tile(0, 2, 2).restore(new TileSnapshot(0, 128, 128, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 2, 2))));
+        document.tile(0, 3, 2).restore(new TileSnapshot(128, 128, 128, 128,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 2, 3).restore(new TileSnapshot(0, 128, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 3, 3).restore(new TileSnapshot(128, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+
+        ObjectAppearanceView appearance = new ObjectAppearanceView(
+                77, false, 128, 128, 128, 0, 0, 0,
+                Map.of(), Map.of(), true, false, false, false,
+                0, 0, 16, 1, 0, false, false, false, 0);
+        ModelGeometryView geometry = new ModelGeometryView(
+                7,
+                new int[]{0, 0, 0, 64, -128, 0, 32, -64, 48},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1})
+                .withVertexSkins(new int[]{1, 1, 1});
+        SequenceDefinitionView sequence = new SequenceDefinitionView(
+                77, new int[]{100}, new int[]{1}, 1, false,
+                -1, -1, 99, 0, 0, 2, -1, 0);
+        SkeletonDefinitionView skeleton =
+                new SkeletonDefinitionView(5, new int[]{1}, new int[][]{{1}});
+        AnimationFrameView frame = new AnimationFrameView(
+                100, 5, new int[]{0}, new int[]{0},
+                new int[]{-16}, new int[]{0}, false);
+
+        ModelRenderPacket packet = new ModelPacketBuilder(animatedDefinitions(
+                appearance, geometry, sequence, Map.of(100, frame), skeleton))
+                .build(document, 0).get(0);
+
+        assertTrue(packet.animationState().transformed());
+        assertTrue(packet.contourContract().applied());
+        assertEquals(List.of(-16, -144, -80),
+                packet.contourContract().unskewedVertexY(),
+                "HILLSKEW/unskewed state must capture the animated pose before contouring");
+        assertEquals(List.of(-16, -80, -48),
+                packet.vertices().stream().map(ModelVertex::y).toList(),
+                "ground contour must run after the animation transform");
+    }
+
+    @Test
     void selectsTypedModelAndAppliesOsrsTransformOrder() {
         WorldDocument document = new WorldDocument(2, 2, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(10, 20, 30, 40,
@@ -1023,6 +1114,37 @@ class ModelPacketBuilderTest {
                 new int[]{0, 0, 0, 64, 0, 0, 0, 0, 64},
                 new int[]{0, 1, 2}, new short[]{(short) color},
                 new int[]{0}, new int[]{-1});
+    }
+
+    private static DefinitionProvider animatedDefinitions(
+            ObjectAppearanceView appearance,
+            ModelGeometryView geometry,
+            SequenceDefinitionView sequence,
+            Map<Integer, AnimationFrameView> frames,
+            SkeletonDefinitionView skeleton) {
+        return new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return Optional.of(new ObjectDefinitionView(id, "animated", 1, 1,
+                        List.of(), new int[]{geometry.id()}, new int[]{10}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(appearance);
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(geometry);
+            }
+            @Override public Optional<SequenceDefinitionView> sequence(int id) {
+                return id == sequence.id() ? Optional.of(sequence) : Optional.empty();
+            }
+            @Override public Optional<AnimationFrameView> animationFrame(int id) {
+                return Optional.ofNullable(frames.get(id));
+            }
+            @Override public Optional<SkeletonDefinitionView> skeleton(int id) {
+                return id == skeleton.id() ? Optional.of(skeleton) : Optional.empty();
+            }
+        };
     }
 
     private static DefinitionProvider definitions(ObjectAppearanceView appearance,
