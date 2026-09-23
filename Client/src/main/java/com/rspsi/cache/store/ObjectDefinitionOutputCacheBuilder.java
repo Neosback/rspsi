@@ -2,6 +2,7 @@ package com.rspsi.cache.store;
 
 import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
+
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileVisitResult;
@@ -21,7 +22,7 @@ import java.util.Objects;
 
 /**
  * Builds a new writable output cache from a read-only source cache and a set
- * of validated object-definition transactions.
+ * of validated object-definition snapshots.
  *
  * <p>The source directory is never opened writable. A new sibling staging
  * directory is cloned from the source, definition payloads are written there,
@@ -35,12 +36,74 @@ public final class ObjectDefinitionOutputCacheBuilder {
     }
 
     /**
-     * Creates a new output cache containing the source cache plus all dirty
-     * object-definition transactions.
+     * Captures immutable canonical payloads from the current transaction
+     * previews. Call this on the editor thread before dispatching filesystem
+     * work so later edits cannot race an in-progress build.
+     */
+    public static BuildPlan plan(
+            Collection<? extends ObjectDefinitionEditTransaction> transactions) {
+        Objects.requireNonNull(transactions, "transactions");
+
+        Map<Integer, ObjectDefinitionEditTransaction> dirty = new LinkedHashMap<>();
+        for (ObjectDefinitionEditTransaction transaction : transactions) {
+            ObjectDefinitionEditTransaction checked =
+                    Objects.requireNonNull(transaction, "transaction");
+            if (!checked.dirty()) {
+                continue;
+            }
+            ObjectDefinitionEditTransaction previous = dirty.putIfAbsent(
+                    checked.id(), checked);
+            if (previous != null) {
+                throw new IllegalArgumentException(
+                        "Duplicate object definition transaction for id " + checked.id());
+            }
+        }
+        if (dirty.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "At least one dirty object definition transaction is required");
+        }
+
+        List<PlannedObjectDefinition> definitions = new ArrayList<>(dirty.size());
+        dirty.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> {
+                    ObjectDefinitionEditTransaction transaction = entry.getValue();
+                    byte[] encoded = transaction.encodeValidated();
+                    ObjectDefinitionRawView preview = transaction.preview();
+                    if (preview.id() != transaction.id()) {
+                        throw new IllegalStateException(
+                                "Object definition preview id " + preview.id()
+                                        + " does not match transaction " + transaction.id());
+                    }
+                    definitions.add(new PlannedObjectDefinition(
+                            transaction.id(),
+                            transaction.original(),
+                            preview,
+                            encoded));
+                });
+        return new BuildPlan(definitions);
+    }
+
+    /** Convenience overload for headless callers that do not need async planning. */
+    public static BuildResult buildNewOutput(
+            Path sourceCache,
+            Path outputCache,
+            int revision,
+            Collection<? extends ObjectDefinitionEditTransaction> transactions)
+            throws IOException {
+        return buildNewOutput(
+                sourceCache,
+                outputCache,
+                revision,
+                plan(transactions));
+    }
+
+    /**
+     * Creates a new output cache containing the source cache plus all
+     * definitions captured by an immutable {@link BuildPlan}.
      *
      * @throws IllegalArgumentException if the output path aliases/nests under
-     *                                  the source, already exists, transactions
-     *                                  are clean/duplicate, or a transaction
+     *                                  the source, already exists, or the plan
      *                                  does not belong to the selected source
      * @throws IOException              if staging/copy/move operations fail
      */
@@ -48,14 +111,18 @@ public final class ObjectDefinitionOutputCacheBuilder {
             Path sourceCache,
             Path outputCache,
             int revision,
-            Collection<? extends ObjectDefinitionEditTransaction> transactions)
+            BuildPlan plan)
             throws IOException {
 
         Objects.requireNonNull(sourceCache, "sourceCache");
         Objects.requireNonNull(outputCache, "outputCache");
-        Objects.requireNonNull(transactions, "transactions");
+        Objects.requireNonNull(plan, "plan");
         if (revision <= 0) {
             throw new IllegalArgumentException("OSRS revision must be positive");
+        }
+        if (plan.definitions().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Object definition output plan cannot be empty");
         }
 
         Path source = sourceCache.toAbsolutePath().normalize();
@@ -67,7 +134,8 @@ public final class ObjectDefinitionOutputCacheBuilder {
 
         validateOutputPath(source, sourceReal, output);
 
-        List<EncodedEdit> edits = prepareEdits(sourceReal, revision, transactions);
+        List<PlannedObjectDefinition> edits =
+                validatePlanAgainstSource(sourceReal, revision, plan);
         Path outputParent = output.getParent();
         if (outputParent == null) {
             throw new IllegalArgumentException("Output cache must have a parent directory");
@@ -89,7 +157,7 @@ public final class ObjectDefinitionOutputCacheBuilder {
             long bytes = edits.stream().mapToLong(edit -> edit.payload().length).sum();
             return new BuildResult(
                     output,
-                    edits.stream().map(EncodedEdit::objectId).toList(),
+                    edits.stream().map(PlannedObjectDefinition::objectId).toList(),
                     bytes);
         } catch (IOException | RuntimeException failure) {
             cleanupTree(staging, failure);
@@ -97,73 +165,48 @@ public final class ObjectDefinitionOutputCacheBuilder {
         }
     }
 
-    private static List<EncodedEdit> prepareEdits(
+    private static List<PlannedObjectDefinition> validatePlanAgainstSource(
             Path source,
             int revision,
-            Collection<? extends ObjectDefinitionEditTransaction> transactions) {
-
-        Map<Integer, ObjectDefinitionEditTransaction> dirty = new LinkedHashMap<>();
-        for (ObjectDefinitionEditTransaction transaction : transactions) {
-            ObjectDefinitionEditTransaction checked =
-                    Objects.requireNonNull(transaction, "transaction");
-            if (!checked.dirty()) {
-                continue;
-            }
-            ObjectDefinitionEditTransaction previous = dirty.putIfAbsent(
-                    checked.id(), checked);
-            if (previous != null) {
-                throw new IllegalArgumentException(
-                        "Duplicate object definition transaction for id " + checked.id());
-            }
-        }
-        if (dirty.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "At least one dirty object definition transaction is required");
-        }
+            BuildPlan plan) {
 
         try (OpenRuneCacheStore sourceStore = OpenRuneCacheStore.open(source)) {
-            List<EncodedEdit> edits = new ArrayList<>(dirty.size());
-            dirty.entrySet().stream()
-                    .sorted(Map.Entry.comparingByKey())
-                    .forEach(entry -> {
-                        int objectId = entry.getKey();
-                        ObjectDefinitionEditTransaction transaction = entry.getValue();
+            for (PlannedObjectDefinition edit : plan.definitions()) {
+                byte[] sourcePayload =
+                        sourceStore.readObjectDefinitionPayload(edit.objectId());
+                if (sourcePayload == null) {
+                    throw new IllegalArgumentException(
+                            "Source cache does not contain object definition "
+                                    + edit.objectId());
+                }
 
-                        byte[] sourcePayload =
-                                sourceStore.readObjectDefinitionPayload(objectId);
-                        if (sourcePayload == null) {
-                            throw new IllegalArgumentException(
-                                    "Source cache does not contain object definition " + objectId);
-                        }
+                ObjectDefinitionRawView sourceRaw =
+                        sourceStore.decodeObjectDefinitionPayload(
+                                edit.objectId(), sourcePayload, revision);
+                if (!sourceRaw.equals(edit.original())) {
+                    throw new IllegalArgumentException(
+                            "Object definition transaction " + edit.objectId()
+                                    + " does not match the selected source cache");
+                }
 
-                        ObjectDefinitionRawView sourceRaw =
-                                sourceStore.decodeObjectDefinitionPayload(
-                                        objectId, sourcePayload, revision);
-                        if (!sourceRaw.equals(transaction.original())) {
-                            throw new IllegalArgumentException(
-                                    "Object definition transaction " + objectId
-                                            + " does not match the selected source cache");
-                        }
-
-                        byte[] encoded = transaction.encodeValidated();
-                        ObjectDefinitionRawView expected = transaction.preview();
-                        ObjectDefinitionRawView encodedRaw =
-                                sourceStore.decodeObjectDefinitionPayload(
-                                        objectId, encoded, revision);
-                        if (!expected.equals(encodedRaw)) {
-                            throw new IllegalStateException(
-                                    "Validated payload does not decode to the transaction preview "
-                                            + "for object " + objectId);
-                        }
-                        edits.add(new EncodedEdit(objectId, expected, encoded));
-                    });
-            return List.copyOf(edits);
+                ObjectDefinitionRawView encodedRaw =
+                        sourceStore.decodeObjectDefinitionPayload(
+                                edit.objectId(), edit.payload(), revision);
+                if (!edit.preview().equals(encodedRaw)) {
+                    throw new IllegalStateException(
+                            "Validated payload does not decode to the planned preview "
+                                    + "for object " + edit.objectId());
+                }
+            }
         }
+        return plan.definitions();
     }
 
-    private static void writeStagedDefinitions(Path staging, List<EncodedEdit> edits) {
+    private static void writeStagedDefinitions(
+            Path staging,
+            List<PlannedObjectDefinition> edits) {
         try (OpenRuneCacheStore output = OpenRuneCacheStore.openWritable(staging)) {
-            for (EncodedEdit edit : edits) {
+            for (PlannedObjectDefinition edit : edits) {
                 output.writeObjectDefinitionPayload(edit.objectId(), edit.payload());
             }
             output.flush();
@@ -173,10 +216,10 @@ public final class ObjectDefinitionOutputCacheBuilder {
     private static void verifyCache(
             Path cachePath,
             int revision,
-            List<EncodedEdit> edits) {
+            List<PlannedObjectDefinition> edits) {
 
         try (OpenRuneCacheStore reopened = OpenRuneCacheStore.open(cachePath)) {
-            for (EncodedEdit edit : edits) {
+            for (PlannedObjectDefinition edit : edits) {
                 byte[] actual = reopened.readObjectDefinitionPayload(edit.objectId());
                 if (actual == null) {
                     throw new IllegalStateException(
@@ -318,13 +361,40 @@ public final class ObjectDefinitionOutputCacheBuilder {
         }
     }
 
-    private record EncodedEdit(
+    /** Immutable snapshot of all definition payloads included in one build. */
+    public record BuildPlan(List<PlannedObjectDefinition> definitions) {
+        public BuildPlan {
+            definitions = List.copyOf(
+                    Objects.requireNonNull(definitions, "definitions"));
+            if (definitions.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Object definition output plan cannot be empty");
+            }
+        }
+
+        public int definitionCount() {
+            return definitions.size();
+        }
+    }
+
+    /** One immutable object definition captured before output I/O begins. */
+    public record PlannedObjectDefinition(
             int objectId,
+            ObjectDefinitionRawView original,
             ObjectDefinitionRawView preview,
             byte[] payload) {
-        private EncodedEdit {
+        public PlannedObjectDefinition {
+            if (objectId < 0) {
+                throw new IllegalArgumentException(
+                        "Object definition id cannot be negative");
+            }
+            original = Objects.requireNonNull(original, "original");
             preview = Objects.requireNonNull(preview, "preview");
             payload = Objects.requireNonNull(payload, "payload").clone();
+            if (original.id() != objectId || preview.id() != objectId) {
+                throw new IllegalArgumentException(
+                        "Planned object definition views must match id " + objectId);
+            }
         }
 
         @Override
