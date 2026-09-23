@@ -23,6 +23,7 @@ public record GpuDrawCommand(
         GameObjectSceneMetadata gameObjectSceneMetadata,
         List<ClientModelBounds> clientRenderableBounds,
         List<ClientRenderablePlacement> clientRenderablePlacements,
+        ModelContourContract.Metadata contourMetadata,
         SceneObjectIdentity sceneObjectIdentity,
         int placementHeight,
         int modelAnchorX,
@@ -59,6 +60,7 @@ public record GpuDrawCommand(
                 clientRenderableBounds, "clientRenderableBounds"));
         clientRenderablePlacements = List.copyOf(Objects.requireNonNull(
                 clientRenderablePlacements, "clientRenderablePlacements"));
+        contourMetadata = Objects.requireNonNull(contourMetadata, "contourMetadata");
         sceneObjectIdentity = Objects.requireNonNull(sceneObjectIdentity, "sceneObjectIdentity");
         if (clientRenderableBounds.stream().anyMatch(value -> value == null || !value.present())) {
             throw new IllegalArgumentException("Client renderable bounds must be present");
@@ -90,8 +92,8 @@ public record GpuDrawCommand(
         this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
                 textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                defaultPlacements(clientRenderableBounds), sceneObjectIdentity,
-                placementHeight, tile.worldX(), tile.worldY());
+                defaultPlacements(clientRenderableBounds), ModelContourContract.Metadata.none(),
+                sceneObjectIdentity, placementHeight, tile.worldX(), tile.worldY());
     }
 
     /** Compatibility constructor before stable scene identity and placement height were explicit. */
@@ -105,8 +107,8 @@ public record GpuDrawCommand(
         this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
                 textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                defaultPlacements(clientRenderableBounds), SceneObjectIdentity.none(), 0,
-                tile.worldX(), tile.worldY());
+                defaultPlacements(clientRenderableBounds), ModelContourContract.Metadata.none(),
+                SceneObjectIdentity.none(), 0, tile.worldX(), tile.worldY());
     }
 
     /** Compatibility constructor before client model bounds were explicit. */
@@ -229,7 +231,7 @@ public record GpuDrawCommand(
         return canMerge(nextTile, nextScenePlane, nextPlaneCullLevel, nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
                 nextRenderMode, nextWallDecorationPresentation, nextGameObjectSceneMetadata,
-                nextClientRenderableBounds, clientRenderablePlacements,
+                nextClientRenderableBounds, clientRenderablePlacements, contourMetadata,
                 sceneObjectIdentity, placementHeight, modelAnchorX, modelAnchorY);
     }
 
@@ -241,6 +243,7 @@ public record GpuDrawCommand(
                      GameObjectSceneMetadata nextGameObjectSceneMetadata,
                      List<ClientModelBounds> nextClientRenderableBounds,
                      List<ClientRenderablePlacement> nextClientRenderablePlacements,
+                     ModelContourContract.Metadata nextContourMetadata,
                      SceneObjectIdentity nextSceneObjectIdentity,
                      int nextPlacementHeight,
                      int nextModelAnchorX,
@@ -257,6 +260,7 @@ public record GpuDrawCommand(
                     && gameObjectSceneMetadata.equals(nextGameObjectSceneMetadata)
                     && clientRenderableBounds.equals(nextClientRenderableBounds)
                     && clientRenderablePlacements.equals(nextClientRenderablePlacements)
+                    && contourMetadata.equals(nextContourMetadata)
                     && sceneObjectIdentity.equals(nextSceneObjectIdentity)
                     && placementHeight == nextPlacementHeight
                     && modelAnchorX == nextModelAnchorX
@@ -285,7 +289,7 @@ public record GpuDrawCommand(
         return new GpuDrawCommand(tile, scenePlane, planeCullLevel, layer, pass, firstIndex,
                 indexCount + additionalIndices, textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                clientRenderablePlacements, sceneObjectIdentity, placementHeight,
-                modelAnchorX, modelAnchorY);
+                clientRenderablePlacements, contourMetadata, sceneObjectIdentity,
+                placementHeight, modelAnchorX, modelAnchorY);
     }
 }
