@@ -1,7 +1,11 @@
 # Map Studio 1.0 foundation acceptance
 
-This checklist is the final acceptance boundary for PR #6. Deterministic CI and real
-revision-240 texture parity are complete. One live native-winding check remains before merge.
+> **Historical acceptance record.** This document records the acceptance work around PR #6.
+> It is not the current rendering backlog. Use `docs/RENDERING_PARITY_MANIFEST.json` for
+> live rendering status and `docs/ROADMAP.md` for current product priority.
+>
+> The native-facing item described below was subsequently completed and is now recorded as
+> `covered` in the rendering manifest. All currently tracked P0 rendering entries are covered.
 
 ## 1. Foundation gate
 
@@ -40,7 +44,7 @@ RSPSi result:
 `textures.definitions` is therefore covered. See `docs/TEXTURE_PARITY_FIXTURE.md` for the
 repeatable manual workflow.
 
-## 3. Native winding / culling parity - final remaining P0
+## 3. Native winding / culling parity - historical final P0, now completed
 
 RuneLite-melxin `Model.draw0` is the source reference:
 
@@ -75,16 +79,17 @@ Acceptance:
 - no see-through wall, missing roof, bridge, or dark-scene regression appears under
   **Client Front**.
 
-Only after this live check should model-geometry culling become a normal default or
-`native.depthPriorityFacing` move to covered. Terrain remains two-sided.
+This was the acceptance condition at the time this checklist was written. Subsequent work
+completed the acceptance and `native.depthPriorityFacing` is now `covered` in the live
+rendering manifest. Terrain remains intentionally two-sided under the current policy.
 
-## 4. Merge rule
+## 4. Historical merge rule
 
-PR #6 is ready to leave draft when:
+The conditions below were the merge rule for PR #6:
 
-- exact-head Foundation is green;
-- the live GL_CCW acceptance above passes;
-- `docs/RENDERING_PARITY_MANIFEST.json` records the resulting native-facing evidence.
+- exact-head Foundation green;
+- live GL_CCW acceptance passed;
+- `docs/RENDERING_PARITY_MANIFEST.json` updated with the resulting native-facing evidence.
 
-P1 rendering items and broader Map Studio features belong in the next single PR after this one
-merges.
+Do not use this section to decide present-day work. The current manifest and roadmap supersede
+this historical gate.

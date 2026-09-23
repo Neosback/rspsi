@@ -1,570 +1,1368 @@
 # OpenRune Studio Roadmap
 
-_Started fresh 2026-09-21. The previous 43-file `docs/` audit trail was retired - this
-single document is the new source of truth for direction. It is meant to be edited in
-place as work lands, not archived-and-replaced like the old one._
+_Rewritten 2026-09-23 after the content-authoring foundation review and UI workspace review._
 
-> **OpenRune integration reference:** see [OPENRUNE_ECOSYSTEM_INTEGRATION.md](OPENRUNE_ECOSYSTEM_INTEGRATION.md)
-> before designing cache-definition editing, project/source integration, symbolic references,
-> incremental packing, or OpenRune Server content bindings. It records the broader ecosystem
-> capabilities and the current Studio integration guardrails.
+This document is the single prioritized product roadmap for OpenRune Studio.
 
-## How to read this
+Detailed supporting contracts:
 
-Every claim below is grounded in something checked against the actual repository or a
-real reference client (RuneLite) or a real sibling map editor (Terraini), not general
-knowledge. Where a claim is "confirmed," it was verified by reading the cited file.
-Where it's a "target," it's a gap with a concrete next action, not a vague aspiration.
+- CONTENT_STUDIO_FOUNDATION.md - advanced authoring foundation and future Theme/Context Engine direction
+- UI_WORKSPACE_CONTRACT.md - strict Contextual Multi-Rail Workspace layout and plugin UI rules
+- OPENRUNE_ECOSYSTEM_INTEGRATION.md - OpenRune Server/cache/source integration guardrails
+- RENDERING_PARITY_MANIFEST.json - live rendering correctness backlog
 
----
+The roadmap deliberately does not duplicate every entry in the rendering parity manifest. The manifest remains the detailed renderer checklist. This file decides product order and architectural dependencies.
 
-## Part 1 — Rendering engine: real OSRS rules
+## Source-of-truth hierarchy
 
-### 1.1 What's already correct (confirmed this pass)
+When project documents disagree, use this order:
 
-- **Underlay blending is genuinely correct.** `FloorBlendRules.blendUnderlay` (`Client/src/main/java/com/rspsi/osrs/rules/terrain/FloorBlendRules.java`)
-  implements the real client's radius-5 (11x11 tile window) weighted hue/saturation/luminance
-  average - `hue = weightedHue*256/chroma`, `sat = saturation/count`, `luminance = luminance/count` -
-  which matches OSRS's own `class470.method9712` (see 1.3) formula field-for-field. This was
-  worth verifying rather than assuming; it holds up.
-- **Tile shapes, heights, and lighting are marked `covered`** in `docs/RENDERING_PARITY_MANIFEST.json`
-  (`terrain.shapes`, `terrain.heights`, `terrain.lighting`, `models.normals`, `models.alpha`,
-  `models.renderModes`, `native.openglState`, `occlusion.planes`, `objects.wallOrientation`,
-  `objects.ground`). Eleven of thirty-seven tracked parity entries are done. Don't re-litigate
-  these without new evidence they've regressed.
-- **Backface culling is deliberately off for models** (`BackfacePolicy` javadoc) because cache
-  models aren't reliably wound - this was re-confirmed this cycle when the object-preview
-  renderer's own culling produced a "transparent fountain" bug that the real (no-cull) native
-  renderer doesn't have. Leave this alone until every model has verified winding.
+1. current production code plus passing tests for what the repository actually does
+2. RENDERING_PARITY_MANIFEST.json for rendering-status claims
+3. ROADMAP.md for project execution order and architectural sequencing
+4. UI_WORKSPACE_CONTRACT.md for editor-shell and plugin UI placement
+5. CONTENT_STUDIO_FOUNDATION.md for advanced-authoring prerequisite detail
+6. OPENRUNE_ECOSYSTEM_INTEGRATION.md for OpenRune subsystem integration detail
+7. explicitly historical acceptance/reference documents for background only
 
-### 1.2 What's not correct yet - the tracked backlog
-
-`docs/RENDERING_PARITY_MANIFEST.json` is the live gap list: 15 "partial," 4 "deferred." Only one
-P0 item remains partial.
-
-This foundation PR has now moved five P0 items to covered:
-
-- `native.drawRanges` - backend-neutral batch planning plus synthetic material/zone fixtures.
-- `models.textureAlpha` - RuneLite model cutout threshold plus texture-animation fixtures.
-- `objects.wallDecorationOffsets` - distinct shape-8 primary/secondary renderables, inherited
-  wall displacement, and camera-dependent submission order.
-- `objects.wallNormalMerge` - L-wall pair merge plus a passing cross-region x=63/x=0 seam
-  fixture over the stitched/padded world-window path.
-- `textures.definitions` - OpenRS2 build-240 cache, independent RuneLite exporter, and focused
-  RSPSi verifier matched 3 representative 128x128 textures with zero metadata/pixel differences.
-
-| id | title | next action |
-|---|---|---|
-| `native.depthPriorityFacing` | Depth modes, face bias, priority ordering, winding/facing | Software/native winding polarity is corrected to GL_CCW; validate model-only Client Front culling against an asymmetric real-cache model and wall/roof/bridge-heavy views. Terrain remains two-sided |
-
-`terrain.bridge` is now covered on the scene-plane semantics branch: authored/source plane,
-current scene plane, original/render level, and minimum/cull level are distinct packet fields,
-with bridge and visibility-below fixtures.
-
-`occlusion.visibility` is now covered on the camera/roof/occlusion branch: the vanilla
-projection traverses from the scene minimum, tests each tile's physical/cull level against the
-active scene plane, carries the shifted scene plane into GPU commands, and matches bridge-wall
-occluders on that current scene plane. `scene.roofs` remains partial for the separate
-RuneLite connected-roof-region removal modes (position/hover/destination/between).
-
-P1-partial items worth picking up after this final P0 validation: `scene.apiSurface`,
-`scene.roofs`, `objects.wallTransforms`, `objects.decorations`,
-`objects.gameObjectFootprint`, `models.colors`, `models.contour`, `textures.animation`.
-
-### 1.3 Ground-truth reference (RuneLite, verified this pass)
-
-For anyone implementing the above, this is the actual algorithm to match, read from
-`runescape-client/.../class470.java:method9712` (obfuscated) and its clean re-implementation
-in `runelite-client/cache/.../MapImageDumper.java` (`BLEND = 5`):
-
-- **Underlay blend**: separable box blur, radius 5, done with a running-sum (add the
-  column/row entering the window, subtract the one leaving) rather than a re-sum per tile -
-  our own `FloorBlendRules` is correct in *result* but does a naive O(25) re-scan per tile
-  instead of the O(1)-amortized running sum. Worth optimizing once the incremental compiler
-  (Part 2) is wired in, since that's the same "stop redoing full-window work on every tile"
-  problem from two angles.
-- **Lighting**: normals come from a **height gradient**, not real surface normals -
-  `dx = height[x+1][y]-height[x-1][y]`, `dy = height[x][y+1]-height[x][y-1]`,
-  `len = sqrt(dx² + dy² + 65536)` (fixed dz = 256), normalized. Light vector is
-  hard-coded `(-50, -50, -10)` (`|v| = sqrt(5100) ≈ 71.4`), and
-  `intensity = dot(normal, light) / (|v| * 3) + 96` (96 = flat ambient). Applying it
-  (`class212.method4685`): **only luminance is modulated** - `newLuminance = clamp((hsl&127)*intensity/128, 2, 126)`,
-  hue/saturation pass through untouched - then the result indexes a precomputed
-  65536-entry HSL->RGB palette with a gamma pass. If our own lighting ever looks
-  subtly wrong, check this exact formula first (spot-check target, since the parity
-  manifest already claims `terrain.lighting: covered` - this is the "grade the
-  homework" reference, not a known bug).
-- **Tile shapes**: `SceneTileModel`'s static `triangleTextureIndices[13][]` /
-  `faceIndices[13][]` define all 13 shapes' triangulation; rotation remaps vertex
-  indices mod 4/8/12/16. Shape 0 -> `SceneTilePaint` (4 corner colors, no model);
-  shapes 1-12 -> `SceneTileModel` (2-4 triangles).
-- **Base terrain height** (when not authored): `HeightCalc.java` - a Jagex-specific
-  **value-noise** function (not Perlin), 3 octaves at frequencies 4/2/1, remapped to
-  `[10, 60]`. Relevant if/when procedural terrain generation (Part 6) needs a
-  game-accurate default height field to seed from.
+A lower item must not silently override a higher item. When work makes a lower document stale, update it in the same PR when practical.
 
 ---
 
-## Part 2 — Performance: faster tile-painting updates
+## 1. Product target
 
-**The earlier roadmap description was stale and has been corrected against the live Studio path.**
-`IncrementalSceneCompiler` is real, tested, and still has no production caller, but
-`SessionSceneController` is **not** what Map Studio currently uses for live edits. The actual
-path is `Editor/src/main/java/com/rspsi/studio/StudioApplication.java`: a session change flips
-`sceneDirty`, then `rebuildMapScene` asynchronously rebuilds the complete
-`RenderWindowScene -> GpuScenePacket -> GpuUploadPlan`.
+OpenRune Studio is intended to become a professional OSRS content-authoring environment, not only a tile editor.
 
-The GPU side is already more advanced than that old description implied.
-`OpenGlSceneRenderer` owns a `ZoneVboManager` that partitions the upload plan into canonical
-**8x8 world zones**, fingerprints each zone, and keeps unchanged VAO/VBO/IBO allocations
-resident. A changed plan therefore does **not** automatically mean every GPU zone is uploaded
-again. This matches the useful part of RuneLite's GPU architecture
-(`runelite-client/.../plugins/gpu/Zone.java` and `GpuPlugin.invalidateZone/rebuild`): dirty
-zones are the unit of GPU residency and rebuild.
+The target includes:
 
-The remaining performance gap is primarily **upstream CPU derivation**: Map Studio still
-reconstructs the full world-window scene, scene packet, and flattened upload plan after an edit
-before the native zone manager can discover that most GPU zones are unchanged.
+- OSRS-accurate terrain and object rendering
+- fast world navigation and reliable picking
+- professional tile/material painting
+- advanced conditional tile and object replacement
+- copy/paste/rotate/mirror of complete structures across all planes
+- path, road, stream, fence, bridge, and shoreline authoring
+- deterministic noise/scatter/ground-decoration workflows
+- biome generation and WFC-assisted world building
+- rich object and definition inspection/editing
+- plugin-first extensibility
+- later, an explainable Theme/Context Engine learned from real OSRS world placement
+- later, broader OpenRune content-studio workflows for server/content data
 
-**Target**:
+The architecture rule is simple:
 
-1. **Landed:** instrument `StudioApplication.buildMapScene` / `rebuildMapScene` by phase
-   (window scene compile, packet assembly, upload-plan flatten, compatibility `RenderScene`
-   build, vertices/indices/commands/textures, and estimated geometry KiB) so optimization is measured.
-2. Extend the incremental compiler concept to the **world-window path actually used by Studio**,
-   preserving the padded/stitching context that `RenderWindowSceneBuilder` supplies. Do not
-   replace that path with a single-region `RenderScene` shortcut that would regress edge
-   blending/stitching semantics.
-3. Rebuild only affected 8x8 scene zones and reuse unchanged packet/plan partitions.
-4. Let `ZoneVboManager` remain the native residency layer and verify that one-zone edits cause
-   only the expected zone uploads.
-5. Keep a conservative full-rebuild fallback for cache reloads, window topology changes, or any
-   mutation whose dependency radius cannot be bounded safely.
+    advanced tools stay thin
+            |
+            v
+    shared queries / geometry / fragments / modifiers
+            |
+            v
+    validated previewable ChangePlan
+            |
+            v
+    one undoable commit
+            |
+            v
+    world-aware persistence
 
-This is still a high-leverage performance target, but it is **not** a one-line
-`SessionSceneController` substitution. The live pipeline has to be made incremental end to end.
+No advanced tool should privately reimplement region traversal, undo stacks, transform rules, autotiling, condition logic, noise, save logic, or cache writes.
 
 ---
 
-## Part 3 — Plugin API refinement
+## 2. Non-negotiable architectural invariants
 
-### 3.1 Current state: two parallel plugin systems
+These are product rules, not suggestions.
 
-- **`EditorPlugin`** (`Client/src/main/java/com/rspsi/editor/plugin/`) - cache-agnostic,
-  engine-level. `EditorPluginContext` has no `DefinitionProvider`/cache access at all (checked
-  this cycle while building the selection overlay - confirmed by reading the full field list
-  of the context record).
-- **`StudioPlugin`** (`Editor/src/main/java/com/rspsi/studio/plugin/`) - ImGui/UI-level,
-  cache-aware via `StudioPanelContext.cache()`. Anything needing model geometry, object
-  definitions, or textures has to live here, not in `EditorPlugin`.
+### 2.1 Canonical authored state
 
-This split isn't necessarily wrong (engine-level extensions arguably *shouldn't* need cache
-access), but it's undocumented as a deliberate boundary, which cost real time this cycle
-figuring out which system a new feature belonged in. **Target**: write down the actual rule
-("if it needs `DefinitionProvider`, it's a `StudioPlugin`; if it's pure document/session logic
-usable headless, it's an `EditorPlugin`") somewhere a plugin author will see it before writing
-code, not after.
+WorldDocument and its eventual multi-region successor remain the canonical authored map state.
 
-### 3.2 What RuneLite does that's worth adopting: declarative settings
+Renderers, UI panels, previews, generators, and plugins derive from canonical state. They do not become alternate sources of truth.
 
-RuneLite plugins never hand-register individual settings. A plugin defines a config
-*interface* (`@ConfigGroup("name")`), each getter is `@ConfigItem(keyName=..., name=...,
-description=..., section=...)`, and `ConfigManager` reflects over it at runtime to both persist
-values *and* auto-generate the settings panel widget for each field's type. No plugin author
-ever writes `ImGui.checkbox(...)`/`ImGui.sliderFloat(...)` by hand for a setting.
+### 2.2 All edits are undoable
 
-Compare our own pattern, used repeatedly this cycle (`BrushSettingsHud.renderSettings`,
-`SelectionOverlayPlugin.renderSettings`): every setting is a hand-written pair of "read the
-field, draw the ImGui widget, write the field back" - correct, but it's boilerplate that scales
-linearly with settings count and gives every plugin author a chance to get the widget-to-type
-mapping subtly wrong (as happened this cycle with `sliderFloat`'s missing `int` overload and
-`checkbox`'s return-value-not-out-param signature - both real compile errors this session).
+Normal authoring changes pass through EditorCommand or the future generalized ChangePlan commit boundary.
 
-**Target**: a declarative settings layer - an annotation (or a small builder DSL, given we
-don't have Guice) on a plain settings class/interface that a shared renderer turns into ImGui
-widgets automatically, keyed by field type (bool -> checkbox, float in a range -> slider, packed
-color -> `colorEdit4`, enum -> combo). This wouldn't replace `SettingsService`/`SettingsStore`
-(the persistence layer is fine) - it would replace the per-plugin `renderSettings()` boilerplate
-that currently sits on top of it. Worth scoping as its own small project rather than bolting on
-piecemeal.
+Direct mutation from UI callbacks is not an acceptable public/plugin workflow.
 
-### 3.3 What RuneLite validates about our existing shape
+### 2.3 World coordinates are first-class
 
-RuneLite plugins touch a small, fixed set of injectable UI managers (`ClientToolbar`/
-`NavigationButton`, `OverlayManager`, `KeyManager`, `MenuManager`, `ConfigManager` - roughly
-6-8 total). Our own `StudioPlugin` interface already has an equivalent small fixed set
-(`renderOverlay`, `renderHUD`, `renderFloating`, `renderSidePanel`, `renderToolShelf`,
-`renderSettings`, `renderContextDrawer` for tools). This is good validation that the *shape* of
-our extension-point design matches a client with a decade of real plugin authors behind it -
-the settings boilerplate (3.2) is the actual gap, not the surface area.
+OSRS cache region boundaries are persistence details, not authoring boundaries.
 
-RuneLite also has `@PluginDependency` with cycle detection and topological sort, letting one
-plugin `@Inject` another. We have nothing like this - if a future plugin genuinely needs to
-depend on another plugin's state, that's worth building deliberately rather than ad hoc, but
-there's no evidence yet that we need it (no current plugin depends on another).
+A road, stream, brush, building paste, biome, selection, or replacement must behave continuously across region boundaries when the required regions are loaded.
+
+### 2.4 Preview before destructive complexity
+
+Complex operations calculate and validate before commit.
+
+Examples:
+
+- rotated building paste
+- conditional replacement
+- biome generation
+- WFC
+- bridge generation
+- large scatter
+- bulk object replacement
+
+### 2.5 Public plugins use neutral capabilities
+
+Public EditorPlugin code consumes neutral editor/asset/data services.
+
+Direct cache backend types, Dear ImGui, GLFW, and OpenGL remain implementation details of Studio.
+
+### 2.6 UI placement is contractual
+
+Plugins contribute into host-owned workspace slots defined by UI_WORKSPACE_CONTRACT.md.
+
+The editor does not grow by adding arbitrary permanent panels around the viewport.
 
 ---
 
-## Part 4 — Layout / UI / UX flow
+# PHASE 0 - Editor Trust Gate
 
-### 4.1 What's now established (this cycle's work, don't re-litigate)
+No advanced authoring system should be built on top of a viewport the user cannot trust.
 
-- **Left Tool Rail is now formally the Brush Tool Rail**, not a generic tool dock. It shows
-  only when a real brush tool is active, gated by an explicit `StudioToolPlugin.isBrushTool()`
-  capability (not inferred from current surface placement - that was circular and let a user
-  "place" a non-brush tool there from Plugin Manager settings with no effect). Only Tile
-  Painter and Height Sculptor return `true`. The Plugin Manager's placement UI now hides the
-  "Left Tool Rail" checkbox entirely for anything that isn't a brush tool.
-- **Floating toolbar** hosts tile/object selection tools; **bottom bar** hosts everything else
-  (Tile Painter, Height Sculptor, Path Builder, Object Placement).
-- **Tightly-coupled plugin pieces are co-located, not scattered.** The object-select tool
-  buttons live as nested classes inside `SelectionOverlayPlugin` now, since they exist only to
-  feed the selection that plugin highlights - this is the pattern to keep applying: if a small
-  plugin's only reason to exist is to drive a bigger one, nest it there instead of giving it its
-  own top-level file.
+This phase is now the immediate priority.
 
-### 4.2 Direction: shared tooling over bespoke UI
+## 0.1 Rendering parity status
 
-The stated goal going forward: most tools should not need to build their own brush-settings UI
-or standalone tool chrome - they should reach for `BrushSettingsHud` and friends first, and
-only build bespoke UI when they genuinely need workspace room beyond what the shared surfaces
-offer. This isn't a rule to enforce mechanically (a tool that needs a real custom workspace -
-e.g. a future path/spline editor, see Part 6 - should still get one), but new tool plugins
-should be reviewed against "does this duplicate settings that already exist on a shared
-surface?" before adding their own.
+RENDERING_PARITY_MANIFEST.json remains authoritative.
 
-### 4.3 Icon audit - open, not closed
+At this roadmap rewrite the live manifest reports:
 
-An icon-glyph audit this cycle found no static-analysis-detectable cause for reported "?"
-glyphs: every codepoint constant in `StudioIcons.java` was checked against the actual shipped
-`MaterialIcons-Regular.ttf`'s cmap (via `fontTools`) and all 93 resolved to real glyphs; no raw
-unrouted unicode escapes exist outside `StudioIcons.java`; no literal `"?"` fallback strings
-exist in settings/plugin UI code. This needs a live repro (screenshot or in-app pointer to
-where it appears) to actually fix - flagging as open rather than closed.
+- 33 covered
+- 4 deferred
+- 0 partial
+- 0 blocked
 
----
+All currently tracked P0 rendering entries are covered, including native.depthPriorityFacing.
 
-## Part 5 — Selection overlay & painting system: what's still missing
+Do not reopen already-covered P0 work from stale prose or historical acceptance documents. Reopen a covered item only when new reproducible evidence demonstrates a regression or an uncovered semantic case.
 
-Shipped this cycle: a real convex-hull object outline (ported from RuneLite's
-`Model.getConvexHull()` technique), a fixed coordinate-space bug that made the whole system
-render nothing (`ModelPacketBuilder`'s local-document-space anchor vs. the camera's absolute
-world-space - see the fix in `SelectionOverlayPlugin`), precise single-object picking through
-the previously-unused `Viewport.objectAt()` hook, and a real settings-backed plugin
-(`SelectionOverlayStyle`) with per-category colors, configurable fill opacity (RuneLite's own
-"transparency" trick, confirmed - its renderer has no true per-triangle tint hook either, every
-"highlighted" object there is the same alpha-blended-hull-fill trick we now have), and a
-"painted edge" double-stroke.
+Phase 0 rendering work is therefore targeted trust validation around the user-observed failures below, not a speculative parity rewrite.
 
-Still open, in the user's own words - "still needs work," "tones more work":
+## 0.2 Missing, null, or invisible objects
 
-- **True per-triangle transparency**, if wanted, is a materially different and larger task:
-  it would mean the native OpenGL renderer accepting a per-object tint/alpha uniform on the
-  actual draw call, not a 2D overlay trick. RuneLite doesn't do this either (confirmed - its
-  renderer has no hook for it), so there's no reference implementation to lean on; this would
-  be original engineering against `OpenGlSceneRenderer` if pursued.
-- **Tile-blending-aware painting UX** - Terraini's road rasterizer (Part 6) does real sub-tile
-  coverage supersampling for edge quality; our own tile paint tool doesn't have an equivalent
-  soft-edge story yet even for plain brush strokes.
-- **Dev-info overlay is a first pass, not feature-complete** - shows id/name/category; RuneLite's
-  Dev Tools overlay additionally shows animation IDs, distance, and per-type extras (combat
-  level for NPCs, quantity for ground items) - our equivalent for objects could grow similarly
-  (e.g. animation id, wall orientation, footprint dimensions) if it proves useful in practice.
+User-observed failure:
 
----
+- some placed objects appear as null in tooling
+- some placed objects do not render at all
 
-## Part 6 — Path/road painting: extend what already exists, not build from scratch
+Current groundwork already resolves default multiloc definitions in ModelPacketBuilder, but that does not prove every placed loc can resolve correctly.
 
-**Correction from the first draft of this document**: `Client/src/main/java/com/rspsi/editor/tool/SplinePathTool.java`
-(427 lines, wired to a real `PathToolPlugin`) already exists and already does real autotiling -
-`SplinePath.neighbourMask(footprint, x, y)` computes an 8-bit neighbor mask per tile,
-`style.shape(mask)`/`style.rotation(mask)` picks the tile shape/rotation from it (its own
-comment literally says "Apply autotiled material shapes and rotations"), and it already
-supports a height-ramping brush style that interpolates terrain height along the curve via
-`TerrainVertexLattice`, committed as one atomic `CompositeEditCommand`. This was found by
-grepping for autotiling infrastructure while researching the questions in this session's
-follow-up, after Terraini's road toolkit had already been written up below as a "new feature
-to build." It isn't - **the actual task is a gap analysis of the existing tool against
-Terraini's more sophisticated techniques**, not new construction. Terraini's road toolkit was
-researched in real depth (not just class names) and gives a genuine blueprint for closing that
-gap, sitting on top of OpenRune's own currently-inert `Client/src/main/java/com/rspsi/editor/generation/`
-package (`Generator`, `GeneratorService`, `GenerationSchema` - has an unused `ROAD` preset) if a
-more general procedural entry point is ever wanted alongside the interactive tool.
+Required investigation must distinguish at least:
 
-### 6.0 What `SplinePathTool` has vs. what Terraini's toolkit adds
+1. definition genuinely missing from the selected cache
+2. definition exists but has a blank/null display name
+3. multiloc shell with a resolvable default transform
+4. multiloc with no usable default in editor state
+5. model id absent or geometry decode unavailable
+6. model type does not match placed loc shape
+7. intentionally non-renderable/invisible loc
+8. render packet produced but scene submission drops it
+9. object rendered but occlusion/plane/depth logic hides it
+10. picker/inspector cannot resolve a visible scene object back to authored identity
+11. UI/type taxonomy is stale even when the object is valid. Object type labels must come from the canonical OSRS loc-shape model rather than duplicated arrays. The current ObjectViewerPanel labels type 11 and type 22 inconsistently with OsrsLocShape and should be corrected during this trust work.
 
-| Capability | `SplinePathTool` today | Terraini |
-|---|---|---|
-| Autotile shape/rotation from neighbor mask | Yes (`SplinePath.neighbourMask` + `style.shape/rotation`) | Yes, but via 48-canonical-case weighted lookup (adds visual variety, avoids mechanical repetition) |
-| Height along the path | Yes (`RAMP` brush style, linear interpolation) | Not researched this pass |
-| Obstacle avoidance / auto-reroute around existing objects | **No** - the user draws the exact path | Yes (`ObstacleRouter`, local A* reroute of only the blocked span) |
-| Curve smoothing | Path is rasterized directly (`path.rasterize(0.4f)`) - not researched whether it's already spline-smoothed upstream | Turn-angle-adaptive Catmull-Rom (sharp corners preserved, gentle turns smoothed) |
-| Tile fit quality | Neighbor-mask lookup (boolean per-tile) | Sub-tile coverage supersampling + Hamming-distance shape fit with edge-portal-mismatch penalty (smoother junctions) |
-| Junction variety | Not researched | Weighted-random among topologically-valid candidates |
+### Acceptance criteria
 
-The two rows worth prioritizing: **obstacle avoidance** (a real missing capability, not a
-polish item - right now painting a path through a wall just paints through it) and **sub-tile
-coverage fitting** (would visibly improve junction quality). Curve smoothing and junction
-variety are polish, worth doing after the two functional gaps.
+For a curated real-cache fixture set:
 
-### 6.1 The actual algorithm (from Terraini, adaptable, not a straight port - see
-### `docs/TERRAINI_REFERENCE.md` and `AGENTS.md` for why Terraini's source itself isn't
-### vendored here; the algorithm *shape* below is original-wording analysis, not copied code)
+- every authored object has an explicit resolution status
+- no object silently degrades to "null"
+- unresolved objects expose a diagnostic reason
+- renderable objects produce expected scene packets
+- transformed/multiloc objects expose both placed identity and display definition
+- object selection/inspector identity survives scene rebuilds
 
-1. **Routing is local reroute, not global pathfinding.** Don't build a full A*/Dijkstra
-   network solver. Take the user's drawn/desired polyline as ground truth; only run A* to
-   patch the specific blocked span(s), inside a bounding box expanded by a small corridor
-   (Terraini's default: 10 tiles) around the affected points. Cost function per edge:
-   `traversal_cost(tile) * (√2 if diagonal else 1) + slope_penalty + distance_from_original_stroke * weight`
-   - that last term is what keeps a reroute hugging the user's intent instead of taking an
-   arbitrary shortest path. Reject diagonal moves that would cut a blocked corner. Heuristic:
-   Chebyshev-with-diagonal-discount (`max(dx,dy) + (√2-1)*min(dx,dy)`).
-2. **Smooth the result with a turn-angle-adaptive spline**, not a uniform one: a
-   Catmull-Rom-style centripetal spline (weights `√distance` between consecutive points) whose
-   *smoothing strength itself* is locally modulated by the turn angle at each vertex - sharp
-   corners (>120°) get near-zero smoothing so real intersections stay crisp, gentle turns
-   (<30°) get full smoothing, blended with a smoothstep in between. Then resample at fixed
-   arc-length spacing for a uniform tile-placement cadence.
-3. **Rasterize with real sub-tile coverage, not per-tile boolean paint.** Terraini precomputes,
-   for each of OSRS's native tile shapes x 4 rotations, a supersampled coverage mask (2-16x
-   supersample) via point-in-triangle tests against the actual triangulation. The swept
-   road-width polygon accumulates real coverage per touched tile; shape/orientation is chosen
-   by minimizing Hamming distance to that coverage mask, **with an explicit penalty for
-   mismatched edge "portal" bits** so adjoining tiles' open/closed edges stay consistent (this
-   is what makes junctions look continuous instead of tile-by-tile arbitrary). Below a small
-   coverage threshold (~0.135), bucket separately for softer edge treatment.
-4. **Junction shape selection is a lookup table, not a rule engine** despite the name
-   ("RoadShapeGrammar") - reduce the 8-bit "which neighbors are also road" mask to 48 canonical
-   cases by folding 90-degree rotations, and map each to a pre-authored, topology-filtered,
-   *weighted* list of shape/orientation candidates (so identical junctions can render with
-   slight variety instead of mechanical repetition).
+## 0.3 Interior floor picking and height correctness
 
-### 6.2 Where this plugs in
+User-observed failure:
 
-`GenerationSchema.ROAD` already exists as an unused preset - this is the natural landing spot.
-`CostGrid` in Terraini is an interface with pluggable occupancy/traversal-cost/slope/edge-block
-methods, deliberately decoupled from any specific terrain backing store - our own
-`WorldDocument`/collision data (`CollisionMap`, `OsrsCollisionBuilder`) is the natural backing
-implementation. Scope as its own phase: routing engine first (testable headless, no rendering
-dependency), then the spline/resample layer, then the coverage-based rasterizer last (it's the
-part that touches the terrain-paint pipeline and benefits most from Part 2's incremental
-compiler being wired in first, since a road stroke touching many tiles is exactly the paint
-workload that should not trigger full scene rebuilds).
+- inside buildings the tile inspector/picker can jump or report implausible height/target information
 
----
+Relevant current behavior needs tightening:
 
-## Part 7 — Procedural terrain generation (lower priority, noted for later)
+- DDA picking chooses rendered triangles, not an abstract tile grid
+- multiple planes can be visible
+- bridge/effective-plane semantics exist
+- TileInfoHudPlugin currently displays the tile's south-west corner height rather than a sampled height at the actual picked point
+- current lastPick behavior is selection-oriented, while hover and pinned inspection should become separate concepts
 
-Terraini's island generator is a real, well-designed system - ten independent seeded Perlin
-noise channels (fbm/ridged/billow combinations, each octave rotated ~28.65 degrees and offset
-to hide grid artifacts, domain-warped by dedicated warp channels), Worley/Voronoi hashing for
-island "lobes," and a library of 128-sample radial templates *digitized from real OSRS islands*
-that get warped by noise rather than used rigidly. This is a substantial, self-contained
-feature (island/landmass generation from a seed) rather than a natural extension of anything
-we have today - noted as a real capability gap, not scheduled against Part 6's road generator,
-which is the higher-value near-term target since it has an existing landing spot
-(`GenerationSchema.ROAD`) and a clearer connection to "stronger editing features."
+### Target
 
----
+Create one canonical pick/hover snapshot containing:
 
-## Part 8 — Other Terraini ideas (lower priority)
+- actual hit world position
+- authored tile
+- authored plane
+- effective/render plane
+- hit triangle/layer
+- sampled surface height at the hit point
+- object identity if applicable
+- tile corner heights
+- bridge/roof context
+- stable scene object identity
+- source draw-command metadata for diagnostics
 
-- **Stamp/prefab paste system** (`StampPlan`/`StampAnchor`/`StampConflictPolicy`/`StampHeightMode`):
-  capture a region, transform it (mirror/rotate/recenter), paste elsewhere with explicit
-  policies for how heights blend into existing terrain and how object conflicts resolve. Real
-  gap in our own object/tile tooling (no "paste onto uneven terrain" story today) but the
-  actual merge/conflict math lives in Terraini code that wasn't opened this pass - would need
-  designing from the policy *names* and OSRS's own terrain-height rules, not copied.
-- **Layer system** (`LayerManager`/`LayerCompositor`): Photoshop-style tile/object layers,
-  each visible layer's per-field changes replayed in order onto a snapshot of the base region
-  (later layers win per-field, not per-tile; hidden layers contribute nothing). No diff/undo
-  machinery of its own - would need to integrate with our existing history system, not bring
-  its own.
-- **Region thumbnail world-map browser**: two-tier (64px/256px) box-downsampled PNG cache,
-  disk-backed, capped by size/count rather than true LRU, generated via a throwaway scene
-  render per region. A plausible "world overview to jump into a region" panel if our own
-  navigation ever needs one - not urgent.
+Then route tile inspector, hover HUD, object picker, and right inspector through the same result.
+
+### Acceptance criteria
+
+- interior floors do not oscillate between unrelated surfaces
+- active-plane restriction is honored when editing
+- show-all-planes can still visually render other levels without stealing picks
+- reported height corresponds to the surface actually hit
+- bridge tiles identify authored and effective planes separately
+- hover inspection and click selection do not fight each other
+
+## 0.4 Interior color/material correctness
+
+User-observed failure:
+
+- colors inside some buildings appear wrong
+
+Do not assume one cause.
+
+Relevant parity families include:
+
+- models.colors
+- floor underlay/overlay color math
+- textured model color/alpha paths
+- lighting
+- contouring
+- priority/depth interactions
+- roof/interior visibility
+
+### Target
+
+Build a small set of real OSRS interior golden scenes and compare Studio output against a trusted reference.
+
+At minimum include:
+
+- stone/castle interior
+- wooden interior
+- textured floor
+- shaped overlay floor
+- wall decorations
+- floor decorations
+- roof transition area
+- bridge/elevated interior if a stable fixture is available
+
+Fix the actual discrepancy found rather than compensating with Studio-specific color tuning.
+
+## 0.5 Object preview quality
+
+User-observed failure:
+
+- object preview often frames poorly
+- default camera angle is poor
+- object is not reliably centered
+- scale relationship to OSRS tiles is not communicated well
+
+Current preview strengths:
+
+- real object geometry and materials
+- automatic geometry bounds
+- orbit yaw/pitch/zoom
+- a reference floor patch
+- double-sided preview workaround to match the main renderer's no-cull presentation
+
+Current issues:
+
+- camera fit uses vertical FOV and a bounding sphere but must also respect preview aspect ratio
+- confirmed coordinate mismatch: ObjectPreviewRenderer.boundsOf() uses ModelRenderPacket local model bounds, while GpuUploadPlanBuilder renders model vertices at anchor.x * 128 / anchor.y * 128 plus renderPlacementHeight. The preview object is deliberately anchored at tile (1,1), so camera centering can be displaced by a full tile in X/Z and by placement height in Y.
+- fixed default yaw/pitch is not guaranteed to present every object well
+- 3x3 floor visualization is a fallback rather than a purpose-built scale grid
+- unresolved objects return an empty preview without sufficiently rich diagnosis
+
+### Target preview contract
+
+- robust center from final renderable world/preview-space bounds
+- fit both horizontal and vertical FOV
+- predictable three-quarter default view
+- user orbit and zoom
+- Reset View
+- one-tile grid with clear 128-unit scale
+- optional footprint visualization based on object definition width/length
+- optional bounding box
+- transparent/checker or neutral backdrop
+- no near-plane clipping
+- large/tall/wide objects remain visible
+- clear unresolved-model reason instead of blank content
 
 ---
 
-## Part 9 — Modularization: modules and plugins
+# PHASE 1 - Strict Contextual Multi-Rail Workspace
 
-Current Gradle module split is exactly two: `Client` (engine, cache, rendering-neutral) and
-`Editor` (Dear ImGui/native shell, Studio plugins). The dual plugin system (Part 3.1) is the
-most concrete symptom of needing clearer module boundaries - it wasn't designed as two systems
-on purpose, it grew that way because cache access is Editor-side and engine logic is
-Client-side, and nobody has drawn the line explicitly.
+The new UI contract is defined in UI_WORKSPACE_CONTRACT.md.
 
-Before splitting into more Gradle modules (a real option worth considering - e.g. isolating a
-`Rendering` module from `Client`, or a `PluginApi` module shared by both), the higher-value,
-lower-risk step is documenting the *existing* two-module boundary's actual rule (3.1) and
-seeing whether real friction remains once that's written down. Module-count changes are a
-one-way door in a Gradle project of this size (build script churn, IDE reindexing, every
-existing import path changes) - worth being sure the two-module split is actually the problem
-before restructuring it.
+This is not a cosmetic reskin. It is the interaction architecture for the editor and the plugin system.
+
+## 1.1 Canonical surfaces
+
+OpenRune Studio will have these first-class workspace slots:
+
+1. Top Status Strip
+2. central 3D Viewport
+3. persistent Bottom Primary Tool Rail
+4. one Bottom Context Drawer
+5. conditional Left Brush Shelf
+6. floating Viewport Quick Palette
+7. Right Inspector Rail + Inspector Panel
+8. managed Viewport HUD Layer
+
+## 1.2 Primary Tool Rail
+
+Persistent horizontal tool selector at the bottom.
+
+Examples:
+
+- Select / Inspect
+- Tile Painter
+- Height Sculpt
+- Path / Linear Feature
+- Object Placement
+- Flags / Collision
+- Building / Fragment
+- Biome / Generation
+
+The rail activates tools. It does not host deep settings.
+
+## 1.3 Context Drawer
+
+One active bottom drawer above the Primary Tool Rail.
+
+Examples:
+
+Tile Painter:
+- underlay/overlay palette
+- tile shape palette
+- rotation
+- flags/material presets
+- conditional rules
+
+Object Placement:
+- object catalog
+- search
+- filters
+- thumbnails
+
+Biome/WFC:
+- presets
+- seed
+- rules
+- preview diagnostics
+
+One drawer at a time. Collapsing it does not deactivate the tool.
+
+## 1.4 Brush Shelf
+
+The left surface becomes a real contextual brush/stamp dynamics panel.
+
+It should own:
+
+- radius
+- footprint shape
+- falloff
+- strength
+- spacing
+- jitter
+- density
+- scatter/noise dynamics where appropriate
+
+The current LeftBrushRail, which mainly toggles BrushSettingsHud, is transitional.
+
+Target behavior:
+
+- actual controls live on the Brush Shelf
+- it collapses completely for tools that do not need brush/stamp dynamics
+- plugin tools may add brush/stamp groups when they declare the relevant capability
+- BrushSettingsHud becomes optional compact HUD/quick state rather than the sole brush editor
+
+## 1.5 Viewport Quick Palette
+
+Floating semi-transparent near-canvas palette.
+
+Purpose:
+
+- reduce pointer travel
+- keep current armed values close to the scene
+- show recent/favorite values
+
+It is not the deep asset browser.
+
+Examples:
+
+Tile Painter:
+- active underlay
+- active overlay
+- active shape
+- recent swatches
+
+Object Placement:
+- active loc
+- rotation
+- recent/favorite locs
+
+Select:
+- tile/object/area picker mode
+
+## 1.6 Right Inspector
+
+Selection-driven and directly editable.
+
+The Inspector must become the authoritative exact-property editor for:
+
+- tile corner heights
+- materials/shapes/rotation
+- flags
+- placed locs
+- object transforms/rotation/type
+- collision
+- render diagnostics
+- scene identity
+
+Ordinary exact edits should not require modal dialogs.
+
+## 1.7 HUDs remain first-class
+
+HUDs are valuable precisely because users may want information to remain visible when the corresponding drawer or inspector is closed.
+
+Examples:
+
+- coordinates/elevation
+- brush summary
+- active material
+- active object
+- selection summary
+- generation warnings
+- performance counters
+
+Plugins keep the ability to contribute managed HUDs.
+
+## 1.8 Strict tool UI descriptor
+
+Move away from permissive "put my tool on arbitrary surfaces" semantics.
+
+Introduce an explicit capability/slot descriptor, conceptually:
+
+    ToolUiDescriptor
+      primaryToolEntry
+      drawer
+      brushCapabilities
+      quickPalette
+      inspectors
+      huds
+      shortcuts
+
+Tool behavior should not be inferred from placement.
+
+## 1.9 UI migration targets
+
+Migrate first-party tools to the contract before encouraging third-party authors to depend on old patterns.
+
+Key migrations:
+
+- LeftBrushRail -> real Brush Shelf host
+- BrushSettingsHud -> optional HUD/quick controls
+- TilePainterPalette -> Context Drawer
+- ObjectViewerPanel -> split deep catalog vs selected-object inspector
+- right-side settings panels -> Inspector Rail/Panel model
+- existing floating selection toolbar -> Viewport Quick Palette/picker model
+- StudioToolPlugin/UiSurfaceContribution -> capability-based compatibility adapter
+
+## 1.10 UI state tests
+
+Even without a pixel-perfect ImGui test harness, the state resolver must be testable.
+
+Verify:
+
+- one active modal world tool
+- one active drawer
+- brush shelf visibility from capability
+- per-tool state memory
+- plugin unload cleanup
+- HUD independence
+- inspector selection routing
+- workspace reset
+- minimum viewport dimensions
 
 ---
 
-## Part 10 — Cache/Filestore: we're sitting on more than we use
+# PHASE 2 - Authored Multi-Region World
 
-Both cache backends are real Gradle dependencies, deliberately walled off behind an explicit
-adapter boundary (`Client/build.gradle`'s `verifyCacheBackendBoundary` task - `com.displee.`/
-`dev.openrune.` imports are forbidden everywhere except ~9 named adapter files, e.g.
-`OpenRuneCacheStore`, `OpenRuneDefinitionProvider`, `OpenRuneCacheInspector`,
-`LegacyDispleeCacheStore`). This is good architecture (no vendor lock-in leaking through the
-codebase) and should stay - "make more use of Filestore" means using more of what the adapter
-layer exposes, not loosening the boundary.
+This remains the most important editing foundation after the trust/UI gate.
 
-**The concrete gap**: `dev.or2:opcode` (bundled at the pinned `openruneFileStoreVersion`, see
-`gradle.properties`) ships a genuine **opcode-to-property reflection system** -
-`dev.openrune.definition.opcode.DefinitionOpcode`/`DefinitionOpcodeProperty` map every
-definition field to its raw cache opcode number with generic get/set access, plus
-`BufferSerializer` for round-tripping. `OpenRuneDefinitionProvider`
-(`Client/src/main/java/com/rspsi/cache/store/OpenRuneDefinitionProvider.java`, 997 lines) wraps
-this into ~20 hand-curated getter methods (`object()`, `underlay()`, `texture()`, `model()`,
-etc.) - none of the generic opcode-level introspection is exposed. Two concrete consequences:
+## 2.1 Problem
 
-- **The long-standing "objects named Null" problem** is this gap in practice: opcode 249
-  (custom key-value params, exposed by the library's `Parameterized` interface) isn't surfaced
-  through `ObjectDefinitionView` at all, so an object with no name but real opcode-249 data has
-  no path to showing anything more useful than "Null" in the UI today.
-- **A real per-field definition editor is more buildable than it looks.** "RuneLite-like bit
-  reading for editing objects" doesn't need to be built from raw byte-buffer parsing - the
-  opcode-property reflection is already there. A generic "show every opcode this definition
-  type carries, with its raw value, editable" panel is a matter of exposing
-  `DefinitionOpcode`/`DefinitionOpcodeProperty` through a new `DefinitionProvider` method (or a
-  parallel raw-access interface for tooling, since `DefinitionProvider`'s curated views are the
-  right thing for rendering code to depend on), not inventing opcode parsing from scratch.
+Editable EditorSession currently centers on one WorldDocument, and the ordinary OSRS session loader opens one 64x64 region.
 
-**Target**: add a `DefinitionProvider` (or sibling) method exposing the raw opcode map for a
-definition, surface opcode-249 params specifically to close the "Null" object gap, and scope a
-generic opcode-editor panel as the concrete "bit-level object editing" feature - building on the
-Object Viewer panel that already exists rather than a new standalone window.
+Multi-region support already exists for rendering/context:
 
----
+- WorldRegion
+- WorldRegionWindow
+- RegionNeighborhood
+- WorldTileAddress
+- world-aware TerrainVertexLattice mode
+- batched region save
 
-## Part 11 — Region stitching: what's actually handled vs. assumed
+What is missing is one authored edit transaction spanning several regions.
 
-The user's question - "doesn't OSRS stitch regions together, don't we need to handle height at
-region boundaries?" - has a real, partially-answered infrastructure already in place:
+## 2.2 Target
 
-- `Client/src/main/java/com/rspsi/editor/model/RegionNeighborhood.java` is a genuine "loaded
-  3x3 OSRS region neighborhood" abstraction whose own javadoc states the design intent
-  explicitly: "World-coordinate lookups never clamp or fabricate neighboring data. Missing
-  adjacent regions remain absent so blending, stitching and diagnostics can distinguish an
-  unloaded seam from authored terrain." This is exactly the right instinct (don't silently
-  paper over a missing neighbor with fabricated data).
-- `FloorBlendRules` has a documented world-coordinate variant that blends underlay color
-  "across loaded adjacent regions" - so the radius-5 color blend (Part 1) is confirmed to
-  already cross region boundaries correctly, not just blend within one region and stop dead at
-  the edge.
-- **What's genuinely unverified this pass**: height-grid continuity specifically (not color).
-  OSRS shares corner heights at region boundaries by construction (a corner belongs to up to 4
-  tiles, and adjacent regions' edge tiles reference the same world-coordinate corners) - whether
-  our own terrain height storage/lookup actually guarantees this sharing, or whether it's
-  possible for two loaded-independently regions to disagree at their shared edge, was not
-  checked this pass. `terrain.bridge` (partial, P1) and `scene.extendedTiles` (partial,
-  "Extended tile border context") in the parity manifest are the closest tracked items but
-  don't explicitly name height-seam continuity as their target.
+Introduce a world-space authored edit abstraction that:
 
-**Target**: a focused fixture/test that loads two adjacent regions independently and asserts
-their shared-edge corner heights match exactly (not just "close enough" from independent
-computation) - this is cheap to write and either confirms the seam is already solid or finds a
-real bug. Do this before spending effort on anything more elaborate around region boundaries.
+- resolves loaded authored regions by absolute WorldTile
+- preserves region ownership
+- can mutate multiple loaded regions atomically
+- reports missing/unloaded regions explicitly
+- creates one undo history entry for one user operation
+- records which cache regions became dirty
+- saves changed regions through the existing region encoders/batch save boundary
 
-**Housekeeping note**: the parity manifest's `evidence` fields for `scene.extendedTiles` and
-`terrain.bridge` point at `docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md`, and
-`terrain.heights`'s evidence points at `docs/TERRAIN_PARITY.md` - both retired in the
-2026-09-21 doc reset. The test-file evidence entries are still valid; the doc-file ones are now
-dangling and should either be removed from the manifest or have their underlying findings
-re-captured somewhere before the pointer is lost entirely.
+## 2.3 Acceptance
+
+A brush stroke, path, stream, fence, selection, replacement, or pasted building can cross x/y multiples of 64 without changing semantics.
+
+No operation silently fabricates missing neighboring regions.
 
 ---
 
-## Part 12 — Tool rail/panel workflow: formalizing what's already the shape
+# PHASE 3 - Query, Condition, and Selection Engine
 
-This is the intended, working information architecture - written down explicitly so new tool
-plugins get placed correctly without re-deriving it each time:
+Advanced tools require one shared predicate language.
 
-- **Left Tool Rail = Brush Tool Rail, brush tools only.** Already enforced by
-  `StudioToolPlugin.isBrushTool()` (Part 4.1) - a tool paints/sculpts with a brush footprint, or
-  it doesn't belong here. "Other things that are similar" means other brush-shaped tools (e.g. a
-  future erase-brush, a stamp-brush per Part 8's paste system if it ends up brush-driven) - the
-  test is "does it have a brush footprint/radius/falloff," not "is it terrain-related."
-- **Floating Tool Rail = selection tools.** Single/Multi tile select, Single/Multi object
-  select - already there, already consolidated into one plugin family (Part 4.1, and see Part 13
-  for finishing that consolidation).
-- **Right panel = settings/inspection primarily, with room to grow into light editing.** Tile
-  Inspector, Plugin Manager/settings, Object Viewer preview - the user's own framing ("mostly
-  settings and inspection... but we may add more tools that are actual editing tools") means this
-  panel isn't reserved as read-only; an editing feature belongs here specifically when it's
-  about *one selected/inspected thing* (e.g. the opcode editor from Part 10 is a natural fit
-  here - it's inspecting-and-editing one definition, not a paint operation).
-- **Bottom bar/drawer = the actual editing tools.** Tile Painter, Height Sculptor, Path Builder,
-  Object Placement - tools that make changes across the scene as their primary job, not tools
-  that inspect one thing. This is already where most editing tools live; keep new
-  scene-modifying tools here by default.
+## 3.1 Current groundwork
 
-This is a workflow the user explicitly said they like ("keeps it organized and gives a decent
-amount of workspace") - the target isn't to change it, it's to keep enforcing it as new tools
-get added, the same way `isBrushTool()` turned an implicit rule into a checked one for the left
-rail.
+- SelectionQuery.ObjectFilter
+- SelectionQuery.TileFilter
+- AttributeSelectionTool
+- legacy TileCondition
+- object replacement commands
+
+## 3.2 Target condition families
+
+Tile:
+
+- plane
+- underlay/overlay
+- shape/rotation
+- flags
+- height
+- slope
+- bridge/roof/effective plane
+- adjacency
+- selection membership
+- distance to feature
+- semantic classification
+
+Object:
+
+- id
+- symbolic name
+- type/shape
+- rotation
+- category
+- footprint
+- collision
+- animation
+- transforms
+- semantic classification
+
+Spatial:
+
+- rectangle
+- polygon/lasso
+- brush mask
+- path distance
+- connected component
+- room/building membership
+- loaded region/window
+
+Procedural:
+
+- deterministic random threshold
+- noise threshold
+- density
+- seeded variation
+
+## 3.3 Composition
+
+Support:
+
+- AND
+- OR
+- NOT
+- reusable named presets
+
+Prefer a data-oriented representation that can eventually be serialized.
+
+## 3.4 Consumers
+
+The same engine must drive:
+
+- select by condition
+- tile replace
+- object replace
+- brush masks
+- scatter
+- path/stream generation
+- biome generation
+- WFC constraints
+- Theme/Context suggestions
 
 ---
 
-## Part 13 — Plugin consolidation: concrete next targets
+# PHASE 4 - General ChangePlan
 
-Part 4.1 already nested the object-select tool buttons inside `SelectionOverlayPlugin` since
-they only exist to feed its selection. **That consolidation is half-finished**:
-`SingleSelectToolPlugin`/`MultiSelectToolPlugin` (the *tile*-select equivalents) are still
-separate top-level files in `Editor/src/main/java/com/rspsi/studio/plugin/builtin/tool/`, even
-though they're the exact same pattern - `StudioPluginManager.discoverPlugins()` currently
-registers four selection-family plugins where the object ones already live nested and the tile
-ones don't yet.
+Promote the good idea behind ProposedChanges into the common complex-edit boundary.
 
-**Target**: fold `SingleSelectToolPlugin`/`MultiSelectToolPlugin` into `SelectionOverlayPlugin`
-as nested classes too, matching `SingleObjectSelectToolPlugin`/`MultiObjectSelectToolPlugin`
-exactly. This is the most concrete, lowest-risk item in this whole document - the pattern is
-already proven, it's the same file, same registration mechanism, no design decision left to
-make. After this, `SelectionOverlayPlugin.java` is the one file owning "what selection means and
-how it's shown" end to end: four tool buttons plus the overlay that visualizes whatever they
-select.
+## 4.1 ChangePlan responsibilities
 
-No other clear same-file-worth candidates were found this pass among the remaining plugins
-(`TilePainterToolPlugin`, `HeightSculptorToolPlugin`, `PathToolPlugin`,
-`ObjectPlacementToolPlugin`, `BrushSettingsHud` each have distinct enough responsibilities that
-merging would just make one file do unrelated things) - but re-check this list after Part 10's
-opcode-editor panel and Part 6's path-tool work land, since new plugins are exactly when this
-question should get asked again rather than assumed answered.
+A plan should carry:
 
----
+- tile mutations
+- object additions/removals/replacements
+- affected world bounds
+- affected region ids
+- preconditions
+- conflict list
+- diagnostics
+- deterministic seed/provenance
+- merge/paste policy
+- preview metadata
+- expected source state where stale-edit protection matters
 
-## Part 14 — Rendering: FPS/memory posture (not yet audited)
+## 4.2 Required workflow
 
-Everything in Part 1 is about *correctness* against real OSRS rules. The user also asked for
-"good FPS/memory," which is a distinct question this pass didn't investigate - no profiling was
-done, no allocation-hotspot analysis, no draw-call-count budget was checked against a target
-frame time. Flagging as explicitly not covered rather than guessing:
+    calculate
+      -> validate
+      -> preview
+      -> resolve conflicts
+      -> commit
+      -> one undo history entry
 
-**Target for a future pass**: profile `OpenGlSceneRenderer` and `SessionSceneController` under
-a real large-region load (the run logs seen throughout this project session consistently report
-"source=709419 vertices... draws=1473" for a loaded scene - worth establishing whether that draw
-call count is already batched well or has obvious merge opportunities), and separately profile
-steady-state memory (texture cache growth, whether `RenderTextureResource`/definition caches
-have any eviction policy or grow unbounded across a long editing session). Part 2's incremental
-compiler wiring is the one performance item already scoped with evidence; this is the header for
-"there's probably more, nobody's looked yet."
+## 4.3 No silent clipping
+
+A plan that reaches unloaded or unavailable authored data must report that fact.
+
+Complex generation must not quietly discard out-of-document edits.
 
 ---
 
-## Explicitly deferred (not in this roadmap's near-term scope)
+# PHASE 5 - WorldFragment Transform and Structure Editing Foundation
 
-- True GPU-level per-object transparency (Part 5) - real engineering against the native
-  renderer, no reference implementation to lean on from either RuneLite or Terraini.
-- Procedural island/terrain generation (Part 7) - real feature, lower priority than the road
-  generator.
-- Stamp/paste and layer systems (Part 8) - real gaps, no existing landing spot in our codebase
-  the way `GenerationSchema.ROAD` gives the road generator one.
-- Further Gradle module splitting (Part 9) - revisit only after the two-module boundary is
-  actually documented and shown to still cause friction.
-- `@PluginDependency`-style plugin-to-plugin dependency graph - no current plugin needs it.
+WorldFragment already provides terrain + objects across all planes.
+
+Now make it professional.
+
+## 5.1 Canonical transforms
+
+Support:
+
+- translate
+- rotate 90/180/270
+- mirror X/Y
+- configurable pivot
+- all planes
+
+Transform correctly:
+
+- tile positions
+- object positions
+- object rotation
+- overlay shape
+- overlay rotation
+- corner heights
+- flags
+- structure footprint
+
+## 5.2 Paste policies
+
+Support policy objects such as:
+
+- replace all
+- terrain only
+- objects only
+- merge objects
+- preserve destination heights
+- use absolute source heights
+- height offset from anchor
+- fit foundation
+- blend perimeter
+- skip conflicts
+- report conflicts
+- replace only matching categories
+
+## 5.3 Building/fragment acceptance
+
+A multi-plane building copied, rotated, and pasted should preserve internal geometry and object relationships and land correctly at the new world-space anchor.
+
+This transform service becomes shared infrastructure, not a private Building Tool implementation.
+
+---
+
+# PHASE 6 - Plugin Platform Hardening
+
+The plugin system is already a major strength.
+
+## 6.1 Preserve current capabilities
+
+Keep:
+
+- external JAR plugins
+- API version
+- manifests
+- semantic versions
+- dependency resolution
+- isolated classloaders
+- repository/update infrastructure
+- tools
+- settings
+- overlays
+- HUDs
+- menus
+- shortcuts
+- inspectors
+- validators
+- generators
+- knowledge analyzers
+- decoded data
+- extension points
+- cleanup/unload lifecycle
+
+## 6.2 Correct the public boundary
+
+EditorPlugin already has neutral cache-facing data through AssetRepository and DecodedDataCatalog.
+
+Documentation must not continue teaching that cache-backed functionality automatically requires StudioPlugin.
+
+Correct rule:
+
+- EditorPlugin: public neutral plugin boundary
+- StudioPlugin: internal/native presentation projection until replaced
+- direct DefinitionProvider/cache backend and ImGui/OpenGL types remain internal
+
+## 6.3 Capability services
+
+Expose future shared foundations through PluginServices:
+
+- worldEdit
+- queries
+- fragments
+- changePlans
+- autotile
+- linearFeatures
+- modifiers
+- brushes
+- assets
+- knowledge
+- generators
+
+## 6.4 Permission enforcement
+
+PluginPermission is currently not enough as metadata.
+
+Before a public Plugin Hub is treated as secure, enforce capabilities.
+
+A plugin without WORLD_EDIT must not be able to mutate canonical world state through a raw context escape hatch.
+
+## 6.5 Neutral rich UI
+
+Public plugins should not require direct ImGui code for normal rich tool UI.
+
+Build a neutral component model for:
+
+- groups
+- rows/columns
+- buttons
+- toggles
+- numeric/text fields
+- combos
+- asset pickers
+- tables/lists
+- progress
+- compact previews
+
+Project these components into the strict workspace slots from UI_WORKSPACE_CONTRACT.md.
+
+## 6.6 Plugin compatibility and deprecation policy
+
+The public plugin API must be versioned as a product contract, not only compiled until it breaks.
+
+Rules:
+
+- new neutral services are additive where possible
+- old StudioToolPlugin/UiSurfaceContribution placement behavior remains behind compatibility adapters while first-party tools migrate
+- deprecated public APIs receive a documented replacement path
+- removal requires an intentional Plugin API version change
+- plugin load failures must report the missing/incompatible capability clearly
+- persisted plugin settings use stable plugin/control ids and survive UI surface migration when semantics are unchanged
+- internal StudioPlugin/native APIs may change more aggressively because they are not the supported third-party boundary
+
+A workspace redesign is not permission to silently break external plugins.
+
+---
+
+# PHASE 7 - Performance and Incremental Scene Rebuild
+
+The GPU residency layer is already more advanced than the CPU authoring path.
+
+## 7.1 Existing strength
+
+OpenGlSceneRenderer/ZoneVboManager already partitions native geometry into canonical 8x8 zones and can reuse unchanged GPU allocations.
+
+## 7.2 Remaining gap
+
+Studio still rebuilds too much upstream CPU-derived scene data after edits.
+
+## 7.3 Target
+
+- make the world-window compile path incremental
+- preserve padded/stitching context
+- invalidate bounded dependency zones
+- reuse unchanged scene packet/upload-plan partitions
+- retain conservative full rebuild for topology/cache reload cases
+- instrument scene rebuild cost continuously
+
+## 7.4 Authoring relevance
+
+This becomes increasingly important once brushes, scatter, conditional replace, and generators can affect large areas interactively.
+
+---
+
+# PHASE 8 - Shared Procedural Authoring Primitives
+
+Do not build separate Path, Stream, Fence, Bridge, and Biome math stacks.
+
+## 8.1 OSRS AutoTileService
+
+Promote path-specific shape/rotation rules into a shared topology service.
+
+Support:
+
+- cardinal and diagonal connectivity
+- interior/exterior corners
+- OSRS overlay shapes/rotations
+- material transition sets
+- arbitrary masks
+- paths
+- streams/banks
+- shorelines
+- biome boundaries
+- bridge approaches
+- plugin-defined rule sets
+- deterministic tie-breaking
+
+## 8.2 Linear Feature Service
+
+Extract shared path/ribbon geometry:
+
+- control points
+- curve evaluation
+- centerline
+- tangent/normal
+- width
+- distance along path
+- left/right side
+- rasterized footprint
+- corners
+- junctions
+
+Consumers:
+
+- road
+- path
+- stream
+- river
+- fence
+- hedge
+- wall
+- shoreline
+- bridge
+
+## 8.3 Deterministic modifier/noise stack
+
+Create reusable fields/modifiers:
+
+- brush weight
+- falloff
+- seeded noise
+- fractal noise
+- threshold
+- density
+- distance to edge
+- distance to centerline
+- slope
+- elevation
+- jitter
+- clustering
+- mask intersection
+
+Rules:
+
+- same seed + same inputs = same output
+- sample in absolute world coordinates
+- preview and commit use identical samples
+- iteration order cannot change randomness
+- plugins may contribute modifiers
+
+---
+
+# PHASE 9 - Advanced Authoring Tools
+
+Only after the shared foundations above are stable.
+
+## 9.1 Professional Tile Painter
+
+Target capabilities:
+
+- underlay/overlay/shape/rotation/flags
+- brush weighting
+- falloff/strength
+- stamp mode
+- conditional paint
+- replace mode
+- deterministic noise
+- edge-aware autotiling
+- palette presets
+- eyedropper/sample
+- preview
+- selection-aware apply
+- world-space strokes across regions
+
+## 9.2 Advanced Tile Replacement
+
+Examples:
+
+- replace overlay A with B only on plane 0
+- replace material inside selection except under roofs
+- replace by slope/elevation
+- replace only connected area
+- replace using weighted/noise variation
+- change shape/rotation automatically from neighborhood
+
+## 9.3 Advanced Object Editing
+
+- multi-object move
+- rotate
+- duplicate
+- replace
+- conditional replace over arbitrary area
+- preserve or remap type/rotation
+- replace by category/footprint/collision/semantic tag
+- conflict preview
+
+## 9.4 Object scatter and ground decoration
+
+- weighted object sets
+- density
+- exclusion radius
+- slope/height constraints
+- distance from paths/water/buildings
+- deterministic seed
+- rotation variation
+- clustering
+- preview
+- semantic/biome presets
+
+## 9.5 Path/Road tool
+
+Build on shared linear geometry and autotiling.
+
+Later enhancements:
+
+- weighted tile variants
+- sub-tile coverage quality
+- turn-angle-aware smoothing
+- local obstacle rerouting
+- terrain adaptation
+- road dressing
+
+## 9.6 Stream/River tool
+
+- centerline/width
+- terrain lowering
+- bank shaping
+- water/material application
+- shoreline autotile
+- noise variation
+- crossings
+- bridge handoff
+
+## 9.7 Auto Fence / Hedge / Wall tool
+
+- line/spline input
+- straight pieces
+- corners
+- posts
+- gates
+- object rotation
+- optional terrain following
+- conditional gaps/intersections
+
+## 9.8 Bridge tool
+
+- detect/declare crossing
+- deck
+- approaches
+- railings
+- terrain/plane/flag semantics
+- width and direction
+- integration with stream/path systems
+
+## 9.9 Building / Structure Stamp
+
+Built on WorldFragment transforms.
+
+- full multi-plane copy
+- rotate/mirror
+- terrain policy
+- foundation fit
+- perimeter blend
+- conflict detection
+- repeated stamping
+- saved fragment library
+
+---
+
+# PHASE 10 - Biomes, WFC, and Procedural World Building
+
+GenerationSchema and GeneratorService already establish the non-destructive generator direction.
+
+## 10.1 Biome system
+
+A biome is not just a noise texture.
+
+It should combine:
+
+- terrain profile
+- floor/material families
+- object/scatter families
+- density constraints
+- path/water relationships
+- elevation/slope
+- transition rules
+- semantic tags
+- deterministic seed
+
+## 10.2 WFC
+
+Use real OSRS-derived and curated pattern sets.
+
+Requirements:
+
+- explainable constraints
+- deterministic seed
+- preview
+- conflict/unsatisfied-cell diagnostics
+- partial regeneration
+- locked cells/areas
+- multi-plane awareness where supported
+- ChangePlan output
+
+## 10.3 Building/interior WFC
+
+Later target:
+
+- room/corridor grammar
+- walls/doors
+- floor families
+- decoration families
+- stairs/vertical relations
+- roofs
+- object dressing
+
+Do not build this before fragment transforms, conditions, and Theme/Context data are mature.
+
+---
+
+# PHASE 11 - Theme and Context Engine
+
+This remains intentionally deferred but preserved as a major product direction.
+
+The engine should learn explainable relationships from real OSRS world placement and cache data.
+
+Potential relations:
+
+- ATTACHED_TO
+- SAME_KIT_AS
+- ADJACENT_TO
+- ABOVE
+- BELOW
+- INSIDE_ROOM_WITH
+- SAME_BUILDING
+- USES_FLOOR
+- USES_ROOF_WITH
+- NEAR_PATH
+- TRANSITIONS_TO
+- SHARES_MODEL
+- SHARES_TEXTURE
+- SHARES_RECOLOR_FAMILY
+- MORPH_OF
+- MAP_ICON_OF
+- LOCATED_IN_AREA
+- ASSOCIATED_WITH_NPC
+
+Sources may include:
+
+- official map placements
+- object definitions
+- shapes/rotations
+- models
+- recolors/retextures
+- floor/material context
+- room/building topology
+- world map semantics
+- transforms/interactions
+- optional OpenRune server/NPC/source context
+- optional curated 117HD area/material metadata
+
+Every inference should retain confidence and provenance.
+
+Consumers:
+
+- contextual asset ranking
+- "objects that belong with this" suggestions
+- semantic brushes
+- biome generation
+- structure dressing
+- WFC candidate ranking
+- replacement suggestions
+- content validation
+
+The Theme Engine consumes the same editor foundations. It does not become a second architecture.
+
+---
+
+# PHASE 12 - Broader OpenRune Content Studio
+
+Once map/world authoring is stable, expand into the broader server/content workflow.
+
+Potential domains:
+
+- NPC spawn/content visualization
+- object-to-script/content bindings
+- interface editing
+- script/client-script inspection where supported
+- GameVal/symbolic references
+- OpenRune plugin/source scanning
+- content validation
+- simulated server ticks/NPC behavior
+- build/publish pipeline
+
+Use OPENRUNE_ECOSYSTEM_INTEGRATION.md as the guardrail.
+
+---
+
+# 13. Project-level build and dirty-resource model
+
+Map edits, definition edits, interfaces, scripts, GameVals, and future authored resources should eventually participate in one project build lifecycle.
+
+Target:
+
+    ProjectResource
+      identity
+      dirty state
+      dependencies
+      validator
+      builder/publisher
+      provenance
+
+The editor should be able to answer:
+
+- what has changed?
+- what must be rebuilt?
+- what depends on it?
+- what has been validated?
+- where was it published?
+- can it be safely reverted?
+
+This should grow from the durable publication/provenance work already landed.
+
+---
+
+# 14. Testing strategy
+
+Professional authoring tools need OSRS-semantic fixtures, not only synthetic unit tests.
+
+## 14.1 Golden scene fixtures
+
+Maintain real-cache fixtures for:
+
+- interiors
+- walls
+- wall decorations
+- ground decorations
+- bridges
+- roofs
+- shaped floors
+- textured floors
+- multilocs
+- animated objects
+- large footprints
+- cross-region edges
+
+## 14.2 Transform fixtures
+
+Cover:
+
+- every tile overlay shape/rotation under 90/180/270 transforms
+- every relevant object shape/rotation
+- multi-plane fragment rotation
+- mirror
+- cross-region paste
+- shared terrain vertices
+
+## 14.3 Procedural determinism
+
+Verify:
+
+- same seed produces same output
+- different traversal order produces same output
+- region boundaries do not reset noise
+- preview exactly matches committed plan
+
+## 14.4 Plugin lifecycle
+
+Verify:
+
+- permissions
+- unload cleanup
+- dependencies
+- UI contribution cleanup
+- capability-based surface resolution
+- no stale settings/resources
+
+---
+
+# 15. Execution discipline
+
+The project should continue the one-focused-PR-at-a-time workflow.
+
+Rules:
+
+1. One architectural objective per PR.
+2. Do not start an advanced tool when its shared prerequisite is missing.
+3. Every PR states acceptance criteria before implementation.
+4. New OSRS behavior gets a fixture or trusted-reference validation.
+5. Rendering claims update RENDERING_PARITY_MANIFEST.json.
+6. Roadmap state is updated when a phase materially changes.
+7. Avoid duplicate tool-specific systems when a shared service is the correct abstraction.
+8. Keep first-party tools on the same public-neutral APIs we want community plugins to use whenever practical.
+9. Native/UI exceptions must be explicit.
+10. Run foundationGate and live Studio validation for UI/rendering changes.
+
+---
+
+# 16. Near-term PR order
+
+This is the recommended immediate sequence from the current main branch.
+
+## PR A - Scene object completeness diagnostics
+
+- build real fixtures for missing/null/invisible placed objects
+- classify resolution failures
+- eliminate silent null/blank object states
+- verify multiloc/default-transform handling
+- verify scene submission and identity
+
+## PR B - Canonical pick/hover/surface snapshot
+
+- separate hover from selection
+- actual hit world position
+- sampled hit height
+- authored/effective/render plane
+- stable object identity
+- route HUD/inspector/pickers through it
+
+## PR C - Interior rendering parity
+
+- real interior golden scenes
+- isolate color/material discrepancy
+- fix actual parity bug
+- update manifest entries as evidence warrants
+
+## PR D - Object preview framing and scale
+
+- correct the confirmed local-bounds vs anchored-GPU-geometry camera mismatch
+- include render placement height in preview-space bounds
+- derive/verify bounds from the same coordinate space submitted to the preview renderer
+- aspect-aware auto-fit
+- better default view
+- footprint/tile scale visualization
+- diagnostics for unresolved models
+
+## PR E - Workspace state model
+
+- implement capability-based ToolUiDescriptor
+- one drawer mutex
+- Brush Shelf visibility
+- Quick Palette host
+- Inspector routing
+- HUD independence
+
+## PR F - First-party UI migration
+
+- Tile Painter
+- Height Sculpt
+- Object Placement
+- Select/Inspect
+- Flags/Collision
+- Path tool
+
+After those correctness and workspace foundations are stable:
+
+## PR G - Multi-region authored world boundary
+
+Then proceed into Query/Condition, ChangePlan, Fragment Transform, and shared procedural services in that order.
+
+---
+
+# 17. Current foundation we should not rebuild
+
+Already-established strengths include:
+
+- backend-neutral WorldDocument
+- EditorSession/history
+- atomic CompositeEditCommand
+- shared TerrainVertexLattice
+- BrushEngine and weighted brush samples
+- object transform commands
+- WorldFragment and codec
+- generator/ProposedChanges direction
+- spline path authoring
+- first-pass OSRS autotiling
+- region/window rendering context
+- 8x8 GPU zone residency
+- neutral AssetRepository
+- DecodedDataCatalog
+- knowledge/corpus groundwork
+- external plugin runtime
+- plugin dependency/version/update infrastructure
+- HUD manager
+- stable scene object identity groundwork
+- OpenRune source/cache integration boundaries
+
+The roadmap is about connecting and hardening these pieces, not replacing them.
+
+---
+
+# 18. Definition of success
+
+OpenRune Studio reaches the intended architecture when a community plugin can implement an advanced world-authoring feature by combining stable services instead of reaching into editor internals.
+
+The ideal plugin should be able to:
+
+    declare a tool
+    declare its UI slots
+    query world/selection context
+    use shared brush/linear/autotile/modifier services
+    produce a ChangePlan
+    preview it
+    commit it
+    extend the inspector/HUD
+    unload cleanly
+
+At that point, advanced Tile Painter, Object Replace, Stream, Fence, Bridge, Building, Biome, WFC, and Theme workflows can grow independently without destabilizing the editor core.

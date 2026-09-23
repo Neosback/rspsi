@@ -1,5 +1,9 @@
 # OpenRune Studio Content Authoring Foundation Review
 
+> **Scope:** this document records architectural prerequisites for advanced authoring.
+> `docs/ROADMAP.md` is the authoritative execution order, and
+> `docs/UI_WORKSPACE_CONTRACT.md` is authoritative for editor-shell/UI placement.
+
 Reviewed against main at ce46a7b916c32b463cf7da830b3512a2c9cd4a1f after PR #44.
 
 ## Purpose

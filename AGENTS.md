@@ -17,19 +17,20 @@ for correctness (see below), the same way a spec document would be.
 Two Gradle modules, declared in `settings.gradle`:
 
 - **`Client`** - cache/definition loading, the world document model, the rendering pipeline
-  (both software and OpenGL-neutral packet builders), editor tools, selection, and the
-  cache-agnostic `EditorPlugin` extension point. No ImGui/GLFW/UI code lives here. Buildable
-  and testable headless.
-- **`Editor`** - the Dear ImGui/GLFW native desktop shell ("Studio"), including the
-  cache-aware `StudioPlugin` extension point, all panels/HUDs/toolbars, and the OpenGL scene
-  renderer that actually draws to a window.
+  (both software and OpenGL-neutral packet builders), editor tools, selection, and the public
+  neutral `EditorPlugin` extension point. No ImGui/GLFW UI code lives here. Buildable and
+  testable headless.
+- **`Editor`** - the Dear ImGui/GLFW native desktop shell ("Studio"), including internal
+  Studio projection code, all panels/HUDs/toolbars, and the OpenGL scene renderer that actually
+  draws to a window.
 
-**The plugin-system split is deliberate but under-enforced**: if a plugin needs
-`DefinitionProvider`/cache access (object definitions, models, textures), it has to be a
-`StudioPlugin` in `Editor` - `EditorPluginContext` (`Client`) has no cache handle at all. If a
-plugin is pure document/session logic that should work headless, it belongs in `Client` as an
-`EditorPlugin`. When in doubt, check what `EditorPluginContext`'s record fields actually expose
-before assuming a capability is available Client-side.
+**Public plugin boundary**: third-party and first-party feature plugins should prefer
+`EditorPlugin` and neutral services. `EditorPluginContext` intentionally does not expose a raw
+`DefinitionProvider`, but it does expose neutral cache-facing access through
+`AssetRepository`, `PluginApi.data()`, and `DecodedDataCatalog`. Direct cache backend types,
+Dear ImGui, GLFW, and OpenGL remain internal Studio implementation details. `StudioPlugin`
+is a transitional/internal presentation API, not the public plugin model to teach new plugin
+authors. See `docs/UI_WORKSPACE_CONTRACT.md` for where plugin UI contributions belong.
 
 ## Build, test, run
 
@@ -47,7 +48,9 @@ Editor consumes Client's public API surface and breaks silently otherwise.
 `docs/RENDERING_PARITY_MANIFEST.json` is a live-maintained, schema-versioned list of rendering
 correctness gaps against real OSRS behavior (covered/partial/deferred, with a `nextAction` per
 entry). `./gradlew renderingAuditGate` validates its shape; treat it as the actual rendering
-backlog, not something to re-derive from scratch.
+backlog, not something to re-derive from scratch. `docs/ROADMAP.md` defines product order,
+`docs/CONTENT_STUDIO_FOUNDATION.md` defines advanced-authoring prerequisites, and
+`docs/UI_WORKSPACE_CONTRACT.md` defines the strict editor-shell/UI contribution contract.
 
 ## Reference source trees (not part of the build)
 
@@ -62,7 +65,7 @@ A full RuneLite fork (based on OpenOSRS, **BSD 2-Clause licensed** - see its own
 open-source client code and is safe to read, quote, and reimplement techniques from freely.
 
 Use it to verify or port real client behavior. Some concretely useful starting points found
-this cycle (see `docs/ROADMAP.md` Part 1.3 for the full writeup):
+this cycle (see `docs/ROADMAP.md` and the parity manifest for current priority):
 
 - Terrain underlay color blending: `runelite-client/cache/.../MapImageDumper.java`
   (un-obfuscated re-implementation; the real client's is `runescape-client/.../class470.java`,
@@ -72,11 +75,11 @@ this cycle (see `docs/ROADMAP.md` Part 1.3 for the full writeup):
   + `Jarvis.convexHull()` (`runelite-api/.../model/Jarvis.java`) - already ported into this
   project as `Client/src/main/java/com/rspsi/editor/render/ConvexHull2D.java`.
 - Plugin config-from-interface pattern: `runelite-client/.../config/ConfigItem.java` +
-  `ConfigManager` - the model for the declarative-settings idea in `docs/ROADMAP.md` Part 3.2.
+  `ConfigManager` - useful reference for neutral/declarative plugin settings UI.
 - Zone-based incremental GPU rebuild (8x8 zones, dirty-flag invalidation): `runelite-client/.../plugins/gpu/Zone.java`,
   `GpuPlugin.invalidateZone`/`rebuild` - the validation reference for wiring in
   `Client/src/main/java/com/rspsi/editor/render/compiler/IncrementalSceneCompiler.java`
-  (see `docs/ROADMAP.md` Part 2).
+  (see the performance phase in `docs/ROADMAP.md`).
 
 When citing something from here in a commit, comment, or design doc, name the exact file/method
 (as above) rather than "RuneLite does X somewhere" - future readers (agents included) need to
@@ -119,11 +122,13 @@ file.
   without winding-order fixtures passing first - it was tried before and broke walls/roofs/
   bridges. A renderer that *does* cull (e.g. a new software preview path) needs to emit
   double-sided geometry to match, not the other way around.
-- **`StudioToolPlugin.surfaces()` defaults to all three chrome surfaces** (bottom bar, floating
-  toolbar, tool rail) if unoverridden - a new tool plugin almost always wants an explicit
-  override. The Left Tool Rail specifically is brush-only now (`isBrushTool()` gates it, not
-  surface membership) - a non-brush tool has no reason to be there even if placed via the
-  Plugin Manager's override UI.
+- **The current `StudioToolPlugin.surfaces()` model is transitional.** Existing code still
+  supports bottom-bar/floating/left-rail placement, but new UI work must follow
+  `docs/UI_WORKSPACE_CONTRACT.md`: the bottom rail activates tools, the Bottom Context Drawer
+  owns deep tool content, the Left Brush Shelf owns brush/stamp dynamics, the Viewport Quick
+  Palette owns near-cursor quick picks, the Right Inspector owns selected-item editing, and
+  HUDs remain independently pinnable/glanceable. Do not infer tool capability from arbitrary
+  surface placement.
 - **Tightly-coupled small plugins should be nested inside the plugin they serve**, not given
   their own top-level file, when their only reason to exist is feeding another plugin (see
   `SelectionOverlayPlugin`'s nested `SingleObjectSelectToolPlugin`/`MultiObjectSelectToolPlugin`).
