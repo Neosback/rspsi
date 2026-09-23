@@ -27,6 +27,48 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GpuScenePacketBuilderTest {
     @Test
+    void instancePacketRebasesModelGeometryIntoTheSameWorldSpaceAsTerrain() {
+        WorldDocument document = new WorldDocument(8, 8, 1);
+        TileCoordinate local = new TileCoordinate(0, 3, 5);
+        ModelRenderPacket model = new ModelRenderPacket(
+                local, 42, ObjectCategory.GROUND,
+                List.of(new ModelVertex(0, 0, 0, 0, 0, 0, 1, 0, 0),
+                        new ModelVertex(64, 0, 0, 0, 0, 0, 1, 0, 0),
+                        new ModelVertex(0, 0, 64, 0, 0, 0, 1, 0, 0)),
+                List.of(new ModelTriangle(0, 1, 2, 100, 100, 100,
+                        -1, 0, 0, 0)), List.of(), -1,
+                0, 0, 0, 64, 0, 64, false, false)
+                .withSceneObjectIdentity(SceneObjectIdentity.of(
+                        new WorldObject(42, 10, 0, 0, 3, 5), 1, 1));
+        RenderScene scene = new RenderScene(
+                document, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(),
+                LightingProfile.osrs(), Map.of(), List.of(), List.of(),
+                List.of(model), List.of(), Map.of());
+
+        WorldRegion sourceRegion = new WorldRegion(0, 0, new WorldDocument(64, 64, 1));
+        WorldRegionWindow source = new WorldRegionWindow(
+                0, 0, 1, 1, Map.of(sourceRegion.regionId(), sourceRegion));
+        SceneWindow window = new SceneWindow(
+                source, 3200, 6400, 1, 0, 0, -1,
+                java.util.Set.of(sourceRegion.regionId()),
+                List.of(new com.rspsi.editor.model.InstanceChunkTemplate(
+                        0, 0, 0, 0, 0, 0, 0)));
+
+        GpuScenePacket packet = new GpuScenePacketBuilder().buildInstance(window, scene);
+        ModelRenderPacket projected = packet.tiles().get(0).models().get(0);
+
+        assertEquals(new TileCoordinate(0, 3203, 6405), projected.anchor());
+        assertEquals(3203, projected.sceneObjectIdentity().anchorX());
+        assertEquals(6405, projected.sceneObjectIdentity().anchorY());
+
+        GpuUploadPlan upload = new GpuUploadPlanBuilder().build(packet);
+        assertEquals(3203, upload.commands().get(0).modelAnchorX());
+        assertEquals(6405, upload.commands().get(0).modelAnchorY());
+        assertEquals(3203 * 128.0f, upload.vertices().get(0).x());
+        assertEquals(6405 * 128.0f, upload.vertices().get(0).z());
+    }
+
+    @Test
     void localRenderSceneFootprintMetadataIsWorldRebasedWithTheSceneWindow() {
         WorldDocument document = new WorldDocument(1, 1, 1);
         TileCoordinate local = new TileCoordinate(0, 0, 0);

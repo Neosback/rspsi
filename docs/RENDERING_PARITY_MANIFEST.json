@@ -268,24 +268,39 @@
       "id": "scene.instances",
       "domain": "scene",
       "title": "Instance template chunks and rotated regions",
-      "status": "partial",
+      "status": "covered",
       "priority": "p3",
       "runelite": [
-        "net.runelite.api.Scene#getInstanceTemplateChunks"
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/Scene.java#getInstanceTemplateChunks",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/coords/WorldPoint.java#toLocalInstance",
+        "RuneLite-melxin/runescape-client/src/main/java/class383.java#loadRegion",
+        "RuneLite-melxin/runescape-client/src/main/java/SequenceDefinition.java#method4986",
+        "RuneLite-melxin/runescape-client/src/main/java/Tiles.java#method2092",
+        "RuneLite-melxin/runescape-client/src/main/java/FontName.java#method11264",
+        "RuneLite-melxin/runescape-client/src/main/java/class69.java#method2286",
+        "RuneLite-melxin/runescape-client/src/main/java/class226.java#method5057",
+        "RuneLite-melxin/runescape-client/src/main/java/ScriptFrame.java#method749"
       ],
       "rspsi": [
-        "Client/src/main/java/com/rspsi/editor/model/WorldDocument.java",
-        "Client/src/main/java/com/rspsi/editor/render/SceneWindow.java"
+        "Client/src/main/java/com/rspsi/editor/model/InstanceChunkTemplate.java",
+        "Client/src/main/java/com/rspsi/editor/render/InstanceTemplateGrid.java",
+        "Client/src/main/java/com/rspsi/editor/render/InstanceSceneMaterializer.java",
+        "Client/src/main/java/com/rspsi/editor/render/InstanceRenderSceneBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/SceneWindow.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuScenePacketBuilder.java"
       ],
       "tsps": [
         "rs/scene/Scene.ts",
         "rs/scene/SceneLocs.ts"
       ],
       "evidence": [
-        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+        "Client/src/test/java/com/rspsi/editor/render/InstanceTemplateGridTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/InstanceSceneMaterializerTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/InstanceRenderSceneBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuScenePacketBuilderTest.java"
       ],
-      "reason": "The neutral model has instance context, but rotated template reconstruction is not a native parity fixture.",
-      "nextAction": "Add an instance-template fixture before claiming full scene parity."
+      "reason": "Packed [plane][13][13] instance templates now reconstruct a derived 104x104 scene before ordinary terrain/model/collision compilation. Tile rotation matches RuneLite WorldPoint and the client terrain loader; object anchors reproduce the client footprint-aware Tiles.method2092/class69 formulas; cache-encoded generated/explicit heights replay loadTerrain semantics on the target plane; absent chunks reproduce the client's height seam filling; overlay rotation, tile flags, bridge behavior, object orientation, collision, model identity, GPU anchors and picker coordinates all follow the projected target scene. The legacy local RenderScene packet path remains unchanged while buildInstance explicitly rebases instance model geometry into the same world coordinate space as terrain.",
+      "nextAction": "Keep packed-template, all-four-rotation, raw height replay, missing-chunk seam, multi-tile object, bridge/collision and GPU world-space fixtures as regressions. Future instance editing UX or server-driven template acquisition should consume this projection contract rather than adding renderer-specific rotation."
     },
     {
       "id": "objects.wallOrientation",
