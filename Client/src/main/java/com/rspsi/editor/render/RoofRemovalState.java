@@ -56,7 +56,8 @@ public record RoofRemovalState(
     }
 
     public static RoofRemovalState disabled() {
-        return new RoofRemovalState(0, null, null, null, null, 0);
+        return new RoofRemovalState(0,
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), 0);
     }
 
     public boolean enabled() {
