@@ -157,4 +157,68 @@ class SceneVisibilityPolicyTest {
         assertTrue(!SceneVisibilityPolicy.editor().withRoofGeometry(true).includes(roof));
         assertTrue(SceneVisibilityPolicy.editor().withRoofGeometry(true).includes(bridge));
     }
+    @Test
+    void roofRemovalModeReplacesVanillaUpperPlaneCullWithSelectedConnectedRegions() {
+        SceneTileSnapshot lowerSelected = roofTile(0, 1, 1,
+                OsrsTileFlags.REMOVE_ROOFS, 0);
+        SceneTileSnapshot upperSelected = roofTile(1, 1, 1, 0, 1);
+        SceneTileSnapshot lowerOther = roofTile(0, 8, 1,
+                OsrsTileFlags.REMOVE_ROOFS, 0);
+        SceneTileSnapshot upperOther = roofTile(1, 8, 1, 0, 1);
+
+        WorldRegionWindow source = new WorldRegionWindow(0, 0, 1, 1, Map.of());
+        SceneWindow window = new SceneWindow(
+                source, 0, 0, 4, 0, 0, -1, java.util.Set.of(), java.util.List.of());
+        GpuScenePacket packet = new GpuScenePacket(
+                window,
+                java.util.List.of(lowerSelected, upperSelected, lowerOther, upperOther),
+                LightingProfile.osrs(),
+                "roof-removal-regions",
+                Map.of());
+
+        GpuScenePacket vanilla = SceneVisibilityPolicy.clientTraversal(0).apply(packet);
+        assertEquals(2, vanilla.tiles().size(),
+                "vanilla traversal hides every tile whose physical level is above the active plane");
+
+        RoofRemovalState state = new RoofRemovalState(
+                RoofRemovalState.POSITION,
+                new RoofRemovalState.ScenePoint(1, 1),
+                null, null, null, 200);
+        GpuScenePacket dynamic = SceneVisibilityPolicy.clientTraversal(0)
+                .withRoofRemovalState(state)
+                .apply(packet);
+
+        assertEquals(3, dynamic.tiles().size());
+        assertTrue(dynamic.tiles().stream().noneMatch(tile ->
+                tile.authoredPlane() == 1
+                        && tile.worldAddress().worldX() == 1
+                        && tile.worldAddress().worldY() == 1));
+        assertTrue(dynamic.tiles().stream().anyMatch(tile ->
+                tile.authoredPlane() == 1
+                        && tile.worldAddress().worldX() == 8
+                        && tile.worldAddress().worldY() == 1),
+                "when roof-removal mode is enabled, upper tiles outside selected roof regions stay visible");
+        assertNotEquals(vanilla.fingerprint(), dynamic.fingerprint());
+    }
+
+    private static SceneTileSnapshot roofTile(int plane, int x, int y, int flags, int cullLevel) {
+        com.rspsi.editor.model.TileCoordinate coordinate =
+                new com.rspsi.editor.model.TileCoordinate(plane, x, y);
+        return new SceneTileSnapshot(
+                coordinate,
+                com.rspsi.editor.model.WorldTileAddress.of(x, y, plane),
+                flags,
+                plane,
+                plane,
+                plane,
+                cullLevel,
+                java.util.Optional.empty(),
+                java.util.Optional.empty(),
+                java.util.List.of(),
+                java.util.List.of(),
+                java.util.List.of(),
+                false,
+                false);
+    }
+
 }
