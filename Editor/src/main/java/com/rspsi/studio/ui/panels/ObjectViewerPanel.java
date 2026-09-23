@@ -66,6 +66,7 @@ public final class ObjectViewerPanel implements StudioPanel {
     private final ImInt newParamType = new ImInt(0);
     private final ImString newParamValue = new ImString(512);
     private String definitionEditStatus = "";
+    private int lastPropertiesObjectId = Integer.MIN_VALUE;
 
     private final ObjectPreviewRenderer previewRenderer = new ObjectPreviewRenderer();
     private float previewYaw = (float) Math.toRadians(200.0);
@@ -460,6 +461,11 @@ public final class ObjectViewerPanel implements StudioPanel {
                                               SettingsStore settings) {
         ImGui.inputInt("Object ID##prop-obj-id", selectedObjectId);
         int id = selectedObjectId.get();
+        if (id != lastPropertiesObjectId) {
+            scalarEditStates.clear();
+            definitionEditStatus = "";
+            lastPropertiesObjectId = id;
+        }
 
         if (cache == null) {
             ImGui.textDisabled("Load an OSRS cache to inspect object definitions.");
@@ -520,6 +526,7 @@ public final class ObjectViewerPanel implements StudioPanel {
 
     private void renderDefinitionTransactionEditor(StudioPanelContext context,
                                                    ObjectDefinitionEditTransaction transaction) {
+        ImGui.pushID(transaction.id());
         ImGui.separator();
         ImGui.text("Definition edit transaction");
         if (transaction.dirty()) {
@@ -563,6 +570,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         if (!definitionEditStatus.isBlank()) {
             ImGui.textWrapped(definitionEditStatus);
         }
+        ImGui.popID();
     }
 
     private void renderScalarField(StudioPanelContext context,
@@ -584,7 +592,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
 
         boolean dirty = transaction.dirtyFields().contains(fieldName);
-        boolean changed = ImGui.inputText(
+        ImGui.inputText(
                 (dirty ? "* " : "") + label + "##definition-" + fieldName,
                 state.input);
         boolean activated = ImGui.isItemActivated();
@@ -594,16 +602,6 @@ public final class ObjectViewerPanel implements StudioPanel {
             state.editing = true;
             state.before = editValue(field);
             state.error = "";
-        }
-
-        if (changed && state.editing) {
-            try {
-                transaction.setField(
-                        fieldName, editValue(field.type(), state.input.get()));
-                state.error = "";
-            } catch (RuntimeException failure) {
-                state.error = failureMessage(failure);
-            }
         }
 
         if (deactivated && state.editing) {
@@ -622,25 +620,20 @@ public final class ObjectViewerPanel implements StudioPanel {
                                        ScalarEditState state) {
         ObjectDefinitionEditValue before = state.before;
         try {
-            ObjectDefinitionEditValue requested = editValue(type, state.input.get());
-            transaction.setField(fieldName, requested);
-            ObjectDefinitionRawView.Field canonical = rawField(
-                    transaction.preview(), fieldName).orElseThrow();
-            ObjectDefinitionEditValue after = editValue(canonical);
+            ObjectDefinitionEditValue after = editValue(type, state.input.get());
             if (!Objects.equals(before, after)) {
                 context.session().execute(ObjectDefinitionEditCommand.field(
                         transaction, fieldName, before, after));
                 definitionEditStatus = "Updated " + fieldName + " in object "
                         + transaction.id() + " preview.";
             }
+            ObjectDefinitionRawView.Field canonical = rawField(
+                    transaction.preview(), fieldName).orElseThrow();
             state.sync(canonical.value());
             state.error = "";
         } catch (RuntimeException failure) {
-            if (before != null) {
-                transaction.setField(fieldName, before);
-                rawField(transaction.preview(), fieldName)
-                        .ifPresent(restored -> state.sync(restored.value()));
-            }
+            rawField(transaction.preview(), fieldName)
+                    .ifPresent(restored -> state.sync(restored.value()));
             state.error = failureMessage(failure);
             definitionEditStatus = "Rejected " + fieldName + " edit: " + state.error;
         } finally {
@@ -694,6 +687,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             ImGui.textDisabled("#" + param.id() + "  "
                     + param.type().name().toLowerCase(java.util.Locale.ROOT));
             ImGui.sameLine();
+            boolean removed = false;
             if (ImGui.smallButton("Remove##definition-param")) {
                 try {
                     context.session().execute(ObjectDefinitionEditCommand.param(
@@ -701,13 +695,16 @@ public final class ObjectViewerPanel implements StudioPanel {
                     scalarEditStates.remove(paramStateKey(transaction.id(), param.id()));
                     definitionEditStatus = "Removed param " + param.id()
                             + " from object " + transaction.id() + " preview.";
+                    removed = true;
                 } catch (RuntimeException failure) {
                     definitionEditStatus = "Param removal failed: "
                             + failureMessage(failure);
                 }
             }
 
-            renderParamValue(context, transaction, param);
+            if (!removed) {
+                renderParamValue(context, transaction, param);
+            }
             ImGui.popID();
         }
 
@@ -757,7 +754,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
 
         boolean dirty = transaction.dirtyParams().contains(param.id());
-        boolean changed = ImGui.inputText(
+        ImGui.inputText(
                 (dirty ? "* Value" : "Value") + "##definition-param-value",
                 state.input);
         boolean activated = ImGui.isItemActivated();
@@ -769,40 +766,26 @@ public final class ObjectViewerPanel implements StudioPanel {
             state.error = "";
         }
 
-        if (changed && state.editing) {
-            try {
-                transaction.putParam(
-                        param.id(), editValue(param.type(), state.input.get()));
-                state.error = "";
-            } catch (RuntimeException failure) {
-                state.error = failureMessage(failure);
-            }
-        }
-
         if (deactivated && state.editing) {
             ObjectDefinitionEditValue before = state.before;
             try {
                 ObjectDefinitionEditValue after =
                         editValue(param.type(), state.input.get());
-                transaction.putParam(param.id(), after);
+                if (!Objects.equals(before, after)) {
+                    context.session().execute(ObjectDefinitionEditCommand.param(
+                            transaction, param.id(), before, after));
+                    definitionEditStatus = "Updated param " + param.id()
+                            + " in object " + transaction.id() + " preview.";
+                }
                 ObjectDefinitionEditValue canonical = transaction.preview().params().stream()
                         .filter(candidate -> candidate.id() == param.id())
                         .findFirst()
                         .map(ObjectViewerPanel::editValue)
                         .orElseThrow();
-                if (!Objects.equals(before, canonical)) {
-                    context.session().execute(ObjectDefinitionEditCommand.param(
-                            transaction, param.id(), before, canonical));
-                    definitionEditStatus = "Updated param " + param.id()
-                            + " in object " + transaction.id() + " preview.";
-                }
                 state.sync(canonical.value());
                 state.error = "";
             } catch (RuntimeException failure) {
-                if (before != null) {
-                    transaction.putParam(param.id(), before);
-                    state.sync(before.value());
-                }
+                state.sync(before == null ? "" : before.value());
                 state.error = failureMessage(failure);
                 definitionEditStatus = "Rejected param " + param.id()
                         + " edit: " + state.error;
@@ -923,12 +906,12 @@ public final class ObjectViewerPanel implements StudioPanel {
             ObjectDefinitionRawView.ValueType type, String value) {
         return switch (type) {
             case STRING -> ObjectDefinitionEditValue.stringValue(value);
-            case INTEGER -> new ObjectDefinitionEditValue(
-                    ObjectDefinitionRawView.ValueType.INTEGER, value.trim());
-            case LONG -> new ObjectDefinitionEditValue(
-                    ObjectDefinitionRawView.ValueType.LONG, value.trim());
-            case BOOLEAN -> new ObjectDefinitionEditValue(
-                    ObjectDefinitionRawView.ValueType.BOOLEAN, value.trim());
+            case INTEGER -> ObjectDefinitionEditValue.intValue(
+                    Integer.parseInt(value.trim()));
+            case LONG -> ObjectDefinitionEditValue.longValue(
+                    Long.parseLong(value.trim()));
+            case BOOLEAN -> ObjectDefinitionEditValue.booleanValue(
+                    Boolean.parseBoolean(value.trim()));
             default -> throw new IllegalArgumentException(
                     "Complex definition value is not scalar-editable: " + type);
         };
