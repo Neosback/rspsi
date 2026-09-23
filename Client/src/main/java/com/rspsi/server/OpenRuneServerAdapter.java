@@ -312,7 +312,10 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
     private static ServerContentKind classify(Path path, Path base) {
         String relative = base.relativize(path).toString().replace('\\', '/').toLowerCase();
         String name = path.getFileName().toString().toLowerCase();
-        if (name.equals("gamevals.toml") || relative.contains("gamevals")) return ServerContentKind.GAMEVAL;
+        if (name.equals("gamevals.toml") || name.endsWith(".rscm")
+                || relative.contains("gamevals")) {
+            return ServerContentKind.GAMEVAL;
+        }
         if (relative.contains("/pack/") || relative.startsWith("pack/")) {
             if (relative.contains("/configs/") || relative.startsWith("configs/")) return ServerContentKind.CONFIG;
             if (relative.contains("/models/") || relative.startsWith("models/")) return ServerContentKind.MODEL;
@@ -325,6 +328,9 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
             }
         }
         if (relative.startsWith("map/") || relative.contains("/map/")) return ServerContentKind.MAP;
+        if (name.endsWith(".toml") || name.endsWith(".json")) {
+            return ServerContentKind.CONFIG;
+        }
         if (relative.endsWith(".kt") || relative.endsWith(".java")) return ServerContentKind.SERVER_SCRIPT;
         if (name.endsWith(".cs2") || name.endsWith(".rs2asm")) return ServerContentKind.CS2;
         if (name.endsWith(".dat")) return ServerContentKind.MODEL;
