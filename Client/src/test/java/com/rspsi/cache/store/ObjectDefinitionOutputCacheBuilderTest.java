@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ObjectDefinitionOutputCacheBuilderTest {
     private static final int REVISION = 240;
-    private static final int OBJECT_ID = 1276;
+    private static final int OBJECT_ID = 0;
 
     @TempDir
     Path temporaryDirectory;
