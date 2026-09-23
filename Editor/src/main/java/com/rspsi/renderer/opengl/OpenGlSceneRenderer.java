@@ -829,15 +829,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             if (alloc == null) {
                 continue;
             }
-            for (int offset = 0; offset < batches.commandCount(); offset++) {
-                frameMetrics.record(commands.get(batches.commandIndexAt(offset)));
-            }
             if (alloc.vao() != lastBoundVao) {
                 glBindVertexArray(alloc.vao());
                 lastBoundVao = alloc.vao();
             }
             applyDrawState(plan, first, alpha, clientCycle);
             if (batches.commandCount() == 1) {
+                frameMetrics.record(first);
                 int localFirst = zoneManager.localFirstIndex(firstIndex);
                 glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
                         (long) localFirst * Integer.BYTES);
@@ -848,6 +846,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                     for (int offset = 0; offset < batches.commandCount(); offset++) {
                         int commandIndex = batches.commandIndexAt(offset);
                         GpuDrawCommand command = commands.get(commandIndex);
+                        frameMetrics.record(command);
                         counts.put(command.indexCount());
                         offsets.put((long) zoneManager.localFirstIndex(commandIndex)
                                 * Integer.BYTES);
