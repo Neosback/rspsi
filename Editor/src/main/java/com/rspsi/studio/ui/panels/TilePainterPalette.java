@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui.panels;
 
+import com.rspsi.editor.model.FloorId;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.brush.BrushCapability;
@@ -201,12 +202,14 @@ public final class TilePainterPalette implements StudioPanel {
         return y + size - vertexY / 128.0f * size;
     }
 
-    public static int floorColor(LoadedOsrsCacheSession cache, int id,
+    /** Display colour for an encoded (map-stored) floor id; see {@link FloorId}. */
+    public static int floorColor(LoadedOsrsCacheSession cache, int encodedId,
                                   boolean underlay, int fallback) {
-        if (cache == null || id <= 0) return fallback;
+        if (cache == null || encodedId <= 0) return fallback;
+        int definitionId = FloorId.definitionId(encodedId);
         var def = underlay
-                ? cache.bundle().definitions().underlay(id)
-                : cache.bundle().definitions().overlay(id);
+                ? cache.bundle().definitions().underlay(definitionId)
+                : cache.bundle().definitions().overlay(definitionId);
         return def.isPresent() && def.get().rgb() >= 0
                 ? 0xFF000000 | def.get().rgb() : fallback;
     }
@@ -237,27 +240,34 @@ public final class TilePainterPalette implements StudioPanel {
         return fallback;
     }
 
+    private static String definitionLabel(int encodedId) {
+        return encodedId <= 0 ? "none" : "#" + FloorId.definitionId(encodedId);
+    }
+
+    // Preset ids were picked from swatches that showed definition N for
+    // encoded value N; they keep those definition ids but are unverified
+    // against real floors (e.g. overlay 12 is an untextured red floor).
     private void renderPresets() {
         ImGui.textDisabled("Presets:");
         ImGui.sameLine();
         if (ImGui.smallButton(StudioIcons.ENVIRONMENT + " Grass##sw-grass")) {
-            state.setUnderlayId(1); state.setApplyUnderlay(true);
+            state.setUnderlayId(FloorId.encode(1)); state.setApplyUnderlay(true);
         }
         ImGui.sameLine();
         if (ImGui.smallButton(StudioIcons.GRID + " Cobble##sw-cobl")) {
-            state.setUnderlayId(10); state.setApplyUnderlay(true);
+            state.setUnderlayId(FloorId.encode(10)); state.setApplyUnderlay(true);
         }
         ImGui.sameLine();
         if (ImGui.smallButton(StudioIcons.WATER + " Water##sw-wtr")) {
-            state.setOverlayId(12); state.setApplyOverlay(true);
+            state.setOverlayId(FloorId.encode(12)); state.setApplyOverlay(true);
         }
         ImGui.sameLine();
         if (ImGui.smallButton(StudioIcons.TERRAIN + " Sand##sw-snd")) {
-            state.setUnderlayId(28); state.setApplyUnderlay(true);
+            state.setUnderlayId(FloorId.encode(28)); state.setApplyUnderlay(true);
         }
         ImGui.sameLine();
         if (ImGui.smallButton("Snow##sw-snw")) {
-            state.setUnderlayId(35); state.setApplyUnderlay(true);
+            state.setUnderlayId(FloorId.encode(35)); state.setApplyUnderlay(true);
         }
     }
 
@@ -301,7 +311,7 @@ public final class TilePainterPalette implements StudioPanel {
         checkbox("Apply Underlay to painted/selected tiles##chk-und",
                 state.applyUnderlay(), state::setApplyUnderlay);
         ImGui.sameLine(0.0f, 20.0f);
-        ImGui.text("Selected Underlay: #" + state.underlayId());
+        ImGui.text("Selected Underlay: " + definitionLabel(state.underlayId()));
         ImGui.separator();
         renderFloorGrid(cache, true);
     }
@@ -310,7 +320,7 @@ public final class TilePainterPalette implements StudioPanel {
         checkbox("Apply Overlay to painted/selected tiles##chk-ovr",
                 state.applyOverlay(), state::setApplyOverlay);
         ImGui.sameLine(0.0f, 20.0f);
-        ImGui.text("Selected Overlay: #" + state.overlayId());
+        ImGui.text("Selected Overlay: " + definitionLabel(state.overlayId()));
         ImGui.separator();
         renderFloorGrid(cache, false);
     }
@@ -321,21 +331,24 @@ public final class TilePainterPalette implements StudioPanel {
         int cols = Math.max(1, (int) (ImGui.getContentRegionAvailX() / (size + spacing)));
         imgui.ImDrawList draw = ImGui.getWindowDrawList();
 
+        // Swatch i is floor definition i; painter state stores the encoded map value.
         for (int i = 0; i < 128; i++) {
             if (i > 0 && i % cols != 0) ImGui.sameLine(0.0f, spacing);
-            int color = floorColor(cache, i, underlay, underlay ? 0xFF333333 : 0xFF4A4A4A);
+            int encoded = FloorId.encode(i);
+            int color = floorColor(cache, encoded, underlay, underlay ? 0xFF333333 : 0xFF4A4A4A);
             float sx = ImGui.getCursorScreenPos().x;
             float sy = ImGui.getCursorScreenPos().y;
             draw.addRectFilled(sx, sy, sx + size, sy + size, color);
             int selected = underlay ? state.underlayId() : state.overlayId();
-            draw.addRect(sx - (i == selected ? 1 : 0), sy - (i == selected ? 1 : 0),
-                    sx + size + (i == selected ? 1 : 0), sy + size + (i == selected ? 1 : 0),
-                    i == selected ? 0xFFFFFFFF : 0xFF222222, 0.0f, 0, i == selected ? 2.0f : 1.0f);
+            boolean isSelected = encoded == selected;
+            draw.addRect(sx - (isSelected ? 1 : 0), sy - (isSelected ? 1 : 0),
+                    sx + size + (isSelected ? 1 : 0), sy + size + (isSelected ? 1 : 0),
+                    isSelected ? 0xFFFFFFFF : 0xFF222222, 0.0f, 0, isSelected ? 2.0f : 1.0f);
             if (ImGui.invisibleButton((underlay ? "und-" : "ovr-") + i, size, size)) {
                 if (underlay) {
-                    state.setUnderlayId(i); state.setApplyUnderlay(true);
+                    state.setUnderlayId(encoded); state.setApplyUnderlay(true);
                 } else {
-                    state.setOverlayId(i); state.setApplyOverlay(true);
+                    state.setOverlayId(encoded); state.setApplyOverlay(true);
                 }
             }
             if (ImGui.isItemHovered()) ImGui.setTooltip((underlay ? "Underlay #" : "Overlay #") + i);

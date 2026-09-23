@@ -1,5 +1,6 @@
 package com.rspsi.studio.ui.hud;
 
+import com.rspsi.editor.model.FloorId;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.brush.BrushAwareTool;
 import com.rspsi.editor.brush.BrushCapability;
@@ -547,7 +548,7 @@ public final class BrushSettingsHud implements StudioPlugin {
             ImGui.openPopup(popupId);
         }
         if (ImGui.isItemHovered()) {
-            ImGui.setTooltip((underlay ? "Underlay #" : "Overlay #") + id + " (Click to browse visual swatches)");
+            ImGui.setTooltip((underlay ? "Underlay #" : "Overlay #") + FloorId.definitionId(id) + " (Click to browse visual swatches)");
         }
     }
 
@@ -579,7 +580,7 @@ public final class BrushSettingsHud implements StudioPlugin {
                 ImGui.closeCurrentPopup();
             }
             if (ImGui.isItemHovered()) {
-                ImGui.setTooltip((underlay ? "Underlay #" : "Overlay #") + i);
+                ImGui.setTooltip((underlay ? "Underlay #" : "Overlay #") + FloorId.definitionId(i));
             }
         }
     }

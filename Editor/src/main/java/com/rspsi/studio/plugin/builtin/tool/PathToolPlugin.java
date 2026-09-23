@@ -1,5 +1,6 @@
 package com.rspsi.studio.plugin.builtin.tool;
 
+import com.rspsi.editor.model.FloorId;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.tool.SplinePathTool;
 import com.rspsi.editor.tool.spline.SplineBrushStyle;
@@ -209,7 +210,7 @@ public final class PathToolPlugin implements StudioToolPlugin {
             ImGui.openPopup("path_overlay_palette_popup");
         }
         if (ImGui.isItemHovered()) {
-            ImGui.setTooltip("Overlay #" + currentOverlay + " (Click to browse visual palette)");
+            ImGui.setTooltip("Overlay #" + FloorId.definitionId(currentOverlay) + " (Click to browse visual palette)");
         }
 
         ImGui.sameLine(0.0f, 6.0f);
@@ -351,7 +352,7 @@ public final class PathToolPlugin implements StudioToolPlugin {
                 ImGui.closeCurrentPopup();
             }
             if (ImGui.isItemHovered()) {
-                ImGui.setTooltip("Overlay #" + i);
+                ImGui.setTooltip("Overlay #" + FloorId.definitionId(i));
             }
         }
     }

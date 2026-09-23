@@ -5,6 +5,7 @@ import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.inspector.ObjectDefinitionSummary;
 import com.rspsi.editor.inspector.ObjectInspectorSnapshot;
+import com.rspsi.editor.model.FloorId;
 import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileCoordinate;
@@ -247,7 +248,10 @@ public final class TileBrushPanel implements StudioPanel {
 
     private void appendFloorDefinitionText(StringBuilder sb, LoadedOsrsCacheSession cache, int id, boolean underlay) {
         if (id <= 0 || cache == null) return;
-        var def = underlay ? cache.bundle().definitions().underlay(id) : cache.bundle().definitions().overlay(id);
+        int definitionId = FloorId.definitionId(id);
+        var def = underlay ? cache.bundle().definitions().underlay(definitionId)
+                : cache.bundle().definitions().overlay(definitionId);
+        sb.append(" (definition ").append(definitionId).append(')');
         if (def.isEmpty()) {
             sb.append(" (no definition found)");
             return;
@@ -315,13 +319,15 @@ public final class TileBrushPanel implements StudioPanel {
             ImGui.text(label + ": None");
             return;
         }
-        var def = underlay ? cache.bundle().definitions().underlay(id) : cache.bundle().definitions().overlay(id);
+        int definitionId = FloorId.definitionId(id);
+        var def = underlay ? cache.bundle().definitions().underlay(definitionId)
+                : cache.bundle().definitions().overlay(definitionId);
         if (def.isEmpty()) {
-            ImGui.textColored(0xFFEF4444, label + ": #" + id + "  (no definition found - dangling id)");
+            ImGui.textColored(0xFFEF4444, label + ": #" + definitionId + "  (no definition found - dangling id)");
             return;
         }
         FloorDefinitionView view = def.get();
-        ImGui.text(label + ": #" + id + "   rgb=0x" + Integer.toHexString(view.rgb() & 0xFFFFFF)
+        ImGui.text(label + ": #" + definitionId + "   rgb=0x" + Integer.toHexString(view.rgb() & 0xFFFFFF)
                 + "  hue=" + view.hue() + " sat=" + view.saturation() + " lum=" + view.luminance());
         if (!underlay) {
             ImGui.sameLine();
@@ -501,13 +507,13 @@ public final class TileBrushPanel implements StudioPanel {
 
         int underlayRgb = 0xFF2A2A2A;
         if (cache != null && snapshot.underlayId() > 0) {
-            var def = cache.bundle().definitions().underlay(snapshot.underlayId());
+            var def = cache.bundle().definitions().underlay(FloorId.definitionId(snapshot.underlayId()));
             if (def.isPresent()) underlayRgb = floorDisplayRgb(def.get());
         }
 
         int overlayRgb = 0xFF4A4A4A;
         if (cache != null && snapshot.overlayId() > 0) {
-            var def = cache.bundle().definitions().overlay(snapshot.overlayId());
+            var def = cache.bundle().definitions().overlay(FloorId.definitionId(snapshot.overlayId()));
             if (def.isPresent()) overlayRgb = floorDisplayRgb(def.get());
         }
 
@@ -527,7 +533,7 @@ public final class TileBrushPanel implements StudioPanel {
         }
 
         draw.addRect(x, y, x + size, y + size, toDrawListColor(0xFF64748B), 2.0f, 0, 1.5f);
-        draw.addText(x + size / 2.0f - 10.0f, y - 15.0f, toDrawListColor(0xFFE2E8F0), "N ↑");
+        draw.addText(x + size / 2.0f - 10.0f, y - 15.0f, toDrawListColor(0xFFE2E8F0), "N");
         ImGui.dummy(size, size);
     }
 
@@ -570,7 +576,7 @@ public final class TileBrushPanel implements StudioPanel {
         int shown = 0;
         for (var entry : counts.entrySet()) {
             int id = entry.getKey();
-            String tooltip = "#" + id + "  -  " + entry.getValue() + " tile(s)";
+            String tooltip = "#" + FloorId.definitionId(id) + "  -  " + entry.getValue() + " tile(s)";
             drawSwatch(cache, id, underlay, swatchSize, tooltip);
 
             shown++;
@@ -593,7 +599,9 @@ public final class TileBrushPanel implements StudioPanel {
         int rgb = 0xFF2A2A2A;
         int textureHandle = 0;
         if (cache != null && id > 0) {
-            var def = underlay ? cache.bundle().definitions().underlay(id) : cache.bundle().definitions().overlay(id);
+            int definitionId = FloorId.definitionId(id);
+            var def = underlay ? cache.bundle().definitions().underlay(definitionId)
+                    : cache.bundle().definitions().overlay(definitionId);
             if (def.isPresent()) {
                 rgb = floorDisplayRgb(def.get());
                 if (!underlay && def.get().texture() >= 0) {
