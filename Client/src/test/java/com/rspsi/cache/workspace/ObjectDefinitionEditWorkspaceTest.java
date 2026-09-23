@@ -115,6 +115,40 @@ class ObjectDefinitionEditWorkspaceTest {
 
 
     @Test
+    void failedRestoreLeavesWorkspaceUnboundAndExistingPreviewUntouched() {
+        FakeProvider provider = new FakeProvider();
+        ObjectDefinitionEditWorkspace workspace =
+                new ObjectDefinitionEditWorkspace(provider);
+        ObjectDefinitionEditTransaction transaction =
+                workspace.transaction(7).orElseThrow();
+        ObjectDefinitionRawView before = transaction.preview();
+        ObjectDefinitionRawView unsupported = new ObjectDefinitionRawView(
+                7,
+                List.of(new ObjectDefinitionRawView.Field(
+                        "name",
+                        "2",
+                        ObjectDefinitionRawView.ValueType.LIST,
+                        "[Published]")),
+                List.of());
+
+        IllegalArgumentException failure = assertThrows(
+                IllegalArgumentException.class,
+                () -> workspace.restorePublication(
+                        Path.of("build", "restored-output"),
+                        Map.of(7, unsupported)));
+
+        assertTrue(failure.getMessage().contains("unsupported editable value type"));
+        assertTrue(workspace.publicationTarget().isEmpty());
+        assertTrue(workspace.publishedSnapshots().isEmpty());
+        assertEquals(before, transaction.preview());
+        assertTrue(transaction.publishedPreview().isEmpty());
+        assertFalse(transaction.dirty());
+        assertEquals(2, provider.editCalls,
+                "restore should validate with a throwaway transaction before commit");
+    }
+
+
+    @Test
     void staleRestoreCannotReplacePublicationThatWonTheStartupRace() {
         FakeProvider provider = new FakeProvider();
         ObjectDefinitionEditWorkspace workspace =
