@@ -11,12 +11,15 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ObjectDefinitionEditWorkspaceTest {
 
@@ -62,6 +65,63 @@ class ObjectDefinitionEditWorkspaceTest {
         assertEquals(0, workspace.modifiedCount());
         assertEquals(1, workspace.unpublishedCount(),
                 "the selected output still needs the published edit reverted");
+    }
+
+
+    @Test
+    void restoresPublishedSnapshotLazilyAsTheCurrentPreview() {
+        FakeProvider provider = new FakeProvider();
+        ObjectDefinitionEditWorkspace workspace =
+                new ObjectDefinitionEditWorkspace(provider);
+        Path output = Path.of("build", "restored-output");
+        ObjectDefinitionRawView published = rawName("Published");
+
+        workspace.restorePublication(output, Map.of(7, published));
+
+        assertEquals(0, provider.editCalls,
+                "restoring provenance must not eagerly create edit transactions");
+        ObjectDefinitionEditTransaction transaction =
+                workspace.transaction(7).orElseThrow();
+
+        assertEquals(1, provider.editCalls);
+        assertEquals(published, transaction.preview());
+        assertEquals(published, transaction.publishedPreview().orElseThrow());
+        assertTrue(transaction.dirty(),
+                "the restored published preview still differs from the source");
+        assertFalse(transaction.hasUnpublishedChanges());
+        assertEquals(0, workspace.unpublishedCount());
+        assertEquals(Map.of(7, published), workspace.publishedSnapshots());
+    }
+
+    @Test
+    void restoreDoesNotOverwriteAnEditMadeBeforeHydrationCompletes() {
+        FakeProvider provider = new FakeProvider();
+        ObjectDefinitionEditWorkspace workspace =
+                new ObjectDefinitionEditWorkspace(provider);
+        ObjectDefinitionEditTransaction transaction =
+                workspace.transaction(7).orElseThrow();
+        transaction.setField(
+                "name", ObjectDefinitionEditValue.stringValue("User edit"));
+
+        ObjectDefinitionRawView published = rawName("Previously published");
+        workspace.restorePublication(
+                Path.of("build", "restored-output"),
+                Map.of(7, published));
+
+        assertEquals("User edit", transaction.preview().fields().get(0).value());
+        assertEquals(published, transaction.publishedPreview().orElseThrow());
+        assertTrue(transaction.hasUnpublishedChanges());
+    }
+
+    private static ObjectDefinitionRawView rawName(String name) {
+        return new ObjectDefinitionRawView(
+                7,
+                List.of(new ObjectDefinitionRawView.Field(
+                        "name",
+                        "2",
+                        ObjectDefinitionRawView.ValueType.STRING,
+                        name)),
+                List.of());
     }
 
     private static final class FakeProvider implements DefinitionProvider {
