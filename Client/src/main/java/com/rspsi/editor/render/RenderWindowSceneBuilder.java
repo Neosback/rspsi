@@ -216,7 +216,26 @@ public final class RenderWindowSceneBuilder {
             }
         }
         if (changedAddresses.isEmpty()) {
-            return new AnimationRefreshResult(previous, Set.of(), 0, rebuiltTiles, false);
+            // Presentation is unchanged, but callers historically observe the
+            // refreshed ModelAnimationState.clientCycle as diagnostic timing
+            // state. Publish the rebuilt active-tile packets without marking
+            // any GPU zone dirty.
+            RenderWindowScene refreshed = new RenderWindowScene(
+                    previous.window(),
+                    previous.terrainMeshes(),
+                    previous.terrainMaterials(),
+                    previous.terrainAppearances(),
+                    previous.terrainLighting(),
+                    previous.terrainPackets(),
+                    nextModels,
+                    previous.tileFlags(),
+                    previous.lightingProfile(),
+                    previous.collision(),
+                    previous.objects(),
+                    previous.bridges(),
+                    previous.textures());
+            return new AnimationRefreshResult(
+                    refreshed, Set.of(), 0, rebuiltTiles, false);
         }
 
         Set<WorldZoneCoordinate> dirtyZones = changedAddresses.stream()
