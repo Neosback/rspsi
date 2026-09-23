@@ -80,6 +80,7 @@ public record SceneContract(
         values.put("getMapRegions", ApiClass.SEMANTIC);
         values.put("getMinLevel", ApiClass.SEMANTIC);
         values.put("getOverlayIds", ApiClass.SEMANTIC);
+        values.put("getRoofs", ApiClass.SEMANTIC);
         values.put("getTileHeights", ApiClass.SEMANTIC);
         values.put("getTiles", ApiClass.SEMANTIC);
         values.put("getTileShapes", ApiClass.SEMANTIC);
@@ -96,7 +97,6 @@ public record SceneContract(
 
         values.put("getExtendedTiles", ApiClass.DEFERRED);
         values.put("getExtendedTileSettings", ApiClass.DEFERRED);
-        values.put("getRoofs", ApiClass.DEFERRED);
 
         return Map.copyOf(values);
     }

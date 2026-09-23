@@ -19,7 +19,8 @@ public record SceneVisibilityPolicy(
         PlaneSelection planeSelection,
         int selectedPlane,
         boolean hideBridgeUpperGeometry,
-        boolean hideRoofGeometry
+        boolean hideRoofGeometry,
+        RoofRemovalState roofRemovalState
 ) {
     public enum PlaneSelection {
         ALL,
@@ -30,24 +31,37 @@ public record SceneVisibilityPolicy(
 
     public SceneVisibilityPolicy {
         planeSelection = Objects.requireNonNull(planeSelection, "planeSelection");
+        roofRemovalState = Objects.requireNonNull(roofRemovalState, "roofRemovalState");
         if (selectedPlane < 0 || selectedPlane > 3) {
             throw new IllegalArgumentException("Selected plane must be between 0 and 3");
         }
     }
 
+    /** Compatibility constructor before frame-time roof removal state was explicit. */
+    public SceneVisibilityPolicy(PlaneSelection planeSelection,
+                                 int selectedPlane,
+                                 boolean hideBridgeUpperGeometry,
+                                 boolean hideRoofGeometry) {
+        this(planeSelection, selectedPlane, hideBridgeUpperGeometry, hideRoofGeometry,
+                RoofRemovalState.disabled());
+    }
+
     /** Editor default: preserve every loaded plane and diagnostic surface. */
     public static SceneVisibilityPolicy editor() {
-        return new SceneVisibilityPolicy(PlaneSelection.ALL, 0, false, false);
+        return new SceneVisibilityPolicy(PlaneSelection.ALL, 0, false, false,
+                RoofRemovalState.disabled());
     }
 
     /** Client-like projection keyed by the tile's authored scene plane. */
     public static SceneVisibilityPolicy authoredPlane(int plane) {
-        return new SceneVisibilityPolicy(PlaneSelection.AUTHORED_PLANE, plane, false, false);
+        return new SceneVisibilityPolicy(PlaneSelection.AUTHORED_PLANE, plane, false, false,
+                RoofRemovalState.disabled());
     }
 
     /** Diagnostic projection keyed by bridge-resolved current scene plane. */
     public static SceneVisibilityPolicy effectivePlane(int plane) {
-        return new SceneVisibilityPolicy(PlaneSelection.EFFECTIVE_PLANE, plane, false, false);
+        return new SceneVisibilityPolicy(PlaneSelection.EFFECTIVE_PLANE, plane, false, false,
+                RoofRemovalState.disabled());
     }
 
     /**
@@ -56,18 +70,33 @@ public record SceneVisibilityPolicy(
      * when their physical/cull level is at or below it.
      */
     public static SceneVisibilityPolicy clientTraversal(int activePlane) {
-        return new SceneVisibilityPolicy(PlaneSelection.CLIENT_TRAVERSAL, activePlane, false, false);
+        return new SceneVisibilityPolicy(PlaneSelection.CLIENT_TRAVERSAL, activePlane, false, false,
+                RoofRemovalState.disabled());
     }
 
     public SceneVisibilityPolicy withBridgeUpperGeometry(boolean hidden) {
-        return new SceneVisibilityPolicy(planeSelection, selectedPlane, hidden, hideRoofGeometry);
+        return new SceneVisibilityPolicy(planeSelection, selectedPlane, hidden, hideRoofGeometry,
+                roofRemovalState);
     }
 
     public SceneVisibilityPolicy withRoofGeometry(boolean hidden) {
-        return new SceneVisibilityPolicy(planeSelection, selectedPlane, hideBridgeUpperGeometry, hidden);
+        return new SceneVisibilityPolicy(planeSelection, selectedPlane, hideBridgeUpperGeometry, hidden,
+                roofRemovalState);
     }
 
-    /** Returns whether one immutable tile projection should be submitted. */
+    public SceneVisibilityPolicy withRoofRemovalState(RoofRemovalState state) {
+        return new SceneVisibilityPolicy(planeSelection, selectedPlane, hideBridgeUpperGeometry,
+                hideRoofGeometry, Objects.requireNonNull(state, "roofRemovalState"));
+    }
+
+    /**
+     * Context-free tile gate used by editor/debug callers.
+     *
+     * <p>Connected roof removal needs neighbouring tile context, so when that
+     * mode is enabled this method intentionally leaves upper physical levels
+     * eligible; {@link #apply(GpuScenePacket)} performs the exact region-aware
+     * decision.</p>
+     */
     public boolean includes(SceneTileSnapshot tile) {
         Objects.requireNonNull(tile, "tile");
         if (planeSelection == PlaneSelection.AUTHORED_PLANE
@@ -79,7 +108,8 @@ public record SceneVisibilityPolicy(
             return false;
         }
         if (planeSelection == PlaneSelection.CLIENT_TRAVERSAL
-                && tile.planeCullLevel() > selectedPlane) {
+                && tile.planeCullLevel() > selectedPlane
+                && !roofRemovalState.enabled()) {
             return false;
         }
         if (hideBridgeUpperGeometry && tile.visibleBelow()) {
@@ -96,9 +126,18 @@ public record SceneVisibilityPolicy(
         // tile creates the characteristic holes seen around castle roofs and
         // bridge approaches.
         SceneContract contract = packet.window().contract();
+        RoofRegionMap roofRegions = null;
+        java.util.Set<Integer> removedRoofRegions = java.util.Set.of();
+        if (planeSelection == PlaneSelection.CLIENT_TRAVERSAL && roofRemovalState.enabled()) {
+            roofRegions = RoofRegionMap.build(packet.window(), packet.tiles());
+            removedRoofRegions = roofRemovalState.selectedRegionIds(roofRegions, selectedPlane);
+        }
+        RoofRegionMap resolvedRoofRegions = roofRegions;
+        java.util.Set<Integer> resolvedRemovedRoofRegions = removedRoofRegions;
         List<SceneTileSnapshot> visible = packet.tiles().stream()
                 .filter(tile -> includesSceneMinimum(contract, tile))
-                .filter(this::includesPlaneAndBridge)
+                .filter(tile -> includesPlaneAndBridge(
+                        tile, resolvedRoofRegions, resolvedRemovedRoofRegions))
                 .map(this::filterRoofGeometry)
                 .toList();
         if (visible.equals(packet.tiles())) return packet;
@@ -114,7 +153,9 @@ public record SceneVisibilityPolicy(
                 || contract.rendersScenePlane(tile.effectivePlane());
     }
 
-    private boolean includesPlaneAndBridge(SceneTileSnapshot tile) {
+    private boolean includesPlaneAndBridge(SceneTileSnapshot tile,
+                                                   RoofRegionMap roofRegions,
+                                                   java.util.Set<Integer> removedRoofRegions) {
         if (planeSelection == PlaneSelection.AUTHORED_PLANE
                 && tile.authoredPlane() != selectedPlane) {
             return false;
@@ -125,7 +166,22 @@ public record SceneVisibilityPolicy(
         }
         if (planeSelection == PlaneSelection.CLIENT_TRAVERSAL
                 && tile.planeCullLevel() > selectedPlane) {
-            return false;
+            if (!roofRemovalState.enabled()) {
+                return false;
+            }
+
+            // With RuneLite roof-removal enabled, the vanilla "all physical
+            // levels above the active plane are hidden" rule is replaced by
+            // connected-region selection. The region lookup always comes from
+            // the active plane at this tile's x/y, exactly like
+            // RSSceneMixin.updateVisibleTilesAndOccluders.
+            int regionId = roofRegions == null ? 0 : roofRegions.regionIdWorld(
+                    selectedPlane,
+                    tile.worldAddress().worldX(),
+                    tile.worldAddress().worldY());
+            if (regionId != 0 && removedRoofRegions.contains(regionId)) {
+                return false;
+            }
         }
         return !hideBridgeUpperGeometry || !tile.visibleBelow();
     }
