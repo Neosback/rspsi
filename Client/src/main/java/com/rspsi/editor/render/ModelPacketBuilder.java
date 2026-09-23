@@ -69,6 +69,36 @@ public final class ModelPacketBuilder {
         return List.copyOf(mergeNormals(packets));
     }
 
+    /**
+     * Rebuilds model packets anchored on one document tile.
+     *
+     * <p>This preserves the scene traversal semantics for multi-renderable
+     * locations such as shape-8 wall decorations and duplicate object
+     * occurrences. Cross-object normal merging is only complete for objects
+     * anchored on this tile; callers that depend on scene-wide
+     * {@code mergeNormals} must conservatively fall back to a full scene
+     * build.</p>
+     */
+    public List<ModelRenderPacket> buildTile(WorldDocument document,
+                                             TileCoordinate coordinate,
+                                             int clientCycle) {
+        Objects.requireNonNull(document, "document");
+        Objects.requireNonNull(coordinate, "coordinate");
+        if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
+        if (!document.contains(coordinate.plane(), coordinate.x(), coordinate.y())) {
+            throw new IllegalArgumentException("Tile is outside the model document: " + coordinate);
+        }
+
+        List<ModelRenderPacket> packets = new ArrayList<>();
+        java.util.Map<WorldObject, Integer> occurrences = new java.util.HashMap<>();
+        for (WorldObject object : document.tile(coordinate).objects()) {
+            int occurrence = occurrences.getOrDefault(object, 0);
+            occurrences.put(object, occurrence + 1);
+            packets.addAll(buildScenePackets(object, document, clientCycle, occurrence));
+        }
+        return List.copyOf(mergeNormals(packets));
+    }
+
     /** Builds one packet when its definition and at least one model are available. */
     public Optional<ModelRenderPacket> build(WorldObject object, WorldDocument document) {
         return build(object, document, 0);
