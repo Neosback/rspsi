@@ -161,23 +161,43 @@ public final class ModelPacketBuilder {
                 definitionResolution.placedDefinition().orElseThrow();
         ObjectDefinitionView objectDefinition =
                 definitionResolution.displayDefinition().orElseThrow();
-        // RuneLite transforms ObjectComposition before model construction, so
-        // scale/recolor/animation/contour metadata belongs to the resolved
-        // display definition, not the placed multiloc shell.
+
+        ObjectAppearanceView placementAppearance =
+                definitions.objectAppearance(placementDefinition.id())
+                        .orElseGet(ObjectAppearanceView::empty);
         ObjectAppearanceView appearance = definitions.objectAppearance(objectDefinition.id())
                 .orElseGet(ObjectAppearanceView::empty);
-        ResolvedAnimation animation = resolveAnimation(appearance.animationId(), clientCycle);
-        int decorDisplacement = wallDecorationDisplacement(object, appearance, document);
-        // Scene occupancy belongs to the placed/base loc definition. A multiloc may
-        // resolve to another definition for its visible model, but the client creates
-        // the GameObject start/end tile rectangle before that runtime transform.
-        int footprintWidth = object.rotation() % 2 == 0
+
+        // FriendSystem.addObjects creates DynamicObject with the PLACED
+        // definition's animation id. DynamicObject.getModel() then resolves
+        // the transform and invokes getModelDynamic() on the DISPLAY
+        // definition, so scale/recolor/retexture/contour come from the child
+        // while animation state remains sourced from the placed definition.
+        int animationId = placementAppearance.animationId();
+        ResolvedAnimation animation = resolveAnimation(animationId, clientCycle);
+        int decorDisplacement =
+                wallDecorationDisplacement(object, placementAppearance, document);
+
+        // The scene GameObject/collision rectangle is created by addObjects()
+        // from the placed definition before DynamicObject resolves a transform.
+        int sceneFootprintWidth = object.rotation() % 2 == 0
                 ? placementDefinition.width() : placementDefinition.length();
-        int footprintLength = object.rotation() % 2 == 0
+        int sceneFootprintLength = object.rotation() % 2 == 0
                 ? placementDefinition.length() : placementDefinition.width();
-        return new ResolvedModelBuild(objectDefinition, appearance, animation.frame(),
-                animation.cachedSkeletal(), animation.skeleton(), animation.state(),
-                decorDisplacement, footprintWidth, footprintLength);
+
+        // DynamicObject.getModel() resolves the transformed definition first,
+        // then uses THAT definition's rotated size to compute model centre and
+        // sampled placement height. Keep this distinct from scene occupancy.
+        int modelFootprintWidth = object.rotation() % 2 == 0
+                ? objectDefinition.width() : objectDefinition.length();
+        int modelFootprintLength = object.rotation() % 2 == 0
+                ? objectDefinition.length() : objectDefinition.width();
+
+        return new ResolvedModelBuild(objectDefinition, appearance, animationId,
+                animation.frame(), animation.cachedSkeletal(), animation.skeleton(),
+                animation.state(), decorDisplacement,
+                sceneFootprintWidth, sceneFootprintLength,
+                modelFootprintWidth, modelFootprintLength);
     }
 
     private Optional<ModelRenderPacket> buildResolvedPacket(
@@ -224,7 +244,7 @@ public final class ModelPacketBuilder {
                 parts.animationTransformed |= animatedGeometry != baseGeometry;
                 int variantStart = parts.vertices.size();
                 append(parts, object, resolved.appearance(), animatedGeometry, document,
-                        variant, resolved.footprintWidth(), resolved.footprintLength());
+                        variant, resolved.modelFootprintWidth(), resolved.modelFootprintLength());
                 if (variant.sourceType() == 2 && parts.vertices.size() > variantStart) {
                     // TSPS keeps the two type-2 L-wall models separate until
                     // ModelData.mergeNormals(model0, model1, 0, 0, 0, false).
@@ -249,13 +269,13 @@ public final class ModelPacketBuilder {
         GameObjectSceneMetadata sceneMetadata = object.category()
                 == com.rspsi.editor.model.ObjectCategory.GROUND
                 ? GameObjectSceneMetadata.of(object.x(), object.y(),
-                        resolved.footprintWidth(), resolved.footprintLength(),
+                        resolved.sceneFootprintWidth(), resolved.sceneFootprintLength(),
                         object.rotation(), modelDrawOrientation)
                 : GameObjectSceneMetadata.none();
         SceneObjectIdentity sceneObjectIdentity = SceneObjectIdentity.of(
-                object, resolved.footprintWidth(), resolved.footprintLength(), occurrence);
+                object, resolved.sceneFootprintWidth(), resolved.sceneFootprintLength(), occurrence);
         int placementHeight = objectCenterHeight(
-                document, object, resolved.footprintWidth(), resolved.footprintLength());
+                document, object, resolved.modelFootprintWidth(), resolved.modelFootprintLength());
         ModelContourContract contourContract = resolved.appearance().contourGroundType() >= 0
                 ? ModelContourContract.of(
                         resolved.appearance().contourGroundType(),
@@ -265,7 +285,7 @@ public final class ModelPacketBuilder {
         ModelRenderPacket packet = new ModelRenderPacket(
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
-                resolved.appearance().animationId(), bounds[0], bounds[1], bounds[2],
+                resolved.animationId(), bounds[0], bounds[1], bounds[2],
                 bounds[3], bounds[4], bounds[5], resolved.animationState().active(), false,
                 placementHeight,
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
@@ -280,13 +300,16 @@ public final class ModelPacketBuilder {
 
     private record ResolvedModelBuild(ObjectDefinitionView objectDefinition,
                                       ObjectAppearanceView appearance,
+                                      int animationId,
                                       Optional<AnimationFrameView> animation,
                                       Optional<CachedSkeletalAnimationView> cachedSkeletal,
                                       Optional<SkeletonDefinitionView> animationSkeleton,
                                       ModelAnimationState animationState,
                                       int decorDisplacement,
-                                      int footprintWidth,
-                                      int footprintLength) {
+                                      int sceneFootprintWidth,
+                                      int sceneFootprintLength,
+                                      int modelFootprintWidth,
+                                      int modelFootprintLength) {
     }
 
     private record ResolvedAnimation(Optional<AnimationFrameView> frame,
