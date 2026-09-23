@@ -286,13 +286,16 @@ The first verified Studio publishing path is now implemented with these invarian
 
 - `LoadedOsrsCacheSession` owns a cache-scoped `ObjectDefinitionEditWorkspace`; UI panels no longer own transaction lifetime.
 - `dirty()` means the preview differs from the immutable read-only source.
-- `hasUnpublishedChanges()` separately means the current preview is not durable in either the source or a successfully-built output snapshot.
-- Publishing records the exact decoded preview that was written; it does not reset the transaction, so normal `EditorCommand` undo/redo remains valid.
+- `hasUnpublishedChanges()` separately means the current preview differs from the last successfully-published output baseline. Before the first publish, the immutable source is the baseline.
+- Publishing records the exact decoded preview that was written; it does not reset the transaction, so normal `EditorCommand` undo/redo remains valid. Undoing a published edit back to the source value therefore becomes an unpublished output change until that reversion is published.
 - Output builds snapshot an immutable `BuildPlan` before filesystem work begins. Edits made while a build runs cannot alter the bytes in that build and remain unpublished afterward.
-- Output creation remains copy-on-build and create-only: source cache -> staging clone -> validated object payload writes -> flush -> read-only reopen -> byte/semantic/canonical verification -> publish staging directory.
+- New output creation remains copy-on-build: source cache -> staging clone -> validated object payload writes -> flush -> read-only reopen -> byte/semantic/canonical verification -> publish staging directory.
+- An explicitly-selected existing output can be updated transactionally: verify its edited definitions against the expected prior published snapshots -> clone the existing output to staging -> write/verify there -> move the old output to a rollback sibling -> publish the verified staging directory -> remove the rollback copy.
+- A stale or unrelated existing output is rejected before replacement when an edited definition does not match its expected publication baseline.
+- Already-published definitions are excluded from new build plans; only unpublished snapshots are persisted.
 - Studio close/dirty gating consults the cache-scoped workspace as well as the current map session, so changing regions cannot hide unpublished definition edits.
 
-The next persistence extension should update an explicitly-selected existing output cache transactionally rather than silently making the source writable. It should preserve the same immutable planning and verification boundary.
+The next persistence work should focus on durable project/output provenance across Studio restarts and then generalize the same transactional build model beyond object definitions.
 
 ### Phase C: broader content studio
 
