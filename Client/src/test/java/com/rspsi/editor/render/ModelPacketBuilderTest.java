@@ -156,6 +156,17 @@ class ModelPacketBuilderTest {
     }
 
     @Test
+    void texturedFlatFaceUsesClientFlatLightnessAndMinusOneSentinel() {
+        ModelTriangle face = colorParityPacket(1, 9, 0).triangles().get(0);
+
+        assertEquals(0x3456, face.unlitColor());
+        assertEquals(72, face.colorA());
+        assertEquals(72, face.colorB());
+        assertEquals(-1, face.colorC());
+        assertEquals(9, face.textureId());
+    }
+
+    @Test
     void retainsAccumulatedClientNormalMagnitudeForSmoothFaces() {
         WorldDocument document = new WorldDocument(1, 1, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
@@ -195,6 +206,17 @@ class ModelPacketBuilderTest {
         ModelRenderPacket packet = singleFacePacket(-128);
 
         assertEquals(128, packet.triangles().get(0).alpha());
+        assertTrue(packet.opaqueTriangleIndices().isEmpty());
+        assertEquals(List.of(0), packet.transparentTriangleIndices());
+    }
+
+    @Test
+    void unsigned254AlphaIsNotMistakenForTheSignedMinusTwoSentinel() {
+        ModelRenderPacket packet = singleFacePacket(254);
+        ModelTriangle face = packet.triangles().get(0);
+
+        assertEquals(254, face.alpha());
+        assertEquals(0, face.renderType());
         assertTrue(packet.opaqueTriangleIndices().isEmpty());
         assertEquals(List.of(0), packet.transparentTriangleIndices());
     }
