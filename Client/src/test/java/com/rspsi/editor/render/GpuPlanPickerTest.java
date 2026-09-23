@@ -162,13 +162,13 @@ class GpuPlanPickerTest {
                 contour, identity, 64, 0, 0);
         GpuUploadPlan plan = new GpuUploadPlan(
                 List.of(
-                        vertex(44, -20, 100, 0x1200),
-                        vertex(84, -20, 100, 0x1200),
-                        vertex(64, 20, 100, 0x1200)),
+                        vertex(44, 44, 100, 0x1200),
+                        vertex(84, 44, 100, 0x1200),
+                        vertex(64, 84, 100, 0x1200)),
                 List.of(0, 1, 2), List.of(command), List.of(), Map.of(), "contour-pick");
 
         PickResult result = new GpuPlanPicker().pick(plan,
-                new CameraState(64, 0, 0, 0, 0),
+                new CameraState(64, 64, 0, 0, 0),
                 100, 100, 50, 50).orElseThrow();
 
         assertTrue(result.hasContourMetadata());
