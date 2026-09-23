@@ -683,24 +683,43 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private void renderClosePrompt() {
-        if (closePrompt) ImGui.openPopup("Unsaved map changes##dashboard");
-        if (!ImGui.beginPopupModal("Unsaved map changes##dashboard")) return;
-        ImGui.textWrapped("This map has unsaved changes. Save before closing Map Studio?");
-        if (ImGui.button("Save")) {
+        if (closePrompt) ImGui.openPopup("Unsaved Studio changes##dashboard");
+        if (!ImGui.beginPopupModal("Unsaved Studio changes##dashboard")) return;
+
+        EditorSession session = loadedScene == null ? null : loadedScene.session();
+        boolean externalDirty = session != null && session.hasUnsavedExternalState();
+        if (externalDirty) {
+            ImGui.textWrapped(
+                    "This Studio session contains in-memory definition edits. "
+                            + "Map Save does not write those definitions yet. "
+                            + "Save Map can persist map changes only; Discard & Close "
+                            + "will lose the definition preview.");
+        } else {
+            ImGui.textWrapped("This map has unsaved changes. Save before closing Map Studio?");
+        }
+
+        boolean canSaveMap = session != null
+                && session.canSave()
+                && session.isSessionSaveDirty();
+        ImGui.beginDisabled(!canSaveMap);
+        if (ImGui.button(externalDirty ? "Save Map" : "Save")) {
             try {
-                if (loadedScene == null || !loadedScene.session().canSave()) {
-                    throw new IllegalStateException("This map session is read-only");
+                session.save();
+                if (session.hasUnsavedExternalState()) {
+                    sceneStatus = "Map changes saved. Definition edits remain in-memory only.";
+                } else {
+                    ImGui.closeCurrentPopup();
+                    closeMapEditorTab();
                 }
-                loadedScene.session().save();
-                ImGui.closeCurrentPopup();
-                closeMapEditorTab();
             } catch (RuntimeException failure) {
                 sceneStatus = "Save failed: " + rootMessage(failure);
                 notifications.error("Map save failed", sceneStatus);
             }
         }
+        ImGui.endDisabled();
+
         ImGui.sameLine();
-        if (ImGui.button("Discard")) {
+        if (ImGui.button(externalDirty ? "Discard & Close" : "Discard")) {
             ImGui.closeCurrentPopup();
             closeMapEditorTab();
         }

@@ -9,14 +9,26 @@ import java.util.Set;
 /** Non-UI undo/redo history. The cursor is also used for dirty-state tracking. */
 public final class CommandHistory {
     private final List<EditorCommand> commands = new ArrayList<>();
+    // One token per history position, including position zero. A session-save
+    // command creates a new token; an external transaction command carries the
+    // current token forward. This keeps save-dirty checks O(1) and still
+    // distinguishes replacement branches that happen to share a cursor index.
+    private final List<Long> sessionSaveStateTokens = new ArrayList<>(List.of(0L));
+    private long nextSessionSaveStateToken;
     private int cursor;
 
     public void execute(EditorCommand command, EditorSession session) {
         command.apply(session);
         while (commands.size() > cursor) {
             commands.remove(commands.size() - 1);
+            sessionSaveStateTokens.remove(sessionSaveStateTokens.size() - 1);
         }
         commands.add(command);
+        long currentToken = sessionSaveStateTokens.get(cursor);
+        long nextToken = command.savedBySessionSave()
+                ? ++nextSessionSaveStateToken
+                : currentToken;
+        sessionSaveStateTokens.add(nextToken);
         cursor++;
     }
 
@@ -128,6 +140,14 @@ public final class CommandHistory {
 
     public boolean canRedo() {
         return cursor < commands.size();
+    }
+
+    /**
+     * Identity token for the currently applied state that is persisted by the
+     * normal {@link EditorSession} save handler.
+     */
+    public long sessionSaveStateToken() {
+        return sessionSaveStateTokens.get(cursor);
     }
 
     EditorCommand previousCommand() {

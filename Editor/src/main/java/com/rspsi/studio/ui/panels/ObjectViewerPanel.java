@@ -1,8 +1,11 @@
 package com.rspsi.studio.ui.panels;
 
+import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
+import com.rspsi.cache.definition.ObjectDefinitionEditValue;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.editor.ObjectDefinitionEditCommand;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.selection.ObjectSelection;
 import com.rspsi.editor.selection.ObjectSetSelection;
@@ -27,7 +30,11 @@ import imgui.type.ImString;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -47,6 +54,19 @@ public final class ObjectViewerPanel implements StudioPanel {
     private final ImInt selectedObjectId = new ImInt(-1);
     private final ImInt objectType = new ImInt(10);
     private final ImInt objectRotation = new ImInt(0);
+
+    // Definition editing stays isolated from the source cache. Transactions
+    // are retained while this cache session is active so switching between
+    // objects does not discard in-memory edits or break history references.
+    private LoadedOsrsCacheSession definitionEditCache;
+    private final Map<Integer, ObjectDefinitionEditTransaction> definitionEdits =
+            new HashMap<>();
+    private final Map<String, ScalarEditState> scalarEditStates = new HashMap<>();
+    private final ImInt newParamId = new ImInt(0);
+    private final ImInt newParamType = new ImInt(0);
+    private final ImString newParamValue = new ImString(512);
+    private String definitionEditStatus = "";
+    private int lastPropertiesObjectId = Integer.MIN_VALUE;
 
     private final ObjectPreviewRenderer previewRenderer = new ObjectPreviewRenderer();
     private float previewYaw = (float) Math.toRadians(200.0);
@@ -74,6 +94,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             "22 - Floor decor"
     };
     private static final String[] ROTATIONS = {"West (0)", "North (1)", "East (2)", "South (3)"};
+    private static final String[] PARAM_TYPES = {"String", "Int", "Long"};
 
     @Override
     public String id() {
@@ -110,6 +131,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         LoadedOsrsCacheSession cache = context.cache();
         SettingsStore settings = context.settings();
 
+        syncDefinitionEditCache(cache);
         syncFromViewportPick(context);
 
         // 1. Sub-tabs at top: [Viewer] [Properties]. The active tab reads as
@@ -439,6 +461,11 @@ public final class ObjectViewerPanel implements StudioPanel {
                                               SettingsStore settings) {
         ImGui.inputInt("Object ID##prop-obj-id", selectedObjectId);
         int id = selectedObjectId.get();
+        if (id != lastPropertiesObjectId) {
+            scalarEditStates.clear();
+            definitionEditStatus = "";
+            lastPropertiesObjectId = id;
+        }
 
         if (cache == null) {
             ImGui.textDisabled("Load an OSRS cache to inspect object definitions.");
@@ -447,29 +474,350 @@ public final class ObjectViewerPanel implements StudioPanel {
 
         var definitions = cache.bundle().definitions();
         definitions.object(id).ifPresentOrElse(def -> {
+            ObjectDefinitionEditTransaction transaction = definitionTransaction(cache, id);
+            ObjectDefinitionRawView raw = transaction == null
+                    ? definitions.objectRaw(id).orElse(null)
+                    : displayPreview(transaction);
+
+            String previewName = rawField(raw, "name")
+                    .map(ObjectDefinitionRawView.Field::value)
+                    .orElse(def.name());
+            int previewSizeX = rawInt(raw, "sizeX").orElse(def.width());
+            int previewSizeY = rawInt(raw, "sizeY").orElse(def.length());
+
             ImGui.pushFont(StudioFonts.mono(), 0.0f);
-            ImGui.textColored(0xFF38BDF8, def.name().isEmpty() ? "(unnamed)" : def.name());
-            ImGui.text("Size:        " + def.width() + " x " + def.length());
+            ImGui.textColored(0xFF38BDF8,
+                    previewName == null || previewName.isEmpty() ? "(unnamed)" : previewName);
+            ImGui.text("Size:        " + previewSizeX + " x " + previewSizeY);
             ImGui.text("Interactive: " + def.interactive());
             ImGui.text("Models:      " + java.util.Arrays.toString(def.modelIds()));
             ImGui.text("Actions:     " + String.join(", ",
                     def.interactions().stream().filter(a -> !a.isBlank()).toList()));
             ImGui.popFont();
 
+            if (transaction != null) {
+                renderDefinitionTransactionEditor(context, transaction);
+                raw = displayPreview(transaction);
+            } else {
+                ImGui.separator();
+                ImGui.textDisabled(
+                        "This cache backend does not expose object-definition edit transactions.");
+            }
+
             ImGui.separator();
-            ImGui.textDisabled("Raw decoded definition");
+            ImGui.textDisabled(transaction == null
+                    ? "Raw decoded definition"
+                    : "In-memory decoded preview");
             ImGui.inputTextWithHint("##raw-object-filter",
                     StudioIcons.SEARCH + "  Filter field, opcode, param or value...",
                     rawPropertyFilter);
 
-            definitions.objectRaw(id).ifPresentOrElse(
-                    this::renderRawObjectDefinition,
-                    () -> ImGui.textDisabled(
-                            "Raw definition metadata is unavailable for this cache backend."));
+            if (raw == null) {
+                ImGui.textDisabled(
+                        "Raw definition metadata is unavailable for this cache backend.");
+            } else {
+                renderRawObjectDefinition(
+                        raw,
+                        transaction == null ? Set.of() : transaction.dirtyFields(),
+                        transaction == null ? Set.of() : transaction.dirtyParams());
+            }
         }, () -> ImGui.textDisabled("Object definition not found for ID " + id));
     }
 
-    private void renderRawObjectDefinition(ObjectDefinitionRawView raw) {
+    private void renderDefinitionTransactionEditor(StudioPanelContext context,
+                                                   ObjectDefinitionEditTransaction transaction) {
+        ImGui.pushID(transaction.id());
+        ImGui.separator();
+        ImGui.text("Definition edit transaction");
+        if (transaction.dirty()) {
+            ImGui.sameLine();
+            ImGui.textColored(0xFF38BDF8,
+                    "* " + transaction.dirtyFields().size() + " fields, "
+                            + transaction.dirtyParams().size() + " params modified");
+        } else {
+            ImGui.sameLine();
+            ImGui.textDisabled("clean");
+        }
+
+        ImGui.textDisabled(
+                "Preview only. The source cache remains read-only until an explicit output-cache phase.");
+
+        boolean canEdit = context.session() != null && context.session().canEdit();
+        if (!canEdit) {
+            ImGui.textDisabled("Open an editable Studio session to modify this transaction.");
+        }
+
+        ImGui.beginDisabled(!canEdit);
+        renderScalarField(context, transaction, "name", "Name");
+        renderScalarField(context, transaction, "sizeX", "Size X");
+        renderScalarField(context, transaction, "sizeY", "Size Y");
+        renderScalarField(context, transaction, "animationId", "Animation ID");
+        renderBooleanField(context, transaction, "isHollow", "Hollow");
+        renderBooleanField(context, transaction, "isRotated", "Rotated");
+        renderParamEditor(context, transaction);
+        ImGui.endDisabled();
+
+        if (ImGui.button("Validate encoded preview##definition-validate")) {
+            try {
+                byte[] encoded = transaction.encodeValidated();
+                definitionEditStatus = "Validated canonical OpenRune payload: "
+                        + encoded.length + " bytes";
+            } catch (RuntimeException failure) {
+                definitionEditStatus = "Validation failed: " + failureMessage(failure);
+            }
+        }
+
+        if (!definitionEditStatus.isBlank()) {
+            ImGui.textWrapped(definitionEditStatus);
+        }
+        ImGui.popID();
+    }
+
+    private void renderScalarField(StudioPanelContext context,
+                                   ObjectDefinitionEditTransaction transaction,
+                                   String fieldName,
+                                   String label) {
+        Optional<ObjectDefinitionRawView.Field> currentField =
+                rawField(transaction.preview(), fieldName);
+        if (currentField.isEmpty()) return;
+
+        ObjectDefinitionRawView.Field field = currentField.get();
+        if (!isTextEditableScalar(field.type())) return;
+
+        String key = "field:" + transaction.id() + ":" + fieldName;
+        ScalarEditState state = scalarEditStates.computeIfAbsent(
+                key, ignored -> new ScalarEditState());
+        if (!state.editing && !Objects.equals(state.syncedValue, field.value())) {
+            state.sync(field.value());
+        }
+
+        boolean dirty = transaction.dirtyFields().contains(fieldName);
+        ImGui.inputText(
+                (dirty ? "* " : "") + label + "##definition-" + fieldName,
+                state.input);
+        boolean activated = ImGui.isItemActivated();
+        boolean active = ImGui.isItemActive();
+        boolean deactivated = ImGui.isItemDeactivated();
+
+        if (activated) {
+            state.editing = true;
+            state.before = editValue(field);
+            state.error = "";
+        }
+
+        if (deactivated && state.editing) {
+            finishScalarFieldEdit(context, transaction, fieldName, field.type(), state);
+        } else if (state.editing && !active) {
+            // The widget can disappear while active when the panel/tab changes.
+            // No transaction mutation has happened yet, so cancel the orphaned
+            // edit buffer instead of leaving it stuck as an untracked change.
+            state.editing = false;
+            state.before = null;
+            state.sync(field.value());
+            state.error = "";
+        }
+
+        if (!state.error.isBlank()) {
+            ImGui.textColored(0xFF60A5FA, state.error);
+        }
+    }
+
+    private void finishScalarFieldEdit(StudioPanelContext context,
+                                       ObjectDefinitionEditTransaction transaction,
+                                       String fieldName,
+                                       ObjectDefinitionRawView.ValueType type,
+                                       ScalarEditState state) {
+        ObjectDefinitionEditValue before = state.before;
+        try {
+            ObjectDefinitionEditValue after = editValue(type, state.input.get());
+            if (!Objects.equals(before, after)) {
+                context.session().execute(ObjectDefinitionEditCommand.field(
+                        transaction, fieldName, before, after));
+                definitionEditStatus = "Updated " + fieldName + " in object "
+                        + transaction.id() + " preview.";
+            }
+            ObjectDefinitionRawView.Field canonical = rawField(
+                    transaction.preview(), fieldName).orElseThrow();
+            state.sync(canonical.value());
+            state.error = "";
+        } catch (RuntimeException failure) {
+            rawField(transaction.preview(), fieldName)
+                    .ifPresent(restored -> state.sync(restored.value()));
+            state.error = failureMessage(failure);
+            definitionEditStatus = "Rejected " + fieldName + " edit: " + state.error;
+        } finally {
+            state.editing = false;
+            state.before = null;
+        }
+    }
+
+    private void renderBooleanField(StudioPanelContext context,
+                                    ObjectDefinitionEditTransaction transaction,
+                                    String fieldName,
+                                    String label) {
+        Optional<ObjectDefinitionRawView.Field> currentField =
+                rawField(transaction.preview(), fieldName);
+        if (currentField.isEmpty()
+                || currentField.get().type() != ObjectDefinitionRawView.ValueType.BOOLEAN) {
+            return;
+        }
+
+        boolean current = Boolean.parseBoolean(currentField.get().value());
+        boolean dirty = transaction.dirtyFields().contains(fieldName);
+        if (ImGui.checkbox((dirty ? "* " : "") + label + "##definition-" + fieldName,
+                current)) {
+            ObjectDefinitionEditValue before =
+                    ObjectDefinitionEditValue.booleanValue(current);
+            ObjectDefinitionEditValue after =
+                    ObjectDefinitionEditValue.booleanValue(!current);
+            try {
+                context.session().execute(ObjectDefinitionEditCommand.field(
+                        transaction, fieldName, before, after));
+                definitionEditStatus = "Updated " + fieldName + " in object "
+                        + transaction.id() + " preview.";
+            } catch (RuntimeException failure) {
+                definitionEditStatus = "Rejected " + fieldName + " edit: "
+                        + failureMessage(failure);
+            }
+        }
+    }
+
+    private void renderParamEditor(StudioPanelContext context,
+                                   ObjectDefinitionEditTransaction transaction) {
+        ImGui.separator();
+        ObjectDefinitionRawView preview = transaction.preview();
+        ImGui.text("Opcode 249 parameters");
+        if (preview.params().isEmpty()) {
+            ImGui.textDisabled("No parameters in this definition.");
+        }
+
+        for (ObjectDefinitionRawView.Param param : preview.params()) {
+            ImGui.pushID(param.id());
+            ImGui.textDisabled("#" + param.id() + "  "
+                    + param.type().name().toLowerCase(java.util.Locale.ROOT));
+            ImGui.sameLine();
+            boolean removed = false;
+            if (ImGui.smallButton("Remove##definition-param")) {
+                try {
+                    context.session().execute(ObjectDefinitionEditCommand.param(
+                            transaction, param.id(), editValue(param), null));
+                    scalarEditStates.remove(paramStateKey(transaction.id(), param.id()));
+                    definitionEditStatus = "Removed param " + param.id()
+                            + " from object " + transaction.id() + " preview.";
+                    removed = true;
+                } catch (RuntimeException failure) {
+                    definitionEditStatus = "Param removal failed: "
+                            + failureMessage(failure);
+                }
+            }
+
+            if (!removed) {
+                renderParamValue(context, transaction, param);
+            }
+            ImGui.popID();
+        }
+
+        ImGui.separator();
+        ImGui.textDisabled("Add or replace parameter");
+        ImGui.inputInt("Param ID##definition-param-id", newParamId);
+        ImGui.combo("Type##definition-param-type", newParamType, PARAM_TYPES);
+        ImGui.inputText("Value##definition-param-value", newParamValue);
+        if (ImGui.button("Add / Replace##definition-param-add")) {
+            try {
+                int paramId = newParamId.get();
+                ObjectDefinitionEditValue after = editValue(
+                        paramType(newParamType.get()), newParamValue.get());
+                ObjectDefinitionEditValue before = transaction.preview().params().stream()
+                        .filter(param -> param.id() == paramId)
+                        .findFirst()
+                        .map(ObjectViewerPanel::editValue)
+                        .orElse(null);
+                if (!Objects.equals(before, after)) {
+                    context.session().execute(ObjectDefinitionEditCommand.param(
+                            transaction, paramId, before, after));
+                    scalarEditStates.remove(paramStateKey(transaction.id(), paramId));
+                    definitionEditStatus = (before == null ? "Added param " : "Replaced param ")
+                            + paramId + " in object " + transaction.id() + " preview.";
+                }
+            } catch (RuntimeException failure) {
+                definitionEditStatus = "Param edit failed: " + failureMessage(failure);
+            }
+        }
+    }
+
+    private void renderParamValue(StudioPanelContext context,
+                                  ObjectDefinitionEditTransaction transaction,
+                                  ObjectDefinitionRawView.Param param) {
+        if (param.type() != ObjectDefinitionRawView.ValueType.STRING
+                && param.type() != ObjectDefinitionRawView.ValueType.INTEGER
+                && param.type() != ObjectDefinitionRawView.ValueType.LONG) {
+            ImGui.textDisabled(compactRawValue(param.value()));
+            return;
+        }
+
+        String key = paramStateKey(transaction.id(), param.id());
+        ScalarEditState state = scalarEditStates.computeIfAbsent(
+                key, ignored -> new ScalarEditState());
+        if (!state.editing && !Objects.equals(state.syncedValue, param.value())) {
+            state.sync(param.value());
+        }
+
+        boolean dirty = transaction.dirtyParams().contains(param.id());
+        ImGui.inputText(
+                (dirty ? "* Value" : "Value") + "##definition-param-value",
+                state.input);
+        boolean activated = ImGui.isItemActivated();
+        boolean active = ImGui.isItemActive();
+        boolean deactivated = ImGui.isItemDeactivated();
+
+        if (activated) {
+            state.editing = true;
+            state.before = editValue(param);
+            state.error = "";
+        }
+
+        if (deactivated && state.editing) {
+            ObjectDefinitionEditValue before = state.before;
+            try {
+                ObjectDefinitionEditValue after =
+                        editValue(param.type(), state.input.get());
+                if (!Objects.equals(before, after)) {
+                    context.session().execute(ObjectDefinitionEditCommand.param(
+                            transaction, param.id(), before, after));
+                    definitionEditStatus = "Updated param " + param.id()
+                            + " in object " + transaction.id() + " preview.";
+                }
+                ObjectDefinitionEditValue canonical = transaction.preview().params().stream()
+                        .filter(candidate -> candidate.id() == param.id())
+                        .findFirst()
+                        .map(ObjectViewerPanel::editValue)
+                        .orElseThrow();
+                state.sync(canonical.value());
+                state.error = "";
+            } catch (RuntimeException failure) {
+                state.sync(before == null ? "" : before.value());
+                state.error = failureMessage(failure);
+                definitionEditStatus = "Rejected param " + param.id()
+                        + " edit: " + state.error;
+            } finally {
+                state.editing = false;
+                state.before = null;
+            }
+        } else if (state.editing && !active) {
+            state.editing = false;
+            state.before = null;
+            state.sync(param.value());
+            state.error = "";
+        }
+
+        if (!state.error.isBlank()) {
+            ImGui.textColored(0xFF60A5FA, state.error);
+        }
+    }
+
+    private void renderRawObjectDefinition(ObjectDefinitionRawView raw,
+                                           Set<String> dirtyFields,
+                                           Set<Integer> dirtyParams) {
         String filter = rawPropertyFilter.get().trim().toLowerCase(java.util.Locale.ROOT);
 
         ImGui.pushFont(StudioFonts.mono(), 0.0f);
@@ -483,7 +831,9 @@ public final class ObjectViewerPanel implements StudioPanel {
             }
             visibleFields++;
             String opcode = field.opcode().isBlank() ? "-" : field.opcode();
-            ImGui.text(formatRawRow(opcode, field.name(),
+            String name = dirtyFields.contains(field.name())
+                    ? "* " + field.name() : field.name();
+            ImGui.text(formatRawRow(opcode, name,
                     field.type().name().toLowerCase(java.util.Locale.ROOT),
                     compactRawValue(field.value())));
         }
@@ -498,9 +848,11 @@ public final class ObjectViewerPanel implements StudioPanel {
                 continue;
             }
             visibleParams++;
+            String name = (dirtyParams.contains(param.id()) ? "* " : "")
+                    + "param[" + param.id() + "]";
             ImGui.text(formatRawRow(
                     "249",
-                    "param[" + param.id() + "]",
+                    name,
                     param.type().name().toLowerCase(java.util.Locale.ROOT),
                     compactRawValue(param.value())));
         }
@@ -511,6 +863,130 @@ public final class ObjectViewerPanel implements StudioPanel {
             ImGui.textDisabled("No opcode 249 parameters.");
         }
         ImGui.popFont();
+    }
+
+    private void syncDefinitionEditCache(LoadedOsrsCacheSession cache) {
+        if (definitionEditCache == cache) return;
+        definitionEditCache = cache;
+        definitionEdits.clear();
+        scalarEditStates.clear();
+        definitionEditStatus = "";
+    }
+
+    private ObjectDefinitionEditTransaction definitionTransaction(
+            LoadedOsrsCacheSession cache, int id) {
+        ObjectDefinitionEditTransaction existing = definitionEdits.get(id);
+        if (existing != null) return existing;
+        ObjectDefinitionEditTransaction created =
+                cache.bundle().definitions().editObject(id).orElse(null);
+        if (created != null) {
+            definitionEdits.put(id, created);
+        }
+        return created;
+    }
+
+    private ObjectDefinitionRawView displayPreview(
+            ObjectDefinitionEditTransaction transaction) {
+        ObjectDefinitionRawView base = transaction.preview();
+        List<ObjectDefinitionRawView.Field> fields = base.fields().stream()
+                .map(field -> {
+                    ScalarEditState state = scalarEditStates.get(
+                            "field:" + transaction.id() + ":" + field.name());
+                    if (state == null || !state.editing) return field;
+                    return new ObjectDefinitionRawView.Field(
+                            field.name(), field.opcode(), field.type(), state.input.get());
+                })
+                .toList();
+        List<ObjectDefinitionRawView.Param> params = base.params().stream()
+                .map(param -> {
+                    ScalarEditState state = scalarEditStates.get(
+                            paramStateKey(transaction.id(), param.id()));
+                    if (state == null || !state.editing) return param;
+                    return new ObjectDefinitionRawView.Param(
+                            param.id(), param.type(), state.input.get());
+                })
+                .toList();
+        return new ObjectDefinitionRawView(base.id(), fields, params);
+    }
+
+    private static Optional<ObjectDefinitionRawView.Field> rawField(
+            ObjectDefinitionRawView raw, String name) {
+        if (raw == null) return Optional.empty();
+        return raw.fields().stream()
+                .filter(field -> field.name().equals(name))
+                .findFirst();
+    }
+
+    private static Optional<Integer> rawInt(ObjectDefinitionRawView raw, String name) {
+        return rawField(raw, name).flatMap(field -> {
+            try {
+                return Optional.of(Integer.parseInt(field.value()));
+            } catch (NumberFormatException ignored) {
+                return Optional.empty();
+            }
+        });
+    }
+
+    private static boolean isTextEditableScalar(ObjectDefinitionRawView.ValueType type) {
+        return type == ObjectDefinitionRawView.ValueType.STRING
+                || type == ObjectDefinitionRawView.ValueType.INTEGER
+                || type == ObjectDefinitionRawView.ValueType.LONG;
+    }
+
+    private static ObjectDefinitionEditValue editValue(ObjectDefinitionRawView.Field field) {
+        return editValue(field.type(), field.value());
+    }
+
+    private static ObjectDefinitionEditValue editValue(ObjectDefinitionRawView.Param param) {
+        return editValue(param.type(), param.value());
+    }
+
+    private static ObjectDefinitionEditValue editValue(
+            ObjectDefinitionRawView.ValueType type, String value) {
+        return switch (type) {
+            case STRING -> ObjectDefinitionEditValue.stringValue(value);
+            case INTEGER -> ObjectDefinitionEditValue.intValue(
+                    Integer.parseInt(value.trim()));
+            case LONG -> ObjectDefinitionEditValue.longValue(
+                    Long.parseLong(value.trim()));
+            case BOOLEAN -> new ObjectDefinitionEditValue(
+                    ObjectDefinitionRawView.ValueType.BOOLEAN, value.trim());
+            default -> throw new IllegalArgumentException(
+                    "Complex definition value is not scalar-editable: " + type);
+        };
+    }
+
+    private static ObjectDefinitionRawView.ValueType paramType(int index) {
+        return switch (index) {
+            case 0 -> ObjectDefinitionRawView.ValueType.STRING;
+            case 1 -> ObjectDefinitionRawView.ValueType.INTEGER;
+            case 2 -> ObjectDefinitionRawView.ValueType.LONG;
+            default -> throw new IllegalArgumentException("Unknown param type index: " + index);
+        };
+    }
+
+    private static String paramStateKey(int objectId, int paramId) {
+        return "param:" + objectId + ":" + paramId;
+    }
+
+    private static String failureMessage(RuntimeException failure) {
+        String message = failure.getMessage();
+        return message == null || message.isBlank()
+                ? failure.getClass().getSimpleName()
+                : message;
+    }
+
+    private static final class ScalarEditState {
+        private final ImString input = new ImString(512);
+        private String syncedValue;
+        private boolean editing;
+        private ObjectDefinitionEditValue before;
+        private String error = "";
+
+        private void sync(String value) {
+            input.set(value == null ? "" : value);
+            syncedValue = value == null ? "" : value;
+        }
     }
 
     private static boolean matchesRawFilter(String filter, String... values) {
