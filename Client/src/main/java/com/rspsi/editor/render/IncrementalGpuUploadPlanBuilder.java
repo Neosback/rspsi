@@ -126,7 +126,11 @@ public final class IncrementalGpuUploadPlanBuilder {
                     command.layer(), command.pass(),
                     indexBase + command.firstIndex(), command.indexCount(),
                     command.textureId(), command.priority(), command.depthBias(),
-                    command.objectId(), command.renderMode(), command.wallDecorationPresentation());
+                    command.objectId(), command.renderMode(),
+                    command.wallDecorationPresentation(), command.gameObjectSceneMetadata(),
+                    command.clientRenderableBounds(), command.clientRenderablePlacements(),
+                    command.contourMetadata(), command.sceneObjectIdentity(),
+                    command.placementHeight(), command.modelAnchorX(), command.modelAnchorY());
             appendCommand(commands, shifted);
         }
         textureTriangles.addAll(plan.textureTriangles());
@@ -140,7 +144,11 @@ public final class IncrementalGpuUploadPlanBuilder {
             if (previous.canMerge(command.tile(), command.scenePlane(), command.planeCullLevel(),
                     command.layer(), command.pass(), command.textureId(), command.priority(),
                     command.depthBias(), command.objectId(), command.firstIndex(),
-                    command.renderMode(), command.wallDecorationPresentation())) {
+                    command.renderMode(), command.wallDecorationPresentation(),
+                    command.gameObjectSceneMetadata(), command.clientRenderableBounds(),
+                    command.clientRenderablePlacements(), command.contourMetadata(),
+                    command.sceneObjectIdentity(), command.placementHeight(),
+                    command.modelAnchorX(), command.modelAnchorY())) {
                 commands.set(last, previous.extend(command.indexCount()));
                 return;
             }
