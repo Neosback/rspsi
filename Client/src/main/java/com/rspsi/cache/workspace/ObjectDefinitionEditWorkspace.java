@@ -2,6 +2,7 @@ package com.rspsi.cache.workspace;
 
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
+import com.rspsi.cache.definition.ObjectDefinitionEditValue;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
 
 import java.nio.file.Path;
@@ -43,7 +44,7 @@ public final class ObjectDefinitionEditWorkspace {
         created.ifPresent(transaction -> {
             ObjectDefinitionRawView published = publishedSnapshots.get(objectId);
             if (published != null) {
-                transaction.markPublished(published);
+                applyRestoredPublication(transaction, published);
             }
             transactions.put(objectId, transaction);
         });
@@ -129,9 +130,105 @@ public final class ObjectDefinitionEditWorkspace {
                 : transactions.entrySet()) {
             ObjectDefinitionRawView published = publishedSnapshots.get(entry.getKey());
             if (published != null) {
-                entry.getValue().markPublished(published);
+                applyRestoredPublication(entry.getValue(), published);
             }
         }
+    }
+
+    private static void applyRestoredPublication(
+            ObjectDefinitionEditTransaction transaction,
+            ObjectDefinitionRawView published) {
+        if (transaction.dirty()) {
+            transaction.markPublished(published);
+            return;
+        }
+
+        Map<String, ObjectDefinitionRawView.Field> originalFields =
+                fieldsByName(transaction.original());
+        for (ObjectDefinitionRawView.Field target : published.fields()) {
+            ObjectDefinitionRawView.Field original =
+                    originalFields.get(target.name());
+            if (Objects.equals(original, target)) {
+                continue;
+            }
+            if (original == null) {
+                throw new IllegalArgumentException(
+                        "Persisted publication contains unknown object field "
+                                + target.name() + " for object " + transaction.id());
+            }
+            transaction.setField(target.name(), editValue(target));
+        }
+
+        Map<Integer, ObjectDefinitionRawView.Param> originalParams =
+                paramsById(transaction.original());
+        Map<Integer, ObjectDefinitionRawView.Param> publishedParams =
+                paramsById(published);
+
+        for (int paramId : originalParams.keySet()) {
+            if (!publishedParams.containsKey(paramId)) {
+                transaction.removeParam(paramId);
+            }
+        }
+        for (Map.Entry<Integer, ObjectDefinitionRawView.Param> entry
+                : publishedParams.entrySet()) {
+            if (!Objects.equals(originalParams.get(entry.getKey()), entry.getValue())) {
+                transaction.putParam(entry.getKey(), editValue(entry.getValue()));
+            }
+        }
+
+        if (!transaction.preview().equals(published)) {
+            throw new IllegalArgumentException(
+                    "Persisted publication snapshot cannot be restored for object "
+                            + transaction.id());
+        }
+        transaction.markPublished(published);
+    }
+
+    private static Map<String, ObjectDefinitionRawView.Field> fieldsByName(
+            ObjectDefinitionRawView view) {
+        LinkedHashMap<String, ObjectDefinitionRawView.Field> result =
+                new LinkedHashMap<>();
+        for (ObjectDefinitionRawView.Field field : view.fields()) {
+            result.put(field.name(), field);
+        }
+        return result;
+    }
+
+    private static Map<Integer, ObjectDefinitionRawView.Param> paramsById(
+            ObjectDefinitionRawView view) {
+        LinkedHashMap<Integer, ObjectDefinitionRawView.Param> result =
+                new LinkedHashMap<>();
+        for (ObjectDefinitionRawView.Param param : view.params()) {
+            result.put(param.id(), param);
+        }
+        return result;
+    }
+
+    private static ObjectDefinitionEditValue editValue(
+            ObjectDefinitionRawView.Field field) {
+        return editValue(field.type(), field.value());
+    }
+
+    private static ObjectDefinitionEditValue editValue(
+            ObjectDefinitionRawView.Param param) {
+        return editValue(param.type(), param.value());
+    }
+
+    private static ObjectDefinitionEditValue editValue(
+            ObjectDefinitionRawView.ValueType type,
+            String value) {
+        return switch (type) {
+            case STRING -> ObjectDefinitionEditValue.stringValue(value);
+            case INTEGER -> ObjectDefinitionEditValue.intValue(
+                    Integer.parseInt(value.trim()));
+            case LONG -> ObjectDefinitionEditValue.longValue(
+                    Long.parseLong(value.trim()));
+            case BOOLEAN -> ObjectDefinitionEditValue.booleanValue(
+                    Boolean.parseBoolean(value.trim()));
+            default -> throw new IllegalArgumentException(
+                    "Persisted publication contains unsupported editable value type "
+                            + type);
+        };
     }
 
     /**
