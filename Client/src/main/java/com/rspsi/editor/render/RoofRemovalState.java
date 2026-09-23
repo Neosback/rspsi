@@ -107,8 +107,8 @@ public record RoofRemovalState(
 
     private static void addBetweenRegions(Set<Integer> selected, RoofRegionMap regions,
                                           int plane, ScenePoint camera, ScenePoint player) {
-        if (!regions.contains(plane, camera.x(), camera.y())
-                || !regions.contains(plane, player.x(), player.y())) {
+        if (!regions.inBounds(plane, camera.x(), camera.y())
+                || !regions.inBounds(plane, player.x(), player.y())) {
             return;
         }
 
