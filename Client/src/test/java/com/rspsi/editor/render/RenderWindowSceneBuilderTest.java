@@ -150,6 +150,64 @@ class RenderWindowSceneBuilderTest {
     }
 
     @Test
+    void animationRefreshRebuildsOnlyActiveModelTilesAndReusesStaticPackets() {
+        WorldDocument document = new WorldDocument(64, 64, 1);
+        WorldObject animated = new WorldObject(42, 10, 0, 0, 8, 8);
+        WorldObject stationary = new WorldObject(43, 10, 0, 0, 24, 24);
+        document.tile(0, 8, 8).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(animated)));
+        document.tile(0, 24, 24).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(stationary)));
+        WorldRegion loaded = new WorldRegion(10, 20, document);
+        WorldRegionWindow window = new WorldRegionWindow(
+                10, 20, 1, 1, Map.of(loaded.regionId(), loaded));
+        RenderWindowSceneBuilder builder =
+                new RenderWindowSceneBuilder(animatedDefinitions());
+
+        RenderWindowScene initial = builder.build(window, 0);
+        WorldTileAddress animatedAddress =
+                WorldTileAddress.of(10 * 64 + 8, 20 * 64 + 8, 0);
+        WorldTileAddress staticAddress =
+                WorldTileAddress.of(10 * 64 + 24, 20 * 64 + 24, 0);
+        ModelRenderPacket staticPacket =
+                initial.modelPackets().get(staticAddress).get(0);
+
+        RenderWindowSceneBuilder.AnimationRefreshResult refresh =
+                builder.refreshAnimations(initial, 2);
+
+        assertEquals(1, refresh.rebuiltModelTiles());
+        assertFalse(refresh.fullModelRebuild());
+        assertEquals(1, refresh.changedTiles());
+        assertEquals(java.util.Set.of(WorldZoneCoordinate.from(animatedAddress)),
+                refresh.dirtyZones());
+        assertSame(staticPacket,
+                refresh.scene().modelPackets().get(staticAddress).get(0),
+                "stationary model packets must remain resident by identity");
+    }
+
+    @Test
+    void animationRefreshFallsBackWhenActiveTileRequiresSceneWideNormalMerge() {
+        WorldDocument document = new WorldDocument(64, 64, 1);
+        WorldObject animated = new WorldObject(42, 10, 0, 0, 8, 8);
+        document.tile(0, 8, 8).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(animated)));
+        WorldRegion loaded = new WorldRegion(10, 20, document);
+        WorldRegionWindow window = new WorldRegionWindow(
+                10, 20, 1, 1, Map.of(loaded.regionId(), loaded));
+        RenderWindowSceneBuilder builder =
+                new RenderWindowSceneBuilder(animatedDefinitions(true));
+
+        RenderWindowScene initial = builder.build(window, 0);
+        RenderWindowSceneBuilder.AnimationRefreshResult refresh =
+                builder.refreshAnimations(initial, 2);
+
+        assertTrue(refresh.fullModelRebuild(),
+                "mergeNormals animation tiles must preserve the scene-wide normal merge pass");
+        assertEquals(1, refresh.changedTiles());
+        assertTrue(refresh.rebuiltModelTiles() >= 1);
+    }
+
+    @Test
     void stitchesEastNeighborBeforeBuildingSharedGeometry() {
         WorldDocument westDocument = new WorldDocument(64, 64, 4);
         WorldDocument eastDocument = new WorldDocument(64, 64, 4);
@@ -227,9 +285,20 @@ class RenderWindowSceneBuilderTest {
     }
 
     private static DefinitionProvider animatedDefinitions() {
+        return animatedDefinitions(false);
+    }
+
+    private static DefinitionProvider animatedDefinitions(boolean mergeNormals) {
         com.rspsi.cache.definition.ObjectAppearanceView appearance =
                 new com.rspsi.cache.definition.ObjectAppearanceView(
                         77, false, 128, 128, 128,
+                        0, 0, 0, Map.of(), Map.of(),
+                        true, false, mergeNormals, false,
+                        0, 0, 16, -1, 0,
+                        false, false, false, 0);
+        com.rspsi.cache.definition.ObjectAppearanceView staticAppearance =
+                new com.rspsi.cache.definition.ObjectAppearanceView(
+                        -1, false, 128, 128, 128,
                         0, 0, 0, Map.of(), Map.of(),
                         true, false, false, false,
                         0, 0, 16, -1, 0,
@@ -259,15 +328,23 @@ class RenderWindowSceneBuilderTest {
 
         return new DefinitionProvider() {
             @Override public Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) {
-                return id == 42
-                        ? Optional.of(new com.rspsi.cache.definition.ObjectDefinitionView(
-                                42, "animated", 1, 1, List.of(),
-                                new int[]{7}, new int[]{10}, -1, false))
-                        : Optional.empty();
+                return switch (id) {
+                    case 42 -> Optional.of(new com.rspsi.cache.definition.ObjectDefinitionView(
+                            42, "animated", 1, 1, List.of(),
+                            new int[]{7}, new int[]{10}, -1, false));
+                    case 43 -> Optional.of(new com.rspsi.cache.definition.ObjectDefinitionView(
+                            43, "stationary", 1, 1, List.of(),
+                            new int[]{7}, new int[]{10}, -1, false));
+                    default -> Optional.empty();
+                };
             }
 
             @Override public Optional<com.rspsi.cache.definition.ObjectAppearanceView> objectAppearance(int id) {
-                return id == 42 ? Optional.of(appearance) : Optional.empty();
+                return switch (id) {
+                    case 42 -> Optional.of(appearance);
+                    case 43 -> Optional.of(staticAppearance);
+                    default -> Optional.empty();
+                };
             }
 
             @Override public Optional<com.rspsi.cache.definition.ModelGeometryView> modelGeometry(int id) {

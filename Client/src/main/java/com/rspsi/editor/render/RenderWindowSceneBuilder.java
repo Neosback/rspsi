@@ -157,16 +157,118 @@ public final class RenderWindowSceneBuilder {
         Objects.requireNonNull(previous, "previous");
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         if (definitions == null) {
-            return new AnimationRefreshResult(previous, Set.of(), 0);
+            return new AnimationRefreshResult(previous, Set.of(), 0, 0, false);
         }
 
-        WorldRegionWindow prepared = previous.window().copy();
-        prepared.stitchSharedEdges();
+        Set<WorldTileAddress> activeAddresses = previous.modelPackets().entrySet().stream()
+                .filter(entry -> entry.getValue().stream()
+                        .anyMatch(packet -> packet.animationState().active()))
+                .map(Map.Entry::getKey)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (activeAddresses.isEmpty()) {
+            return new AnimationRefreshResult(previous, Set.of(), 0, 0, false);
+        }
+
+        // The RenderWindowScene already retains the prepared, stitched source
+        // window. Re-materialize only the padded document needed for contour,
+        // placement-height and wall-displacement rules; do not re-copy and
+        // re-stitch the whole window on every animation frame.
+        WorldRegionWindow prepared = previous.window();
         WorldDocument worldDocument =
                 prepared.materializePaddedWorldDocument(TERRAIN_CONTEXT_BORDER);
-        var nextModels = buildWorldModelPackets(prepared, worldDocument, clientCycle);
+
+        if (requiresSceneWideNormalMerge(prepared, worldDocument, activeAddresses)) {
+            return refreshAnimationsFull(previous, prepared, worldDocument, clientCycle);
+        }
+
+        ModelPacketBuilder modelBuilder = new ModelPacketBuilder(definitions);
+        Map<WorldTileAddress, List<ModelRenderPacket>> nextModels =
+                new LinkedHashMap<>(previous.modelPackets());
+
+        int rebuiltTiles = 0;
+        for (WorldTileAddress address : activeAddresses) {
+            TileCoordinate local = paddedCoordinate(prepared, address);
+            if (!worldDocument.contains(local.plane(), local.x(), local.y())) {
+                nextModels.remove(address);
+                rebuiltTiles++;
+                continue;
+            }
+
+            List<ModelRenderPacket> localPackets =
+                    modelBuilder.buildTile(worldDocument, local, clientCycle);
+            List<ModelRenderPacket> worldPackets = localPackets.stream()
+                    .map(packet -> toWorldPacket(prepared, packet))
+                    .filter(Objects::nonNull)
+                    .toList();
+            if (worldPackets.isEmpty()) {
+                nextModels.remove(address);
+            } else {
+                nextModels.put(address, worldPackets);
+            }
+            rebuiltTiles++;
+        }
+
+        Set<WorldTileAddress> changedAddresses = new LinkedHashSet<>();
+        for (WorldTileAddress address : activeAddresses) {
+            if (!sameModelPresentation(
+                    previous.modelPackets().get(address), nextModels.get(address))) {
+                changedAddresses.add(address);
+            }
+        }
+        if (changedAddresses.isEmpty()) {
+            // Presentation is unchanged, but callers historically observe the
+            // refreshed ModelAnimationState.clientCycle as diagnostic timing
+            // state. Publish the rebuilt active-tile packets without marking
+            // any GPU zone dirty.
+            RenderWindowScene refreshed = new RenderWindowScene(
+                    previous.window(),
+                    previous.terrainMeshes(),
+                    previous.terrainMaterials(),
+                    previous.terrainAppearances(),
+                    previous.terrainLighting(),
+                    previous.terrainPackets(),
+                    nextModels,
+                    previous.tileFlags(),
+                    previous.lightingProfile(),
+                    previous.collision(),
+                    previous.objects(),
+                    previous.bridges(),
+                    previous.textures());
+            return new AnimationRefreshResult(
+                    refreshed, Set.of(), 0, rebuiltTiles, false);
+        }
+
+        Set<WorldZoneCoordinate> dirtyZones = changedAddresses.stream()
+                .map(WorldZoneCoordinate::from)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+
+        RenderWindowScene refreshed = new RenderWindowScene(
+                previous.window(),
+                previous.terrainMeshes(),
+                previous.terrainMaterials(),
+                previous.terrainAppearances(),
+                previous.terrainLighting(),
+                previous.terrainPackets(),
+                nextModels,
+                previous.tileFlags(),
+                previous.lightingProfile(),
+                previous.collision(),
+                previous.objects(),
+                previous.bridges(),
+                previous.textures());
+        return new AnimationRefreshResult(
+                refreshed, dirtyZones, changedAddresses.size(), rebuiltTiles, false);
+    }
+
+    private AnimationRefreshResult refreshAnimationsFull(RenderWindowScene previous,
+                                                         WorldRegionWindow prepared,
+                                                         WorldDocument worldDocument,
+                                                         int clientCycle) {
+        Map<WorldTileAddress, List<ModelRenderPacket>> nextModels =
+                buildWorldModelPackets(prepared, worldDocument, clientCycle);
         if (previous.modelPackets().equals(nextModels)) {
-            return new AnimationRefreshResult(previous, Set.of(), 0);
+            return new AnimationRefreshResult(
+                    previous, Set.of(), 0, nextModels.size(), true);
         }
 
         Set<WorldTileAddress> changedAddresses = new LinkedHashSet<>();
@@ -194,7 +296,35 @@ public final class RenderWindowSceneBuilder {
                 previous.bridges(),
                 previous.textures());
         return new AnimationRefreshResult(
-                refreshed, dirtyZones, changedAddresses.size());
+                refreshed, dirtyZones, changedAddresses.size(), nextModels.size(), true);
+    }
+
+    private boolean requiresSceneWideNormalMerge(WorldRegionWindow prepared,
+                                                 WorldDocument worldDocument,
+                                                 Set<WorldTileAddress> activeAddresses) {
+        for (WorldTileAddress address : activeAddresses) {
+            TileCoordinate local = paddedCoordinate(prepared, address);
+            if (!worldDocument.contains(local.plane(), local.x(), local.y())) continue;
+            for (com.rspsi.editor.model.WorldObject object :
+                    worldDocument.tile(local).objects()) {
+                if (definitions.objectAppearance(object.id())
+                        .map(com.rspsi.cache.definition.ObjectAppearanceView::mergeNormals)
+                        .orElse(false)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static TileCoordinate paddedCoordinate(WorldRegionWindow prepared,
+                                                   WorldTileAddress address) {
+        return new TileCoordinate(
+                address.plane(),
+                TERRAIN_CONTEXT_BORDER
+                        + address.worldX() - prepared.minRegionX() * WorldRegion.REGION_SIZE,
+                TERRAIN_CONTEXT_BORDER
+                        + address.worldY() - prepared.minRegionY() * WorldRegion.REGION_SIZE);
     }
 
     private static boolean sameModelPresentation(List<ModelRenderPacket> first,
@@ -216,37 +346,55 @@ public final class RenderWindowSceneBuilder {
         var modelPackets = new LinkedHashMap<WorldTileAddress, List<ModelRenderPacket>>();
         ModelPacketBuilder worldModelBuilder = new ModelPacketBuilder(definitions);
         for (ModelRenderPacket packet : worldModelBuilder.build(worldDocument, clientCycle)) {
-            int worldX = prepared.minRegionX() * WorldRegion.REGION_SIZE
-                    + packet.anchor().x() - TERRAIN_CONTEXT_BORDER;
-            int worldY = prepared.minRegionY() * WorldRegion.REGION_SIZE
-                    + packet.anchor().y() - TERRAIN_CONTEXT_BORDER;
-            if (worldX < 0 || worldY < 0
-                    || worldX < prepared.minRegionX() * WorldRegion.REGION_SIZE
-                    || worldY < prepared.minRegionY() * WorldRegion.REGION_SIZE
-                    || worldX >= (prepared.minRegionX() + prepared.regionWidth())
-                            * WorldRegion.REGION_SIZE
-                    || worldY >= (prepared.minRegionY() + prepared.regionHeight())
-                            * WorldRegion.REGION_SIZE) {
-                continue;
-            }
-            ModelRenderPacket worldPacket = packet.withAnchor(new TileCoordinate(
-                    packet.anchor().plane(), worldX, worldY));
+            ModelRenderPacket worldPacket = toWorldPacket(prepared, packet);
+            if (worldPacket == null) continue;
             modelPackets.computeIfAbsent(WorldTileAddress.of(
-                    worldX, worldY, packet.anchor().plane()), ignored -> new ArrayList<>())
+                    worldPacket.anchor().x(), worldPacket.anchor().y(),
+                    worldPacket.anchor().plane()), ignored -> new ArrayList<>())
                     .add(worldPacket);
         }
         return modelPackets;
     }
 
+    private static ModelRenderPacket toWorldPacket(WorldRegionWindow prepared,
+                                                        ModelRenderPacket packet) {
+        int worldX = prepared.minRegionX() * WorldRegion.REGION_SIZE
+                + packet.anchor().x() - TERRAIN_CONTEXT_BORDER;
+        int worldY = prepared.minRegionY() * WorldRegion.REGION_SIZE
+                + packet.anchor().y() - TERRAIN_CONTEXT_BORDER;
+        if (worldX < 0 || worldY < 0
+                || worldX < prepared.minRegionX() * WorldRegion.REGION_SIZE
+                || worldY < prepared.minRegionY() * WorldRegion.REGION_SIZE
+                || worldX >= (prepared.minRegionX() + prepared.regionWidth())
+                        * WorldRegion.REGION_SIZE
+                || worldY >= (prepared.minRegionY() + prepared.regionHeight())
+                        * WorldRegion.REGION_SIZE) {
+            return null;
+        }
+        return packet.withAnchor(new TileCoordinate(
+                packet.anchor().plane(), worldX, worldY));
+    }
+
     public record AnimationRefreshResult(
             RenderWindowScene scene,
             Set<WorldZoneCoordinate> dirtyZones,
-            int changedTiles
+            int changedTiles,
+            int rebuiltModelTiles,
+            boolean fullModelRebuild
     ) {
+        /** Source-compatible constructor from before refresh-scope diagnostics. */
+        public AnimationRefreshResult(RenderWindowScene scene,
+                                      Set<WorldZoneCoordinate> dirtyZones,
+                                      int changedTiles) {
+            this(scene, dirtyZones, changedTiles, changedTiles, false);
+        }
+
         public AnimationRefreshResult {
             scene = Objects.requireNonNull(scene, "scene");
             dirtyZones = Set.copyOf(Objects.requireNonNull(dirtyZones, "dirtyZones"));
-            if (changedTiles < 0) throw new IllegalArgumentException("changedTiles cannot be negative");
+            if (changedTiles < 0 || rebuiltModelTiles < 0) {
+                throw new IllegalArgumentException("Animation refresh counts cannot be negative");
+            }
         }
     }
 
