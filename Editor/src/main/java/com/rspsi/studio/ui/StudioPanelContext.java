@@ -35,7 +35,37 @@ public record StudioPanelContext(
         EditorToolController toolController,
         com.rspsi.studio.plugin.StudioPluginManager studioPlugins,
         StudioBrushManager brushes,
-        ViewportHudManager huds) {
+        ViewportHudManager huds,
+        Consumer<LoadedOsrsCacheSession> persistDefinitionPublication) {
+
+    public StudioPanelContext {
+        persistDefinitionPublication = persistDefinitionPublication == null
+                ? ignored -> { }
+                : persistDefinitionPublication;
+    }
+
+    /** Compatibility constructor retaining the pre-provenance canonical shape. */
+    public StudioPanelContext(
+            LoadedOsrsCacheSession cache,
+            SettingsStore settings,
+            EditorSession session,
+            EditorPluginLifecycleManager pluginLifecycle,
+            NativeSceneViewport viewport,
+            SimulationEngine simulation,
+            SymbolService symbols,
+            ReferenceService references,
+            NpcSpawnService spawns,
+            ServerIntegrationService integrations,
+            Consumer<String> activateTool,
+            String activeToolId,
+            EditorToolController toolController,
+            com.rspsi.studio.plugin.StudioPluginManager studioPlugins,
+            StudioBrushManager brushes,
+            ViewportHudManager huds) {
+        this(cache, settings, session, pluginLifecycle, viewport, simulation, symbols,
+                references, spawns, integrations, activateTool, activeToolId,
+                toolController, studioPlugins, brushes, huds, ignored -> { });
+    }
 
     /** Compatibility constructor for tests and transitional callers. */
     public StudioPanelContext(
@@ -56,6 +86,7 @@ public record StudioPanelContext(
             StudioBrushManager brushes) {
         this(cache, settings, session, pluginLifecycle, viewport, simulation, symbols,
                 references, spawns, integrations, activateTool, activeToolId,
-                toolController, studioPlugins, brushes, new ViewportHudManager());
+                toolController, studioPlugins, brushes, new ViewportHudManager(),
+                ignored -> { });
     }
 }
