@@ -1431,11 +1431,6 @@ public final class ModelPacketBuilder {
                 + lighting.lightZ() * normal.z) / denominator;
     }
 
-    private static int blendLight(int hsl, int lightness) {
-        int light = (hsl & 127) * lightness >> 7;
-        return (hsl & 0xFF80) + clamp(light, 2, 126);
-    }
-
     private static int recolor(int color, Map<Integer, Integer> replacements) {
         return replacements.getOrDefault(color, color);
     }
