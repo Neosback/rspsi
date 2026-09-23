@@ -123,12 +123,13 @@ public final class TileInfoHudPlugin implements StudioPlugin {
                             definitions);
                     if (resolution.transformed() && resolution.displayDefinition().isPresent()) {
                         var display = resolution.displayDefinition().orElseThrow();
-                        objName = placedLabel + " -> " + display.name() + " (#" + display.id() + ")";
+                        objName = labelWithId(placedLabel, hit.objectId())
+                                + " -> " + labelWithId(display.name(), display.id());
                     } else {
-                        objName = placedLabel + " (#" + hit.objectId() + ")";
+                        objName = labelWithId(placedLabel, hit.objectId());
                     }
                 } else {
-                    objName = placedLabel + " (#" + hit.objectId() + ")";
+                    objName = labelWithId(placedLabel, hit.objectId());
                 }
             }
             if (sb.length() > 2) sb.append("  |  ");
@@ -168,6 +169,11 @@ public final class TileInfoHudPlugin implements StudioPlugin {
 
         // Text
         dl.addText(hudX + padX, hudY + padY, 0xFFE2E8F0, text);
+    }
+
+    private static String labelWithId(String displayName, int id) {
+        String fallback = "Object #" + id;
+        return fallback.equals(displayName) ? fallback : displayName + " (#" + id + ")";
     }
 
     @Override
