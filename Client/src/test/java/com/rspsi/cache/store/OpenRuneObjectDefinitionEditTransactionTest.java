@@ -69,6 +69,38 @@ class OpenRuneObjectDefinitionEditTransactionTest {
     }
 
     @Test
+    void publishedPreviewBecomesDurableBaselineWithoutResettingSourceDiff() {
+        ObjectTypeBuilder builder = new ObjectTypeBuilder(55);
+        builder.setName("Original");
+        builder.setSizeX(1);
+
+        OpenRuneObjectDefinitionEditTransaction transaction =
+                new OpenRuneObjectDefinitionEditTransaction(builder.build(), 240);
+        transaction.setField(
+                "name", ObjectDefinitionEditValue.stringValue("Published"));
+
+        ObjectDefinitionRawView published = transaction.preview();
+        transaction.markPublished(published);
+
+        assertTrue(transaction.dirty());
+        assertFalse(transaction.hasUnpublishedChanges());
+        assertEquals("Published", field(transaction.preview(), "name").value());
+
+        transaction.setField(
+                "name", ObjectDefinitionEditValue.stringValue("Newer"));
+        assertTrue(transaction.hasUnpublishedChanges());
+
+        transaction.setField(
+                "name", ObjectDefinitionEditValue.stringValue("Published"));
+        assertFalse(transaction.hasUnpublishedChanges());
+
+        transaction.setField(
+                "name", ObjectDefinitionEditValue.stringValue("Original"));
+        assertFalse(transaction.dirty());
+        assertFalse(transaction.hasUnpublishedChanges());
+    }
+
+    @Test
     void resetRestoresSourceAndClearsDirtyState() {
         ObjectTypeBuilder builder = new ObjectTypeBuilder(42);
         builder.setName("Rocks");
