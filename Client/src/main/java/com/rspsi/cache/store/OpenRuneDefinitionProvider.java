@@ -325,16 +325,21 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         String stem;
         if (name.startsWith("get") && name.length() > 3) {
             stem = name.substring(3);
-        } else if (name.startsWith("is") && name.length() > 2
+            if (stem.length() == 1) {
+                return stem.toLowerCase(java.util.Locale.ROOT);
+            }
+            return Character.toLowerCase(stem.charAt(0)) + stem.substring(1);
+        }
+        if (name.startsWith("is") && name.length() > 2
                 && (method.getReturnType() == boolean.class
                     || method.getReturnType() == Boolean.class)) {
-            stem = name.substring(2);
-        } else {
-            return null;
+            // Kotlin properties literally named "isHollow"/"isRotated"
+            // compile to isHollow()/isRotated(). Preserve that property name
+            // rather than normalizing it to "hollow"/"rotated", otherwise
+            // opcode metadata no longer lines up with ObjectType's schema.
+            return name;
         }
-        if (stem.isEmpty()) return null;
-        if (stem.length() == 1) return stem.toLowerCase(java.util.Locale.ROOT);
-        return Character.toLowerCase(stem.charAt(0)) + stem.substring(1);
+        return null;
     }
 
     private static ObjectDefinitionRawView.ValueType rawValueType(Object value) {
