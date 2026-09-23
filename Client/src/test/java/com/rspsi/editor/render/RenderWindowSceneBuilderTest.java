@@ -18,6 +18,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RenderWindowSceneBuilderTest {
@@ -104,6 +106,50 @@ class RenderWindowSceneBuilderTest {
     }
 
     @Test
+    void animationRefreshKeepsTerrainResidentAndDirtiesOnlyChangedFrames() {
+        WorldDocument document = new WorldDocument(64, 64, 1);
+        WorldObject object = new WorldObject(42, 10, 0, 0, 8, 8);
+        document.tile(0, 8, 8).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(object)));
+        WorldRegion loaded = new WorldRegion(10, 20, document);
+        WorldRegionWindow window = new WorldRegionWindow(
+                10, 20, 1, 1, Map.of(loaded.regionId(), loaded));
+        RenderWindowSceneBuilder builder =
+                new RenderWindowSceneBuilder(animatedDefinitions());
+
+        RenderWindowScene initial = builder.build(window, 0);
+        WorldTileAddress address = WorldTileAddress.of(10 * 64 + 8, 20 * 64 + 8, 0);
+        ModelRenderPacket frameZero = initial.modelPackets().get(address).get(0);
+
+        RenderWindowSceneBuilder.AnimationRefreshResult sameFrame =
+                builder.refreshAnimations(initial, 1);
+        ModelRenderPacket cycleOne = sameFrame.scene().modelPackets().get(address).get(0);
+
+        assertTrue(sameFrame.dirtyZones().isEmpty(),
+                "advancing inside one frame must not rebuild a GPU zone");
+        assertEquals(0, sameFrame.changedTiles());
+        assertEquals(1, cycleOne.animationState().clientCycle(),
+                "diagnostic timing state should still advance");
+        assertEquals(frameZero.vertices(), cycleOne.vertices());
+        assertSame(initial.terrainMeshes().get(address),
+                sameFrame.scene().terrainMeshes().get(address),
+                "animation refresh must leave resident terrain geometry untouched");
+
+        RenderWindowSceneBuilder.AnimationRefreshResult nextFrame =
+                builder.refreshAnimations(sameFrame.scene(), 2);
+        ModelRenderPacket frameOne = nextFrame.scene().modelPackets().get(address).get(0);
+
+        assertEquals(java.util.Set.of(WorldZoneCoordinate.from(address)),
+                nextFrame.dirtyZones());
+        assertEquals(1, nextFrame.changedTiles());
+        assertEquals(1, frameOne.animationState().frameIndex());
+        assertEquals(101, frameOne.animationState().frameId());
+        assertNotEquals(frameZero.vertices(), frameOne.vertices());
+        assertSame(initial.terrainMeshes().get(address),
+                nextFrame.scene().terrainMeshes().get(address));
+    }
+
+    @Test
     void stitchesEastNeighborBeforeBuildingSharedGeometry() {
         WorldDocument westDocument = new WorldDocument(64, 64, 4);
         WorldDocument eastDocument = new WorldDocument(64, 64, 4);
@@ -178,6 +224,80 @@ class RenderWindowSceneBuilderTest {
                 "east boundary wall should receive its west neighbor's normal");
         assertTrue(westPacket.triangles().stream().anyMatch(face -> face.renderType() == 2));
         assertTrue(eastPacket.triangles().stream().anyMatch(face -> face.renderType() == 2));
+    }
+
+    private static DefinitionProvider animatedDefinitions() {
+        com.rspsi.cache.definition.ObjectAppearanceView appearance =
+                new com.rspsi.cache.definition.ObjectAppearanceView(
+                        77, false, 128, 128, 128,
+                        0, 0, 0, Map.of(), Map.of(),
+                        true, false, false, false,
+                        0, 0, 16, -1, 0,
+                        false, false, false, 0);
+        com.rspsi.cache.definition.ModelGeometryView geometry =
+                new com.rspsi.cache.definition.ModelGeometryView(
+                        7,
+                        new int[]{0, 0, 0, 64, 0, 0, 0, 0, 64},
+                        new int[]{0, 1, 2}, new short[]{100},
+                        new int[]{0}, new int[]{-1})
+                        .withVertexSkins(new int[]{1, 1, 1});
+        com.rspsi.cache.definition.SequenceDefinitionView sequence =
+                new com.rspsi.cache.definition.SequenceDefinitionView(
+                        77, new int[]{100, 101}, new int[]{1, 1}, 2, false,
+                        -1, -1, 99, 0, 0, 2, -1, 0);
+        com.rspsi.cache.definition.SkeletonDefinitionView skeleton =
+                new com.rspsi.cache.definition.SkeletonDefinitionView(
+                        5, new int[]{1}, new int[][]{{1}});
+        com.rspsi.cache.definition.AnimationFrameView first =
+                new com.rspsi.cache.definition.AnimationFrameView(
+                        100, 5, new int[]{0}, new int[]{0},
+                        new int[]{0}, new int[]{0}, false);
+        com.rspsi.cache.definition.AnimationFrameView second =
+                new com.rspsi.cache.definition.AnimationFrameView(
+                        101, 5, new int[]{0}, new int[]{10},
+                        new int[]{0}, new int[]{0}, false);
+
+        return new DefinitionProvider() {
+            @Override public Optional<com.rspsi.cache.definition.ObjectDefinitionView> object(int id) {
+                return id == 42
+                        ? Optional.of(new com.rspsi.cache.definition.ObjectDefinitionView(
+                                42, "animated", 1, 1, List.of(),
+                                new int[]{7}, new int[]{10}, -1, false))
+                        : Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.ObjectAppearanceView> objectAppearance(int id) {
+                return id == 42 ? Optional.of(appearance) : Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.ModelGeometryView> modelGeometry(int id) {
+                return id == 7 ? Optional.of(geometry) : Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.SequenceDefinitionView> sequence(int id) {
+                return id == 77 ? Optional.of(sequence) : Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.AnimationFrameView> animationFrame(int id) {
+                return switch (id) {
+                    case 100 -> Optional.of(first);
+                    case 101 -> Optional.of(second);
+                    default -> Optional.empty();
+                };
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.SkeletonDefinitionView> skeleton(int id) {
+                return id == 5 ? Optional.of(skeleton) : Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> underlay(int id) {
+                return Optional.empty();
+            }
+
+            @Override public Optional<com.rspsi.cache.definition.FloorDefinitionView> overlay(int id) {
+                return Optional.empty();
+            }
+        };
     }
 
     private static DefinitionProvider mergingWallDefinitions() {
