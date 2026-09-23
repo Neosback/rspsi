@@ -24,6 +24,7 @@ import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
 import com.rspsi.editor.plugin.runtime.ExternalPluginRuntimeSnapshot;
 import com.rspsi.editor.plugin.runtime.PluginEcosystemService;
 import com.rspsi.editor.plugin.runtime.SemanticVersion;
+import com.rspsi.editor.render.AnimationRefreshScheduler;
 import com.rspsi.editor.render.GpuScenePacket;
 import com.rspsi.editor.render.GpuScenePacketBuilder;
 import com.rspsi.editor.render.GpuUploadPlan;
@@ -307,11 +308,14 @@ public final class StudioApplication implements AutoCloseable {
                 plan.vertices().size(), plan.indices().size(), plan.commands().size(),
                 plan.textures().size());
         logSceneBuild("initial", regionX, regionY, metrics);
+        int nextAnimationRefreshCycle = AnimationRefreshScheduler.nextPresentationCycle(
+                scene, cache.bundle().definitions(), clientCycle);
         return new LoadedMapScene(opened, session, scene, renderScene, packet, plan,
                 initialPlan.zonedPlan(), incrementalPlanBuilder, settingsRevision,
                 new com.rspsi.editor.render.CameraState(
                 (float) centerX, -2400.0f, (float) centerZ - 4200.0f,
-                (float) -Math.toRadians(28.0), 0.0f), clientCycle);
+                (float) -Math.toRadians(28.0), 0.0f), clientCycle,
+                nextAnimationRefreshCycle);
     }
 
     private void pollSceneLoad() {
@@ -358,12 +362,15 @@ public final class StudioApplication implements AutoCloseable {
         }
 
         if (loadedScene == null || cache == null || pendingSceneRebuild != null
-                || sceneDirty.get() || !hasActiveModelAnimations(loadedScene.windowScene())) {
+                || sceneDirty.get()) {
             return;
         }
 
+        int nextRefreshCycle = loadedScene.nextAnimationRefreshCycle();
+        if (nextRefreshCycle < 0) return;
+
         int clientCycle = currentClientCycle();
-        if (clientCycle == loadedScene.animationCycle()) return;
+        if (clientCycle < nextRefreshCycle) return;
         LoadedMapScene baseScene = loadedScene;
         pendingAnimationRefresh = CompletableFuture.supplyAsync(
                 () -> refreshMapAnimation(cache, baseScene, clientCycle), sceneExecutor);
@@ -411,16 +418,12 @@ public final class StudioApplication implements AutoCloseable {
             LOGGER.debug("Animation cycle {} changed {} model tiles across {} GPU zones",
                     clientCycle, animation.changedTiles(), animation.dirtyZones().size());
         }
+        int nextAnimationRefreshCycle = AnimationRefreshScheduler.nextPresentationCycle(
+                scene, definitions, clientCycle);
         return new LoadedMapScene(
                 baseScene.opened(), baseScene.session(), scene, renderScene, packet, plan,
                 zonedPlan, incrementalPlanBuilder, settingsRevision,
-                baseScene.camera(), clientCycle);
-    }
-
-    private static boolean hasActiveModelAnimations(RenderWindowScene scene) {
-        return scene.modelPackets().values().stream()
-                .flatMap(List::stream)
-                .anyMatch(packet -> packet.animationState().active());
+                baseScene.camera(), clientCycle, nextAnimationRefreshCycle);
     }
 
     private int currentClientCycle() {
@@ -542,9 +545,12 @@ public final class StudioApplication implements AutoCloseable {
                 windowUpdate.dirtyWorldZones().size(), windowUpdate.compiledVisibleTiles(),
                 packetUpdate.rebuiltTiles(), packetUpdate.reusedTiles(),
                 planUpdate.rebuiltTiles(), planUpdate.reusedTiles());
+        int nextAnimationRefreshCycle = AnimationRefreshScheduler.nextPresentationCycle(
+                scene, cache.bundle().definitions(), baseScene.animationCycle());
         return new LoadedMapScene(baseScene.opened(), baseScene.session(), scene, renderScene,
                 packet, plan, planUpdate.zonedPlan(), incrementalPlanBuilder,
-                settingsRevision, baseScene.camera(), baseScene.animationCycle());
+                settingsRevision, baseScene.camera(), baseScene.animationCycle(),
+                nextAnimationRefreshCycle);
     }
 
     private static int[] parseRegion(String value) {
@@ -786,10 +792,19 @@ public final class StudioApplication implements AutoCloseable {
                                   IncrementalGpuUploadPlanBuilder planBuilder,
                                   long settingsRevision,
                                   com.rspsi.editor.render.CameraState camera,
-                                  int animationCycle) {
+                                  int animationCycle,
+                                  int nextAnimationRefreshCycle) {
         private LoadedMapScene {
             if (animationCycle < 0) {
                 throw new IllegalArgumentException("Animation cycle cannot be negative");
+            }
+            if (nextAnimationRefreshCycle < AnimationRefreshScheduler.NONE) {
+                throw new IllegalArgumentException("Invalid next animation refresh cycle");
+            }
+            if (nextAnimationRefreshCycle >= 0
+                    && nextAnimationRefreshCycle <= animationCycle) {
+                throw new IllegalArgumentException(
+                        "Next animation refresh cycle must be in the future");
             }
         }
     }
