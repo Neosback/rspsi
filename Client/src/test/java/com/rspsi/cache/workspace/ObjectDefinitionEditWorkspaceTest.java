@@ -9,12 +9,14 @@ import com.rspsi.cache.definition.ObjectDefinitionView;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ObjectDefinitionEditWorkspaceTest {
 
@@ -38,10 +40,18 @@ class ObjectDefinitionEditWorkspaceTest {
         assertEquals(1, workspace.unpublishedCount());
 
         ObjectDefinitionRawView published = first.preview();
-        workspace.markPublished(7, published);
+        Path output = Path.of("build", "development-cache");
+        workspace.markPublished(output, 7, published);
 
+        assertEquals(
+                output.toAbsolutePath().normalize(),
+                workspace.publicationTarget().orElseThrow());
         assertEquals(1, workspace.modifiedCount());
         assertEquals(0, workspace.unpublishedCount());
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> workspace.markPublished(
+                        Path.of("build", "different-cache"), 7, published));
 
         first.setField("name",
                 ObjectDefinitionEditValue.stringValue("Newer"));
