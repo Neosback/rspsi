@@ -29,14 +29,14 @@ public final class ObjectDefinitionResolver {
         Optional<ObjectDefinitionView> placed = definitions.object(placedId);
         if (placed.isEmpty()) {
             return new Resolution(placedId, Status.MISSING_PLACED_DEFINITION,
-                    Optional.empty(), Optional.empty(), List.of(placedId), placedId);
+                    Optional.empty(), Optional.empty(), List.of(placedId));
         }
 
         ObjectDefinitionView placedDefinition = placed.orElseThrow();
         if (!placedDefinition.hasTransforms()) {
             return new Resolution(placedId, Status.RESOLVED,
                     Optional.of(placedDefinition), Optional.of(placedDefinition),
-                    List.of(placedId), -1);
+                    List.of(placedId));
         }
 
         // RuneLite DynamicObject.getModel() performs exactly one
@@ -47,14 +47,14 @@ public final class ObjectDefinitionResolver {
         if (nextId < 0) {
             return new Resolution(placedId, Status.NO_DEFAULT_TRANSFORM,
                     Optional.of(placedDefinition), Optional.empty(),
-                    List.of(placedId), -1);
+                    List.of(placedId));
         }
 
         Optional<ObjectDefinitionView> next = definitions.object(nextId);
         if (next.isEmpty()) {
             return new Resolution(placedId, Status.MISSING_TRANSFORM_DEFINITION,
                     Optional.of(placedDefinition), Optional.empty(),
-                    List.of(placedId, nextId), nextId);
+                    List.of(placedId, nextId));
         }
 
         ObjectDefinitionView displayDefinition = next.orElseThrow();
@@ -63,7 +63,7 @@ public final class ObjectDefinitionResolver {
                         ? Status.RESOLVED_NESTED_TRANSFORM_CHILD
                         : Status.RESOLVED,
                 Optional.of(placedDefinition), Optional.of(displayDefinition),
-                List.of(placedId, nextId), -1);
+                List.of(placedId, nextId));
     }
 
     public enum Status {
@@ -79,8 +79,7 @@ public final class ObjectDefinitionResolver {
             Status status,
             Optional<ObjectDefinitionView> placedDefinition,
             Optional<ObjectDefinitionView> displayDefinition,
-            List<Integer> transformPath,
-            int unresolvedDefinitionId
+            List<Integer> transformPath
     ) {
         public Resolution {
             if (placedId < 0) {
@@ -100,12 +99,5 @@ public final class ObjectDefinitionResolver {
                     && displayDefinition.isPresent();
         }
 
-        public boolean transformed() {
-            return transformPath.size() > 1;
-        }
-
-        public int displayId() {
-            return displayDefinition.map(ObjectDefinitionView::id).orElse(-1);
-        }
     }
 }
