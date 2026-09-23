@@ -468,25 +468,33 @@
       "id": "models.colors",
       "domain": "materials",
       "title": "Face colors, unlit colors, and flat-face sentinels",
-      "status": "partial",
+      "status": "covered",
       "priority": "p1",
       "runelite": [
-        "net.runelite.api.Model#getFaceColors1",
-        "net.runelite.api.Model#getUnlitFaceColors"
+        "RuneLite-melxin/runescape-client/src/main/java/ModelData.java#toModel",
+        "RuneLite-melxin/runescape-client/src/main/java/Model.java#draw0",
+        "RuneLite-melxin/runescape-client/src/main/java/Model.java#method5949",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/Model.java#getFaceColors1",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/Model.java#getUnlitFaceColors"
       ],
       "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelFaceColorContract.java",
         "Client/src/main/java/com/rspsi/editor/render/ModelTriangle.java",
-        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java"
+        "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuUploadPlanBuilder.java"
       ],
       "tsps": [
         "rs/model/ModelData.ts",
         "render/SceneBuffer.ts"
       ],
       "evidence": [
-        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java"
+        "Client/src/test/java/com/rspsi/editor/render/ModelFaceColorContractTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuModelColorParityTest.java"
       ],
-      "reason": "Colors are retained and relit, but unlit-face submission is not independently selectable as a callback mode.",
-      "nextAction": "Add explicit source-color and lit-color parity assertions."
+      "reason": "Source/unlit Jagex HSL and post-lighting Model.faceColors1/2/3 are now explicit, independently asserted contracts. Recolor is applied before the retained unlit color, smooth and textured faces reproduce ModelData.toModel lighting/clamping, flat faces preserve faceColors3=-1 with the client's zero-initialized faceColors2 slot, and skipped faces preserve faceColors3=-2. Submission and GPU flattening use those sentinels directly, so textured renderType 3 is omitted correctly while 254-alpha shaded faces remain drawable. Flat color is expanded to three ordinary GPU vertex values only at the backend boundary. Optional unlit draw-mode negotiation remains tracked separately under callbacks.modes rather than being a color-retention gap.",
+      "nextAction": "Keep ModelFaceColorContract as the single source of truth when adding callback/unlit rendering modes or new dynamic model submission paths."
     },
     {
       "id": "models.alpha",
