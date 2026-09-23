@@ -8,6 +8,7 @@ import com.rspsi.cache.store.ObjectDefinitionOutputCacheBuilder;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.cache.workspace.ObjectDefinitionEditWorkspace;
 import com.rspsi.editor.ObjectDefinitionEditCommand;
+import com.rspsi.editor.inspector.ObjectReport;
 import com.rspsi.editor.inspector.ObjectResolutionSummary;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.OsrsLocShape;
@@ -21,6 +22,7 @@ import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.ObjectPreviewRenderer;
+import com.rspsi.studio.ui.PropertyGrid;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
 import imgui.ImDrawList;
@@ -512,14 +514,11 @@ public final class ObjectViewerPanel implements StudioPanel {
             int previewSizeX = rawInt(raw, "sizeX").orElse(def.width());
             int previewSizeY = rawInt(raw, "sizeY").orElse(def.length());
 
-            ImGui.pushFont(StudioFonts.mono(), 0.0f);
-            ImGui.textColored(0xFF38BDF8, objectLabel(previewName, id));
-            ImGui.text("Size:        " + previewSizeX + " x " + previewSizeY);
-            ImGui.text("Interactive: " + def.interactive());
-            ImGui.text("Models:      " + java.util.Arrays.toString(def.modelIds()));
-            ImGui.text("Actions:     " + String.join(", ",
-                    def.interactions().stream().filter(a -> !a.isBlank()).toList()));
-            ImGui.popFont();
+            if (transaction != null && !transaction.dirtyFields().isEmpty()) {
+                ImGui.textColored(0xFFF59E0B, "Unsaved edits: " + objectLabel(previewName, id)
+                        + "  size " + previewSizeX + " x " + previewSizeY);
+            }
+            PropertyGrid.render("obj-props", ObjectReport.forDefinition(id, definitions));
 
             if (transaction != null) {
                 renderDefinitionTransactionEditor(context, cache, transaction);

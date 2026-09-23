@@ -1,11 +1,14 @@
 package com.rspsi.studio.ui.panels;
 
 import com.rspsi.cache.definition.FloorDefinitionView;
-import com.rspsi.cache.definition.ObjectAppearanceView;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
-import com.rspsi.editor.inspector.ObjectDefinitionSummary;
-import com.rspsi.editor.inspector.ObjectInspectorSnapshot;
+import com.rspsi.editor.inspector.ObjectReport;
+import com.rspsi.studio.ui.PropertyGrid;
 import com.rspsi.editor.model.FloorId;
+import com.rspsi.editor.render.TerrainRenderVertex;
+import com.rspsi.editor.render.TerrainRenderFace;
+import com.rspsi.editor.render.TerrainRenderPacket;
+import com.rspsi.editor.render.TilePreviewBuilder;
 import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileCoordinate;
@@ -159,8 +162,11 @@ public final class TileBrushPanel implements StudioPanel {
         ImGui.textDisabled("[" + flagSummary(flags) + "]");
 
         ImGui.spacing();
-        renderLiveTilePreview(cache, snapshot);
-        ImGui.sameLine(0.0f, 16.0f);
+        ImGui.checkbox("Underlay blending##tile-preview-blend", previewBlending);
+        ImGui.sameLine();
+        ImGui.textDisabled("(off = this tile's own underlay colour)");
+        renderTilePreviewStack(cache, world, coord.plane(), localX, localY);
+        ImGui.spacing();
         ImGui.beginGroup();
         renderFloorDefinitionDetail(cache, "Underlay", snapshot.underlayId(), true);
         ImGui.spacing();
@@ -342,7 +348,7 @@ public final class TileBrushPanel implements StudioPanel {
 
     /**
      * Object Inspector: every object on the selected tile, each expandable into its full
-     * {@link ObjectInspectorSnapshot} - definition, collision, and appearance data straight from
+     * {@link ObjectReport} - definition, collision, and appearance data straight from
      * the cache, for tracking a misconfigured type/rule or a rendering bug back to its source.
      */
     private void renderObjectsOnTile(LoadedOsrsCacheSession cache, java.util.List<WorldObject> objects) {
@@ -358,183 +364,99 @@ public final class TileBrushPanel implements StudioPanel {
             ImGui.textDisabled("No cache loaded - cannot resolve object definitions.");
             return;
         }
+        int index = 0;
         for (WorldObject object : objects) {
-            ImGui.pushID(object.id() * 4 + object.rotation());
-            ObjectInspectorSnapshot snapshot = ObjectInspectorSnapshot.capture(object, cache.bundle().definitions());
-            String label = "#" + object.id() + "  " + snapshot.definition().map(ObjectDefinitionSummary::name)
-                    .filter(name -> !name.isBlank()).orElse("(unnamed)")
-                    + "   [" + snapshot.categoryName() + "]";
+            ImGui.pushID(index);
+            ObjectReport report = ObjectReport.forPlacement(object, cache.bundle().definitions());
+            String label = report.title() + "   [" + object.category().displayName() + "]";
             if (ImGui.treeNode(label)) {
-                if (ImGui.smallButton("Copy Object Info##obj-copy")) {
-                    ImGui.setClipboardText(objectInfoText(object, snapshot));
-                }
-                renderObjectInspectorDetail(object, snapshot);
+                PropertyGrid.render("tile-obj-" + index, report);
                 ImGui.treePop();
             }
             ImGui.popID();
+            index++;
         }
     }
 
-    private void renderObjectInspectorDetail(WorldObject object, ObjectInspectorSnapshot snapshot) {
-        ImGui.textColored(0xFF38BDF8, "Placement");
-        ImGui.text("Id: " + snapshot.id() + "   Type: " + snapshot.type() + "   Rotation: " + snapshot.rotation());
-        ImGui.text("Position: " + snapshot.x() + ", " + snapshot.y() + "  (plane " + snapshot.plane() + ")");
-        ImGui.text("Category: " + snapshot.categoryName() + "   Shape: " + snapshot.shapeName());
-        if (snapshot.category() == com.rspsi.editor.model.ObjectCategory.WALL
-                || snapshot.category() == com.rspsi.editor.model.ObjectCategory.WALL_DECOR) {
-            ImGui.text("Wall orientation A/B: 0x" + Integer.toHexString(object.wallOrientationA())
-                    + " / 0x" + Integer.toHexString(object.wallOrientationB()));
-        }
+    private final imgui.type.ImBoolean previewBlending = new imgui.type.ImBoolean(true);
+    private final TilePreviewBuilder tilePreviews = new TilePreviewBuilder();
 
-        ImGui.spacing();
-        ImGui.textColored(0xFF38BDF8, "Definition");
-        if (snapshot.definition().isEmpty()) {
-            ImGui.textColored(0xFFEF4444, "No definition found for id " + snapshot.id() + " - dangling object id.");
-        } else {
-            ObjectDefinitionSummary def = snapshot.definition().get();
-            ImGui.text("Name: " + (def.name().isBlank() ? "(none)" : def.name()));
-            ImGui.text("Size: " + def.width() + " x " + def.length());
-            ImGui.text("Model ids: " + def.modelIds());
-            if (!def.modelTypes().isEmpty()) {
-                ImGui.text("Model types: " + def.modelTypes());
+    /**
+     * Every floor surface authored at this x,y, one preview per plane, drawn
+     * from the exact terrain packet the renderer submits (lit colours and the
+     * real texture), so a bridge deck and the ground under it, or stacked
+     * floors, are shown one under the other instead of fighting in one box.
+     */
+    private void renderTilePreviewStack(LoadedOsrsCacheSession cache, WorldDocument world,
+                                        int selectedPlane, int x, int y) {
+        if (cache == null) {
+            ImGui.textDisabled("No cache loaded - cannot build the tile preview.");
+            return;
+        }
+        TilePreviewBuilder.Mode mode = previewBlending.get()
+                ? TilePreviewBuilder.Mode.BLENDED : TilePreviewBuilder.Mode.UNBLENDED;
+        boolean any = false;
+        for (int plane = 0; plane < world.planes(); plane++) {
+            var packet = tilePreviews.build(world, cache.bundle().definitions(), plane, x, y, mode);
+            if (packet.isEmpty()) continue;
+            any = true;
+            int effective = world.effectivePlane(plane, x, y);
+            String label = "Plane " + plane + (effective != plane ? "  (renders on scene plane " + effective + ")" : "")
+                    + (plane == selectedPlane ? "  - selected" : "");
+            if (plane == selectedPlane) {
+                ImGui.textColored(0xFF38BDF8, label);
+            } else {
+                ImGui.textDisabled(label);
             }
-            ImGui.text("Actions: " + (def.actions().isEmpty() ? "(none)" : String.join(", ", def.actions())));
+            drawTilePacket(cache, packet.orElseThrow(), 96.0f);
         }
-
-        ImGui.spacing();
-        ImGui.textColored(0xFF38BDF8, "Resolution");
-        var resolution = snapshot.resolution();
-        if (resolution.renderableGeometryReady()) {
-            ImGui.text(resolution.diagnosticSummary());
-        } else {
-            ImGui.textColored(0xFFEF4444, resolution.diagnosticSummary());
-        }
-        if (resolution.transformed()) {
-            ImGui.text("Transform path: " + resolution.transformPath());
-            resolution.displayDefinition().ifPresent(display ->
-                    ImGui.text("Display definition: " + display.name() + " (#" + display.id() + ")"));
-        }
-        if (!resolution.selectedModelIds().isEmpty()) {
-            ImGui.text("Selected models: " + resolution.selectedModelIds());
-        }
-
-        ImGui.spacing();
-        ImGui.textColored(0xFF38BDF8, "Collision");
-        if (snapshot.collision().isEmpty()) {
-            ImGui.textDisabled("No collision data.");
-        } else {
-            var collision = snapshot.collision().get();
-            ImGui.text("Block walk: " + collision.blockWalk() + "   Block projectile: " + collision.blockProjectile()
-                    + "   Breaks routefinding: " + collision.breakRouteFinding());
-        }
-
-        ImGui.spacing();
-        ImGui.textColored(0xFF38BDF8, "Appearance");
-        if (snapshot.appearance().isEmpty()) {
-            ImGui.textDisabled("No appearance data.");
-        } else {
-            ObjectAppearanceView a = snapshot.appearance().get();
-            ImGui.text("Animation id: " + (a.animationId() >= 0 ? String.valueOf(a.animationId()) : "none")
-                    + "   Randomize start: " + a.randomizeAnimStart() + "   Delay update: " + a.delayAnimationUpdate());
-            ImGui.text("Scale: " + a.scaleX() + ", " + a.scaleY() + ", " + a.scaleZ()
-                    + "   Offset: " + a.offsetX() + ", " + a.offsetY() + ", " + a.offsetZ());
-            ImGui.text("Contoured ground: " + a.contouredGround() + " (type " + a.contourGroundType()
-                    + ", param " + a.contourGroundParameter() + ")   Obstructs ground: " + a.obstructsGround());
-            ImGui.text("Decor displacement: " + a.decorDisplacement() + "   Rotated: " + a.rotated());
-            ImGui.text("Casts shadow: " + a.castsShadow() + "   Occludes: " + a.occludes());
-            ImGui.text("Merge normals: " + a.mergeNormals() + "   Non-flat shading: " + a.nonFlatShading());
-            ImGui.text("Ambient: " + a.ambient() + "   Contrast: " + a.contrast());
-            ImGui.text("Model clipped: " + a.modelClipped() + "   Clip mask: 0x" + Integer.toHexString(a.clipMask()));
-            if (!a.recolors().isEmpty()) {
-                ImGui.text("Recolors: " + a.recolors());
-            }
-            if (!a.retextures().isEmpty()) {
-                ImGui.text("Retextures: " + a.retextures());
-            }
-        }
-        // The visible model's scale/offset/recolors come from the display
-        // definition; only call it out when it differs from the placed one.
-        snapshot.displayAppearance()
-                .filter(display -> !snapshot.appearance().equals(java.util.Optional.of(display)))
-                .ifPresent(d -> {
-                    ImGui.textColored(0xFF38BDF8, "Display appearance (visible model)");
-                    ImGui.text("Scale: " + d.scaleX() + ", " + d.scaleY() + ", " + d.scaleZ()
-                            + "   Offset: " + d.offsetX() + ", " + d.offsetY() + ", " + d.offsetZ());
-                    if (!d.recolors().isEmpty()) {
-                        ImGui.text("Recolors: " + d.recolors());
-                    }
-                    if (!d.retextures().isEmpty()) {
-                        ImGui.text("Retextures: " + d.retextures());
-                    }
-                });
+        if (!any) ImGui.textDisabled("No floor is drawn at this position on any plane.");
     }
 
-    private String objectInfoText(WorldObject object, ObjectInspectorSnapshot snapshot) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Object #").append(snapshot.id()).append(" type=").append(snapshot.type())
-                .append(" rotation=").append(snapshot.rotation()).append('\n');
-        sb.append("Position: ").append(snapshot.x()).append(',').append(snapshot.y())
-                .append(" plane ").append(snapshot.plane()).append('\n');
-        sb.append("Category: ").append(snapshot.categoryName()).append("  Shape: ").append(snapshot.shapeName())
-                .append('\n');
-        sb.append("Wall orientation A/B: 0x").append(Integer.toHexString(object.wallOrientationA()))
-                .append(" / 0x").append(Integer.toHexString(object.wallOrientationB())).append('\n');
-        snapshot.definition().ifPresentOrElse(def -> sb.append("Definition: name=").append(def.name())
-                        .append(" size=").append(def.width()).append('x').append(def.length())
-                        .append(" modelIds=").append(def.modelIds())
-                        .append(" actions=").append(def.actions()).append('\n'),
-                () -> sb.append("Definition: NOT FOUND (dangling id)\n"));
-        sb.append("Resolution: ").append(snapshot.resolution().diagnosticSummary())
-                .append(" transformPath=").append(snapshot.resolution().transformPath())
-                .append(" selectedModels=").append(snapshot.resolution().selectedModelIds()).append('\n');
-        snapshot.collision().ifPresent(c -> sb.append("Collision: blockWalk=").append(c.blockWalk())
-                .append(" blockProjectile=").append(c.blockProjectile())
-                .append(" breaksRouteFinding=").append(c.breakRouteFinding()).append('\n'));
-        snapshot.appearance().ifPresent(a -> sb.append("Appearance: animationId=").append(a.animationId())
-                .append(" scale=").append(a.scaleX()).append(',').append(a.scaleY()).append(',').append(a.scaleZ())
-                .append(" offset=").append(a.offsetX()).append(',').append(a.offsetY()).append(',').append(a.offsetZ())
-                .append(" castsShadow=").append(a.castsShadow()).append(" occludes=").append(a.occludes())
-                .append(" clipMask=0x").append(Integer.toHexString(a.clipMask())).append('\n'));
-        return sb.toString();
-    }
-
-    /** Draws exact authored topology using the canonical TerrainMeshBuilder. */
-    private void renderLiveTilePreview(LoadedOsrsCacheSession cache, TileSnapshot snapshot) {
-        float size = 96.0f;
+    /** Draws one terrain packet as the renderer shades it (north up). */
+    private static void drawTilePacket(LoadedOsrsCacheSession cache, TerrainRenderPacket packet, float size) {
         float x = ImGui.getCursorScreenPos().x;
         float y = ImGui.getCursorScreenPos().y;
         ImDrawList draw = ImGui.getWindowDrawList();
-
-        int underlayRgb = 0xFF2A2A2A;
-        if (cache != null && snapshot.underlayId() > 0) {
-            var def = cache.bundle().definitions().underlay(FloorId.definitionId(snapshot.underlayId()));
-            if (def.isPresent()) underlayRgb = floorDisplayRgb(def.get());
+        draw.addRectFilled(x, y, x + size, y + size, toDrawListColor(0xFF0B0F17), 2.0f);
+        for (TerrainRenderFace face : packet.faces()) {
+            TerrainRenderVertex a = packet.vertices().get(face.a());
+            TerrainRenderVertex b = packet.vertices().get(face.b());
+            TerrainRenderVertex c = packet.vertices().get(face.c());
+            float ax = x + a.x() / 128.0f * size, ay = y + size - a.y() / 128.0f * size;
+            float bx = x + b.x() / 128.0f * size, by = y + size - b.y() / 128.0f * size;
+            float cx = x + c.x() / 128.0f * size, cy = y + size - c.y() / 128.0f * size;
+            int texture = face.textureId() >= 0 ? OverlayTextureCache.handleFor(cache, face.textureId()) : 0;
+            if (texture != 0) {
+                // Textured faces: texture RGB x the 7-bit tile light, as the renderer does.
+                int light = ((a.packedHsl() & 0x7F) + (b.packedHsl() & 0x7F) + (c.packedHsl() & 0x7F)) / 3;
+                int grey = Math.min(255, light * 255 / 127);
+                int tint = 0xFF000000 | (grey << 16) | (grey << 8) | grey;
+                draw.addImageQuad(texture, ax, ay, bx, by, cx, cy, cx, cy,
+                        a.x() / 128.0f, 1.0f - a.y() / 128.0f, b.x() / 128.0f, 1.0f - b.y() / 128.0f,
+                        c.x() / 128.0f, 1.0f - c.y() / 128.0f, c.x() / 128.0f, 1.0f - c.y() / 128.0f,
+                        toDrawListColor(tint));
+            } else {
+                draw.addTriangleFilled(ax, ay, bx, by, cx, cy,
+                        toDrawListColor(averageRgb(a.packedHsl(), b.packedHsl(), c.packedHsl())));
+            }
         }
-
-        int overlayRgb = 0xFF4A4A4A;
-        if (cache != null && snapshot.overlayId() > 0) {
-            var def = cache.bundle().definitions().overlay(FloorId.definitionId(snapshot.overlayId()));
-            if (def.isPresent()) overlayRgb = floorDisplayRgb(def.get());
-        }
-
-        var mesh = new TerrainMeshBuilder().build(snapshot);
-        draw.addRectFilled(x, y, x + size, y + size, toDrawListColor(underlayRgb), 2.0f);
-        for (var face : mesh.faces()) {
-            if (face.material() == 1 && snapshot.overlayId() <= 0) continue;
-            int color = toDrawListColor(face.material() == 1 ? overlayRgb : underlayRgb);
-            var a = mesh.vertices().get(face.a());
-            var b = mesh.vertices().get(face.b());
-            var c = mesh.vertices().get(face.c());
-            draw.addTriangleFilled(
-                    x + a.x() / 128.0f * size, y + size - a.y() / 128.0f * size,
-                    x + b.x() / 128.0f * size, y + size - b.y() / 128.0f * size,
-                    x + c.x() / 128.0f * size, y + size - c.y() / 128.0f * size,
-                    color);
-        }
-
         draw.addRect(x, y, x + size, y + size, toDrawListColor(0xFF64748B), 2.0f, 0, 1.5f);
-        draw.addText(x + size / 2.0f - 10.0f, y - 15.0f, toDrawListColor(0xFFE2E8F0), "N");
+        draw.addText(x + size + 4.0f, y, toDrawListColor(0xFFE2E8F0), "N");
         ImGui.dummy(size, size);
+    }
+
+    private static int averageRgb(int... packedHsl) {
+        int r = 0, g = 0, b = 0;
+        for (int hsl : packedHsl) {
+            int rgb = OsrsTerrainColorMath.packedHslToRgb(hsl, 0.6);
+            if (rgb == OsrsTerrainColorMath.INVALID_HSL_COLOR) rgb = 0;
+            r += (rgb >> 16) & 0xFF;
+            g += (rgb >> 8) & 0xFF;
+            b += rgb & 0xFF;
+        }
+        int n = packedHsl.length;
+        return 0xFF000000 | ((r / n) << 16) | ((g / n) << 8) | (b / n);
     }
 
     private void renderRegionSurvey(LoadedOsrsCacheSession cache, StudioPanelContext context, WorldDocument world) {
