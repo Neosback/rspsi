@@ -63,6 +63,20 @@ public record ModelAnimationState(
         return frameIndex >= 0;
     }
 
+    /**
+     * True when both states produce the same animation presentation.
+     * Client cycle is intentionally excluded: it is diagnostic timing state,
+     * while sequence/frame/offset/transform state determines rendered output.
+     */
+    public boolean samePresentation(ModelAnimationState other) {
+        return other != null
+                && sequenceId == other.sequenceId
+                && frameIndex == other.frameIndex
+                && frameId == other.frameId
+                && animationHeightOffset == other.animationHeightOffset
+                && transformed == other.transformed;
+    }
+
     public ModelAnimationState withTransformed(boolean value) {
         if (!frameSelected() && value) {
             throw new IllegalArgumentException("Animation without a selected frame cannot be transformed");
