@@ -276,6 +276,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private final ArrayList<Integer> alphaOrder = new ArrayList<>();
     private final RsFaceOrderPlanner.Workspace alphaOrderWorkspace =
             new RsFaceOrderPlanner.Workspace();
+    private GpuCommandGeometry cachedAlphaGeometry;
+    private GpuCommandVisibility cachedAlphaVisibility;
+    private CameraState cachedAlphaCamera;
+    private List<GpuDrawCommand> cachedAlphaCommandList = List.of();
+    private List<Integer> cachedAlphaOrder = List.of();
     private final java.util.HashSet<Integer> missingTextureIds = new java.util.HashSet<>();
     private final FrameMetrics frameMetrics = new FrameMetrics();
     private GpuUploadPlan statisticsPlan;
@@ -538,29 +543,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // The software reference renderer composites transparent triangles
         // back-to-front. Keep opaque submission order stable, but apply the
         // same depth ordering to alpha ranges in the native backend.
-        alphaCommands.clear();
-        alphaOrder.clear();
-        ensureCommandIndices(commands);
-        for (int index = 0; index < commands.size(); index++) {
-            GpuDrawCommand command = commands.get(index);
-            if (command.pass() == GpuDrawCommand.SubmissionPass.ALPHA
-                    && visibility.visible(index)) {
-                alphaCommands.add(command);
-            }
-        }
-        float alphaCosYaw = (float) Math.cos(camera.yaw());
-        float alphaSinYaw = (float) Math.sin(camera.yaw());
-        float alphaCosPitch = (float) Math.cos(camera.pitch());
-        float alphaSinPitch = (float) Math.sin(camera.pitch());
-        List<GpuDrawCommand> orderedAlpha = RsFaceOrderPlanner.orderAlphaReusable(
-                alphaCommands,
-                command -> averageDepth(runtimeGeometry, alphaIndices.get(command), command, camera,
-                        alphaCosYaw, alphaSinYaw, alphaCosPitch, alphaSinPitch),
-                command -> command.wallDecorationPresentation().cameraOrder(command.tile(), camera),
-                alphaOrderWorkspace);
-        for (GpuDrawCommand command : orderedAlpha) {
-            alphaOrder.add(alphaIndices.get(command));
-        }
+        List<Integer> alphaOrder = alphaOrderFor(
+                runtimeGeometry, commands, visibility, camera);
         drawBatches(
                 plan, commands, alphaOrder, visibility, camera, true, clientCycle);
         // Alpha and no-depth submissions disable depth writes. Restore the
@@ -858,6 +842,51 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             }
             frameMetrics.drawCalls++;
         }
+    }
+
+    List<Integer> alphaOrderFor(GpuCommandGeometry geometry,
+                                List<GpuDrawCommand> commands,
+                                GpuCommandVisibility visibility,
+                                CameraState camera) {
+        if (geometry == cachedAlphaGeometry
+                && commands == cachedAlphaCommandList
+                && visibility == cachedAlphaVisibility
+                && camera.equals(cachedAlphaCamera)) {
+            return cachedAlphaOrder;
+        }
+
+        alphaCommands.clear();
+        alphaOrder.clear();
+        ensureCommandIndices(commands);
+        for (int index = 0; index < commands.size(); index++) {
+            GpuDrawCommand command = commands.get(index);
+            if (command.pass() == GpuDrawCommand.SubmissionPass.ALPHA
+                    && visibility.visible(index)) {
+                alphaCommands.add(command);
+            }
+        }
+
+        float cosYaw = (float) Math.cos(camera.yaw());
+        float sinYaw = (float) Math.sin(camera.yaw());
+        float cosPitch = (float) Math.cos(camera.pitch());
+        float sinPitch = (float) Math.sin(camera.pitch());
+        List<GpuDrawCommand> orderedAlpha = RsFaceOrderPlanner.orderAlphaReusable(
+                alphaCommands,
+                command -> averageDepth(geometry, alphaIndices.get(command), command, camera,
+                        cosYaw, sinYaw, cosPitch, sinPitch),
+                command -> command.wallDecorationPresentation().cameraOrder(
+                        command.tile(), camera),
+                alphaOrderWorkspace);
+        for (GpuDrawCommand command : orderedAlpha) {
+            alphaOrder.add(alphaIndices.get(command));
+        }
+
+        cachedAlphaGeometry = geometry;
+        cachedAlphaCommandList = commands;
+        cachedAlphaVisibility = visibility;
+        cachedAlphaCamera = camera;
+        cachedAlphaOrder = List.copyOf(alphaOrder);
+        return cachedAlphaOrder;
     }
 
     private void ensureCommandIndices(List<GpuDrawCommand> commands) {
@@ -1200,6 +1229,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         alphaIndices.clear();
         indexedCommands = List.of();
         alphaOrder.clear();
+        cachedAlphaGeometry = null;
+        cachedAlphaVisibility = null;
+        cachedAlphaCamera = null;
+        cachedAlphaCommandList = List.of();
+        cachedAlphaOrder = List.of();
         missingTextureIds.clear();
         frameMetrics.reset();
         statisticsPlan = null;
