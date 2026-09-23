@@ -596,6 +596,7 @@ public final class ObjectViewerPanel implements StudioPanel {
                 (dirty ? "* " : "") + label + "##definition-" + fieldName,
                 state.input);
         boolean activated = ImGui.isItemActivated();
+        boolean active = ImGui.isItemActive();
         boolean deactivated = ImGui.isItemDeactivated();
 
         if (activated) {
@@ -606,6 +607,14 @@ public final class ObjectViewerPanel implements StudioPanel {
 
         if (deactivated && state.editing) {
             finishScalarFieldEdit(context, transaction, fieldName, field.type(), state);
+        } else if (state.editing && !active) {
+            // The widget can disappear while active when the panel/tab changes.
+            // No transaction mutation has happened yet, so cancel the orphaned
+            // edit buffer instead of leaving it stuck as an untracked change.
+            state.editing = false;
+            state.before = null;
+            state.sync(field.value());
+            state.error = "";
         }
 
         if (!state.error.isBlank()) {
@@ -758,6 +767,7 @@ public final class ObjectViewerPanel implements StudioPanel {
                 (dirty ? "* Value" : "Value") + "##definition-param-value",
                 state.input);
         boolean activated = ImGui.isItemActivated();
+        boolean active = ImGui.isItemActive();
         boolean deactivated = ImGui.isItemDeactivated();
 
         if (activated) {
@@ -793,6 +803,11 @@ public final class ObjectViewerPanel implements StudioPanel {
                 state.editing = false;
                 state.before = null;
             }
+        } else if (state.editing && !active) {
+            state.editing = false;
+            state.before = null;
+            state.sync(param.value());
+            state.error = "";
         }
 
         if (!state.error.isBlank()) {
@@ -910,8 +925,8 @@ public final class ObjectViewerPanel implements StudioPanel {
                     Integer.parseInt(value.trim()));
             case LONG -> ObjectDefinitionEditValue.longValue(
                     Long.parseLong(value.trim()));
-            case BOOLEAN -> ObjectDefinitionEditValue.booleanValue(
-                    Boolean.parseBoolean(value.trim()));
+            case BOOLEAN -> new ObjectDefinitionEditValue(
+                    ObjectDefinitionRawView.ValueType.BOOLEAN, value.trim());
             default -> throw new IllegalArgumentException(
                     "Complex definition value is not scalar-editable: " + type);
         };
