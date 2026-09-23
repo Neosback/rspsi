@@ -18,11 +18,12 @@ class ModelAnimationStateTest {
     }
 
     @Test
-    void unresolvedSequenceDoesNotShiftPlacementUntilAFrameIsActive() {
+    void activeSequenceAppliesHeightOffsetEvenWithoutLegacyFrameTransform() {
         ModelAnimationState state = ModelAnimationState.unresolved(77, 2, 12);
 
-        assertFalse(state.active());
+        assertTrue(state.active());
+        assertFalse(state.frameSelected());
         assertFalse(state.transformed());
-        assertEquals(100, state.renderPlacementHeight(100));
+        assertEquals(88, state.renderPlacementHeight(100));
     }
 }
