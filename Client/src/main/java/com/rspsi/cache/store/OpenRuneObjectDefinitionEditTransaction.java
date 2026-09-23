@@ -13,6 +13,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -23,7 +24,6 @@ final class OpenRuneObjectDefinitionEditTransaction
         implements ObjectDefinitionEditTransaction {
 
     private final ObjectType source;
-    private final int revision;
     private final ObjectCodec codec;
     private final ObjectDefinitionRawView original;
     private ObjectTypeBuilder builder;
@@ -33,7 +33,6 @@ final class OpenRuneObjectDefinitionEditTransaction
         if (revision <= 0) {
             throw new IllegalArgumentException("OSRS revision must be positive");
         }
-        this.revision = revision;
         this.codec = new ObjectCodec(revision);
         this.original = OpenRuneDefinitionProvider.toRawView(source);
         this.builder = source.toBuilder();
@@ -63,7 +62,14 @@ final class OpenRuneObjectDefinitionEditTransaction
         LinkedHashSet<String> names = new LinkedHashSet<>(before.keySet());
         names.addAll(after.keySet());
         for (String name : names) {
-            if (!Objects.equals(before.get(name), after.get(name))) {
+            ObjectDefinitionRawView.Field beforeField = before.get(name);
+            ObjectDefinitionRawView.Field afterField = after.get(name);
+            ObjectDefinitionRawView.Field candidate =
+                    afterField == null ? beforeField : afterField;
+            if (candidate == null || !isScalar(candidate.type())) {
+                continue;
+            }
+            if (!Objects.equals(beforeField, afterField)) {
                 dirty.add(name);
             }
         }
@@ -229,7 +235,14 @@ final class OpenRuneObjectDefinitionEditTransaction
 
     private Map<Integer, Object> mutableParams() {
         Map<Integer, Object> current = builder.getParams();
-        return current == null ? new HashMap<>() : new HashMap<>(current);
+        return current == null ? new TreeMap<>() : new TreeMap<>(current);
+    }
+
+    private static boolean isScalar(ObjectDefinitionRawView.ValueType type) {
+        return type == ObjectDefinitionRawView.ValueType.STRING
+                || type == ObjectDefinitionRawView.ValueType.INTEGER
+                || type == ObjectDefinitionRawView.ValueType.LONG
+                || type == ObjectDefinitionRawView.ValueType.BOOLEAN;
     }
 
     private static Map<String, ObjectDefinitionRawView.Field> fieldsByName(
