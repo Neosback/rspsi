@@ -660,7 +660,71 @@ The workspace must verify:
 
 These rules should be unit-tested at the state/layout resolver level even though pixel-perfect ImGui rendering still needs live verification.
 
-## 16. Guiding principle
+## 16. Accessibility, focus, scaling, and performance
+
+The workspace must remain usable as the tool set and asset catalogs grow.
+
+### Accessibility and discoverability
+
+- every icon-only control requires a tooltip and stable accessible label
+- color cannot be the only indicator of active/error/warning state
+- keyboard focus order follows the visible workspace hierarchy
+- core actions expose shortcuts when practical
+- focus must not leak into the viewport while a text/numeric field is actively capturing input
+- Escape should cancel transient tool interaction before closing persistent workspace surfaces
+- destructive actions require clear intent and remain undoable where technically possible
+
+### DPI and sizing
+
+- rails, hit targets, fonts, thumbnails, and spacing derive from shared layout/theme tokens
+- high-DPI scaling must not require per-plugin pixel constants
+- the workspace defines a supported minimum window size
+- when space is constrained, contextual surfaces collapse before the central viewport becomes unusable
+- user-resized rail/drawer dimensions are clamped to sane min/max values
+
+### Transparency and readability
+
+- translucency is appropriate for viewport HUDs and the Viewport Quick Palette
+- core drawers, shelves, and inspectors must retain sufficient contrast for prolonged editing
+- text/background contrast must remain readable over bright and dark OSRS scenes
+- pinned HUDs may expose opacity controls but cannot become effectively invisible while still intercepting input
+
+### UI/render-loop performance
+
+Dear ImGui rendering must not become an implicit cache-processing loop.
+
+Rules:
+
+- large object/material catalogs use virtualization
+- search indexes are cached/incremental rather than rebuilt every frame
+- model/thumbnail generation is asynchronous or amortized and never blocks the frame loop on thousands of assets
+- cache decoding, world-corpus analysis, and expensive semantic queries do not run synchronously from ordinary render callbacks
+- unavailable thumbnails show stable placeholders rather than shifting layout
+- plugin UI contributions receive the same performance expectations as first-party UI
+- HUDs and inspectors consume canonical snapshots/services instead of repeatedly rescanning the world independently
+
+The target is a stable interactive viewport even while deep libraries contain tens of thousands of definitions.
+
+## 17. Workspace persistence and schema evolution
+
+Workspace state is persistent user data and needs a migration strategy.
+
+Persist using stable semantic ids, not array positions:
+
+- tool id
+- surface contribution id
+- inspector section id
+- HUD id
+- quick-palette slot id
+- plugin id
+
+Workspace layout/settings storage should carry a schema version.
+
+When surfaces are renamed or migrated, provide an explicit migration where reasonable. Corrupt or obsolete workspace state must fall back to a known default layout rather than preventing Studio startup.
+
+Plugin-owned persisted UI state is removed or quarantined cleanly when a plugin disappears, without corrupting host workspace state.
+
+## 18. Guiding principle
 
 The workspace is contextual, not modal-window-driven.
 
