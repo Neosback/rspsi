@@ -63,7 +63,6 @@ public final class LoadedOsrsCacheSession implements AutoCloseable {
 
     @Override
     public void close() {
-        objectDefinitions.clear();
         bundle.close();
     }
 }
