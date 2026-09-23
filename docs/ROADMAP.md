@@ -13,6 +13,20 @@ Detailed supporting contracts:
 
 The roadmap deliberately does not duplicate every entry in the rendering parity manifest. The manifest remains the detailed renderer checklist. This file decides product order and architectural dependencies.
 
+## Source-of-truth hierarchy
+
+When project documents disagree, use this order:
+
+1. current production code plus passing tests for what the repository actually does
+2. RENDERING_PARITY_MANIFEST.json for rendering-status claims
+3. ROADMAP.md for project execution order and architectural sequencing
+4. UI_WORKSPACE_CONTRACT.md for editor-shell and plugin UI placement
+5. CONTENT_STUDIO_FOUNDATION.md for advanced-authoring prerequisite detail
+6. OPENRUNE_ECOSYSTEM_INTEGRATION.md for OpenRune subsystem integration detail
+7. explicitly historical acceptance/reference documents for background only
+
+A lower item must not silently override a higher item. When work makes a lower document stale, update it in the same PR when practical.
+
 ---
 
 ## 1. Product target
@@ -110,15 +124,22 @@ No advanced authoring system should be built on top of a viewport the user canno
 
 This phase is now the immediate priority.
 
-## 0.1 Rendering parity blocker
+## 0.1 Rendering parity status
 
 RENDERING_PARITY_MANIFEST.json remains authoritative.
 
-The remaining P0 renderer item must be closed with real-cache validation:
+At this roadmap rewrite the live manifest reports:
 
-- native.depthPriorityFacing
+- 33 covered
+- 4 deferred
+- 0 partial
+- 0 blocked
 
-Do not mark it covered from synthetic fixtures alone. Validate asymmetric models plus wall/roof/bridge-heavy scenes.
+All currently tracked P0 rendering entries are covered, including native.depthPriorityFacing.
+
+Do not reopen already-covered P0 work from stale prose or historical acceptance documents. Reopen a covered item only when new reproducible evidence demonstrates a regression or an uncovered semantic case.
+
+Phase 0 rendering work is therefore targeted trust validation around the user-observed failures below, not a speculative parity rewrite.
 
 ## 0.2 Missing, null, or invisible objects
 
@@ -141,6 +162,7 @@ Required investigation must distinguish at least:
 8. render packet produced but scene submission drops it
 9. object rendered but occlusion/plane/depth logic hides it
 10. picker/inspector cannot resolve a visible scene object back to authored identity
+11. UI/type taxonomy is stale even when the object is valid. Object type labels must come from the canonical OSRS loc-shape model rather than duplicated arrays. The current ObjectViewerPanel labels type 11 and type 22 inconsistently with OsrsLocShape and should be corrected during this trust work.
 
 ### Acceptance criteria
 
@@ -764,6 +786,22 @@ Build a neutral component model for:
 - compact previews
 
 Project these components into the strict workspace slots from UI_WORKSPACE_CONTRACT.md.
+
+## 6.6 Plugin compatibility and deprecation policy
+
+The public plugin API must be versioned as a product contract, not only compiled until it breaks.
+
+Rules:
+
+- new neutral services are additive where possible
+- old StudioToolPlugin/UiSurfaceContribution placement behavior remains behind compatibility adapters while first-party tools migrate
+- deprecated public APIs receive a documented replacement path
+- removal requires an intentional Plugin API version change
+- plugin load failures must report the missing/incompatible capability clearly
+- persisted plugin settings use stable plugin/control ids and survive UI surface migration when semantics are unchanged
+- internal StudioPlugin/native APIs may change more aggressively because they are not the supported third-party boundary
+
+A workspace redesign is not permission to silently break external plugins.
 
 ---
 
