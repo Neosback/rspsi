@@ -246,10 +246,10 @@ Current preview strengths:
 - a reference floor patch
 - double-sided preview workaround to match the main renderer's no-cull presentation
 
-Current issues to validate:
+Current issues:
 
 - camera fit uses vertical FOV and a bounding sphere but must also respect preview aspect ratio
-- verify whether model bounds and final GPU-plan coordinates are in the same space used by the preview camera
+- confirmed coordinate mismatch: ObjectPreviewRenderer.boundsOf() uses ModelRenderPacket local model bounds, while GpuUploadPlanBuilder renders model vertices at anchor.x * 128 / anchor.y * 128 plus renderPlacementHeight. The preview object is deliberately anchored at tile (1,1), so camera centering can be displaced by a full tile in X/Z and by placement height in Y.
 - fixed default yaw/pitch is not guaranteed to present every object well
 - 3x3 floor visualization is a fallback rather than a purpose-built scale grid
 - unresolved objects return an empty preview without sufficiently rich diagnosis
@@ -1248,7 +1248,9 @@ This is the recommended immediate sequence from the current main branch.
 
 ## PR D - Object preview framing and scale
 
-- verify preview coordinate spaces
+- correct the confirmed local-bounds vs anchored-GPU-geometry camera mismatch
+- include render placement height in preview-space bounds
+- derive/verify bounds from the same coordinate space submitted to the preview renderer
 - aspect-aware auto-fit
 - better default view
 - footprint/tile scale visualization
