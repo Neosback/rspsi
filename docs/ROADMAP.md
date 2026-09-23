@@ -11,6 +11,7 @@ Detailed supporting contracts:
 - STUDIO_SEMANTIC_API.md - Studio-owned authored-world/resolved-scene API contract and RuneLite reference policy
 - PHASE0_LUMBRIDGE_ACCEPTANCE.md - pinned real-cache object-resolution acceptance for Lumbridge region 50,50
 - OPENRUNE_ECOSYSTEM_INTEGRATION.md - OpenRune Server/cache/source integration guardrails
+- OPENRUNE_MAVEN_CATALOG.md - published OpenRune artifact inventory, adoption matrix, version status, and XTEA boundary
 - RENDERING_PARITY_MANIFEST.json - live rendering correctness backlog
 
 The roadmap deliberately does not duplicate every entry in the rendering parity manifest. The manifest remains the detailed renderer checklist. This file decides product order and architectural dependencies.
@@ -26,7 +27,8 @@ When project documents disagree, use this order:
 5. UI_WORKSPACE_CONTRACT.md for editor-shell and plugin UI placement
 6. CONTENT_STUDIO_FOUNDATION.md for advanced-authoring prerequisite detail
 7. OPENRUNE_ECOSYSTEM_INTEGRATION.md for OpenRune subsystem integration detail
-8. explicitly historical acceptance/reference documents for background only
+8. OPENRUNE_MAVEN_CATALOG.md for published OpenRune dependency/capability inventory
+9. explicitly historical acceptance/reference documents for background only
 
 A lower item must not silently override a higher item. When work makes a lower document stale, update it in the same PR when practical.
 
@@ -38,7 +40,7 @@ Use the correct reference for the question being answered. Do not treat all exte
 2. **Vendored RuneLite `runescape-client` source** is the primary reproducible reference for OSRS client scene semantics: object transforms, tile paint/model construction, loc-shape model selection, plane/bridge behavior, contouring, lighting order, scene traversal, visibility, and related client rules.
 3. **Vendored RuneLite `runelite-api` and public Javadocs** are the primary naming/concept reference for stable semantic API design. They are not by themselves proof of implementation behavior.
 4. **Vendored RuneLite mixins/GPU/client renderer code** is consulted when the question is specifically how RuneLite exposes or submits client scene/render state.
-5. **OpenRune FileStore/definitions/builders** are the primary backend reference for cache decoding, encoding, writable definition semantics, reference-table updates, and OpenRune project/content integration.
+5. **OpenRune FileStore/definitions/builders/tools** are the primary backend reference for cache decoding, encoding, writable definition semantics, reference-table updates, reference-cache acquisition, packing, and OpenRune project/content integration. Check OPENRUNE_MAVEN_CATALOG.md before building overlapping infrastructure.
 6. **TSPS and other open implementations** are secondary algorithm/architecture cross-checks, not the final source of OSRS truth.
 7. **Legacy RSPSi behavior** is historical evidence only unless locked by current tests or independently validated.
 8. **OSRS Wiki/data tools** are useful for IDs, names, locations, and human context, not for renderer math or client traversal semantics.
