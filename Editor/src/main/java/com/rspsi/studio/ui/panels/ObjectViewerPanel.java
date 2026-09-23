@@ -8,6 +8,7 @@ import com.rspsi.cache.store.ObjectDefinitionOutputCacheBuilder;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.cache.workspace.ObjectDefinitionEditWorkspace;
 import com.rspsi.editor.ObjectDefinitionEditCommand;
+import com.rspsi.editor.inspector.ObjectResolutionSummary;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.OsrsLocShape;
 import com.rspsi.editor.selection.ObjectSelection;
@@ -198,6 +199,7 @@ public final class ObjectViewerPanel implements StudioPanel {
     }
 
     private static final float PREVIEW_HEIGHT = 200.0f;
+    private static final int GRID_PREVIEW_ANCHOR = 1;
     private static final float CELL_SIZE = 88.0f;
     private static final float CELL_SPACING = 8.0f;
 
@@ -245,12 +247,17 @@ public final class ObjectViewerPanel implements StudioPanel {
             if (texture != 0) {
                 ImGui.image((long) texture, size, size);
             } else {
+                ObjectResolutionSummary resolution = ObjectResolutionSummary.capture(
+                        new WorldObject(objId, objectType.get(), objectRotation.get(),
+                                0, GRID_PREVIEW_ANCHOR, GRID_PREVIEW_ANCHOR),
+                        cache.bundle().definitions());
+                String reason = resolution.renderableGeometryReady()
+                        ? "Model data resolved, but the preview produced no renderable packet"
+                        : resolution.diagnosticSummary();
                 draw.addText(StudioFonts.ui(), 12, cx + 12, cy + PREVIEW_HEIGHT * 0.5f - 16.0f,
                         StudioDrawColors.abgr(0xFFF59E0B), "No renderable model for #" + objId);
-                draw.addText(StudioFonts.mono(), 11, cx + 12, cy + PREVIEW_HEIGHT * 0.5f + 2.0f,
-                        StudioDrawColors.abgr(0xFF94A3B8), "(varbit/varp-driven appearance with no live game state,");
-                draw.addText(StudioFonts.mono(), 11, cx + 12, cy + PREVIEW_HEIGHT * 0.5f + 16.0f,
-                        StudioDrawColors.abgr(0xFF94A3B8), "and no configured default - nothing to fall back to)");
+                draw.addText(StudioFonts.mono(), 11, cx + 12, cy + PREVIEW_HEIGHT * 0.5f + 4.0f,
+                        StudioDrawColors.abgr(0xFF94A3B8), compactPreviewDiagnostic(reason));
             }
 
             // Drag-anywhere-on-the-preview to orbit; the invisible button
@@ -315,6 +322,11 @@ public final class ObjectViewerPanel implements StudioPanel {
             settings.set(EditorSettingKeys.OBJECT_ROTATION, objectRotation.get());
         }
         ImGui.popItemWidth();
+    }
+
+    private static String compactPreviewDiagnostic(String value) {
+        if (value == null || value.isBlank()) return "No diagnostic detail available";
+        return value.length() <= 64 ? value : value.substring(0, 61) + "...";
     }
 
     private static float clamp(float value, float min, float max) {
