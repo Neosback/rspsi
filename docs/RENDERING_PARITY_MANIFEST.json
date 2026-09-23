@@ -1072,17 +1072,21 @@
       "id": "callbacks.modes",
       "domain": "native",
       "title": "RuneLite draw callback modes and optional passes",
-      "status": "partial",
+      "status": "covered",
       "priority": "p2",
       "runelite": [
-        "net.runelite.api.hooks.DrawCallbacks#PASS_OPAQUE",
-        "net.runelite.api.hooks.DrawCallbacks#PASS_ALPHA",
-        "net.runelite.api.hooks.DrawCallbacks#PRE_PASS_ALPHA",
-        "net.runelite.api.hooks.DrawCallbacks#HILLSKEW",
-        "net.runelite.api.hooks.DrawCallbacks#NORMALS"
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/hooks/DrawCallbacks.java#GPU",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/hooks/DrawCallbacks.java#HILLSKEW",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/hooks/DrawCallbacks.java#NORMALS",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/hooks/DrawCallbacks.java#ZBUF",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/hooks/DrawCallbacks.java#PASS_OPAQUE",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/hooks/DrawCallbacks.java#PASS_ALPHA"
       ],
       "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/DrawCallbackContract.java",
         "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuSceneVertex.java",
+        "Client/src/main/java/com/rspsi/editor/render/ModelContourContract.java",
         "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
       ],
       "tsps": [
@@ -1090,10 +1094,14 @@
         "render/SceneBuffer.ts"
       ],
       "evidence": [
-        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+        "Client/src/test/java/com/rspsi/editor/render/DrawCallbackContractTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ModelContourContractTest.java",
+        "Editor/src/test/java/com/rspsi/renderer/opengl/OpenGlSceneRendererStateTest.java",
+        "Editor/src/test/java/com/rspsi/renderer/opengl/OpenGlCallbackPassAcceptanceTest.java"
       ],
-      "reason": "Opaque/alpha submission and normal data are present, and the model contour contract now exposes HILLSKEW-compatible unskewed-model metadata. Callback-mode negotiation, pre-alpha callback behavior, and source-backed optional callback passes remain explicit gaps.",
-      "nextAction": "Add callback negotiation and optional passes only when source-backed fixtures require them; consume the existing contour/unskewed-model contract rather than duplicating HILLSKEW geometry."
+      "reason": "The native renderer now has an explicit fail-closed DrawCallbacks compatibility contract using the vendored RuneLite bit/pass values. GPU, HILLSKEW, NORMALS and ZBUF are advertised because each has concrete backing state; unsupported optional flags remain disabled instead of being silently claimed. The only pass IDs in the vendored API are PASS_OPAQUE and PASS_ALPHA, and both map directly to GpuDrawCommand submission passes. HILLSKEW uses retained pre-contour model state, normals survive into GPU-plan vertices, all five render modes have explicit native depth/blend state, and production OpenGL acceptance verifies alpha composition occurs after opaque submission with depth state restored afterward.",
+      "nextAction": "Keep callback negotiation, contour/normal transport, render-mode state and native opaque/alpha composition fixtures as regressions. Add future RuneLite callback capabilities only when a source-backed editor feature requires and implements them."
     }
   ]
 }
