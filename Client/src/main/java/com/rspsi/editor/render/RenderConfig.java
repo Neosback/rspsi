@@ -75,6 +75,15 @@ public record RenderConfig(
                 .withRoofGeometry(!roofsVisible);
     }
 
+    /**
+     * Applies frame-time RuneLite roof-removal inputs to the compiled scene policy.
+     * The transient state is never persisted into authored map data or settings.
+     */
+    public SceneVisibilityPolicy visibilityPolicy(RoofRemovalState roofRemovalState) {
+        return visibilityPolicy().withRoofRemovalState(
+                Objects.requireNonNull(roofRemovalState, "roofRemovalState"));
+    }
+
     /** Presentation-only exposure; authored scene colors remain unchanged. */
     public RenderPresentation presentation() {
         return new RenderPresentation(brightness, exposure, wireframe,
@@ -87,8 +96,16 @@ public record RenderConfig(
      * backends receive the same semantic submission.
      */
     public GpuScenePacket apply(GpuScenePacket packet) {
+        return apply(packet, RoofRemovalState.disabled());
+    }
+
+    /**
+     * Applies renderer settings plus frame-time roof-removal state through the
+     * same neutral packet path consumed by every backend.
+     */
+    public GpuScenePacket apply(GpuScenePacket packet, RoofRemovalState roofRemovalState) {
         Objects.requireNonNull(packet, "GPU packet");
-        GpuScenePacket visible = visibilityPolicy().apply(packet);
+        GpuScenePacket visible = visibilityPolicy(roofRemovalState).apply(packet);
         List<SceneTileSnapshot> tiles = visible.tiles().stream()
                 .map(this::filterTile)
                 .toList();
