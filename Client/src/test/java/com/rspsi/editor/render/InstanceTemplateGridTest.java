@@ -68,13 +68,15 @@ class InstanceTemplateGridTest {
                 () -> InstanceTemplateGrid.from(4, List.of(outsideChunks)));
 
         InstanceChunkTemplate outsidePlane = new InstanceChunkTemplate(
-                4, 0, 0, 0, 100, 200, 0);
+                3, 0, 0, 0, 100, 200, 0);
         assertThrows(IllegalArgumentException.class,
-                () -> InstanceTemplateGrid.from(4, List.of(outsidePlane)));
+                () -> InstanceTemplateGrid.from(3, List.of(outsidePlane)));
     }
 
     @Test
     void rejectsPackedSourceValuesThatWouldTruncate() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new InstanceChunkTemplate(4, 0, 0, 0, 10, 20, 0));
         assertThrows(IllegalArgumentException.class,
                 () -> new InstanceChunkTemplate(0, 0, 0, 4, 10, 20, 0));
         assertThrows(IllegalArgumentException.class,
