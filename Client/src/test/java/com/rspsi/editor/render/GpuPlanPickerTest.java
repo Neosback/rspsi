@@ -147,6 +147,37 @@ class GpuPlanPickerTest {
     }
 
     @Test
+    void pickResultCarriesContourRuntimeMetadata() {
+        ClientModelBounds bounds = boundsForTriangle(-20, -20, 36, 20, -20, 36, 0, 20, 36);
+        SceneObjectIdentity identity = SceneObjectIdentity.of(
+                new WorldObject(11, 10, 0, 0, 0, 0), 1, 1);
+        ModelContourContract.Metadata contour = ModelContourContract.of(
+                1, 65536, 64, true, List.of(0, -64, -32)).metadata();
+        GpuDrawCommand command = new GpuDrawCommand(
+                WorldTileAddress.of(0, 0, 0), 0, 0,
+                SceneLayer.Kind.GROUND_OBJECT, GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, -1, 0, 0, 11, GpuDrawCommand.RenderMode.DEFAULT,
+                WallDecorationPresentation.none(), GameObjectSceneMetadata.none(),
+                List.of(bounds), List.of(ClientRenderablePlacement.none()),
+                contour, identity, 64, 0, 0);
+        GpuUploadPlan plan = new GpuUploadPlan(
+                List.of(
+                        vertex(44, 44, 100, 0x1200),
+                        vertex(84, 44, 100, 0x1200),
+                        vertex(64, 84, 100, 0x1200)),
+                List.of(0, 1, 2), List.of(command), List.of(), Map.of(), "contour-pick");
+
+        PickResult result = new GpuPlanPicker().pick(plan,
+                new CameraState(64, 64, 0, 0, 0),
+                100, 100, 50, 50).orElseThrow();
+
+        assertTrue(result.hasContourMetadata());
+        assertEquals(ModelContourContract.Mode.PARTIAL, result.contourMetadata().mode());
+        assertEquals(65536, result.contourMetadata().parameter());
+        assertTrue(result.contourMetadata().hasUnskewedModel());
+    }
+
+    @Test
     void displacedWallDecorationUsesPerRenderablePlacementForBroadPhase() {
         ClientModelBounds bounds = boundsForTriangle(
                 -10, -20, 36, 10, -20, 36, 0, 20, 36);

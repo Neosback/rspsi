@@ -14,6 +14,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GpuUploadPlanBuilderTest {
     @Test
@@ -101,6 +102,8 @@ class GpuUploadPlanBuilderTest {
                 .withGameObjectSceneMetadata(metadata)
                 .withClientModelBounds(clientBounds)
                 .withClientRenderablePlacements(List.of(new ClientRenderablePlacement(12, -7)))
+                .withContourContract(ModelContourContract.of(
+                        1, 0, 40, true, List.of(0, -20, 0)))
                 .withSceneObjectIdentity(identity);
         SceneTileSnapshot tile = new SceneTileSnapshot(coordinate, address, 0, 0,
                 Optional.empty(), Optional.empty(), List.of(model),
@@ -119,6 +122,38 @@ class GpuUploadPlanBuilderTest {
         assertEquals(List.of(new ClientRenderablePlacement(12, -7)),
                 plan.commands().get(0).clientRenderablePlacements());
         assertEquals(identity, plan.commands().get(0).sceneObjectIdentity());
+        assertTrue(plan.commands().get(0).contourMetadata().present());
+        assertEquals(ModelContourContract.Mode.FULL,
+                plan.commands().get(0).contourMetadata().mode());
+        assertTrue(plan.commands().get(0).contourMetadata().applied());
+        assertTrue(plan.commands().get(0).contourMetadata().hasUnskewedModel());
+    }
+
+    @Test
+    void uploadFingerprintChangesWhenOnlyContourMetadataChanges() {
+        WorldTileAddress tile = WorldTileAddress.of(3200, 3200, 0);
+        ModelContourContract.Metadata full = ModelContourContract.of(
+                1, 0, 64, true, List.of(0, -64, -32)).metadata();
+        ModelContourContract.Metadata partial = ModelContourContract.of(
+                1, 65536, 64, true, List.of(0, -64, -32)).metadata();
+        GpuDrawCommand first = new GpuDrawCommand(tile, 0, 0,
+                SceneLayer.Kind.GROUND_OBJECT, GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, -1, 0, 0, 42, GpuDrawCommand.RenderMode.DEFAULT,
+                WallDecorationPresentation.none(), GameObjectSceneMetadata.none(),
+                List.of(), List.of(), full, SceneObjectIdentity.none(),
+                64, 3200, 3200);
+        GpuDrawCommand second = new GpuDrawCommand(tile, 0, 0,
+                SceneLayer.Kind.GROUND_OBJECT, GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, -1, 0, 0, 42, GpuDrawCommand.RenderMode.DEFAULT,
+                WallDecorationPresentation.none(), GameObjectSceneMetadata.none(),
+                List.of(), List.of(), partial, SceneObjectIdentity.none(),
+                64, 3200, 3200);
+
+        assertNotEquals(
+                GpuUploadPlanBuilder.fingerprint(
+                        "same", List.of(), List.of(), List.of(first), List.of(), Map.of(), List.of()),
+                GpuUploadPlanBuilder.fingerprint(
+                        "same", List.of(), List.of(), List.of(second), List.of(), Map.of(), List.of()));
     }
 
     @Test

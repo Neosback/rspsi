@@ -30,8 +30,29 @@ public record ModelRenderPacket(
         GameObjectSceneMetadata gameObjectSceneMetadata,
         List<ClientModelBounds> clientRenderableBounds,
         List<ClientRenderablePlacement> clientRenderablePlacements,
+        ModelContourContract contourContract,
         SceneObjectIdentity sceneObjectIdentity
 ) {
+    /** Compatibility constructor before contour metadata was retained. */
+    public ModelRenderPacket(TileCoordinate anchor, int objectId, ObjectCategory category,
+                             List<ModelVertex> vertices, List<ModelTriangle> triangles,
+                             List<TextureTriangle> textureTriangles, int animationId,
+                             int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
+                             boolean supportsAnimation, boolean supportsParticles,
+                             int placementHeight, boolean roofRelated,
+                             GpuDrawCommand.RenderMode renderMode,
+                             WallDecorationPresentation wallDecorationPresentation,
+                             GameObjectSceneMetadata gameObjectSceneMetadata,
+                             List<ClientModelBounds> clientRenderableBounds,
+                             List<ClientRenderablePlacement> clientRenderablePlacements,
+                             SceneObjectIdentity sceneObjectIdentity) {
+        this(anchor, objectId, category, vertices, triangles, textureTriangles, animationId,
+                minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles,
+                placementHeight, roofRelated, renderMode, wallDecorationPresentation,
+                gameObjectSceneMetadata, clientRenderableBounds, clientRenderablePlacements,
+                ModelContourContract.none(), sceneObjectIdentity);
+    }
+
     /** Compatibility constructor before stable scene-object identity was retained. */
     public ModelRenderPacket(TileCoordinate anchor, int objectId, ObjectCategory category,
                              List<ModelVertex> vertices, List<ModelTriangle> triangles,
@@ -47,7 +68,8 @@ public record ModelRenderPacket(
                 minX, minY, minZ, maxX, maxY, maxZ, supportsAnimation, supportsParticles,
                 placementHeight, roofRelated, renderMode, wallDecorationPresentation,
                 gameObjectSceneMetadata, clientRenderableBounds,
-                defaultPlacements(clientRenderableBounds), SceneObjectIdentity.none());
+                defaultPlacements(clientRenderableBounds), ModelContourContract.none(),
+                SceneObjectIdentity.none());
     }
 
     /** Compatibility constructor before client model bounds metadata was retained. */
@@ -133,6 +155,7 @@ public record ModelRenderPacket(
                 clientRenderableBounds, "clientRenderableBounds"));
         clientRenderablePlacements = List.copyOf(Objects.requireNonNull(
                 clientRenderablePlacements, "clientRenderablePlacements"));
+        contourContract = Objects.requireNonNull(contourContract, "contourContract");
         sceneObjectIdentity = Objects.requireNonNull(sceneObjectIdentity, "sceneObjectIdentity");
         if (clientRenderableBounds.stream().anyMatch(value -> value == null || !value.present())) {
             throw new IllegalArgumentException("Client renderable bounds must be present");
@@ -141,6 +164,7 @@ public record ModelRenderPacket(
                 || clientRenderablePlacements.stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("Client renderable placements must match bounds");
         }
+        contourContract.validateVertexCount(vertices.size());
         if (objectId < 0 || animationId < -1 || minX > maxX || minY > maxY || minZ > maxZ) {
             throw new IllegalArgumentException("Invalid model packet identity or bounds");
         }
@@ -166,7 +190,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata.translated(deltaX, deltaY),
-                clientRenderableBounds, clientRenderablePlacements, sceneObjectIdentity.withAnchor(newAnchor));
+                clientRenderableBounds, clientRenderablePlacements, contourContract, sceneObjectIdentity.withAnchor(newAnchor));
     }
 
     /** Returns this packet with an explicit RuneLite-compatible render mode. */
@@ -175,7 +199,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 newRenderMode, wallDecorationPresentation, gameObjectSceneMetadata,
-                clientRenderableBounds, clientRenderablePlacements, sceneObjectIdentity);
+                clientRenderableBounds, clientRenderablePlacements, contourContract, sceneObjectIdentity);
     }
 
     /** Returns this packet with explicit wall-decoration renderable identity. */
@@ -185,7 +209,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, Objects.requireNonNull(presentation, "presentation"),
-                gameObjectSceneMetadata, clientRenderableBounds, clientRenderablePlacements, sceneObjectIdentity);
+                gameObjectSceneMetadata, clientRenderableBounds, clientRenderablePlacements, contourContract, sceneObjectIdentity);
     }
 
     /** Returns this packet with explicit client game-object scene metadata. */
@@ -194,7 +218,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, Objects.requireNonNull(metadata, "metadata"),
-                clientRenderableBounds, clientRenderablePlacements, sceneObjectIdentity);
+                clientRenderableBounds, clientRenderablePlacements, contourContract, sceneObjectIdentity);
     }
 
     /** Returns this packet with one client-local bounds entry per client renderable. */
@@ -206,7 +230,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
-                copied, placements, sceneObjectIdentity);
+                copied, placements, contourContract, sceneObjectIdentity);
     }
 
     /** Returns this packet with per-renderable scene placement offsets. */
@@ -216,12 +240,22 @@ public record ModelRenderPacket(
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
                 clientRenderableBounds, List.copyOf(Objects.requireNonNull(placements, "placements")),
-                sceneObjectIdentity);
+                contourContract, sceneObjectIdentity);
     }
 
     /** Convenience for the common one-renderable packet. */
     public ModelRenderPacket withClientModelBounds(ClientModelBounds bounds) {
         return withClientRenderableBounds(List.of(Objects.requireNonNull(bounds, "bounds")));
+    }
+
+    /** Returns this packet with explicit contour-ground runtime metadata. */
+    public ModelRenderPacket withContourContract(ModelContourContract contract) {
+        return new ModelRenderPacket(anchor, objectId, category, vertices, triangles,
+                textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
+                supportsAnimation, supportsParticles, placementHeight, roofRelated,
+                renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
+                clientRenderableBounds, clientRenderablePlacements,
+                Objects.requireNonNull(contract, "contract"), sceneObjectIdentity);
     }
 
     /** Returns this packet with the semantic identity of its placed object. */
@@ -230,7 +264,7 @@ public record ModelRenderPacket(
                 textureTriangles, animationId, minX, minY, minZ, maxX, maxY, maxZ,
                 supportsAnimation, supportsParticles, placementHeight, roofRelated,
                 renderMode, wallDecorationPresentation, gameObjectSceneMetadata,
-                clientRenderableBounds, clientRenderablePlacements,
+                clientRenderableBounds, clientRenderablePlacements, contourContract,
                 Objects.requireNonNull(identity, "identity"));
     }
 
@@ -240,6 +274,22 @@ public record ModelRenderPacket(
         return java.util.stream.IntStream.range(0, bounds.size())
                 .mapToObj(ignored -> ClientRenderablePlacement.none())
                 .toList();
+    }
+
+    /**
+     * Reconstructs RuneLite's HILLSKEW unskewed model vertex stream when the
+     * client contour pass actually produced a warped copy.
+     */
+    public java.util.Optional<List<ModelVertex>> unskewedVertices() {
+        if (!contourContract.hasUnskewedModel()) return java.util.Optional.empty();
+        java.util.ArrayList<ModelVertex> result = new java.util.ArrayList<>(vertices.size());
+        for (int index = 0; index < vertices.size(); index++) {
+            ModelVertex vertex = vertices.get(index);
+            result.add(new ModelVertex(vertex.x(), contourContract.unskewedY(index), vertex.z(),
+                    vertex.normalX(), vertex.normalY(), vertex.normalZ(),
+                    vertex.normalMagnitude(), vertex.u(), vertex.v()));
+        }
+        return java.util.Optional.of(List.copyOf(result));
     }
 
     /** Triangle indices suitable for the opaque submission pass. */

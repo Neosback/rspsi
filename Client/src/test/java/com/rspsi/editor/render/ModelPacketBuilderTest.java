@@ -255,6 +255,10 @@ class ModelPacketBuilderTest {
                 .build(document).get(0);
 
         assertEquals(0, packet.vertices().get(0).y());
+        assertTrue(packet.contourContract().present());
+        assertTrue(!packet.contourContract().applied());
+        assertEquals(ModelContourContract.Mode.FULL, packet.contourContract().mode());
+        assertTrue(!packet.contourContract().hasUnskewedModel());
     }
 
     /**
@@ -295,6 +299,11 @@ class ModelPacketBuilderTest {
         // Middle vertex: ratio 32768, warp scaled by (65536-32768)/65536:
         // -64 + 32768 * 32 / 65536 = -48.
         assertEquals(-48, packet.vertices().get(2).y());
+        assertEquals(ModelContourContract.Mode.PARTIAL, packet.contourContract().mode());
+        assertEquals(2, packet.contourContract().type());
+        assertEquals(65536, packet.contourContract().parameter());
+        assertTrue(packet.contourContract().applied());
+        assertEquals(List.of(0, -128, -64), packet.contourContract().unskewedVertexY());
     }
 
     /** clipType 0 (full contour) attaches every vertex regardless of height. */
@@ -329,6 +338,21 @@ class ModelPacketBuilderTest {
         assertEquals(64, contouredBounds.height(),
                 "client cylinder bounds must be recalculated from the contoured model");
         assertEquals(0, contouredBounds.bottomY());
+        assertTrue(packet.contourContract().present());
+        assertTrue(packet.contourContract().applied());
+        assertEquals(ModelContourContract.Mode.FULL, packet.contourContract().mode());
+        assertEquals(1, packet.contourContract().type());
+        assertEquals(0, packet.contourContract().parameter());
+        assertEquals(64, packet.contourContract().placementHeight());
+        assertEquals(List.of(0, -128, -64), packet.contourContract().unskewedVertexY());
+        assertEquals(-128, packet.contourContract().unskewedY(1));
+        assertEquals(packet.vertices().size(), packet.contourContract().metadata().vertexCount());
+        List<ModelVertex> unskewed = packet.unskewedVertices().orElseThrow();
+        assertEquals(List.of(0, -128, -64),
+                unskewed.stream().map(ModelVertex::y).toList());
+        assertEquals(packet.vertices().get(1).x(), unskewed.get(1).x());
+        assertEquals(packet.vertices().get(1).z(), unskewed.get(1).z());
+        assertEquals(packet.vertices().get(1).normalY(), unskewed.get(1).normalY());
     }
 
     @Test
@@ -520,6 +544,72 @@ class ModelPacketBuilderTest {
         assertEquals(new ClientRenderablePlacement(16, 0),
                 fallbackStraight.clientRenderablePlacements().get(0),
                 "fallback shape-5 placement must retain the client's 16-unit displacement");
+    }
+
+    @Test
+    void wallDecorationDisplacementDoesNotAffectContourSampling() {
+        WorldDocument document = new WorldDocument(6, 6, 1);
+        WorldObject wall = new WorldObject(100, 0, 0, 0, 2, 2);
+        WorldObject attached = new WorldObject(42, 4, 0, 0, 2, 2);
+        WorldObject displaced = new WorldObject(43, 5, 0, 0, 2, 2);
+        document.tile(0, 2, 2).restore(new TileSnapshot(0, 128, 128, 0,
+                0, 0, 0, 0, 0, List.of(wall, attached, displaced)));
+        document.tile(0, 3, 2).restore(new TileSnapshot(128, 128, 128, 128,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 2, 3).restore(new TileSnapshot(0, 128, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+        document.tile(0, 3, 3).restore(new TileSnapshot(128, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of()));
+
+        ObjectAppearanceView contourAppearance = new ObjectAppearanceView(
+                -1, false, 128, 128, 128, 0, 0, 0, Map.of(), Map.of(),
+                true, false, false, false, 0, 0, 16, 1, 0,
+                false, false, false, 0);
+        ModelGeometryView geometry = new ModelGeometryView(7,
+                new int[]{0, 0, 0, 64, -128, 0, 32, -64, 48},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                if (id == 100) {
+                    return Optional.of(new ObjectDefinitionView(id, "wall", 1, 1,
+                            List.of(), new int[0], new int[0], -1, false));
+                }
+                return Optional.of(new ObjectDefinitionView(id, "decor", 1, 1,
+                        List.of(), new int[]{7}, new int[]{4}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) {
+                return Optional.empty();
+            }
+            @Override public Optional<FloorDefinitionView> overlay(int id) {
+                return Optional.empty();
+            }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(id == 100 ? appearanceWithDisplacement(32)
+                        : contourAppearance);
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(geometry);
+            }
+        };
+
+        List<ModelRenderPacket> packets = new ModelPacketBuilder(definitions).build(document);
+
+        assertEquals(2, packets.size());
+        ModelRenderPacket attachedPacket = packets.get(0);
+        ModelRenderPacket displacedPacket = packets.get(1);
+        assertEquals(List.of(0, -64, -32),
+                attachedPacket.vertices().stream().map(ModelVertex::y).toList());
+        assertEquals(attachedPacket.vertices().stream().map(ModelVertex::y).toList(),
+                displacedPacket.vertices().stream().map(ModelVertex::y).toList(),
+                "Scene wall-decoration displacement must be applied after contourGround");
+        assertEquals(ClientRenderablePlacement.none(),
+                attachedPacket.clientRenderablePlacements().get(0));
+        assertEquals(new ClientRenderablePlacement(32, 0),
+                displacedPacket.clientRenderablePlacements().get(0));
+        assertTrue(displacedPacket.vertices().get(0).x() != attachedPacket.vertices().get(0).x(),
+                "the later Scene placement must still move the displaced decoration");
+        assertTrue(attachedPacket.contourContract().applied());
+        assertTrue(displacedPacket.contourContract().applied());
     }
 
     @Test

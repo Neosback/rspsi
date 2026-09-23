@@ -590,25 +590,38 @@
       "id": "models.contour",
       "domain": "scene",
       "title": "Contour ground and height-map model placement",
-      "status": "partial",
+      "status": "covered",
       "priority": "p1",
       "runelite": [
         "net.runelite.api.Model#getUnskewedModel",
         "net.runelite.api.hooks.DrawCallbacks#HILLSKEW"
       ],
       "rspsi": [
+        "Client/src/main/java/com/rspsi/editor/render/ModelContourContract.java",
         "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
-        "Client/src/main/java/com/rspsi/editor/render/TerrainPacketBuilder.java"
+        "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java",
+        "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java",
+        "Client/src/main/java/com/rspsi/editor/render/PickResult.java"
       ],
       "tsps": [
         "rs/config/loctype/LocModelLoader.ts",
         "render/render/shaders/main.vert.glsl"
       ],
       "evidence": [
-        "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
+        "RuneLite-melxin/runescape-client/src/main/java/ObjectComposition.java#getEntity",
+        "RuneLite-melxin/runescape-client/src/main/java/ObjectComposition.java#getModel",
+        "RuneLite-melxin/runescape-client/src/main/java/ObjectComposition.java#getModelDynamic",
+        "RuneLite-melxin/runescape-client/src/main/java/Model.java#contourGround",
+        "RuneLite-melxin/runelite-mixins/src/main/java/net/runelite/mixins/RSModelMixin.java#copy$contourGround",
+        "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/hooks/DrawCallbacks.java#HILLSKEW",
+        "Client/src/test/java/com/rspsi/cache/store/OpenRuneDefinitionProviderContourGroundTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ModelContourContractTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
+        "Client/src/test/java/com/rspsi/editor/render/GpuPlanPickerTest.java"
       ],
-      "reason": "Static contouring exists, but runtime height-map skew modes are not a first-class packet contract.",
-      "nextAction": "Add contour type/parameter fields and a sloped-object fixture."
+      "reason": "Static location contouring is now an explicit renderer/runtime contract. Raw contour type and parameter preserve cache/client clipType semantics; full, partial, extended and configured-but-skipped states are distinguishable; placement height and applied state are retained; warped packets preserve a 1:1 pre-contour Y stream that reconstructs RuneLite's HILLSKEW unskewed-model relationship; contour metadata propagates through GPU commands, fingerprints and PickResult. The builder preserves client ordering (animation/model transforms, pre-contour lighting, contour warp, then client bounds) and applies Scene wall-decoration displacement only after contour sampling.",
+      "nextAction": "Keep clipType mapping/overflow, full/partial/skipped contour, unskewed reconstruction, sloped placement, client-bounds recalculation, wall-decoration displacement ordering, GPU fingerprint and picker metadata fixtures as regressions. DrawCallbacks HILLSKEW negotiation remains tracked separately by callbacks.modes."
     },
     {
       "id": "models.bounds",
@@ -1019,8 +1032,8 @@
       "evidence": [
         "docs/RUNELITE_RENDERING_PARITY_AUDIT_2026-09-18.md"
       ],
-      "reason": "Opaque/alpha and normal data are present; pre-alpha, HILLSKEW, and callback negotiation remain explicit gaps.",
-      "nextAction": "Add only source-backed optional passes after fixture evidence requires them."
+      "reason": "Opaque/alpha submission and normal data are present, and the model contour contract now exposes HILLSKEW-compatible unskewed-model metadata. Callback-mode negotiation, pre-alpha callback behavior, and source-backed optional callback passes remain explicit gaps.",
+      "nextAction": "Add callback negotiation and optional passes only when source-backed fixtures require them; consume the existing contour/unskewed-model contract rather than duplicating HILLSKEW geometry."
     }
   ]
 }

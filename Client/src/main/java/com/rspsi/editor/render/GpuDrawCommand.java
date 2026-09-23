@@ -23,6 +23,7 @@ public record GpuDrawCommand(
         GameObjectSceneMetadata gameObjectSceneMetadata,
         List<ClientModelBounds> clientRenderableBounds,
         List<ClientRenderablePlacement> clientRenderablePlacements,
+        ModelContourContract.Metadata contourMetadata,
         SceneObjectIdentity sceneObjectIdentity,
         int placementHeight,
         int modelAnchorX,
@@ -59,6 +60,7 @@ public record GpuDrawCommand(
                 clientRenderableBounds, "clientRenderableBounds"));
         clientRenderablePlacements = List.copyOf(Objects.requireNonNull(
                 clientRenderablePlacements, "clientRenderablePlacements"));
+        contourMetadata = Objects.requireNonNull(contourMetadata, "contourMetadata");
         sceneObjectIdentity = Objects.requireNonNull(sceneObjectIdentity, "sceneObjectIdentity");
         if (clientRenderableBounds.stream().anyMatch(value -> value == null || !value.present())) {
             throw new IllegalArgumentException("Client renderable bounds must be present");
@@ -77,6 +79,26 @@ public record GpuDrawCommand(
         }
     }
 
+    /** Compatibility constructor before contour metadata was retained. */
+    public GpuDrawCommand(WorldTileAddress tile, int scenePlane, int planeCullLevel,
+                          SceneLayer.Kind layer, SubmissionPass pass,
+                          int firstIndex, int indexCount, int textureId, int priority,
+                          int depthBias, int objectId, RenderMode renderMode,
+                          WallDecorationPresentation wallDecorationPresentation,
+                          GameObjectSceneMetadata gameObjectSceneMetadata,
+                          List<ClientModelBounds> clientRenderableBounds,
+                          List<ClientRenderablePlacement> clientRenderablePlacements,
+                          SceneObjectIdentity sceneObjectIdentity,
+                          int placementHeight,
+                          int modelAnchorX,
+                          int modelAnchorY) {
+        this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
+                textureId, priority, depthBias, objectId, renderMode,
+                wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
+                clientRenderablePlacements, ModelContourContract.Metadata.none(),
+                sceneObjectIdentity, placementHeight, modelAnchorX, modelAnchorY);
+    }
+
     /** Compatibility constructor before render-space model anchors were explicit. */
     public GpuDrawCommand(WorldTileAddress tile, int scenePlane, int planeCullLevel,
                           SceneLayer.Kind layer, SubmissionPass pass,
@@ -90,8 +112,8 @@ public record GpuDrawCommand(
         this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
                 textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                defaultPlacements(clientRenderableBounds), sceneObjectIdentity,
-                placementHeight, tile.worldX(), tile.worldY());
+                defaultPlacements(clientRenderableBounds), ModelContourContract.Metadata.none(),
+                sceneObjectIdentity, placementHeight, tile.worldX(), tile.worldY());
     }
 
     /** Compatibility constructor before stable scene identity and placement height were explicit. */
@@ -105,8 +127,8 @@ public record GpuDrawCommand(
         this(tile, scenePlane, planeCullLevel, layer, pass, firstIndex, indexCount,
                 textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                defaultPlacements(clientRenderableBounds), SceneObjectIdentity.none(), 0,
-                tile.worldX(), tile.worldY());
+                defaultPlacements(clientRenderableBounds), ModelContourContract.Metadata.none(),
+                SceneObjectIdentity.none(), 0, tile.worldX(), tile.worldY());
     }
 
     /** Compatibility constructor before client model bounds were explicit. */
@@ -229,8 +251,28 @@ public record GpuDrawCommand(
         return canMerge(nextTile, nextScenePlane, nextPlaneCullLevel, nextLayer, nextPass,
                 nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
                 nextRenderMode, nextWallDecorationPresentation, nextGameObjectSceneMetadata,
-                nextClientRenderableBounds, clientRenderablePlacements,
+                nextClientRenderableBounds, clientRenderablePlacements, contourMetadata,
                 sceneObjectIdentity, placementHeight, modelAnchorX, modelAnchorY);
+    }
+
+    /** Compatibility overload from before contour metadata participated in batching. */
+    boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
+                     SceneLayer.Kind nextLayer, SubmissionPass nextPass, int nextTextureId,
+                     int nextPriority, int nextDepthBias, int nextObjectId, int nextFirstIndex,
+                     RenderMode nextRenderMode,
+                     WallDecorationPresentation nextWallDecorationPresentation,
+                     GameObjectSceneMetadata nextGameObjectSceneMetadata,
+                     List<ClientModelBounds> nextClientRenderableBounds,
+                     List<ClientRenderablePlacement> nextClientRenderablePlacements,
+                     SceneObjectIdentity nextSceneObjectIdentity,
+                     int nextPlacementHeight,
+                     int nextModelAnchorX,
+                     int nextModelAnchorY) {
+        return canMerge(nextTile, nextScenePlane, nextPlaneCullLevel, nextLayer, nextPass,
+                nextTextureId, nextPriority, nextDepthBias, nextObjectId, nextFirstIndex,
+                nextRenderMode, nextWallDecorationPresentation, nextGameObjectSceneMetadata,
+                nextClientRenderableBounds, nextClientRenderablePlacements, contourMetadata,
+                nextSceneObjectIdentity, nextPlacementHeight, nextModelAnchorX, nextModelAnchorY);
     }
 
     boolean canMerge(WorldTileAddress nextTile, int nextScenePlane, int nextPlaneCullLevel,
@@ -241,6 +283,7 @@ public record GpuDrawCommand(
                      GameObjectSceneMetadata nextGameObjectSceneMetadata,
                      List<ClientModelBounds> nextClientRenderableBounds,
                      List<ClientRenderablePlacement> nextClientRenderablePlacements,
+                     ModelContourContract.Metadata nextContourMetadata,
                      SceneObjectIdentity nextSceneObjectIdentity,
                      int nextPlacementHeight,
                      int nextModelAnchorX,
@@ -257,6 +300,7 @@ public record GpuDrawCommand(
                     && gameObjectSceneMetadata.equals(nextGameObjectSceneMetadata)
                     && clientRenderableBounds.equals(nextClientRenderableBounds)
                     && clientRenderablePlacements.equals(nextClientRenderablePlacements)
+                    && contourMetadata.equals(nextContourMetadata)
                     && sceneObjectIdentity.equals(nextSceneObjectIdentity)
                     && placementHeight == nextPlacementHeight
                     && modelAnchorX == nextModelAnchorX
@@ -285,7 +329,7 @@ public record GpuDrawCommand(
         return new GpuDrawCommand(tile, scenePlane, planeCullLevel, layer, pass, firstIndex,
                 indexCount + additionalIndices, textureId, priority, depthBias, objectId, renderMode,
                 wallDecorationPresentation, gameObjectSceneMetadata, clientRenderableBounds,
-                clientRenderablePlacements, sceneObjectIdentity, placementHeight,
-                modelAnchorX, modelAnchorY);
+                clientRenderablePlacements, contourMetadata, sceneObjectIdentity,
+                placementHeight, modelAnchorX, modelAnchorY);
     }
 }
