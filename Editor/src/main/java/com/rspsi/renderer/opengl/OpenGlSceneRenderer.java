@@ -485,12 +485,15 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glUniform1f(brightnessLocation, (float) presentation.brightness());
         glUniform1f(exposureLocation, (float) presentation.exposure());
         glUniform1i(smoothBandingLocation, presentation.smoothBanding() ? 1 : 0);
-        SceneFog.Bounds fogBounds = fogBounds(runtimeGeometry);
-        glUniform1i(useFogLocation, presentation.fogDepthTiles() > 0 ? 1 : 0);
-        glUniform1f(fogWestLocation, fogBounds.minX());
-        glUniform1f(fogEastLocation, fogBounds.maxX());
-        glUniform1f(fogSouthLocation, fogBounds.minZ());
-        glUniform1f(fogNorthLocation, fogBounds.maxZ());
+        boolean fogEnabled = presentation.fogDepthTiles() > 0;
+        glUniform1i(useFogLocation, fogEnabled ? 1 : 0);
+        if (fogEnabled) {
+            SceneFog.Bounds fogBounds = fogBounds(runtimeGeometry);
+            glUniform1f(fogWestLocation, fogBounds.minX());
+            glUniform1f(fogEastLocation, fogBounds.maxX());
+            glUniform1f(fogSouthLocation, fogBounds.minZ());
+            glUniform1f(fogNorthLocation, fogBounds.maxZ());
+        }
         glUniform1f(fogDepthLocation, presentation.fogDepthTiles() * 128.0f);
         glUniform3f(fogColorLocation, ((presentation.fogColor() >>> 16) & 0xFF) / 255.0f,
                 ((presentation.fogColor() >>> 8) & 0xFF) / 255.0f,
@@ -764,13 +767,15 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
 
     private List<Integer> opaqueOrder(GpuUploadPlan plan, List<GpuDrawCommand> commands,
                                       GpuCommandVisibility visibility, CameraState camera) {
-        boolean cameraOrderedDecorations = commands.stream()
-                .anyMatch(command -> command.wallDecorationPresentation().cameraOrdered());
-        if (!cameraOrderedDecorations
-                && !visibility.occlusionApplied()
+        // A cached opaque order is only stored when the plan has no
+        // camera-ordered decorations and occlusion is inactive, so a matching
+        // fingerprint can return before scanning every command again.
+        if (!visibility.occlusionApplied()
                 && plan.fingerprint().equals(orderedPlanFingerprint)) {
             return cachedOpaqueOrder;
         }
+        boolean cameraOrderedDecorations = commands.stream()
+                .anyMatch(command -> command.wallDecorationPresentation().cameraOrdered());
         List<Integer> result = new ArrayList<>();
         for (int index = 0; index < commands.size(); index++) {
             if (commands.get(index).pass() == GpuDrawCommand.SubmissionPass.OPAQUE
