@@ -2,9 +2,6 @@ package com.rspsi.cache.store;
 
 import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
-import dev.openrune.definition.codec.ObjectCodec;
-import dev.openrune.definition.type.ObjectType;
-
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileVisitResult;
@@ -128,7 +125,6 @@ public final class ObjectDefinitionOutputCacheBuilder {
                     "At least one dirty object definition transaction is required");
         }
 
-        ObjectCodec codec = new ObjectCodec(revision);
         try (OpenRuneCacheStore sourceStore = OpenRuneCacheStore.open(source)) {
             List<EncodedEdit> edits = new ArrayList<>(dirty.size());
             dirty.entrySet().stream()
@@ -144,8 +140,9 @@ public final class ObjectDefinitionOutputCacheBuilder {
                                     "Source cache does not contain object definition " + objectId);
                         }
 
-                        ObjectDefinitionRawView sourceRaw = decodeRaw(
-                                codec, objectId, sourcePayload);
+                        ObjectDefinitionRawView sourceRaw =
+                                sourceStore.decodeObjectDefinitionPayload(
+                                        objectId, sourcePayload, revision);
                         if (!sourceRaw.equals(transaction.original())) {
                             throw new IllegalArgumentException(
                                     "Object definition transaction " + objectId
@@ -154,8 +151,9 @@ public final class ObjectDefinitionOutputCacheBuilder {
 
                         byte[] encoded = transaction.encodeValidated();
                         ObjectDefinitionRawView expected = transaction.preview();
-                        ObjectDefinitionRawView encodedRaw = decodeRaw(
-                                codec, objectId, encoded);
+                        ObjectDefinitionRawView encodedRaw =
+                                sourceStore.decodeObjectDefinitionPayload(
+                                        objectId, encoded, revision);
                         if (!expected.equals(encodedRaw)) {
                             throw new IllegalStateException(
                                     "Validated payload does not decode to the transaction preview "
@@ -181,7 +179,6 @@ public final class ObjectDefinitionOutputCacheBuilder {
             int revision,
             List<EncodedEdit> edits) {
 
-        ObjectCodec codec = new ObjectCodec(revision);
         try (OpenRuneCacheStore reopened = OpenRuneCacheStore.open(cachePath)) {
             for (EncodedEdit edit : edits) {
                 byte[] actual = reopened.readObjectDefinitionPayload(edit.objectId());
@@ -196,38 +193,24 @@ public final class ObjectDefinitionOutputCacheBuilder {
                                     + edit.objectId());
                 }
 
-                ObjectDefinitionRawView decoded = decodeRaw(
-                        codec, edit.objectId(), actual);
+                ObjectDefinitionRawView decoded =
+                        reopened.decodeObjectDefinitionPayload(
+                                edit.objectId(), actual, revision);
                 if (!edit.preview().equals(decoded)) {
                     throw new IllegalStateException(
                             "Written object definition semantic mismatch after reopen: "
                                     + edit.objectId());
                 }
 
-                ObjectType type = codec.loadData(edit.objectId(), actual);
                 byte[] canonical =
-                        new OpenRuneObjectDefinitionEditTransaction(type, revision)
-                                .encodeValidated();
+                        reopened.canonicalObjectDefinitionPayload(
+                                edit.objectId(), actual, revision);
                 if (!Arrays.equals(actual, canonical)) {
                     throw new IllegalStateException(
                             "Written object definition is not canonical after reopen: "
                                     + edit.objectId());
                 }
             }
-        }
-    }
-
-    private static ObjectDefinitionRawView decodeRaw(
-            ObjectCodec codec,
-            int objectId,
-            byte[] payload) {
-        try {
-            return OpenRuneDefinitionProvider.toRawView(
-                    codec.loadData(objectId, payload));
-        } catch (RuntimeException failure) {
-            throw new IllegalArgumentException(
-                    "Unable to decode object definition " + objectId,
-                    failure);
         }
     }
 
