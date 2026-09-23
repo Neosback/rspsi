@@ -129,6 +129,7 @@ public final class MapEditorView {
 
     private final PreferencesWindow preferencesWindow = new PreferencesWindow();
     private final PluginManagerWindow pluginManagerWindow = new PluginManagerWindow();
+    private final com.rspsi.studio.ui.ObjectEditorWindow objectEditor = new com.rspsi.studio.ui.ObjectEditorWindow();
     private final NativeWorkspaceLayoutStore layoutStore = new NativeWorkspaceLayoutStore();
     private boolean layoutRestored;
     private boolean defaultToolActivated;
@@ -293,6 +294,7 @@ public final class MapEditorView {
         preferencesWindow.render(settings, pluginLifecycle != null && pluginLifecycle.host() != null
                 ? pluginLifecycle.host().context().settingsService() : null);
         pluginManagerWindow.render(pluginLifecycle);
+        objectEditor.render(cache, session(pluginLifecycle));
     }
 
     private void renderViewport(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
@@ -613,12 +615,14 @@ public final class MapEditorView {
                 String objName = "Object #" + obj.id();
                 if (cache != null) {
                     objName = cache.bundle().definitions().object(obj.id())
-                            .map(ObjectDefinitionView::name)
-                            .filter(n -> !n.isBlank())
+                            .map(ObjectDefinitionView::displayName)
                             .orElse("Object #" + obj.id());
                 }
 
                 if (ImGui.beginMenu(objName + " (Type " + obj.type() + ", Rot " + obj.rotation() + ")##ctx-obj-" + obj.id())) {
+                    if (ImGui.menuItem("Edit object...")) {
+                        objectEditor.open(obj);
+                    }
                     if (ImGui.menuItem("Rotate +90° (Clockwise)")) {
                         int nextRot = (obj.rotation() + 1) % 4;
                         s.execute(new RotateObjectCommand(obj, nextRot, "Rotate " + objName));
