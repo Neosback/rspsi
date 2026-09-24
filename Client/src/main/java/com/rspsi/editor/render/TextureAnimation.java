@@ -31,13 +31,31 @@ public final class TextureAnimation {
             throw new IllegalArgumentException("texture dimensions must be positive");
         }
 
+        UvOffset rate = rate(definition, width, height);
+        int phase = clientCycle & CLIENT_CYCLE_MASK;
+        return new UvOffset(rate.u() * phase, rate.v() * phase);
+    }
+
+    /**
+     * Returns normalized UV displacement per client cycle.
+     *
+     * <p>This is the static value suitable for a GPU texture-state table:
+     * the shader multiplies it by {@code clientCycle & 127}. Keeping the
+     * rate calculation here makes the CPU reference and native shader paths
+     * share one direction/dimension contract.</p>
+     */
+    public static UvOffset rate(TextureDefinitionView definition, int width, int height) {
+        Objects.requireNonNull(definition, "definition");
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("texture dimensions must be positive");
+        }
+
         int direction = definition.animationDirection();
         int speed = definition.animationSpeed();
         if (direction < 1 || direction > 4 || speed == 0) return UvOffset.ZERO;
 
-        int phase = clientCycle & CLIENT_CYCLE_MASK;
-        float horizontal = speed * (float) phase / width;
-        float vertical = speed * (float) phase / height;
+        float horizontal = speed / (float) width;
+        float vertical = speed / (float) height;
         return switch (direction) {
             case 1 -> new UvOffset(0.0f, -vertical);
             case 2 -> new UvOffset(-horizontal, 0.0f);
@@ -45,6 +63,15 @@ public final class TextureAnimation {
             case 4 -> new UvOffset(horizontal, 0.0f);
             default -> UvOffset.ZERO;
         };
+    }
+
+    /** Returns the static native animation rate for a decoded renderer texture. */
+    public static UvOffset rate(RenderTextureResource texture) {
+        Objects.requireNonNull(texture, "texture");
+        if (!texture.hasPixels() || texture.width() <= 0 || texture.height() <= 0) {
+            return UvOffset.ZERO;
+        }
+        return rate(texture.definition(), texture.width(), texture.height());
     }
 
     /** Returns the native offset for a decoded renderer texture. */
