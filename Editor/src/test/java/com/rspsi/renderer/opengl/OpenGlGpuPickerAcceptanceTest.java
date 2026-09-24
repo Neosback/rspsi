@@ -158,14 +158,22 @@ class OpenGlGpuPickerAcceptanceTest {
             GpuUploadPlan plan = centeredPlan(0, 42);
             presentation.bindForScene();
             renderer.draw(plan, camera(), SIZE, SIZE, RenderPresentation.neutral(), 0);
-            presentation.resolve();
 
+            int previousDrawFramebuffer = org.lwjgl.opengl.GL11.glGetInteger(
+                    org.lwjgl.opengl.GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+            int previousReadFramebuffer = org.lwjgl.opengl.GL11.glGetInteger(
+                    org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER_BINDING);
             int expected = PickerId.encode(
                     0, 0, 0, PickerId.slotFor(SceneLayer.Kind.GROUND_OBJECT));
             assertEquals(expected,
                     renderer.pickId(plan, null, camera(), SIZE, SIZE,
                             SIZE / 2.0f, SIZE / 2.0f, null));
+            assertEquals(previousDrawFramebuffer, org.lwjgl.opengl.GL11.glGetInteger(
+                    org.lwjgl.opengl.GL30.GL_DRAW_FRAMEBUFFER_BINDING));
+            assertEquals(previousReadFramebuffer, org.lwjgl.opengl.GL11.glGetInteger(
+                    org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER_BINDING));
             assertTrue(renderer.pickerFramebufferAllocated());
+            presentation.resolve();
 
             renderer.setGpuPickingEnabled(false);
             renderer.draw(plan, camera(), SIZE, SIZE, RenderPresentation.neutral(), 0);
