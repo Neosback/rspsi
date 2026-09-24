@@ -1637,6 +1637,9 @@ public final class ModelPacketBuilder {
     private record RawVertex(int x, int y, int z) {
     }
 
+    private record VertexExtents(int minX, int maxX, int minZ, int maxZ) {
+    }
+
     private record Normal(int x, int y, int z, int magnitude) {
     }
 }
