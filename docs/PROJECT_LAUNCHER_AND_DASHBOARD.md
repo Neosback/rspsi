@@ -70,42 +70,41 @@ The launcher is a dedicated pre-project full-window surface inspired by modern I
 
 ### 3.1 Primary layout
 
-Recommended structure:
+Recommended first-release structure:
 
 ```
-+-------------------------------------------------------------------+
-| OpenRune Studio                                                   |
-|                                                                   |
-| Recent Projects                         Actions                    |
-|                                                                   |
-| [Project A] OpenRune Server             + New Project              |
-|  /projects/my-server                    Open Project...             |
-|  last opened 10 min ago                 Import/Link...             |
-|                                                                   |
-| [Project B] Standalone Cache                                      |
-|  ~/StudioProjects/world-edit                                      |
-|  last opened yesterday                                            |
-|                                                                   |
-| [Project C] ...                                                   |
-|                                                                   |
-| Settings   Plugins   About                                        |
-+-------------------------------------------------------------------+
++------------------------------------------------------------+
+|                    OpenRune Studio                         |
+|                                                            |
+| Projects                                                   |
+| +--------------------------------------------------------+ |
+| | My OpenRune Server          OpenRune-Server            | |
+| | /projects/my-server                                   | |
+| | Last opened ...                    [ Open ] [ Remove ] | |
+| |                                                        | |
+| | Local Cache                  Cache                    | |
+| | ~/.openrune-studio/...                               | |
+| +--------------------------------------------------------+ |
+|                                                            |
+| [               Import OpenRune-Server                  ] |
+| [               Continue without import                ] |
++------------------------------------------------------------+
 ```
 
-The launcher should support:
+The first-release launcher supports:
 
 - recent projects;
-- pinned projects;
-- project name;
+- project name derived from the imported source initially;
 - project type;
 - project root/source summary;
 - last-opened time;
 - missing/moved project indication;
 - remove from recent list without deleting project data;
-- New Project;
-- Open Existing Studio Project;
-- link/import an existing OpenRune Server project;
-- application-level Settings and Plugins without opening a project.
+- Import OpenRune-Server;
+- Continue without import using a native cache-directory chooser.
+
+Pinning, arbitrary descriptor browsing, rename, application-level Settings/Plugins and advanced
+project repair can be added later without complicating the normal startup path.
 
 The launcher should **not** decode a cache merely to render the recent-project list.
 
