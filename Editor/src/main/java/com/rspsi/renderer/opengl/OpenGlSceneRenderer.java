@@ -127,10 +127,6 @@ import static org.lwjgl.opengl.GL30.glGenVertexArrays;
 public final class OpenGlSceneRenderer implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenGlSceneRenderer.class);
     private static final ShaderSourceLoader SHADER_SOURCES = new ShaderSourceLoader("shaders");
-    // Position, UV, encoded light/color, alpha, render type, and native RGB.
-    // The reference packet retains normals; this backend does not need them
-    // after ModelPacketBuilder has produced its lit face values.
-    private static final int FLOATS_PER_VERTEX = 12;
     private static final int TEXTURE_SIZE = 128;
     private static final int TEXTURE_LAYER_CAPACITY = 256;
     private static final float FOV_Y = (float) Math.toRadians(50.0);
@@ -206,9 +202,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     private int program;
-    private int vertexArray;
-    private int vertexBuffer;
-    private int indexBuffer;
     private int cameraLocation;
     private int pitchLocation;
     private int yawLocation;
@@ -290,33 +283,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             throw new IllegalStateException("RSPSi requires an OpenGL 3.3 core context; detected "
                     + org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_VERSION));
         }
-        vertexArray = glGenVertexArrays();
-        vertexBuffer = glGenBuffers();
-        indexBuffer = glGenBuffers();
-        glBindVertexArray(vertexArray);
-        // A core context has no usable default VAO. Bind the editor-owned VAO
-        // before shader validation and all attribute setup so initialization
-        // never depends on compatibility-profile behavior.
+        // ZoneVboManager owns all resident scene VAOs/VBOs. Shader compilation
+        // is independent of vertex-array state, so keep one authoritative
+        // native scene layout instead of maintaining a second empty VAO here.
         program = GlShaderProgram.link(
                 SHADER_SOURCES.load("scene/vanilla.vert"),
                 SHADER_SOURCES.load("scene/vanilla.frag"));
-        glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-        int stride = FLOATS_PER_VERTEX * Float.BYTES;
-        glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0L);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, false, stride, 3L * Float.BYTES);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(2, 1, GL_FLOAT, false, stride, 5L * Float.BYTES);
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(3, 1, GL_FLOAT, false, stride, 6L * Float.BYTES);
-        glEnableVertexAttribArray(3);
-        glVertexAttribPointer(4, 1, GL_FLOAT, false, stride, 7L * Float.BYTES);
-        glEnableVertexAttribArray(4);
-        glVertexAttribPointer(5, 3, GL_FLOAT, false, stride, 8L * Float.BYTES);
-        glEnableVertexAttribArray(5);
-        glVertexAttribPointer(6, 1, GL_FLOAT, false, stride, 11L * Float.BYTES);
-        glEnableVertexAttribArray(6);
-        glBindVertexArray(0);
 
         cameraLocation = glGetUniformLocation(program, "uCamera");
         pitchLocation = glGetUniformLocation(program, "uPitch");
@@ -1211,11 +1183,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         textureArray = 0;
         textureLayers.clear();
         textureScales.clear();
-        if (vertexArray != 0) glDeleteVertexArrays(vertexArray);
         if (program != 0) org.lwjgl.opengl.GL20.glDeleteProgram(program);
-        if (vertexBuffer != 0) org.lwjgl.opengl.GL15.glDeleteBuffers(vertexBuffer);
-        if (indexBuffer != 0) org.lwjgl.opengl.GL15.glDeleteBuffers(indexBuffer);
-        vertexArray = vertexBuffer = indexBuffer = program = 0;
+        program = 0;
         uploadedFingerprint = null;
         uploadedTextureFingerprint = null;
         fingerprintedTextureResources = null;
