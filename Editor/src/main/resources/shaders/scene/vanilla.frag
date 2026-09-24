@@ -1,4 +1,7 @@
 #version 330 core
+
+#include "/common/frame_uniforms.glsl"
+
 in vec2 vUv;
 noperspective in float vEncodedColor;
 in float vAlpha;
@@ -8,16 +11,11 @@ in float vFogAmount;
 uniform sampler2DArray uTexture;
 uniform sampler2D uPalette;
 uniform samplerBuffer uTextureState;
-uniform int uClientCycle;
 uniform int uTextured;
 uniform int uTextureAvailable;
 uniform int uTextureMissing;
 uniform int uTerrain;
 uniform int uTextureLayer;
-uniform float uBrightness;
-uniform float uExposure;
-uniform int uSmoothBanding;
-uniform vec3 uFogColor;
 out vec4 outColor;
 void main() {
     vec3 color;
