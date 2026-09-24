@@ -16,21 +16,21 @@ class RenderOrderKeyTest {
     }
 
     @Test
-    void materialLayerBiasAndDepthModeChangeNativeState() {
+    void packedMaterialDoesNotSplitNativeStateButFixedFunctionStateDoes() {
         GpuDrawCommand base = command(7, 1, 4, GpuDrawCommand.RenderMode.DEFAULT);
         GpuDrawCommand texture = command(9, 1, 4, GpuDrawCommand.RenderMode.DEFAULT);
         GpuDrawCommand bias = command(7, 1, 5, GpuDrawCommand.RenderMode.DEFAULT);
         GpuDrawCommand depth = command(7, 1, 4, GpuDrawCommand.RenderMode.SORTED_NO_DEPTH);
-        GpuDrawCommand layer = new GpuDrawCommand(
+        GpuDrawCommand terrain = new GpuDrawCommand(
                 WorldTileAddress.of(3200, 3200, 0),
-                SceneLayer.Kind.WALL_DECORATION,
+                SceneLayer.Kind.TERRAIN,
                 GpuDrawCommand.SubmissionPass.OPAQUE,
                 0, 3, 7, 1, 4, 1, GpuDrawCommand.RenderMode.DEFAULT);
 
-        assertNotEquals(RenderOrderKey.nativeState(base), RenderOrderKey.nativeState(texture));
-        assertNotEquals(RenderOrderKey.nativeState(base), RenderOrderKey.nativeState(bias));
+        assertEquals(RenderOrderKey.nativeState(base), RenderOrderKey.nativeState(texture));
+        assertEquals(RenderOrderKey.nativeState(base), RenderOrderKey.nativeState(bias));
         assertNotEquals(RenderOrderKey.nativeState(base), RenderOrderKey.nativeState(depth));
-        assertNotEquals(RenderOrderKey.nativeState(base), RenderOrderKey.nativeState(layer));
+        assertNotEquals(RenderOrderKey.nativeState(base), RenderOrderKey.nativeState(terrain));
     }
 
     private static GpuDrawCommand command(int textureId, int priority, int bias,
