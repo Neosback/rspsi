@@ -3,6 +3,8 @@ package com.rspsi.editor.integration;
 import com.rspsi.editor.integration.npc.NpcSpawnProvider;
 import com.rspsi.editor.integration.reference.ReferenceProvider;
 import com.rspsi.editor.symbols.SymbolProvider;
+import com.rspsi.server.ServerConnection;
+import com.rspsi.server.ServerProjectInspection;
 
 import java.nio.file.Path;
 import java.util.Optional;
@@ -18,6 +20,24 @@ public interface IntegrationSession extends AutoCloseable {
     Path projectRoot();
 
     Set<IntegrationCapability> activeCapabilities();
+
+    /**
+     * Returns the persisted neutral connection when this integration was opened from one.
+     */
+    default Optional<ServerConnection> connection() {
+        return Optional.empty();
+    }
+
+    /**
+     * Returns the authoritative project inspection used to open this session when available.
+     *
+     * <p>This is intentionally neutral server-project metadata: cache roles, source roots,
+     * build tasks, fingerprints, runtime plugins and diagnostics. Provider-specific source
+     * semantics remain behind their own adapters.</p>
+     */
+    default Optional<ServerProjectInspection> projectInspection() {
+        return Optional.empty();
+    }
 
     Optional<SymbolProvider> symbolProvider();
 
