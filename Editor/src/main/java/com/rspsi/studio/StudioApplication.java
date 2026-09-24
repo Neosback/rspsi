@@ -1007,38 +1007,40 @@ public final class StudioApplication implements AutoCloseable {
             RenderWindowSceneBuilder.AnimationRefreshTimings inner = metric.windowTimings();
             long heapDelta = metric.heapAfterBytes() - metric.heapBeforeBytes();
 
-            LOGGER.debug(
-                    "Animation perf cycle={} total={}ms window={}ms "
-                            + "(scan={} padded={} normalMerge={} models={} detect={}) "
-                            + "semantic={}ms packet={}ms plan={}ms dirtyZones={} changedTiles={} "
-                            + "rebuiltModelTiles={} fullModelRebuild={} packetUpdated={} "
-                            + "packetTiles={}/{} planUpdated={} planTiles={}/{} planZones={}/{} "
-                            + "heap={}MiB delta={}KiB",
-                    metric.clientCycle(),
-                    millis(metric.totalNanos()),
-                    millis(metric.windowRefreshNanos()),
-                    millis(inner.activeScanNanos()),
-                    millis(inner.paddedWorldNanos()),
-                    millis(inner.normalMergeCheckNanos()),
-                    millis(inner.modelRebuildNanos()),
-                    millis(inner.changeDetectionNanos()),
-                    millis(metric.semanticSceneNanos()),
-                    millis(metric.packetNanos()),
-                    millis(metric.planNanos()),
-                    metric.dirtyZones(),
-                    metric.changedTiles(),
-                    metric.rebuiltModelTiles(),
-                    metric.fullModelRebuild(),
-                    metric.packetUpdated(),
-                    metric.packetRebuiltTiles(),
-                    metric.packetReusedTiles(),
-                    metric.planUpdated(),
-                    metric.planRebuiltTiles(),
-                    metric.planReusedTiles(),
-                    metric.planRebuiltZones(),
-                    metric.planReusedZones(),
-                    mebibytes(metric.heapAfterBytes()),
-                    kibibytes(heapDelta));
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug(
+                        "Animation perf cycle={} total={}ms window={}ms "
+                                + "(scan={} padded={} normalMerge={} models={} detect={}) "
+                                + "semantic={}ms packet={}ms plan={}ms dirtyZones={} changedTiles={} "
+                                + "rebuiltModelTiles={} fullModelRebuild={} packetUpdated={} "
+                                + "packetTiles={}/{} planUpdated={} planTiles={}/{} planZones={}/{} "
+                                + "heap={}MiB delta={}KiB",
+                        metric.clientCycle(),
+                        millis(metric.totalNanos()),
+                        millis(metric.windowRefreshNanos()),
+                        millis(inner.activeScanNanos()),
+                        millis(inner.paddedWorldNanos()),
+                        millis(inner.normalMergeCheckNanos()),
+                        millis(inner.modelRebuildNanos()),
+                        millis(inner.changeDetectionNanos()),
+                        millis(metric.semanticSceneNanos()),
+                        millis(metric.packetNanos()),
+                        millis(metric.planNanos()),
+                        metric.dirtyZones(),
+                        metric.changedTiles(),
+                        metric.rebuiltModelTiles(),
+                        metric.fullModelRebuild(),
+                        metric.packetUpdated(),
+                        metric.packetRebuiltTiles(),
+                        metric.packetReusedTiles(),
+                        metric.planUpdated(),
+                        metric.planRebuiltTiles(),
+                        metric.planReusedTiles(),
+                        metric.planRebuiltZones(),
+                        metric.planReusedZones(),
+                        mebibytes(metric.heapAfterBytes()),
+                        kibibytes(heapDelta));
+            }
 
             samples++;
             if (metric.fullModelRebuild()) fullModelRebuilds++;
