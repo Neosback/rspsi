@@ -30,6 +30,11 @@ public record TerrainNormalTile(
         if (x < 0 || x > 128 || y < 0 || y > 128) {
             throw new IllegalArgumentException("Terrain normal sample must be inside a tile");
         }
+        if (x == 0 && y == 0) return southWest;
+        if (x == 128 && y == 0) return southEast;
+        if (x == 128 && y == 128) return northEast;
+        if (x == 0 && y == 128) return northWest;
+
         int inverseX = 128 - x;
         int inverseY = 128 - y;
         int nx = weighted(southWest.x(), southEast.x(), northEast.x(), northWest.x(),
