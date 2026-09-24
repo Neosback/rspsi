@@ -775,13 +775,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 ? GpuDrawCommand.SubmissionPass.ALPHA
                 : GpuDrawCommand.SubmissionPass.OPAQUE;
         GpuDrawBatchPlanner.BatchCursor batches = GpuDrawBatchPlanner.cursor(
-                commands, orderedIndices, pass, zoneManager::zoneKeyForCommand);
+                commands, orderedIndices, pass, zoneManager::drawGroupKeyForCommand);
 
         int lastBoundVao = -1;
         while (batches.next()) {
             int firstIndex = batches.firstCommandIndex();
             GpuDrawCommand first = commands.get(firstIndex);
-            ZoneVboManager.ZoneAllocation allocation = zoneManager.allocation(batches.zoneKey());
+            ZoneVboManager.ZoneAllocation allocation = zoneManager.allocationForCommand(firstIndex);
             if (allocation == null || allocation.pickerVbo() == 0) continue;
 
             if (allocation.vao() != lastBoundVao) {
@@ -1225,13 +1225,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 ? GpuDrawCommand.SubmissionPass.ALPHA
                 : GpuDrawCommand.SubmissionPass.OPAQUE;
         GpuDrawBatchPlanner.BatchCursor batches = GpuDrawBatchPlanner.cursor(
-                commands, orderedIndices, pass, zoneManager::zoneKeyForCommand);
+                commands, orderedIndices, pass, zoneManager::drawGroupKeyForCommand);
 
         int lastBoundVao = -1;
         while (batches.next()) {
             int firstIndex = batches.firstCommandIndex();
             GpuDrawCommand first = commands.get(firstIndex);
-            ZoneVboManager.ZoneAllocation alloc = zoneManager.allocation(batches.zoneKey());
+            ZoneVboManager.ZoneAllocation alloc = zoneManager.allocationForCommand(firstIndex);
             if (alloc == null) {
                 continue;
             }
