@@ -112,7 +112,9 @@ final class GpuPickerFramebuffer implements AutoCloseable {
         glDrawBuffer(GL_COLOR_ATTACHMENT0);
         glReadBuffer(GL_COLOR_ATTACHMENT0);
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            IntBuffer clearId = stack.ints(PickerId.INVALID);
+            // LWJGL validates the OpenGL clear-value pointer as four uints even
+            // for an R32UI attachment; only the first component is consumed.
+            IntBuffer clearId = stack.ints(PickerId.INVALID, 0, 0, 0);
             glClearBufferuiv(GL_COLOR, 0, clearId);
         }
         glClearDepth(0.0);
