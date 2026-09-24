@@ -414,6 +414,20 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         lastFramePolygonMode = presentation.wireframe() ? GL_LINE : GL_FILL;
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         frameMetrics.reset();
+
+        // Optional native streams are reconciled before empty-scene exits so
+        // disabling a feature immediately drops its resident GPU cost even
+        // when the editor has no scene loaded.
+        boolean auxiliaryLayoutChanged = zoneManager.setAuxiliaryStreams(
+                presentation.debugView().requiresNormals(), gpuPickingEnabled);
+        if (auxiliaryLayoutChanged) {
+            uploadedFingerprint = null;
+            orderedPlanFingerprint = null;
+        }
+        if (!gpuPickingEnabled && pickerFramebuffer.allocated()) {
+            pickerFramebuffer.release();
+        }
+
         if (plan == null) {
             statistics = statisticsFor(null, null, null,
                     false, false, 0, 0, 0, 0, 0, 0);
@@ -433,25 +447,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
         // Geometry/texture upload is gated on the plan's own camera-independent
         // fingerprint only, and always uploads the complete, unfiltered plan.
-        // Occlusion visibility below is a separate, cheap, per-frame decision
-        // (GpuCommandVisibility) that never rebuilds vertex/index data or
-        // shatters merged draw commands - camera movement alone must never
-        // trigger a glBufferData re-upload. geometryUploaded/textureUploaded
-        // are surfaced through Statistics so camera-drag regressions can be
-        // caught by a debug overlay/log rather than assumed fixed.
-        boolean auxiliaryLayoutChanged = zoneManager.setAuxiliaryStreams(
-                presentation.debugView().requiresNormals(), gpuPickingEnabled);
-        if (auxiliaryLayoutChanged) {
-            // The VAO layout changed (optional attribute 7 and/or 8 appears or
-            // disappears), so the current plan must be made resident again even
-            // though its neutral scene fingerprint is unchanged.
-            uploadedFingerprint = null;
-            orderedPlanFingerprint = null;
-        }
-        if (!gpuPickingEnabled && pickerFramebuffer.allocated()) {
-            pickerFramebuffer.release();
-        }
-
+        // Occlusion visibility is a separate per-frame decision and camera
+        // movement alone must never trigger a scene-buffer re-upload.
         boolean geometryUploaded = false;
         boolean textureUploaded = false;
         int gpuZoneUploads = 0;
