@@ -7,13 +7,13 @@ in vec3 vColor;
 in float vFogAmount;
 uniform sampler2DArray uTexture;
 uniform sampler2D uPalette;
+uniform samplerBuffer uTextureState;
+uniform int uClientCycle;
 uniform int uTextured;
 uniform int uTextureAvailable;
 uniform int uTextureMissing;
 uniform int uTerrain;
-uniform vec2 uTextureOffset;
 uniform int uTextureLayer;
-uniform vec2 uTextureScale;
 uniform float uBrightness;
 uniform float uExposure;
 uniform int uSmoothBanding;
@@ -22,12 +22,16 @@ out vec4 outColor;
 void main() {
     vec3 color;
     if (uTextured != 0) {
-        vec2 textureUv = vUv + uTextureOffset;
-        if (uTerrain != 0 || uTextureOffset.x != 0.0 || uTextureOffset.y != 0.0) {
-            textureUv = fract(textureUv);
-        }
         if (uTextureAvailable != 0) {
-            vec3 texCoord = vec3(textureUv * uTextureScale, float(uTextureLayer));
+            vec4 textureState = texelFetch(uTextureState, uTextureLayer);
+            vec2 textureScale = textureState.xy;
+            vec2 animationRate = textureState.zw;
+            vec2 textureOffset = animationRate * float(uClientCycle);
+            vec2 textureUv = vUv + textureOffset;
+            if (uTerrain != 0 || animationRate.x != 0.0 || animationRate.y != 0.0) {
+                textureUv = fract(textureUv);
+            }
+            vec3 texCoord = vec3(textureUv * textureScale, float(uTextureLayer));
             // Base LOD 0 alpha test prevents cutout erosion at distance
             vec4 texel0 = textureLod(uTexture, texCoord, 0.0);
             // RuneLite GPU frag.glsl rejects any texel whose
