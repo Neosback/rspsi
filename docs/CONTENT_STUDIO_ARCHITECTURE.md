@@ -451,7 +451,36 @@ web-js
 
 The goal is not "make all current Java compile to JavaScript". The goal is to make Content Studio's **domain model** portable enough that a web shell can reuse it later.
 
-## 14. Near-term implementation order
+## 14. Server-integration audit
+
+The project-first lifecycle does **not** mean every existing server abstraction is obsolete.
+
+### Keep / converge
+
+- `OpenRuneServerAdapter`: authoritative OpenRune layout detection, cache-role resolution and declared build capabilities.
+- `OpenRuneServerProvider`: provider-neutral binding from an imported project into optional Studio domains.
+- `ServerProjectInspection`: useful immutable project snapshot.
+- `ServerIntegrationService`: keep as the active project-domain binder, but evolve it toward lazy refreshable domains rather than ad-hoc connection UI.
+- `ServerBuildTask` / `ServerBuildRunner`: useful declared-command execution boundary.
+
+### Retired in the first Content Studio slice
+
+- `OpenRuneServerPlugin` and its project-path/enable/symbol/content-index settings.
+
+Those settings represented the same OpenRune project a second time and could register another provider from the map-editor plugin lifecycle. The launcher/project descriptor is now the sole owner of the external checkout.
+
+### Transitional retirement candidates
+
+These should be reference-audited before removal or migration:
+
+- `ServerConnectionToml`: a separate server-connection persistence format now overlaps the Studio project descriptor. Overrides may still be valuable, but their persistence should ultimately belong to project settings.
+- `ServerProject`: an older compact projection that overlaps `ServerProjectInspection`.
+- `OsrsBundle.withServerAdapter(...)` / `withServerConnection(...)`: older cache-bundle coupling that may no longer belong once Content Studio owns the project context.
+- interactive `probe(...)` paths that existed for the old connection UI. Provider probing is still useful for import/repair, but should not recreate a second in-project connection system.
+
+Do not remove a transitional API until callers/tests are enumerated and its remaining responsibility has a project-owned replacement.
+
+## 15. Near-term implementation order
 
 1. Finish the Kotlin lightweight project-open coordinator.
 2. Keep Content Studio usable before full cache decoding.
