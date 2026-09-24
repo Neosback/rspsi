@@ -405,11 +405,9 @@ final class PickingSpatialIndex {
             int[] tested = new int[triangleCount];
             int[] globalFirst = new int[upload.commands().size()];
             WorldAabb[][] commandAabbs = new WorldAabb[upload.commands().size()][];
+            Arrays.fill(commandAabbs, new WorldAabb[0]);
             int[] broadPhaseGeneration = new int[upload.commands().size()];
             byte[] broadPhaseResult = new byte[upload.commands().size()];
-            for (int commandIndex = 0; commandIndex < upload.commands().size(); commandIndex++) {
-                commandAabbs[commandIndex] = buildCommandAabbs(upload.commands().get(commandIndex));
-            }
             Set<ZoneKey> coverage = new LinkedHashSet<>();
             SourceZone shell = new SourceZone(upload, refs, tested, globalFirst,
                     commandAabbs, broadPhaseGeneration, broadPhaseResult, coverage,
@@ -484,6 +482,13 @@ final class PickingSpatialIndex {
                 throw new IllegalStateException("Picking command order diverged from zoned upload");
             }
             globalFirstIndices[bindingCursor] = globalCommand.firstIndex();
+            // GpuZoneUpload intentionally carries only render-critical command
+            // metadata. Bind the complete current-plan command here so client
+            // model bounds, placements and model anchors stay available to the
+            // picking broad phase without making zone geometry non-reusable.
+            commandAabbs[bindingCursor] = buildCommandAabbs(globalCommand);
+            broadPhaseGeneration[bindingCursor] = 0;
+            broadPhaseResult[bindingCursor] = 0;
             bindingCursor++;
         }
 
