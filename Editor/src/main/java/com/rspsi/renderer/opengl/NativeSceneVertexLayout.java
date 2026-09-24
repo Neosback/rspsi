@@ -9,15 +9,20 @@ final class NativeSceneVertexLayout {
     /** Position XYZ + UV. Stable geometry stream. */
     static final int GEOMETRY_FLOATS_PER_VERTEX = 5;
 
-    /** Encoded color/light + alpha + render type + RGB + priority. */
-    static final int SHADING_FLOATS_PER_VERTEX = 7;
+    /** Interpolated/source vertex color-light data: encoded value + derived RGB. */
+    static final int VERTEX_SHADING_FLOATS_PER_VERTEX = 4;
+
+    /** Face-local metadata broadcast to the triangle's vertices for vanilla GLSL inputs. */
+    static final int FACE_METADATA_FLOATS_PER_VERTEX = 3;
 
     /** Optional normal XYZ + magnitude stream, enabled only by a consuming shader. */
     static final int NORMAL_FLOATS_PER_VERTEX = 4;
 
-    /** Current vanilla resident bytes across both mandatory vertex streams. */
+    /** Current vanilla resident bytes across mandatory vertex/metadata streams. */
     static final int BYTES_PER_VERTEX =
-            (GEOMETRY_FLOATS_PER_VERTEX + SHADING_FLOATS_PER_VERTEX) * Float.BYTES;
+            (GEOMETRY_FLOATS_PER_VERTEX
+                    + VERTEX_SHADING_FLOATS_PER_VERTEX
+                    + FACE_METADATA_FLOATS_PER_VERTEX) * Float.BYTES;
 
     static final int NORMAL_BYTES_PER_VERTEX = NORMAL_FLOATS_PER_VERTEX * Float.BYTES;
 

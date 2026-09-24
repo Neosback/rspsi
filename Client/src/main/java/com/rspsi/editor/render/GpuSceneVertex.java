@@ -30,6 +30,10 @@ public record GpuSceneVertex(
         int pickerTileY,
         int pickerSlot
 ) {
+    public GpuFaceShading faceShading() {
+        return GpuFaceShading.from(this);
+    }
+
     public GpuSceneVertex {
         if (!Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(z)
                 || !Float.isFinite(u) || !Float.isFinite(v)) {

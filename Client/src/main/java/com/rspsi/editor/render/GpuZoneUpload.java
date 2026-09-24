@@ -42,7 +42,11 @@ public record GpuZoneUpload(
         Objects.requireNonNull(indices, "indices");
 
         long geometry = mix(1125899906842597L, vertices.size());
-        long shading = mix(1125899906842597L, vertices.size());
+        long vertexShading = mix(1125899906842597L, vertices.size());
+        if (indices.size() % 3 != 0) {
+            throw new IllegalArgumentException("Zone topology must contain complete triangles");
+        }
+        long faceShading = mix(1125899906842597L, indices.size() / 3);
         long normals = mix(1125899906842597L, vertices.size());
         for (GpuSceneVertex vertex : vertices) {
             geometry = mix(geometry, Float.floatToIntBits(vertex.x()));
@@ -51,11 +55,8 @@ public record GpuZoneUpload(
             geometry = mix(geometry, Float.floatToIntBits(vertex.u()));
             geometry = mix(geometry, Float.floatToIntBits(vertex.v()));
 
-            shading = mix(shading, vertex.encodedColor());
-            shading = mix(shading, vertex.colorEncoding().ordinal());
-            shading = mix(shading, vertex.alpha());
-            shading = mix(shading, vertex.renderType());
-            shading = mix(shading, vertex.priority());
+            vertexShading = mix(vertexShading, vertex.encodedColor());
+            vertexShading = mix(vertexShading, vertex.colorEncoding().ordinal());
 
             normals = mix(normals, vertex.normalX());
             normals = mix(normals, vertex.normalY());
@@ -63,14 +64,34 @@ public record GpuZoneUpload(
             normals = mix(normals, vertex.normalMagnitude());
         }
 
+        for (int offset = 0; offset < indices.size(); offset += 3) {
+            GpuSceneVertex first = vertices.get(indices.get(offset));
+            GpuSceneVertex second = vertices.get(indices.get(offset + 1));
+            GpuSceneVertex third = vertices.get(indices.get(offset + 2));
+            if (!sameFaceShading(first, second) || !sameFaceShading(first, third)) {
+                throw new IllegalArgumentException(
+                        "Face shading metadata must be constant across one triangle");
+            }
+            faceShading = mix(faceShading, first.alpha());
+            faceShading = mix(faceShading, first.renderType());
+            faceShading = mix(faceShading, first.priority());
+        }
+
         long topology = mix(1125899906842597L, indices.size());
         for (int index : indices) topology = mix(topology, index);
-        return new GpuZoneStreamFingerprints(geometry, shading, topology, normals);
+        return new GpuZoneStreamFingerprints(
+                geometry, vertexShading, faceShading, topology, normals);
     }
 
     /** Current native-residency aggregate retained for flat-plan callers. */
     public static long fingerprint(List<GpuSceneVertex> vertices, List<Integer> indices) {
         return fingerprints(vertices, indices).nativeFingerprint();
+    }
+
+    private static boolean sameFaceShading(GpuSceneVertex first, GpuSceneVertex second) {
+        return first.alpha() == second.alpha()
+                && first.renderType() == second.renderType()
+                && first.priority() == second.priority();
     }
 
     private static long mix(long hash, int value) {
