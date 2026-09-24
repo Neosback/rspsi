@@ -6,7 +6,7 @@ layout(std140) uniform FrameUniforms {
     vec4 frameCameraPitch;              // camera.xyz, pitch
     vec4 frameYawFocalAspectDepthA;     // yaw, focal, aspect, depthA
     vec4 frameDepthPresentation;        // depthB, depthBiasNudge, brightness, exposure
-    ivec4 frameFlags;                   // smoothBanding, useFog, clientCycle, reserved
+    ivec4 frameFlags;                   // smoothBanding, useFog, clientCycle, debugView
     vec4 frameFogBounds;                // west, east, south, north
     vec4 frameFogColorDepth;            // fogColor.rgb, fogDepth
 };
@@ -24,6 +24,7 @@ layout(std140) uniform FrameUniforms {
 #define uSmoothBanding frameFlags.x
 #define uUseFog frameFlags.y
 #define uClientCycle frameFlags.z
+#define uDebugView frameFlags.w
 #define uFogWest frameFogBounds.x
 #define uFogEast frameFogBounds.y
 #define uFogSouth frameFogBounds.z
