@@ -179,9 +179,11 @@ class OpenGlGpuPickerAcceptanceTest {
     private static GpuUploadPlan topTrianglePlan() {
         int slot = PickerId.slotFor(SceneLayer.Kind.GROUND_OBJECT);
         List<GpuSceneVertex> vertices = List.of(
-                vertex(-20.0f, 20.0f, 100.0f, 0, slot),
-                vertex(0.0f, 40.0f, 100.0f, 0, slot),
-                vertex(20.0f, 20.0f, 100.0f, 0, slot));
+                // OSRS world Y points downward, so negative Y projects toward
+                // the top of the viewport with the neutral camera.
+                vertex(-20.0f, -20.0f, 100.0f, 0, slot),
+                vertex(0.0f, -40.0f, 100.0f, 0, slot),
+                vertex(20.0f, -20.0f, 100.0f, 0, slot));
         return new GpuUploadPlan(vertices, List.of(0, 1, 2), List.of(command(0, 0, 42)),
                 List.of(), Map.of(), "gpu-picker-y-flip");
     }
