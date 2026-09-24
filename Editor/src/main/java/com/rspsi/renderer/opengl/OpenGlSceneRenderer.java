@@ -109,7 +109,6 @@ import static org.lwjgl.opengl.GL20.glGetUniformLocation;
 import static org.lwjgl.opengl.GL20.glUseProgram;
 import static org.lwjgl.opengl.GL20.glUniform1f;
 import static org.lwjgl.opengl.GL20.glUniform1i;
-import static org.lwjgl.opengl.GL20.glUniform3f;
 import static org.lwjgl.opengl.GL20.glUniformMatrix4fv;
 import static org.lwjgl.opengl.GL20.glVertexAttribPointer;
 import static org.lwjgl.opengl.GL14.glMultiDrawElements;
@@ -194,15 +193,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     private int program;
-    private int cameraLocation;
-    private int pitchLocation;
-    private int yawLocation;
-    private int focalLocation;
-    private int aspectLocation;
-    private int depthALocation;
-    private int depthBLocation;
     private int faceBiasLocation;
-    private int depthBiasNudgeLocation;
     private int texturedLocation;
     private int textureAvailableLocation;
     private int textureMissingLocation;
@@ -210,19 +201,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int textureLocation;
     private int textureLayerLocation;
     private int textureStateLocation;
-    private int clientCycleLocation;
-    private int brightnessLocation;
-    private int exposureLocation;
-    private int smoothBandingLocation;
-    private int useFogLocation;
-    private int fogWestLocation;
-    private int fogEastLocation;
-    private int fogSouthLocation;
-    private int fogNorthLocation;
-    private int fogDepthLocation;
-    private int fogColorLocation;
     private final ZoneVboManager zoneManager = new ZoneVboManager();
     private final TextureStateBuffer textureStateBuffer = new TextureStateBuffer();
+    private final FrameUniformBuffer frameUniformBuffer = new FrameUniformBuffer();
     private final GpuCommandVisibility.Cache visibilityCache =
             new GpuCommandVisibility.Cache();
     private int paletteTexture;
@@ -285,15 +266,16 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 SHADER_SOURCES.load("scene/vanilla.vert"),
                 SHADER_SOURCES.load("scene/vanilla.frag"));
 
-        cameraLocation = glGetUniformLocation(program, "uCamera");
-        pitchLocation = glGetUniformLocation(program, "uPitch");
-        yawLocation = glGetUniformLocation(program, "uYaw");
-        focalLocation = glGetUniformLocation(program, "uFocal");
-        aspectLocation = glGetUniformLocation(program, "uAspect");
-        depthALocation = glGetUniformLocation(program, "uDepthA");
-        depthBLocation = glGetUniformLocation(program, "uDepthB");
+        int frameUniformBlock = org.lwjgl.opengl.GL31.glGetUniformBlockIndex(
+                program, "FrameUniforms");
+        if (frameUniformBlock < 0) {
+            throw new IllegalStateException("Vanilla shader is missing FrameUniforms block");
+        }
+        org.lwjgl.opengl.GL31.glUniformBlockBinding(
+                program, frameUniformBlock, FrameUniformBuffer.BINDING_POINT);
+        frameUniformBuffer.initialize();
+
         faceBiasLocation = glGetUniformLocation(program, "uFaceBias");
-        depthBiasNudgeLocation = glGetUniformLocation(program, "uDepthBiasNudge");
         texturedLocation = glGetUniformLocation(program, "uTextured");
         textureAvailableLocation = glGetUniformLocation(program, "uTextureAvailable");
         textureMissingLocation = glGetUniformLocation(program, "uTextureMissing");
@@ -301,17 +283,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         textureLocation = glGetUniformLocation(program, "uTexture");
         textureLayerLocation = glGetUniformLocation(program, "uTextureLayer");
         textureStateLocation = glGetUniformLocation(program, "uTextureState");
-        clientCycleLocation = glGetUniformLocation(program, "uClientCycle");
-        brightnessLocation = glGetUniformLocation(program, "uBrightness");
-        exposureLocation = glGetUniformLocation(program, "uExposure");
-        smoothBandingLocation = glGetUniformLocation(program, "uSmoothBanding");
-        useFogLocation = glGetUniformLocation(program, "uUseFog");
-        fogWestLocation = glGetUniformLocation(program, "uFogWest");
-        fogEastLocation = glGetUniformLocation(program, "uFogEast");
-        fogSouthLocation = glGetUniformLocation(program, "uFogSouth");
-        fogNorthLocation = glGetUniformLocation(program, "uFogNorth");
-        fogDepthLocation = glGetUniformLocation(program, "uFogDepth");
-        fogColorLocation = glGetUniformLocation(program, "uFogColor");
         paletteLocation = glGetUniformLocation(program, "uPalette");
         glUseProgram(program);
         glUniform1i(textureLocation, 0);
@@ -472,32 +443,21 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         GpuCommandVisibility visibility = visibilityCache.resolve(
                 runtimeGeometry, camera, plan.occluders(), plan.sceneWindow());
 
-        glUseProgram(program);
-        glUniform3f(cameraLocation, camera.x(), camera.y(), camera.z());
-        glUniform1f(pitchLocation, camera.pitch());
-        glUniform1f(yawLocation, camera.yaw());
-        glUniform1f(focalLocation, (float) (1.0 / Math.tan(FOV_Y * 0.5)));
-        glUniform1f(aspectLocation, (float) width / height);
-        glUniform1f(depthALocation, -(FAR + NEAR) / (FAR - NEAR));
-        glUniform1f(depthBLocation, 2.0f * FAR * NEAR / (FAR - NEAR));
-        glUniform1f(depthBiasNudgeLocation, DEPTH_BIAS_NUDGE);
-        glUniform1f(brightnessLocation, (float) presentation.brightness());
-        glUniform1f(exposureLocation, (float) presentation.exposure());
-        glUniform1i(smoothBandingLocation, presentation.smoothBanding() ? 1 : 0);
-        glUniform1i(clientCycleLocation, clientCycle & TextureAnimation.CLIENT_CYCLE_MASK);
         boolean fogEnabled = presentation.fogDepthTiles() > 0;
-        glUniform1i(useFogLocation, fogEnabled ? 1 : 0);
-        if (fogEnabled) {
-            SceneFog.Bounds fogBounds = fogBounds(runtimeGeometry);
-            glUniform1f(fogWestLocation, fogBounds.minX());
-            glUniform1f(fogEastLocation, fogBounds.maxX());
-            glUniform1f(fogSouthLocation, fogBounds.minZ());
-            glUniform1f(fogNorthLocation, fogBounds.maxZ());
-        }
-        glUniform1f(fogDepthLocation, presentation.fogDepthTiles() * 128.0f);
-        glUniform3f(fogColorLocation, ((presentation.fogColor() >>> 16) & 0xFF) / 255.0f,
-                ((presentation.fogColor() >>> 8) & 0xFF) / 255.0f,
-                (presentation.fogColor() & 0xFF) / 255.0f);
+        SceneFog.Bounds frameFogBounds = fogEnabled ? fogBounds(runtimeGeometry) : null;
+        frameUniformBuffer.upload(
+                camera,
+                (float) (1.0 / Math.tan(FOV_Y * 0.5)),
+                (float) width / height,
+                -(FAR + NEAR) / (FAR - NEAR),
+                2.0f * FAR * NEAR / (FAR - NEAR),
+                DEPTH_BIAS_NUDGE,
+                presentation,
+                frameFogBounds,
+                clientCycle & TextureAnimation.CLIENT_CYCLE_MASK);
+        frameUniformBuffer.bind();
+
+        glUseProgram(program);
         glPolygonMode(GL_FRONT_AND_BACK, presentation.wireframe() ? GL_LINE : GL_FILL);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
@@ -570,7 +530,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     /**
      * Selects back-face culling for non-terrain model geometry.
      *
-     * <p>{@link #applyDrawState(GpuUploadPlan, GpuDrawCommand, boolean, int)}
+     * <p>{@link #applyDrawState(GpuDrawCommand, boolean)}
      * enables culling only for non-terrain commands and disables it again for
      * terrain. The default is client-front {@link #CULL_FRONT_CCW}; the
      * opposite winding and two-sided modes remain diagnostics.</p>
@@ -1198,6 +1158,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         if (textureArray != 0) org.lwjgl.opengl.GL11.glDeleteTextures(textureArray);
         textureArray = 0;
         textureStateBuffer.close();
+        frameUniformBuffer.close();
         textureLayers.clear();
         if (program != 0) org.lwjgl.opengl.GL20.glDeleteProgram(program);
         program = 0;

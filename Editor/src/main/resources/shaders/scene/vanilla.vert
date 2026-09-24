@@ -6,13 +6,9 @@ layout(location = 3) in float aAlpha;
 layout(location = 4) in float aRenderType;
 layout(location = 5) in vec3 aColor;
 layout(location = 6) in float aPriority;
-uniform vec3 uCamera;
-uniform float uPitch;
-uniform float uYaw;
-uniform float uFocal;
-uniform float uAspect;
-uniform float uDepthA;
-uniform float uDepthB;
+
+#include "/common/frame_uniforms.glsl"
+
 uniform float uFaceBias;
 // Constant depth-buffer separation per bias step, on top of the
 // view-space bias. The view-space term is correct up close but its
@@ -23,13 +19,6 @@ uniform float uFaceBias;
 // would divide back down by depth and turn into yet another
 // distance-dependent term. Only Z moves and W stays unbiased, so
 // screen X/Y and the silhouette are unchanged.
-uniform float uDepthBiasNudge;
-uniform int uUseFog;
-uniform float uFogWest;
-uniform float uFogEast;
-uniform float uFogSouth;
-uniform float uFogNorth;
-uniform float uFogDepth;
 out vec2 vUv;
 noperspective out float vEncodedColor;
 out float vAlpha;
