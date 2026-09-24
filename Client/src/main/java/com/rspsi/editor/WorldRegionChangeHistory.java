@@ -55,7 +55,22 @@ public final class WorldRegionChangeHistory {
             for (PendingRegionEdit edit : edits) {
                 EditorSession session = edit.session();
                 int before = session.history().position();
-                session.execute(edit.command());
+                try {
+                    session.execute(edit.command());
+                } catch (RuntimeException failure) {
+                    // Session listeners run after CommandHistory.execute(). If
+                    // a listener fails, the command may already be canonical
+                    // state and must participate in transaction rollback.
+                    CommandHistory history = session.history();
+                    if (history.position() == before + 1
+                            && history.canUndo()
+                            && history.previousCommand() == edit.command()) {
+                        applied.add(new RegionStep(
+                                edit.regionId(), session, edit.command(),
+                                before, history.position()));
+                    }
+                    throw failure;
+                }
                 int after = session.history().position();
                 if (after != before + 1
                         || session.history().previousCommand() != edit.command()) {
