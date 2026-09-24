@@ -6,7 +6,7 @@ dependencies {
     implementation "org.tomlj:tomlj:1.1.1"
     // OpenRune currently targets Kotlin 2.2.0. PSI is kept behind the server semantic adapter so
     // compiler-internal types never enter Studio's neutral APIs.
-    implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:2.2.0"
+    implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:${openruneKotlinSemanticVersion}"
     // Raw cache-library types are confined to legacy adapters/renderers and
     // must not become part of the editor module's transitive API.
     implementation 'com.displee:rs-cache-library:7.3.0'
