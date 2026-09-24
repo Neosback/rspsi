@@ -57,8 +57,20 @@ correctness gaps against real OSRS behavior (covered/partial/deferred, with a `n
 entry). `./gradlew renderingAuditGate` validates its shape; treat it as the actual rendering
 backlog, not something to re-derive from scratch. `docs/ROADMAP.md` defines product order,
 `docs/PROJECT_LAUNCHER_AND_DASHBOARD.md` defines application startup/project lifecycle,
+`docs/CONTENT_STUDIO_ARCHITECTURE.md` defines the project-owned Content Studio, lazy-domain,
+refresh, cross-tool navigation, RSProx, and future Kotlin/JS boundaries,
 `docs/CONTENT_STUDIO_FOUNDATION.md` defines advanced-authoring prerequisites, and
 `docs/UI_WORKSPACE_CONTRACT.md` defines the strict in-project editor-shell/UI contribution contract.
+
+## Kotlin / coroutine direction
+
+New application/project orchestration may be Kotlin when it materially improves structured
+concurrency, cancellation, immutable state, or lazy-domain composition. Do not translate stable
+Java renderer/cache code merely for language consistency.
+
+Project open must remain below the content-decoding boundary. Content Studio may validate FileStore
+and project identity at startup, but cache definitions, RSCM/GameVals, Gradle/PSI, spawn indexes and
+semantic graphs are workspace-demanded services. See `docs/CONTENT_STUDIO_ARCHITECTURE.md`.
 
 ## Reference source trees (not part of the build)
 
