@@ -1,621 +1,413 @@
 package com.rspsi.studio;
 
-import com.rspsi.studio.theme.StudioDrawColors;
-import com.rspsi.cache.workspace.CacheDecoderSummary;
-import com.rspsi.cache.workspace.CacheDecoderSummary.IndexEntry;
 import com.rspsi.cache.workspace.CacheSessionState;
 import com.rspsi.cache.workspace.CacheSessionStatus;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.editor.integration.ServerIntegrationService;
+import com.rspsi.editor.integration.semantic.SemanticContentNodeKind;
+import com.rspsi.editor.integration.semantic.SemanticFactKind;
+import com.rspsi.project.ProjectIntegrationCapability;
+import com.rspsi.project.StudioProjectDescriptor;
+import com.rspsi.project.StudioProjectKind;
+import com.rspsi.server.ServerPathKey;
+import com.rspsi.server.ServerProjectInspection;
+import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioWidgets;
-import imgui.ImDrawList;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
-import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiTableFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImString;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-/** Dear ImGui dashboard for cache selection, validation, and workspace activation. */
+/**
+ * In-project home.
+ *
+ * <p>Project/cache selection belongs to the pre-project launcher. This view presents project
+ * health, OpenRune content intelligence, recent/continue actions, and workspace entry points.</p>
+ */
 public final class DashboardView {
-    private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance(Locale.US);
+    private static final NumberFormat NUMBER_FORMAT =
+            NumberFormat.getIntegerInstance(Locale.US);
 
-    private final ImString cachePath = new ImString(512);
     private final ImString region = new ImString("50,50", 32);
-    private boolean editingCachePath = false;
-    private boolean serverIntegrationExpanded = true;
 
-    public DashboardView(String initialPath) {
-        cachePath.set(initialPath == null ? "" : initialPath);
-    }
+    public void render(
+            StudioProjectDescriptor project,
+            CacheSessionStatus status,
+            ServerIntegrationService integrations,
+            Runnable openMapEditor,
+            Runnable openInterfaceStudio,
+            Runnable openObjectStudio,
+            Runnable openIntegrationCenter,
+            Runnable closeProject,
+            WorkspaceManager workspaces,
+            Runnable openDashboard,
+            Consumer<WorkspaceManager.Workspace> closeWorkspace) {
+        Objects.requireNonNull(project, "project");
+        Objects.requireNonNull(status, "status");
+        Objects.requireNonNull(openMapEditor, "openMapEditor");
 
-    private void renderInternal(CacheSessionStatus status,
-                                Consumer<Path> loadCache,
-                                Runnable openMapEditor,
-                                Runnable openInterfaceStudio,
-                                Runnable openObjectStudio,
-                                com.rspsi.editor.integration.ServerIntegrationService integrations,
-                                Runnable openIntegrationCenter,
-                                WorkspaceManager workspaces,
-                                Runnable openDashboard,
-                                Consumer<WorkspaceManager.Workspace> closeWorkspace) {
-        Objects.requireNonNull(status, "cache status");
-        Objects.requireNonNull(loadCache, "load cache callback");
-        Objects.requireNonNull(openMapEditor, "open workspace callback");
-
-        imgui.ImGuiViewport mainViewport = ImGui.getMainViewport();
-        ImGui.setNextWindowPos(mainViewport.getPosX(), mainViewport.getPosY());
-        ImGui.setNextWindowSize(mainViewport.getSizeX(), mainViewport.getSizeY());
+        var viewport = ImGui.getMainViewport();
+        ImGui.setNextWindowPos(viewport.getPosX(), viewport.getPosY());
+        ImGui.setNextWindowSize(viewport.getSizeX(), viewport.getSizeY());
         int flags = ImGuiWindowFlags.NoDecoration
                 | ImGuiWindowFlags.NoMove
                 | ImGuiWindowFlags.NoSavedSettings
                 | ImGuiWindowFlags.NoBringToFrontOnFocus
                 | ImGuiWindowFlags.NoDocking;
-        if (!ImGui.begin("OpenRune Studio", flags)) {
+        if (!ImGui.begin("Project Home##openrune-studio", flags)) {
             ImGui.end();
             return;
         }
 
         if (workspaces != null) {
-            StudioWidgets.workspaceTabs(workspaces, openDashboard, openMapEditor,
-                    openInterfaceStudio, openObjectStudio, closeWorkspace);
+            StudioWidgets.workspaceTabs(
+                    workspaces,
+                    openDashboard,
+                    openMapEditor,
+                    openInterfaceStudio,
+                    openObjectStudio,
+                    closeWorkspace);
             ImGui.separator();
         }
 
-        // A fixed margin, not a centered fixed-width column: this screen grows into
-        // future sections (cache management, plugins) instead of stranding them in
-        // empty space either side of a narrow reading-width block.
-        float margin = 24.0f;
-        ImGui.dummy(1.0f, 16.0f);
-        ImGui.indent(margin);
+        ImGui.dummy(1.0f, 12.0f);
+        ImGui.indent(24.0f);
 
-        // Header Title
-        ImGui.pushStyleColor(ImGuiCol.Text, 0.88f, 0.91f, 0.98f, 1.0f);
-        ImGui.text("OPENRUNE STUDIO");
-        ImGui.popStyleColor();
-        ImGui.textDisabled("Cache-first editing for RuneScape worlds");
-        ImGui.dummy(1.0f, 8.0f);
+        renderProjectHeader(project, status, integrations, closeProject);
+        ImGui.dummy(1.0f, 10.0f);
 
-        // Cache Configuration Section
-        ImGui.separatorText("Cache Configuration");
-        boolean ready = status.state() == CacheSessionState.READY;
-        if (ready && !editingCachePath) {
-            status.currentSession().ifPresent(session -> {
-                StudioWidgets.beginCard("cache-summary", -1.0f, 48.0f);
-                ImGui.textColored(StudioDrawColors.abgr(0xFF4ADE80), StudioIcons.CHECK + "  Cache Ready:");
-                ImGui.sameLine();
-                ImGui.text(session.path().toString());
-                ImGui.sameLine(0.0f, 12.0f);
-                StudioWidgets.pill("Rev " + session.identity().revision(), ImGui.getColorU32(0.18f, 0.24f, 0.38f, 0.8f), ImGui.getColorU32(0.51f, 0.65f, 0.97f, 1.0f));
-                ImGui.sameLine(0.0f, 12.0f);
-                if (StudioWidgets.buttonGhost("Change...##cache-path-edit", 75.0f, 22.0f)) {
-                    editingCachePath = true;
-                }
-                StudioWidgets.endCard();
-            });
+        renderContinue(project, status, openMapEditor);
+        ImGui.dummy(1.0f, 10.0f);
+
+        if (project.kind() == StudioProjectKind.OPENRUNE_SERVER) {
+            renderOpenRuneContentHome(project, status, integrations, openIntegrationCenter);
+            ImGui.dummy(1.0f, 10.0f);
         } else {
-            ImGui.textDisabled("Specify the OSRS cache folder containing main_file_cache.dat2 and .idx files.");
-            ImGui.inputTextWithHint("##cache-path", "Path to an OSRS cache directory (e.g. /path/to/cache)", cachePath);
-            ImGui.sameLine();
-            boolean loading = status.state() == CacheSessionState.LOADING;
-            ImGui.beginDisabled(loading || cachePath.isEmpty());
-            if (StudioWidgets.buttonPrimary(loading ? "Loading..." : "Load cache", 110.0f, 0.0f)) {
-                Path path = Path.of(cachePath.get().trim()).toAbsolutePath().normalize();
-                loadCache.accept(path);
-                editingCachePath = false;
-            }
-            ImGui.endDisabled();
-            if (ready) {
-                ImGui.sameLine();
-                if (ImGui.smallButton("Cancel##cache-path-cancel")) {
-                    editingCachePath = false;
-                }
-            }
+            renderStandaloneSummary(status);
+            ImGui.dummy(1.0f, 10.0f);
         }
 
-        // Path Validation Warning Cards
-        renderPathWarnings(status);
+        renderWorkspaces(status, openMapEditor, openInterfaceStudio, openObjectStudio);
+        ImGui.dummy(1.0f, 10.0f);
+        renderDiagnostics(status);
 
-        // Status / Loading / Ready panels
-        renderStatus(status);
-
-        // Server Integration Section
-        renderServerIntegrationSection(integrations, openIntegrationCenter);
-
-        // Modern 3-Card Workspace Launchers
-        renderWorkspaceSection(status, openMapEditor, openInterfaceStudio, openObjectStudio);
-
-        ImGui.dummy(1.0f, 24.0f);
-        ImGui.unindent(margin);
+        ImGui.dummy(1.0f, 22.0f);
+        ImGui.unindent(24.0f);
         ImGui.end();
     }
 
-    private void renderWorkspaceSection(CacheSessionStatus status,
-                                        Runnable openMapEditor,
-                                        Runnable openInterfaceStudio,
-                                        Runnable openObjectStudio) {
-        ImGui.dummy(1.0f, 12.0f);
-        ImGui.separatorText("Workspaces");
-        ImGui.textDisabled("Select an editing environment. Workspaces become active once cache decoding completes.");
-        ImGui.dummy(1.0f, 6.0f);
+    private static void renderProjectHeader(
+            StudioProjectDescriptor project,
+            CacheSessionStatus status,
+            ServerIntegrationService integrations,
+            Runnable closeProject) {
+        StudioWidgets.beginCard("project-header", -1.0f, 112.0f);
 
-        boolean ready = status.state() == CacheSessionState.READY;
-        float availWidth = ImGui.getContentRegionAvailX();
-        float cardSpacing = 12.0f;
-        float cardWidth = Math.max(260.0f, (availWidth - cardSpacing * 2.0f) / 3.0f);
-        float cardHeight = 220.0f;
+        ImGui.pushStyleColor(ImGuiCol.Text, 0.91f, 0.94f, 1.0f, 1.0f);
+        ImGui.text(project.name());
+        ImGui.popStyleColor();
 
-        // Card 1: Map Studio
-        StudioWidgets.beginCard("ws-map", cardWidth, cardHeight);
-        {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF818CF8), StudioIcons.MAP);
-            ImGui.sameLine();
-            ImGui.text("Map Studio");
-            ImGui.sameLine(0.0f, 8.0f);
-            if (ready) {
-                StudioWidgets.pill("READY", ImGui.getColorU32(0.13f, 0.28f, 0.18f, 0.8f), ImGui.getColorU32(0.29f, 0.87f, 0.50f, 1.0f));
-            } else {
-                StudioWidgets.pill("LOCKED", ImGui.getColorU32(0.18f, 0.20f, 0.26f, 0.8f), ImGui.getColorU32(0.58f, 0.64f, 0.72f, 1.0f));
-            }
+        ImGui.sameLine(0.0f, 10.0f);
+        boolean openRune = project.kind() == StudioProjectKind.OPENRUNE_SERVER;
+        StudioWidgets.pill(
+                openRune ? "OPENRUNE SERVER" : "STANDALONE CACHE",
+                ImGui.getColorU32(
+                        openRune ? 0.18f : 0.16f,
+                        openRune ? 0.23f : 0.28f,
+                        openRune ? 0.40f : 0.20f,
+                        0.90f),
+                ImGui.getColorU32(
+                        openRune ? 0.58f : 0.43f,
+                        openRune ? 0.70f : 0.90f,
+                        openRune ? 1.00f : 0.55f,
+                        1.00f));
 
-            ImGui.dummy(1.0f, 2.0f);
-            ImGui.pushStyleColor(ImGuiCol.Text, 0.65f, 0.70f, 0.78f, 1.0f);
-            ImGui.textWrapped("3D terrain sculpting, tile painting, object placement & spline path autotiling.");
-            ImGui.popStyleColor();
-
-            ImGui.dummy(1.0f, 6.0f);
-            ImGui.textDisabled("Target Region:");
-            ImGui.setNextItemWidth(-1.0f);
-            ImGui.inputTextWithHint("##region", "Region X,Y or ID (e.g. 50,50)", region);
-
-            ImGui.dummy(1.0f, 8.0f);
-            ImGui.beginDisabled(!ready);
-            if (StudioWidgets.buttonPrimary(StudioIcons.MAP + "  Launch Map Studio", -1.0f, 34.0f)) {
-                openMapEditor.run();
-            }
-            ImGui.endDisabled();
-        }
-        StudioWidgets.endCard();
-
-        ImGui.sameLine(0.0f, cardSpacing);
-
-        // Card 2: Interface Studio
-        StudioWidgets.beginCard("ws-interface", cardWidth, cardHeight);
-        {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.PREFAB);
-            ImGui.sameLine();
-            ImGui.text("Interface Studio");
-            ImGui.sameLine(0.0f, 8.0f);
-            if (ready) {
-                StudioWidgets.pill("READY", ImGui.getColorU32(0.13f, 0.28f, 0.18f, 0.8f), ImGui.getColorU32(0.29f, 0.87f, 0.50f, 1.0f));
-            } else {
-                StudioWidgets.pill("LOCKED", ImGui.getColorU32(0.18f, 0.20f, 0.26f, 0.8f), ImGui.getColorU32(0.58f, 0.64f, 0.72f, 1.0f));
-            }
-
-            ImGui.dummy(1.0f, 2.0f);
-            ImGui.pushStyleColor(ImGuiCol.Text, 0.65f, 0.70f, 0.78f, 1.0f);
-            ImGui.textWrapped("Visual layout editor for game interfaces, component trees, sprite assets & CS2 scripts.");
-            ImGui.popStyleColor();
-
-            ImGui.dummy(1.0f, 36.0f);
-
-            ImGui.beginDisabled(!ready || openInterfaceStudio == null);
-            if (StudioWidgets.buttonSecondary(StudioIcons.PREFAB + "  Open Interface Studio", -1.0f, 34.0f)) {
-                if (openInterfaceStudio != null) openInterfaceStudio.run();
-            }
-            ImGui.endDisabled();
-        }
-        StudioWidgets.endCard();
-
-        ImGui.sameLine(0.0f, cardSpacing);
-
-        // Card 3: Object Studio
-        StudioWidgets.beginCard("ws-object", cardWidth, cardHeight);
-        {
-            ImGui.textColored(StudioDrawColors.abgr(0xFFFBBF24), StudioIcons.OBJECT);
-            ImGui.sameLine();
-            ImGui.text("Object Studio");
-            ImGui.sameLine(0.0f, 8.0f);
-            if (ready) {
-                StudioWidgets.pill("READY", ImGui.getColorU32(0.13f, 0.28f, 0.18f, 0.8f), ImGui.getColorU32(0.29f, 0.87f, 0.50f, 1.0f));
-            } else {
-                StudioWidgets.pill("LOCKED", ImGui.getColorU32(0.18f, 0.20f, 0.26f, 0.8f), ImGui.getColorU32(0.58f, 0.64f, 0.72f, 1.0f));
-            }
-
-            ImGui.dummy(1.0f, 2.0f);
-            ImGui.pushStyleColor(ImGuiCol.Text, 0.65f, 0.70f, 0.78f, 1.0f);
-            ImGui.textWrapped("3D model inspection, animation sequence scrubber, model export & transform tuning.");
-            ImGui.popStyleColor();
-
-            ImGui.dummy(1.0f, 36.0f);
-
-            ImGui.beginDisabled(!ready || openObjectStudio == null);
-            if (StudioWidgets.buttonSecondary(StudioIcons.OBJECT + "  Open Object Studio", -1.0f, 34.0f)) {
-                if (openObjectStudio != null) openObjectStudio.run();
-            }
-            ImGui.endDisabled();
-        }
-        StudioWidgets.endCard();
-    }
-
-    public void render(CacheSessionStatus status,
-                       Consumer<Path> loadCache,
-                       Runnable openMapEditor) {
-        render(status, loadCache, openMapEditor, null, null, null, null, null, null, null);
-    }
-
-    public void render(CacheSessionStatus status,
-                       Consumer<Path> loadCache,
-                       Runnable openMapEditor,
-                       Runnable openInterfaceStudio,
-                       Runnable openObjectStudio,
-                       com.rspsi.editor.integration.ServerIntegrationService integrations,
-                       Runnable openIntegrationCenter,
-                       WorkspaceManager workspaces,
-                       Runnable openDashboard,
-                       Consumer<WorkspaceManager.Workspace> closeWorkspace) {
-        renderInternal(status, loadCache, openMapEditor, openInterfaceStudio, openObjectStudio, integrations,
-                openIntegrationCenter, workspaces, openDashboard, closeWorkspace);
-    }
-
-    private void renderServerIntegrationSection(com.rspsi.editor.integration.ServerIntegrationService integrations,
-                                                Runnable openIntegrationCenter) {
-        ImGui.dummy(1.0f, 8.0f);
-        boolean connected = integrations != null && integrations.isConnected();
-
-        if (!connected && !serverIntegrationExpanded) {
-            ImGui.textDisabled("Server integration not set up.");
-            ImGui.sameLine();
-            if (ImGui.smallButton("Set up...##server-integration-expand")) {
-                serverIntegrationExpanded = true;
-            }
-            return;
+        ImGui.sameLine();
+        if (status.state() == CacheSessionState.READY) {
+            StudioWidgets.pill(
+                    "HEALTHY",
+                    ImGui.getColorU32(0.13f, 0.28f, 0.18f, 0.85f),
+                    ImGui.getColorU32(0.29f, 0.87f, 0.50f, 1.0f));
         }
 
-        ImGui.separatorText("Server Integration");
-        if (connected) {
-            var session = integrations.activeSession().get();
-            ImGui.textColored(0xFF66FF66, "[OK] Connected: " + session.provider().name());
-            ImGui.textDisabled("Root: " + session.projectRoot() + " (" + session.activeCapabilities().size() + " capabilities active)");
-            if (openIntegrationCenter != null) {
-                if (ImGui.button("Configure Integration")) openIntegrationCenter.run();
-                ImGui.sameLine();
-                if (ImGui.button("Disconnect")) integrations.disconnect();
-            }
+        ImGui.textDisabled(project.sourcePathValue().toString());
+
+        LoadedOsrsCacheSession cache = status.currentSession().orElse(null);
+        if (cache != null) {
+            ImGui.text("Revision " + cache.identity().revision()
+                    + "  ·  " + fmt(cache.mapCount()) + " map groups");
         } else {
-            ImGui.textDisabled("No server project connected. Connect an OpenRune or custom server repository for symbols and spawns.");
-            if (openIntegrationCenter != null) {
-                if (ImGui.button("Connect Project...")) openIntegrationCenter.run();
-                ImGui.sameLine();
-                if (ImGui.smallButton("Not now##server-integration-collapse")) {
-                    serverIntegrationExpanded = false;
-                }
-            }
-        }
-    }
-
-    private void renderPathWarnings(CacheSessionStatus status) {
-        if (status.state() == CacheSessionState.READY || status.state() == CacheSessionState.LOADING) {
-            return;
-        }
-
-        String raw = cachePath.get().trim();
-        if (raw.isEmpty()) {
-            renderWarningCard("CACHE PATH REQUIRED",
-                    "No cache path is currently configured. Enter the file path to your OSRS cache folder above and click 'Load cache' to decode and verify all cache contents.");
-            return;
-        }
-
-        try {
-            Path path = Path.of(raw);
-            if (!Files.exists(path)) {
-                renderWarningCard("DIRECTORY NOT FOUND",
-                        "The specified cache path does not exist on disk:\n" + path.toAbsolutePath().normalize());
-            } else if (!Files.isDirectory(path)) {
-                renderWarningCard("NOT A DIRECTORY",
-                        "The specified path points to a file, not a cache directory:\n" + path.toAbsolutePath().normalize());
-            } else if (!Files.exists(path.resolve("main_file_cache.dat2"))) {
-                renderWarningCard("INVALID CACHE DIRECTORY",
-                        "Directory exists, but 'main_file_cache.dat2' was not found in this folder.\nPlease point to the folder containing OSRS cache data files (.dat2 and .idx).");
-            }
-        } catch (Exception ex) {
-            renderWarningCard("INVALID PATH FORMAT",
-                    "The entered path string is not a valid filesystem path: " + ex.getMessage());
-        }
-    }
-
-    private static void renderStatus(CacheSessionStatus status) {
-        switch (status.state()) {
-            case EMPTY -> {
-                // Warning banner handled by renderPathWarnings above
-            }
-            case LOADING -> renderLoadingIndicator(status);
-            case READY -> status.currentSession().ifPresent(session -> {
-                ImGui.dummy(1.0f, 6.0f);
-                renderReadyHeader(session);
-                ImGui.dummy(1.0f, 6.0f);
-                renderDecoderInspection(session.decoderSummary());
-            });
-            case FAILED -> {
-                ImGui.dummy(1.0f, 6.0f);
-                String detail = status.failure() == null ? status.message() : status.failure().getMessage();
-                renderErrorCard("CACHE LOAD FAILED",
-                        detail == null || detail.isBlank() ? status.message() : detail);
-            }
-        }
-    }
-
-    /**
-     * The cache loader only ever reports {@link com.rspsi.cache.workspace.CacheLoadPhase}
-     * checkpoints, not fine-grained progress within a phase — the slowest part
-     * (decoding every definition table) happens entirely inside one phase, so a
-     * literal percentage bar sat still and then jumped, which read as broken.
-     * An indeterminate, centered animation is honest about what we actually
-     * know: a phase name and "still working," not a fake number.
-     */
-    private static void renderLoadingIndicator(CacheSessionStatus status) {
-        ImGui.dummy(1.0f, 16.0f);
-        float barWidth = 320.0f;
-        float barHeight = 8.0f;
-        float available = ImGui.getContentRegionAvailX();
-        ImGui.setCursorPosX(ImGui.getCursorPosX() + Math.max(0.0f, (available - barWidth) * 0.5f));
-
-        float x = ImGui.getCursorScreenPosX();
-        float y = ImGui.getCursorScreenPosY();
-        ImDrawList drawList = ImGui.getWindowDrawList();
-        drawList.addRectFilled(x, y, x + barWidth, y + barHeight,
-                ImGui.getColorU32(0.16f, 0.18f, 0.22f, 1.0f), 3.0f);
-        float sweepWidth = barWidth * 0.28f;
-        float phase = (float) (ImGui.getTime() % 1.2) / 1.2f;
-        float sweepX = x + (barWidth - sweepWidth) * (0.5f - 0.5f * (float) Math.cos(phase * Math.PI * 2.0));
-        drawList.addRectFilled(sweepX, y, sweepX + sweepWidth, y + barHeight,
-                ImGui.getColorU32(0.35f, 0.58f, 0.85f, 1.0f), 3.0f);
-        ImGui.dummy(barWidth, barHeight);
-
-        ImGui.dummy(1.0f, 8.0f);
-        String label = status.phase().name().replace('_', ' ') + "...";
-        float labelWidth = ImGui.calcTextSize(label).x;
-        ImGui.setCursorPosX(ImGui.getCursorPosX() + Math.max(0.0f, (available - labelWidth) * 0.5f));
-        ImGui.textDisabled(label);
-        if (!status.message().isBlank()) {
-            float msgWidth = ImGui.calcTextSize(status.message()).x;
-            ImGui.setCursorPosX(ImGui.getCursorPosX() + Math.max(0.0f, (available - msgWidth) * 0.5f));
             ImGui.textDisabled(status.message());
         }
+
+        if (openRune && integrations != null) {
+            integrations.activeProjectInspection().ifPresent(inspection -> {
+                String branch = inspection.git().available() && !inspection.git().branch().isBlank()
+                        ? inspection.git().branch() : "Git unavailable";
+                String suffix = inspection.git().dirty() ? " · modified" : "";
+                ImGui.sameLine(0.0f, 14.0f);
+                ImGui.textDisabled(branch + suffix);
+            });
+        }
+
+        if (closeProject != null) {
+            float buttonWidth = 110.0f;
+            ImGui.sameLine(Math.max(ImGui.getCursorPosX() + 12.0f,
+                    ImGui.getWindowContentRegionMaxX() - buttonWidth));
+            if (StudioWidgets.buttonGhost("Close Project", buttonWidth, 26.0f)) {
+                closeProject.run();
+            }
+        }
+
+        StudioWidgets.endCard();
     }
 
-    private static void renderReadyHeader(LoadedOsrsCacheSession session) {
-        ImGui.pushStyleColor(ImGuiCol.ChildBg, 0.08f, 0.22f, 0.12f, 0.65f);
-        ImGui.pushStyleColor(ImGuiCol.Border, 0.25f, 0.85f, 0.40f, 0.90f);
-        ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 6.0f);
-        ImGui.pushStyleVar(ImGuiStyleVar.ChildBorderSize, 1.5f);
-        ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 12.0f, 10.0f);
+    private void renderContinue(
+            StudioProjectDescriptor project,
+            CacheSessionStatus status,
+            Runnable openMapEditor) {
+        boolean ready = status.state() == CacheSessionState.READY;
+        StudioWidgets.beginCard("project-continue", -1.0f, 112.0f);
+        ImGui.text(StudioIcons.MAP + "  Continue");
+        ImGui.textDisabled(ready
+                ? "Open Map Studio at a region. Workspace scene loading starts only after you enter it."
+                : "Project services are not ready.");
 
-        if (ImGui.beginChild("##ready-header", 0.0f, 74.0f, true, ImGuiWindowFlags.NoScrollbar)) {
-            ImGui.pushStyleColor(ImGuiCol.Text, 0.35f, 0.95f, 0.50f, 1.0f);
-            ImGui.textUnformatted("[OK] CACHE READY & VERIFIED  ·  " + session.backendName());
-            ImGui.popStyleColor();
-            ImGui.text("Revision " + session.identity().revision()
-                    + "  ·  " + fmt(session.mapCount()) + " map groups  ·  FileStore decoders operational");
-            ImGui.textDisabled(session.path().toString());
+        ImGui.dummy(1.0f, 5.0f);
+        ImGui.setNextItemWidth(220.0f);
+        ImGui.inputTextWithHint("##home-region", "Region X,Y or ID", region);
+        ImGui.sameLine();
+
+        ImGui.beginDisabled(!ready);
+        if (StudioWidgets.buttonPrimary("Open Map Studio", 150.0f, 30.0f)) {
+            openMapEditor.run();
         }
-        ImGui.endChild();
+        ImGui.endDisabled();
 
-        ImGui.popStyleVar(3);
-        ImGui.popStyleColor(2);
+        if (project.kind() == StudioProjectKind.OPENRUNE_SERVER) {
+            ImGui.sameLine();
+            ImGui.textDisabled("Content semantics stay connected while you edit the world.");
+        }
+        StudioWidgets.endCard();
     }
 
-    private static void renderDecoderInspection(CacheDecoderSummary summary) {
-        if (summary == null) return;
+    private static void renderOpenRuneContentHome(
+            StudioProjectDescriptor project,
+            CacheSessionStatus status,
+            ServerIntegrationService integrations,
+            Runnable openIntegrationCenter) {
+        ImGui.separatorText("OpenRune Content Home");
 
-        ImGui.separatorText("FileStore Cache Inspection & Decoder Verification");
+        ServerProjectInspection inspection = integrations == null
+                ? null : integrations.activeProjectInspection().orElse(null);
+        var source = integrations == null
+                ? null : integrations.activeSemanticSourceIndex().orElse(null);
+        var graph = integrations == null
+                ? null : integrations.activeSemanticContentGraph().orElse(null);
 
-        // Health Status Badge Row
-        if (summary.allDecodersPassed()) {
-            ImGui.pushStyleColor(ImGuiCol.Text, 0.35f, 0.95f, 0.50f, 1.0f);
-            ImGui.textUnformatted("[OK] All 18 FileStore Decoders Verified Operational [100% OK]");
-            ImGui.popStyleColor();
-        } else {
-            ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 0.82f, 0.25f, 1.0f);
-            ImGui.textUnformatted("[!] Cache Read with " + summary.failures().size() + " Decoder Diagnostic Note(s)");
-            ImGui.popStyleColor();
-        }
-        ImGui.textDisabled("Total Decoded Definitions: " + fmt(summary.totalDefinitionsCount())
-                + "  ·  Total Audio Assets: " + fmt(summary.totalAudioCount())
-                + "  ·  Total Archives: " + fmt(summary.totalArchives())
-                + " across " + summary.totalIndices() + " indices");
+        int modules = inspection == null ? 0
+                : inspection.gradleModel().map(model -> model.projects().size()).orElse(0);
+        int buildTasks = inspection == null ? 0 : inspection.buildTasks().size();
+        int scripts = source == null ? 0
+                : source.facts(SemanticFactKind.PLUGIN_SCRIPT).size();
+        int handlers = source == null ? 0
+                : source.facts(SemanticFactKind.SCRIPT_HANDLER).size();
+        int quests = graph == null ? 0
+                : graph.nodes(SemanticContentNodeKind.QUEST).size();
+        int objects = graph == null ? 0
+                : graph.nodes(SemanticContentNodeKind.OBJECT_DEFINITION).size();
+        int graphNodes = graph == null ? 0 : graph.nodes().size();
+        int graphEdges = graph == null ? 0 : graph.edges().size();
+        int symbols = integrations == null ? 0 : integrations.symbolService().totalSymbolCount();
+        int references = integrations == null ? 0
+                : integrations.referenceService().totalReferenceCount();
+        int spawns = integrations == null ? 0
+                : integrations.npcSpawnService().totalSpawnCount();
 
-        ImGui.dummy(1.0f, 6.0f);
-
-        // 2-Column Categorized Metric Grid
-        if (ImGui.beginTable("##decoder-grid", 2, ImGuiTableFlags.SizingStretchSame)) {
-            ImGui.tableNextRow();
-
-            // Column 1: Audio & Sound Decoders
-            ImGui.tableNextColumn();
-            renderStatCard("AUDIO & SOUND DECODERS", 0.35f, 0.75f, 0.95f, 155.0f, () -> {
-                statRow("Sound Effects (Synth/Wave):", summary.soundEffects());
-                statRow("Vorbis Audio Samples:", summary.vorbisSounds());
-                statRow("Music Tracks (MIDI):", summary.musicTracks());
-                statRow("Music Jingles:", summary.musicJingles());
-                statRow("Music Patches (SoundFont):", summary.musicPatches());
-            });
-
-            // Column 2: Visual Media & Graphics
-            ImGui.tableNextColumn();
-            renderStatCard("VISUAL MEDIA & GRAPHICS", 0.95f, 0.65f, 0.35f, 155.0f, () -> {
-                statRow("Sprites (Index 8):", fmt(summary.spriteGroups()) + " groups (" + fmt(summary.totalSubSprites()) + " frames)");
-                statRow("3D Models (Index 7):", summary.models());
-                statRow("Textures & Materials:", summary.textures());
-                statRow("Minimap Map Scenes:", summary.mapScenes());
-                statRow("Fonts (Index 13):", summary.fonts());
-            });
-
-            ImGui.tableNextRow();
-
-            // Column 1: World & Environment
-            ImGui.tableNextColumn();
-            renderStatCard("WORLD & ENVIRONMENT", 0.45f, 0.90f, 0.55f, 260.0f, () -> {
-                statRow("Maps & Regions (Index 5):", summary.maps());
-                statRow("Underlay Floor Types:", summary.underlays());
-                statRow("Overlay Floor Types:", summary.overlays());
-                statRow("World Map Areas (Index 19):", summary.worldMapAreas());
-            });
-
-            // Column 2: Gameplay Definitions & Logic
-            ImGui.tableNextColumn();
-            renderStatCard("GAME DEFINITIONS & LOGIC", 0.85f, 0.55f, 0.95f, 260.0f, () -> {
-                statRow("Objects / Scenery:", summary.objects());
-                statRow("Items & Equipment:", summary.items());
-                statRow("NPCs / Monsters:", summary.npcs());
-                statRow("Sequences (Animations):", summary.sequences());
-                statRow("Spot Animations (GFX):", summary.spotAnims());
-                statRow("Identity Kits (Appearance):", summary.identityKits());
-                statRow("Inventories:", summary.inventories());
-                statRow("VarBits & Variables:", summary.varbits());
-                statRow("Enums & Data Structs:", fmt(summary.enums()) + " / " + fmt(summary.structs()));
-                statRow("Interfaces & CS2 Scripts:", fmt(summary.interfaces()) + " / " + fmt(summary.clientScripts()));
-                statRow("DB Tables (Index 21):", summary.dbTables());
-            });
-
+        if (ImGui.beginTable("##openrune-content-metrics", 4,
+                ImGuiTableFlags.SizingStretchSame)) {
+            metricCell("MODULES", fmt(modules), "Gradle projects");
+            metricCell("SCRIPTS", fmt(scripts), fmt(handlers) + " handlers");
+            metricCell("QUESTS", fmt(quests), "semantic graph");
+            metricCell("OBJECT CONTENT", fmt(objects), "authored overlays");
+            metricCell("GAMEVALS / SYMBOLS", fmt(symbols), "RSCM + authored mappings");
+            metricCell("REFERENCES", fmt(references), "declarative source links");
+            metricCell("NPC SPAWNS", fmt(spawns), "server spawn data");
+            metricCell("CONTENT GRAPH", fmt(graphNodes), fmt(graphEdges) + " relationships");
             ImGui.endTable();
         }
 
-        // Collapsible All 25 Indices Breakdown Table
-        ImGui.dummy(1.0f, 4.0f);
-        if (ImGui.collapsingHeader("Raw Cache Indices Breakdown (" + summary.totalIndices() + " indices, " + fmt(summary.totalArchives()) + " archives)")) {
-            if (ImGui.beginTable("##raw-indices-table", 3,
-                    ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.BordersOuter
-                            | ImGuiTableFlags.SizingFixedFit)) {
-                ImGui.tableSetupColumn("Index ID", 0, 80.0f);
-                ImGui.tableSetupColumn("Category / Name", 0, 320.0f);
-                ImGui.tableSetupColumn("Archives", 0, 120.0f);
-                ImGui.tableHeadersRow();
-
-                for (IndexEntry entry : summary.indices()) {
-                    ImGui.tableNextRow();
-                    ImGui.tableNextColumn();
-                    ImGui.text(String.valueOf(entry.id()));
-                    ImGui.tableNextColumn();
-                    ImGui.text(entry.name());
-                    ImGui.tableNextColumn();
-                    if (entry.archiveCount() > 0) {
-                        ImGui.text(fmt(entry.archiveCount()));
-                    } else {
-                        ImGui.textDisabled("0");
-                    }
-                }
-                ImGui.endTable();
-            }
+        ImGui.dummy(1.0f, 8.0f);
+        if (ImGui.beginTable("##openrune-project-health", 2,
+                ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp)) {
+            statusRow("LIVE cache", pathLabel(inspection, ServerPathKey.LIVE_CACHE,
+                    status.state() == CacheSessionState.READY ? "Ready" : "Unavailable"));
+            statusRow("SERVER cache", pathLabel(inspection, ServerPathKey.SERVER_CACHE, "Not detected"));
+            statusRow("Source semantics", source == null
+                    ? "Unavailable" : fmt(source.files().size()) + " Kotlin files indexed");
+            statusRow("Content graph", graph == null
+                    ? "Unavailable" : fmt(graphNodes) + " nodes / " + fmt(graphEdges) + " edges");
+            statusRow("Build tooling", buildTasks == 0
+                    ? "No supported task discovered" : buildTasks + " supported project task(s)");
+            statusRow("Integration policy", project.capabilities().contains(
+                    ProjectIntegrationCapability.CACHE_BUILD)
+                    ? "Managed build enabled" : project.capabilities().contains(
+                    ProjectIntegrationCapability.PROJECT_SOURCE_WRITE)
+                    ? "Author" : "Inspect");
+            ImGui.endTable();
         }
-    }
 
-    private static void renderStatCard(String title, float r, float g, float b, float height, Runnable rows) {
-        ImGui.pushStyleColor(ImGuiCol.ChildBg, 0.12f, 0.14f, 0.18f, 0.80f);
-        ImGui.pushStyleColor(ImGuiCol.Border, r * 0.7f, g * 0.7f, b * 0.7f, 0.50f);
-        ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 5.0f);
-        ImGui.pushStyleVar(ImGuiStyleVar.ChildBorderSize, 1.0f);
-        ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 10.0f, 8.0f);
-
-        if (ImGui.beginChild("##card-" + title, 0.0f, height, true, ImGuiWindowFlags.NoScrollbar)) {
-            ImGui.pushStyleColor(ImGuiCol.Text, r, g, b, 1.0f);
-            ImGui.text(title);
-            ImGui.popStyleColor();
-            ImGui.separator();
-            rows.run();
+        if (inspection != null && !inspection.diagnostics().isEmpty()) {
+            ImGui.dummy(1.0f, 6.0f);
+            ImGui.textDisabled(inspection.diagnostics().size()
+                    + " integration diagnostic(s) available.");
         }
-        ImGui.endChild();
 
-        ImGui.popStyleVar(3);
-        ImGui.popStyleColor(2);
-    }
-
-    private static void statRow(String label, int count) {
-        statRow(label, fmt(count));
-    }
-
-    private static void statRow(String label, String value) {
-        ImGui.textUnformatted(label);
-        float textWidth = ImGui.calcTextSize(value).x;
-        float alignX = Math.max(ImGui.getCursorPosX() + 10.0f, ImGui.getContentRegionAvailX() - textWidth - 6.0f);
-        ImGui.sameLine(alignX);
-        ImGui.pushStyleColor(ImGuiCol.Text, 0.95f, 0.96f, 0.98f, 1.0f);
-        ImGui.textUnformatted(value);
-        ImGui.popStyleColor();
-    }
-
-    private static void renderWarningCard(String title, String message) {
-        ImGui.pushStyleColor(ImGuiCol.ChildBg, 0.24f, 0.18f, 0.05f, 0.75f);
-        ImGui.pushStyleColor(ImGuiCol.Border, 0.95f, 0.72f, 0.15f, 0.95f);
-        ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 6.0f);
-        ImGui.pushStyleVar(ImGuiStyleVar.ChildBorderSize, 1.5f);
-        ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 12.0f, 10.0f);
-
-        if (ImGui.beginChild("##warning-card", 0.0f, 76.0f, true, ImGuiWindowFlags.NoScrollbar)) {
-            ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 0.82f, 0.25f, 1.0f);
-            ImGui.textUnformatted("[!] " + title);
-            ImGui.popStyleColor();
-            ImGui.pushStyleColor(ImGuiCol.Text, 0.92f, 0.92f, 0.92f, 1.0f);
-            ImGui.textWrapped(message);
-            ImGui.popStyleColor();
+        ImGui.dummy(1.0f, 8.0f);
+        if (openIntegrationCenter != null
+                && StudioWidgets.buttonSecondary("OpenRune Integration & Build", 210.0f, 30.0f)) {
+            openIntegrationCenter.run();
         }
-        ImGui.endChild();
-
-        ImGui.popStyleVar(3);
-        ImGui.popStyleColor(2);
+        ImGui.sameLine();
+        ImGui.textDisabled(
+                "Project setup stays in Project Settings/Integration—not on the Content Home.");
     }
 
-    private static void renderErrorCard(String title, String message) {
-        ImGui.pushStyleColor(ImGuiCol.ChildBg, 0.26f, 0.08f, 0.08f, 0.75f);
-        ImGui.pushStyleColor(ImGuiCol.Border, 0.95f, 0.25f, 0.25f, 0.95f);
-        ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 6.0f);
-        ImGui.pushStyleVar(ImGuiStyleVar.ChildBorderSize, 1.5f);
-        ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 12.0f, 10.0f);
-
-        if (ImGui.beginChild("##error-card", 0.0f, 76.0f, true, ImGuiWindowFlags.NoScrollbar)) {
-            ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 0.35f, 0.35f, 1.0f);
-            ImGui.textUnformatted("[X] " + title);
-            ImGui.popStyleColor();
-            ImGui.pushStyleColor(ImGuiCol.Text, 0.92f, 0.92f, 0.92f, 1.0f);
-            ImGui.textWrapped(message);
-            ImGui.popStyleColor();
+    private static void renderStandaloneSummary(CacheSessionStatus status) {
+        ImGui.separatorText("Project Status");
+        LoadedOsrsCacheSession cache = status.currentSession().orElse(null);
+        StudioWidgets.beginCard("standalone-project-health", -1.0f, 94.0f);
+        if (cache == null) {
+            ImGui.textDisabled(status.message());
+        } else {
+            ImGui.textColored(
+                    StudioDrawColors.abgr(0xFF4ADE80),
+                    StudioIcons.CHECK + "  Cache ready");
+            ImGui.text("Revision " + cache.identity().revision()
+                    + "  ·  " + fmt(cache.mapCount()) + " map groups");
+            ImGui.textDisabled(cache.path().toString());
         }
-        ImGui.endChild();
+        StudioWidgets.endCard();
+    }
 
-        ImGui.popStyleVar(3);
-        ImGui.popStyleColor(2);
+    private static void renderWorkspaces(
+            CacheSessionStatus status,
+            Runnable openMapEditor,
+            Runnable openInterfaceStudio,
+            Runnable openObjectStudio) {
+        ImGui.separatorText("Workspaces");
+        boolean ready = status.state() == CacheSessionState.READY;
+        float spacing = 12.0f;
+        float width = Math.max(230.0f,
+                (ImGui.getContentRegionAvailX() - spacing * 2.0f) / 3.0f);
+
+        workspaceCard(
+                "home-map",
+                StudioIcons.MAP,
+                "Map Studio",
+                "World editing with server-content semantics attached to selected objects.",
+                ready,
+                openMapEditor,
+                width);
+        ImGui.sameLine(0.0f, spacing);
+        workspaceCard(
+                "home-interface",
+                StudioIcons.PREFAB,
+                "Interface Studio",
+                "Interfaces, components, sprites and future CS2 relationships.",
+                ready,
+                openInterfaceStudio,
+                width);
+        ImGui.sameLine(0.0f, spacing);
+        workspaceCard(
+                "home-object",
+                StudioIcons.OBJECT,
+                "Object Studio",
+                "Definitions, models, animations and server object overlays.",
+                ready,
+                openObjectStudio,
+                width);
+    }
+
+    private static void workspaceCard(
+            String id,
+            String icon,
+            String title,
+            String description,
+            boolean ready,
+            Runnable action,
+            float width) {
+        StudioWidgets.beginCard(id, width, 144.0f);
+        ImGui.text(icon + "  " + title);
+        ImGui.textWrapped(description);
+        ImGui.dummy(1.0f, 8.0f);
+        ImGui.beginDisabled(!ready || action == null);
+        if (StudioWidgets.buttonSecondary("Open " + title + "##" + id, -1.0f, 30.0f)
+                && action != null) {
+            action.run();
+        }
+        ImGui.endDisabled();
+        StudioWidgets.endCard();
+    }
+
+    private static void renderDiagnostics(CacheSessionStatus status) {
+        if (status.state() != CacheSessionState.READY) return;
+        LoadedOsrsCacheSession cache = status.currentSession().orElse(null);
+        if (cache == null || cache.decoderSummary() == null) return;
+
+        if (!ImGui.collapsingHeader("Cache Diagnostics")) return;
+
+        var summary = cache.decoderSummary();
+        if (summary.allDecodersPassed()) {
+            ImGui.textColored(
+                    StudioDrawColors.abgr(0xFF4ADE80),
+                    StudioIcons.CHECK + "  Required decoders healthy");
+        } else {
+            ImGui.text("Decoder diagnostics: " + summary.failures().size());
+        }
+        ImGui.textDisabled(
+                fmt(summary.totalDefinitionsCount()) + " definitions  ·  "
+                        + fmt(summary.totalAudioCount()) + " audio assets  ·  "
+                        + fmt(summary.totalArchives()) + " archives across "
+                        + summary.totalIndices() + " indices");
+        ImGui.textDisabled(
+                "Detailed cache census belongs in Project Diagnostics, not the project home.");
+    }
+
+    private static void metricCell(String title, String value, String detail) {
+        ImGui.tableNextColumn();
+        StudioWidgets.beginCard("metric-" + title, -1.0f, 82.0f);
+        ImGui.textDisabled(title);
+        ImGui.text(value);
+        ImGui.textDisabled(detail);
+        StudioWidgets.endCard();
+    }
+
+    private static void statusRow(String label, String value) {
+        ImGui.tableNextRow();
+        ImGui.tableNextColumn();
+        ImGui.textDisabled(label);
+        ImGui.tableNextColumn();
+        ImGui.text(value);
+    }
+
+    private static String pathLabel(
+            ServerProjectInspection inspection,
+            ServerPathKey key,
+            String fallback) {
+        if (inspection == null) return fallback;
+        return inspection.path(key).map(path -> path.toString()).orElse(fallback);
     }
 
     private static String fmt(int value) {
         return NUMBER_FORMAT.format(value);
-    }
-
-    public boolean pointsToDirectory() {
-        String raw = cachePath.get().trim();
-        if (raw.isEmpty()) return false;
-        try {
-            return Files.isDirectory(Path.of(raw));
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
-    public boolean pointsToValidCache() {
-        String raw = cachePath.get().trim();
-        if (raw.isEmpty()) return false;
-        try {
-            Path path = Path.of(raw);
-            return Files.isDirectory(path) && Files.exists(path.resolve("main_file_cache.dat2"));
-        } catch (Exception ignored) {
-            return false;
-        }
     }
 
     public String regionText() {
