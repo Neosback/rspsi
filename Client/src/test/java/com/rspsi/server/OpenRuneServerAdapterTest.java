@@ -110,11 +110,12 @@ class OpenRuneServerAdapterTest {
     }
 
     @Test
-    void rejectsARevisionOutsideTheFirstPartyProfile() throws Exception {
+    void keepsProjectIntegrationAvailableOutsideVerifiedCacheRevisionProfile() throws Exception {
         Path root = fixtureRoot("317");
         ServerProjectInspection inspection = new OpenRuneServerAdapter().inspect(root);
-        assertEquals(ServerIntegrationStatus.INCOMPATIBLE, inspection.status());
-        assertTrue(inspection.diagnostics().stream().anyMatch(message -> message.contains("outside")));
+        assertEquals(ServerIntegrationStatus.SUPPORTED, inspection.status());
+        assertTrue(inspection.diagnostics().stream()
+                .anyMatch(message -> message.contains("cache semantics require validation")));
     }
 
     @Test
