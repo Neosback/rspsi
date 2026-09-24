@@ -79,9 +79,8 @@ class IncrementalGpuUploadPlanBuilderTest {
         assertEquals(expected.occluders(), result.plan().occluders());
         assertEquals(expected.fingerprint(), result.plan().fingerprint());
 
-        int expectedParallelTasks = result.fragmentWorkerParallelism() > 1
-                ? tiles.size() : 0;
-        assertEquals(expectedParallelTasks, result.parallelFragmentTasks());
+        int expectedParallelTasks = result.fragmentWorkerParallelism() > 1 ? 2 : 0;
+        assertEquals(expectedParallelTasks, result.parallelZoneTasks());
     }
 
     @Test
