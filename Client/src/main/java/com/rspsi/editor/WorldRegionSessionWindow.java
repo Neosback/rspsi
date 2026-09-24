@@ -1,16 +1,20 @@
 package com.rspsi.editor;
 
+import com.rspsi.editor.change.ChangePlan;
 import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.WorldRegion;
 import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.WorldTileAddress;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
@@ -25,6 +29,7 @@ public final class WorldRegionSessionWindow {
     private final WorldRegionWindow window;
     private final Map<Integer, EditorSession> sessions;
     private final WorldRegionSaveHandler saveHandler;
+    private final WorldRegionChangeHistory changeHistory = new WorldRegionChangeHistory();
 
     public WorldRegionSessionWindow(WorldRegionWindow window,
                                     Map<Integer, EditorSession> sessions) {
@@ -130,6 +135,76 @@ public final class WorldRegionSessionWindow {
 
     public boolean canSave() {
         return saveHandler != null;
+    }
+
+    /** One user-visible history for transactions committed through {@link #commit(ChangePlan)}. */
+    public WorldRegionChangeHistory changeHistory() {
+        return changeHistory;
+    }
+
+    /**
+     * Validates and atomically commits one world-space change plan.
+     *
+     * <p>Every affected tile is resolved, checked for editability, and compared
+     * with the plan's expected-before state before the first region mutates.
+     * The plan is then partitioned into one composite command per region and
+     * recorded as one window-level undo/redo entry.</p>
+     *
+     * @return false when the plan contains no effective tile changes.
+     */
+    public boolean commit(ChangePlan plan) {
+        Objects.requireNonNull(plan, "plan");
+        if (plan.isEmpty()) return false;
+
+        Map<Integer, List<EditorCommand>> byRegion = new TreeMap<>();
+        Map<Integer, EditorSession> touchedSessions = new TreeMap<>();
+
+        // Full preflight first. A missing/read-only/stale tile aborts the
+        // complete plan before any canonical region document is changed.
+        for (ChangePlan.TileChange change : plan.tileChanges().values()) {
+            ResolvedTile resolved = resolve(change.tile()).orElseThrow(() ->
+                    new IllegalStateException(
+                            "Change plan references an unloaded world tile: " + change.tile()));
+            EditorSession session = resolved.session();
+            if (!session.canEdit()) {
+                throw new IllegalStateException(
+                        "Change plan references a read-only region: " + resolved.regionId());
+            }
+            var current = session.world().tile(resolved.localTile()).snapshot();
+            if (!current.equals(change.before())) {
+                throw new IllegalStateException(
+                        "Change plan is stale at world tile " + change.tile());
+            }
+
+            touchedSessions.put(resolved.regionId(), session);
+            byRegion.computeIfAbsent(resolved.regionId(), ignored -> new ArrayList<>())
+                    .add(new SetTileCommand(
+                            resolved.localTile().coordinate(),
+                            change.before(),
+                            change.after(),
+                            plan.description()));
+        }
+
+        List<WorldRegionChangeHistory.PendingRegionEdit> edits =
+                new ArrayList<>(byRegion.size());
+        for (var entry : byRegion.entrySet()) {
+            EditorSession session = touchedSessions.get(entry.getKey());
+            EditorCommand command = new CompositeEditCommand(
+                    plan.description(), entry.getValue());
+            edits.add(new WorldRegionChangeHistory.PendingRegionEdit(
+                    entry.getKey(), session, command));
+        }
+
+        changeHistory.execute(plan.description(), edits);
+        return true;
+    }
+
+    public boolean undoChangePlan() {
+        return changeHistory.undo();
+    }
+
+    public boolean redoChangePlan() {
+        return changeHistory.redo();
     }
 
     /**
