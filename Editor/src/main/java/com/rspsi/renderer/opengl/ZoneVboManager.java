@@ -10,6 +10,7 @@ import com.rspsi.editor.render.GpuZoneUpload;
 import com.rspsi.editor.render.GpuZonedDrawCommand;
 import com.rspsi.editor.render.GpuZonedUploadPlan;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
+import com.rspsi.editor.render.PickerId;
 import com.rspsi.editor.render.WorldZoneCoordinate;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.lwjgl.opengl.GL11C.GL_FLOAT;
+import static org.lwjgl.opengl.GL11C.GL_UNSIGNED_INT;
 import static org.lwjgl.opengl.GL15C.GL_ARRAY_BUFFER;
 import static org.lwjgl.opengl.GL15C.GL_ELEMENT_ARRAY_BUFFER;
 import static org.lwjgl.opengl.GL15C.GL_STATIC_DRAW;
@@ -32,6 +34,7 @@ import static org.lwjgl.opengl.GL15C.glGenBuffers;
 import static org.lwjgl.opengl.GL20C.glEnableVertexAttribArray;
 import static org.lwjgl.opengl.GL20C.glVertexAttribPointer;
 import static org.lwjgl.opengl.GL30C.glBindVertexArray;
+import static org.lwjgl.opengl.GL30C.glVertexAttribIPointer;
 import static org.lwjgl.opengl.GL30C.glDeleteVertexArrays;
 import static org.lwjgl.opengl.GL30C.glGenVertexArrays;
 
@@ -54,18 +57,20 @@ public final class ZoneVboManager implements AutoCloseable {
             int vertexShadingVbo,
             int faceMetadataVbo,
             int normalVbo,
+            int pickerVbo,
             int ibo,
             long geometryFingerprint,
             long vertexShadingFingerprint,
             long faceMetadataFingerprint,
             long normalFingerprint,
+            long pickerFingerprint,
             long indexFingerprint
     ) {
         /** Compatibility constructor from the previous single-shading-stream layout. */
         ZoneAllocation(long zoneKey, int vao, int geometryVbo, int shadingVbo, int ibo,
                        long geometryFingerprint, long shadingFingerprint, long indexFingerprint) {
-            this(zoneKey, vao, geometryVbo, shadingVbo, 0, 0, ibo,
-                    geometryFingerprint, shadingFingerprint, 0L, 0L, indexFingerprint);
+            this(zoneKey, vao, geometryVbo, shadingVbo, 0, 0, 0, ibo,
+                    geometryFingerprint, shadingFingerprint, 0L, 0L, 0L, indexFingerprint);
         }
 
         /** Compatibility constructor from the optional-normal single-shading layout. */
@@ -73,32 +78,39 @@ public final class ZoneVboManager implements AutoCloseable {
                        int normalVbo, int ibo,
                        long geometryFingerprint, long shadingFingerprint,
                        long normalFingerprint, long indexFingerprint) {
-            this(zoneKey, vao, geometryVbo, shadingVbo, 0, normalVbo, ibo,
+            this(zoneKey, vao, geometryVbo, shadingVbo, 0, normalVbo, 0, ibo,
                     geometryFingerprint, shadingFingerprint, 0L,
-                    normalFingerprint, indexFingerprint);
+                    normalFingerprint, 0L, indexFingerprint);
         }
     }
 
     record StreamUploadDecision(boolean geometry, boolean vertexShading,
-                                boolean faceMetadata, boolean normals, boolean indices) {
+                                boolean faceMetadata, boolean normals,
+                                boolean pickers, boolean indices) {
         /** Compatibility aggregate for callers that still ask about "shading". */
         boolean shading() {
             return vertexShading || faceMetadata;
         }
 
         boolean any() {
-            return geometry || vertexShading || faceMetadata || normals || indices;
+            return geometry || vertexShading || faceMetadata || normals || pickers || indices;
         }
     }
 
     static StreamUploadDecision streamUploadDecision(
             ZoneAllocation existing, GpuZoneStreamFingerprints fingerprints) {
-        return streamUploadDecision(existing, fingerprints, false);
+        return streamUploadDecision(existing, fingerprints, false, false);
     }
 
     static StreamUploadDecision streamUploadDecision(
             ZoneAllocation existing, GpuZoneStreamFingerprints fingerprints,
             boolean normalStreamEnabled) {
+        return streamUploadDecision(existing, fingerprints, normalStreamEnabled, false);
+    }
+
+    static StreamUploadDecision streamUploadDecision(
+            ZoneAllocation existing, GpuZoneStreamFingerprints fingerprints,
+            boolean normalStreamEnabled, boolean pickerStreamEnabled) {
         if (fingerprints == null) {
             throw new IllegalArgumentException("Zone stream fingerprints cannot be null");
         }
@@ -110,12 +122,15 @@ public final class ZoneVboManager implements AutoCloseable {
                         || existing.faceMetadataFingerprint() != fingerprints.faceShading(),
                 normalStreamEnabled && (existing == null
                         || existing.normalFingerprint() != fingerprints.normals()),
+                pickerStreamEnabled && (existing == null
+                        || existing.pickerFingerprint() != fingerprints.pickerIds()),
                 existing == null || existing.indexFingerprint() != fingerprints.indices());
     }
 
     private final Map<Long, ZoneAllocation> allocations = new HashMap<>();
     private final GpuUploadScratch uploadScratch = new GpuUploadScratch();
     private boolean normalStreamEnabled;
+    private boolean pickerStreamEnabled;
     private int[] commandLocalFirstIndices = new int[0];
     private long[] commandZoneKeys = new long[0];
     private int dirtyZonesUploadedCount;
@@ -126,13 +141,19 @@ public final class ZoneVboManager implements AutoCloseable {
     private int faceMetadataStreamUploads;
     private int indexStreamUploads;
     private int normalStreamUploads;
+    private int pickerStreamUploads;
 
     public ZoneVboManager() {
-        this(false);
+        this(false, false);
     }
 
     ZoneVboManager(boolean normalStreamEnabled) {
+        this(normalStreamEnabled, false);
+    }
+
+    ZoneVboManager(boolean normalStreamEnabled, boolean pickerStreamEnabled) {
         this.normalStreamEnabled = normalStreamEnabled;
+        this.pickerStreamEnabled = pickerStreamEnabled;
     }
 
     /**
@@ -145,8 +166,20 @@ public final class ZoneVboManager implements AutoCloseable {
      * @return true when the native zone layout changed
      */
     boolean setNormalStreamEnabled(boolean enabled) {
-        if (normalStreamEnabled == enabled) return false;
-        normalStreamEnabled = enabled;
+        return setAuxiliaryStreams(enabled, pickerStreamEnabled);
+    }
+
+    boolean setPickerStreamEnabled(boolean enabled) {
+        return setAuxiliaryStreams(normalStreamEnabled, enabled);
+    }
+
+    boolean setAuxiliaryStreams(boolean normalsEnabled, boolean pickersEnabled) {
+        if (normalStreamEnabled == normalsEnabled
+                && pickerStreamEnabled == pickersEnabled) {
+            return false;
+        }
+        normalStreamEnabled = normalsEnabled;
+        pickerStreamEnabled = pickersEnabled;
         clearAllocations();
         return true;
     }
@@ -261,8 +294,8 @@ public final class ZoneVboManager implements AutoCloseable {
                             List<Integer> indices,
                             GpuZoneStreamFingerprints fingerprints) {
         ZoneAllocation existing = allocations.get(key);
-        StreamUploadDecision decision =
-                streamUploadDecision(existing, fingerprints, normalStreamEnabled);
+        StreamUploadDecision decision = streamUploadDecision(
+                existing, fingerprints, normalStreamEnabled, pickerStreamEnabled);
         if (!decision.any()) {
             reusedAllocationsCount++;
             return;
@@ -273,6 +306,7 @@ public final class ZoneVboManager implements AutoCloseable {
         int vertexShadingVbo;
         int faceMetadataVbo;
         int normalVbo;
+        int pickerVbo;
         int ibo;
         if (existing == null) {
             vao = glGenVertexArrays();
@@ -280,14 +314,17 @@ public final class ZoneVboManager implements AutoCloseable {
             vertexShadingVbo = glGenBuffers();
             faceMetadataVbo = glGenBuffers();
             normalVbo = normalStreamEnabled ? glGenBuffers() : 0;
+            pickerVbo = pickerStreamEnabled ? glGenBuffers() : 0;
             ibo = glGenBuffers();
-            setupVao(vao, geometryVbo, vertexShadingVbo, faceMetadataVbo, normalVbo, ibo);
+            setupVao(vao, geometryVbo, vertexShadingVbo, faceMetadataVbo,
+                    normalVbo, pickerVbo, ibo);
         } else {
             vao = existing.vao();
             geometryVbo = existing.geometryVbo();
             vertexShadingVbo = existing.vertexShadingVbo();
             faceMetadataVbo = existing.faceMetadataVbo();
             normalVbo = existing.normalVbo();
+            pickerVbo = existing.pickerVbo();
             ibo = existing.ibo();
         }
 
@@ -307,22 +344,29 @@ public final class ZoneVboManager implements AutoCloseable {
             uploadNormals(normalVbo, vertices);
             normalStreamUploads++;
         }
+        if (decision.pickers()) {
+            uploadPickerIds(pickerVbo, vertices);
+            pickerStreamUploads++;
+        }
         if (decision.indices()) {
             uploadIndices(vao, ibo, indices);
             indexStreamUploads++;
         }
 
         allocations.put(key, new ZoneAllocation(
-                key, vao, geometryVbo, vertexShadingVbo, faceMetadataVbo, normalVbo, ibo,
+                key, vao, geometryVbo, vertexShadingVbo, faceMetadataVbo,
+                normalVbo, pickerVbo, ibo,
                 fingerprints.geometry(), fingerprints.vertexShading(),
                 fingerprints.faceShading(),
                 normalStreamEnabled ? fingerprints.normals() : 0L,
+                pickerStreamEnabled ? fingerprints.pickerIds() : 0L,
                 fingerprints.indices()));
         dirtyZonesUploadedCount++;
     }
 
     private static void setupVao(int vao, int geometryVbo, int vertexShadingVbo,
-                                 int faceMetadataVbo, int normalVbo, int ibo) {
+                                 int faceMetadataVbo, int normalVbo,
+                                 int pickerVbo, int ibo) {
         glBindVertexArray(vao);
 
         glBindBuffer(GL_ARRAY_BUFFER, geometryVbo);
@@ -355,6 +399,12 @@ public final class ZoneVboManager implements AutoCloseable {
             int normalStride = NativeSceneVertexLayout.NORMAL_FLOATS_PER_VERTEX * Float.BYTES;
             glVertexAttribPointer(7, 4, GL_FLOAT, false, normalStride, 0L);
             glEnableVertexAttribArray(7);
+        }
+
+        if (pickerVbo != 0) {
+            glBindBuffer(GL_ARRAY_BUFFER, pickerVbo);
+            glVertexAttribIPointer(8, 1, GL_UNSIGNED_INT, Integer.BYTES, 0L);
+            glEnableVertexAttribArray(8);
         }
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
@@ -430,6 +480,23 @@ public final class ZoneVboManager implements AutoCloseable {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
+    private void uploadPickerIds(int pickerVbo, List<GpuSceneVertex> vertices) {
+        if (pickerVbo == 0) {
+            throw new IllegalStateException("Picker stream upload requested without a picker VBO");
+        }
+        IntBuffer data = uploadScratch.indices(vertices.size());
+        for (GpuSceneVertex vertex : vertices) {
+            data.put(PickerId.encode(
+                    vertex.pickerPlane(), vertex.pickerTileX(),
+                    vertex.pickerTileY(), vertex.pickerSlot()));
+        }
+        data.flip();
+
+        glBindBuffer(GL_ARRAY_BUFFER, pickerVbo);
+        glBufferData(GL_ARRAY_BUFFER, data, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
     private void uploadIndices(int vao, int ibo, List<Integer> indices) {
         IntBuffer data = uploadScratch.indices(indices.size());
         indices.forEach(data::put);
@@ -457,6 +524,7 @@ public final class ZoneVboManager implements AutoCloseable {
         glDeleteBuffers(allocation.vertexShadingVbo());
         glDeleteBuffers(allocation.faceMetadataVbo());
         if (allocation.normalVbo() != 0) glDeleteBuffers(allocation.normalVbo());
+        if (allocation.pickerVbo() != 0) glDeleteBuffers(allocation.pickerVbo());
         glDeleteBuffers(allocation.ibo());
     }
 
@@ -468,6 +536,7 @@ public final class ZoneVboManager implements AutoCloseable {
         faceMetadataStreamUploads = 0;
         indexStreamUploads = 0;
         normalStreamUploads = 0;
+        pickerStreamUploads = 0;
     }
 
     public int localFirstIndex(int commandIndex) {
@@ -518,8 +587,16 @@ public final class ZoneVboManager implements AutoCloseable {
         return normalStreamUploads;
     }
 
+    int pickerStreamUploads() {
+        return pickerStreamUploads;
+    }
+
     boolean normalStreamEnabled() {
         return normalStreamEnabled;
+    }
+
+    boolean pickerStreamEnabled() {
+        return pickerStreamEnabled;
     }
 
     int stagingVertexCapacityFloats() {

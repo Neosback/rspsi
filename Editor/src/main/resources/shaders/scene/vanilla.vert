@@ -7,6 +7,7 @@ layout(location = 4) in float aRenderType;
 layout(location = 5) in vec3 aColor;
 layout(location = 6) in float aPriority;
 layout(location = 7) in vec4 aNormal;
+layout(location = 8) in uint aPickerId;
 
 #include "/common/frame_uniforms.glsl"
 
@@ -29,6 +30,7 @@ out vec3 vColor;
 out float vFogAmount;
 out vec3 vNormal;
 out float vViewDepth;
+flat out uint vPickerId;
 
 #include "/common/fog.glsl"
 
@@ -71,6 +73,7 @@ void main() {
     vColor = aColor;
     vNormal = aNormal.xyz;
     vViewDepth = depth;
+    vPickerId = aPickerId;
     vFogAmount = sceneFogAmount(
         aPosition, uUseFog, uFogWest, uFogEast,
         uFogSouth, uFogNorth, uFogDepth

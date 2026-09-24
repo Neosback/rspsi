@@ -48,6 +48,7 @@ public record GpuZoneUpload(
         }
         long faceShading = mix(1125899906842597L, indices.size() / 3);
         long normals = mix(1125899906842597L, vertices.size());
+        long pickerIds = mix(1125899906842597L, vertices.size());
         for (GpuSceneVertex vertex : vertices) {
             geometry = mix(geometry, Float.floatToIntBits(vertex.x()));
             geometry = mix(geometry, Float.floatToIntBits(vertex.y()));
@@ -62,6 +63,10 @@ public record GpuZoneUpload(
             normals = mix(normals, vertex.normalY());
             normals = mix(normals, vertex.normalZ());
             normals = mix(normals, vertex.normalMagnitude());
+
+            pickerIds = mix(pickerIds, PickerId.encode(
+                    vertex.pickerPlane(), vertex.pickerTileX(),
+                    vertex.pickerTileY(), vertex.pickerSlot()));
         }
 
         for (int offset = 0; offset < indices.size(); offset += 3) {
@@ -72,6 +77,10 @@ public record GpuZoneUpload(
                 throw new IllegalArgumentException(
                         "Face shading metadata must be constant across one triangle");
             }
+            if (!samePickerId(first, second) || !samePickerId(first, third)) {
+                throw new IllegalArgumentException(
+                        "Picker metadata must be constant across one triangle");
+            }
             faceShading = mix(faceShading, first.alpha());
             faceShading = mix(faceShading, first.renderType());
             faceShading = mix(faceShading, first.priority());
@@ -80,7 +89,7 @@ public record GpuZoneUpload(
         long topology = mix(1125899906842597L, indices.size());
         for (int index : indices) topology = mix(topology, index);
         return new GpuZoneStreamFingerprints(
-                geometry, vertexShading, faceShading, topology, normals);
+                geometry, vertexShading, faceShading, topology, normals, pickerIds);
     }
 
     /** Current native-residency aggregate retained for flat-plan callers. */
@@ -92,6 +101,13 @@ public record GpuZoneUpload(
         return first.alpha() == second.alpha()
                 && first.renderType() == second.renderType()
                 && first.priority() == second.priority();
+    }
+
+    private static boolean samePickerId(GpuSceneVertex first, GpuSceneVertex second) {
+        return first.pickerPlane() == second.pickerPlane()
+                && first.pickerTileX() == second.pickerTileX()
+                && first.pickerTileY() == second.pickerTileY()
+                && first.pickerSlot() == second.pickerSlot();
     }
 
     private static long mix(long hash, int value) {

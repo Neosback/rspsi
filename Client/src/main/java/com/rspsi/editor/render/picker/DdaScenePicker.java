@@ -8,6 +8,7 @@ import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.GpuZonedUploadPlan;
 import com.rspsi.editor.render.PickResult;
+import com.rspsi.editor.render.PickerId;
 import com.rspsi.editor.render.SceneCameraProjection;
 import com.rspsi.editor.render.SceneOcclusionResolver;
 
@@ -58,6 +59,38 @@ public final class DdaScenePicker {
                                      CameraState camera, int width, int height,
                                      float screenX, float screenY,
                                      SceneCameraProjection projection, Integer restrictToPlane) {
+        return pickInternal(plan, zonedPlan, camera, width, height, screenX, screenY,
+                projection, restrictToPlane, PickerId.INVALID);
+    }
+
+    /**
+     * Resolves one GPU picker-ID hit through the same exact DDA ray/triangle path.
+     *
+     * <p>The packed GPU ID intentionally names a tile/layer family rather than
+     * consuming bits for a transient object index. Filtering the resident
+     * triangles by that ID keeps duplicate objects on the same tile exact while
+     * retaining the CPU picker as the semantic reference and fallback.</p>
+     */
+    public Optional<PickResult> pickMatchingId(
+            GpuUploadPlan plan, GpuZonedUploadPlan zonedPlan,
+            CameraState camera, int width, int height,
+            float screenX, float screenY,
+            SceneCameraProjection projection, Integer restrictToPlane,
+            int pickerId) {
+        if (!PickerId.isValid(pickerId)) {
+            lastMetrics = Metrics.empty();
+            return Optional.empty();
+        }
+        return pickInternal(plan, zonedPlan, camera, width, height, screenX, screenY,
+                projection, restrictToPlane, pickerId);
+    }
+
+    private Optional<PickResult> pickInternal(
+            GpuUploadPlan plan, GpuZonedUploadPlan zonedPlan,
+            CameraState camera, int width, int height,
+            float screenX, float screenY,
+            SceneCameraProjection projection, Integer restrictToPlane,
+            int requiredPickerId) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(camera, "camera");
         Objects.requireNonNull(projection, "projection");
@@ -119,6 +152,10 @@ public final class DdaScenePicker {
                 for (PickingSpatialIndex.TriangleRef triangle : bucket) {
                     if (!triangle.markTested(generation)) {
                         duplicateSkips++;
+                        continue;
+                    }
+                    if (requiredPickerId != PickerId.INVALID
+                            && pickerId(triangle.a()) != requiredPickerId) {
                         continue;
                     }
                     byte broadPhase = triangle.broadPhase(generation,
@@ -185,6 +222,11 @@ public final class DdaScenePicker {
         return bestTriangle == null
                 ? Optional.empty()
                 : Optional.of(toResult(bestTriangle, bestDistance, scratch));
+    }
+
+    private static int pickerId(GpuSceneVertex vertex) {
+        return PickerId.encode(vertex.pickerPlane(), vertex.pickerTileX(),
+                vertex.pickerTileY(), vertex.pickerSlot());
     }
 
     /** Diagnostics for the most recent pick, useful for performance overlays/tests. */

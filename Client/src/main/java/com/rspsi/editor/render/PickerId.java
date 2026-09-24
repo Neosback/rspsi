@@ -1,30 +1,31 @@
 package com.rspsi.editor.render;
 
 /**
- * Canonical bit layout for a GPU picker id: one 32-bit integer that names exactly which tile
- * (and, for non-terrain geometry, which category slot on that tile) a rendered fragment belongs
- * to. Mirrors the proven scheme from the reference project at
- * {@code /Users/tylercovalt/Desktop/oldlostproject/src} (its {@code PickerId.java}), so the
- * eventual GLSL-side packing in the fragment/vertex shaders can be a direct line-for-line port.
+ * Canonical 32-bit GPU picker key for one world tile/category family.
  *
- * <p>Layout: {@code bit0 valid | bits1-2 plane | bits3-15 tileX(13b) | bits16-28 tileY(13b) |
- * bits29-31 slot(3b)}. 13 bits per axis covers world tile coordinates 0..8191, which is every
- * OSRS region actually in use today; a coordinate outside that range would alias, but nothing in
- * the live game world currently reaches it.</p>
+ * <p>The cache/client coordinate domain is 14 bits per world axis. RuneLite's
+ * {@code WorldPoint.fromCoord} decodes Jagex coordinates with {@code 0x3FFF}
+ * masks, and the bundled source contains live/mirrored coordinates above 8191.
+ * A picker key therefore cannot spend bits on both a plane and a three-bit
+ * category slot without aliasing valid OSRS world coordinates.</p>
+ *
+ * <p>Layout: {@code bit0 valid | bits1-14 tileX(14b) |
+ * bits15-28 tileY(14b) | bits29-31 slot(3b)}. Plane is intentionally not
+ * encoded. Plane-restricted GPU passes filter commands before rasterization;
+ * unrestricted picks resolve the exact plane/object through the canonical DDA
+ * picker after this key narrows the hit to a tile/category family.</p>
  */
 public final class PickerId {
 
     public static final int INVALID = 0;
 
     private static final int VALID_BIT = 1;
-    private static final int PLANE_SHIFT = 1;
-    private static final int TILE_X_SHIFT = 3;
-    private static final int TILE_X_MASK = 0x1FFF; // 13 bits
-    private static final int TILE_Y_SHIFT = 16;
-    private static final int TILE_Y_MASK = 0x1FFF; // 13 bits
+    private static final int TILE_X_SHIFT = 1;
+    private static final int TILE_X_MASK = 0x3FFF; // Jagex 14-bit world coordinate
+    private static final int TILE_Y_SHIFT = 15;
+    private static final int TILE_Y_MASK = 0x3FFF; // Jagex 14-bit world coordinate
     private static final int SLOT_SHIFT = 29;
-    private static final int SLOT_MASK = 0x7; // 3 bits
-    private static final int PLANE_MASK = 0x3; // 2 bits
+    private static final int SLOT_MASK = 0x7;
 
     private PickerId() {
     }
@@ -39,20 +40,34 @@ public final class PickerId {
         return layer.ordinal() & SLOT_MASK;
     }
 
+    /**
+     * Compatibility entry point for vertex metadata that still carries plane.
+     * Plane is validated but deliberately omitted from the packed 32-bit key.
+     */
     public static int encode(int plane, int tileX, int tileY, int slot) {
+        if (plane < 0 || plane > 3) {
+            throw new IllegalArgumentException("Picker plane must be within 0..3");
+        }
+        return encode(tileX, tileY, slot);
+    }
+
+    public static int encode(int tileX, int tileY, int slot) {
+        if (tileX < 0 || tileX > TILE_X_MASK
+                || tileY < 0 || tileY > TILE_Y_MASK) {
+            throw new IllegalArgumentException(
+                    "Picker world coordinates must fit the Jagex 14-bit domain");
+        }
+        if (slot < 0 || slot > SLOT_MASK) {
+            throw new IllegalArgumentException("Picker slot must be within 0..7");
+        }
         return VALID_BIT
-                | ((plane & PLANE_MASK) << PLANE_SHIFT)
-                | ((tileX & TILE_X_MASK) << TILE_X_SHIFT)
-                | ((tileY & TILE_Y_MASK) << TILE_Y_SHIFT)
-                | ((slot & SLOT_MASK) << SLOT_SHIFT);
+                | (tileX << TILE_X_SHIFT)
+                | (tileY << TILE_Y_SHIFT)
+                | (slot << SLOT_SHIFT);
     }
 
     public static boolean isValid(int id) {
         return (id & VALID_BIT) != 0;
-    }
-
-    public static int plane(int id) {
-        return (id >>> PLANE_SHIFT) & PLANE_MASK;
     }
 
     public static int tileX(int id) {

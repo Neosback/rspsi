@@ -12,11 +12,19 @@ public record GpuZoneStreamFingerprints(
         long vertexShading,
         long faceShading,
         long indices,
-        long normals
+        long normals,
+        long pickerIds
 ) {
+    /** Compatibility constructor from before picker IDs were a separate stream. */
+    public GpuZoneStreamFingerprints(
+            long geometry, long vertexShading, long faceShading,
+            long indices, long normals) {
+        this(geometry, vertexShading, faceShading, indices, normals, 0L);
+    }
+
     /** Compatibility constructor for callers that still model shading as one stream. */
     public GpuZoneStreamFingerprints(long geometry, long shading, long indices, long normals) {
-        this(geometry, shading, 0L, indices, normals);
+        this(geometry, shading, 0L, indices, normals, 0L);
     }
 
     /** Aggregate identity for callers that do not need the split shading boundary. */

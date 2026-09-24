@@ -9,6 +9,7 @@ import com.rspsi.editor.render.picker.DdaScenePicker;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.GpuZonedUploadPlan;
 import com.rspsi.editor.render.PickResult;
+import com.rspsi.editor.render.PickerId;
 import com.rspsi.editor.render.RenderPresentation;
 import com.rspsi.editor.render.SceneCameraProjection;
 import com.rspsi.editor.render.ViewportController;
@@ -36,6 +37,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private float imageOriginX;
     private float imageOriginY;
     private PickResult selection;
+    private boolean gpuPickingEnabled = true;
     private boolean initialized;
     private boolean closed;
     private final ViewportController navigation = new ViewportController(
@@ -48,6 +50,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     public void initialize() {
         if (initialized) return;
         renderer.initialize();
+        renderer.setGpuPickingEnabled(gpuPickingEnabled);
         framebuffer.setCapabilityProfile(renderer.capabilityProfile());
         initialized = true;
     }
@@ -169,8 +172,37 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
                 || lastWidth <= 0 || lastHeight <= 0) {
             return java.util.Optional.empty();
         }
+
+        if (gpuPickingEnabled) {
+            int packedId = renderer.pickId(
+                    lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight,
+                    x, y, pickPlaneRestriction);
+            if (PickerId.isValid(packedId)) {
+                java.util.Optional<PickResult> exact = picker.pickMatchingId(
+                        lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight,
+                        x, y, lastFrameProjection, pickPlaneRestriction, packedId);
+                if (exact.isPresent()) {
+                    return exact;
+                }
+            }
+        }
+
+        // The DDA path remains the authoritative fallback/reference. This also
+        // protects selection if a driver rejects the optional integer pass or
+        // a future shader/visibility change temporarily breaks GPU parity.
         return picker.pick(lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight, x, y,
                 lastFrameProjection, pickPlaneRestriction);
+    }
+
+    public void setGpuPickingEnabled(boolean enabled) {
+        gpuPickingEnabled = enabled;
+        if (initialized) {
+            renderer.setGpuPickingEnabled(enabled);
+        }
+    }
+
+    public boolean gpuPickingEnabled() {
+        return gpuPickingEnabled;
     }
 
     /** The most recent pick, updated when the user clicks inside the viewport. */

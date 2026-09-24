@@ -13,6 +13,7 @@ import com.rspsi.editor.render.SceneLayer;
 import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.GpuColorEncoding;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
+import com.rspsi.editor.render.PickerId;
 import com.rspsi.editor.render.RenderPresentation;
 import com.rspsi.editor.render.RenderOrderKey;
 import com.rspsi.editor.render.SceneFog;
@@ -197,7 +198,22 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int textureLocation;
     private int textureLayerLocation;
     private int textureStateLocation;
+
+    private int pickerProgram;
+    private int pickerFaceBiasLocation;
+    private int pickerTexturedLocation;
+    private int pickerTextureAvailableLocation;
+    private int pickerTerrainLocation;
+    private int pickerTextureLocation;
+    private int pickerTextureLayerLocation;
+    private int pickerTextureStateLocation;
+
     private final ZoneVboManager zoneManager = new ZoneVboManager();
+    private final GpuPickerFramebuffer pickerFramebuffer = new GpuPickerFramebuffer();
+    private final ArrayList<Integer> pickerOrderWorkspace = new ArrayList<>();
+    private boolean gpuPickingEnabled;
+    private RenderPresentation lastDrawPresentation = RenderPresentation.neutral();
+    private int lastDrawClientCycle;
     private final TextureStateBuffer textureStateBuffer = new TextureStateBuffer();
     private final FrameUniformBuffer frameUniformBuffer = new FrameUniformBuffer();
     private final GpuCommandVisibility.Cache visibilityCache =
@@ -261,14 +277,12 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         program = GlShaderProgram.link(
                 SHADER_SOURCES.load("scene/vanilla.vert"),
                 SHADER_SOURCES.load("scene/vanilla.frag"));
+        pickerProgram = GlShaderProgram.link(
+                SHADER_SOURCES.load("scene/vanilla.vert"),
+                SHADER_SOURCES.load("scene/picker.frag"));
 
-        int frameUniformBlock = org.lwjgl.opengl.GL31.glGetUniformBlockIndex(
-                program, "FrameUniforms");
-        if (frameUniformBlock < 0) {
-            throw new IllegalStateException("Vanilla shader is missing FrameUniforms block");
-        }
-        org.lwjgl.opengl.GL31.glUniformBlockBinding(
-                program, frameUniformBlock, FrameUniformBuffer.BINDING_POINT);
+        bindFrameUniformBlock(program, "Vanilla");
+        bindFrameUniformBlock(pickerProgram, "Picker");
         frameUniformBuffer.initialize();
 
         faceBiasLocation = glGetUniformLocation(program, "uFaceBias");
@@ -284,6 +298,17 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glUniform1i(textureLocation, 0);
         glUniform1i(paletteLocation, 1);
         glUniform1i(textureStateLocation, 2);
+
+        pickerFaceBiasLocation = glGetUniformLocation(pickerProgram, "uFaceBias");
+        pickerTexturedLocation = glGetUniformLocation(pickerProgram, "uTextured");
+        pickerTextureAvailableLocation = glGetUniformLocation(pickerProgram, "uTextureAvailable");
+        pickerTerrainLocation = glGetUniformLocation(pickerProgram, "uTerrain");
+        pickerTextureLocation = glGetUniformLocation(pickerProgram, "uTexture");
+        pickerTextureLayerLocation = glGetUniformLocation(pickerProgram, "uTextureLayer");
+        pickerTextureStateLocation = glGetUniformLocation(pickerProgram, "uTextureState");
+        glUseProgram(pickerProgram);
+        glUniform1i(pickerTextureLocation, 0);
+        glUniform1i(pickerTextureStateLocation, 2);
         glUseProgram(0);
         uploadPaletteTexture();
         glEnable(GL_DEPTH_TEST);
@@ -296,6 +321,15 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // share Model.draw0's facing contract and remains two-sided per draw.
         glClearColor(0.063f, 0.094f, 0.153f, 1.0f);
         captureGlError();
+    }
+
+    private static void bindFrameUniformBlock(int shaderProgram, String label) {
+        int block = org.lwjgl.opengl.GL31.glGetUniformBlockIndex(shaderProgram, "FrameUniforms");
+        if (block < 0) {
+            throw new IllegalStateException(label + " shader is missing FrameUniforms block");
+        }
+        org.lwjgl.opengl.GL31.glUniformBlockBinding(
+                shaderProgram, block, FrameUniformBuffer.BINDING_POINT);
     }
 
     private void uploadPaletteTexture() {
@@ -349,6 +383,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                      CameraState camera, int width, int height,
                      RenderPresentation presentation, int clientCycle) {
         if (presentation == null) throw new IllegalArgumentException("presentation cannot be null");
+        lastDrawPresentation = presentation;
+        lastDrawClientCycle = clientCycle & TextureAnimation.CLIENT_CYCLE_MASK;
         // Reassert all state that the previous alpha pass or the ImGui backend
         // may have changed. In particular, glDepthMask(false) survives a
         // frame and would make the next depth clear ineffective, producing
@@ -378,6 +414,20 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         lastFramePolygonMode = presentation.wireframe() ? GL_LINE : GL_FILL;
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         frameMetrics.reset();
+
+        // Optional native streams are reconciled before empty-scene exits so
+        // disabling a feature immediately drops its resident GPU cost even
+        // when the editor has no scene loaded.
+        boolean auxiliaryLayoutChanged = zoneManager.setAuxiliaryStreams(
+                presentation.debugView().requiresNormals(), gpuPickingEnabled);
+        if (auxiliaryLayoutChanged) {
+            uploadedFingerprint = null;
+            orderedPlanFingerprint = null;
+        }
+        if (!gpuPickingEnabled && pickerFramebuffer.allocated()) {
+            pickerFramebuffer.release();
+        }
+
         if (plan == null) {
             statistics = statisticsFor(null, null, null,
                     false, false, 0, 0, 0, 0, 0, 0);
@@ -397,22 +447,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
         // Geometry/texture upload is gated on the plan's own camera-independent
         // fingerprint only, and always uploads the complete, unfiltered plan.
-        // Occlusion visibility below is a separate, cheap, per-frame decision
-        // (GpuCommandVisibility) that never rebuilds vertex/index data or
-        // shatters merged draw commands - camera movement alone must never
-        // trigger a glBufferData re-upload. geometryUploaded/textureUploaded
-        // are surfaced through Statistics so camera-drag regressions can be
-        // caught by a debug overlay/log rather than assumed fixed.
-        boolean normalLayoutChanged =
-                zoneManager.setNormalStreamEnabled(presentation.debugView().requiresNormals());
-        if (normalLayoutChanged) {
-            // The VAO layout changed (attribute 7 appears/disappears), so the
-            // current plan must be made resident again even though its neutral
-            // scene fingerprint is unchanged.
-            uploadedFingerprint = null;
-            orderedPlanFingerprint = null;
-        }
-
+        // Occlusion visibility is a separate per-frame decision and camera
+        // movement alone must never trigger a scene-buffer re-upload.
         boolean geometryUploaded = false;
         boolean textureUploaded = false;
         int gpuZoneUploads = 0;
@@ -548,6 +584,255 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
 
     public int cullMode() {
         return cullMode;
+    }
+
+    /**
+     * Enables the optional resident picker-ID stream. The integer framebuffer
+     * itself remains lazy and is not allocated until a pick is actually issued.
+     */
+    public void setGpuPickingEnabled(boolean enabled) {
+        gpuPickingEnabled = enabled;
+    }
+
+    public boolean gpuPickingEnabled() {
+        return gpuPickingEnabled;
+    }
+
+    boolean pickerFramebufferAllocated() {
+        return pickerFramebuffer.allocated();
+    }
+
+    /**
+     * Renders the current scene into the dedicated integer picker target and
+     * reads one top-left-origin viewport pixel.
+     *
+     * <p>The pass is intentionally single-sample even when the visible scene
+     * uses MSAA. Integer IDs therefore never require a multisample resolve.
+     * Returning {@link PickerId#INVALID} leaves the CPU DDA picker as the
+     * correctness fallback.</p>
+     */
+    public int pickId(GpuUploadPlan plan, GpuZonedUploadPlan zonedPlan,
+                      CameraState camera, int width, int height,
+                      float screenX, float screenY, Integer restrictToPlane) {
+        if (!gpuPickingEnabled || plan == null || camera == null
+                || width <= 0 || height <= 0
+                || !Float.isFinite(screenX) || !Float.isFinite(screenY)
+                || screenX < 0.0f || screenY < 0.0f
+                || screenX >= width || screenY >= height
+                || (restrictToPlane != null && (restrictToPlane < 0 || restrictToPlane > 3))
+                || !zoneManager.pickerStreamEnabled()
+                || !plan.fingerprint().equals(uploadedFingerprint)) {
+            return PickerId.INVALID;
+        }
+
+        boolean zonedGeometryActive = zonedPlan != null
+                && plan.fingerprint().equals(zonedPlan.sourceFingerprint());
+        GpuCommandGeometry runtimeGeometry = zonedGeometryActive ? zonedPlan : plan;
+        GeometryStatistics geometryStatistics = geometryStatistics(runtimeGeometry);
+        if (geometryStatistics.sourceVertices() == 0
+                || geometryStatistics.sourceIndices() == 0) {
+            return PickerId.INVALID;
+        }
+
+        GpuCommandVisibility visibility = visibilityCache.resolve(
+                runtimeGeometry, camera, plan.occluders(), plan.sceneWindow());
+
+        int previousDrawFramebuffer = org.lwjgl.opengl.GL11.glGetInteger(
+                org.lwjgl.opengl.GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = org.lwjgl.opengl.GL11.glGetInteger(
+                org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER_BINDING);
+
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            IntBuffer previousViewport = stack.mallocInt(4);
+            org.lwjgl.opengl.GL11.glGetIntegerv(
+                    org.lwjgl.opengl.GL11.GL_VIEWPORT, previousViewport);
+
+            try {
+                pickerFramebuffer.resize(width, height);
+                pickerFramebuffer.bindAndClear();
+
+                glEnable(GL_DEPTH_TEST);
+                glDepthFunc(GL_GEQUAL);
+                glDepthMask(true);
+                glDisable(GL_BLEND);
+                glDisable(GL_CULL_FACE);
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+                boolean fogEnabled = lastDrawPresentation.fogDepthTiles() > 0;
+                SceneFog.Bounds frameFogBounds = fogEnabled ? fogBounds(runtimeGeometry) : null;
+                frameUniformBuffer.upload(
+                        camera,
+                        (float) (1.0 / Math.tan(FOV_Y * 0.5)),
+                        (float) width / height,
+                        -(FAR + NEAR) / (FAR - NEAR),
+                        2.0f * FAR * NEAR / (FAR - NEAR),
+                        DEPTH_BIAS_NUDGE,
+                        lastDrawPresentation,
+                        frameFogBounds,
+                        lastDrawClientCycle);
+                frameUniformBuffer.bind();
+
+                glUseProgram(pickerProgram);
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
+                glActiveTexture(GL_TEXTURE2);
+                textureStateBuffer.bind();
+                resetDrawState();
+
+                List<GpuDrawCommand> commands = plan.commands();
+                List<Integer> opaque = pickerOrder(
+                        opaqueOrder(plan, commands, visibility, camera),
+                        commands, restrictToPlane);
+                drawPickerBatches(commands, opaque, false);
+
+                List<Integer> alpha = pickerOrder(
+                        alphaOrderFor(runtimeGeometry, commands, visibility, camera),
+                        commands, restrictToPlane);
+                drawPickerBatches(commands, alpha, true);
+
+                glDepthMask(true);
+                glEnable(GL_DEPTH_TEST);
+                glDepthFunc(GL_GEQUAL);
+                glDisable(GL_BLEND);
+                glDisable(GL_CULL_FACE);
+                glBindVertexArray(0);
+
+                int result = pickerFramebuffer.readTopLeft(screenX, screenY);
+                captureGlError();
+                return result;
+            } finally {
+                glBindVertexArray(0);
+                glActiveTexture(GL_TEXTURE2);
+                textureStateBuffer.unbind();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+                glUseProgram(0);
+                glDepthMask(true);
+                glEnable(GL_DEPTH_TEST);
+                glDepthFunc(GL_GEQUAL);
+                glDisable(GL_BLEND);
+                glDisable(GL_CULL_FACE);
+                resetDrawState();
+
+                org.lwjgl.opengl.GL30.glBindFramebuffer(
+                        org.lwjgl.opengl.GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+                org.lwjgl.opengl.GL30.glBindFramebuffer(
+                        org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+                glViewport(previousViewport.get(0), previousViewport.get(1),
+                        previousViewport.get(2), previousViewport.get(3));
+            }
+        }
+    }
+
+    private List<Integer> pickerOrder(List<Integer> source,
+                                      List<GpuDrawCommand> commands,
+                                      Integer restrictToPlane) {
+        if (restrictToPlane == null) return source;
+        pickerOrderWorkspace.clear();
+        for (int index : source) {
+            if (commands.get(index).tile().plane() == restrictToPlane) {
+                pickerOrderWorkspace.add(index);
+            }
+        }
+        return pickerOrderWorkspace;
+    }
+
+    private void drawPickerBatches(List<GpuDrawCommand> commands,
+                                   List<Integer> orderedIndices, boolean alpha) {
+        GpuDrawCommand.SubmissionPass pass = alpha
+                ? GpuDrawCommand.SubmissionPass.ALPHA
+                : GpuDrawCommand.SubmissionPass.OPAQUE;
+        GpuDrawBatchPlanner.BatchCursor batches = GpuDrawBatchPlanner.cursor(
+                commands, orderedIndices, pass, zoneManager::zoneKeyForCommand);
+
+        int lastBoundVao = -1;
+        while (batches.next()) {
+            int firstIndex = batches.firstCommandIndex();
+            GpuDrawCommand first = commands.get(firstIndex);
+            ZoneVboManager.ZoneAllocation allocation = zoneManager.allocation(batches.zoneKey());
+            if (allocation == null || allocation.pickerVbo() == 0) continue;
+
+            if (allocation.vao() != lastBoundVao) {
+                glBindVertexArray(allocation.vao());
+                lastBoundVao = allocation.vao();
+            }
+            applyPickerDrawState(first, alpha);
+
+            if (batches.commandCount() == 1) {
+                int localFirst = zoneManager.localFirstIndex(firstIndex);
+                glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
+                        (long) localFirst * Integer.BYTES);
+            } else {
+                try (MemoryStack stack = MemoryStack.stackPush()) {
+                    IntBuffer counts = stack.mallocInt(batches.commandCount());
+                    PointerBuffer offsets = stack.mallocPointer(batches.commandCount());
+                    for (int offset = 0; offset < batches.commandCount(); offset++) {
+                        int commandIndex = batches.commandIndexAt(offset);
+                        GpuDrawCommand command = commands.get(commandIndex);
+                        counts.put(command.indexCount());
+                        offsets.put((long) zoneManager.localFirstIndex(commandIndex)
+                                * Integer.BYTES);
+                    }
+                    counts.flip();
+                    offsets.flip();
+                    glMultiDrawElements(GL_TRIANGLES, counts, GL_UNSIGNED_INT, offsets);
+                }
+            }
+        }
+    }
+
+    private void applyPickerDrawState(GpuDrawCommand command, boolean alpha) {
+        boolean expectedAlpha = command.pass() == GpuDrawCommand.SubmissionPass.ALPHA;
+        if (alpha != expectedAlpha) {
+            throw new IllegalArgumentException("Picker draw pass does not match command submission pass");
+        }
+
+        NativeDrawState state = nativeDrawState(command.pass(), command.renderMode());
+        int noDepth = state.depthTest() ? 0 : 1;
+        if (noDepth != lastNoDepth) {
+            if (state.depthTest()) glEnable(GL_DEPTH_TEST);
+            else glDisable(GL_DEPTH_TEST);
+            lastNoDepth = noDepth;
+        }
+        glDepthMask(state.depthWrite());
+        glDisable(GL_BLEND);
+
+        int layer = textureLayers.getOrDefault(command.textureId(), -1);
+        int textured = command.textureId() < 0 ? 0 : 1;
+        if (textured != lastTextured) {
+            glUniform1i(pickerTexturedLocation, textured);
+            lastTextured = textured;
+        }
+        int textureAvailable = layer < 0 ? 0 : 1;
+        if (textureAvailable != lastTextureAvailable) {
+            glUniform1i(pickerTextureAvailableLocation, textureAvailable);
+            lastTextureAvailable = textureAvailable;
+        }
+
+        int isTerrain = command.layer() == SceneLayer.Kind.TERRAIN ? 1 : 0;
+        if (isTerrain != lastTerrain) {
+            glUniform1i(pickerTerrainLocation, isTerrain);
+            lastTerrain = isTerrain;
+        }
+
+        int cull = cullEnabledFor(command.layer(), cullMode) ? 1 : 0;
+        if (cull != lastCull) {
+            if (cull == 1) glEnable(GL_CULL_FACE);
+            else glDisable(GL_CULL_FACE);
+            lastCull = cull;
+        }
+
+        int faceBias = command.depthBias();
+        if (faceBias != lastFaceBias) {
+            glUniform1f(pickerFaceBiasLocation, faceBias);
+            lastFaceBias = faceBias;
+        }
+
+        int texLayer = Math.max(0, layer);
+        if (texLayer != lastTextureLayer) {
+            glUniform1i(pickerTextureLayerLocation, texLayer);
+            lastTextureLayer = texLayer;
+        }
     }
 
     static boolean cullEnabledFor(SceneLayer.Kind layer, int mode) {
@@ -1171,6 +1456,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     @Override
     public void close() {
         zoneManager.close();
+        pickerFramebuffer.close();
         visibilityCache.clear();
         if (paletteTexture != 0) org.lwjgl.opengl.GL11.glDeleteTextures(paletteTexture);
         paletteTexture = 0;
@@ -1181,6 +1467,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         textureLayers.clear();
         if (program != 0) org.lwjgl.opengl.GL20.glDeleteProgram(program);
         program = 0;
+        if (pickerProgram != 0) org.lwjgl.opengl.GL20.glDeleteProgram(pickerProgram);
+        pickerProgram = 0;
         uploadedFingerprint = null;
         uploadedTextureFingerprint = null;
         uploadedTextureStateFingerprint = null;
@@ -1193,6 +1481,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         orderedPlanFingerprint = null;
         cachedOpaqueOrder = List.of();
         opaqueOrderWorkspace.clear();
+        pickerOrderWorkspace.clear();
         alphaCommands.clear();
         alphaIndices.clear();
         indexedCommands = List.of();

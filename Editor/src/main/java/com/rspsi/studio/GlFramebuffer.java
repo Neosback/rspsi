@@ -44,9 +44,9 @@ import static org.lwjgl.opengl.GL30.glBlitFramebuffer;
  * texture suitable for {@code ImGui.image}.
  *
  * <p>Scene picking is intentionally separate from this presentation target.
- * The production viewport currently uses the zone-resident CPU DDA picker;
- * a future GPU picker-id attachment should be introduced only when the scene
- * shader and readback path are implemented together.</p>
+ * The optional GPU picker uses its own lazy single-sample {@code R32UI}
+ * framebuffer, while the zone-resident CPU DDA path remains the exact
+ * resolver and fallback.</p>
  */
 public final class GlFramebuffer implements AutoCloseable {
     private int resolveFramebuffer;
