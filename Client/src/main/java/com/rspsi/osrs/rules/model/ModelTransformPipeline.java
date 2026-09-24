@@ -13,27 +13,70 @@ import java.util.Objects;
  * definition offsets -> post-scale diagonal rotation -> footprint center and decor offsets.</p>
  */
 public final class ModelTransformPipeline {
+    private static final int ANGLE_MASK = 2047;
+    private static final double ANGLE_UNIT = Math.PI * 2.0 / 2048.0;
+    private static final int[] SINE = new int[2048];
+    private static final int[] COSINE = new int[2048];
+
+    static {
+        // Same fixed-point lookup convention used by the client and RuneLite.
+        // Runtime model transforms stay integer-only and allocation-free.
+        for (int angle = 0; angle < 2048; angle++) {
+            SINE[angle] = (int) (65536.0 * Math.sin(angle * ANGLE_UNIT));
+            COSINE[angle] = (int) (65536.0 * Math.cos(angle * ANGLE_UNIT));
+        }
+    }
+
     public record TransformedVertex(int x, int y, int z) {}
 
     private ModelTransformPipeline() {}
 
-    /** Matches the client ModelData.rotate(angle) 2048-unit angle table. */
-    public static int[] rotateJagexAngle(int x, int z, int angle) {
-        int sine = (int) (65536.0 * Math.sin(angle * Math.PI * 2.0 / 2048.0));
-        int cosine = (int) (65536.0 * Math.cos(angle * Math.PI * 2.0 / 2048.0));
+    /**
+     * Allocation-free client ModelData.rotate(angle) helper.
+     *
+     * <p>The high 32 bits contain X and the low 32 bits contain Z.</p>
+     */
+    public static long rotateJagexAnglePacked(int x, int z, int angle) {
+        int normalized = angle & ANGLE_MASK;
+        int sine = SINE[normalized];
+        int cosine = COSINE[normalized];
         int rotatedX = (sine * z + cosine * x) >> 16;
         int rotatedZ = (cosine * z - sine * x) >> 16;
-        return new int[]{rotatedX, rotatedZ};
+        return pack(rotatedX, rotatedZ);
     }
 
-    /** Rotates coordinates by quarter turns (0..3). */
-    public static int[] rotateQuarterTurn(int x, int z, int rotation) {
+    /** Compatibility helper for callers that need an array result. */
+    public static int[] rotateJagexAngle(int x, int z, int angle) {
+        long packed = rotateJagexAnglePacked(x, z, angle);
+        return new int[]{unpackX(packed), unpackZ(packed)};
+    }
+
+    /** Allocation-free quarter-turn helper. */
+    public static long rotateQuarterTurnPacked(int x, int z, int rotation) {
         return switch (rotation & 3) {
-            case 1 -> new int[]{z, -x};
-            case 2 -> new int[]{-x, -z};
-            case 3 -> new int[]{-z, x};
-            default -> new int[]{x, z};
+            case 1 -> pack(z, -x);
+            case 2 -> pack(-x, -z);
+            case 3 -> pack(-z, x);
+            default -> pack(x, z);
         };
+    }
+
+    /** Compatibility helper for callers that need an array result. */
+    public static int[] rotateQuarterTurn(int x, int z, int rotation) {
+        long packed = rotateQuarterTurnPacked(x, z, rotation);
+        return new int[]{unpackX(packed), unpackZ(packed)};
+    }
+
+    public static int unpackX(long packed) {
+        return (int) (packed >> 32);
+    }
+
+    public static int unpackZ(long packed) {
+        return (int) packed;
+    }
+
+    private static long pack(int x, int z) {
+        return ((long) x << 32) | (z & 0xFFFF_FFFFL);
     }
 
     /**
@@ -65,14 +108,14 @@ public final class ModelTransformPipeline {
         }
 
         if (variant.sourceType() == 4 && variant.rotation() > 3) {
-            int[] diagonal = rotateJagexAngle(x, z, 256);
-            x = diagonal[0] + 45;
-            z = diagonal[1] - 45;
+            long diagonal = rotateJagexAnglePacked(x, z, 256);
+            x = unpackX(diagonal) + 45;
+            z = unpackZ(diagonal) - 45;
         }
 
-        int[] rotated = rotateQuarterTurn(x, z, variant.rotation());
-        x = rotated[0];
-        z = rotated[1];
+        long rotated = rotateQuarterTurnPacked(x, z, variant.rotation());
+        x = unpackX(rotated);
+        z = unpackZ(rotated);
 
         if (appearance != null) {
             x = x * appearance.scaleX() / 128;
@@ -84,9 +127,9 @@ public final class ModelTransformPipeline {
         }
 
         if (variant.rotateAfterScale()) {
-            int[] diagonal = rotateJagexAngle(x, z, 256);
-            x = diagonal[0];
-            z = diagonal[1];
+            long diagonal = rotateJagexAnglePacked(x, z, 256);
+            x = unpackX(diagonal);
+            z = unpackZ(diagonal);
         }
 
         x += centerX + variant.decorX();
