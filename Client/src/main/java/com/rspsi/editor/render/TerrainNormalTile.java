@@ -56,6 +56,6 @@ public record TerrainNormalTile(
                 + (long) se * x * inverseY
                 + (long) ne * x * y
                 + (long) nw * inverseX * y;
-        return (int) ((value + 8192) / 16384);
+        return (int) ((value >= 0 ? value + 8192 : value - 8192) / 16384);
     }
 }
