@@ -23,7 +23,8 @@ public enum IntegrationCapability {
     RUNTIME_SIMULATION("Server Script Simulation"),
     LIVE_SERVER("Live Server Connection"),
     SOURCE_NAVIGATION("Direct Source File Navigation"),
-    SOURCE_SEMANTICS("Kotlin/OpenRune Semantic Source Index");
+    SOURCE_SEMANTICS("Kotlin/OpenRune Semantic Source Index"),
+    CONTENT_GRAPH("Cross-source Semantic Content Graph");
 
     private final String description;
 
