@@ -1,6 +1,7 @@
 package com.rspsi.editor;
 
 import com.rspsi.editor.change.ChangePlan;
+import com.rspsi.editor.change.ChangePlanValidation;
 import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.TileSnapshot;
@@ -217,6 +218,13 @@ class WorldRegionSessionWindowTest {
 
         eastDocument.tile(0, 0, 10).restore(withUnderlay(eastBefore, 99));
 
+        ChangePlanValidation validation = sessions.validate(plan);
+        assertFalse(validation.canCommit());
+        assertEquals(1, validation.conflicts().size());
+        assertEquals(ChangePlanValidation.ConflictCode.STALE_SOURCE,
+                validation.conflicts().get(0).code());
+        assertEquals(eastTile, validation.conflicts().get(0).tile());
+
         assertThrows(IllegalStateException.class, () -> sessions.commit(plan));
         assertEquals(westBefore, westDocument.tile(0, 63, 10).snapshot(),
                 "preflight must reject the whole plan before mutating the first region");
@@ -245,6 +253,13 @@ class WorldRegionSessionWindowTest {
                 .setTile(westTile, westBefore, withUnderlay(westBefore, 7))
                 .setTile(missingTile, placeholder, withUnderlay(placeholder, 8))
                 .build();
+
+        ChangePlanValidation validation = sessions.validate(plan);
+        assertFalse(validation.canCommit());
+        assertEquals(1, validation.conflicts().size());
+        assertEquals(ChangePlanValidation.ConflictCode.UNLOADED_REGION,
+                validation.conflicts().get(0).code());
+        assertEquals(missingTile, validation.conflicts().get(0).tile());
 
         assertThrows(IllegalStateException.class, () -> sessions.commit(plan));
         assertEquals(westBefore, westDocument.tile(0, 63, 10).snapshot());
