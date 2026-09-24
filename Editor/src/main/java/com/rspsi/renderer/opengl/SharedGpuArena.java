@@ -2,6 +2,7 @@ package com.rspsi.renderer.opengl;
 
 import com.rspsi.editor.render.GpuColorEncoding;
 import com.rspsi.editor.render.GpuSceneVertex;
+import com.rspsi.editor.render.GpuZoneUpload;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
 import com.rspsi.editor.render.PickerId;
 
@@ -226,9 +227,11 @@ final class SharedGpuArena implements AutoCloseable {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
-    void uploadIndices(int indexOffset, int vertexBase, List<Integer> indices) {
-        IntBuffer data = scratch.indices(indices.size());
-        for (int index : indices) data.put(vertexBase + index);
+    void uploadIndices(int indexOffset, int vertexBase, GpuZoneUpload zone) {
+        IntBuffer data = scratch.indices(zone.indices().size());
+        for (int offset = 0; offset < zone.indices().size(); offset++) {
+            data.put(vertexBase + zone.indexAt(offset));
+        }
         data.flip();
         glBindVertexArray(vao);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
