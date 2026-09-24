@@ -52,35 +52,49 @@ public final class ZoneVboManager implements AutoCloseable {
             int vao,
             int geometryVbo,
             int shadingVbo,
+            int normalVbo,
             int ibo,
             long geometryFingerprint,
             long shadingFingerprint,
+            long normalFingerprint,
             long indexFingerprint
     ) {
-        boolean matches(GpuZoneStreamFingerprints fingerprints) {
-            return !streamUploadDecision(this, fingerprints).any();
+        ZoneAllocation(long zoneKey, int vao, int geometryVbo, int shadingVbo, int ibo,
+                       long geometryFingerprint, long shadingFingerprint, long indexFingerprint) {
+            this(zoneKey, vao, geometryVbo, shadingVbo, 0, ibo,
+                    geometryFingerprint, shadingFingerprint, 0L, indexFingerprint);
         }
     }
 
-    record StreamUploadDecision(boolean geometry, boolean shading, boolean indices) {
+    record StreamUploadDecision(boolean geometry, boolean shading,
+                                boolean normals, boolean indices) {
         boolean any() {
-            return geometry || shading || indices;
+            return geometry || shading || normals || indices;
         }
     }
 
     static StreamUploadDecision streamUploadDecision(
             ZoneAllocation existing, GpuZoneStreamFingerprints fingerprints) {
+        return streamUploadDecision(existing, fingerprints, false);
+    }
+
+    static StreamUploadDecision streamUploadDecision(
+            ZoneAllocation existing, GpuZoneStreamFingerprints fingerprints,
+            boolean normalStreamEnabled) {
         if (fingerprints == null) {
             throw new IllegalArgumentException("Zone stream fingerprints cannot be null");
         }
         return new StreamUploadDecision(
                 existing == null || existing.geometryFingerprint() != fingerprints.geometry(),
                 existing == null || existing.shadingFingerprint() != fingerprints.shading(),
+                normalStreamEnabled && (existing == null
+                        || existing.normalFingerprint() != fingerprints.normals()),
                 existing == null || existing.indexFingerprint() != fingerprints.indices());
     }
 
     private final Map<Long, ZoneAllocation> allocations = new HashMap<>();
     private final GpuUploadScratch uploadScratch = new GpuUploadScratch();
+    private final boolean normalStreamEnabled;
     private int[] commandLocalFirstIndices = new int[0];
     private long[] commandZoneKeys = new long[0];
     private int dirtyZonesUploadedCount;
@@ -89,6 +103,15 @@ public final class ZoneVboManager implements AutoCloseable {
     private int geometryStreamUploads;
     private int shadingStreamUploads;
     private int indexStreamUploads;
+    private int normalStreamUploads;
+
+    public ZoneVboManager() {
+        this(false);
+    }
+
+    ZoneVboManager(boolean normalStreamEnabled) {
+        this.normalStreamEnabled = normalStreamEnabled;
+    }
 
     public static long zoneKey(WorldTileAddress tile) {
         return WorldZoneCoordinate.from(tile).key();
@@ -200,7 +223,8 @@ public final class ZoneVboManager implements AutoCloseable {
                             List<Integer> indices,
                             GpuZoneStreamFingerprints fingerprints) {
         ZoneAllocation existing = allocations.get(key);
-        StreamUploadDecision decision = streamUploadDecision(existing, fingerprints);
+        StreamUploadDecision decision =
+                streamUploadDecision(existing, fingerprints, normalStreamEnabled);
         if (!decision.any()) {
             reusedAllocationsCount++;
             return;
@@ -209,17 +233,20 @@ public final class ZoneVboManager implements AutoCloseable {
         int vao;
         int geometryVbo;
         int shadingVbo;
+        int normalVbo;
         int ibo;
         if (existing == null) {
             vao = glGenVertexArrays();
             geometryVbo = glGenBuffers();
             shadingVbo = glGenBuffers();
+            normalVbo = normalStreamEnabled ? glGenBuffers() : 0;
             ibo = glGenBuffers();
-            setupVao(vao, geometryVbo, shadingVbo, ibo);
+            setupVao(vao, geometryVbo, shadingVbo, normalVbo, ibo);
         } else {
             vao = existing.vao();
             geometryVbo = existing.geometryVbo();
             shadingVbo = existing.shadingVbo();
+            normalVbo = existing.normalVbo();
             ibo = existing.ibo();
         }
 
@@ -231,18 +258,25 @@ public final class ZoneVboManager implements AutoCloseable {
             uploadShading(shadingVbo, vertices);
             shadingStreamUploads++;
         }
+        if (decision.normals()) {
+            uploadNormals(normalVbo, vertices);
+            normalStreamUploads++;
+        }
         if (decision.indices()) {
             uploadIndices(vao, ibo, indices);
             indexStreamUploads++;
         }
 
         allocations.put(key, new ZoneAllocation(
-                key, vao, geometryVbo, shadingVbo, ibo,
-                fingerprints.geometry(), fingerprints.shading(), fingerprints.indices()));
+                key, vao, geometryVbo, shadingVbo, normalVbo, ibo,
+                fingerprints.geometry(), fingerprints.shading(),
+                normalStreamEnabled ? fingerprints.normals() : 0L,
+                fingerprints.indices()));
         dirtyZonesUploadedCount++;
     }
 
-    private static void setupVao(int vao, int geometryVbo, int shadingVbo, int ibo) {
+    private static void setupVao(int vao, int geometryVbo, int shadingVbo,
+                                 int normalVbo, int ibo) {
         glBindVertexArray(vao);
 
         glBindBuffer(GL_ARRAY_BUFFER, geometryVbo);
@@ -264,6 +298,13 @@ public final class ZoneVboManager implements AutoCloseable {
         glEnableVertexAttribArray(5);
         glVertexAttribPointer(6, 1, GL_FLOAT, false, shadingStride, 6L * Float.BYTES);
         glEnableVertexAttribArray(6);
+
+        if (normalVbo != 0) {
+            glBindBuffer(GL_ARRAY_BUFFER, normalVbo);
+            int normalStride = NativeSceneVertexLayout.NORMAL_FLOATS_PER_VERTEX * Float.BYTES;
+            glVertexAttribPointer(7, 4, GL_FLOAT, false, normalStride, 0L);
+            glEnableVertexAttribArray(7);
+        }
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
         glBindVertexArray(0);
@@ -307,6 +348,25 @@ public final class ZoneVboManager implements AutoCloseable {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
+    private void uploadNormals(int normalVbo, List<GpuSceneVertex> vertices) {
+        if (normalVbo == 0) {
+            throw new IllegalStateException("Normal stream upload requested without a normal VBO");
+        }
+        FloatBuffer data = uploadScratch.vertices(
+                vertices.size() * NativeSceneVertexLayout.NORMAL_FLOATS_PER_VERTEX);
+        for (GpuSceneVertex vertex : vertices) {
+            data.put((float) vertex.normalX())
+                    .put((float) vertex.normalY())
+                    .put((float) vertex.normalZ())
+                    .put((float) vertex.normalMagnitude());
+        }
+        data.flip();
+
+        glBindBuffer(GL_ARRAY_BUFFER, normalVbo);
+        glBufferData(GL_ARRAY_BUFFER, data, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
     private void uploadIndices(int vao, int ibo, List<Integer> indices) {
         IntBuffer data = uploadScratch.indices(indices.size());
         indices.forEach(data::put);
@@ -332,6 +392,7 @@ public final class ZoneVboManager implements AutoCloseable {
         glDeleteVertexArrays(allocation.vao());
         glDeleteBuffers(allocation.geometryVbo());
         glDeleteBuffers(allocation.shadingVbo());
+        if (allocation.normalVbo() != 0) glDeleteBuffers(allocation.normalVbo());
         glDeleteBuffers(allocation.ibo());
     }
 
@@ -341,6 +402,7 @@ public final class ZoneVboManager implements AutoCloseable {
         geometryStreamUploads = 0;
         shadingStreamUploads = 0;
         indexStreamUploads = 0;
+        normalStreamUploads = 0;
     }
 
     public int localFirstIndex(int commandIndex) {
@@ -377,6 +439,14 @@ public final class ZoneVboManager implements AutoCloseable {
 
     int indexStreamUploads() {
         return indexStreamUploads;
+    }
+
+    int normalStreamUploads() {
+        return normalStreamUploads;
+    }
+
+    boolean normalStreamEnabled() {
+        return normalStreamEnabled;
     }
 
     int stagingVertexCapacityFloats() {
