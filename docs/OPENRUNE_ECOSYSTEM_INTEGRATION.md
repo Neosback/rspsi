@@ -224,7 +224,20 @@ The second implementation slice adds the connected project's evaluated Gradle mo
 
 Gradle build configuration is executable code. The project browser/probe path therefore **must not** evaluate Gradle. Model evaluation belongs only to the explicit trusted/open-project path. The injected reporting task reads configured build structure and deliberately avoids resolving external dependency configurations or executing game/server classes.
 
-With exact source roots now available, the next convergence step is Kotlin semantic indexing over those roots, followed by the semantic content graph, provenance/edit lenses, and runtime simulation.
+With exact source roots now available, the third implementation slice adds Kotlin PSI-backed source indexing over the evaluated production source sets:
+
+- PSI/compiler types remain private to the first-party OpenRune adapter; Studio-facing APIs receive neutral semantic facts only;
+- every fact carries exact file, offset, line, and column provenance;
+- the initial fact vocabulary covers declarations, calls, symbolic references, `PluginScript`, `QuestScript`, script-handler registrations, quest constructor metadata, and var bindings;
+- symbolic strings such as `loc.*`, `npc.*`, `obj.*`, `varbit.*`, `varp.*`, `content.*`, `stat.*`, and `synth.*` are indexed without assuming one stock content layout;
+- source facts retain Gradle project path, source-set, and package metadata;
+- clearly test/integration/benchmark source sets are excluded by default, while custom production source-set names remain eligible;
+- the PSI compatibility version is independently pinned through `openruneKotlinSemanticVersion` and currently matches the bundled OpenRune Kotlin 2.2.0 toolchain;
+- acceptance covers both synthetic custom-layout fixtures and the bundled OpenRune Mining/Quest source.
+
+This layer is intentionally **structural**, not a claim of full K2 symbol/type resolution. A handler recognized from the PSI call shape is a high-confidence source fact, but cross-module overload/type resolution remains a later enrichment step. That distinction must be preserved in UI wording and edit safety.
+
+The next convergence step is the Semantic Content Graph: join these source facts with GameVals/RSCM, declarative TOML/JSON data, cache/map entities, quest/var state, and later CS2/runtime traces. Edit lenses should operate only where that graph can identify a writable source origin and a verified mutation strategy.
 
 ## OpenRune-FileStore
 
