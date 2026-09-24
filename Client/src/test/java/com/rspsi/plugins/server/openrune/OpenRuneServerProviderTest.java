@@ -160,8 +160,11 @@ class OpenRuneServerProviderTest {
 
         IntegrationOptions options = IntegrationOptions.defaults(
                 root, Set.of(IntegrationCapability.SOURCE_SEMANTICS));
-        IntegrationSession session = provider.open(root, options);
-        var index = session.semanticSourceIndex().orElseThrow();
+        ServerIntegrationService service = new ServerIntegrationService();
+        service.registerProvider(provider);
+        IntegrationSession session = service.connect(root, options);
+        var index = service.activeSemanticSourceIndex().orElseThrow();
+        assertEquals(index, session.semanticSourceIndex().orElseThrow());
 
         assertEquals(2, index.files().size());
         assertTrue(index.facts(SemanticFactKind.PLUGIN_SCRIPT).stream()
@@ -186,6 +189,7 @@ class OpenRuneServerProviderTest {
         assertEquals(mining.toAbsolutePath().normalize(), handler.source().file());
         assertEquals(4, handler.source().startLine());
         assertTrue(handler.source().endOffset() > handler.source().startOffset());
+        service.disconnect();
     }
 
     private static String json(Path path) {
