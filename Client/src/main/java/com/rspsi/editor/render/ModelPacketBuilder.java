@@ -853,12 +853,6 @@ public final class ModelPacketBuilder {
                 vertex.normalMagnitude());
     }
 
-    private static Normal faceNormal(ModelVertex first, ModelVertex second, ModelVertex third) {
-        return faceNormal(new RawVertex(first.x(), first.y(), first.z()),
-                new RawVertex(second.x(), second.y(), second.z()),
-                new RawVertex(third.x(), third.y(), third.z()));
-    }
-
     private record VertexKey(int plane, int x, int y, int z) implements Comparable<VertexKey> {
         @Override
         public int compareTo(VertexKey other) {
@@ -1306,37 +1300,32 @@ public final class ModelPacketBuilder {
      * @return the warped vertices, or {@code null} when the client would leave
      *         the model unchanged
      */
-    private List<RawVertex> applyContour(WorldDocument document, WorldObject object,
-                                         int footprintWidth, int footprintLength,
-                                         List<RawVertex> transformed,
-                                         ObjectAppearanceView appearance,
-                                         int decorX, int decorZ) {
+    private boolean applyContour(WorldDocument document, WorldObject object,
+                                 int footprintWidth, int footprintLength,
+                                 ModelBuildWorkspace workspace, int vertexCount,
+                                 ObjectAppearanceView appearance,
+                                 int decorX, int decorZ) {
         int type = appearance.contourGroundType();
         int parameter = appearance.contourGroundParameter();
-        if (type < 0) return null;
+        if (type < 0) return false;
         boolean usesAbovePlane = type == 4 || type == 5;
-        if (usesAbovePlane && document.planes() <= object.plane() + 1) return null;
+        if (usesAbovePlane && document.planes() <= object.plane() + 1) return false;
 
-        // Client contourGround calculates its cylinder from Model-local
-        // coordinates, then receives the Scene placement centre separately.
-        // RSPSi's neutral packet has already baked footprint-centre and wall-
-        // decoration displacement into X/Z, so remove both before calculating
-        // the client radius. Wall-decoration displacement is Scene-only and
-        // must not participate in contour sampling.
         int centerX = footprintWidth * 64;
         int centerZ = footprintLength * 64;
         int downwardHeight = 0;
         long radiusSquared = 0L;
         int modelMinY = Integer.MAX_VALUE;
         int modelMaxY = Integer.MIN_VALUE;
-        for (RawVertex vertex : transformed) {
-            int localX = vertex.x() - centerX - decorX;
-            int localZ = vertex.z() - centerZ - decorZ;
-            if (-vertex.y() > downwardHeight) downwardHeight = -vertex.y();
+        for (int vertex = 0; vertex < vertexCount; vertex++) {
+            int localX = workspace.x(vertex) - centerX - decorX;
+            int localZ = workspace.z(vertex) - centerZ - decorZ;
+            int y = workspace.y(vertex);
+            if (-y > downwardHeight) downwardHeight = -y;
             long squared = (long) localX * localX + (long) localZ * localZ;
             if (squared > radiusSquared) radiusSquared = squared;
-            modelMinY = Math.min(modelMinY, vertex.y());
-            modelMaxY = Math.max(modelMaxY, vertex.y());
+            modelMinY = Math.min(modelMinY, y);
+            modelMaxY = Math.max(modelMaxY, y);
         }
         downwardHeight = Math.max(1, downwardHeight);
         int xzRadius = (int) (Math.sqrt((double) radiusSquared) + 0.99D);
@@ -1349,60 +1338,49 @@ public final class ModelPacketBuilder {
         int maxWorldX = contourCenterX + xzRadius;
         int minWorldZ = contourCenterZ - xzRadius;
         int maxWorldZ = contourCenterZ + xzRadius;
-        // Out-of-scene footprints are left untouched (client bounds guard:
-        // every vertex satisfies tx+1 < width because xzRadius bounds them).
         if (minWorldX < 0 || (maxWorldX + 128) >> 7 >= document.width()
                 || minWorldZ < 0 || (maxWorldZ + 128) >> 7 >= document.length()) {
-            return null;
+            return false;
         }
-        int sceneHeight = objectCenterHeight(document, object, footprintWidth, footprintLength);
+
+        int sceneHeight = objectCenterHeight(
+                document, object, footprintWidth, footprintLength);
         int startTileX = minWorldX >> 7;
         int endTileX = (maxWorldX + 127) >> 7;
         int startTileZ = minWorldZ >> 7;
         int endTileZ = (maxWorldZ + 127) >> 7;
-        // Fully flat footprints skip the warp: the client compares the radius
-        // box's corner tile heights against the placement height (the client
-        // flat-skips both modes; types 4/5 always warp).
         if (!usesAbovePlane
                 && sampleGrid(document, plane, startTileX, startTileZ) == sceneHeight
                 && sampleGrid(document, plane, endTileX, startTileZ) == sceneHeight
                 && sampleGrid(document, plane, startTileX, endTileZ) == sceneHeight
                 && sampleGrid(document, plane, endTileX, endTileZ) == sceneHeight) {
-            return null;
+            return false;
         }
 
-        List<RawVertex> result = new ArrayList<>(transformed.size());
-        for (RawVertex vertex : transformed) {
-            int localX = vertex.x() - centerX - decorX;
-            int localZ = vertex.z() - centerZ - decorZ;
+        for (int vertex = 0; vertex < vertexCount; vertex++) {
+            int x = workspace.x(vertex);
+            int y = workspace.y(vertex);
+            int z = workspace.z(vertex);
+            int localX = x - centerX - decorX;
+            int localZ = z - centerZ - decorZ;
             int worldX = contourCenterX + localX;
             int worldZ = contourCenterZ + localZ;
             int fractionX = worldX & 127;
             int fractionZ = worldZ & 127;
             int tileX = worldX >> 7;
-            int tileZ = worldZ >> 7;            // Client-exact bilinear: shifted, not divided, so negative scene
-            // heights (the OSRS convention) floor toward negative infinity
-            // exactly as the client's arithmetic shift does.
+            int tileZ = worldZ >> 7;
             int south = contourBlend(sampleGrid(document, plane, tileX, tileZ),
                     sampleGrid(document, plane, tileX + 1, tileZ), fractionX);
             int north = contourBlend(sampleGrid(document, plane, tileX, tileZ + 1),
                     sampleGrid(document, plane, tileX + 1, tileZ + 1), fractionX);
             int height = contourBlend(south, north, fractionZ);
             int newY;
-            // Client dispatch (ObjectComposition.getModel*): clipType == 0
-            // warps every vertex (param 0); clipType > 0 warps only the model
-            // span above the partial threshold (param = clipType * 65536).
-            // TSPS generalizes the partial path as contourGroundType 2.
             if ((type == 1 || type == 2) && parameter > 0) {
-                // Client partial contour: ratio = (-y << 16) / max(-y) runs
-                // 0 at the model top toward 65536 at the bottom; only
-                // vertices above the parameter threshold warp, scaled by
-                // (param - ratio) / param.
-                int yRatio = ((-vertex.y()) << 16) / downwardHeight;
+                int yRatio = ((-y) << 16) / downwardHeight;
                 if (yRatio < parameter) {
-                    newY = vertex.y() + (parameter - yRatio) * (height - sceneHeight) / parameter;
+                    newY = y + (parameter - yRatio) * (height - sceneHeight) / parameter;
                 } else {
-                    newY = vertex.y();
+                    newY = y;
                 }
             } else if (type == 3) {
                 int delta = height - sceneHeight;
@@ -1410,25 +1388,23 @@ public final class ModelPacketBuilder {
                     int limit = Math.abs(parameter);
                     delta = Math.max(-limit, Math.min(limit, delta));
                 }
-                newY = vertex.y() + delta;
+                newY = y + delta;
             } else if (type == 4) {
                 int aboveHeight = contourSampleAbove(document, plane, worldX, worldZ,
                         fractionX, fractionZ);
-                newY = vertex.y() + aboveHeight - sceneHeight + verticalSpan;
+                newY = y + aboveHeight - sceneHeight + verticalSpan;
             } else if (type == 5) {
                 int aboveHeight = contourSampleAbove(document, plane, worldX, worldZ,
                         fractionX, fractionZ);
                 int deltaHeight = height - aboveHeight;
-                newY = (((vertex.y() << 8) / verticalSpan) * deltaHeight >> 8)
+                newY = (((y << 8) / verticalSpan) * deltaHeight >> 8)
                         - (sceneHeight - height);
             } else {
-                // Type 1 with parameter 0 (client clipType 0) and any
-                // unmodelled type: full ground attachment.
-                newY = vertex.y() + height - sceneHeight;
+                newY = y + height - sceneHeight;
             }
-            result.add(new RawVertex(vertex.x(), newY, vertex.z()));
+            workspace.setY(vertex, newY);
         }
-        return result;
+        return true;
     }
 
     /** Client bilinear step: {@code (first * (128 - amount) + second * amount) >> 7}. */
@@ -1487,10 +1463,10 @@ public final class ModelPacketBuilder {
         return (int) (sum >> 2);
     }
 
-    private static List<Normal> calculateNormals(List<RawVertex> vertices,
-                                                   ModelGeometryView geometry, boolean mirror) {
-        List<Normal> normals = new ArrayList<>();
-        for (int index = 0; index < vertices.size(); index++) normals.add(new Normal(0, 0, 0, 0));
+    private static void calculateNormals(ModelBuildWorkspace workspace,
+                                         int vertexCount,
+                                         ModelGeometryView geometry,
+                                         boolean mirror) {
         int[] indices = geometry.triangleIndices();
         int[] renderTypes = geometry.triangleRenderTypes();
         for (int face = 0; face < geometry.triangleCount(); face++) {
@@ -1503,39 +1479,23 @@ public final class ModelPacketBuilder {
                 b = c;
                 c = swap;
             }
-            Normal normal = faceNormal(vertices.get(a), vertices.get(b), vertices.get(c));
-            // ModelData.calculateVertexNormals() accumulates only render type
-            // 0 faces. Type 1 is flat-lit from faceNormals, while hidden and
-            // other special faces must not pull a wall corner's smooth normal
-            // toward an unrelated face. Including them produces the visible
-            // bright/dark seams at wall joins that the client does not have.
+            workspace.computeFaceNormal(a, b, c);
             int renderType = valueAt(renderTypes, face, 0);
             if (renderType == 0) {
-                addNormal(normals, a, normal);
-                addNormal(normals, b, normal);
-                addNormal(normals, c, normal);
+                workspace.accumulateFaceNormal(a);
+                workspace.accumulateFaceNormal(b);
+                workspace.accumulateFaceNormal(c);
             }
         }
-        // RuneLite/TSPS retain the accumulated components and the face-count
-        // magnitude. Lighting divides by that magnitude; normalizing the
-        // components here while retaining the count would double-attenuate
-        // smooth multi-face models.
-        return List.copyOf(normals);
     }
 
-    private static void addNormal(List<Normal> normals, int index, Normal value) {
-        Normal current = normals.get(index);
-        normals.set(index, new Normal(current.x + value.x, current.y + value.y,
-                current.z + value.z, current.magnitude + 1));
-    }
-
-    private static Normal faceNormal(RawVertex first, RawVertex second, RawVertex third) {
-        int x1 = second.x - first.x;
-        int y1 = second.y - first.y;
-        int z1 = second.z - first.z;
-        int x2 = third.x - first.x;
-        int y2 = third.y - first.y;
-        int z2 = third.z - first.z;
+    private static Normal faceNormal(ModelVertex first, ModelVertex second, ModelVertex third) {
+        int x1 = second.x() - first.x();
+        int y1 = second.y() - first.y();
+        int z1 = second.z() - first.z();
+        int x2 = third.x() - first.x();
+        int y2 = third.y() - first.y();
+        int z2 = third.z() - first.z();
         int x = y1 * z2 - y2 * z1;
         int y = z1 * x2 - z2 * x1;
         int z = x1 * y2 - x2 * y1;
@@ -1544,26 +1504,40 @@ public final class ModelPacketBuilder {
             y >>= 1;
             z >>= 1;
         }
-        int magnitude = Math.max(1, (int) Math.sqrt((long) x * x + (long) y * y + (long) z * z));
-        return new Normal(x * 256 / magnitude, y * 256 / magnitude, z * 256 / magnitude, 1);
+        int magnitude = Math.max(1,
+                (int) Math.sqrt((long) x * x + (long) y * y + (long) z * z));
+        return new Normal(x * 256 / magnitude, y * 256 / magnitude,
+                z * 256 / magnitude, 1);
     }
 
+
     private int lightness(Normal normal, ObjectAppearanceView appearance) {
+        return lightness(normal.x, normal.y, normal.z, normal.magnitude, appearance);
+    }
+
+    private int lightness(int normalX, int normalY, int normalZ, int normalMagnitude,
+                          ObjectAppearanceView appearance) {
         int ambient = 64 + appearance.ambient();
         int contrast = 768 + appearance.contrast();
         int intensity = Math.max(1, (lighting.lightMagnitude() * contrast) >> 8);
-        return ambient + (lighting.lightX() * normal.x + lighting.lightY() * normal.y
-                + lighting.lightZ() * normal.z) / Math.max(1, intensity * Math.max(1, normal.magnitude));
+        return ambient + (lighting.lightX() * normalX + lighting.lightY() * normalY
+                + lighting.lightZ() * normalZ)
+                / Math.max(1, intensity * Math.max(1, normalMagnitude));
     }
 
     /** Flat faces use the client face-normal denominator (1.5 × intensity). */
     private int flatLightness(Normal normal, ObjectAppearanceView appearance) {
+        return flatLightness(normal.x, normal.y, normal.z, appearance);
+    }
+
+    private int flatLightness(int normalX, int normalY, int normalZ,
+                              ObjectAppearanceView appearance) {
         int ambient = 64 + appearance.ambient();
         int contrast = 768 + appearance.contrast();
         int intensity = Math.max(1, (lighting.lightMagnitude() * contrast) >> 8);
         int denominator = Math.max(1, intensity + (intensity >> 1));
-        return ambient + (lighting.lightX() * normal.x + lighting.lightY() * normal.y
-                + lighting.lightZ() * normal.z) / denominator;
+        return ambient + (lighting.lightX() * normalX + lighting.lightY() * normalY
+                + lighting.lightZ() * normalZ) / denominator;
     }
 
     private static int recolor(int color, Map<Integer, Integer> replacements) {
@@ -1586,19 +1560,6 @@ public final class ModelPacketBuilder {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static VertexExtents vertexExtents(List<RawVertex> vertices) {
-        int minX = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE;
-        int minZ = Integer.MAX_VALUE;
-        int maxZ = Integer.MIN_VALUE;
-        for (RawVertex vertex : vertices) {
-            minX = Math.min(minX, vertex.x);
-            maxX = Math.max(maxX, vertex.x);
-            minZ = Math.min(minZ, vertex.z);
-            maxZ = Math.max(maxZ, vertex.z);
-        }
-        return new VertexExtents(minX, maxX, minZ, maxZ);
-    }
 
     private static float normalized(int value, int min, int max) {
         return max == min ? 0.0f : (value - min) / (float) (max - min);
@@ -1638,11 +1599,7 @@ public final class ModelPacketBuilder {
     private record VertexRange(int start, int end) {
     }
 
-    private record RawVertex(int x, int y, int z) {
-    }
 
-    private record VertexExtents(int minX, int maxX, int minZ, int maxZ) {
-    }
 
     private record Normal(int x, int y, int z, int magnitude) {
     }
