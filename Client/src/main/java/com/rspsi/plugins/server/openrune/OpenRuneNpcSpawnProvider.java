@@ -4,6 +4,8 @@ import com.rspsi.editor.integration.content.ParseDiagnostics;
 import com.rspsi.editor.integration.npc.NpcSpawn;
 import com.rspsi.editor.integration.npc.NpcSpawnProvider;
 import com.rspsi.editor.model.WorldTile;
+import com.rspsi.server.ServerPathKey;
+import com.rspsi.server.ServerProjectInspection;
 import org.tomlj.Toml;
 import org.tomlj.TomlArray;
 import org.tomlj.TomlParseResult;
@@ -28,17 +30,30 @@ import java.util.stream.Stream;
  */
 public final class OpenRuneNpcSpawnProvider implements NpcSpawnProvider {
     private final Path projectRoot;
+    private final Path rawCacheRoot;
     private final List<NpcSpawn> spawns = new ArrayList<>();
     private final ParseDiagnostics diagnostics = new ParseDiagnostics();
 
     public OpenRuneNpcSpawnProvider(Path projectRoot) {
+        this(projectRoot,
+                Objects.requireNonNull(projectRoot, "projectRoot")
+                        .resolve(".data").resolve("raw-cache"));
+    }
+
+    public OpenRuneNpcSpawnProvider(ServerProjectInspection inspection) {
+        this(Objects.requireNonNull(inspection, "inspection").connection().root(),
+                inspection.path(ServerPathKey.RAW_CACHE)
+                        .orElse(inspection.connection().root().resolve(".data").resolve("raw-cache")));
+    }
+
+    private OpenRuneNpcSpawnProvider(Path projectRoot, Path rawCacheRoot) {
         this.projectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
+        this.rawCacheRoot = Objects.requireNonNull(rawCacheRoot, "rawCacheRoot");
         indexSpawns();
     }
 
     private void indexSpawns() {
-        Path tomlRoot = projectRoot.resolve(".data").resolve("raw-cache")
-                .resolve("map").resolve("npcs");
+        Path tomlRoot = rawCacheRoot.resolve("map").resolve("npcs");
         if (Files.isDirectory(tomlRoot)) {
             try (Stream<Path> stream = Files.walk(tomlRoot)) {
                 stream.filter(Files::isRegularFile)
