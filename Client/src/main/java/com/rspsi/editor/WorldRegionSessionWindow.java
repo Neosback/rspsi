@@ -115,13 +115,13 @@ public final class WorldRegionSessionWindow {
     public Set<Integer> dirtyRegionIds() {
         Set<Integer> dirty = new TreeSet<>();
         for (var entry : sessions.entrySet()) {
-            if (entry.getValue().isDirty()) dirty.add(entry.getKey());
+            if (entry.getValue().isSessionSaveDirty()) dirty.add(entry.getKey());
         }
         return Set.copyOf(dirty);
     }
 
     public boolean isDirty() {
-        return sessions.values().stream().anyMatch(EditorSession::isDirty);
+        return sessions.values().stream().anyMatch(EditorSession::isSessionSaveDirty);
     }
 
     public boolean canEdit(WorldTile worldTile) {
