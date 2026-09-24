@@ -4,8 +4,6 @@ import com.rspsi.cache.workspace.CacheSessionState;
 import com.rspsi.cache.workspace.CacheSessionStatus;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.integration.ServerIntegrationService;
-import com.rspsi.editor.integration.semantic.SemanticContentNodeKind;
-import com.rspsi.editor.integration.semantic.SemanticFactKind;
 import com.rspsi.project.ProjectIntegrationCapability;
 import com.rspsi.project.StudioProjectDescriptor;
 import com.rspsi.project.StudioProjectKind;
@@ -80,14 +78,14 @@ public final class DashboardView {
         ImGui.dummy(1.0f, 12.0f);
         ImGui.indent(24.0f);
 
-        renderProjectHeader(project, status, integrations, closeProject);
+        renderProjectHeader(project, status, closeProject);
         ImGui.dummy(1.0f, 10.0f);
 
         renderContinue(project, status, openMapEditor);
         ImGui.dummy(1.0f, 10.0f);
 
         if (project.kind() == StudioProjectKind.OPENRUNE_SERVER) {
-            renderOpenRuneContentHome(project, status, integrations, openIntegrationCenter);
+            renderOpenRuneProjectStatus(project, status, integrations, openIntegrationCenter);
             ImGui.dummy(1.0f, 10.0f);
         } else {
             renderStandaloneSummary(status);
@@ -106,7 +104,6 @@ public final class DashboardView {
     private static void renderProjectHeader(
             StudioProjectDescriptor project,
             CacheSessionStatus status,
-            ServerIntegrationService integrations,
             Runnable closeProject) {
         StudioWidgets.beginCard("project-header", -1.0f, 112.0f);
 
@@ -145,16 +142,6 @@ public final class DashboardView {
                     + "  ·  " + fmt(cache.mapCount()) + " map groups");
         } else {
             ImGui.textDisabled(status.message());
-        }
-
-        if (openRune && integrations != null) {
-            integrations.activeProjectInspection().ifPresent(inspection -> {
-                String branch = inspection.git().available() && !inspection.git().branch().isBlank()
-                        ? inspection.git().branch() : "Git unavailable";
-                String suffix = inspection.git().dirty() ? " · modified" : "";
-                ImGui.sameLine(0.0f, 14.0f);
-                ImGui.textDisabled(branch + suffix);
-            });
         }
 
         if (closeProject != null) {
@@ -198,86 +185,69 @@ public final class DashboardView {
         StudioWidgets.endCard();
     }
 
-    private static void renderOpenRuneContentHome(
+    private static void renderOpenRuneProjectStatus(
             StudioProjectDescriptor project,
             CacheSessionStatus status,
             ServerIntegrationService integrations,
             Runnable openIntegrationCenter) {
-        ImGui.separatorText("OpenRune Content Home");
+        ImGui.separatorText("OpenRune Project");
 
         ServerProjectInspection inspection = integrations == null
                 ? null : integrations.activeProjectInspection().orElse(null);
-        var source = integrations == null
-                ? null : integrations.activeSemanticSourceIndex().orElse(null);
-        var graph = integrations == null
-                ? null : integrations.activeSemanticContentGraph().orElse(null);
+        LoadedOsrsCacheSession cache = status.currentSession().orElse(null);
 
-        int modules = inspection == null ? 0
-                : inspection.gradleModel().map(model -> model.projects().size()).orElse(0);
-        int buildTasks = inspection == null ? 0 : inspection.buildTasks().size();
-        int scripts = source == null ? 0
-                : source.facts(SemanticFactKind.PLUGIN_SCRIPT).size();
-        int handlers = source == null ? 0
-                : source.facts(SemanticFactKind.SCRIPT_HANDLER).size();
-        int quests = graph == null ? 0
-                : graph.nodes(SemanticContentNodeKind.QUEST).size();
-        int objects = graph == null ? 0
-                : graph.nodes(SemanticContentNodeKind.OBJECT_DEFINITION).size();
-        int graphNodes = graph == null ? 0 : graph.nodes().size();
-        int graphEdges = graph == null ? 0 : graph.edges().size();
-        int symbols = integrations == null ? 0 : integrations.symbolService().totalSymbolCount();
-        int references = integrations == null ? 0
-                : integrations.referenceService().totalReferenceCount();
-        int spawns = integrations == null ? 0
-                : integrations.npcSpawnService().totalSpawnCount();
-
-        if (ImGui.beginTable("##openrune-content-metrics", 4,
-                ImGuiTableFlags.SizingStretchSame)) {
-            metricCell("MODULES", fmt(modules), "Gradle projects");
-            metricCell("SCRIPTS", fmt(scripts), fmt(handlers) + " handlers");
-            metricCell("QUESTS", fmt(quests), "semantic graph");
-            metricCell("OBJECT CONTENT", fmt(objects), "authored overlays");
-            metricCell("GAMEVALS / SYMBOLS", fmt(symbols), "RSCM + authored mappings");
-            metricCell("REFERENCES", fmt(references), "declarative source links");
-            metricCell("NPC SPAWNS", fmt(spawns), "server spawn data");
-            metricCell("CONTENT GRAPH", fmt(graphNodes), fmt(graphEdges) + " relationships");
-            ImGui.endTable();
-        }
-
-        ImGui.dummy(1.0f, 8.0f);
+        StudioWidgets.beginCard("openrune-project-status", -1.0f, 190.0f);
         if (ImGui.beginTable("##openrune-project-health", 2,
                 ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp)) {
-            statusRow("LIVE cache", pathLabel(inspection, ServerPathKey.LIVE_CACHE,
-                    status.state() == CacheSessionState.READY ? "Ready" : "Unavailable"));
-            statusRow("SERVER cache", pathLabel(inspection, ServerPathKey.SERVER_CACHE, "Not detected"));
-            statusRow("Source semantics", source == null
-                    ? "Unavailable" : fmt(source.files().size()) + " Kotlin files indexed");
-            statusRow("Content graph", graph == null
-                    ? "Unavailable" : fmt(graphNodes) + " nodes / " + fmt(graphEdges) + " edges");
-            statusRow("Build tooling", buildTasks == 0
-                    ? "No supported task discovered" : buildTasks + " supported project task(s)");
-            statusRow("Integration policy", project.capabilities().contains(
-                    ProjectIntegrationCapability.CACHE_BUILD)
-                    ? "Managed build enabled" : project.capabilities().contains(
-                    ProjectIntegrationCapability.PROJECT_SOURCE_WRITE)
-                    ? "Author" : "Inspect");
+            statusRow("LIVE cache", cache != null
+                    ? "Ready · revision " + cache.identity().revision()
+                    : pathLabel(inspection, ServerPathKey.LIVE_CACHE, "Unavailable"));
+            statusRow("SERVER cache",
+                    pathState(inspection, ServerPathKey.SERVER_CACHE, "Not detected"));
+            statusRow("Access", accessLabel(project));
+            statusRow("Build access",
+                    project.capabilities().contains(ProjectIntegrationCapability.CACHE_BUILD)
+                            ? "Allowed when explicitly requested"
+                            : "Not granted");
             ImGui.endTable();
         }
 
-        if (inspection != null && !inspection.diagnostics().isEmpty()) {
-            ImGui.dummy(1.0f, 6.0f);
-            ImGui.textDisabled(inspection.diagnostics().size()
-                    + " integration diagnostic(s) available.");
-        }
-
         ImGui.dummy(1.0f, 8.0f);
+        ImGui.textDisabled(
+                "Studio opens the LIVE cache first. Source/content indexing is deferred until "
+                        + "a future content workspace explicitly needs it.");
+        ImGui.dummy(1.0f, 8.0f);
+
         if (openIntegrationCenter != null
-                && StudioWidgets.buttonSecondary("OpenRune Integration & Build", 210.0f, 30.0f)) {
+                && StudioWidgets.buttonSecondary("Project integration", 170.0f, 30.0f)) {
             openIntegrationCenter.run();
         }
-        ImGui.sameLine();
-        ImGui.textDisabled(
-                "Project setup stays in Project Settings/Integration—not on the Content Home.");
+        StudioWidgets.endCard();
+    }
+
+    private static String accessLabel(StudioProjectDescriptor project) {
+        boolean write = project.capabilities().contains(
+                ProjectIntegrationCapability.PROJECT_SOURCE_WRITE);
+        boolean build = project.capabilities().contains(
+                ProjectIntegrationCapability.CACHE_BUILD);
+        boolean launch = project.capabilities().contains(
+                ProjectIntegrationCapability.SERVER_LAUNCH);
+        if (launch) return "Read + write + build + server launch";
+        if (build) return "Read + write + build";
+        if (write) return "Read + write";
+        return "Read only";
+    }
+
+    private static String pathState(
+            ServerProjectInspection inspection,
+            ServerPathKey key,
+            String fallback) {
+        if (inspection == null) return fallback;
+        return inspection.path(key)
+                .map(path -> java.nio.file.Files.isDirectory(path)
+                        ? "Ready · " + path
+                        : "Missing · " + path)
+                .orElse(fallback);
     }
 
     private static void renderStandaloneSummary(CacheSessionStatus status) {
