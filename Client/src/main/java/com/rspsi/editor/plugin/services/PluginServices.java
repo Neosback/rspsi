@@ -23,6 +23,7 @@ import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.overlay.OverlayRegistry;
 import com.rspsi.editor.corpus.RegionFeatureRegistry;
 import com.rspsi.editor.corpus.OsrsRegionFeatureExtractor;
+import com.rspsi.editor.plugin.EditorExecutionService;
 import com.rspsi.editor.plugin.EditorPluginRegistry;
 import com.rspsi.editor.plugin.EditorToolRegistration;
 import com.rspsi.editor.plugin.event.EditorEventBus;
@@ -59,6 +60,7 @@ public final class PluginServices {
     private final AssetRepository assets;
     private final DecodedDataCatalog decodedData;
     private final EditorPluginRegistry registry;
+    private final EditorExecutionService execution;
     private final EditorEventBus events;
     private final SelectionChangeListener selectionListener;
     private final BrushEngine brushEngine = new BrushEngine();
@@ -81,7 +83,8 @@ public final class PluginServices {
         this.assets = Objects.requireNonNull(assets, "assets");
         this.decodedData = DecodedDataCatalog.fromAssets(this.assets);
         this.registry = Objects.requireNonNull(registry, "registry");
-        this.events = new EditorEventBus();
+        this.execution = new EditorExecutionService("rspsi-plugin");
+        this.events = new EditorEventBus(execution);
         this.corpusFeatures.register(new OsrsRegionFeatureExtractor());
         this.selectionListener = ignored ->
                 events.publish(new SelectionChangedEvent(
@@ -107,6 +110,7 @@ public final class PluginServices {
     private void close() {
         session.selection().removeChangeListener(selectionListener);
         events.clear();
+        execution.close();
         overlays.clear();
         extensions.clear();
         corpusFeatures.clear();
@@ -120,6 +124,7 @@ public final class PluginServices {
     public UiService ui() { return ui; }
     public CommandService commands() { return commands; }
     public EditorEventBus events() { return events; }
+    public EditorExecutionService execution() { return execution; }
     public OverlayRegistry overlays() { return overlays; }
     public RegionFeatureRegistry corpusFeatures() { return corpusFeatures; }
     public DecodedDataCatalog decodedData() { return decodedData; }
