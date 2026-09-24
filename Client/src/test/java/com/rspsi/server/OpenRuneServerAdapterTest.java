@@ -186,18 +186,22 @@ class OpenRuneServerAdapterTest {
                 + "\"pluginClasses\":[]"
                 + "}"
                 + "]}";
+        Path wrapperSentinel = root.resolve("wrapper-invoked");
         Files.writeString(root.resolve("gradlew"),
                 "#!/bin/sh\n"
+                        + "touch '" + wrapperSentinel.toAbsolutePath() + "'\n"
                         + "printf '%s\\n' 'RSPSI_GRADLE_MODEL="
                         + payload.replace("'", "'\\''") + "'\n");
 
         ServerProjectInspection passive = new OpenRuneServerAdapter().inspect(root);
         assertTrue(passive.gradleModel().isEmpty());
+        assertFalse(Files.exists(wrapperSentinel), "passive inspection must not execute Gradle");
         assertFalse(passive.content().stream()
                 .anyMatch(entry -> entry.path().equals(sources.resolve("Mining.kt").toAbsolutePath().normalize())));
 
         ServerProjectInspection connected = new OpenRuneServerAdapter().inspectConnected(root);
 
+        assertTrue(Files.exists(wrapperSentinel), "connected inspection should evaluate Gradle");
         assertTrue(connected.gradleModel().isPresent(), connected.diagnostics().toString());
         assertTrue(connected.supports(ServerCapability.GRADLE_PROJECT_MODEL));
         assertTrue(connected.supports(ServerCapability.CONTENT_INVENTORY));
