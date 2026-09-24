@@ -78,6 +78,14 @@ public final class WorkspaceManager {
     }
 
     /** Consumes the pending focus request; used to force-select a tab in the native tab bar once. */
+    /** Returns to the in-project home with no editor workspace tabs left open. */
+    public void reset() {
+        open.clear();
+        open.add(Workspace.DASHBOARD);
+        active = Workspace.DASHBOARD;
+        pendingFocus = Workspace.DASHBOARD;
+    }
+
     public Workspace consumePendingFocus() {
         Workspace value = pendingFocus;
         pendingFocus = null;
