@@ -153,6 +153,16 @@ public record OpenGlCapabilityProfile(
         }
     }
 
+    /** OpenGL 3.3 integer targets are sufficient once two draw/color attachments are available. */
+    public boolean supportsPickerIdPass() {
+        return openGl33 && maxColorAttachments >= 2 && maxDrawBuffers >= 2;
+    }
+
+    /** Persistent mapped buffers are only selected when buffer-storage semantics exist. */
+    public boolean supportsPersistentMapping() {
+        return bufferStorage;
+    }
+
     public String diagnosticSummary() {
         return vendor + " / " + renderer + " / " + version
                 + "; GL=" + majorVersion + "." + minorVersion
