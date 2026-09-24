@@ -120,7 +120,7 @@ public final class GpuZonedUploadPlanBuilder {
 
         private GpuZoneUpload freeze() {
             return new GpuZoneUpload(zone, vertices, indices, commands,
-                    GpuZoneUpload.fingerprint(vertices, indices));
+                    GpuZoneUpload.fingerprints(vertices, indices));
         }
     }
 }

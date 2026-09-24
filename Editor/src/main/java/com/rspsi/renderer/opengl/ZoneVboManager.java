@@ -5,6 +5,7 @@ import com.rspsi.editor.render.GpuColorEncoding;
 import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
+import com.rspsi.editor.render.GpuZoneStreamFingerprints;
 import com.rspsi.editor.render.GpuZoneUpload;
 import com.rspsi.editor.render.GpuZonedDrawCommand;
 import com.rspsi.editor.render.GpuZonedUploadPlan;
@@ -20,8 +21,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.lwjgl.opengl.GL11C.*;
-import static org.lwjgl.opengl.GL15C.*;
+import static org.lwjgl.opengl.GL11C.GL_FLOAT;
+import static org.lwjgl.opengl.GL15C.GL_ARRAY_BUFFER;
+import static org.lwjgl.opengl.GL15C.GL_ELEMENT_ARRAY_BUFFER;
+import static org.lwjgl.opengl.GL15C.GL_STATIC_DRAW;
+import static org.lwjgl.opengl.GL15C.glBindBuffer;
+import static org.lwjgl.opengl.GL15C.glBufferData;
+import static org.lwjgl.opengl.GL15C.glDeleteBuffers;
+import static org.lwjgl.opengl.GL15C.glGenBuffers;
 import static org.lwjgl.opengl.GL20C.glEnableVertexAttribArray;
 import static org.lwjgl.opengl.GL20C.glVertexAttribPointer;
 import static org.lwjgl.opengl.GL30C.glBindVertexArray;
@@ -31,31 +38,64 @@ import static org.lwjgl.opengl.GL30C.glGenVertexArrays;
 /**
  * Manages 8x8 zone-partitioned GPU vertex and index buffers.
  *
- * <p>Rather than re-uploading the entire world geometry on every terrain or object edit,
- * geometry is partitioned into 8x8 zone partitions matching {@code SceneZone}. Edits
- * only re-upload the modified 8x8 zones into their dedicated GPU VBOs while static zones
- * remain resident in GPU memory.</p>
+ * <p>Stable position/UV geometry and vanilla shading data live in independent
+ * VBOs. A shading-only change can therefore update the small shading stream
+ * without re-uploading positions, UVs or topology. Renderer-neutral auxiliary
+ * data such as normals remains outside these vanilla streams until a shader
+ * actually consumes it.</p>
  */
 public final class ZoneVboManager implements AutoCloseable {
     public static final int ZONE_SIZE = 8;
 
-    public record ZoneAllocation(long zoneKey, int vao, int vbo, int ibo, long fingerprint) { }
+    public record ZoneAllocation(
+            long zoneKey,
+            int vao,
+            int geometryVbo,
+            int shadingVbo,
+            int ibo,
+            long geometryFingerprint,
+            long shadingFingerprint,
+            long indexFingerprint
+    ) {
+        boolean matches(GpuZoneStreamFingerprints fingerprints) {
+            return !streamUploadDecision(this, fingerprints).any();
+        }
+    }
+
+    record StreamUploadDecision(boolean geometry, boolean shading, boolean indices) {
+        boolean any() {
+            return geometry || shading || indices;
+        }
+    }
+
+    static StreamUploadDecision streamUploadDecision(
+            ZoneAllocation existing, GpuZoneStreamFingerprints fingerprints) {
+        if (fingerprints == null) {
+            throw new IllegalArgumentException("Zone stream fingerprints cannot be null");
+        }
+        return new StreamUploadDecision(
+                existing == null || existing.geometryFingerprint() != fingerprints.geometry(),
+                existing == null || existing.shadingFingerprint() != fingerprints.shading(),
+                existing == null || existing.indexFingerprint() != fingerprints.indices());
+    }
 
     private final Map<Long, ZoneAllocation> allocations = new HashMap<>();
     private final GpuUploadScratch uploadScratch = new GpuUploadScratch();
     private int[] commandLocalFirstIndices = new int[0];
     private long[] commandZoneKeys = new long[0];
-    private int dirtyZonesUploadedCount = 0;
-    private int reusedAllocationsCount = 0;
-    private int totalZonesCount = 0;
+    private int dirtyZonesUploadedCount;
+    private int reusedAllocationsCount;
+    private int totalZonesCount;
+    private int geometryStreamUploads;
+    private int shadingStreamUploads;
+    private int indexStreamUploads;
 
     public static long zoneKey(WorldTileAddress tile) {
         return WorldZoneCoordinate.from(tile).key();
     }
 
     public void upload(GpuUploadPlan plan) {
-        dirtyZonesUploadedCount = 0;
-        reusedAllocationsCount = 0;
+        resetUploadMetrics();
         if (plan == null || plan.commands().isEmpty() || plan.vertices().isEmpty()) {
             close();
             totalZonesCount = 0;
@@ -68,19 +108,17 @@ public final class ZoneVboManager implements AutoCloseable {
             commandZoneKeys = new long[commands.size()];
         }
 
-        // Group commands by 8x8 zone
         Map<Long, List<Integer>> zoneToCommandIndices = new HashMap<>();
         for (int i = 0; i < commands.size(); i++) {
             GpuDrawCommand command = commands.get(i);
             long key = zoneKey(command.tile());
             commandZoneKeys[i] = key;
-            zoneToCommandIndices.computeIfAbsent(key, k -> new ArrayList<>()).add(i);
+            zoneToCommandIndices.computeIfAbsent(key, ignored -> new ArrayList<>()).add(i);
         }
 
         totalZonesCount = zoneToCommandIndices.size();
         Set<Long> activeZones = new HashSet<>(zoneToCommandIndices.keySet());
 
-        // Fast global-to-local vertex index map
         int[] globalToLocal = new int[plan.vertices().size()];
         Arrays.fill(globalToLocal, -1);
         List<Integer> touchedGlobal = new ArrayList<>();
@@ -98,65 +136,29 @@ public final class ZoneVboManager implements AutoCloseable {
                 GpuDrawCommand cmd = commands.get(cmdIdx);
                 commandLocalFirstIndices[cmdIdx] = localIndices.size();
                 for (int i = 0; i < cmd.indexCount(); i++) {
-                    int gIdx = plan.indices().get(cmd.firstIndex() + i);
-                    int lIdx = globalToLocal[gIdx];
-                    if (lIdx == -1) {
-                        lIdx = localVertices.size();
-                        localVertices.add(plan.vertices().get(gIdx));
-                        globalToLocal[gIdx] = lIdx;
-                        touchedGlobal.add(gIdx);
+                    int globalIndex = plan.indices().get(cmd.firstIndex() + i);
+                    int localIndex = globalToLocal[globalIndex];
+                    if (localIndex == -1) {
+                        localIndex = localVertices.size();
+                        localVertices.add(plan.vertices().get(globalIndex));
+                        globalToLocal[globalIndex] = localIndex;
+                        touchedGlobal.add(globalIndex);
                     }
-                    localIndices.add(lIdx);
+                    localIndices.add(localIndex);
                 }
             }
 
-            // Reset touched entries for next zone
-            for (int gIdx : touchedGlobal) {
-                globalToLocal[gIdx] = -1;
+            for (int globalIndex : touchedGlobal) {
+                globalToLocal[globalIndex] = -1;
             }
             touchedGlobal.clear();
 
-            // Compute zone fingerprint
-            long fingerprint = GpuZoneUpload.fingerprint(localVertices, localIndices);
-            ZoneAllocation existing = allocations.get(key);
-
-            if (existing != null && existing.fingerprint() == fingerprint) {
-                // Buffer is already up to date on GPU
-                reusedAllocationsCount++;
-                continue;
-            }
-
-            // Need to upload or update this zone's GPU buffers
-            int vao, vbo, ibo;
-            if (existing == null) {
-                vao = glGenVertexArrays();
-                vbo = glGenBuffers();
-                ibo = glGenBuffers();
-                setupVao(vao, vbo, ibo);
-            } else {
-                vao = existing.vao();
-                vbo = existing.vbo();
-                ibo = existing.ibo();
-            }
-
-            uploadZoneBuffers(vao, vbo, ibo, localVertices, localIndices);
-            allocations.put(key, new ZoneAllocation(key, vao, vbo, ibo, fingerprint));
-            dirtyZonesUploadedCount++;
+            GpuZoneStreamFingerprints fingerprints =
+                    GpuZoneUpload.fingerprints(localVertices, localIndices);
+            uploadZone(key, localVertices, localIndices, fingerprints);
         }
 
-        // Clean up allocations for zones that no longer exist in the plan
-        allocations.keySet().removeIf(key -> {
-            if (!activeZones.contains(key)) {
-                ZoneAllocation alloc = allocations.get(key);
-                if (alloc != null) {
-                    glDeleteVertexArrays(alloc.vao());
-                    glDeleteBuffers(alloc.vbo());
-                    glDeleteBuffers(alloc.ibo());
-                }
-                return true;
-            }
-            return false;
-        });
+        removeInactive(activeZones);
     }
 
     /**
@@ -164,8 +166,7 @@ public final class ZoneVboManager implements AutoCloseable {
      * global flat vertex/index arrays on the render thread.
      */
     public void upload(GpuZonedUploadPlan plan) {
-        dirtyZonesUploadedCount = 0;
-        reusedAllocationsCount = 0;
+        resetUploadMetrics();
         if (plan == null || plan.zones().isEmpty() || plan.commandRefs().isEmpty()) {
             close();
             totalZonesCount = 0;
@@ -188,98 +189,158 @@ public final class ZoneVboManager implements AutoCloseable {
         for (GpuZoneUpload zone : plan.zones().values()) {
             long key = zone.zone().key();
             activeZones.add(key);
-            ZoneAllocation existing = allocations.get(key);
-            if (existing != null && existing.fingerprint() == zone.fingerprint()) {
-                reusedAllocationsCount++;
-                continue;
-            }
-
-            int vao;
-            int vbo;
-            int ibo;
-            if (existing == null) {
-                vao = glGenVertexArrays();
-                vbo = glGenBuffers();
-                ibo = glGenBuffers();
-                setupVao(vao, vbo, ibo);
-            } else {
-                vao = existing.vao();
-                vbo = existing.vbo();
-                ibo = existing.ibo();
-            }
-            uploadZoneBuffers(vao, vbo, ibo, zone.vertices(), zone.indices());
-            allocations.put(key, new ZoneAllocation(key, vao, vbo, ibo, zone.fingerprint()));
-            dirtyZonesUploadedCount++;
+            uploadZone(key, zone.vertices(), zone.indices(), zone.fingerprints());
         }
 
-        allocations.keySet().removeIf(key -> {
-            if (activeZones.contains(key)) return false;
-            ZoneAllocation allocation = allocations.get(key);
-            if (allocation != null) {
-                glDeleteVertexArrays(allocation.vao());
-                glDeleteBuffers(allocation.vbo());
-                glDeleteBuffers(allocation.ibo());
-            }
-            return true;
-        });
+        removeInactive(activeZones);
     }
 
-    private static void setupVao(int vao, int vbo, int ibo) {
-        glBindVertexArray(vao);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    private void uploadZone(long key,
+                            List<GpuSceneVertex> vertices,
+                            List<Integer> indices,
+                            GpuZoneStreamFingerprints fingerprints) {
+        ZoneAllocation existing = allocations.get(key);
+        StreamUploadDecision decision = streamUploadDecision(existing, fingerprints);
+        if (!decision.any()) {
+            reusedAllocationsCount++;
+            return;
+        }
 
-        int stride = NativeSceneVertexLayout.FLOATS_PER_VERTEX * Float.BYTES;
-        glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0L);
+        int vao;
+        int geometryVbo;
+        int shadingVbo;
+        int ibo;
+        if (existing == null) {
+            vao = glGenVertexArrays();
+            geometryVbo = glGenBuffers();
+            shadingVbo = glGenBuffers();
+            ibo = glGenBuffers();
+            setupVao(vao, geometryVbo, shadingVbo, ibo);
+        } else {
+            vao = existing.vao();
+            geometryVbo = existing.geometryVbo();
+            shadingVbo = existing.shadingVbo();
+            ibo = existing.ibo();
+        }
+
+        if (decision.geometry()) {
+            uploadGeometry(geometryVbo, vertices);
+            geometryStreamUploads++;
+        }
+        if (decision.shading()) {
+            uploadShading(shadingVbo, vertices);
+            shadingStreamUploads++;
+        }
+        if (decision.indices()) {
+            uploadIndices(vao, ibo, indices);
+            indexStreamUploads++;
+        }
+
+        allocations.put(key, new ZoneAllocation(
+                key, vao, geometryVbo, shadingVbo, ibo,
+                fingerprints.geometry(), fingerprints.shading(), fingerprints.indices()));
+        dirtyZonesUploadedCount++;
+    }
+
+    private static void setupVao(int vao, int geometryVbo, int shadingVbo, int ibo) {
+        glBindVertexArray(vao);
+
+        glBindBuffer(GL_ARRAY_BUFFER, geometryVbo);
+        int geometryStride = NativeSceneVertexLayout.GEOMETRY_FLOATS_PER_VERTEX * Float.BYTES;
+        glVertexAttribPointer(0, 3, GL_FLOAT, false, geometryStride, 0L);
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, false, stride, 3L * Float.BYTES);
+        glVertexAttribPointer(1, 2, GL_FLOAT, false, geometryStride, 3L * Float.BYTES);
         glEnableVertexAttribArray(1);
-        glVertexAttribPointer(2, 1, GL_FLOAT, false, stride, 5L * Float.BYTES);
+
+        glBindBuffer(GL_ARRAY_BUFFER, shadingVbo);
+        int shadingStride = NativeSceneVertexLayout.SHADING_FLOATS_PER_VERTEX * Float.BYTES;
+        glVertexAttribPointer(2, 1, GL_FLOAT, false, shadingStride, 0L);
         glEnableVertexAttribArray(2);
-        glVertexAttribPointer(3, 1, GL_FLOAT, false, stride, 6L * Float.BYTES);
+        glVertexAttribPointer(3, 1, GL_FLOAT, false, shadingStride, 1L * Float.BYTES);
         glEnableVertexAttribArray(3);
-        glVertexAttribPointer(4, 1, GL_FLOAT, false, stride, 7L * Float.BYTES);
+        glVertexAttribPointer(4, 1, GL_FLOAT, false, shadingStride, 2L * Float.BYTES);
         glEnableVertexAttribArray(4);
-        glVertexAttribPointer(5, 3, GL_FLOAT, false, stride, 8L * Float.BYTES);
+        glVertexAttribPointer(5, 3, GL_FLOAT, false, shadingStride, 3L * Float.BYTES);
         glEnableVertexAttribArray(5);
-        glVertexAttribPointer(6, 1, GL_FLOAT, false, stride, 11L * Float.BYTES);
+        glVertexAttribPointer(6, 1, GL_FLOAT, false, shadingStride, 6L * Float.BYTES);
         glEnableVertexAttribArray(6);
 
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
         glBindVertexArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
 
-    private void uploadZoneBuffers(int vao, int vbo, int ibo,
-                                   List<GpuSceneVertex> vertices,
-                                   List<Integer> indices) {
-        FloatBuffer vertexData = uploadScratch.vertices(vertices.size() * NativeSceneVertexLayout.FLOATS_PER_VERTEX);
+    private void uploadGeometry(int geometryVbo, List<GpuSceneVertex> vertices) {
+        FloatBuffer data = uploadScratch.vertices(
+                vertices.size() * NativeSceneVertexLayout.GEOMETRY_FLOATS_PER_VERTEX);
+        for (GpuSceneVertex vertex : vertices) {
+            data.put(vertex.x()).put(vertex.y()).put(vertex.z())
+                    .put(vertex.u()).put(vertex.v());
+        }
+        data.flip();
+
+        glBindBuffer(GL_ARRAY_BUFFER, geometryVbo);
+        glBufferData(GL_ARRAY_BUFFER, data, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
+    private void uploadShading(int shadingVbo, List<GpuSceneVertex> vertices) {
+        FloatBuffer data = uploadScratch.vertices(
+                vertices.size() * NativeSceneVertexLayout.SHADING_FLOATS_PER_VERTEX);
         for (GpuSceneVertex vertex : vertices) {
             int rgb = vertex.colorEncoding() == GpuColorEncoding.PACKED_JAGEX_HSL
                     ? OsrsTerrainColorMath.packedHslToRgb(vertex.encodedColor(), 0.6)
                     : 0;
-            vertexData.put(vertex.x()).put(vertex.y()).put(vertex.z())
-                    .put(vertex.u()).put(vertex.v()).put(vertex.encodedColor())
-                    .put(vertex.alpha()).put(vertex.renderType())
+            data.put(vertex.encodedColor())
+                    .put(vertex.alpha())
+                    .put(vertex.renderType())
                     .put(((rgb >>> 16) & 0xFF) / 255.0f)
                     .put(((rgb >>> 8) & 0xFF) / 255.0f)
                     .put((rgb & 0xFF) / 255.0f)
                     .put((float) vertex.priority());
         }
-        vertexData.flip();
+        data.flip();
 
-        IntBuffer indexData = uploadScratch.indices(indices.size());
-        indices.forEach(indexData::put);
-        indexData.flip();
+        glBindBuffer(GL_ARRAY_BUFFER, shadingVbo);
+        glBufferData(GL_ARRAY_BUFFER, data, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
+    private void uploadIndices(int vao, int ibo, List<Integer> indices) {
+        IntBuffer data = uploadScratch.indices(indices.size());
+        indices.forEach(data::put);
+        data.flip();
 
         glBindVertexArray(vao);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, vertexData, GL_STATIC_DRAW);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexData, GL_STATIC_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, data, GL_STATIC_DRAW);
         glBindVertexArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    }
+
+    private void removeInactive(Set<Long> activeZones) {
+        allocations.keySet().removeIf(key -> {
+            if (activeZones.contains(key)) return false;
+            ZoneAllocation allocation = allocations.get(key);
+            if (allocation != null) delete(allocation);
+            return true;
+        });
+    }
+
+    private static void delete(ZoneAllocation allocation) {
+        glDeleteVertexArrays(allocation.vao());
+        glDeleteBuffers(allocation.geometryVbo());
+        glDeleteBuffers(allocation.shadingVbo());
+        glDeleteBuffers(allocation.ibo());
+    }
+
+    private void resetUploadMetrics() {
+        dirtyZonesUploadedCount = 0;
+        reusedAllocationsCount = 0;
+        geometryStreamUploads = 0;
+        shadingStreamUploads = 0;
+        indexStreamUploads = 0;
     }
 
     public int localFirstIndex(int commandIndex) {
@@ -306,6 +367,18 @@ public final class ZoneVboManager implements AutoCloseable {
         return reusedAllocationsCount;
     }
 
+    int geometryStreamUploads() {
+        return geometryStreamUploads;
+    }
+
+    int shadingStreamUploads() {
+        return shadingStreamUploads;
+    }
+
+    int indexStreamUploads() {
+        return indexStreamUploads;
+    }
+
     int stagingVertexCapacityFloats() {
         return uploadScratch.vertexCapacityFloats();
     }
@@ -324,16 +397,13 @@ public final class ZoneVboManager implements AutoCloseable {
 
     @Override
     public void close() {
-        for (ZoneAllocation alloc : allocations.values()) {
-            glDeleteVertexArrays(alloc.vao());
-            glDeleteBuffers(alloc.vbo());
-            glDeleteBuffers(alloc.ibo());
+        for (ZoneAllocation allocation : allocations.values()) {
+            delete(allocation);
         }
         allocations.clear();
         commandLocalFirstIndices = new int[0];
         commandZoneKeys = new long[0];
-        dirtyZonesUploadedCount = 0;
-        reusedAllocationsCount = 0;
+        resetUploadMetrics();
         totalZonesCount = 0;
         uploadScratch.close();
     }

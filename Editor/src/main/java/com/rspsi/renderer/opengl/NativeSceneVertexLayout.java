@@ -1,13 +1,20 @@
 package com.rspsi.renderer.opengl;
 
 /**
- * Native vanilla scene-vertex layout shared by the zone uploader and renderer
- * diagnostics. Renderer-neutral {@code GpuSceneVertex} remains richer than this
- * backend-specific packed stream.
+ * Native vanilla scene streams shared by the zone uploader and renderer
+ * diagnostics. Renderer-neutral {@code GpuSceneVertex} remains richer than
+ * these backend-specific packed streams.
  */
 final class NativeSceneVertexLayout {
-    static final int FLOATS_PER_VERTEX = 12;
-    static final int BYTES_PER_VERTEX = FLOATS_PER_VERTEX * Float.BYTES;
+    /** Position XYZ + UV. Stable geometry stream. */
+    static final int GEOMETRY_FLOATS_PER_VERTEX = 5;
+
+    /** Encoded color/light + alpha + render type + RGB + priority. */
+    static final int SHADING_FLOATS_PER_VERTEX = 7;
+
+    /** Current vanilla resident bytes across both vertex streams. */
+    static final int BYTES_PER_VERTEX =
+            (GEOMETRY_FLOATS_PER_VERTEX + SHADING_FLOATS_PER_VERTEX) * Float.BYTES;
 
     private NativeSceneVertexLayout() {
     }
