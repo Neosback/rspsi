@@ -1,6 +1,7 @@
 package com.rspsi.renderer.opengl;
 
 import com.rspsi.editor.render.CameraState;
+import com.rspsi.editor.render.GpuDebugView;
 import com.rspsi.editor.render.RenderPresentation;
 import com.rspsi.editor.render.SceneFog;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,21 @@ class FrameUniformBufferTest {
         assertEquals(0x66 / 255.0f, bytes.getFloat(84));
         assertEquals(0x99 / 255.0f, bytes.getFloat(88));
         assertEquals(12 * 128.0f, bytes.getFloat(92));
+    }
+
+    @Test
+    void packsGpuDebugViewIntoReservedFrameFlag() {
+        ByteBuffer bytes = BufferUtils.createByteBuffer(FrameUniformBuffer.BYTE_SIZE)
+                .order(ByteOrder.nativeOrder());
+
+        FrameUniformBuffer.write(bytes,
+                new CameraState(0.0f, 0.0f, 0.0f, 0.0f, 0.0f),
+                1.0f, 1.0f, -1.0f, 1.0f, 0.0f,
+                new RenderPresentation(
+                        1.0, 0.0, false, true, 0, 0x101827, GpuDebugView.NORMALS),
+                null, 0);
+
+        assertEquals(GpuDebugView.NORMALS.shaderCode(), bytes.getInt(60));
     }
 
     @Test
