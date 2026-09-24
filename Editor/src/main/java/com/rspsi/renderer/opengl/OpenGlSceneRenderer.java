@@ -104,7 +104,6 @@ import static org.lwjgl.opengl.GL15.glGenBuffers;
 import static org.lwjgl.opengl.GL20.glEnableVertexAttribArray;
 import static org.lwjgl.opengl.GL20.glGetUniformLocation;
 import static org.lwjgl.opengl.GL20.glUseProgram;
-import static org.lwjgl.opengl.GL20.glUniform1f;
 import static org.lwjgl.opengl.GL20.glUniform1i;
 import static org.lwjgl.opengl.GL20.glUniformMatrix4fv;
 import static org.lwjgl.opengl.GL20.glVertexAttribPointer;
@@ -167,45 +166,22 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     private int lastAlpha = -1;
-    private int lastTextured = -1;
-    private int lastTextureAvailable = -1;
-    private int lastTextureMissing = -1;
-    private int lastTerrain = -1;
     private int lastCull = -1;
     private int cullMode = CULL_FRONT_CCW;
     private int lastNoDepth = -1;
-    private int lastFaceBias = -1;
-    private int lastTextureLayer = -1;
 
     private void resetDrawState() {
         lastAlpha = -1;
-        lastTextured = -1;
-        lastTextureAvailable = -1;
-        lastTextureMissing = -1;
-        lastTerrain = -1;
         lastCull = -1;
         lastNoDepth = -1;
-        lastFaceBias = -1;
-        lastTextureLayer = -1;
     }
 
     private int program;
-    private int faceBiasLocation;
-    private int texturedLocation;
-    private int textureAvailableLocation;
-    private int textureMissingLocation;
-    private int terrainLocation;
     private int textureLocation;
-    private int textureLayerLocation;
     private int textureStateLocation;
 
     private int pickerProgram;
-    private int pickerFaceBiasLocation;
-    private int pickerTexturedLocation;
-    private int pickerTextureAvailableLocation;
-    private int pickerTerrainLocation;
     private int pickerTextureLocation;
-    private int pickerTextureLayerLocation;
     private int pickerTextureStateLocation;
 
     private final ZoneVboManager zoneManager = new ZoneVboManager();
@@ -288,13 +264,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         bindFrameUniformBlock(pickerProgram, "Picker");
         frameUniformBuffer.initialize();
 
-        faceBiasLocation = glGetUniformLocation(program, "uFaceBias");
-        texturedLocation = glGetUniformLocation(program, "uTextured");
-        textureAvailableLocation = glGetUniformLocation(program, "uTextureAvailable");
-        textureMissingLocation = glGetUniformLocation(program, "uTextureMissing");
-        terrainLocation = glGetUniformLocation(program, "uTerrain");
         textureLocation = glGetUniformLocation(program, "uTexture");
-        textureLayerLocation = glGetUniformLocation(program, "uTextureLayer");
         textureStateLocation = glGetUniformLocation(program, "uTextureState");
         paletteLocation = glGetUniformLocation(program, "uPalette");
         glUseProgram(program);
@@ -302,12 +272,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glUniform1i(paletteLocation, 1);
         glUniform1i(textureStateLocation, 2);
 
-        pickerFaceBiasLocation = glGetUniformLocation(pickerProgram, "uFaceBias");
-        pickerTexturedLocation = glGetUniformLocation(pickerProgram, "uTextured");
-        pickerTextureAvailableLocation = glGetUniformLocation(pickerProgram, "uTextureAvailable");
-        pickerTerrainLocation = glGetUniformLocation(pickerProgram, "uTerrain");
         pickerTextureLocation = glGetUniformLocation(pickerProgram, "uTexture");
-        pickerTextureLayerLocation = glGetUniformLocation(pickerProgram, "uTextureLayer");
         pickerTextureStateLocation = glGetUniformLocation(pickerProgram, "uTextureState");
         glUseProgram(pickerProgram);
         glUniform1i(pickerTextureLocation, 0);
@@ -490,11 +455,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             uploadedTextureFingerprint = textureFingerprint;
             textureUploaded = true;
         }
-        String textureStateFingerprint = textureStateFingerprintCached(plan.textures());
+        int textureStateCapacity = requiredTextureStateCapacity(plan);
+        String textureStateFingerprint =
+                textureStateFingerprintCached(plan.textures()) + ':' + textureStateCapacity;
         if (!textureStateFingerprint.equals(uploadedTextureStateFingerprint)) {
-            capabilityProfile.requireTextureStateEntries(requiredTextureCapacity(plan.textures()));
+            capabilityProfile.requireTextureStateEntries(textureStateCapacity);
             long textureStateStarted = System.nanoTime();
-            textureStateBuffer.upload(plan.textures(), TEXTURE_LAYER_CAPACITY);
+            textureStateBuffer.upload(plan.textures(), textureStateCapacity);
             performanceMetrics.addTextureUploadNanos(System.nanoTime() - textureStateStarted);
             frameMetrics.recordTextureState(textureStateBuffer.lastUploadBytes());
             uploadedTextureStateFingerprint = textureStateFingerprint;
@@ -844,41 +811,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glDepthMask(state.depthWrite());
         glDisable(GL_BLEND);
 
-        int layer = textureLayers.getOrDefault(command.textureId(), -1);
-        int textured = command.textureId() < 0 ? 0 : 1;
-        if (textured != lastTextured) {
-            glUniform1i(pickerTexturedLocation, textured);
-            lastTextured = textured;
-        }
-        int textureAvailable = layer < 0 ? 0 : 1;
-        if (textureAvailable != lastTextureAvailable) {
-            glUniform1i(pickerTextureAvailableLocation, textureAvailable);
-            lastTextureAvailable = textureAvailable;
-        }
-
-        int isTerrain = command.layer() == SceneLayer.Kind.TERRAIN ? 1 : 0;
-        if (isTerrain != lastTerrain) {
-            glUniform1i(pickerTerrainLocation, isTerrain);
-            lastTerrain = isTerrain;
-        }
-
         int cull = cullEnabledFor(command.layer(), cullMode) ? 1 : 0;
         if (cull != lastCull) {
             if (cull == 1) glEnable(GL_CULL_FACE);
             else glDisable(GL_CULL_FACE);
             lastCull = cull;
-        }
-
-        int faceBias = command.depthBias();
-        if (faceBias != lastFaceBias) {
-            glUniform1f(pickerFaceBiasLocation, faceBias);
-            lastFaceBias = faceBias;
-        }
-
-        int texLayer = Math.max(0, layer);
-        if (texLayer != lastTextureLayer) {
-            glUniform1i(pickerTextureLayerLocation, texLayer);
-            lastTextureLayer = texLayer;
         }
     }
 
@@ -1432,9 +1369,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             if (state.blend()) {
                 glEnable(GL_BLEND);
                 // Preserve destination alpha in the resolved scene texture.
-                // ImGui composites that texture later, so plain glBlendFunc
-                // would progressively erode alpha across overlapping water,
-                // canopy, and other transparent surfaces.
                 glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
             } else {
                 glDisable(GL_BLEND);
@@ -1444,42 +1378,15 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         if (depthStateChanged || alphaStateChanged) {
             glDepthMask(state.depthWrite());
         }
-        int layer = textureLayers.getOrDefault(command.textureId(), -1);
-        int textured = command.textureId() < 0 ? 0 : 1;
-        if (textured != lastTextured) {
-            glUniform1i(texturedLocation, textured);
-            lastTextured = textured;
-        }
-        int textureAvailable = layer < 0 ? 0 : 1;
-        if (textureAvailable != lastTextureAvailable) {
-            glUniform1i(textureAvailableLocation, textureAvailable);
-            lastTextureAvailable = textureAvailable;
-        }
-        int textureMissing = command.textureId() >= 0 && layer < 0 ? 1 : 0;
-        if (textureMissing != lastTextureMissing) {
-            glUniform1i(textureMissingLocation, textureMissing);
-            lastTextureMissing = textureMissing;
-        }
-        int isTerrain = command.layer() == SceneLayer.Kind.TERRAIN ? 1 : 0;
+
+        // Texture identity, availability, face bias and terrain material flags
+        // now travel with the resident vertex stream. Only real fixed-function
+        // state remains a native batch boundary.
         int cull = cullEnabledFor(command.layer(), cullMode) ? 1 : 0;
         if (cull != lastCull) {
             if (cull == 1) glEnable(GL_CULL_FACE);
             else glDisable(GL_CULL_FACE);
             lastCull = cull;
-        }
-        if (isTerrain != lastTerrain) {
-            glUniform1i(terrainLocation, isTerrain);
-            lastTerrain = isTerrain;
-        }
-        int faceBias = command.depthBias();
-        if (faceBias != lastFaceBias) {
-            glUniform1f(faceBiasLocation, faceBias);
-            lastFaceBias = faceBias;
-        }
-        int texLayer = Math.max(0, layer);
-        if (texLayer != lastTextureLayer) {
-            glUniform1i(textureLayerLocation, texLayer);
-            lastTextureLayer = texLayer;
         }
     }
 
@@ -1584,6 +1491,19 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 .max()
                 .orElse(-1);
         return Math.max(TEXTURE_LAYER_CAPACITY, largestTextureId + 1);
+    }
+
+    private static int requiredTextureStateCapacity(GpuUploadPlan plan) {
+        int largestResourceId = plan.textures().keySet().stream()
+                .mapToInt(Integer::intValue)
+                .max()
+                .orElse(-1);
+        int largestReferencedId = plan.commands().stream()
+                .mapToInt(GpuDrawCommand::textureId)
+                .max()
+                .orElse(-1);
+        return Math.max(TEXTURE_LAYER_CAPACITY,
+                Math.max(largestResourceId, largestReferencedId) + 1);
     }
 
     private long uploadTextureArray(Map<Integer, RenderTextureResource> resources) {
