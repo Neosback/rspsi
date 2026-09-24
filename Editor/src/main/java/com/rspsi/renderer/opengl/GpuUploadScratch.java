@@ -28,8 +28,9 @@ final class GpuUploadScratch implements AutoCloseable {
         if (vertices == null || vertices.capacity() < requiredFloats) {
             int next = nextCapacity(vertices == null ? 0 : vertices.capacity(),
                     requiredFloats, INITIAL_VERTEX_FLOATS);
+            FloatBuffer replacement = MemoryUtil.memAllocFloat(next);
             if (vertices != null) MemoryUtil.memFree(vertices);
-            vertices = MemoryUtil.memAllocFloat(next);
+            vertices = replacement;
             vertexGrowths++;
         }
         vertices.clear();
@@ -43,8 +44,9 @@ final class GpuUploadScratch implements AutoCloseable {
         if (indices == null || indices.capacity() < requiredIndices) {
             int next = nextCapacity(indices == null ? 0 : indices.capacity(),
                     requiredIndices, INITIAL_INDICES);
+            IntBuffer replacement = MemoryUtil.memAllocInt(next);
             if (indices != null) MemoryUtil.memFree(indices);
-            indices = MemoryUtil.memAllocInt(next);
+            indices = replacement;
             indexGrowths++;
         }
         indices.clear();
