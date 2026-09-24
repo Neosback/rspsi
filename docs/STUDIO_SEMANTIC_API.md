@@ -74,13 +74,47 @@ Use OpenRune as the primary backend/content-toolchain reference for:
 
 OpenRune-specific classes remain behind Studio-owned neutral adapters.
 
-### 2.3 Real content truth
+### 2.3 Server/source semantics
+
+Connected OpenRune projects also have a source-semantic domain that is distinct from cache/client scene semantics.
+
+The first source index uses the connected project's evaluated Gradle source roots and Kotlin PSI to emit Studio-owned neutral facts with exact provenance. PSI/compiler implementation classes must not escape the OpenRune adapter boundary.
+
+Initial source facts include:
+
+- class and function declarations
+- call sites
+- symbolic references
+- `PluginScript` and `QuestScript` declarations
+- OpenRune handler registrations such as `onOpLoc1`, `onOpContentLoc1`, and `onOpNpc1`
+- quest-definition constructor metadata
+- varbit/varp binding calls
+
+Every source-derived fact must preserve:
+
+- source file
+- start/end offsets
+- one-based line/column positions
+- Gradle project path
+- source-set identity
+- package
+- confidence/provenance category
+
+Important epistemic rule:
+
+**PSI structure is not the same thing as resolved K2 semantics.**
+
+For example, seeing a call named `onOpContentLoc1("content.rock")` is strong structural evidence that the source registers that content handler, but overload/type resolution and cross-module symbol identity require a later K2/FIR/Analysis API enrichment. Studio must not silently upgrade a structural inference into a resolved semantic claim.
+
+The public semantic/content graph should consume these neutral facts rather than exposing Kotlin PSI nodes directly. This keeps future parser/compiler upgrades from changing plugin/editor contracts.
+
+### 2.4 Real content truth
 
 Use real OSRS cache/map fixtures for acceptance.
 
 A code path matching RuneLite or OpenRune in isolation is not enough when a user-observed problem concerns a real scene. Curated fixtures must prove the authored placements, decoded definitions, resolved scene semantics, and rendered result agree for representative locations.
 
-### 2.4 Secondary implementation references
+### 2.5 Secondary implementation references
 
 TSPS and other open implementations are useful cross-checks for algorithms and renderer architecture, but they are secondary evidence.
 
