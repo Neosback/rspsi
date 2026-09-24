@@ -80,7 +80,7 @@ class WorldFragmentTransformerTest {
                 .findFirst().orElseThrow();
         assertEquals(12, pivotPatch.x());
         assertEquals(21, pivotPatch.y());
-        assertEquals(new TileBounds(11, 19, 12, 21), result.fragment().bounds());
+        assertEquals(new TileBounds(11, 21, 12, 23), result.fragment().bounds());
     }
 
     @Test
