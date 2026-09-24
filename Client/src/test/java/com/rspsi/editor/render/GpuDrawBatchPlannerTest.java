@@ -70,11 +70,13 @@ class GpuDrawBatchPlannerTest {
 
         assertEquals(true, cursor.next());
         assertEquals(2, cursor.commandCount());
+        assertEquals(0, cursor.orderedStart());
         assertEquals(0, cursor.firstCommandIndex());
         assertEquals(1, cursor.commandIndexAt(1));
 
         assertEquals(true, cursor.next());
         assertEquals(1, cursor.commandCount());
+        assertEquals(2, cursor.orderedStart());
         assertEquals(2, cursor.firstCommandIndex());
 
         assertEquals(true, cursor.next());

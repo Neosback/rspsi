@@ -256,6 +256,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private final FrameMetrics frameMetrics = new FrameMetrics();
     private final RendererPerformanceMetrics performanceMetrics = new RendererPerformanceMetrics();
     private final GpuTimerQuery gpuTimerQuery = new GpuTimerQuery();
+    private final IndirectDrawBuffer indirectDrawBuffer = new IndirectDrawBuffer();
     private GpuUploadPlan statisticsPlan;
     private PlanStatistics cachedPlanStatistics = PlanStatistics.empty();
     private GpuCommandGeometry statisticsGeometry;
@@ -777,39 +778,53 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         GpuDrawBatchPlanner.BatchCursor batches = GpuDrawBatchPlanner.cursor(
                 commands, orderedIndices, pass, zoneManager::drawGroupKeyForCommand);
 
+        boolean mdi = capabilityProfile != null
+                && capabilityProfile.supportsMultiDrawIndirect()
+                && orderedIndices.size() > 1;
+        if (mdi) {
+            indirectDrawBuffer.upload(commands, orderedIndices, zoneManager::localFirstIndex);
+        }
+
         int lastBoundVao = -1;
-        while (batches.next()) {
-            int firstIndex = batches.firstCommandIndex();
-            GpuDrawCommand first = commands.get(firstIndex);
-            ZoneVboManager.ZoneAllocation allocation = zoneManager.allocationForCommand(firstIndex);
-            if (allocation == null || allocation.pickerVbo() == 0) continue;
+        try {
+            while (batches.next()) {
+                int firstIndex = batches.firstCommandIndex();
+                GpuDrawCommand first = commands.get(firstIndex);
+                ZoneVboManager.ZoneAllocation allocation =
+                        zoneManager.allocationForCommand(firstIndex);
+                if (allocation == null || allocation.pickerVbo() == 0) continue;
 
-            if (allocation.vao() != lastBoundVao) {
-                glBindVertexArray(allocation.vao());
-                lastBoundVao = allocation.vao();
-            }
-            applyPickerDrawState(first, alpha);
+                if (allocation.vao() != lastBoundVao) {
+                    glBindVertexArray(allocation.vao());
+                    lastBoundVao = allocation.vao();
+                }
+                applyPickerDrawState(first, alpha);
 
-            if (batches.commandCount() == 1) {
-                int localFirst = zoneManager.localFirstIndex(firstIndex);
-                glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
-                        (long) localFirst * Integer.BYTES);
-            } else {
-                try (MemoryStack stack = MemoryStack.stackPush()) {
-                    IntBuffer counts = stack.mallocInt(batches.commandCount());
-                    PointerBuffer offsets = stack.mallocPointer(batches.commandCount());
-                    for (int offset = 0; offset < batches.commandCount(); offset++) {
-                        int commandIndex = batches.commandIndexAt(offset);
-                        GpuDrawCommand command = commands.get(commandIndex);
-                        counts.put(command.indexCount());
-                        offsets.put((long) zoneManager.localFirstIndex(commandIndex)
-                                * Integer.BYTES);
+                if (batches.commandCount() == 1) {
+                    int localFirst = zoneManager.localFirstIndex(firstIndex);
+                    glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
+                            (long) localFirst * Integer.BYTES);
+                } else if (mdi) {
+                    indirectDrawBuffer.draw(batches.orderedStart(), batches.commandCount());
+                } else {
+                    try (MemoryStack stack = MemoryStack.stackPush()) {
+                        IntBuffer counts = stack.mallocInt(batches.commandCount());
+                        PointerBuffer offsets = stack.mallocPointer(batches.commandCount());
+                        for (int offset = 0; offset < batches.commandCount(); offset++) {
+                            int commandIndex = batches.commandIndexAt(offset);
+                            GpuDrawCommand command = commands.get(commandIndex);
+                            counts.put(command.indexCount());
+                            offsets.put((long) zoneManager.localFirstIndex(commandIndex)
+                                    * Integer.BYTES);
+                        }
+                        counts.flip();
+                        offsets.flip();
+                        glMultiDrawElements(GL_TRIANGLES, counts, GL_UNSIGNED_INT, offsets);
                     }
-                    counts.flip();
-                    offsets.flip();
-                    glMultiDrawElements(GL_TRIANGLES, counts, GL_UNSIGNED_INT, offsets);
                 }
             }
+        } finally {
+            if (mdi) indirectDrawBuffer.unbind();
         }
     }
 
@@ -1227,44 +1242,62 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         GpuDrawBatchPlanner.BatchCursor batches = GpuDrawBatchPlanner.cursor(
                 commands, orderedIndices, pass, zoneManager::drawGroupKeyForCommand);
 
+        boolean mdi = capabilityProfile != null
+                && capabilityProfile.supportsMultiDrawIndirect()
+                && orderedIndices.size() > 1;
+        if (mdi) {
+            indirectDrawBuffer.upload(commands, orderedIndices, zoneManager::localFirstIndex);
+        }
+
         int lastBoundVao = -1;
-        while (batches.next()) {
-            int firstIndex = batches.firstCommandIndex();
-            GpuDrawCommand first = commands.get(firstIndex);
-            ZoneVboManager.ZoneAllocation alloc = zoneManager.allocationForCommand(firstIndex);
-            if (alloc == null) {
-                continue;
-            }
-            if (alloc.vao() != lastBoundVao) {
-                glBindVertexArray(alloc.vao());
-                lastBoundVao = alloc.vao();
-            }
-            applyDrawState(first, alpha);
-            if (batches.commandCount() == 1) {
-                frameMetrics.record(first);
-                int localFirst = zoneManager.localFirstIndex(firstIndex);
-                glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
-                        (long) localFirst * Integer.BYTES);
-                frameMetrics.singleDrawCalls++;
-            } else {
-                try (MemoryStack stack = MemoryStack.stackPush()) {
-                    IntBuffer counts = stack.mallocInt(batches.commandCount());
-                    PointerBuffer offsets = stack.mallocPointer(batches.commandCount());
-                    for (int offset = 0; offset < batches.commandCount(); offset++) {
-                        int commandIndex = batches.commandIndexAt(offset);
-                        GpuDrawCommand command = commands.get(commandIndex);
-                        frameMetrics.record(command);
-                        counts.put(command.indexCount());
-                        offsets.put((long) zoneManager.localFirstIndex(commandIndex)
-                                * Integer.BYTES);
-                    }
-                    counts.flip();
-                    offsets.flip();
-                    glMultiDrawElements(GL_TRIANGLES, counts, GL_UNSIGNED_INT, offsets);
+        try {
+            while (batches.next()) {
+                int firstIndex = batches.firstCommandIndex();
+                GpuDrawCommand first = commands.get(firstIndex);
+                ZoneVboManager.ZoneAllocation alloc =
+                        zoneManager.allocationForCommand(firstIndex);
+                if (alloc == null) {
+                    continue;
                 }
-                frameMetrics.multiDrawCalls++;
+                if (alloc.vao() != lastBoundVao) {
+                    glBindVertexArray(alloc.vao());
+                    lastBoundVao = alloc.vao();
+                }
+                applyDrawState(first, alpha);
+                if (batches.commandCount() == 1) {
+                    frameMetrics.record(first);
+                    int localFirst = zoneManager.localFirstIndex(firstIndex);
+                    glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
+                            (long) localFirst * Integer.BYTES);
+                    frameMetrics.singleDrawCalls++;
+                } else {
+                    for (int offset = 0; offset < batches.commandCount(); offset++) {
+                        frameMetrics.record(commands.get(batches.commandIndexAt(offset)));
+                    }
+                    if (mdi) {
+                        indirectDrawBuffer.draw(batches.orderedStart(), batches.commandCount());
+                    } else {
+                        try (MemoryStack stack = MemoryStack.stackPush()) {
+                            IntBuffer counts = stack.mallocInt(batches.commandCount());
+                            PointerBuffer offsets = stack.mallocPointer(batches.commandCount());
+                            for (int offset = 0; offset < batches.commandCount(); offset++) {
+                                int commandIndex = batches.commandIndexAt(offset);
+                                GpuDrawCommand command = commands.get(commandIndex);
+                                counts.put(command.indexCount());
+                                offsets.put((long) zoneManager.localFirstIndex(commandIndex)
+                                        * Integer.BYTES);
+                            }
+                            counts.flip();
+                            offsets.flip();
+                            glMultiDrawElements(GL_TRIANGLES, counts, GL_UNSIGNED_INT, offsets);
+                        }
+                    }
+                    frameMetrics.multiDrawCalls++;
+                }
+                frameMetrics.drawCalls++;
             }
-            frameMetrics.drawCalls++;
+        } finally {
+            if (mdi) indirectDrawBuffer.unbind();
         }
     }
 
@@ -1653,6 +1686,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         textureStateBuffer.close();
         frameUniformBuffer.close();
         gpuTimerQuery.close();
+        indirectDrawBuffer.close();
         performanceMetrics.reset();
         textureLayers.clear();
         if (program != 0) org.lwjgl.opengl.GL20.glDeleteProgram(program);
