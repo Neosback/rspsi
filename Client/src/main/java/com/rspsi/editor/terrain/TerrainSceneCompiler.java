@@ -24,6 +24,8 @@ import com.rspsi.editor.render.TerrainAppearance;
 import com.rspsi.editor.render.TerrainAppearanceBuilder;
 import com.rspsi.editor.render.TerrainLight;
 import com.rspsi.editor.render.TerrainLighting;
+import com.rspsi.editor.render.TerrainNormalTile;
+import com.rspsi.editor.render.TerrainNormals;
 import com.rspsi.editor.render.TerrainPacketBuilder;
 import com.rspsi.editor.render.TerrainShadowMap;
 import com.rspsi.editor.render.compiler.InvalidationGraph;
@@ -150,7 +152,10 @@ public final class TerrainSceneCompiler {
                             neighborhood, definitions, plane, worldX, worldY);
                     TerrainLight lighting = TerrainLighting.buildTile(
                             neighborhood, lightingProfile, plane, worldX, worldY);
-                    var packet = packetBuilder.build(coordinate, mesh, appearance, lighting);
+                    TerrainNormalTile normals = TerrainNormals.buildTile(
+                            neighborhood, lightingProfile, plane, worldX, worldY);
+                    var packet = packetBuilder.build(
+                            coordinate, mesh, appearance, lighting, normals);
                     int flags = snapshot.flags();
                     int minimapHsl = appearance.overlayMinimapHsl() >= 0
                             ? appearance.overlayMinimapHsl() : appearance.underlayHsl();
@@ -204,7 +209,11 @@ public final class TerrainSceneCompiler {
         TerrainLight lighting = TerrainLighting.buildTile(
                 document, lightingProfile, shadows,
                 coordinate.plane(), coordinate.x(), coordinate.y());
-        var packet = packetBuilder.build(coordinate, mesh, appearance, lighting);
+        TerrainNormalTile normals = TerrainNormals.buildTile(
+                document, lightingProfile,
+                coordinate.plane(), coordinate.x(), coordinate.y());
+        var packet = packetBuilder.build(
+                coordinate, mesh, appearance, lighting, normals);
         int flags = snapshot.flags();
         int minimapHsl = appearance.overlayMinimapHsl() >= 0
                 ? appearance.overlayMinimapHsl() : appearance.underlayHsl();
