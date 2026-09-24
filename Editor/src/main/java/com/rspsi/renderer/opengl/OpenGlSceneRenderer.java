@@ -794,7 +794,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 int localFirst = zoneManager.localFirstIndex(firstIndex);
                 glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
                         (long) localFirst * Integer.BYTES);
-                frameMetrics.singleDrawCalls++;
             } else {
                 try (MemoryStack stack = MemoryStack.stackPush()) {
                     IntBuffer counts = stack.mallocInt(batches.commandCount());
@@ -1246,6 +1245,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 int localFirst = zoneManager.localFirstIndex(firstIndex);
                 glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
                         (long) localFirst * Integer.BYTES);
+                frameMetrics.singleDrawCalls++;
             } else {
                 try (MemoryStack stack = MemoryStack.stackPush()) {
                     IntBuffer counts = stack.mallocInt(batches.commandCount());
