@@ -29,6 +29,8 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private final DdaScenePicker picker = new DdaScenePicker();
     private GpuUploadPlan lastPlan;
     private GpuZonedUploadPlan zonedPlan;
+    private CameraState lastFrameCamera;
+    private SceneCameraProjection lastFrameProjection;
     private int lastWidth;
     private int lastHeight;
     private float imageOriginX;
@@ -158,9 +160,12 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
      * retained so a click resolves against exactly what the user saw.
      */
     public java.util.Optional<PickResult> pickAt(float x, float y) {
-        if (lastPlan == null || lastWidth <= 0 || lastHeight <= 0) return java.util.Optional.empty();
-        return picker.pick(lastPlan, navigation.camera(), lastWidth, lastHeight, x, y,
-                SceneCameraProjection.editorDefault(), pickPlaneRestriction);
+        if (lastPlan == null || lastFrameCamera == null || lastFrameProjection == null
+                || lastWidth <= 0 || lastHeight <= 0) {
+            return java.util.Optional.empty();
+        }
+        return picker.pick(lastPlan, lastFrameCamera, lastWidth, lastHeight, x, y,
+                lastFrameProjection, pickPlaneRestriction);
     }
 
     /** The most recent pick, updated when the user clicks inside the viewport. */
@@ -192,13 +197,16 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         framebuffer.resize(width, height, samples);
         framebuffer.bindForScene();
         renderer.setFramebufferStatus(framebuffer.framebufferStatus());
-        renderer.draw(plan, zonedPlan, navigation.camera(), width, height, presentation);
+
+        // Freeze the complete camera/projection state for the frame before any
+        // input is consumed. The scene image, picking and every world-space
+        // overlay must resolve against this same snapshot. Navigation input
+        // below intentionally updates only the next frame.
+        CameraState frameCamera = navigation.camera();
+        SceneCameraProjection frameProjection = SceneCameraProjection.editorDefault();
+        renderer.draw(plan, zonedPlan, frameCamera, width, height, presentation);
         framebuffer.resolve();
-        // Remember what this frame actually drew so a click can be ray-cast
-        // against the same plan, size, and camera the user was looking at.
-        lastPlan = plan;
-        lastWidth = width;
-        lastHeight = height;
+        recordPresentedFrame(plan, frameCamera, frameProjection, width, height);
         ImGui.image(framebuffer.texture(), width, height, 0.0f, 1.0f, 1.0f, 0.0f);
         imageOriginX = ImGui.getItemRectMinX();
         imageOriginY = ImGui.getItemRectMinY();
@@ -211,6 +219,28 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     public float imageOriginY() { return imageOriginY; }
     public int lastWidth() { return lastWidth; }
     public int lastHeight() { return lastHeight; }
+
+    /**
+     * Camera snapshot that produced the currently presented scene image.
+     * Navigation may already contain input for the next frame, so overlays,
+     * picking and diagnostics must use this value instead of navigation.camera().
+     */
+    public CameraState lastFrameCamera() { return lastFrameCamera; }
+
+    /** Projection paired with {@link #lastFrameCamera()} for the presented frame. */
+    public SceneCameraProjection lastFrameProjection() { return lastFrameProjection; }
+
+    void recordPresentedFrame(GpuUploadPlan plan, CameraState camera,
+                              SceneCameraProjection projection, int width, int height) {
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("Presented frame dimensions must be positive");
+        }
+        lastPlan = plan;
+        lastFrameCamera = Objects.requireNonNull(camera, "camera");
+        lastFrameProjection = Objects.requireNonNull(projection, "projection");
+        lastWidth = width;
+        lastHeight = height;
+    }
 
     /** The exact plan submitted on the most recent frame, for inspectors that want to show
      * which real {@code GpuDrawCommand}(s) a tile/object resolved to (texture, pass, priority,
@@ -228,8 +258,11 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     }
 
     public ViewportOverlayDraw createOverlayDraw(ViewportOverlayDraw.ViewportElevationSampler sampler) {
+        if (lastFrameCamera == null || lastFrameProjection == null) {
+            throw new IllegalStateException("No presented scene frame is available for overlay projection");
+        }
         return new ViewportOverlayDraw(ImGui.getWindowDrawList(), imageOriginX, imageOriginY,
-                lastWidth, lastHeight, navigation.camera(), SceneCameraProjection.editorDefault(), sampler);
+                lastWidth, lastHeight, lastFrameCamera, lastFrameProjection, sampler);
     }
 
     private final java.util.Set<String> enabledOverlays = new java.util.HashSet<>();
@@ -251,7 +284,8 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
 
     public void renderOverlays(com.rspsi.editor.tool.EditorTool activeTool,
                                com.rspsi.editor.plugin.EditorPluginLifecycleManager pluginLifecycle) {
-        if (lastPlan == null || lastWidth <= 0 || lastHeight <= 0) return;
+        if (lastPlan == null || lastFrameCamera == null || lastFrameProjection == null
+                || lastWidth <= 0 || lastHeight <= 0) return;
         ViewportOverlayDraw.ViewportElevationSampler sampler = this.elevationSampler;
         if (sampler == null && pluginLifecycle != null && pluginLifecycle.host() != null) {
             var session = pluginLifecycle.host().context().session();
