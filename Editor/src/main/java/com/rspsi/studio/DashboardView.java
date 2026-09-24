@@ -27,7 +27,7 @@ import java.util.function.Consumer;
  * In-project home.
  *
  * <p>Project/cache selection belongs to the pre-project launcher. This view presents project
- * health, OpenRune content intelligence, recent/continue actions, and workspace entry points.</p>
+ * health, access state, recent/continue actions, and workspace entry points.</p>
  */
 public final class DashboardView {
     private static final NumberFormat NUMBER_FORMAT =
@@ -180,7 +180,7 @@ public final class DashboardView {
 
         if (project.kind() == StudioProjectKind.OPENRUNE_SERVER) {
             ImGui.sameLine();
-            ImGui.textDisabled("Content semantics stay connected while you edit the world.");
+            ImGui.textDisabled("The imported OpenRune project stays connected while you edit.");
         }
         StudioWidgets.endCard();
     }
@@ -282,7 +282,7 @@ public final class DashboardView {
                 "home-map",
                 StudioIcons.MAP,
                 "Map Studio",
-                "World editing with server-content semantics attached to selected objects.",
+                "World editing, terrain, objects, selection and project-aware cache loading.",
                 ready,
                 openMapEditor,
                 width);
@@ -291,7 +291,7 @@ public final class DashboardView {
                 "home-interface",
                 StudioIcons.PREFAB,
                 "Interface Studio",
-                "Interfaces, components, sprites and future CS2 relationships.",
+                "Interfaces, components and sprites.",
                 ready,
                 openInterfaceStudio,
                 width);
@@ -300,7 +300,7 @@ public final class DashboardView {
                 "home-object",
                 StudioIcons.OBJECT,
                 "Object Studio",
-                "Definitions, models, animations and server object overlays.",
+                "Definitions, models, animations and asset inspection.",
                 ready,
                 openObjectStudio,
                 width);
@@ -349,15 +349,6 @@ public final class DashboardView {
                         + summary.totalIndices() + " indices");
         ImGui.textDisabled(
                 "Detailed cache census belongs in Project Diagnostics, not the project home.");
-    }
-
-    private static void metricCell(String title, String value, String detail) {
-        ImGui.tableNextColumn();
-        StudioWidgets.beginCard("metric-" + title, -1.0f, 82.0f);
-        ImGui.textDisabled(title);
-        ImGui.text(value);
-        ImGui.textDisabled(detail);
-        StudioWidgets.endCard();
     }
 
     private static void statusRow(String label, String value) {
