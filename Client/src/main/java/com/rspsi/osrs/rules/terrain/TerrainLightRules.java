@@ -1,6 +1,7 @@
 package com.rspsi.osrs.rules.terrain;
 
 import com.rspsi.editor.render.LightingProfile;
+import com.rspsi.editor.render.TerrainNormal;
 
 import java.util.Objects;
 
@@ -26,18 +27,39 @@ public final class TerrainLightRules {
             int shadowPenalty
     ) {
         Objects.requireNonNull(profile, "profile");
-        int normalLength = (int) Math.sqrt((long) heightDeltaY * heightDeltaY
-                + (long) heightDeltaX * heightDeltaX + profile.heightScale());
-        if (normalLength == 0) normalLength = 1;
+        TerrainNormal normal = calculateCornerNormal(
+                heightDeltaX, heightDeltaY, profile.heightScale());
 
-        int normalX = (heightDeltaX << 8) / normalLength;
-        int normalY = profile.heightScale() / normalLength;
-        int normalZ = (heightDeltaY << 8) / normalLength;
-
-        int dot = normalX * profile.lightX() + normalY * profile.lightY() + normalZ * profile.lightZ();
+        int dot = normal.x() * profile.lightX()
+                + normal.y() * profile.lightY()
+                + normal.z() * profile.lightZ();
         int baseLight = (int) ((double) dot / profile.lightIntensity()) + profile.ambient();
 
         return baseLight - shadowPenalty;
+    }
+
+    /**
+     * Calculates the same normalized slope vector used by client-style terrain
+     * lighting. Keeping the normal derivation here prevents future GPU lighting
+     * from drifting from the vanilla CPU lighting oracle.
+     */
+    public static TerrainNormal calculateCornerNormal(
+            int heightDeltaX,
+            int heightDeltaY,
+            int heightScale
+    ) {
+        if (heightScale <= 0) {
+            throw new IllegalArgumentException("Terrain normal height scale must be positive");
+        }
+        int normalLength = (int) Math.sqrt((long) heightDeltaY * heightDeltaY
+                + (long) heightDeltaX * heightDeltaX + heightScale);
+        if (normalLength == 0) normalLength = 1;
+
+        return new TerrainNormal(
+                (heightDeltaX << 8) / normalLength,
+                heightScale / normalLength,
+                (heightDeltaY << 8) / normalLength,
+                1);
     }
 
     /**
