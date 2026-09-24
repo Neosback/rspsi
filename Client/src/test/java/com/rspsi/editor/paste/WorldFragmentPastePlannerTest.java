@@ -51,7 +51,7 @@ class WorldFragmentPastePlannerTest {
                 eastAfter.objects(),
                 "world-space object anchor must be localized into east region payload");
 
-        assertTrue(fixture.window().commit(result.requireCommittablePlan()));
+        assertTrue(result.commit(fixture.window()));
         assertEquals(7, fixture.west().tile(0, 63, 10).snapshot().underlayId());
         assertEquals(8, fixture.east().tile(0, 0, 10).snapshot().underlayId());
         assertEquals(List.of(new WorldObject(100, 10, 2, 0, 0, 10)),
@@ -286,6 +286,57 @@ class WorldFragmentPastePlannerTest {
                 .get(new WorldTile(0, REGION_X * 64, WORLD_Y)).after();
         assertEquals(1, candidate.underlayId(),
                 "the first source patch wins deterministically for preview");
+    }
+
+
+    @Test
+    void readOnlyDestinationIsReportedBeforeAnyMutation() {
+        WorldDocument west = new WorldDocument(64, 64, 1);
+        WorldRegion region = new WorldRegion(REGION_X, REGION_Y, west);
+        WorldRegionWindow regions = new WorldRegionWindow(
+                REGION_X, REGION_Y, 1, 1, Map.of(WEST_ID, region));
+        WorldRegionSessionWindow window = new WorldRegionSessionWindow(
+                regions,
+                Map.of(WEST_ID, EditorSession.readOnly(west, region.window())));
+
+        WorldFragmentPasteResult result = WorldFragmentPastePlanner.plan(
+                window,
+                oneTileFragment(snapshot(1, 2, 3, 4, 9, List.of())),
+                REGION_X * 64,
+                REGION_Y * 64,
+                WorldFragmentPastePolicy.terrainOnly());
+
+        assertFalse(result.canCommit());
+        assertEquals(WorldFragmentPasteResult.ConflictCode.READ_ONLY_REGION,
+                result.conflicts().get(0).code());
+        assertThrows(IllegalStateException.class, () -> result.commit(window));
+        assertEquals(0, west.tile(0, 0, 0).snapshot().underlayId());
+    }
+
+    @Test
+    void unavailablePlaneIsReportedRatherThanClamped() {
+        WorldDocument west = new WorldDocument(64, 64, 1);
+        WorldRegion region = new WorldRegion(REGION_X, REGION_Y, west);
+        WorldRegionWindow regions = new WorldRegionWindow(
+                REGION_X, REGION_Y, 1, 1, Map.of(WEST_ID, region));
+        WorldRegionSessionWindow window = new WorldRegionSessionWindow(
+                regions,
+                Map.of(WEST_ID, new EditorSession(west, region.window())));
+        WorldFragment fragment = new WorldFragment(
+                new TileBounds(0, 0, 0, 0),
+                List.of(new TerrainTilePatch(1, 0, 0,
+                        snapshot(1, 2, 3, 4, 9, List.of()))),
+                List.of());
+
+        WorldFragmentPasteResult result = WorldFragmentPastePlanner.plan(
+                window, fragment,
+                REGION_X * 64, REGION_Y * 64,
+                WorldFragmentPastePolicy.terrainOnly());
+
+        assertFalse(result.canCommit());
+        assertEquals(WorldFragmentPasteResult.ConflictCode.PLANE_UNAVAILABLE,
+                result.conflicts().get(0).code());
+        assertTrue(result.candidatePlan().isEmpty());
     }
 
     private static WorldFragment twoTileFragment() {
