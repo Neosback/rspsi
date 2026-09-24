@@ -84,15 +84,11 @@ import static org.lwjgl.opengl.GL11.glEnable;
 import static org.lwjgl.opengl.GL11.glDepthFunc;
 import static org.lwjgl.opengl.GL11.glGenTextures;
 import static org.lwjgl.opengl.GL11.glGetError;
-import static org.lwjgl.opengl.GL11.glGetString;
 import static org.lwjgl.opengl.GL11.glTexImage2D;
 import static org.lwjgl.opengl.GL11.glTexParameteri;
 import static org.lwjgl.opengl.GL11.glViewport;
 import static org.lwjgl.opengl.GL11.glPolygonMode;
 import static org.lwjgl.opengl.GL11.GL_NO_ERROR;
-import static org.lwjgl.opengl.GL11.GL_RENDERER;
-import static org.lwjgl.opengl.GL11.GL_VENDOR;
-import static org.lwjgl.opengl.GL11.GL_VERSION;
 import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
 import static org.lwjgl.opengl.GL12.GL_TEXTURE_WRAP_R;
 import static org.lwjgl.opengl.GL12.glTexImage3D;
@@ -653,11 +649,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private void captureGlError() {
         int error = glGetError();
         if (firstGlError == GL_NO_ERROR && error != GL_NO_ERROR) firstGlError = error;
-    }
-
-    private static String safeGlString(int name) {
-        String value = glGetString(name);
-        return value == null ? "unknown" : value;
     }
 
     /**
