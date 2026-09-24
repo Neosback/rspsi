@@ -46,6 +46,29 @@ public final class OsrsProjectSessionLoader {
     }
 
     public OpenedProject load(int regionX, int regionY) {
+        CompatibilityState state = compatibilityState();
+        OsrsSessionLoader.LoadedRegion region = state.compatibility().readOnly()
+                ? sessions.loadReadOnly(regionX, regionY)
+                : sessions.load(regionX, regionY);
+        return new OpenedProject(project, state.cache(), state.compatibility(),
+                store.capabilities(), region);
+    }
+
+    /**
+     * Opens a bounded multi-region authoring window using the same project/cache
+     * compatibility decision as the single-region loader.
+     */
+    public OpenedWorldWindow loadWindow(int minRegionX, int minRegionY,
+                                        int regionWidth, int regionHeight) {
+        CompatibilityState state = compatibilityState();
+        OsrsSessionLoader.LoadedWindow window = state.compatibility().readOnly()
+                ? sessions.loadWindowReadOnly(minRegionX, minRegionY, regionWidth, regionHeight)
+                : sessions.loadWindow(minRegionX, minRegionY, regionWidth, regionHeight);
+        return new OpenedWorldWindow(project, state.cache(), state.compatibility(),
+                store.capabilities(), window);
+    }
+
+    private CompatibilityState compatibilityState() {
         Optional<OsrsCacheMetadata> cache = identityStore.metadata(revision);
         ProjectCompatibility compatibility = cache
                 .map(value -> ProjectCompatibility.assess(project, value))
@@ -56,10 +79,41 @@ public final class OsrsProjectSessionLoader {
             issues.add("cache backend is read-only");
             compatibility = new ProjectCompatibility(true, issues);
         }
-        OsrsSessionLoader.LoadedRegion region = compatibility.readOnly()
-                ? sessions.loadReadOnly(regionX, regionY)
-                : sessions.load(regionX, regionY);
-        return new OpenedProject(project, cache, compatibility, store.capabilities(), region);
+        return new CompatibilityState(cache, compatibility);
+    }
+
+    private record CompatibilityState(
+            Optional<OsrsCacheMetadata> cache,
+            ProjectCompatibility compatibility
+    ) {
+        private CompatibilityState {
+            cache = Objects.requireNonNull(cache, "cache");
+            compatibility = Objects.requireNonNull(compatibility, "compatibility");
+        }
+    }
+
+    public record OpenedWorldWindow(
+            ProjectMetadata project,
+            Optional<OsrsCacheMetadata> cache,
+            ProjectCompatibility compatibility,
+            CacheStoreCapabilities capabilities,
+            OsrsSessionLoader.LoadedWindow window
+    ) {
+        public OpenedWorldWindow {
+            project = Objects.requireNonNull(project, "project");
+            cache = Objects.requireNonNull(cache, "cache");
+            compatibility = Objects.requireNonNull(compatibility, "compatibility");
+            capabilities = Objects.requireNonNull(capabilities, "capabilities");
+            window = Objects.requireNonNull(window, "window");
+        }
+
+        public boolean readOnly() {
+            return compatibility.readOnly();
+        }
+
+        public CacheWriteMode writeMode() {
+            return readOnly() ? CacheWriteMode.READ_ONLY : capabilities.writeMode();
+        }
     }
 
     public record OpenedProject(

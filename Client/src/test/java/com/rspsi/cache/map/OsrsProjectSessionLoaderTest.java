@@ -89,9 +89,44 @@ class OsrsProjectSessionLoaderTest {
         assertTrue(opened.compatibility().issues().contains("cache backend is read-only"));
     }
 
+    @Test
+    void matchingIdentityProducesEditableMultiRegionWindow() {
+        OsrsCacheMetadata identity = new OsrsCacheMetadata(240, 2, "cache-a");
+        RecordingStore store = new RecordingStore(identity);
+        OsrsMapService maps = maps(store);
+
+        OsrsProjectSessionLoader.OpenedWorldWindow opened =
+                new OsrsProjectSessionLoader(store, maps, ProjectMetadata.forCache(identity))
+                        .loadWindow(50, 50, 2, 1);
+
+        assertFalse(opened.readOnly());
+        assertTrue(opened.window().sessions().canSave());
+        assertEquals(2, opened.window().sessions().sessions().size());
+        assertTrue(opened.window().window().complete());
+    }
+
+    @Test
+    void mismatchedIdentityMakesEntireMultiRegionWindowReadOnly() {
+        OsrsCacheMetadata projectIdentity = new OsrsCacheMetadata(240, 2, "cache-a");
+        RecordingStore store = new RecordingStore(
+                new OsrsCacheMetadata(240, 2, "cache-b"));
+        OsrsMapService maps = maps(store);
+
+        OsrsProjectSessionLoader.OpenedWorldWindow opened =
+                new OsrsProjectSessionLoader(store, maps,
+                        ProjectMetadata.forCache(projectIdentity))
+                        .loadWindow(50, 50, 2, 1);
+
+        assertTrue(opened.readOnly());
+        assertFalse(opened.window().sessions().canSave());
+        assertTrue(opened.window().sessions().sessions().values().stream()
+                .noneMatch(com.rspsi.editor.EditorSession::canEdit));
+    }
+
     private static OsrsMapService maps(RecordingStore store) {
         return new OsrsMapService(store, 5, MapIndexTable.of(List.of(
-                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))));
+                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"),
+                new MapIndexEntry(51, 50, 101, 101, "m51_50", "l51_50"))));
     }
 
     private static final class RecordingStore implements CacheStore {
@@ -107,8 +142,11 @@ class OsrsProjectSessionLoaderTest {
             this.identity = identity;
             this.writable = writable;
             WorldDocument source = new WorldDocument(64, 64, 4);
+            WorldDocument neighbor = new WorldDocument(64, 64, 4);
             values.put("5:100:0", OsrsRegionEncoder.encodeTerrain(source, true));
             values.put("5:100:1", OsrsRegionEncoder.encodeLocations(source));
+            values.put("5:101:0", OsrsRegionEncoder.encodeTerrain(neighbor, true));
+            values.put("5:101:1", OsrsRegionEncoder.encodeLocations(neighbor));
         }
 
         @Override public byte[] read(int index, int archive, int file) {
