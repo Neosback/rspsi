@@ -1,48 +1,32 @@
 package com.rspsi.studio.integration;
 
-import com.rspsi.editor.integration.IntegrationCapability;
-import com.rspsi.editor.integration.IntegrationOptions;
-import com.rspsi.editor.integration.IntegrationProbe;
 import com.rspsi.editor.integration.ServerIntegrationService;
+import com.rspsi.server.ServerPathKey;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
-import imgui.type.ImString;
 
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /**
- * Native Dear ImGui window for managing server project integrations (e.g. OpenRune, RSMod).
+ * Read-only project-owned integration status.
  *
- * <p>Provides project folder scanning, capability negotiation, and live connection status.</p>
+ * <p>Server integration is selected when a Studio project is imported/opened.
+ * This window intentionally does not reconnect, disconnect, rescan, or toggle
+ * content features behind the active project's back.</p>
  */
 public final class IntegrationCenterWindow {
-    private final ImString projectPath = new ImString(512);
-    private final Map<IntegrationCapability, ImBoolean> capabilityToggles = new HashMap<>();
-    private IntegrationProbe currentProbe;
-    private String statusMessage = "";
-
-    public IntegrationCenterWindow() {
-        for (IntegrationCapability cap : IntegrationCapability.values()) {
-            capabilityToggles.put(cap, new ImBoolean(true));
-        }
-    }
 
     public void render(ServerIntegrationService integrations, ImBoolean open) {
         Objects.requireNonNull(integrations, "integrations");
         Objects.requireNonNull(open, "open");
         if (!open.get()) return;
 
-        ImGui.setNextWindowSize(640, 520, imgui.flag.ImGuiCond.FirstUseEver);
-        if (!ImGui.begin("Server Integration Center", open, ImGuiWindowFlags.NoCollapse)) {
+        ImGui.setNextWindowSize(620, 420, imgui.flag.ImGuiCond.FirstUseEver);
+        if (!ImGui.begin("Project Integration", open, ImGuiWindowFlags.NoCollapse)) {
             ImGui.end();
             return;
         }
@@ -50,120 +34,74 @@ public final class IntegrationCenterWindow {
         if (integrations.isConnected()) {
             renderConnectedView(integrations);
         } else {
-            renderConnectView(integrations);
+            renderNoProjectView();
         }
 
         ImGui.end();
     }
 
-    private void renderConnectedView(ServerIntegrationService integrations) {
+    private static void renderConnectedView(ServerIntegrationService integrations) {
         var session = integrations.activeSession().orElseThrow();
-        StudioWidgets.section("Connected Server Project");
+        StudioWidgets.section("OpenRune-Server");
 
         ImGui.pushFont(StudioFonts.mono(), 0.0f);
-        ImGui.textColored(0xFF66FF66, "[OK] Connected: " + session.provider().name());
-        ImGui.text("Project Root: " + session.projectRoot().toString());
+        ImGui.textColored(0xFF66FF66, "[OK] " + session.provider().name());
+        ImGui.text("Project root: " + session.projectRoot());
         ImGui.popFont();
 
-        ImGui.separator();
-        StudioWidgets.section("Active Capabilities");
-        for (IntegrationCapability cap : session.activeCapabilities()) {
-            ImGui.bulletText("[x] " + cap.description());
-        }
+        session.projectInspection().ifPresent(inspection -> {
+            ImGui.dummy(1.0f, 10.0f);
+            if (!inspection.revision().isBlank()) {
+                ImGui.text("Revision " + inspection.revision());
+            }
 
-        ImGui.dummy(1.0f, 16.0f);
-        if (ImGui.button("Disconnect Server Project", 200, 30)) {
-            integrations.disconnect();
-            currentProbe = null;
-            statusMessage = "Disconnected from server project.";
-        }
+            ImGui.separator();
+            StudioWidgets.section("Cache roles");
+            inspection.path(ServerPathKey.LIVE_CACHE).ifPresentOrElse(
+                    path -> statusLine("LIVE", path.toString(), Files.isDirectory(path)),
+                    () -> statusLine("LIVE", "Not detected", false));
+            inspection.path(ServerPathKey.SERVER_CACHE).ifPresentOrElse(
+                    path -> statusLine("SERVER", path.toString(), Files.isDirectory(path)),
+                    () -> statusLine("SERVER", "Not detected", false));
+
+            ImGui.dummy(1.0f, 10.0f);
+            StudioWidgets.section("Bound startup services");
+            if (session.activeCapabilities().isEmpty()) {
+                ImGui.textDisabled("No optional integration services are bound.");
+            } else {
+                session.activeCapabilities().stream()
+                        .sorted(java.util.Comparator.comparing(Enum::name))
+                        .forEach(capability -> ImGui.bulletText(capability.description()));
+            }
+
+            if (!inspection.diagnostics().isEmpty()) {
+                ImGui.dummy(1.0f, 8.0f);
+                ImGui.textDisabled(inspection.diagnostics().size()
+                        + " project diagnostic(s) available.");
+            }
+        });
+
+        ImGui.dummy(1.0f, 14.0f);
+        ImGui.textWrapped(
+                "The active Studio project owns this connection. Content/source indexing is "
+                        + "not part of startup and will be activated only by a workspace that "
+                        + "needs it.");
+        ImGui.textDisabled(
+                "To use a different server project, close this project and choose "
+                        + "Import OpenRune-Server from the Projects screen.");
     }
 
-    private void renderConnectView(ServerIntegrationService integrations) {
-        StudioWidgets.section("Connect Server Project");
-        ImGui.textWrapped("Connect OpenRune Studio to a server repository to enable GameVals, RSCM mappings, content scripts, and NPC spawns.");
-
-        ImGui.dummy(1.0f, 6.0f);
-        ImGui.inputTextWithHint("##server-path", "Path to server repository root (e.g. /path/to/OpenRune-Server)", projectPath);
-        ImGui.sameLine();
-        if (ImGui.button("Scan Project")) {
-            scanProject(integrations);
-        }
-
-        if (!statusMessage.isEmpty()) {
-            ImGui.textDisabled(statusMessage);
-        }
-
-        if (currentProbe != null) {
-            renderProbeDetails(integrations);
-        }
+    private static void renderNoProjectView() {
+        StudioWidgets.section("No server project imported");
+        ImGui.textWrapped(
+                "Server integration is project-owned. Return to the Projects screen and choose "
+                        + "Import OpenRune-Server to connect a checkout.");
+        ImGui.dummy(1.0f, 8.0f);
+        ImGui.textDisabled(
+                "Standalone cache projects stay standalone; there is no hidden server connection.");
     }
 
-    private void scanProject(ServerIntegrationService integrations) {
-        String raw = projectPath.get().trim();
-        if (raw.isEmpty()) {
-            statusMessage = "Please enter a project directory path.";
-            return;
-        }
-        Path path = Path.of(raw).toAbsolutePath().normalize();
-        if (!Files.isDirectory(path)) {
-            statusMessage = "Directory not found: " + path;
-            currentProbe = null;
-            return;
-        }
-
-        var probeOpt = integrations.probe(path);
-        if (probeOpt.isPresent()) {
-            currentProbe = probeOpt.get();
-            statusMessage = "Detected: " + currentProbe.serverName();
-            for (IntegrationCapability cap : IntegrationCapability.values()) {
-                capabilityToggles.get(cap).set(currentProbe.supports(cap));
-            }
-        } else {
-            currentProbe = null;
-            statusMessage = "No compatible server integration provider recognized this directory layout.";
-        }
-    }
-
-    private void renderProbeDetails(ServerIntegrationService integrations) {
-        ImGui.separator();
-        StudioWidgets.section("Detected Server: " + currentProbe.serverName());
-
-        ImGui.textDisabled("Select features to enable:");
-        if (ImGui.smallButton("Recommended")) {
-            for (IntegrationCapability cap : IntegrationCapability.values()) {
-                capabilityToggles.get(cap).set(currentProbe.supports(cap));
-            }
-        }
-        ImGui.sameLine();
-        if (ImGui.smallButton("Minimal")) {
-            for (IntegrationCapability cap : IntegrationCapability.values()) {
-                capabilityToggles.get(cap).set(cap == IntegrationCapability.SYMBOLS);
-            }
-        }
-        ImGui.sameLine();
-        if (ImGui.smallButton("Everything")) {
-            for (IntegrationCapability cap : IntegrationCapability.values()) {
-                capabilityToggles.get(cap).set(true);
-            }
-        }
-
-        for (IntegrationCapability cap : IntegrationCapability.values()) {
-            if (currentProbe.supports(cap)) {
-                ImGui.checkbox(cap.description(), capabilityToggles.get(cap));
-            }
-        }
-
-        ImGui.dummy(1.0f, 12.0f);
-        if (ImGui.button("Connect Project", 160, 32)) {
-            Set<IntegrationCapability> enabled = EnumSet.noneOf(IntegrationCapability.class);
-            for (Map.Entry<IntegrationCapability, ImBoolean> entry : capabilityToggles.entrySet()) {
-                if (entry.getValue().get()) {
-                    enabled.add(entry.getKey());
-                }
-            }
-            IntegrationOptions options = new IntegrationOptions(currentProbe.projectRoot(), enabled, Map.of());
-            integrations.connect(currentProbe.projectRoot(), options);
-        }
+    private static void statusLine(String label, String value, boolean ready) {
+        ImGui.text((ready ? "[OK] " : "[--] ") + label + ": " + value);
     }
 }
