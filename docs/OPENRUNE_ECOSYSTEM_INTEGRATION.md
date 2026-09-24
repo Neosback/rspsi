@@ -6,7 +6,7 @@
 
 This document records the OpenRune capabilities that are relevant to RSPSi / OpenRune Studio so implementation work does not repeatedly rediscover the same backend features or build competing abstractions.
 
-For the published artifact inventory, current versions, mirrored OpenRS2/compiler artifacts, adoption status, and XTEA revision boundary, see `docs/OPENRUNE_MAVEN_CATALOG.md`. That catalog must be checked before adding new cache/content infrastructure.
+For the published artifact inventory, current versions, mirrored OpenRS2/compiler artifacts, adoption status, and XTEA revision boundary, see `docs/OPENRUNE_MAVEN_CATALOG.md`. For the verified OpenRune Server cache/build/GameVal/raw-map/semantic/fork model, see `docs/OPENRUNE_SERVER_INTEGRATION_MODEL.md`. Both must be checked before adding new cache/content infrastructure.
 
 ## Architectural direction
 
@@ -53,7 +53,7 @@ This is the normal path for a user who only wants the map editor. No OpenRune Se
 
 ### Connected OpenRune Server mode
 
-When the OpenRune integration plugin is enabled and the user connects an OpenRune Server project, the project already owns its cache lifecycle.
+When the user imports/opens an OpenRune Server Studio project, that external project already owns its cache lifecycle. The launcher/project descriptor is the sole owner of the connection; the retired settings-driven `OpenRuneServerPlugin` path must not be recreated.
 
 Current OpenRune Server source establishes these roles:
 
@@ -147,7 +147,7 @@ New Project
    -> choose supported source cache
    -> create
    -> project loading gate opens/verifies cache
-   -> Dashboard
+   -> Content Studio
    -> edit
    -> Publish/Export to separate explicit output cache
 ```
@@ -163,7 +163,7 @@ New Project / Link Existing
    -> choose Inspect / Author / Managed Build / Developer policy
    -> create/link
    -> project loading gate binds LIVE + SERVER + required services
-   -> Dashboard
+   -> Content Studio
    -> edit
    -> Publish to Project when policy/resource supports it
    -> update supported OpenRune source artifacts
@@ -175,16 +175,18 @@ A connected user should not have to re-select `.data/cache/LIVE` manually under 
 
 The integration preset is only a convenience over granular capabilities. It never changes the no-clobber rules above, and even Developer policy does not make `FreshCache` an automatic action.
 
-### Converge the existing integration paths
+### Project-owned integration path
 
-The repository currently has two partially overlapping OpenRune integration implementations:
+The settings-driven `OpenRuneServerPlugin` path has been retired. There must be one imported-project
+connection model:
 
-- `OpenRuneServerPlugin` / `OpenRuneServerProvider` / `ServerIntegrationService` own the first-party plugin/session model and declarative symbol/content providers.
-- `OpenRuneServerAdapter` plus `ServerConnection`, `ServerProjectInspection`, `ServerPathKey`, and `ServerBuildTask` already model OpenRune project detection, LIVE/SERVER cache paths, path overrides, fingerprints, and Gradle build tasks.
+- `OpenRuneServerAdapter` plus `ServerConnection`, `ServerProjectInspection`,
+  `ServerPathKey`, and `ServerBuildTask` own structural detection, cache roles, overrides,
+  fingerprints, and declared project actions;
+- `OpenRuneServerProvider` binds optional source/symbol/content domains from that inspected project;
+- `ServerIntegrationService` coordinates the active project session.
 
-These must converge rather than continue as separate discovery stacks.
-
-The target is for the OpenRune plugin/provider to reuse one neutral project inspection/connection model for:
+The provider must reuse the neutral project inspection/connection model for:
 
 - project identity and fingerprint;
 - LIVE/SERVER/raw/source path discovery;
@@ -194,9 +196,30 @@ The target is for the OpenRune plugin/provider to reuse one neutral project insp
 - cache-role binding;
 - stale-project detection.
 
-`ServerIntegrationService` remains the application/session coordinator. The OpenRune provider should delegate project-layout/cache/build discovery to the shared neutral adapter/inspection layer instead of reimplementing it. `CacheSourceProvider` may then expose the connected project's LIVE cache as a read-only cache source, but it must not own project publishing.
+`ServerIntegrationService` remains the application/session coordinator. The OpenRune provider delegates project-layout/cache/build discovery to the shared neutral adapter/inspection layer instead of recreating it. `CacheSourceProvider` may expose the connected project's LIVE cache as a read-only cache source, but it must not own project publishing.
 
 This convergence also prevents the UI, plugin, and legacy adapter paths from disagreeing about where a project's caches live or which build command is authoritative.
+
+### Version/toolchain compatibility
+
+Do not equate an OpenRune project revision with complete compatibility.
+
+The current upstream server pins OR2 3.0.3 and rsprot `osrs-240` artifacts, while its cache
+builder accepts revision/subrevision/environment from `game.yml`. Studio must separately track
+FileStore readability, decoder compatibility, Studio scene support, and server protocol support.
+
+Studio must not runtime-auto-upgrade its embedded OR2 dependency to match an imported checkout.
+Build/publication operations should use the imported project's own Gradle wrapper so they execute
+against that project's exact OR2/toolchain. See `OPENRUNE_SERVER_INTEGRATION_MODEL.md`.
+
+### Resource authority
+
+Map Studio and other tools may present client/cache state and server-authored state together, but
+must preserve source ownership. In particular, OpenRune packs raw NPC spawns, ground-object spawns
+and area polygons from `.data/raw-cache/map/**` into SERVER map files 5, 6 and 7. Those are
+source-editable domains. Ordinary terrain/loc map files 0/1 do not currently have an equivalent
+general stock OpenRune text-source publication contract, so connected-project binary patching is
+not an acceptable fallback.
 
 ### Startup inspection boundary
 
