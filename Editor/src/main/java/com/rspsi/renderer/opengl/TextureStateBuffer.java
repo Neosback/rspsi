@@ -89,6 +89,10 @@ final class TextureStateBuffer implements AutoCloseable {
         glBindTexture(GL_TEXTURE_BUFFER, texture);
     }
 
+    void unbind() {
+        glBindTexture(GL_TEXTURE_BUFFER, 0);
+    }
+
     int entryCount() {
         return entryCount;
     }
