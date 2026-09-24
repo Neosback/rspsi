@@ -342,6 +342,10 @@ class WorldRegionSessionWindowTest {
         assertEquals(eastBefore, eastDocument.tile(0, 0, 10).snapshot());
         assertEquals(0, westSession.history().position());
         assertEquals(0, eastSession.history().position());
+        assertEquals(0, westSession.history().size());
+        assertEquals(0, eastSession.history().size());
+        assertFalse(westSession.history().canRedo());
+        assertFalse(eastSession.history().canRedo());
         assertEquals(0, sessions.changeHistory().size());
     }
 
