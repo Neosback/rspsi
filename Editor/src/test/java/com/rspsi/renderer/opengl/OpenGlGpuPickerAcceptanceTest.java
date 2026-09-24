@@ -83,6 +83,23 @@ class OpenGlGpuPickerAcceptanceTest {
     }
 
     @Test
+    void fullyTransparentModelFaceDoesNotOwnPickerPixel() {
+        glfwMakeContextCurrent(window);
+        try (OpenGlSceneRenderer renderer = new OpenGlSceneRenderer()) {
+            renderer.initialize();
+            renderer.setCullMode(OpenGlSceneRenderer.CULL_OFF);
+            renderer.setGpuPickingEnabled(true);
+            GpuUploadPlan plan = centeredPlan(0, 42, 255);
+
+            renderer.draw(plan, camera(), SIZE, SIZE, RenderPresentation.neutral(), 0);
+            assertEquals(PickerId.INVALID,
+                    renderer.pickId(plan, null, camera(), SIZE, SIZE,
+                            SIZE / 2.0f, SIZE / 2.0f, null));
+            assertEquals(GL_NO_ERROR, glGetError());
+        }
+    }
+
+    @Test
     void topLeftCoordinatesAreFlippedExactlyOnce() {
         glfwMakeContextCurrent(window);
         try (OpenGlSceneRenderer renderer = new OpenGlSceneRenderer()) {
@@ -166,11 +183,15 @@ class OpenGlGpuPickerAcceptanceTest {
     }
 
     private static GpuUploadPlan centeredPlan(int plane, int objectId) {
+        return centeredPlan(plane, objectId, 0);
+    }
+
+    private static GpuUploadPlan centeredPlan(int plane, int objectId, int alpha) {
         int slot = PickerId.slotFor(SceneLayer.Kind.GROUND_OBJECT);
         List<GpuSceneVertex> vertices = List.of(
-                vertex(-25.0f, -20.0f, 100.0f, plane, slot),
-                vertex(0.0f, 25.0f, 100.0f, plane, slot),
-                vertex(25.0f, -20.0f, 100.0f, plane, slot));
+                vertex(-25.0f, -20.0f, 100.0f, plane, slot, alpha),
+                vertex(0.0f, 25.0f, 100.0f, plane, slot, alpha),
+                vertex(25.0f, -20.0f, 100.0f, plane, slot, alpha));
         GpuDrawCommand command = command(plane, 0, objectId);
         return new GpuUploadPlan(vertices, List.of(0, 1, 2), List.of(command),
                 List.of(), Map.of(), "gpu-picker-center-" + plane);
@@ -215,13 +236,18 @@ class OpenGlGpuPickerAcceptanceTest {
 
     private static GpuSceneVertex vertex(
             float x, float y, float z, int plane, int slot) {
+        return vertex(x, y, z, plane, slot, 0);
+    }
+
+    private static GpuSceneVertex vertex(
+            float x, float y, float z, int plane, int slot, int alpha) {
         return new GpuSceneVertex(
                 x, y, z,
                 0.0f, 0.0f,
                 32767, GpuColorEncoding.PACKED_JAGEX_HSL,
                 0,
                 0, 0, 0, 0,
-                -1, 0, 6,
+                -1, alpha, 6,
                 plane, 0, 0, slot);
     }
 }
