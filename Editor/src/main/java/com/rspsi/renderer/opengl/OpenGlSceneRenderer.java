@@ -109,13 +109,13 @@ import static org.lwjgl.opengl.GL20.glGetUniformLocation;
 import static org.lwjgl.opengl.GL20.glUseProgram;
 import static org.lwjgl.opengl.GL20.glUniform1f;
 import static org.lwjgl.opengl.GL20.glUniform1i;
-import static org.lwjgl.opengl.GL20.glUniform2f;
 import static org.lwjgl.opengl.GL20.glUniform3f;
 import static org.lwjgl.opengl.GL20.glUniformMatrix4fv;
 import static org.lwjgl.opengl.GL20.glVertexAttribPointer;
 import static org.lwjgl.opengl.GL14.glMultiDrawElements;
 import static org.lwjgl.opengl.GL30.GL_TEXTURE0;
 import static org.lwjgl.opengl.GL30.GL_TEXTURE1;
+import static org.lwjgl.opengl.GL30.GL_TEXTURE2;
 import static org.lwjgl.opengl.GL30.GL_TEXTURE_2D_ARRAY;
 import static org.lwjgl.opengl.GL30.glActiveTexture;
 import static org.lwjgl.opengl.GL30.glBindVertexArray;
@@ -179,11 +179,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int cullMode = CULL_FRONT_CCW;
     private int lastNoDepth = -1;
     private int lastFaceBias = -1;
-    private float lastTextureOffsetU = Float.NaN;
-    private float lastTextureOffsetV = Float.NaN;
     private int lastTextureLayer = -1;
-    private float lastTextureScaleX = Float.NaN;
-    private float lastTextureScaleY = Float.NaN;
 
     private void resetDrawState() {
         lastAlpha = -1;
@@ -194,11 +190,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         lastCull = -1;
         lastNoDepth = -1;
         lastFaceBias = -1;
-        lastTextureOffsetU = Float.NaN;
-        lastTextureOffsetV = Float.NaN;
         lastTextureLayer = -1;
-        lastTextureScaleX = Float.NaN;
-        lastTextureScaleY = Float.NaN;
     }
 
     private int program;
@@ -217,8 +209,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int terrainLocation;
     private int textureLocation;
     private int textureLayerLocation;
-    private int textureScaleLocation;
-    private int textureOffsetLocation;
+    private int textureStateLocation;
+    private int clientCycleLocation;
     private int brightnessLocation;
     private int exposureLocation;
     private int smoothBandingLocation;
@@ -230,19 +222,22 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int fogDepthLocation;
     private int fogColorLocation;
     private final ZoneVboManager zoneManager = new ZoneVboManager();
+    private final TextureStateBuffer textureStateBuffer = new TextureStateBuffer();
     private final GpuCommandVisibility.Cache visibilityCache =
             new GpuCommandVisibility.Cache();
     private int paletteTexture;
     private int paletteLocation;
     private String uploadedFingerprint;
     private String uploadedTextureFingerprint;
+    private String uploadedTextureStateFingerprint;
     private Map<Integer, RenderTextureResource> fingerprintedTextureResources;
     private String fingerprintedTextureFingerprint;
+    private Map<Integer, RenderTextureResource> fingerprintedTextureStateResources;
+    private String fingerprintedTextureStateFingerprint;
     private GpuCommandGeometry fogBoundsGeometry;
     private SceneFog.Bounds cachedFogBounds;
     private int textureArray;
     private final Map<Integer, Integer> textureLayers = new HashMap<>();
-    private final Map<Integer, float[]> textureScales = new HashMap<>();
     private int firstGlError = GL_NO_ERROR;
     private int framebufferStatus = org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_COMPLETE;
     private Statistics statistics = Statistics.empty();
@@ -305,8 +300,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         terrainLocation = glGetUniformLocation(program, "uTerrain");
         textureLocation = glGetUniformLocation(program, "uTexture");
         textureLayerLocation = glGetUniformLocation(program, "uTextureLayer");
-        textureScaleLocation = glGetUniformLocation(program, "uTextureScale");
-        textureOffsetLocation = glGetUniformLocation(program, "uTextureOffset");
+        textureStateLocation = glGetUniformLocation(program, "uTextureState");
+        clientCycleLocation = glGetUniformLocation(program, "uClientCycle");
         brightnessLocation = glGetUniformLocation(program, "uBrightness");
         exposureLocation = glGetUniformLocation(program, "uExposure");
         smoothBandingLocation = glGetUniformLocation(program, "uSmoothBanding");
@@ -321,6 +316,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glUseProgram(program);
         glUniform1i(textureLocation, 0);
         glUniform1i(paletteLocation, 1);
+        glUniform1i(textureStateLocation, 2);
         glUseProgram(0);
         uploadPaletteTexture();
         glEnable(GL_DEPTH_TEST);
@@ -468,6 +464,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             uploadedTextureFingerprint = textureFingerprint;
             textureUploaded = true;
         }
+        String textureStateFingerprint = textureStateFingerprintCached(plan.textures());
+        if (!textureStateFingerprint.equals(uploadedTextureStateFingerprint)) {
+            textureStateBuffer.upload(plan.textures(), TEXTURE_LAYER_CAPACITY);
+            uploadedTextureStateFingerprint = textureStateFingerprint;
+        }
         GpuCommandVisibility visibility = visibilityCache.resolve(
                 runtimeGeometry, camera, plan.occluders(), plan.sceneWindow());
 
@@ -483,6 +484,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glUniform1f(brightnessLocation, (float) presentation.brightness());
         glUniform1f(exposureLocation, (float) presentation.exposure());
         glUniform1i(smoothBandingLocation, presentation.smoothBanding() ? 1 : 0);
+        glUniform1i(clientCycleLocation, clientCycle & TextureAnimation.CLIENT_CYCLE_MASK);
         boolean fogEnabled = presentation.fogDepthTiles() > 0;
         glUniform1i(useFogLocation, fogEnabled ? 1 : 0);
         if (fogEnabled) {
@@ -501,6 +503,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, paletteTexture);
+        glActiveTexture(GL_TEXTURE2);
+        textureStateBuffer.bind();
         resetDrawState();
         List<GpuDrawCommand> commands = plan.commands();
         // RuneLite uses GL_LEQUAL for its forward-Z native path.  This
@@ -509,14 +513,14 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // instead of failing a strict depth test. List.sort is stable, so
         // indices are only reordered relative to distinct priority values.
         List<Integer> opaqueOrder = opaqueOrder(plan, commands, visibility, camera);
-        drawBatches(plan, commands, opaqueOrder, visibility, camera, false, clientCycle);
+        drawBatches(commands, opaqueOrder, visibility, camera, false);
         // The software reference renderer composites transparent triangles
         // back-to-front. Keep opaque submission order stable, but apply the
         // same depth ordering to alpha ranges in the native backend.
         List<Integer> alphaOrder = alphaOrderFor(
                 runtimeGeometry, commands, visibility, camera);
         drawBatches(
-                plan, commands, alphaOrder, visibility, camera, true, clientCycle);
+                commands, alphaOrder, visibility, camera, true);
         // Alpha and no-depth submissions disable depth writes. Restore the
         // baseline before handing the context back to ImGui and before the
         // next frame's clear.
@@ -529,6 +533,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         lastFrameDepthWrites = true;
         lastFramePolygonMode = presentation.wireframe() ? GL_LINE : GL_FILL;
         glBindVertexArray(0);
+        glActiveTexture(GL_TEXTURE2);
+        textureStateBuffer.unbind();
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, 0);
         glActiveTexture(GL_TEXTURE0);
@@ -773,9 +779,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
     }
 
-    private void drawBatches(GpuUploadPlan plan, List<GpuDrawCommand> commands,
+    private void drawBatches(List<GpuDrawCommand> commands,
                             List<Integer> orderedIndices, GpuCommandVisibility visibility,
-                            CameraState camera, boolean alpha, int clientCycle) {
+                            CameraState camera, boolean alpha) {
         GpuDrawCommand.SubmissionPass pass = alpha
                 ? GpuDrawCommand.SubmissionPass.ALPHA
                 : GpuDrawCommand.SubmissionPass.OPAQUE;
@@ -794,7 +800,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 glBindVertexArray(alloc.vao());
                 lastBoundVao = alloc.vao();
             }
-            applyDrawState(plan, first, alpha, clientCycle);
+            applyDrawState(first, alpha);
             if (batches.commandCount() == 1) {
                 frameMetrics.record(first);
                 int localFirst = zoneManager.localFirstIndex(firstIndex);
@@ -933,19 +939,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return result;
     }
 
-    private void drawCommand(GpuUploadPlan plan, GpuDrawCommand command, int commandIndex,
-                             CameraState camera, boolean alpha, int clientCycle) {
-        long zoneKey = zoneManager.zoneKeyForCommand(commandIndex);
-        ZoneVboManager.ZoneAllocation alloc = zoneManager.allocation(zoneKey);
-        if (alloc == null) return;
-        glBindVertexArray(alloc.vao());
-        applyDrawState(plan, command, alpha, clientCycle);
-        glDrawElements(GL_TRIANGLES, command.indexCount(), GL_UNSIGNED_INT,
-                (long) zoneManager.localFirstIndex(commandIndex) * Integer.BYTES);
-    }
-
-    private void applyDrawState(GpuUploadPlan plan, GpuDrawCommand command,
-                                boolean alpha, int clientCycle) {
+    private void applyDrawState(GpuDrawCommand command, boolean alpha) {
         boolean expectedAlpha = command.pass() == GpuDrawCommand.SubmissionPass.ALPHA;
         if (alpha != expectedAlpha) {
             throw new IllegalArgumentException("Draw pass does not match command submission pass");
@@ -1008,27 +1002,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             glUniform1f(faceBiasLocation, faceBias);
             lastFaceBias = faceBias;
         }
-        RenderTextureResource resource = plan.textures().get(command.textureId());
-        TextureAnimation.UvOffset animation = resource == null
-                ? TextureAnimation.UvOffset.ZERO
-                : TextureAnimation.offset(resource, clientCycle);
-        if (animation.u() != lastTextureOffsetU || animation.v() != lastTextureOffsetV) {
-            glUniform2f(textureOffsetLocation, animation.u(), animation.v());
-            lastTextureOffsetU = animation.u();
-            lastTextureOffsetV = animation.v();
-        }
         int texLayer = Math.max(0, layer);
         if (texLayer != lastTextureLayer) {
             glUniform1i(textureLayerLocation, texLayer);
             lastTextureLayer = texLayer;
-        }
-        float[] scale = textureScales.get(command.textureId());
-        float scaleX = scale == null ? 1.0f : scale[0];
-        float scaleY = scale == null ? 1.0f : scale[1];
-        if (scaleX != lastTextureScaleX || scaleY != lastTextureScaleY) {
-            glUniform2f(textureScaleLocation, scaleX, scaleY);
-            lastTextureScaleX = scaleX;
-            lastTextureScaleY = scaleY;
         }
     }
 
@@ -1079,6 +1056,30 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return fingerprint;
     }
 
+    private String textureStateFingerprintCached(
+            Map<Integer, RenderTextureResource> resources) {
+        if (resources == fingerprintedTextureStateResources
+                && fingerprintedTextureStateFingerprint != null) {
+            return fingerprintedTextureStateFingerprint;
+        }
+        String fingerprint = textureStateFingerprint(resources);
+        fingerprintedTextureStateResources = resources;
+        fingerprintedTextureStateFingerprint = fingerprint;
+        return fingerprint;
+    }
+
+    private static String textureStateFingerprint(
+            Map<Integer, RenderTextureResource> resources) {
+        StringBuilder value = new StringBuilder();
+        resources.values().stream().sorted(Comparator.comparingInt(RenderTextureResource::id))
+                .forEach(texture -> value.append(texture.id())
+                        .append(':').append(texture.pixelStatus())
+                        .append(':').append(texture.width()).append('x').append(texture.height())
+                        .append(':').append(texture.definition().animationDirection())
+                        .append(':').append(texture.definition().animationSpeed()).append('|'));
+        return sha256(value.toString());
+    }
+
     private static String textureFingerprint(Map<Integer, RenderTextureResource> resources) {
         StringBuilder value = new StringBuilder();
         resources.values().stream().sorted(Comparator.comparingInt(RenderTextureResource::id))
@@ -1086,9 +1087,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                         .append(':').append(texture.pixelStatus())
                         .append(':').append(texture.width()).append('x').append(texture.height())
                         .append(':').append(texture.pixelHash()).append('|'));
+        return sha256(value.toString());
+    }
+
+    private static String sha256(String value) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(value.toString().getBytes(StandardCharsets.UTF_8));
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
             StringBuilder result = new StringBuilder(digest.length * 2);
             for (byte item : digest) result.append(String.format("%02x", item & 0xFF));
             return result.toString();
@@ -1100,7 +1105,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private void uploadTextureArray(Map<Integer, RenderTextureResource> resources) {
         if (textureArray != 0) org.lwjgl.opengl.GL11.glDeleteTextures(textureArray);
         textureLayers.clear();
-        textureScales.clear();
         List<RenderTextureResource> available = resources.values().stream()
                 .filter(RenderTextureResource::hasGpuPixels)
                 .sorted(Comparator.comparingInt(RenderTextureResource::id))
@@ -1181,7 +1185,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                     TEXTURE_SIZE, TEXTURE_SIZE, 1,
                     GL_RGBA, GL_UNSIGNED_BYTE, pixels);
             textureLayers.put(resource.id(), resource.id());
-            textureScales.put(resource.id(), new float[]{1.0f, 1.0f});
         }
         glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
     }
@@ -1194,14 +1197,17 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         paletteTexture = 0;
         if (textureArray != 0) org.lwjgl.opengl.GL11.glDeleteTextures(textureArray);
         textureArray = 0;
+        textureStateBuffer.close();
         textureLayers.clear();
-        textureScales.clear();
         if (program != 0) org.lwjgl.opengl.GL20.glDeleteProgram(program);
         program = 0;
         uploadedFingerprint = null;
         uploadedTextureFingerprint = null;
+        uploadedTextureStateFingerprint = null;
         fingerprintedTextureResources = null;
         fingerprintedTextureFingerprint = null;
+        fingerprintedTextureStateResources = null;
+        fingerprintedTextureStateFingerprint = null;
         fogBoundsGeometry = null;
         cachedFogBounds = null;
         orderedPlanFingerprint = null;

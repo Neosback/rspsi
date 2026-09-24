@@ -41,6 +41,16 @@ class TextureAnimationTest {
     }
 
     @Test
+    void exposesStaticPerCycleRateForGpuStateTables() {
+        TextureDefinitionView definition = definition(4, 3);
+        TextureAnimation.UvOffset rate = TextureAnimation.rate(definition, 128, 128);
+
+        assertEquals(new TextureAnimation.UvOffset(3.0f / 128.0f, 0.0f), rate);
+        assertEquals(new TextureAnimation.UvOffset(rate.u() * 32, rate.v() * 32),
+                TextureAnimation.offset(definition, 32, 128, 128));
+    }
+
+    @Test
     void wrapsAtTheSame128CyclePhaseAsRuneLiteGpu() {
         for (int direction = 1; direction <= 4; direction++) {
             assertEquals(offset(128, 128, direction, 3, 0),
