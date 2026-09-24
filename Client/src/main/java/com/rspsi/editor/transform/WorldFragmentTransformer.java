@@ -43,7 +43,8 @@ public final class WorldFragmentTransformer {
         Origin origin = targetOrigin(sourceBounds, transform, dimensions);
 
         List<WorldFragmentTransformResult.Diagnostic> diagnostics = new ArrayList<>();
-        if ((transform.mirrorX() || transform.mirrorY()) && !fragment.objects().isEmpty()) {
+        boolean hasOddReflection = transform.mirrorX() ^ transform.mirrorY();
+        if (hasOddReflection && !fragment.objects().isEmpty()) {
             diagnostics.add(new WorldFragmentTransformResult.Diagnostic(
                     WorldFragmentTransformResult.DiagnosticCode.OBJECT_MODEL_MIRROR_NOT_NATIVE,
                     "OSRS map locations have quarter-turn rotation but no generic model-mirror bit; "
