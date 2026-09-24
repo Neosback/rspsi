@@ -1603,7 +1603,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             return 4L;
         }
         for (RenderTextureResource resource : available) {
-            int[] source = resource.pixels();
             ByteBuffer pixels = BufferUtils.createByteBuffer(TEXTURE_SIZE * TEXTURE_SIZE * 4);
             for (int y = 0; y < TEXTURE_SIZE; y++) {
                 int sourceY = Math.min(resource.height() - 1,
@@ -1611,7 +1610,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 for (int x = 0; x < TEXTURE_SIZE; x++) {
                     int sourceX = Math.min(resource.width() - 1,
                             x * resource.width() / TEXTURE_SIZE);
-                    int argb = source[sourceY * resource.width() + sourceX];
+                    int argb = resource.pixelAt(sourceX, sourceY);
                     int rgb = argb & 0xFFFFFF;
                     // The client's transparency source is the texture's own
                     // alpha channel (`src >>> 24` in the textured scanline),
