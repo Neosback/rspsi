@@ -117,6 +117,19 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
             details.put("ClientScripts", "CS2/assembly source inventory available");
         }
 
+        long declarativeCount = inspection.content().stream()
+                .map(entry -> entry.path().getFileName().toString().toLowerCase())
+                .filter(name -> name.endsWith(".toml") || name.endsWith(".json"))
+                .count();
+        if (declarativeCount > 0) {
+            capabilities.add(IntegrationCapability.CONTENT_INDEX);
+            capabilities.add(IntegrationCapability.CONTENT_DIAGNOSTICS);
+            capabilities.add(IntegrationCapability.LOC_REFERENCES);
+            capabilities.add(IntegrationCapability.MAP_REFERENCES);
+            details.put("Declarative content", declarativeCount
+                    + " inspected TOML/JSON artifact(s)");
+        }
+
         inspection.path(ServerPathKey.RAW_CACHE).ifPresent(raw -> {
             Path npcs = raw.resolve("map").resolve("npcs");
             Path areas = raw.resolve("map").resolve("area");
