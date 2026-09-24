@@ -6,6 +6,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class GpuZoneStreamFingerprintsTest {
     private static final List<Integer> TRIANGLE = List.of(0, 1, 2);
@@ -59,6 +60,17 @@ class GpuZoneStreamFingerprintsTest {
         assertEquals(first.indices(), changed.indices());
         assertNotEquals(first.normals(), changed.normals());
         assertEquals(first.nativeFingerprint(), changed.nativeFingerprint());
+    }
+
+    @Test
+    void rejectsInconsistentFaceMetadataInsideOneTriangle() {
+        List<GpuSceneVertex> vertices = List.of(
+                vertex(0, 0, 0, 100, 255, 0, 0, 1, 2, 3, 4),
+                vertex(0, 1, 0, 100, 128, 0, 0, 1, 2, 3, 4),
+                vertex(0, 0, 1, 100, 255, 0, 0, 1, 2, 3, 4));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> GpuZoneUpload.fingerprints(vertices, TRIANGLE));
     }
 
     @Test
