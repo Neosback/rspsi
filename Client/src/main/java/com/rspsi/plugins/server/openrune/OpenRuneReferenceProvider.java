@@ -95,6 +95,7 @@ public final class OpenRuneReferenceProvider implements ReferenceProvider {
     private void indexLine(String line, int lineNum, String module, String relativePath) {
         scanPattern(line, lineNum, module, relativePath, "loc.", SymbolNamespace.LOC);
         scanPattern(line, lineNum, module, relativePath, "npc.", SymbolNamespace.NPC);
+        scanPattern(line, lineNum, module, relativePath, "obj.", SymbolNamespace.ITEM);
         scanPattern(line, lineNum, module, relativePath, "item.", SymbolNamespace.ITEM);
     }
 
@@ -117,6 +118,9 @@ public final class OpenRuneReferenceProvider implements ReferenceProvider {
                 allReferences.add(ref);
                 referencesBySymbol.computeIfAbsent(
                         fullSymbol.toLowerCase(Locale.ROOT), key -> new ArrayList<>()).add(ref);
+                String canonical = namespace.qualify(bareName);
+                referencesBySymbol.computeIfAbsent(
+                        canonical.toLowerCase(Locale.ROOT), key -> new ArrayList<>()).add(ref);
                 referencesBySymbol.computeIfAbsent(
                         bareName.toLowerCase(Locale.ROOT), key -> new ArrayList<>()).add(ref);
             }
