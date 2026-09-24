@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -25,6 +26,7 @@ import java.util.TreeSet;
 public record ChangePlan(
         String description,
         Map<WorldTile, TileChange> tileChanges,
+        Provenance provenance,
         List<String> diagnostics
 ) {
     public ChangePlan {
@@ -33,6 +35,7 @@ public record ChangePlan(
             throw new IllegalArgumentException("Change plan description cannot be blank");
         }
         Objects.requireNonNull(tileChanges, "tileChanges");
+        provenance = Objects.requireNonNull(provenance, "provenance");
         Objects.requireNonNull(diagnostics, "diagnostics");
         tileChanges = Collections.unmodifiableMap(new LinkedHashMap<>(tileChanges));
         diagnostics = List.copyOf(diagnostics);
@@ -87,6 +90,35 @@ public record ChangePlan(
         return new Builder(description);
     }
 
+    /**
+     * Reproducibility metadata for generated plans. Manual edits use
+     * {@link #manual()}; deterministic generators should provide the producer
+     * ID and seed used to calculate the plan.
+     */
+    public record Provenance(
+            String producer,
+            OptionalLong seed,
+            Map<String, String> attributes
+    ) {
+        public Provenance {
+            producer = Objects.requireNonNull(producer, "producer");
+            if (producer.isBlank()) {
+                throw new IllegalArgumentException("Provenance producer cannot be blank");
+            }
+            seed = Objects.requireNonNull(seed, "seed");
+            attributes = Collections.unmodifiableMap(
+                    new LinkedHashMap<>(Objects.requireNonNull(attributes, "attributes")));
+        }
+
+        public static Provenance manual() {
+            return new Provenance("manual", OptionalLong.empty(), Map.of());
+        }
+
+        public static Provenance deterministic(String producer, long seed) {
+            return new Provenance(producer, OptionalLong.of(seed), Map.of());
+        }
+    }
+
     public record TileChange(
             WorldTile tile,
             TileSnapshot before,
@@ -106,6 +138,7 @@ public record ChangePlan(
     public static final class Builder {
         private final String description;
         private final Map<WorldTile, TileChange> changes = new LinkedHashMap<>();
+        private Provenance provenance = Provenance.manual();
         private final List<String> diagnostics = new ArrayList<>();
 
         private Builder(String description) {
@@ -129,13 +162,18 @@ public record ChangePlan(
             return this;
         }
 
+        public Builder provenance(Provenance provenance) {
+            this.provenance = Objects.requireNonNull(provenance, "provenance");
+            return this;
+        }
+
         public Builder addDiagnostic(String diagnostic) {
             diagnostics.add(Objects.requireNonNull(diagnostic, "diagnostic"));
             return this;
         }
 
         public ChangePlan build() {
-            return new ChangePlan(description, changes, diagnostics);
+            return new ChangePlan(description, changes, provenance, diagnostics);
         }
     }
 }
