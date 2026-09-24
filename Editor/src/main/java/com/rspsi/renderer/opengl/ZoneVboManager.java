@@ -370,7 +370,7 @@ public final class ZoneVboManager implements AutoCloseable {
             pickerBytesUploaded += (long) vertices.size() * Integer.BYTES;
         }
         if (decision.indices()) {
-            arena.uploadIndices(allocation.indexOffset(), allocation.vertexOffset(), indices);
+            arena.uploadIndices(allocation.indexOffset(), allocation.vertexOffset(), zone);
             indexStreamUploads++;
             indexBytesUploaded += (long) indices.size() * Integer.BYTES;
         }
