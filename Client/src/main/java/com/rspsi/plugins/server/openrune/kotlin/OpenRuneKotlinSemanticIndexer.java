@@ -111,7 +111,7 @@ public final class OpenRuneKotlinSemanticIndexer {
         Set<Path> seen = new LinkedHashSet<>();
         for (GradleProjectModel.ProjectInfo project : model.projects()) {
             for (GradleProjectModel.SourceSetInfo sourceSet : project.sourceSets()) {
-                if (!sourceSet.name().equals("main")) continue;
+                if (!isProductionSourceSet(sourceSet.name())) continue;
                 for (Path root : sourceSet.sourceDirectories()) {
                     Path normalized = root.toAbsolutePath().normalize();
                     if (seen.add(normalized)) {
@@ -121,6 +121,14 @@ public final class OpenRuneKotlinSemanticIndexer {
             }
         }
         return List.copyOf(roots);
+    }
+
+    private static boolean isProductionSourceSet(String name) {
+        String value = name.toLowerCase(Locale.ROOT);
+        return !(value.contains("test")
+                || value.contains("integration")
+                || value.contains("benchmark")
+                || value.equals("jmh"));
     }
 
     private static List<Path> kotlinFiles(Path root) {
