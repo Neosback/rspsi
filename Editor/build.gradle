@@ -150,8 +150,8 @@ runtime {
 }
 
 application {
-    // Keep the dashboard launcher as the single application entry point. The
-    // legacy cache/plugin form is only reachable from Dashboard settings.
+    // The native project launcher is the single application entry point.
+    // OpenRune connections are owned by Studio project descriptors, never plugin settings.
     mainClass = "com.rspsi.studio.StudioMain"
     applicationName = 'OpenRuneStudio'
 }
