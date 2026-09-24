@@ -1,6 +1,6 @@
-# OpenRune Studio Project Launcher and Dashboard Contract
+# OpenRune Studio Project Launcher and Content Studio Contract
 
-> **Scope:** this document defines the application startup lifecycle, persistent Studio project model, project creation/opening flow, pre-dashboard loading gate, and the in-project Dashboard.
+> **Scope:** this document defines the application startup lifecycle, persistent Studio project model, project creation/opening flow, pre-Content Studio loading gate, and the in-project Content Studio.
 >
 > `docs/ROADMAP.md` remains authoritative for implementation order. `docs/OPENRUNE_ECOSYSTEM_INTEGRATION.md` remains authoritative for OpenRune cache/source ownership and publishing safety. `docs/UI_WORKSPACE_CONTRACT.md` remains authoritative after a project has entered the Studio workspace shell.
 
@@ -35,7 +35,7 @@ DASHBOARD
 
 The Project Launcher exists **before** any Studio project is active.
 
-The Dashboard exists **inside** an already-loaded project.
+The Content Studio exists **inside** an already-loaded project.
 
 These are not the same screen and must not be implemented as the same class with conditional sections.
 
@@ -45,9 +45,9 @@ The current application shell still behaves cache-first:
 
 - `StudioApplication` reads `RSPSI_OSRS_CACHE` or `StudioPreferences.recentCache()`;
 - a recent raw cache path may begin loading immediately during application construction;
-- `DashboardView` owns the editable cache-path field;
-- the Dashboard also owns the server-integration connection prompt;
-- cache decoder diagnostics consume a large part of the Dashboard;
+- `ContentStudioView` owns the editable cache-path field;
+- the Content Studio also owns the server-integration connection prompt;
+- cache decoder diagnostics consume a large part of the Content Studio;
 - workspace launch cards appear on the same screen used to select/repair the cache.
 
 That behavior is transitional.
@@ -56,10 +56,10 @@ The target is project-first:
 
 ```
 old:
-app -> recent cache -> dashboard/cache form -> workspace
+app -> recent cache -> Content Studio/cache form -> workspace
 
 new:
-app -> project launcher -> project selection -> loading gate -> dashboard -> workspace
+app -> project launcher -> project selection -> loading gate -> Content Studio -> workspace
 ```
 
 A raw cache path is project configuration, not application identity.
@@ -241,7 +241,7 @@ access" does not silently grant destructive/reset operations. Fresh-cache/reset 
 
 Import performs only bounded project/cache-role inspection. It must not recursively scan server
 content, evaluate the Gradle project model, build semantic graphs, or run repository-wide content
-indexing before the Dashboard is usable.
+indexing before the Content Studio is usable.
 
 ### 6.2 Continue without import
 
@@ -305,13 +305,13 @@ saved source-cache binding
    +--> restore output/provenance state
 ```
 
-If a source moved, the user repairs the project binding once through a relocation flow. The Dashboard should not revert to being a cache path editor.
+If a source moved, the user repairs the project binding once through a relocation flow. The Content Studio should not revert to being a cache path editor.
 
 ## 8. Project loading gate
 
-After a project is selected, the launcher disappears and a dedicated full-window loading view appears **before** the Dashboard.
+After a project is selected, the launcher disappears and a dedicated full-window loading view appears **before** the Content Studio.
 
-The Dashboard is shown only when the minimum required project state is usable.
+The Content Studio is shown only when the minimum required project state is usable.
 
 ### 8.1 Loading stages
 
@@ -335,7 +335,7 @@ ProjectLoadService
 
 For an OpenRune project, required service binding includes enough integration state to correctly establish LIVE/SERVER/source ownership before the user can edit.
 
-Optional expensive services such as thumbnail generation, broad content search indexes, or corpus analysis should not block the Dashboard unless a workspace actually requires them. They can expose their own warming/indexing status after the project is usable.
+Optional expensive services such as thumbnail generation, broad content search indexes, or corpus analysis should not block the Content Studio unless a workspace actually requires them. They can expose their own warming/indexing status after the project is usable.
 
 For OpenRune specifically, the startup inspection is bounded: it checks project markers, revision,
 cache-role paths and declared build availability without recursively fingerprinting LIVE/SERVER,
@@ -371,13 +371,13 @@ Show:
 - actionable failure state;
 - Cancel/Back while safe.
 
-Do not display the Dashboard behind the loading view.
+Do not display the Content Studio behind the loading view.
 
 Do not display a fake fine-grained percentage when the loader lacks that information. Instrument the loader so determinate stages/counts can become real over time.
 
 ### 8.3 Failure behavior
 
-A failed project open returns a project-specific repair screen, not the old generic cache Dashboard.
+A failed project open returns a project-specific repair screen, not the old generic cache Content Studio.
 
 Examples:
 
@@ -398,11 +398,11 @@ Offer:
 
 Never silently run `FreshCache` as repair.
 
-## 9. In-project Dashboard overhaul
+## 9. In-project Content Studio overhaul
 
-Once loading succeeds, the Dashboard becomes the **project home**, not project setup.
+Once loading succeeds, the Content Studio becomes the **project home**, not project setup.
 
-### 9.1 Dashboard goals
+### 9.1 Content Studio goals
 
 At a glance the user should know:
 
@@ -414,7 +414,7 @@ At a glance the user should know:
 - what they were working on recently;
 - what major workspace/action they can enter next.
 
-The first-release Dashboard must not show zero-valued modules/scripts/quests/content-graph metrics
+The first-release Content Studio must not show zero-valued modules/scripts/quests/content-graph metrics
 simply because expensive content indexing was intentionally deferred. Broader OpenRune content data
 belongs to a future content workspace and is activated on demand.
 
@@ -443,13 +443,13 @@ belongs to a future content workspace and is activated on demand.
 +------------------------------------------------------------------------+
 ```
 
-### 9.3 What moves off the main Dashboard
+### 9.3 What moves off the main Content Studio
 
 The current decoder census should not dominate the normal project home.
 
 Detailed counts for all cache indices, decoders, audio, graphics, definitions, and archives belong in a dedicated **Cache Diagnostics** / **Project Diagnostics** view.
 
-The Dashboard may show one compact health card:
+The Content Studio may show one compact health card:
 
 ```
 Cache: Ready
@@ -477,7 +477,7 @@ Persist lightweight recent project context:
 - recent selected asset/object where useful;
 - open workspace tabs where restoration is safe.
 
-The Dashboard's primary action should be `Continue` when meaningful.
+The Content Studio's primary action should be `Continue` when meaningful.
 
 Do not automatically build a large map scene during project load merely to support Continue. The cache/project can become READY first; workspace-specific scene loading begins when the workspace opens.
 
@@ -553,7 +553,7 @@ WorkspaceManager
   ...
 ```
 
-This keeps the Dashboard as a project workspace while allowing the Project Launcher and loading screen to exist cleanly outside it.
+This keeps the Content Studio as a project workspace while allowing the Project Launcher and loading screen to exist cleanly outside it.
 
 ## 12. Service boundaries
 
@@ -583,7 +583,7 @@ ProjectIntegrationBinding
   build actions
 ```
 
-`OsrsCacheSessionService` remains the cache-opening implementation component, but it should be orchestrated by the project loader rather than called directly from the launcher/dashboard UI.
+`OsrsCacheSessionService` remains the cache-opening implementation component, but it should be orchestrated by the project loader rather than called directly from the launcher/Content Studio UI.
 
 `ServerIntegrationService` remains the connected integration session coordinator.
 
@@ -609,9 +609,9 @@ Retire or migrate:
 
 - `StudioPreferences.recentCache()`;
 - automatic recent-cache loading in `StudioApplication`;
-- cache-path ownership in `DashboardView`;
-- server-project connection as an ad hoc Dashboard section;
-- the Dashboard as the primary cache diagnostics screen.
+- cache-path ownership in `ContentStudioView`;
+- server-project connection as an ad hoc Content Studio section;
+- the Content Studio as the primary cache diagnostics screen.
 
 Existing users with a remembered cache may be offered a one-time launcher action:
 
@@ -625,7 +625,7 @@ rather than silently opening it.
 
 - app starts without opening/decoding a cache;
 - recent projects render from lightweight metadata;
-- New/Open/Link flows work without entering the Dashboard;
+- New/Open/Link flows work without entering the Content Studio;
 - missing projects can be repaired or removed;
 - selecting a project enters PROJECT_LOADING.
 
@@ -639,13 +639,13 @@ rather than silently opening it.
 
 ### Loading
 
-- Dashboard is never visible before required project/cache initialization succeeds;
+- Content Studio is never visible before required project/cache initialization succeeds;
 - loading state reports current project and stage;
 - failure is project-specific and recoverable;
 - successful loading produces one authoritative current project session;
 - OpenRune LIVE/SERVER roles are resolved before edit workspaces can open.
 
-### Dashboard
+### Content Studio
 
 - no raw cache selector on normal project home;
 - project identity/status is prominent;
@@ -663,7 +663,7 @@ Projects own configuration.
 
 Loading establishes a trustworthy project runtime.
 
-The Dashboard summarizes an already-trustworthy project.
+The Content Studio summarizes an already-trustworthy project.
 
 Workspaces edit that project.
 
