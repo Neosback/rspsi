@@ -132,7 +132,7 @@ class OpenGlGpuPickerAcceptanceTest {
             int plane0 = PickerId.encode(
                     0, 0, 0, PickerId.slotFor(SceneLayer.Kind.GROUND_OBJECT));
             int plane1 = PickerId.encode(
-                    1, 0, 0, PickerId.slotFor(SceneLayer.Kind.GROUND_OBJECT));
+                    1, 1, 0, PickerId.slotFor(SceneLayer.Kind.GROUND_OBJECT));
 
             assertEquals(plane0,
                     renderer.pickId(plan, null, camera(), SIZE, SIZE,
@@ -215,20 +215,25 @@ class OpenGlGpuPickerAcceptanceTest {
         vertices.add(vertex(-25.0f, -20.0f, 100.0f, 0, slot));
         vertices.add(vertex(0.0f, 25.0f, 100.0f, 0, slot));
         vertices.add(vertex(25.0f, -20.0f, 100.0f, 0, slot));
-        vertices.add(vertex(-25.0f, -20.0f, 100.0f, 1, slot));
-        vertices.add(vertex(0.0f, 25.0f, 100.0f, 1, slot));
-        vertices.add(vertex(25.0f, -20.0f, 100.0f, 1, slot));
+        vertices.add(vertex(-25.0f, -20.0f, 100.0f, 1, 1, 0, slot));
+        vertices.add(vertex(0.0f, 25.0f, 100.0f, 1, 1, 0, slot));
+        vertices.add(vertex(25.0f, -20.0f, 100.0f, 1, 1, 0, slot));
 
         List<GpuDrawCommand> commands = List.of(
-                command(0, 0, 42),
-                command(1, 3, 43));
+                command(0, 0, 0, 42),
+                command(1, 1, 3, 43));
         return new GpuUploadPlan(vertices, List.of(0, 1, 2, 3, 4, 5), commands,
                 List.of(), Map.of(), "gpu-picker-planes");
     }
 
     private static GpuDrawCommand command(int plane, int firstIndex, int objectId) {
+        return command(plane, 0, firstIndex, objectId);
+    }
+
+    private static GpuDrawCommand command(
+            int plane, int tileX, int firstIndex, int objectId) {
         return new GpuDrawCommand(
-                WorldTileAddress.of(0, 0, plane),
+                WorldTileAddress.of(tileX, 0, plane),
                 SceneLayer.Kind.GROUND_OBJECT,
                 GpuDrawCommand.SubmissionPass.OPAQUE,
                 firstIndex, 3, -1, 6, objectId);
@@ -236,11 +241,23 @@ class OpenGlGpuPickerAcceptanceTest {
 
     private static GpuSceneVertex vertex(
             float x, float y, float z, int plane, int slot) {
-        return vertex(x, y, z, plane, slot, 0);
+        return vertex(x, y, z, plane, 0, 0, slot, 0);
     }
 
     private static GpuSceneVertex vertex(
             float x, float y, float z, int plane, int slot, int alpha) {
+        return vertex(x, y, z, plane, 0, 0, slot, alpha);
+    }
+
+    private static GpuSceneVertex vertex(
+            float x, float y, float z,
+            int plane, int tileX, int tileY, int slot) {
+        return vertex(x, y, z, plane, tileX, tileY, slot, 0);
+    }
+
+    private static GpuSceneVertex vertex(
+            float x, float y, float z,
+            int plane, int tileX, int tileY, int slot, int alpha) {
         return new GpuSceneVertex(
                 x, y, z,
                 0.0f, 0.0f,
@@ -248,6 +265,6 @@ class OpenGlGpuPickerAcceptanceTest {
                 0,
                 0, 0, 0, 0,
                 -1, alpha, 6,
-                plane, 0, 0, slot);
+                plane, tileX, tileY, slot);
     }
 }
