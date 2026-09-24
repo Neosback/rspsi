@@ -28,7 +28,7 @@ void main() {
             vec2 animationRate = textureState.zw;
             vec2 textureOffset = animationRate * float(uClientCycle);
             vec2 textureUv = vUv + textureOffset;
-            if (uTerrain != 0 || animationRate.x != 0.0 || animationRate.y != 0.0) {
+            if (uTerrain != 0 || textureOffset.x != 0.0 || textureOffset.y != 0.0) {
                 textureUv = fract(textureUv);
             }
             vec3 texCoord = vec3(textureUv * textureScale, float(uTextureLayer));
