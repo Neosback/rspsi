@@ -8,6 +8,7 @@ import com.rspsi.editor.integration.semantic.SemanticContentNodeKind;
 import com.rspsi.editor.integration.semantic.SemanticEvidenceKind;
 import com.rspsi.editor.integration.semantic.SemanticFactKind;
 import com.rspsi.editor.integration.semantic.SemanticRelationKind;
+import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.symbols.SymbolNamespace;
 import com.rspsi.server.ServerConnection;
 import com.rspsi.server.ServerIntegrationStatus;
@@ -230,9 +231,16 @@ class OpenRuneServerProviderTest {
         Files.writeString(resourceRoot.resolve("data/mining.toml"),
                 "rock = \"loc.coal_rock\"\n"
                         + "reward = \"obj.coal\"\n"
-                        + "xp_param = \"param.skill_xp\"\n");
+                        + "xp_param = \"param.skill_xp\"\n"
+                        + "\n[[object]]\n"
+                        + "id = \"loc.coal_rock\"\n"
+                        + "inherit = \"loc.coal_rock\"\n"
+                        + "contentGroup = \"content.rock\"\n"
+                        + "\n[object.params]\n"
+                        + "\"param.next_loc_stage\" = \"loc.depleted_rock\"\n");
 
-        Files.writeString(gamevals.resolve("loc.rscm"), "coal_rock=1234\n");
+        Files.writeString(gamevals.resolve("loc.rscm"),
+                "coal_rock=1234\ndepleted_rock=1235\n");
         Files.writeString(gamevals.resolve("obj.rscm"), "coal=2000\ncake=2001\n");
         Files.writeString(gamevals.resolve("varp.rscm"), "cookquest=3000\n");
         Files.writeString(gamevals.resolve("varbit.rscm"), "cook_done=4000\n");
@@ -240,7 +248,8 @@ class OpenRuneServerProviderTest {
         Files.writeString(gamevals.resolve("content.rscm"), "rock=6000\n");
         Files.writeString(gamevals.resolve("dbrow.rscm"), "mining_coalrock=55487\n");
         Files.writeString(gamevals.resolve("stat.rscm"), "mining=14\n");
-        Files.writeString(gamevals.resolve("param.rscm"), "skill_xp=65493\n");
+        Files.writeString(gamevals.resolve("param.rscm"),
+                "skill_xp=65493\nnext_loc_stage=65533\n");
 
         String payload = "{"
                 + "\"rootName\":\"CustomOpenRune\","
@@ -308,6 +317,46 @@ class OpenRuneServerProviderTest {
         assertTrue(graph.incoming(skillXpParam.id(), SemanticRelationKind.REFERENCES).stream()
                 .flatMap(edge -> edge.evidence().stream())
                 .anyMatch(evidence -> evidence.kind() == SemanticEvidenceKind.DECLARATIVE_REFERENCE));
+
+        var selected = new WorldObject(1234, 10, 0, 0, 10, 10);
+        var object = graph.objectDefinition(selected.id()).orElseThrow();
+        assertEquals(SemanticContentNodeKind.OBJECT_DEFINITION, object.kind());
+        assertEquals("loc.coal_rock", object.attributes().get("objectSymbol"));
+        assertEquals("1234", object.attributes().get("numericId"));
+        assertEquals("true", object.attributes().get("writableSource"));
+        assertTrue(object.evidence().stream()
+                .anyMatch(evidence -> evidence.kind() == SemanticEvidenceKind.DECLARATIVE_STRUCTURE));
+
+        var identifiedLoc = graph.outgoing(object.id(), SemanticRelationKind.IDENTIFIED_BY).stream()
+                .map(edge -> graph.node(edge.to()).orElseThrow())
+                .findFirst()
+                .orElseThrow();
+        assertEquals("loc.coal_rock", identifiedLoc.key());
+
+        var objectContentGroup = graph.outgoing(object.id(), SemanticRelationKind.CONTENT_GROUP).stream()
+                .findFirst()
+                .orElseThrow();
+        assertEquals(rock.id(), objectContentGroup.to());
+        assertTrue(objectContentGroup.evidence().stream()
+                .anyMatch(evidence -> evidence.kind() == SemanticEvidenceKind.DECLARATIVE_STRUCTURE
+                        && evidence.sourceSpan().isPresent()));
+
+        assertTrue(graph.incoming(objectContentGroup.to(), SemanticRelationKind.TARGETS).stream()
+                .map(edge -> graph.node(edge.from()).orElseThrow())
+                .anyMatch(node -> node.kind() == SemanticContentNodeKind.HANDLER
+                        && node.label().equals("onOpContentLoc1")));
+
+        var nextStageParam = graph.symbol("param.next_loc_stage").orElseThrow();
+        assertEquals("65533", nextStageParam.attributes().get("numericId"));
+        assertTrue(graph.outgoing(object.id(), SemanticRelationKind.HAS_PARAM).stream()
+                .anyMatch(edge -> edge.to().equals(nextStageParam.id())
+                        && "loc.depleted_rock".equals(edge.attributes().get("value"))));
+
+        var depleted = graph.symbol("loc.depleted_rock").orElseThrow();
+        assertEquals("1235", depleted.attributes().get("numericId"));
+        assertTrue(graph.outgoing(object.id(), SemanticRelationKind.PARAM_VALUE).stream()
+                .anyMatch(edge -> edge.to().equals(depleted.id())
+                        && "param.next_loc_stage".equals(edge.attributes().get("param"))));
 
         var quest = graph.nodes(SemanticContentNodeKind.QUEST).stream()
                 .filter(node -> node.label().equals("CooksAssistant"))

@@ -81,6 +81,12 @@ public final class SemanticContentGraph {
         return node(SemanticSymbolNames.nodeId(canonical));
     }
 
+    /** Server-side semantic overlay for a concrete cache/world object ID, when known. */
+    public Optional<SemanticContentNode> objectDefinition(int objectId) {
+        if (objectId < 0) return Optional.empty();
+        return node("object:" + objectId);
+    }
+
     public List<SemanticContentNode> nodes(SemanticContentNodeKind kind) {
         return byKind.getOrDefault(Objects.requireNonNull(kind, "kind"), List.of());
     }

@@ -32,12 +32,24 @@ public final class SemanticContentGraphBuilder {
             SemanticSourceIndex sourceIndex,
             SymbolProvider symbolProvider,
             ReferenceProvider referenceProvider) {
+        return build(projectRoot, sourceIndex, symbolProvider, referenceProvider, null);
+    }
+
+    public SemanticContentGraph build(
+            Path projectRoot,
+            SemanticSourceIndex sourceIndex,
+            SymbolProvider symbolProvider,
+            ReferenceProvider referenceProvider,
+            ServerObjectSemanticIndex objectOverlays) {
         Path root = Objects.requireNonNull(projectRoot, "projectRoot")
                 .toAbsolutePath().normalize();
         State state = new State(root);
 
         if (sourceIndex != null) {
             state.diagnostics.addAll(sourceIndex.diagnostics());
+        }
+        if (objectOverlays != null) {
+            state.diagnostics.addAll(objectOverlays.diagnostics());
         }
         if (symbolProvider != null) {
             ingestSymbols(state, symbolProvider);
@@ -47,6 +59,9 @@ public final class SemanticContentGraphBuilder {
         }
         if (referenceProvider != null) {
             ingestDeclarativeReferences(state, referenceProvider);
+        }
+        if (objectOverlays != null) {
+            ingestObjectOverlays(state, objectOverlays);
         }
 
         return state.freeze();
@@ -274,6 +289,126 @@ public final class SemanticContentGraphBuilder {
                     Map.of("contextType", reference.contextType()),
                     evidence);
         }
+    }
+
+    private static void ingestObjectOverlays(
+            State state,
+            ServerObjectSemanticIndex index) {
+        for (ServerObjectSemanticOverlay overlay : index.overlays()) {
+            SemanticEvidence blockEvidence = objectEvidence(
+                    overlay, null, Map.of("field", "object"));
+
+            String canonicalLoc = SemanticSymbolNames.canonical(overlay.objectSymbol());
+            String objectId = overlay.resolved()
+                    ? "object:" + overlay.objectId()
+                    : "object-symbol:" + canonicalLoc;
+
+            MutableNode object = state.ensureNode(
+                    objectId,
+                    SemanticContentNodeKind.OBJECT_DEFINITION,
+                    canonicalLoc,
+                    overlay.objectSymbol());
+            object.attributes.putIfAbsent("objectSymbol", canonicalLoc);
+            object.attributes.putIfAbsent(
+                    "writableSource", Boolean.toString(overlay.writableSource()));
+            object.attributes.putIfAbsent("sourcePath", overlay.blockSource().file().toString());
+            if (overlay.resolved()) {
+                object.attributes.putIfAbsent("numericId", Integer.toString(overlay.objectId()));
+            }
+            if (!object.evidence.contains(blockEvidence)) object.evidence.add(blockEvidence);
+
+            SemanticEvidence idEvidence = objectEvidence(
+                    overlay, "id", Map.of("field", "id"));
+            MutableNode locSymbol = state.ensureSymbol(
+                    overlay.objectSymbol(), overlay.objectSymbol(), idEvidence);
+            if (overlay.resolved()) {
+                state.mergeAttributes(locSymbol, Map.of(
+                        "resolved", "true",
+                        "numericId", Integer.toString(overlay.objectId())));
+            }
+            state.ensureEdge(
+                    object.id,
+                    locSymbol.id,
+                    SemanticRelationKind.IDENTIFIED_BY,
+                    1.0f,
+                    Map.of("sourceField", "id"),
+                    idEvidence);
+
+            overlay.inheritSymbol().ifPresent(inherit -> {
+                SemanticEvidence evidence = objectEvidence(
+                        overlay, "inherit", Map.of("field", "inherit"));
+                MutableNode target = state.ensureSymbol(inherit, inherit, evidence);
+                state.ensureEdge(
+                        object.id,
+                        target.id,
+                        SemanticRelationKind.INHERITS,
+                        1.0f,
+                        Map.of(),
+                        evidence);
+            });
+
+            overlay.contentGroupSymbol().ifPresent(group -> {
+                SemanticEvidence evidence = objectEvidence(
+                        overlay, "contentGroup", Map.of("field", "contentGroup"));
+                MutableNode target = state.ensureSymbol(group, group, evidence);
+                state.ensureEdge(
+                        object.id,
+                        target.id,
+                        SemanticRelationKind.CONTENT_GROUP,
+                        1.0f,
+                        Map.of(),
+                        evidence);
+            });
+
+            overlay.params().forEach((param, value) -> {
+                SemanticEvidence evidence = objectEvidence(
+                        overlay,
+                        "param:" + param,
+                        Map.of("field", "param", "param", param, "value", value));
+                MutableNode paramNode = state.ensureSymbol(param, param, evidence);
+                state.ensureEdge(
+                        object.id,
+                        paramNode.id,
+                        SemanticRelationKind.HAS_PARAM,
+                        1.0f,
+                        Map.of("value", value),
+                        evidence);
+
+                if (SemanticSymbolNames.looksQualified(value)) {
+                    MutableNode valueNode = state.ensureSymbol(value, value, evidence);
+                    state.ensureEdge(
+                            object.id,
+                            valueNode.id,
+                            SemanticRelationKind.PARAM_VALUE,
+                            1.0f,
+                            Map.of("param", SemanticSymbolNames.canonical(param)),
+                            evidence);
+                }
+            });
+        }
+    }
+
+    private static SemanticEvidence objectEvidence(
+            ServerObjectSemanticOverlay overlay,
+            String field,
+            Map<String, String> attributes) {
+        SourceSpan span = field == null
+                ? overlay.blockSource()
+                : overlay.fieldSource(field).orElse(overlay.blockSource());
+        LinkedHashMap<String, String> details = new LinkedHashMap<>(attributes);
+        details.put("objectSymbol", overlay.objectSymbol());
+        details.put("writableSource", Boolean.toString(overlay.writableSource()));
+        if (overlay.resolved()) {
+            details.put("numericId", Integer.toString(overlay.objectId()));
+        }
+        return new SemanticEvidence(
+                SemanticEvidenceKind.DECLARATIVE_STRUCTURE,
+                "openrune.object-overlays",
+                java.util.Optional.of(span),
+                span.file().toString(),
+                span.startLine(),
+                1.0f,
+                details);
     }
 
     private static MutableNode ownerNode(

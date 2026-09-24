@@ -250,7 +250,28 @@ The fourth implementation slice introduces the first read-only Semantic Content 
 
 The first acceptance joins `onOpContentLoc1("content.rock")`, a `QuestScript` quest var, a `boolVarBit` binding, declarative TOML references, and numeric GameVal/RSCM mappings into one graph while proving `obj.coal` and neutral `item.coal` are one identity.
 
-The next convergence step is to attach map/cache entities to these existing symbol nodes, then add domain facets and edit-lens metadata only where provenance identifies a lossless writable origin and a verified mutation strategy. CS2 and runtime traces can later attach to the same graph rather than creating parallel relationship systems.
+The fifth implementation slice attaches map-object identity to authored OpenRune server semantics:
+
+- OpenRune's client/LIVE object definition is **not** treated as the source of `contentGroup`; that field belongs to `ObjectServerType` in the generated SERVER cache;
+- `PackServerConfig` / `ObjectServerCodec` populate that server field from source-controlled `[[object]]` TOML overlays, so Studio indexes the authored overlay first;
+- structured object overlays preserve `id`, `inherit`, `contentGroup`, `[object.params]`, resolved loc ID, and block/field source spans;
+- a map/world object's numeric ID can query an `OBJECT_DEFINITION` graph node directly;
+- the object node links to its loc identity, inherited loc, content group, parameter IDs, and symbolic parameter values;
+- authored-source evidence is marked separately from generic line-scanned declarative references;
+- duplicate object overlays are diagnosed instead of silently choosing a source;
+- `writableSource=true` means only that the fact came from an authored source file. It does **not** grant mutation authority until an edit lens has stale-source and verification rules.
+
+This gives Studio its first concrete end-to-end map/content path:
+
+    WorldObject.id
+      -> loc.* identity
+      -> authored [[object]]
+      -> content.*
+      -> Kotlin handler registration
+
+SERVER-cache `ObjectServerType` decoding should later be added as generated-result verification/fallback, not used to erase the authored provenance that makes low-code editing safe.
+
+The next convergence step is to promote useful domain facets over this graph (for example an object/content inspector and handler lookup), then define the first verified edit lens for a narrow TOML field before attempting arbitrary Kotlin rewriting. CS2 and runtime traces can later attach to the same graph rather than creating parallel relationship systems.
 
 ## OpenRune-FileStore
 

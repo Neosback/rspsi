@@ -139,9 +139,25 @@ Initial directed relation kinds:
     BINDS_STATE
     USES_STATE
 
-A later map/cache integration should attach authored/resolved map entities to the existing canonical symbol nodes rather than create a second object-identity graph.
+Map/cache integration attaches server-side object semantics to the existing canonical symbol nodes rather than creating a second object-identity graph.
 
-Likewise, edit lenses must be an additional capability layered on graph provenance. A node is editable only when Studio can identify a supported writable origin, a mutation strategy, stale-source validation, and post-write verification. A read-only reference or generated mapping is never sufficient by itself.
+For OpenRune object content, the source-of-truth split is explicit:
+
+- LIVE/client object definitions describe client-facing object appearance/interaction data;
+- source-controlled `[[object]]` TOML overlays describe authored server additions such as `contentGroup` and server params;
+- the generated SERVER cache contains the merged `ObjectServerType` result.
+
+The graph therefore models an `OBJECT_DEFINITION` node keyed by resolved map/cache object ID when available, with typed relationships:
+
+    IDENTIFIED_BY -> loc.*
+    INHERITS      -> loc.*
+    CONTENT_GROUP -> content.*
+    HAS_PARAM     -> param.*
+    PARAM_VALUE   -> symbolic value
+
+This is sufficient for a selected `WorldObject.id` to reach the server content group and then the Kotlin handlers that target that group without guessing from display names.
+
+Likewise, edit lenses must be an additional capability layered on graph provenance. A node is editable only when Studio can identify a supported writable origin, a mutation strategy, stale-source validation, and post-write verification. A read-only reference or generated mapping is never sufficient by itself. An authored-source flag is provenance, not permission to rewrite the file.
 
 ### 2.5 Real content truth
 

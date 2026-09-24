@@ -6,5 +6,6 @@ public enum SemanticContentNodeKind {
     SCRIPT,
     QUEST,
     HANDLER,
+    OBJECT_DEFINITION,
     RESOURCE
 }
