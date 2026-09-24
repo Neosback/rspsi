@@ -131,7 +131,9 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
         ServerDetection detection = detect(root);
         Map<ServerPathKey, Path> paths = resolvePaths(connection);
         List<String> diagnostics = new ArrayList<>();
-        ServerGitState git = readGit(root);
+        // Startup must stay bounded. Do not run git status or recursively walk
+        // cache/content trees before the project shell is usable.
+        ServerGitState git = ServerGitState.unavailable();
         String revision = readRevision(root);
         List<ServerContentEntry> content = List.of();
         List<ServerPluginInfo> plugins = List.of();
@@ -147,9 +149,9 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
             diagnostics.add("No Gradle wrapper found; configure command overrides to enable builds");
         }
 
-        String fingerprint = fingerprint(root, paths, content, plugins, git, revision);
+        String fingerprint = startupFingerprint(root, paths, revision);
         ServerIntegrationStatus status = status(connection, detection, revision, paths, tasks,
-                fingerprint, diagnostics);
+                fingerprint, diagnostics, false);
         return new ServerProjectInspection(connection, detection, status, paths, revision, git,
                 content, plugins, tasks, capabilities, diagnostics, fingerprint);
     }
@@ -353,13 +355,23 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
                                                   Map<ServerPathKey, Path> paths,
                                                   List<ServerBuildTask> tasks, String fingerprint,
                                                   List<String> diagnostics) {
+        return status(connection, detection, revision, paths, tasks, fingerprint, diagnostics, true);
+    }
+
+    private static ServerIntegrationStatus status(ServerConnection connection,
+                                                  ServerDetection detection, String revision,
+                                                  Map<ServerPathKey, Path> paths,
+                                                  List<ServerBuildTask> tasks, String fingerprint,
+                                                  List<String> diagnostics,
+                                                  boolean compareExpectedFingerprint) {
         if (!detection.matched()) return ServerIntegrationStatus.NOT_DETECTED;
         if (!revision.isEmpty() && !(revision.equals("240") || revision.startsWith("240."))) {
             diagnostics.add("Detected cache revision is outside the verified first-party cache profile; "
                     + "project integration remains available but cache semantics require validation: "
                     + revision);
         }
-        if (!connection.expectedFingerprint().isEmpty()
+        if (compareExpectedFingerprint
+                && !connection.expectedFingerprint().isEmpty()
                 && !connection.expectedFingerprint().equals(fingerprint)) {
             diagnostics.add("The server project changed since this connection was saved");
             return ServerIntegrationStatus.STALE;
@@ -502,6 +514,43 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
             if (matcher.find()) return matcher.group(1);
         }
         return "";
+    }
+
+    /**
+     * Bounded project identity used only by the startup gate.
+     *
+     * <p>Do not recurse through LIVE/SERVER/raw caches, content trees, GameVals
+     * or plugin directories here. Those trees can contain tens of thousands of
+     * files and made the launcher appear frozen at the integration-inspection
+     * stage. Full inspection keeps the stronger content fingerprint for the
+     * workflows that actually need stale-source protection.</p>
+     */
+    private static String startupFingerprint(Path root,
+                                             Map<ServerPathKey, Path> paths,
+                                             String revision) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            update(digest, "startup-v1");
+            update(digest, "revision=" + revision);
+            for (String relative : IMPORTANT_FILES) {
+                hashPath(digest, root.resolve(relative), root);
+            }
+            for (Map.Entry<ServerPathKey, Path> entry : paths.entrySet()) {
+                Path value = entry.getValue();
+                update(digest, entry.getKey().configName() + "=" + displayPath(root, value));
+                try {
+                    update(digest, "exists=" + Files.exists(value));
+                    if (Files.exists(value)) {
+                        update(digest, "mtime=" + Files.getLastModifiedTime(value).toMillis());
+                    }
+                } catch (IOException ignored) {
+                    update(digest, "unreadable=" + displayPath(root, value));
+                }
+            }
+            return hex(digest.digest());
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
     }
 
     private static String fingerprint(Path root, Map<ServerPathKey, Path> paths,
