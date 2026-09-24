@@ -1602,8 +1602,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
             return 4L;
         }
+        ByteBuffer pixels = BufferUtils.createByteBuffer(TEXTURE_SIZE * TEXTURE_SIZE * 4);
         for (RenderTextureResource resource : available) {
-            ByteBuffer pixels = BufferUtils.createByteBuffer(TEXTURE_SIZE * TEXTURE_SIZE * 4);
+            pixels.clear();
             for (int y = 0; y < TEXTURE_SIZE; y++) {
                 int sourceY = Math.min(resource.height() - 1,
                         y * resource.height() / TEXTURE_SIZE);
