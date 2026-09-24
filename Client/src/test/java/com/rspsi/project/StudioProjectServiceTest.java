@@ -121,6 +121,51 @@ class StudioProjectServiceTest {
         assertTrue(registry.recent().isEmpty());
     }
 
+    @Test
+    void automaticStandaloneNeedsOnlyCacheDirectoryAndReusesProject() throws Exception {
+        Path cache = cache("my-cache");
+        StudioProjectRegistry registry =
+                new StudioProjectRegistry(temp.resolve("studio/recent-projects.json"));
+        StudioProjectService service = new StudioProjectService(registry);
+
+        StudioProjectDescriptor first = service.createStandalone(cache);
+        StudioProjectDescriptor reopened = service.createStandalone(cache);
+
+        assertEquals("my-cache", first.name());
+        assertEquals(first.projectId(), reopened.projectId());
+        assertEquals(cache.toAbsolutePath().normalize(), first.sourcePathValue());
+        assertTrue(first.projectDataPath().startsWith(temp.resolve("studio/projects").toAbsolutePath()));
+        assertTrue(Files.isRegularFile(
+                StudioProjectDescriptorStore.descriptorPath(first.projectDataPath())));
+        assertEquals(1, registry.recent().size());
+    }
+
+    @Test
+    void automaticOpenRuneImportNeedsOnlyServerDirectoryAndAccessLevel() throws Exception {
+        Path server = temp.resolve("OpenRune-Server");
+        Files.createDirectories(server.resolve("or-cache"));
+        Files.writeString(server.resolve("or-cache/build.gradle.kts"), "");
+        Files.writeString(server.resolve("game.yml"), "revision: 240.2\n");
+        Files.writeString(server.resolve("gradlew"), "#!/bin/sh\n");
+
+        StudioProjectRegistry registry =
+                new StudioProjectRegistry(temp.resolve("studio/recent-projects.json"));
+        StudioProjectService service = new StudioProjectService(registry);
+
+        StudioProjectDescriptor descriptor =
+                service.linkOpenRune(server, ProjectIntegrationPreset.AUTHOR);
+
+        assertEquals("OpenRune-Server", descriptor.name());
+        assertEquals(StudioProjectKind.OPENRUNE_SERVER, descriptor.kind());
+        assertEquals(server.toAbsolutePath().normalize(), descriptor.sourcePathValue());
+        assertTrue(descriptor.capabilities()
+                .contains(ProjectIntegrationCapability.PROJECT_SOURCE_WRITE));
+        assertFalse(descriptor.capabilities()
+                .contains(ProjectIntegrationCapability.CACHE_BUILD));
+        assertTrue(descriptor.projectDataPath().startsWith(
+                temp.resolve("studio/projects").toAbsolutePath()));
+    }
+
     private Path cache(String name) throws Exception {
         Path cache = temp.resolve(name);
         Files.createDirectories(cache);
