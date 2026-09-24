@@ -1,7 +1,5 @@
 package com.rspsi.editor;
 
-import java.util.Objects;
-
 /**
  * Neutral persistence boundary for a loaded multi-region editor window.
  *
@@ -11,8 +9,4 @@ import java.util.Objects;
 @FunctionalInterface
 public interface WorldRegionSaveHandler {
     void save(WorldRegionSessionWindow window);
-
-    static WorldRegionSaveHandler require(WorldRegionSaveHandler handler) {
-        return Objects.requireNonNull(handler, "handler");
-    }
 }
