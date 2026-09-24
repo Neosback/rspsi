@@ -37,7 +37,20 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private float imageOriginX;
     private float imageOriginY;
     private PickResult selection;
-    private boolean gpuPickingEnabled = true;
+    // CPU DDA is the authoritative editor picker and does not require a second
+    // scene render or synchronous GPU readback. GPU ID picking remains available
+    // as an explicit diagnostic/acceleration option.
+    private boolean gpuPickingEnabled = false;
+    private GpuUploadPlan cachedPickPlan;
+    private GpuZonedUploadPlan cachedPickZonedPlan;
+    private CameraState cachedPickCamera;
+    private SceneCameraProjection cachedPickProjection;
+    private Integer cachedPickPlaneRestriction;
+    private int cachedPickWidth;
+    private int cachedPickHeight;
+    private float cachedPickX = Float.NaN;
+    private float cachedPickY = Float.NaN;
+    private java.util.Optional<PickResult> cachedPickResult;
     private boolean initialized;
     private boolean closed;
     private final ViewportController navigation = new ViewportController(
@@ -159,7 +172,9 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
      * because it happens to be rendered. Pass {@code null} to remove the restriction.
      */
     public void setPickPlaneRestriction(Integer plane) {
+        if (Objects.equals(this.pickPlaneRestriction, plane)) return;
         this.pickPlaneRestriction = plane;
+        invalidatePickCache();
     }
 
     /**
@@ -173,29 +188,77 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
             return java.util.Optional.empty();
         }
 
+        if (samePickQuery(x, y)) {
+            return cachedPickResult;
+        }
+
+        java.util.Optional<PickResult> result = java.util.Optional.empty();
         if (gpuPickingEnabled) {
             int packedId = renderer.pickId(
                     lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight,
                     x, y, pickPlaneRestriction);
             if (PickerId.isValid(packedId)) {
-                java.util.Optional<PickResult> exact = picker.pickMatchingId(
+                result = picker.pickMatchingId(
                         lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight,
                         x, y, lastFrameProjection, pickPlaneRestriction, packedId);
-                if (exact.isPresent()) {
-                    return exact;
-                }
             }
         }
 
-        // The DDA path remains the authoritative fallback/reference. This also
-        // protects selection if a driver rejects the optional integer pass or
-        // a future shader/visibility change temporarily breaks GPU parity.
-        return picker.pick(lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight, x, y,
-                lastFrameProjection, pickPlaneRestriction);
+        if (result.isEmpty()) {
+            // The DDA path remains the authoritative fallback/reference. This also
+            // protects selection if a driver rejects the optional integer pass or
+            // a future shader/visibility change temporarily breaks GPU parity.
+            result = picker.pick(lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight, x, y,
+                    lastFrameProjection, pickPlaneRestriction);
+        }
+
+        cachePick(x, y, result);
+        return result;
+    }
+
+    private boolean samePickQuery(float x, float y) {
+        return cachedPickResult != null
+                && cachedPickPlan == lastPlan
+                && cachedPickZonedPlan == zonedPlan
+                && Objects.equals(cachedPickCamera, lastFrameCamera)
+                && Objects.equals(cachedPickProjection, lastFrameProjection)
+                && Objects.equals(cachedPickPlaneRestriction, pickPlaneRestriction)
+                && cachedPickWidth == lastWidth
+                && cachedPickHeight == lastHeight
+                && Float.floatToIntBits(cachedPickX) == Float.floatToIntBits(x)
+                && Float.floatToIntBits(cachedPickY) == Float.floatToIntBits(y);
+    }
+
+    private void cachePick(float x, float y, java.util.Optional<PickResult> result) {
+        cachedPickPlan = lastPlan;
+        cachedPickZonedPlan = zonedPlan;
+        cachedPickCamera = lastFrameCamera;
+        cachedPickProjection = lastFrameProjection;
+        cachedPickPlaneRestriction = pickPlaneRestriction;
+        cachedPickWidth = lastWidth;
+        cachedPickHeight = lastHeight;
+        cachedPickX = x;
+        cachedPickY = y;
+        cachedPickResult = Objects.requireNonNull(result, "pick result");
+    }
+
+    private void invalidatePickCache() {
+        cachedPickPlan = null;
+        cachedPickZonedPlan = null;
+        cachedPickCamera = null;
+        cachedPickProjection = null;
+        cachedPickPlaneRestriction = null;
+        cachedPickWidth = 0;
+        cachedPickHeight = 0;
+        cachedPickX = Float.NaN;
+        cachedPickY = Float.NaN;
+        cachedPickResult = null;
     }
 
     public void setGpuPickingEnabled(boolean enabled) {
+        if (gpuPickingEnabled == enabled) return;
         gpuPickingEnabled = enabled;
+        invalidatePickCache();
         if (initialized) {
             renderer.setGpuPickingEnabled(enabled);
         }
