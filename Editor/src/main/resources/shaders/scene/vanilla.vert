@@ -24,6 +24,7 @@ out vec2 vUv;
 noperspective out float vEncodedColor;
 out float vAlpha;
 out float vRenderType;
+out float vPriority;
 out vec3 vColor;
 out float vFogAmount;
 out vec3 vNormal;
@@ -66,6 +67,7 @@ void main() {
     vEncodedColor = aEncodedColor;
     vAlpha = aAlpha;
     vRenderType = aRenderType;
+    vPriority = aPriority;
     vColor = aColor;
     vNormal = aNormal.xyz;
     vViewDepth = depth;
