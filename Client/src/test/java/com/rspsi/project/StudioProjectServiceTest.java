@@ -164,6 +164,12 @@ class StudioProjectServiceTest {
                 .contains(ProjectIntegrationCapability.CACHE_BUILD));
         assertTrue(descriptor.projectDataPath().startsWith(
                 temp.resolve("studio/projects").toAbsolutePath()));
+
+        StudioProjectDescriptor upgraded =
+                service.linkOpenRune(server, ProjectIntegrationPreset.MANAGED_BUILD);
+        assertEquals(descriptor.projectId(), upgraded.projectId());
+        assertTrue(upgraded.capabilities()
+                .contains(ProjectIntegrationCapability.CACHE_BUILD));
     }
 
     private Path cache(String name) throws Exception {
