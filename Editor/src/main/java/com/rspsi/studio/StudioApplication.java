@@ -169,7 +169,7 @@ public final class StudioApplication implements AutoCloseable {
     private boolean closed;
 
     public StudioApplication() {
-        window = new NativeWindow(1320, 860, "OpenRune Studio");
+        window = new NativeWindow(1120, 820, "OpenRune Studio");
         integrations = new ServerIntegrationService(symbols, references, spawns);
         integrations.registerProvider(new OpenRuneServerProvider());
         SettingsJsonStore.load(settingsFile, renderSettings);
@@ -1171,6 +1171,7 @@ public final class StudioApplication implements AutoCloseable {
         sceneViewport.close();
         SettingsJsonStore.save(settingsFile, renderSettings);
         cacheSessions.close();
+        StudioBranding.close();
         imgui.close();
         window.close();
     }
