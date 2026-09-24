@@ -289,6 +289,47 @@ class WorldRegionSessionWindowTest {
         assertEquals(1, sessions.changeHistory().position());
     }
 
+    @Test
+    void listenerFailureRollsBackEveryRegionIncludingTheFailingSession() {
+        WorldDocument westDocument = new WorldDocument(64, 64, 1);
+        WorldDocument eastDocument = new WorldDocument(64, 64, 1);
+        WorldRegion west = new WorldRegion(50, 50, westDocument);
+        WorldRegion east = new WorldRegion(51, 50, eastDocument);
+        WorldRegionWindow window = new WorldRegionWindow(50, 50, 2, 1, Map.of(
+                west.regionId(), west,
+                east.regionId(), east));
+        EditorSession westSession = new EditorSession(westDocument, west.window());
+        EditorSession eastSession = new EditorSession(eastDocument, east.window());
+        WorldRegionSessionWindow sessions = new WorldRegionSessionWindow(window, Map.of(
+                west.regionId(), westSession,
+                east.regionId(), eastSession));
+
+        WorldTile westTile = new WorldTile(0, 50 * 64 + 63, 50 * 64 + 10);
+        WorldTile eastTile = new WorldTile(0, 51 * 64, 50 * 64 + 10);
+        TileSnapshot westBefore = westDocument.tile(0, 63, 10).snapshot();
+        TileSnapshot eastBefore = eastDocument.tile(0, 0, 10).snapshot();
+
+        java.util.concurrent.atomic.AtomicBoolean failOnce =
+                new java.util.concurrent.atomic.AtomicBoolean(true);
+        eastSession.addChangeListener(ignored -> {
+            if (failOnce.getAndSet(false)) {
+                throw new IllegalStateException("listener failure");
+            }
+        });
+
+        ChangePlan plan = ChangePlan.builder("atomic failure")
+                .setTile(westTile, westBefore, withUnderlay(westBefore, 7))
+                .setTile(eastTile, eastBefore, withUnderlay(eastBefore, 8))
+                .build();
+
+        assertThrows(IllegalStateException.class, () -> sessions.commit(plan));
+        assertEquals(westBefore, westDocument.tile(0, 63, 10).snapshot());
+        assertEquals(eastBefore, eastDocument.tile(0, 0, 10).snapshot());
+        assertEquals(0, westSession.history().position());
+        assertEquals(0, eastSession.history().position());
+        assertEquals(0, sessions.changeHistory().size());
+    }
+
     private static TileSnapshot withUnderlay(TileSnapshot source, int underlay) {
         return new TileSnapshot(
                 source.southWestHeight(), source.southEastHeight(),
