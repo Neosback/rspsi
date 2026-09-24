@@ -3,6 +3,7 @@ package com.rspsi.cache.store;
 import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
 import com.rspsi.cache.definition.ObjectDefinitionEditValue;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
+import dev.openrune.definition.EntityOpsDefinition;
 import dev.openrune.definition.codec.ObjectCodec;
 import dev.openrune.definition.type.ObjectType;
 import dev.openrune.definition.type.builders.ObjectTypeBuilder;
@@ -13,6 +14,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.TreeMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -72,7 +74,9 @@ final class OpenRuneObjectDefinitionEditTransaction
             ObjectDefinitionRawView.Field afterField = after.get(name);
             ObjectDefinitionRawView.Field candidate =
                     afterField == null ? beforeField : afterField;
-            if (candidate == null || !isScalar(candidate.type())) {
+            // Lists and actions count too: they are editable through
+            // setIntLists/setAction and must publish like scalar fields.
+            if (candidate == null) {
                 continue;
             }
             if (!Objects.equals(beforeField, afterField)) {
@@ -186,6 +190,83 @@ final class OpenRuneObjectDefinitionEditTransaction
         invalidatePreview();
     }
 
+    /** Integer-list fields the builder exposes as {@code List<Integer>} properties. */
+    private static final Set<String> INT_LIST_FIELDS = Set.of(
+            "objectModels", "objectTypes", "ambientSoundIds", "originalColours", "modifiedColours",
+            "originalTextureColours", "modifiedTextureColours", "transforms");
+    private static final int ACTION_COUNT = 5;
+
+    @Override
+    public List<Integer> intList(String fieldName) {
+        requireIntListField(fieldName);
+        Method getter = findGetter(fieldName);
+        Object value;
+        try {
+            value = getter.invoke(builder);
+        } catch (ReflectiveOperationException failure) {
+            throw new IllegalStateException("Unable to read OpenRune object field " + fieldName, failure);
+        }
+        if (value == null) return List.of();
+        List<Integer> copy = new java.util.ArrayList<>();
+        for (Object element : (List<?>) value) copy.add((Integer) element);
+        return List.copyOf(copy);
+    }
+
+    @Override
+    public void setIntLists(Map<String, List<Integer>> values) {
+        Objects.requireNonNull(values, "values");
+        values.keySet().forEach(OpenRuneObjectDefinitionEditTransaction::requireIntListField);
+        for (Map.Entry<String, List<Integer>> entry : values.entrySet()) {
+            List<Integer> list = entry.getValue();
+            if (list != null) {
+                list.forEach(element -> Objects.requireNonNull(element, entry.getKey() + " element"));
+            }
+            invoke(findSetter(entry.getKey()), builder,
+                    list == null || list.isEmpty() ? null : new java.util.ArrayList<>(list));
+        }
+        invalidatePreview();
+    }
+
+    @Override
+    public List<String> actions() {
+        List<EntityOpsDefinition.Op> ops = builder.getActions().getOps();
+        java.util.ArrayList<String> result = new java.util.ArrayList<>(ACTION_COUNT);
+        for (int index = 0; index < ACTION_COUNT; index++) {
+            EntityOpsDefinition.Op op = index < ops.size() ? ops.get(index) : null;
+            result.add(op == null ? null : op.getText());
+        }
+        return java.util.Collections.unmodifiableList(result);
+    }
+
+    @Override
+    public void setAction(int index, String text) {
+        if (index < 0 || index >= ACTION_COUNT) {
+            throw new IllegalArgumentException("Object actions are numbered 0-4, got " + index);
+        }
+        if (text == null || text.isBlank()) {
+            List<EntityOpsDefinition.Op> ops = builder.getActions().getOps();
+            if (index < ops.size()) ops.set(index, null);
+        } else {
+            builder.getActions().setOp(index, text);
+        }
+        invalidatePreview();
+    }
+
+    private static void requireIntListField(String fieldName) {
+        if (!INT_LIST_FIELDS.contains(fieldName)) {
+            throw new IllegalArgumentException("Not an integer-list object field: " + fieldName);
+        }
+    }
+
+    private Method findGetter(String fieldName) {
+        String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+        try {
+            return ObjectTypeBuilder.class.getMethod(getterName);
+        } catch (NoSuchMethodException failure) {
+            throw new IllegalArgumentException("Object field does not expose a builder getter: " + fieldName);
+        }
+    }
+
     @Override
     public void reset() {
         builder = source.toBuilder();
@@ -277,12 +358,6 @@ final class OpenRuneObjectDefinitionEditTransaction
         return current == null ? new TreeMap<>() : new TreeMap<>(current);
     }
 
-    private static boolean isScalar(ObjectDefinitionRawView.ValueType type) {
-        return type == ObjectDefinitionRawView.ValueType.STRING
-                || type == ObjectDefinitionRawView.ValueType.INTEGER
-                || type == ObjectDefinitionRawView.ValueType.LONG
-                || type == ObjectDefinitionRawView.ValueType.BOOLEAN;
-    }
 
     private static Map<String, ObjectDefinitionRawView.Field> fieldsByName(
             ObjectDefinitionRawView view) {

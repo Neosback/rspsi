@@ -1,5 +1,7 @@
 package com.rspsi.cache.definition;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -61,6 +63,33 @@ public interface ObjectDefinitionEditTransaction {
     void setField(String fieldName, ObjectDefinitionEditValue value);
 
     void putParam(int paramId, ObjectDefinitionEditValue value);
+
+    /**
+     * Current value of an integer-list field (model ids and types, recolour and
+     * retexture pairs, multiloc transforms, ambient sound ids); empty when unset.
+     */
+    default List<Integer> intList(String fieldName) {
+        throw new UnsupportedOperationException("This backend does not edit list fields");
+    }
+
+    /**
+     * Replaces integer-list fields in one step, so paired lists (models and
+     * their types, recolour from/to) never encode with mismatched lengths. An
+     * empty list clears the field.
+     */
+    default void setIntLists(Map<String, List<Integer>> values) {
+        throw new UnsupportedOperationException("This backend does not edit list fields");
+    }
+
+    /** Right-click options 1-5 (opcodes 30-34); {@code null} entries are unset. */
+    default List<String> actions() {
+        throw new UnsupportedOperationException("This backend does not edit actions");
+    }
+
+    /** Sets right-click option {@code index} (0-4); {@code null} or blank removes it. */
+    default void setAction(int index, String text) {
+        throw new UnsupportedOperationException("This backend does not edit actions");
+    }
 
     void removeParam(int paramId);
 

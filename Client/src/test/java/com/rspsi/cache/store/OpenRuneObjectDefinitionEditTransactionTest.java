@@ -8,6 +8,7 @@ import dev.openrune.definition.type.builders.ObjectTypeBuilder;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -68,6 +69,49 @@ class OpenRuneObjectDefinitionEditTransactionTest {
         assertFalse(source.isHollow());
         assertEquals("old", source.getParams().get(100));
         assertEquals(7, source.getParams().get(200));
+    }
+
+    @Test
+    void listAndActionEditsRoundTripThroughTheRealObjectCodec() {
+        ObjectTypeBuilder sourceBuilder = new ObjectTypeBuilder(654);
+        sourceBuilder.setName("Crate");
+        sourceBuilder.setObjectModels(new java.util.ArrayList<>(List.of(100)));
+        sourceBuilder.getActions().setOp(0, "Search");
+        ObjectType source = sourceBuilder.build();
+        OpenRuneObjectDefinitionEditTransaction transaction =
+                new OpenRuneObjectDefinitionEditTransaction(source, 240);
+
+        assertEquals(List.of(100), transaction.intList("objectModels"));
+        assertEquals(List.of(), transaction.intList("originalColours"));
+        assertEquals("Search", transaction.actions().get(0));
+
+        transaction.setIntLists(Map.of(
+                "objectModels", List.of(100, 101),
+                "originalColours", List.of(6000),
+                "modifiedColours", List.of(9000)));
+        transaction.setAction(1, "Kick");
+        transaction.setAction(0, null);
+
+        assertEquals(List.of(100, 101), transaction.intList("objectModels"));
+        assertTrue(transaction.dirtyFields().containsAll(Set.of("objectModels", "originalColours", "modifiedColours")));
+        java.util.List<String> actions = transaction.actions();
+        assertEquals(null, actions.get(0));
+        assertEquals("Kick", actions.get(1));
+
+        ObjectType decoded = new ObjectCodec(240).loadData(654, transaction.encodeValidated());
+        assertEquals(List.of(100, 101), decoded.getObjectModels());
+        assertEquals(List.of(6000), decoded.getOriginalColours());
+        assertEquals(List.of(9000), decoded.getModifiedColours());
+        assertEquals("Kick", decoded.getActions().getOpOrNull(1));
+        assertEquals(null, decoded.getActions().getOpOrNull(0));
+
+        // Clearing a list and the source's isolation.
+        transaction.setIntLists(Map.of("originalColours", List.of(), "modifiedColours", List.of()));
+        assertEquals(List.of(), transaction.intList("originalColours"));
+        assertEquals(List.of(100), source.getObjectModels());
+        assertEquals("Search", source.getActions().getOpOrNull(0));
+        assertThrows(IllegalArgumentException.class, () -> transaction.intList("name"));
+        assertThrows(IllegalArgumentException.class, () -> transaction.setAction(5, "Nope"));
     }
 
     @Test

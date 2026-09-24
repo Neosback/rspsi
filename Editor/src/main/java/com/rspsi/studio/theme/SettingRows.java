@@ -35,6 +35,20 @@ public final class SettingRows {
         return true;
     }
 
+    /**
+     * A rows table without a collapsing header, for a few short labels (the
+     * control column gets most of the width); call {@link #end()} only when
+     * this returns true.
+     */
+    public static boolean beginPlain(String id) {
+        if (!ImGui.beginTable("##rows-" + id, 2, ImGuiTableFlags.SizingStretchProp)) {
+            return false;
+        }
+        ImGui.tableSetupColumn("label", ImGuiTableColumnFlags.WidthStretch, 0.3f);
+        ImGui.tableSetupColumn("control", ImGuiTableColumnFlags.WidthStretch, 0.7f);
+        return true;
+    }
+
     public static void end() {
         ImGui.endTable();
     }

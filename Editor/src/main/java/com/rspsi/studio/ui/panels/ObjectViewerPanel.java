@@ -1,13 +1,11 @@
 package com.rspsi.studio.ui.panels;
 
 import com.rspsi.cache.definition.ObjectDefinitionEditTransaction;
-import com.rspsi.cache.definition.ObjectDefinitionEditValue;
 import com.rspsi.cache.definition.ObjectDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
 import com.rspsi.cache.store.ObjectDefinitionOutputCacheBuilder;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.cache.workspace.ObjectDefinitionEditWorkspace;
-import com.rspsi.editor.ObjectDefinitionEditCommand;
 import com.rspsi.editor.inspector.ObjectReport;
 import com.rspsi.editor.inspector.ObjectResolutionSummary;
 import com.rspsi.editor.model.WorldObject;
@@ -21,9 +19,10 @@ import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.theme.StudioFonts;
+import com.rspsi.studio.theme.SettingRows;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.ObjectPreviewRenderer;
-import com.rspsi.studio.ui.PropertyGrid;
+import com.rspsi.studio.ui.ObjectPropertyTree;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
 import imgui.ImDrawList;
@@ -37,10 +36,7 @@ import imgui.type.ImString;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.nio.file.Files;
@@ -69,10 +65,6 @@ public final class ObjectViewerPanel implements StudioPanel {
     // LoadedOsrsCacheSession.objectDefinitions(). This panel keeps only
     // transient widget/build state.
     private LoadedOsrsCacheSession definitionUiCache;
-    private final Map<String, ScalarEditState> scalarEditStates = new HashMap<>();
-    private final ImInt newParamId = new ImInt(0);
-    private final ImInt newParamType = new ImInt(0);
-    private final ImString newParamValue = new ImString(512);
     private final ImString outputCachePath = new ImString(1024);
     private CompletableFuture<DefinitionBuildCompletion> definitionBuild;
     private String definitionEditStatus = "";
@@ -80,6 +72,7 @@ public final class ObjectViewerPanel implements StudioPanel {
     private int lastPropertiesObjectId = Integer.MIN_VALUE;
 
     private final ObjectPreviewRenderer previewRenderer = new ObjectPreviewRenderer();
+    private final ObjectPropertyTree propertyTree = new ObjectPropertyTree();
     private float previewYaw = ObjectPreviewScene.DEFAULT_ORBIT_YAW;
     private float previewElevation = ObjectPreviewScene.DEFAULT_ELEVATION;
     private float previewZoom = 1.0f;
@@ -102,7 +95,6 @@ public final class ObjectViewerPanel implements StudioPanel {
             .map(shape -> shape.id() + " - " + shape.displayName())
             .toArray(String[]::new);
     private static final String[] ROTATIONS = {"West (0)", "North (1)", "East (2)", "South (3)"};
-    private static final String[] PARAM_TYPES = {"String", "Int", "Long"};
 
     @Override
     public String id() {
@@ -195,13 +187,12 @@ public final class ObjectViewerPanel implements StudioPanel {
             ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0.12f, 0.16f, 0.21f, 1.0f);
             ImGui.pushStyleColor(ImGuiCol.Text, 0.58f, 0.64f, 0.72f, 1.0f);
         }
-        if (ImGui.button(label + "##sub-" + tabIndex, width, 28.0f)) {
+        if (ImGui.button(label + "##sub-" + tabIndex, width, ImGui.getFrameHeight() + ImGui.getStyle().getFramePaddingY())) {
             activeSubTab = tabIndex;
         }
         ImGui.popStyleColor(4);
     }
 
-    private static final float PREVIEW_HEIGHT = 200.0f;
     private static final int GRID_PREVIEW_ANCHOR = 1;
     private static final float CELL_SIZE = 88.0f;
     private static final float CELL_SPACING = 8.0f;
@@ -210,8 +201,12 @@ public final class ObjectViewerPanel implements StudioPanel {
                                           LoadedOsrsCacheSession cache,
                                           SettingsStore settings) {
         // Filter dropdown & Search
-        ImGui.combo("Filter##obj-flt", typeFilter, FILTER_OPTIONS);
+        ImGui.setNextItemWidth(-Float.MIN_VALUE);
         ImGui.inputTextWithHint("##obj-search", StudioIcons.SEARCH + "  Search by ID or name...", searchFilter);
+        if (SettingRows.beginPlain("object-filter")) {
+            SettingRows.combo("Show", typeFilter, FILTER_OPTIONS);
+            SettingRows.end();
+        }
         ImGui.separator();
 
         int objId = selectedObjectId.get();
@@ -233,16 +228,18 @@ public final class ObjectViewerPanel implements StudioPanel {
         float cx = ImGui.getCursorScreenPos().x;
         float cy = ImGui.getCursorScreenPos().y;
         ImDrawList draw = ImGui.getWindowDrawList();
-        draw.addRectFilled(cx, cy, cx + panelW, cy + PREVIEW_HEIGHT, StudioDrawColors.abgr(0xFF1E2836), 4.0f);
-        draw.addRect(cx, cy, cx + panelW, cy + PREVIEW_HEIGHT, StudioDrawColors.abgr(0xFF33455C), 4.0f);
+        // Square preview sized from the font, so it scales with DPI, capped by the panel width.
+        float previewHeight = Math.min(panelW, ImGui.getFontSize() * 17.0f);
+        draw.addRectFilled(cx, cy, cx + panelW, cy + previewHeight, StudioDrawColors.abgr(0xFF1E2836), 4.0f);
+        draw.addRect(cx, cy, cx + panelW, cy + previewHeight, StudioDrawColors.abgr(0xFF33455C), 4.0f);
 
         if (objId < 0 || cache == null) {
             String prompt = cache == null ? "No cache loaded." : "Select an object below to preview it.";
-            draw.addText(StudioFonts.ui(), 13, cx + 12, cy + PREVIEW_HEIGHT * 0.5f - 8.0f,
+            draw.addText(StudioFonts.ui(), 13, cx + 12, cy + previewHeight * 0.5f - 8.0f,
                     StudioDrawColors.abgr(0xFF64748B), prompt);
-            ImGui.dummy(panelW, PREVIEW_HEIGHT + 8.0f);
+            ImGui.dummy(panelW, previewHeight + 8.0f);
         } else {
-            int size = (int) PREVIEW_HEIGHT - 4;
+            int size = (int) previewHeight - 4;
             int texture = previewRenderer.render(cache.bundle().definitions(), objId, objectType.get(),
                     objectRotation.get(), previewYaw, previewElevation, previewZoom, size, size);
 
@@ -257,9 +254,9 @@ public final class ObjectViewerPanel implements StudioPanel {
                 String reason = resolution.renderableGeometryReady()
                         ? "Model data resolved, but the preview produced no renderable packet"
                         : resolution.diagnosticSummary();
-                draw.addText(StudioFonts.ui(), 12, cx + 12, cy + PREVIEW_HEIGHT * 0.5f - 16.0f,
+                draw.addText(StudioFonts.ui(), 12, cx + 12, cy + previewHeight * 0.5f - 16.0f,
                         StudioDrawColors.abgr(0xFFF59E0B), "No renderable model for #" + objId);
-                draw.addText(StudioFonts.mono(), 11, cx + 12, cy + PREVIEW_HEIGHT * 0.5f + 4.0f,
+                draw.addText(StudioFonts.mono(), 11, cx + 12, cy + previewHeight * 0.5f + 4.0f,
                         StudioDrawColors.abgr(0xFF94A3B8), compactPreviewDiagnostic(reason));
             }
 
@@ -299,7 +296,7 @@ public final class ObjectViewerPanel implements StudioPanel {
                 ImGui.setTooltip("Drag to orbit, scroll to zoom, double-click to reset.\nDrag onto the 3D viewport to spawn. Grid cells are one game tile.");
             }
 
-            ImGui.setCursorScreenPos(cx, cy + PREVIEW_HEIGHT + 4.0f);
+            ImGui.setCursorScreenPos(cx, cy + previewHeight + 4.0f);
         }
 
         String objName = cache == null || objId < 0 ? null
@@ -307,11 +304,20 @@ public final class ObjectViewerPanel implements StudioPanel {
                         .map(definition -> objectLabel(definition.displayName(), objId))
                         .orElse(null);
         if (objId >= 0) {
-            ImGui.text(objName == null ? "Object #" + objId : objName);
+            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), objName == null ? "Object #" + objId : objName);
         }
 
+        if (SettingRows.beginPlain("place-object")) {
+            if (SettingRows.combo("Shape", objectType, OBJECT_TYPES)) {
+                settings.set(EditorSettingKeys.OBJECT_TYPE, objectType.get());
+            }
+            if (SettingRows.combo("Rotation", objectRotation, ROTATIONS)) {
+                settings.set(EditorSettingKeys.OBJECT_ROTATION, objectRotation.get());
+            }
+            SettingRows.end();
+        }
         ImGui.beginDisabled(objId < 0);
-        if (ImGui.button(StudioIcons.ADD_OBJECT + " Add game object##add-obj", panelW * 0.5f - 4.0f, 24.0f)) {
+        if (ImGui.button(StudioIcons.ADD_OBJECT + " Add game object##add-obj", -Float.MIN_VALUE, 0.0f)) {
             settings.set(EditorSettingKeys.OBJECT_ID, objId);
             settings.set(EditorSettingKeys.OBJECT_TYPE, objectType.get());
             settings.set(EditorSettingKeys.OBJECT_ROTATION, objectRotation.get());
@@ -320,18 +326,9 @@ public final class ObjectViewerPanel implements StudioPanel {
             }
         }
         ImGui.endDisabled();
-        ImGui.sameLine();
-        ImGui.textDisabled(StudioIcons.OPEN_IN_NEW + " Drag preview to Viewport");
-
-        ImGui.pushItemWidth(panelW * 0.48f);
-        if (ImGui.combo("##place-type", objectType, OBJECT_TYPES)) {
-            settings.set(EditorSettingKeys.OBJECT_TYPE, objectType.get());
+        if (ImGui.isItemHovered(imgui.flag.ImGuiHoveredFlags.AllowWhenDisabled)) {
+            ImGui.setTooltip("Place this object with the Place tool, or drag the preview onto the viewport.");
         }
-        ImGui.sameLine();
-        if (ImGui.combo("##place-rot", objectRotation, ROTATIONS)) {
-            settings.set(EditorSettingKeys.OBJECT_ROTATION, objectRotation.get());
-        }
-        ImGui.popItemWidth();
     }
 
     private static String objectLabel(String name, int id) {
@@ -495,10 +492,13 @@ public final class ObjectViewerPanel implements StudioPanel {
     private void renderObjectPropertiesSubTab(StudioPanelContext context,
                                               LoadedOsrsCacheSession cache,
                                               SettingsStore settings) {
-        ImGui.inputInt("Object ID##prop-obj-id", selectedObjectId);
+        ImGui.alignTextToFramePadding();
+        ImGui.text("Object");
+        ImGui.sameLine();
+        ImGui.setNextItemWidth(-Float.MIN_VALUE);
+        ImGui.inputInt("##prop-obj-id", selectedObjectId);
         int id = selectedObjectId.get();
         if (id != lastPropertiesObjectId) {
-            scalarEditStates.clear();
             definitionEditStatus = "";
             lastPropertiesObjectId = id;
         }
@@ -509,91 +509,72 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
 
         var definitions = cache.bundle().definitions();
-        definitions.object(id).ifPresentOrElse(def -> {
-            ObjectDefinitionEditTransaction transaction = definitionTransaction(cache, id);
-            ObjectDefinitionRawView raw = transaction == null
-                    ? definitions.objectRaw(id).orElse(null)
-                    : displayPreview(transaction);
+        Optional<ObjectDefinitionView> definition = definitions.object(id);
+        if (definition.isEmpty()) {
+            ImGui.textDisabled("Object definition not found for ID " + id);
+            return;
+        }
+        ObjectDefinitionEditTransaction transaction = definitionTransaction(cache, id);
+        ObjectDefinitionRawView raw = transaction == null
+                ? definitions.objectRaw(id).orElse(null)
+                : transaction.preview();
+        boolean canEdit = transaction != null && context.session() != null && context.session().canEdit();
 
-            String previewName = rawField(raw, "name")
-                    .map(ObjectDefinitionRawView.Field::value)
-                    .orElse(def.displayName());
-            int previewSizeX = rawInt(raw, "sizeX").orElse(def.width());
-            int previewSizeY = rawInt(raw, "sizeY").orElse(def.length());
+        String previewName = rawField(raw, "name").map(ObjectDefinitionRawView.Field::value)
+                .orElse(definition.get().displayName());
+        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), objectLabel(previewName, id));
+        ImGui.sameLine();
+        float copyWidth = ImGui.calcTextSize("Copy").x + ImGui.getStyle().getFramePaddingX() * 2.0f;
+        ImGui.setCursorPosX(Math.max(ImGui.getCursorPosX(),
+                ImGui.getCursorPosX() + ImGui.getContentRegionAvailX() - copyWidth));
+        if (ImGui.smallButton("Copy##prop-copy")) {
+            ImGui.setClipboardText(ObjectReport.forDefinition(id, definitions).toText());
+        }
+        if (ImGui.isItemHovered()) ImGui.setTooltip("Copy this object's properties as text.");
+        if (transaction == null) {
+            ImGui.textDisabled("Read-only: this cache backend has no definition edit transactions.");
+        } else if (!canEdit) {
+            ImGui.textDisabled("Read-only: open an editable Studio session to change fields.");
+        } else if (transaction.dirty()) {
+            ImGui.textColored(StudioDrawColors.abgr(0xFFF59E0B), transaction.dirtyFields().size() + " field(s), "
+                    + transaction.dirtyParams().size() + " param(s) edited"
+                    + (transaction.hasUnpublishedChanges() ? " - not saved yet" : " - saved"));
+        }
 
-            if (transaction != null && !transaction.dirtyFields().isEmpty()) {
-                ImGui.textColored(StudioDrawColors.abgr(0xFFF59E0B), "Unsaved edits: " + objectLabel(previewName, id)
-                        + "  size " + previewSizeX + " x " + previewSizeY);
-            }
-            PropertyGrid.render("obj-props", ObjectReport.forDefinition(id, definitions));
+        propertyTree.render("viewer", new ObjectPropertyTree.Source(id, raw, definition.get(), transaction,
+                context.session(), definitions));
+        if (!propertyTree.status().isBlank()) {
+            ImGui.textWrapped(propertyTree.status());
+        }
 
-            if (transaction != null) {
-                renderDefinitionTransactionEditor(context, cache, transaction);
-                raw = displayPreview(transaction);
-            } else {
-                ImGui.separator();
-                ImGui.textDisabled(
-                        "This cache backend does not expose object-definition edit transactions.");
-            }
+        if (transaction != null && ImGui.collapsingHeader("Save game object##prop-save")) {
+            renderDefinitionTransactionEditor(context, cache, transaction);
+        }
 
-            ImGui.separator();
-            ImGui.textDisabled(transaction == null
-                    ? "Raw decoded definition"
-                    : "In-memory decoded preview");
+        if (ImGui.collapsingHeader("Raw decoded definition##prop-raw")) {
+            ImGui.setNextItemWidth(-Float.MIN_VALUE);
             ImGui.inputTextWithHint("##raw-object-filter",
                     StudioIcons.SEARCH + "  Filter field, opcode, param or value...",
                     rawPropertyFilter);
-
             if (raw == null) {
-                ImGui.textDisabled(
-                        "Raw definition metadata is unavailable for this cache backend.");
+                ImGui.textDisabled("Raw definition metadata is unavailable for this cache backend.");
             } else {
                 renderRawObjectDefinition(
                         raw,
                         transaction == null ? Set.of() : transaction.dirtyFields(),
                         transaction == null ? Set.of() : transaction.dirtyParams());
             }
-        }, () -> ImGui.textDisabled("Object definition not found for ID " + id));
+        }
     }
 
+    /** Validation and publishing of this session's definition edits to an output cache. */
     private void renderDefinitionTransactionEditor(StudioPanelContext context,
                                                    LoadedOsrsCacheSession cache,
                                                    ObjectDefinitionEditTransaction transaction) {
         ImGui.pushID(transaction.id());
-        ImGui.separator();
-        ImGui.text("Definition edit transaction");
-        if (transaction.dirty()) {
-            ImGui.sameLine();
-            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8),
-                    "* " + transaction.dirtyFields().size() + " fields, "
-                            + transaction.dirtyParams().size() + " params modified");
-            ImGui.sameLine();
-            ImGui.textDisabled(transaction.hasUnpublishedChanges()
-                    ? "(unpublished)" : "(published)");
-        } else {
-            ImGui.sameLine();
-            ImGui.textDisabled("clean");
-        }
-
-        ImGui.textDisabled(
-                "The source cache stays read-only. Publish edits to a separate verified output cache below.");
-
-        boolean canEdit = context.session() != null && context.session().canEdit();
-        if (!canEdit) {
-            ImGui.textDisabled("Open an editable Studio session to modify this transaction.");
-        }
-
-        ImGui.beginDisabled(!canEdit);
-        renderScalarField(context, transaction, "name", "Name");
-        renderScalarField(context, transaction, "sizeX", "Size X");
-        renderScalarField(context, transaction, "sizeY", "Size Y");
-        renderScalarField(context, transaction, "animationId", "Animation ID");
-        renderBooleanField(context, transaction, "isHollow", "Hollow");
-        renderBooleanField(context, transaction, "isRotated", "Rotated");
-        renderParamEditor(context, transaction);
-        ImGui.endDisabled();
-
-        if (ImGui.button("Validate encoded preview##definition-validate")) {
+        ImGui.textWrapped("The source cache stays read-only. Edits are published to a separate, "
+                + "verified output cache.");
+        if (ImGui.button("Validate encoded definition##definition-validate")) {
             try {
                 byte[] encoded = transaction.encodeValidated();
                 definitionEditStatus = "Validated canonical OpenRune payload: "
@@ -602,255 +583,11 @@ public final class ObjectViewerPanel implements StudioPanel {
                 definitionEditStatus = "Validation failed: " + failureMessage(failure);
             }
         }
-
         if (!definitionEditStatus.isBlank()) {
             ImGui.textWrapped(definitionEditStatus);
         }
-
         renderDefinitionOutputSection(context, cache);
         ImGui.popID();
-    }
-
-    private void renderScalarField(StudioPanelContext context,
-                                   ObjectDefinitionEditTransaction transaction,
-                                   String fieldName,
-                                   String label) {
-        Optional<ObjectDefinitionRawView.Field> currentField =
-                rawField(transaction.preview(), fieldName);
-        if (currentField.isEmpty()) return;
-
-        ObjectDefinitionRawView.Field field = currentField.get();
-        if (!isTextEditableScalar(field.type())) return;
-
-        String key = "field:" + transaction.id() + ":" + fieldName;
-        ScalarEditState state = scalarEditStates.computeIfAbsent(
-                key, ignored -> new ScalarEditState());
-        if (!state.editing && !Objects.equals(state.syncedValue, field.value())) {
-            state.sync(field.value());
-        }
-
-        boolean dirty = transaction.dirtyFields().contains(fieldName);
-        ImGui.inputText(
-                (dirty ? "* " : "") + label + "##definition-" + fieldName,
-                state.input);
-        boolean activated = ImGui.isItemActivated();
-        boolean active = ImGui.isItemActive();
-        boolean deactivated = ImGui.isItemDeactivated();
-
-        if (activated) {
-            state.editing = true;
-            state.before = editValue(field);
-            state.error = "";
-        }
-
-        if (deactivated && state.editing) {
-            finishScalarFieldEdit(context, transaction, fieldName, field.type(), state);
-        } else if (state.editing && !active) {
-            // The widget can disappear while active when the panel/tab changes.
-            // No transaction mutation has happened yet, so cancel the orphaned
-            // edit buffer instead of leaving it stuck as an untracked change.
-            state.editing = false;
-            state.before = null;
-            state.sync(field.value());
-            state.error = "";
-        }
-
-        if (!state.error.isBlank()) {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF60A5FA), state.error);
-        }
-    }
-
-    private void finishScalarFieldEdit(StudioPanelContext context,
-                                       ObjectDefinitionEditTransaction transaction,
-                                       String fieldName,
-                                       ObjectDefinitionRawView.ValueType type,
-                                       ScalarEditState state) {
-        ObjectDefinitionEditValue before = state.before;
-        try {
-            ObjectDefinitionEditValue after = editValue(type, state.input.get());
-            if (!Objects.equals(before, after)) {
-                context.session().execute(ObjectDefinitionEditCommand.field(
-                        transaction, fieldName, before, after));
-                definitionEditStatus = "Updated " + fieldName + " in object "
-                        + transaction.id() + " preview.";
-            }
-            ObjectDefinitionRawView.Field canonical = rawField(
-                    transaction.preview(), fieldName).orElseThrow();
-            state.sync(canonical.value());
-            state.error = "";
-        } catch (RuntimeException failure) {
-            rawField(transaction.preview(), fieldName)
-                    .ifPresent(restored -> state.sync(restored.value()));
-            state.error = failureMessage(failure);
-            definitionEditStatus = "Rejected " + fieldName + " edit: " + state.error;
-        } finally {
-            state.editing = false;
-            state.before = null;
-        }
-    }
-
-    private void renderBooleanField(StudioPanelContext context,
-                                    ObjectDefinitionEditTransaction transaction,
-                                    String fieldName,
-                                    String label) {
-        Optional<ObjectDefinitionRawView.Field> currentField =
-                rawField(transaction.preview(), fieldName);
-        if (currentField.isEmpty()
-                || currentField.get().type() != ObjectDefinitionRawView.ValueType.BOOLEAN) {
-            return;
-        }
-
-        boolean current = Boolean.parseBoolean(currentField.get().value());
-        boolean dirty = transaction.dirtyFields().contains(fieldName);
-        if (ImGui.checkbox((dirty ? "* " : "") + label + "##definition-" + fieldName,
-                current)) {
-            ObjectDefinitionEditValue before =
-                    ObjectDefinitionEditValue.booleanValue(current);
-            ObjectDefinitionEditValue after =
-                    ObjectDefinitionEditValue.booleanValue(!current);
-            try {
-                context.session().execute(ObjectDefinitionEditCommand.field(
-                        transaction, fieldName, before, after));
-                definitionEditStatus = "Updated " + fieldName + " in object "
-                        + transaction.id() + " preview.";
-            } catch (RuntimeException failure) {
-                definitionEditStatus = "Rejected " + fieldName + " edit: "
-                        + failureMessage(failure);
-            }
-        }
-    }
-
-    private void renderParamEditor(StudioPanelContext context,
-                                   ObjectDefinitionEditTransaction transaction) {
-        ImGui.separator();
-        ObjectDefinitionRawView preview = transaction.preview();
-        ImGui.text("Opcode 249 parameters");
-        if (preview.params().isEmpty()) {
-            ImGui.textDisabled("No parameters in this definition.");
-        }
-
-        for (ObjectDefinitionRawView.Param param : preview.params()) {
-            ImGui.pushID(param.id());
-            ImGui.textDisabled("#" + param.id() + "  "
-                    + param.type().name().toLowerCase(java.util.Locale.ROOT));
-            ImGui.sameLine();
-            boolean removed = false;
-            if (ImGui.smallButton("Remove##definition-param")) {
-                try {
-                    context.session().execute(ObjectDefinitionEditCommand.param(
-                            transaction, param.id(), editValue(param), null));
-                    scalarEditStates.remove(paramStateKey(transaction.id(), param.id()));
-                    definitionEditStatus = "Removed param " + param.id()
-                            + " from object " + transaction.id() + " preview.";
-                    removed = true;
-                } catch (RuntimeException failure) {
-                    definitionEditStatus = "Param removal failed: "
-                            + failureMessage(failure);
-                }
-            }
-
-            if (!removed) {
-                renderParamValue(context, transaction, param);
-            }
-            ImGui.popID();
-        }
-
-        ImGui.separator();
-        ImGui.textDisabled("Add or replace parameter");
-        ImGui.inputInt("Param ID##definition-param-id", newParamId);
-        ImGui.combo("Type##definition-param-type", newParamType, PARAM_TYPES);
-        ImGui.inputText("Value##definition-param-value", newParamValue);
-        if (ImGui.button("Add / Replace##definition-param-add")) {
-            try {
-                int paramId = newParamId.get();
-                ObjectDefinitionEditValue after = editValue(
-                        paramType(newParamType.get()), newParamValue.get());
-                ObjectDefinitionEditValue before = transaction.preview().params().stream()
-                        .filter(param -> param.id() == paramId)
-                        .findFirst()
-                        .map(ObjectViewerPanel::editValue)
-                        .orElse(null);
-                if (!Objects.equals(before, after)) {
-                    context.session().execute(ObjectDefinitionEditCommand.param(
-                            transaction, paramId, before, after));
-                    scalarEditStates.remove(paramStateKey(transaction.id(), paramId));
-                    definitionEditStatus = (before == null ? "Added param " : "Replaced param ")
-                            + paramId + " in object " + transaction.id() + " preview.";
-                }
-            } catch (RuntimeException failure) {
-                definitionEditStatus = "Param edit failed: " + failureMessage(failure);
-            }
-        }
-    }
-
-    private void renderParamValue(StudioPanelContext context,
-                                  ObjectDefinitionEditTransaction transaction,
-                                  ObjectDefinitionRawView.Param param) {
-        if (param.type() != ObjectDefinitionRawView.ValueType.STRING
-                && param.type() != ObjectDefinitionRawView.ValueType.INTEGER
-                && param.type() != ObjectDefinitionRawView.ValueType.LONG) {
-            ImGui.textDisabled(compactRawValue(param.value()));
-            return;
-        }
-
-        String key = paramStateKey(transaction.id(), param.id());
-        ScalarEditState state = scalarEditStates.computeIfAbsent(
-                key, ignored -> new ScalarEditState());
-        if (!state.editing && !Objects.equals(state.syncedValue, param.value())) {
-            state.sync(param.value());
-        }
-
-        boolean dirty = transaction.dirtyParams().contains(param.id());
-        ImGui.inputText(
-                (dirty ? "* Value" : "Value") + "##definition-param-value",
-                state.input);
-        boolean activated = ImGui.isItemActivated();
-        boolean active = ImGui.isItemActive();
-        boolean deactivated = ImGui.isItemDeactivated();
-
-        if (activated) {
-            state.editing = true;
-            state.before = editValue(param);
-            state.error = "";
-        }
-
-        if (deactivated && state.editing) {
-            ObjectDefinitionEditValue before = state.before;
-            try {
-                ObjectDefinitionEditValue after =
-                        editValue(param.type(), state.input.get());
-                if (!Objects.equals(before, after)) {
-                    context.session().execute(ObjectDefinitionEditCommand.param(
-                            transaction, param.id(), before, after));
-                    definitionEditStatus = "Updated param " + param.id()
-                            + " in object " + transaction.id() + " preview.";
-                }
-                ObjectDefinitionEditValue canonical = transaction.preview().params().stream()
-                        .filter(candidate -> candidate.id() == param.id())
-                        .findFirst()
-                        .map(ObjectViewerPanel::editValue)
-                        .orElseThrow();
-                state.sync(canonical.value());
-                state.error = "";
-            } catch (RuntimeException failure) {
-                state.sync(before == null ? "" : before.value());
-                state.error = failureMessage(failure);
-                definitionEditStatus = "Rejected param " + param.id()
-                        + " edit: " + state.error;
-            } finally {
-                state.editing = false;
-                state.before = null;
-            }
-        } else if (state.editing && !active) {
-            state.editing = false;
-            state.before = null;
-            state.sync(param.value());
-            state.error = "";
-        }
-
-        if (!state.error.isBlank()) {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF60A5FA), state.error);
-        }
     }
 
     private void renderRawObjectDefinition(ObjectDefinitionRawView raw,
@@ -859,7 +596,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         String filter = rawPropertyFilter.get().trim().toLowerCase(java.util.Locale.ROOT);
 
         ImGui.pushFont(StudioFonts.mono(), 0.0f);
-        ImGui.textDisabled("OPCODE       FIELD                    TYPE       VALUE");
+        ImGui.textDisabled("OPCODE  FIELD  TYPE  VALUE");
 
         int visibleFields = 0;
         for (ObjectDefinitionRawView.Field field : raw.fields()) {
@@ -871,7 +608,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             String opcode = field.opcode().isBlank() ? "-" : field.opcode();
             String name = dirtyFields.contains(field.name())
                     ? "* " + field.name() : field.name();
-            ImGui.text(formatRawRow(opcode, name,
+            ImGui.textWrapped(formatRawRow(opcode, name,
                     field.type().name().toLowerCase(java.util.Locale.ROOT),
                     compactRawValue(field.value())));
         }
@@ -888,7 +625,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             visibleParams++;
             String name = (dirtyParams.contains(param.id()) ? "* " : "")
                     + "param[" + param.id() + "]";
-            ImGui.text(formatRawRow(
+            ImGui.textWrapped(formatRawRow(
                     "249",
                     name,
                     param.type().name().toLowerCase(java.util.Locale.ROOT),
@@ -906,7 +643,6 @@ public final class ObjectViewerPanel implements StudioPanel {
     private void syncDefinitionUiState(LoadedOsrsCacheSession cache) {
         if (definitionUiCache == cache) return;
         definitionUiCache = cache;
-        scalarEditStates.clear();
         definitionEditStatus = "";
         definitionBuildStatus = "";
         lastPropertiesObjectId = Integer.MIN_VALUE;
@@ -1132,88 +868,12 @@ public final class ObjectViewerPanel implements StudioPanel {
         return candidate;
     }
 
-    private ObjectDefinitionRawView displayPreview(
-            ObjectDefinitionEditTransaction transaction) {
-        ObjectDefinitionRawView base = transaction.preview();
-        List<ObjectDefinitionRawView.Field> fields = base.fields().stream()
-                .map(field -> {
-                    ScalarEditState state = scalarEditStates.get(
-                            "field:" + transaction.id() + ":" + field.name());
-                    if (state == null || !state.editing) return field;
-                    return new ObjectDefinitionRawView.Field(
-                            field.name(), field.opcode(), field.type(), state.input.get());
-                })
-                .toList();
-        List<ObjectDefinitionRawView.Param> params = base.params().stream()
-                .map(param -> {
-                    ScalarEditState state = scalarEditStates.get(
-                            paramStateKey(transaction.id(), param.id()));
-                    if (state == null || !state.editing) return param;
-                    return new ObjectDefinitionRawView.Param(
-                            param.id(), param.type(), state.input.get());
-                })
-                .toList();
-        return new ObjectDefinitionRawView(base.id(), fields, params);
-    }
-
     private static Optional<ObjectDefinitionRawView.Field> rawField(
             ObjectDefinitionRawView raw, String name) {
         if (raw == null) return Optional.empty();
         return raw.fields().stream()
                 .filter(field -> field.name().equals(name))
                 .findFirst();
-    }
-
-    private static Optional<Integer> rawInt(ObjectDefinitionRawView raw, String name) {
-        return rawField(raw, name).flatMap(field -> {
-            try {
-                return Optional.of(Integer.parseInt(field.value()));
-            } catch (NumberFormatException ignored) {
-                return Optional.empty();
-            }
-        });
-    }
-
-    private static boolean isTextEditableScalar(ObjectDefinitionRawView.ValueType type) {
-        return type == ObjectDefinitionRawView.ValueType.STRING
-                || type == ObjectDefinitionRawView.ValueType.INTEGER
-                || type == ObjectDefinitionRawView.ValueType.LONG;
-    }
-
-    private static ObjectDefinitionEditValue editValue(ObjectDefinitionRawView.Field field) {
-        return editValue(field.type(), field.value());
-    }
-
-    private static ObjectDefinitionEditValue editValue(ObjectDefinitionRawView.Param param) {
-        return editValue(param.type(), param.value());
-    }
-
-    private static ObjectDefinitionEditValue editValue(
-            ObjectDefinitionRawView.ValueType type, String value) {
-        return switch (type) {
-            case STRING -> ObjectDefinitionEditValue.stringValue(value);
-            case INTEGER -> ObjectDefinitionEditValue.intValue(
-                    Integer.parseInt(value.trim()));
-            case LONG -> ObjectDefinitionEditValue.longValue(
-                    Long.parseLong(value.trim()));
-            case BOOLEAN -> new ObjectDefinitionEditValue(
-                    ObjectDefinitionRawView.ValueType.BOOLEAN, value.trim());
-            default -> throw new IllegalArgumentException(
-                    "Complex definition value is not scalar-editable: " + type);
-        };
-    }
-
-    private static ObjectDefinitionRawView.ValueType paramType(int index) {
-        return switch (index) {
-            case 0 -> ObjectDefinitionRawView.ValueType.STRING;
-            case 1 -> ObjectDefinitionRawView.ValueType.INTEGER;
-            case 2 -> ObjectDefinitionRawView.ValueType.LONG;
-            default -> throw new IllegalArgumentException("Unknown param type index: " + index);
-        };
-    }
-
-    private static String paramStateKey(int objectId, int paramId) {
-        return "param:" + objectId + ":" + paramId;
     }
 
     private static String failureMessage(RuntimeException failure) {
@@ -1254,19 +914,6 @@ public final class ObjectViewerPanel implements StudioPanel {
                 Throwable failure) {
             return new DefinitionBuildCompletion(
                     workspace, plan, null, updatedExisting, failure);
-        }
-    }
-
-    private static final class ScalarEditState {
-        private final ImString input = new ImString(512);
-        private String syncedValue;
-        private boolean editing;
-        private ObjectDefinitionEditValue before;
-        private String error = "";
-
-        private void sync(String value) {
-            input.set(value == null ? "" : value);
-            syncedValue = value == null ? "" : value;
         }
     }
 
