@@ -3,6 +3,7 @@ package com.rspsi.server;
 /** Optional capabilities supplied by a server/project adapter. */
 public enum ServerCapability {
     PROJECT_LAYOUT,
+    GRADLE_PROJECT_MODEL,
     CACHE_DISCOVERY,
     BUILD_CACHE,
     FRESH_CACHE,
