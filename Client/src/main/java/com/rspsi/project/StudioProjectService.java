@@ -61,7 +61,25 @@ public final class StudioProjectService {
         Path data = automaticProjectDataRoot(root, "openrune");
         StudioProjectDescriptor existing = existingAutomaticProject(
                 data, StudioProjectKind.OPENRUNE_SERVER, root);
-        if (existing != null) return existing;
+        if (existing != null) {
+            if (!existing.capabilities().equals(preset.capabilities())) {
+                StudioProjectDescriptor updated = new StudioProjectDescriptor(
+                        existing.formatVersion(),
+                        existing.projectId(),
+                        existing.name(),
+                        existing.kind(),
+                        existing.createdAtEpochMillis(),
+                        existing.projectDataLocation(),
+                        existing.sourcePath(),
+                        existing.providerId(),
+                        preset.capabilities());
+                Path descriptorPath = StudioProjectDescriptorStore.descriptorPath(data);
+                StudioProjectDescriptorStore.write(descriptorPath, updated);
+                registry.remember(descriptorPath, updated);
+                return updated;
+            }
+            return existing;
+        }
         return linkOpenRune(name, data, root, preset);
     }
 
