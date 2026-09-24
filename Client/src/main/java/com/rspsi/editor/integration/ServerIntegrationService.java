@@ -94,6 +94,18 @@ public final class ServerIntegrationService {
         return Optional.empty();
     }
 
+    /** Probes a persisted project connection without discarding its overrides or fingerprint. */
+    public Optional<IntegrationProbe> probe(ServerConnection connection) {
+        if (connection == null) return Optional.empty();
+        Path path = connection.root();
+        for (ServerIntegrationProvider provider : providers) {
+            if (provider.canOpen(path)) {
+                return Optional.of(provider.probe(connection));
+            }
+        }
+        return Optional.empty();
+    }
+
     /**
      * Connects a server project, opening a session and binding its providers to Studio services.
      */
