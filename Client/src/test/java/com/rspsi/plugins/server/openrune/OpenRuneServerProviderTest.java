@@ -56,6 +56,8 @@ class OpenRuneServerProviderTest {
         Files.writeString(customGamevals.resolve("loc.rscm"), "coal_rock=1234\n");
         Files.writeString(customContent.resolve("skills/mining/rocks.toml"),
                 "target = \"loc.coal_rock\"\n");
+        Files.writeString(customContent.resolve("skills/mining/gamevals.toml"),
+                "[gamevals.obj]\ncoal = 2000\n");
 
         ServerConnection connection = ServerConnection.forRoot(root)
                 .withPath(ServerPathKey.LIVE_CACHE, "custom/live")
@@ -91,6 +93,9 @@ class OpenRuneServerProviderTest {
         var symbol = session.symbolProvider().orElseThrow()
                 .resolve(SymbolNamespace.LOC, "coal_rock").orElseThrow();
         assertEquals(1234, symbol.id());
+        var item = session.symbolProvider().orElseThrow()
+                .resolve(SymbolNamespace.ITEM, "coal").orElseThrow();
+        assertEquals(2000, item.id());
         assertEquals(1, session.npcSpawnProvider().orElseThrow().totalSpawnCount());
         assertTrue(session.referenceProvider().orElseThrow().totalReferenceCount() > 0);
 
