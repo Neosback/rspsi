@@ -114,7 +114,7 @@ class WorldFragmentPastePlannerTest {
     }
 
     @Test
-    void mergeObjectsDeduplicatesIdenticalDestinationObject() {
+    void mergeObjectsDeduplicatesIdenticalDestinationObjectAsNoOp() {
         Fixture fixture = twoRegionFixture();
         int targetX = REGION_X * 64 + 7;
         WorldObject existing = new WorldObject(2, 10, 3, 0, 7, 10);
@@ -128,13 +128,46 @@ class WorldFragmentPastePlannerTest {
                         snapshot(0, 0, 0, 0, 99, List.of()))),
                 List.of(new WorldObject(2, 10, 3, 0, 0, 0)));
 
-        TileSnapshot after = WorldFragmentPastePlanner.plan(
-                        fixture.window(), fragment, targetX, WORLD_Y,
-                        WorldFragmentPastePolicy.mergeObjects())
-                .requireCommittablePlan()
+        WorldFragmentPasteResult result = WorldFragmentPastePlanner.plan(
+                fixture.window(), fragment, targetX, WORLD_Y,
+                WorldFragmentPastePolicy.mergeObjects());
+
+        assertTrue(result.canCommit());
+        assertTrue(result.candidatePlan().isEmpty(),
+                "an identical object merge must collapse to a no-op ChangePlan");
+        assertFalse(result.commit(fixture.window()),
+                "committing an exact no-op paste must not create history");
+        assertEquals(List.of(existing, other),
+                fixture.west().tile(0, 7, 10).snapshot().objects());
+        assertEquals(5, fixture.west().tile(0, 7, 10).snapshot().underlayId());
+        assertEquals(0, fixture.window().changeHistory().size());
+    }
+
+    @Test
+    void mergeObjectsAddsNewObjectWhilePreservingDestinationObjectsAndTerrain() {
+        Fixture fixture = twoRegionFixture();
+        int targetX = REGION_X * 64 + 7;
+        WorldObject existing = new WorldObject(3, 22, 0, 0, 7, 10);
+        fixture.west().tile(0, 7, 10).restore(snapshot(
+                0, 0, 0, 0, 5, List.of(existing)));
+
+        WorldFragment fragment = new WorldFragment(
+                new TileBounds(0, 0, 0, 0),
+                List.of(new TerrainTilePatch(0, 0, 0,
+                        snapshot(0, 0, 0, 0, 99, List.of()))),
+                List.of(new WorldObject(2, 10, 3, 0, 0, 0)));
+
+        WorldFragmentPasteResult result = WorldFragmentPastePlanner.plan(
+                fixture.window(), fragment, targetX, WORLD_Y,
+                WorldFragmentPastePolicy.mergeObjects());
+
+        TileSnapshot after = result.requireCommittablePlan()
                 .tileChanges().get(new WorldTile(0, targetX, WORLD_Y)).after();
 
-        assertEquals(List.of(existing, other), after.objects());
+        assertEquals(List.of(
+                existing,
+                new WorldObject(2, 10, 3, 0, 7, 10)),
+                after.objects());
         assertEquals(5, after.underlayId());
     }
 
