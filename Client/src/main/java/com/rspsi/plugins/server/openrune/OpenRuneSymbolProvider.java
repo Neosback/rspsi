@@ -59,11 +59,18 @@ public final class OpenRuneSymbolProvider implements SymbolProvider {
         if (Files.isDirectory(gamevalsDir)) {
             indexRscmFile(gamevalsDir.resolve("loc.rscm"), SymbolNamespace.LOC);
             indexRscmFile(gamevalsDir.resolve("npc.rscm"), SymbolNamespace.NPC);
+            indexRscmFile(gamevalsDir.resolve("obj.rscm"), SymbolNamespace.ITEM);
             indexRscmFile(gamevalsDir.resolve("item.rscm"), SymbolNamespace.ITEM);
             indexRscmFile(gamevalsDir.resolve("varbit.rscm"), SymbolNamespace.VARBIT);
             indexRscmFile(gamevalsDir.resolve("varp.rscm"), SymbolNamespace.VARP);
+            indexRscmFile(gamevalsDir.resolve("varc.rscm"), SymbolNamespace.VARC);
             indexRscmFile(gamevalsDir.resolve("interface.rscm"), SymbolNamespace.INTERFACE);
+            indexRscmFile(gamevalsDir.resolve("component.rscm"), SymbolNamespace.COMPONENT);
             indexRscmFile(gamevalsDir.resolve("clientscript.rscm"), SymbolNamespace.CLIENTSCRIPT);
+            indexRscmFile(gamevalsDir.resolve("dbtable.rscm"), SymbolNamespace.DB_TABLE);
+            indexRscmFile(gamevalsDir.resolve("area.rscm"), SymbolNamespace.AREA);
+            indexRscmFile(gamevalsDir.resolve("seq.rscm"), SymbolNamespace.SEQUENCE);
+            indexRscmFile(gamevalsDir.resolve("spotanim.rscm"), SymbolNamespace.SPOTANIM);
         }
 
         for (Path tomlFile : authoredGamevals) {
