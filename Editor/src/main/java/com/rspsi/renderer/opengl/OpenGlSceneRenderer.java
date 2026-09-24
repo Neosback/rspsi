@@ -790,6 +790,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 int localFirst = zoneManager.localFirstIndex(firstIndex);
                 glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
                         (long) localFirst * Integer.BYTES);
+                frameMetrics.singleDrawCalls++;
             } else {
                 try (MemoryStack stack = MemoryStack.stackPush()) {
                     IntBuffer counts = stack.mallocInt(batches.commandCount());
@@ -914,7 +915,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 flatMaterializationCount, flatMaterializationBytes,
                 gpuZoneUploads, gpuReusedAllocations,
                 gpuGeometryStreamUploads, gpuShadingStreamUploads, gpuIndexStreamUploads,
-                visibility != null && visibility.occlusionApplied());
+                visibility != null && visibility.occlusionApplied(),
+                performanceStatistics());
     }
 
     private PlanStatistics planStatistics(GpuUploadPlan plan) {
@@ -974,6 +976,55 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         if (firstGlError == GL_NO_ERROR && error != GL_NO_ERROR) firstGlError = error;
     }
 
+    private void drainGpuTimerQueries() {
+        if (capabilityProfile == null || !capabilityProfile.supportsTimerQueries()) return;
+        long sample;
+        while ((sample = gpuTimerQuery.pollCompletedNanos()) >= 0L) {
+            performanceMetrics.recordGpuSceneNanos(sample);
+        }
+    }
+
+    private void finishPerformanceFrame() {
+        drainGpuTimerQueries();
+        performanceMetrics.endFrame();
+    }
+
+    private PerformanceStatistics performanceStatistics() {
+        RendererPerformanceMetrics.Snapshot timing = performanceMetrics.snapshot();
+        return new PerformanceStatistics(
+                timing.cpuFrameNanos(),
+                timing.cpuGeometryUploadNanos(),
+                timing.cpuTextureUploadNanos(),
+                timing.cpuVisibilityNanos(),
+                timing.cpuOrderingNanos(),
+                timing.cpuSubmissionNanos(),
+                timing.gpuSceneNanos(),
+                timing.cpuFrameP50Nanos(),
+                timing.cpuFrameP95Nanos(),
+                timing.gpuSceneP50Nanos(),
+                timing.gpuSceneP95Nanos(),
+                timing.cpuFrameSampleCount(),
+                timing.gpuSceneSampleCount(),
+                frameMetrics.submittedCommands,
+                frameMetrics.singleDrawCalls,
+                frameMetrics.multiDrawCalls,
+                frameMetrics.gpuBufferBytesUploaded,
+                frameMetrics.gpuGeometryBytesUploaded,
+                frameMetrics.gpuVertexShadingBytesUploaded,
+                frameMetrics.gpuFaceMetadataBytesUploaded,
+                frameMetrics.gpuNormalBytesUploaded,
+                frameMetrics.gpuPickerBytesUploaded,
+                frameMetrics.gpuIndexBytesUploaded,
+                frameMetrics.texturePixelBytesUploaded,
+                frameMetrics.textureStateBytesUploaded,
+                frameMetrics.textureLayersUploaded,
+                frameMetrics.gpuNormalStreamUploads,
+                frameMetrics.gpuPickerStreamUploads,
+                frameMetrics.gpuRemovedAllocations,
+                timing.pickerCpuNanos(),
+                timing.pickerReadbackNanos());
+    }
+
     /**
      * {@code geometryUploaded}/{@code textureUploaded} report whether this
      * frame performed a {@code glBufferData}/texture-array upload; both
@@ -1002,22 +1053,77 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         private int renderedIndices;
         private int terrainTriangles;
         private int objectTriangles;
+        private int submittedCommands;
+        private int singleDrawCalls;
+        private int multiDrawCalls;
+        private int gpuNormalStreamUploads;
+        private int gpuPickerStreamUploads;
+        private int gpuRemovedAllocations;
+        private int textureLayersUploaded;
+        private long gpuBufferBytesUploaded;
+        private long gpuGeometryBytesUploaded;
+        private long gpuVertexShadingBytesUploaded;
+        private long gpuFaceMetadataBytesUploaded;
+        private long gpuNormalBytesUploaded;
+        private long gpuPickerBytesUploaded;
+        private long gpuIndexBytesUploaded;
+        private long texturePixelBytesUploaded;
+        private long textureStateBytesUploaded;
 
         void reset() {
             drawCalls = 0;
             renderedIndices = 0;
             terrainTriangles = 0;
             objectTriangles = 0;
+            submittedCommands = 0;
+            singleDrawCalls = 0;
+            multiDrawCalls = 0;
+            gpuNormalStreamUploads = 0;
+            gpuPickerStreamUploads = 0;
+            gpuRemovedAllocations = 0;
+            textureLayersUploaded = 0;
+            gpuBufferBytesUploaded = 0L;
+            gpuGeometryBytesUploaded = 0L;
+            gpuVertexShadingBytesUploaded = 0L;
+            gpuFaceMetadataBytesUploaded = 0L;
+            gpuNormalBytesUploaded = 0L;
+            gpuPickerBytesUploaded = 0L;
+            gpuIndexBytesUploaded = 0L;
+            texturePixelBytesUploaded = 0L;
+            textureStateBytesUploaded = 0L;
         }
 
         void record(GpuDrawCommand command) {
             int triangles = command.indexCount() / 3;
+            submittedCommands++;
             renderedIndices += command.indexCount();
             if (command.layer() == SceneLayer.Kind.TERRAIN) {
                 terrainTriangles += triangles;
             } else {
                 objectTriangles += triangles;
             }
+        }
+
+        void captureZoneUploads(ZoneVboManager manager) {
+            gpuBufferBytesUploaded = manager.totalBytesUploaded();
+            gpuGeometryBytesUploaded = manager.geometryBytesUploaded();
+            gpuVertexShadingBytesUploaded = manager.vertexShadingBytesUploaded();
+            gpuFaceMetadataBytesUploaded = manager.faceMetadataBytesUploaded();
+            gpuNormalBytesUploaded = manager.normalBytesUploaded();
+            gpuPickerBytesUploaded = manager.pickerBytesUploaded();
+            gpuIndexBytesUploaded = manager.indexBytesUploaded();
+            gpuNormalStreamUploads = manager.normalStreamUploads();
+            gpuPickerStreamUploads = manager.pickerStreamUploads();
+            gpuRemovedAllocations = manager.removedAllocationsCount();
+        }
+
+        void recordTexturePixels(long bytes, int layers) {
+            texturePixelBytesUploaded += Math.max(0L, bytes);
+            textureLayersUploaded += Math.max(0, layers);
+        }
+
+        void recordTextureState(long bytes) {
+            textureStateBytesUploaded += Math.max(0L, bytes);
         }
 
         int drawCalls() {
@@ -1037,6 +1143,53 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
     }
 
+    public record PerformanceStatistics(
+            long cpuFrameNanos,
+            long cpuGeometryUploadNanos,
+            long cpuTextureUploadNanos,
+            long cpuVisibilityNanos,
+            long cpuOrderingNanos,
+            long cpuSubmissionNanos,
+            long gpuSceneNanos,
+            long cpuFrameP50Nanos,
+            long cpuFrameP95Nanos,
+            long gpuSceneP50Nanos,
+            long gpuSceneP95Nanos,
+            int cpuFrameSampleCount,
+            int gpuSceneSampleCount,
+            int submittedCommands,
+            int singleDrawCalls,
+            int multiDrawCalls,
+            long gpuBufferBytesUploaded,
+            long gpuGeometryBytesUploaded,
+            long gpuVertexShadingBytesUploaded,
+            long gpuFaceMetadataBytesUploaded,
+            long gpuNormalBytesUploaded,
+            long gpuPickerBytesUploaded,
+            long gpuIndexBytesUploaded,
+            long texturePixelBytesUploaded,
+            long textureStateBytesUploaded,
+            int textureLayersUploaded,
+            int gpuNormalStreamUploads,
+            int gpuPickerStreamUploads,
+            int gpuRemovedAllocations,
+            long pickerCpuNanos,
+            long pickerReadbackNanos
+    ) {
+        private static PerformanceStatistics empty() {
+            return new PerformanceStatistics(
+                    0L, 0L, 0L, 0L, 0L, 0L, 0L,
+                    0L, 0L, 0L, 0L, 0, 0,
+                    0, 0, 0,
+                    0L, 0L, 0L, 0L, 0L, 0L, 0L,
+                    0L, 0L, 0, 0, 0, 0, 0L, 0L);
+        }
+
+        public long totalUploadBytes() {
+            return gpuBufferBytesUploaded + texturePixelBytesUploaded + textureStateBytesUploaded;
+        }
+    }
+
     public record Statistics(int sourceVertices, int sourceIndices, int renderedIndices,
                              int terrainTriangles, int objectTriangles,
                              int decodedTextures, int fallbackTextures, int unavailableTextures,
@@ -1048,12 +1201,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                              long flatMaterializationBytes, int gpuZoneUploads,
                              int gpuReusedAllocations, int gpuGeometryStreamUploads,
                              int gpuShadingStreamUploads, int gpuIndexStreamUploads,
-                             boolean occlusionApplied) {
+                             boolean occlusionApplied, PerformanceStatistics performance) {
         private static Statistics empty() {
             return new Statistics(0, 0, 0, 0, 0, 0, 0, 0, 0,
                     "unknown", "unknown", "unknown", GL_NO_ERROR,
                     org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_COMPLETE, GL_FILL, true,
-                    false, false, 0, 0L, 0, 0L, 0, 0, 0, 0, 0, false);
+                    false, false, 0, 0L, 0, 0L, 0, 0, 0, 0, 0, false,
+                    PerformanceStatistics.empty());
         }
 
         public int renderedTriangles() {
@@ -1104,6 +1258,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                     offsets.flip();
                     glMultiDrawElements(GL_TRIANGLES, counts, GL_UNSIGNED_INT, offsets);
                 }
+                frameMetrics.multiDrawCalls++;
             }
             frameMetrics.drawCalls++;
         }
