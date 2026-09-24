@@ -42,7 +42,6 @@ public final class IncrementalGpuUploadPlanBuilder {
             ThreadLocal.withInitial(GpuUploadPlanBuilder::new);
 
     private final Map<WorldTileAddress, TileFragment> cache = new LinkedHashMap<>();
-    private final Map<WorldTileAddress, TileFragment> cache = new LinkedHashMap<>();
     private IncrementalGpuZonedUploadPlanBuilder zonedBuilder =
             new IncrementalGpuZonedUploadPlanBuilder();
 
