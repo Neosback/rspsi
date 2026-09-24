@@ -512,6 +512,7 @@ final class PickingSpatialIndex {
             List<TriangleRef>[] mutable = new List[ZONE_TILES * ZONE_TILES];
 
             for (SourceZone source : sources) {
+                if (!source.coverage().contains(coordinate)) continue;
                 for (TriangleRef triangle : source.triangles) {
                     if (!triangle.overlaps(coordinate)) continue;
                     int minX = Math.max(triangle.minTileX, coordinate.minTileX());
