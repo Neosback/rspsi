@@ -3,6 +3,7 @@ package com.rspsi.renderer.opengl;
 import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.render.GpuColorEncoding;
 import com.rspsi.editor.render.GpuDrawCommand;
+import com.rspsi.editor.render.GpuFaceShading;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.GpuZoneStreamFingerprints;
@@ -38,11 +39,11 @@ import static org.lwjgl.opengl.GL30C.glGenVertexArrays;
 /**
  * Manages 8x8 zone-partitioned GPU vertex and index buffers.
  *
- * <p>Stable position/UV geometry and vanilla shading data live in independent
- * VBOs. A shading-only change can therefore update the small shading stream
- * without re-uploading positions, UVs or topology. Renderer-neutral auxiliary
- * data such as normals remains outside these vanilla streams until a shader
- * actually consumes it.</p>
+ * <p>Stable position/UV geometry, per-vertex color/light data and face-local
+ * metadata live in independent VBOs. A face-only material/shading change can
+ * therefore update its metadata stream without re-uploading positions, UVs,
+ * vertex colors or topology. Renderer-neutral auxiliary normals remain
+ * optional until a shader consumes them.</p>
  */
 public final class ZoneVboManager implements AutoCloseable {
     public static final int ZONE_SIZE = 8;
@@ -51,25 +52,43 @@ public final class ZoneVboManager implements AutoCloseable {
             long zoneKey,
             int vao,
             int geometryVbo,
-            int shadingVbo,
+            int vertexShadingVbo,
+            int faceMetadataVbo,
             int normalVbo,
             int ibo,
             long geometryFingerprint,
-            long shadingFingerprint,
+            long vertexShadingFingerprint,
+            long faceMetadataFingerprint,
             long normalFingerprint,
             long indexFingerprint
     ) {
+        /** Compatibility constructor from the previous single-shading-stream layout. */
         ZoneAllocation(long zoneKey, int vao, int geometryVbo, int shadingVbo, int ibo,
                        long geometryFingerprint, long shadingFingerprint, long indexFingerprint) {
-            this(zoneKey, vao, geometryVbo, shadingVbo, 0, ibo,
-                    geometryFingerprint, shadingFingerprint, 0L, indexFingerprint);
+            this(zoneKey, vao, geometryVbo, shadingVbo, 0, 0, ibo,
+                    geometryFingerprint, shadingFingerprint, 0L, 0L, indexFingerprint);
+        }
+
+        /** Compatibility constructor from the optional-normal single-shading layout. */
+        ZoneAllocation(long zoneKey, int vao, int geometryVbo, int shadingVbo,
+                       int normalVbo, int ibo,
+                       long geometryFingerprint, long shadingFingerprint,
+                       long normalFingerprint, long indexFingerprint) {
+            this(zoneKey, vao, geometryVbo, shadingVbo, 0, normalVbo, ibo,
+                    geometryFingerprint, shadingFingerprint, 0L,
+                    normalFingerprint, indexFingerprint);
         }
     }
 
-    record StreamUploadDecision(boolean geometry, boolean shading,
-                                boolean normals, boolean indices) {
+    record StreamUploadDecision(boolean geometry, boolean vertexShading,
+                                boolean faceMetadata, boolean normals, boolean indices) {
+        /** Compatibility aggregate for callers that still ask about "shading". */
+        boolean shading() {
+            return vertexShading || faceMetadata;
+        }
+
         boolean any() {
-            return geometry || shading || normals || indices;
+            return geometry || vertexShading || faceMetadata || normals || indices;
         }
     }
 
@@ -86,7 +105,10 @@ public final class ZoneVboManager implements AutoCloseable {
         }
         return new StreamUploadDecision(
                 existing == null || existing.geometryFingerprint() != fingerprints.geometry(),
-                existing == null || existing.shadingFingerprint() != fingerprints.shading(),
+                existing == null
+                        || existing.vertexShadingFingerprint() != fingerprints.vertexShading(),
+                existing == null
+                        || existing.faceMetadataFingerprint() != fingerprints.faceShading(),
                 normalStreamEnabled && (existing == null
                         || existing.normalFingerprint() != fingerprints.normals()),
                 existing == null || existing.indexFingerprint() != fingerprints.indices());
@@ -101,7 +123,8 @@ public final class ZoneVboManager implements AutoCloseable {
     private int reusedAllocationsCount;
     private int totalZonesCount;
     private int geometryStreamUploads;
-    private int shadingStreamUploads;
+    private int vertexShadingStreamUploads;
+    private int faceMetadataStreamUploads;
     private int indexStreamUploads;
     private int normalStreamUploads;
 
@@ -232,20 +255,23 @@ public final class ZoneVboManager implements AutoCloseable {
 
         int vao;
         int geometryVbo;
-        int shadingVbo;
+        int vertexShadingVbo;
+        int faceMetadataVbo;
         int normalVbo;
         int ibo;
         if (existing == null) {
             vao = glGenVertexArrays();
             geometryVbo = glGenBuffers();
-            shadingVbo = glGenBuffers();
+            vertexShadingVbo = glGenBuffers();
+            faceMetadataVbo = glGenBuffers();
             normalVbo = normalStreamEnabled ? glGenBuffers() : 0;
             ibo = glGenBuffers();
-            setupVao(vao, geometryVbo, shadingVbo, normalVbo, ibo);
+            setupVao(vao, geometryVbo, vertexShadingVbo, faceMetadataVbo, normalVbo, ibo);
         } else {
             vao = existing.vao();
             geometryVbo = existing.geometryVbo();
-            shadingVbo = existing.shadingVbo();
+            vertexShadingVbo = existing.vertexShadingVbo();
+            faceMetadataVbo = existing.faceMetadataVbo();
             normalVbo = existing.normalVbo();
             ibo = existing.ibo();
         }
@@ -254,9 +280,13 @@ public final class ZoneVboManager implements AutoCloseable {
             uploadGeometry(geometryVbo, vertices);
             geometryStreamUploads++;
         }
-        if (decision.shading()) {
-            uploadShading(shadingVbo, vertices);
-            shadingStreamUploads++;
+        if (decision.vertexShading()) {
+            uploadVertexShading(vertexShadingVbo, vertices);
+            vertexShadingStreamUploads++;
+        }
+        if (decision.faceMetadata()) {
+            uploadFaceMetadata(faceMetadataVbo, vertices);
+            faceMetadataStreamUploads++;
         }
         if (decision.normals()) {
             uploadNormals(normalVbo, vertices);
@@ -268,15 +298,16 @@ public final class ZoneVboManager implements AutoCloseable {
         }
 
         allocations.put(key, new ZoneAllocation(
-                key, vao, geometryVbo, shadingVbo, normalVbo, ibo,
-                fingerprints.geometry(), fingerprints.shading(),
+                key, vao, geometryVbo, vertexShadingVbo, faceMetadataVbo, normalVbo, ibo,
+                fingerprints.geometry(), fingerprints.vertexShading(),
+                fingerprints.faceShading(),
                 normalStreamEnabled ? fingerprints.normals() : 0L,
                 fingerprints.indices()));
         dirtyZonesUploadedCount++;
     }
 
-    private static void setupVao(int vao, int geometryVbo, int shadingVbo,
-                                 int normalVbo, int ibo) {
+    private static void setupVao(int vao, int geometryVbo, int vertexShadingVbo,
+                                 int faceMetadataVbo, int normalVbo, int ibo) {
         glBindVertexArray(vao);
 
         glBindBuffer(GL_ARRAY_BUFFER, geometryVbo);
@@ -286,17 +317,22 @@ public final class ZoneVboManager implements AutoCloseable {
         glVertexAttribPointer(1, 2, GL_FLOAT, false, geometryStride, 3L * Float.BYTES);
         glEnableVertexAttribArray(1);
 
-        glBindBuffer(GL_ARRAY_BUFFER, shadingVbo);
-        int shadingStride = NativeSceneVertexLayout.SHADING_FLOATS_PER_VERTEX * Float.BYTES;
-        glVertexAttribPointer(2, 1, GL_FLOAT, false, shadingStride, 0L);
+        glBindBuffer(GL_ARRAY_BUFFER, vertexShadingVbo);
+        int vertexShadingStride =
+                NativeSceneVertexLayout.VERTEX_SHADING_FLOATS_PER_VERTEX * Float.BYTES;
+        glVertexAttribPointer(2, 1, GL_FLOAT, false, vertexShadingStride, 0L);
         glEnableVertexAttribArray(2);
-        glVertexAttribPointer(3, 1, GL_FLOAT, false, shadingStride, 1L * Float.BYTES);
-        glEnableVertexAttribArray(3);
-        glVertexAttribPointer(4, 1, GL_FLOAT, false, shadingStride, 2L * Float.BYTES);
-        glEnableVertexAttribArray(4);
-        glVertexAttribPointer(5, 3, GL_FLOAT, false, shadingStride, 3L * Float.BYTES);
+        glVertexAttribPointer(5, 3, GL_FLOAT, false, vertexShadingStride, 1L * Float.BYTES);
         glEnableVertexAttribArray(5);
-        glVertexAttribPointer(6, 1, GL_FLOAT, false, shadingStride, 6L * Float.BYTES);
+
+        glBindBuffer(GL_ARRAY_BUFFER, faceMetadataVbo);
+        int faceMetadataStride =
+                NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX * Float.BYTES;
+        glVertexAttribPointer(3, 1, GL_FLOAT, false, faceMetadataStride, 0L);
+        glEnableVertexAttribArray(3);
+        glVertexAttribPointer(4, 1, GL_FLOAT, false, faceMetadataStride, 1L * Float.BYTES);
+        glEnableVertexAttribArray(4);
+        glVertexAttribPointer(6, 1, GL_FLOAT, false, faceMetadataStride, 2L * Float.BYTES);
         glEnableVertexAttribArray(6);
 
         if (normalVbo != 0) {
@@ -326,24 +362,37 @@ public final class ZoneVboManager implements AutoCloseable {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
-    private void uploadShading(int shadingVbo, List<GpuSceneVertex> vertices) {
+    private void uploadVertexShading(int shadingVbo, List<GpuSceneVertex> vertices) {
         FloatBuffer data = uploadScratch.vertices(
-                vertices.size() * NativeSceneVertexLayout.SHADING_FLOATS_PER_VERTEX);
+                vertices.size() * NativeSceneVertexLayout.VERTEX_SHADING_FLOATS_PER_VERTEX);
         for (GpuSceneVertex vertex : vertices) {
             int rgb = vertex.colorEncoding() == GpuColorEncoding.PACKED_JAGEX_HSL
                     ? OsrsTerrainColorMath.packedHslToRgb(vertex.encodedColor(), 0.6)
                     : 0;
             data.put(vertex.encodedColor())
-                    .put(vertex.alpha())
-                    .put(vertex.renderType())
                     .put(((rgb >>> 16) & 0xFF) / 255.0f)
                     .put(((rgb >>> 8) & 0xFF) / 255.0f)
-                    .put((rgb & 0xFF) / 255.0f)
-                    .put((float) vertex.priority());
+                    .put((rgb & 0xFF) / 255.0f);
         }
         data.flip();
 
         glBindBuffer(GL_ARRAY_BUFFER, shadingVbo);
+        glBufferData(GL_ARRAY_BUFFER, data, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
+    private void uploadFaceMetadata(int metadataVbo, List<GpuSceneVertex> vertices) {
+        FloatBuffer data = uploadScratch.vertices(
+                vertices.size() * NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX);
+        for (GpuSceneVertex vertex : vertices) {
+            GpuFaceShading face = vertex.faceShading();
+            data.put((float) face.alpha())
+                    .put((float) face.renderType())
+                    .put((float) face.priority());
+        }
+        data.flip();
+
+        glBindBuffer(GL_ARRAY_BUFFER, metadataVbo);
         glBufferData(GL_ARRAY_BUFFER, data, GL_STATIC_DRAW);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
@@ -391,7 +440,8 @@ public final class ZoneVboManager implements AutoCloseable {
     private static void delete(ZoneAllocation allocation) {
         glDeleteVertexArrays(allocation.vao());
         glDeleteBuffers(allocation.geometryVbo());
-        glDeleteBuffers(allocation.shadingVbo());
+        glDeleteBuffers(allocation.vertexShadingVbo());
+        glDeleteBuffers(allocation.faceMetadataVbo());
         if (allocation.normalVbo() != 0) glDeleteBuffers(allocation.normalVbo());
         glDeleteBuffers(allocation.ibo());
     }
@@ -400,7 +450,8 @@ public final class ZoneVboManager implements AutoCloseable {
         dirtyZonesUploadedCount = 0;
         reusedAllocationsCount = 0;
         geometryStreamUploads = 0;
-        shadingStreamUploads = 0;
+        vertexShadingStreamUploads = 0;
+        faceMetadataStreamUploads = 0;
         indexStreamUploads = 0;
         normalStreamUploads = 0;
     }
@@ -434,7 +485,15 @@ public final class ZoneVboManager implements AutoCloseable {
     }
 
     int shadingStreamUploads() {
-        return shadingStreamUploads;
+        return vertexShadingStreamUploads + faceMetadataStreamUploads;
+    }
+
+    int vertexShadingStreamUploads() {
+        return vertexShadingStreamUploads;
+    }
+
+    int faceMetadataStreamUploads() {
+        return faceMetadataStreamUploads;
     }
 
     int indexStreamUploads() {
