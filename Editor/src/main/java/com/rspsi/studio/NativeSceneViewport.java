@@ -51,6 +51,17 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private float cachedPickX = Float.NaN;
     private float cachedPickY = Float.NaN;
     private java.util.Optional<PickResult> cachedPickResult;
+    private GpuUploadPlan renderedPlan;
+    private GpuZonedUploadPlan renderedZonedPlan;
+    private CameraState renderedCamera;
+    private RenderPresentation renderedPresentation;
+    private int renderedWidth;
+    private int renderedHeight;
+    private int renderedSamples = -1;
+    private int renderedCullMode = -1;
+    private int renderedTextureCycle = -1;
+    private GpuUploadPlan animatedTexturePlan;
+    private boolean animatedTexturePlanValue;
     private boolean initialized;
     private boolean closed;
     private final ViewportController navigation = new ViewportController(
@@ -295,7 +306,6 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         int width = Math.max(1, Math.round(availableWidth));
         int height = Math.max(1, Math.round(availableHeight));
         framebuffer.resize(width, height, samples);
-        framebuffer.bindForScene();
         renderer.setFramebufferStatus(framebuffer.framebufferStatus());
 
         // Freeze the complete camera/projection state for the frame before any
@@ -304,8 +314,31 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         // below intentionally updates only the next frame.
         CameraState frameCamera = navigation.camera();
         SceneCameraProjection frameProjection = SceneCameraProjection.editorDefault();
-        renderer.draw(plan, zonedPlan, frameCamera, width, height, presentation);
-        framebuffer.resolve();
+        int textureCycle = textureAnimationCycle();
+        boolean animatedTextures = hasAnimatedTextures(plan);
+        boolean redrawScene = renderedPlan != plan
+                || renderedZonedPlan != zonedPlan
+                || !Objects.equals(renderedCamera, frameCamera)
+                || !Objects.equals(renderedPresentation, presentation)
+                || renderedWidth != width
+                || renderedHeight != height
+                || renderedSamples != framebuffer.samples()
+                || renderedCullMode != renderer.cullMode()
+                || (animatedTextures && renderedTextureCycle != textureCycle);
+        if (redrawScene) {
+            framebuffer.bindForScene();
+            renderer.draw(plan, zonedPlan, frameCamera, width, height, presentation);
+            framebuffer.resolve();
+            renderedPlan = plan;
+            renderedZonedPlan = zonedPlan;
+            renderedCamera = frameCamera;
+            renderedPresentation = presentation;
+            renderedWidth = width;
+            renderedHeight = height;
+            renderedSamples = framebuffer.samples();
+            renderedCullMode = renderer.cullMode();
+            renderedTextureCycle = textureCycle;
+        }
         recordPresentedFrame(plan, frameCamera, frameProjection, width, height);
         ImGui.image(framebuffer.texture(), width, height, 0.0f, 1.0f, 1.0f, 0.0f);
         imageOriginX = ImGui.getItemRectMinX();
@@ -313,6 +346,21 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         updateSelectionFromInput();
         updateCameraFromInput();
         updateCameraFromKeyboard();
+    }
+
+    private boolean hasAnimatedTextures(GpuUploadPlan plan) {
+        if (animatedTexturePlan != plan) {
+            animatedTexturePlan = plan;
+            animatedTexturePlanValue = plan.textures().values().stream()
+                    .anyMatch(texture -> texture.definition().animationDirection() != 0
+                            && texture.definition().animationSpeed() != 0);
+        }
+        return animatedTexturePlanValue;
+    }
+
+    private static int textureAnimationCycle() {
+        long cycle = (System.nanoTime() / 1_000_000L) / 20L;
+        return (int) (cycle & com.rspsi.editor.render.TextureAnimation.CLIENT_CYCLE_MASK);
     }
 
     public float imageOriginX() { return imageOriginX; }
