@@ -22,6 +22,7 @@ import static org.lwjgl.glfw.GLFW.glfwInit;
 import static org.lwjgl.glfw.GLFW.glfwMakeContextCurrent;
 import static org.lwjgl.glfw.GLFW.glfwPollEvents;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowShouldClose;
+import static org.lwjgl.glfw.GLFW.glfwSetWindowTitle;
 import static org.lwjgl.glfw.GLFW.glfwShowWindow;
 import static org.lwjgl.glfw.GLFW.glfwSwapBuffers;
 import static org.lwjgl.glfw.GLFW.glfwSwapInterval;
@@ -103,6 +104,11 @@ public final class NativeWindow implements AutoCloseable {
     public void requestClose() {
         ensureOpen();
         glfwSetWindowShouldClose(handle, true);
+    }
+
+    public void setTitle(String title) {
+        ensureOpen();
+        glfwSetWindowTitle(handle, Objects.requireNonNull(title, "title"));
     }
 
     public int[] windowSize() {
