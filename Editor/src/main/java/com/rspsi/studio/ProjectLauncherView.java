@@ -179,6 +179,14 @@ public final class ProjectLauncherView {
             tryOpen(project.descriptor(), openProject);
         }
         ImGui.endDisabled();
+
+        if (project.kind() == StudioProjectKind.OPENRUNE_SERVER && project.available()) {
+            ImGui.sameLine();
+            if (StudioWidgets.buttonSecondary("Relocate", 92.0f, 30.0f)) {
+                relocateOpenRune(project, openProject);
+            }
+        }
+
         ImGui.sameLine();
         if (StudioWidgets.buttonGhost("Remove", 82.0f, 30.0f)) {
             registry.remove(project.projectId());
@@ -291,6 +299,24 @@ public final class ProjectLauncherView {
         } catch (Exception failure) {
             error = rootMessage(failure);
         }
+    }
+
+    private void relocateOpenRune(
+            RecentStudioProject recent,
+            Consumer<StudioProjectDescriptor> openProject) {
+        NativeFileDialogs.chooseDirectory(
+                "Relocate OpenRune-Server directory",
+                Path.of(System.getProperty("user.home")))
+                .ifPresent(path -> {
+                    try {
+                        StudioProjectDescriptor updated =
+                                projects.relocateOpenRune(recent.descriptor(), path);
+                        error = "";
+                        openProject.accept(updated);
+                    } catch (Exception failure) {
+                        error = rootMessage(failure);
+                    }
+                });
     }
 
     private static String accessLabel(ProjectIntegrationPreset preset) {
