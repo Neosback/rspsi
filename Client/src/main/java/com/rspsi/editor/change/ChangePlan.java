@@ -1,5 +1,6 @@
 package com.rspsi.editor.change;
 
+import com.rspsi.editor.model.TileBounds;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldTile;
 
@@ -9,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -55,6 +57,30 @@ public record ChangePlan(
             regions.add(tile.address().regionId());
         }
         return Set.copyOf(regions);
+    }
+
+    /** Inclusive XY bounds in absolute OSRS world-tile coordinates. */
+    public Optional<TileBounds> affectedWorldBounds() {
+        if (tileChanges.isEmpty()) return Optional.empty();
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        for (WorldTile tile : tileChanges.keySet()) {
+            minX = Math.min(minX, tile.x());
+            minY = Math.min(minY, tile.y());
+            maxX = Math.max(maxX, tile.x());
+            maxY = Math.max(maxY, tile.y());
+        }
+        return Optional.of(new TileBounds(minX, minY, maxX, maxY));
+    }
+
+    public Set<Integer> affectedPlanes() {
+        Set<Integer> planes = new TreeSet<>();
+        for (WorldTile tile : tileChanges.keySet()) {
+            planes.add(tile.plane());
+        }
+        return Set.copyOf(planes);
     }
 
     public static Builder builder(String description) {
