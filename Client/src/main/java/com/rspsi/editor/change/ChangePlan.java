@@ -4,6 +4,7 @@ import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldTile;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +32,7 @@ public record ChangePlan(
         }
         Objects.requireNonNull(tileChanges, "tileChanges");
         Objects.requireNonNull(diagnostics, "diagnostics");
-        tileChanges = Map.copyOf(new LinkedHashMap<>(tileChanges));
+        tileChanges = Collections.unmodifiableMap(new LinkedHashMap<>(tileChanges));
         diagnostics = List.copyOf(diagnostics);
         for (var entry : tileChanges.entrySet()) {
             if (!entry.getKey().equals(entry.getValue().tile())) {
