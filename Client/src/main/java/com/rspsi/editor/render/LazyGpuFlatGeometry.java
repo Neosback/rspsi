@@ -91,7 +91,8 @@ final class LazyGpuFlatGeometry {
         if (materializedVertices != null) return;
 
         ArrayList<GpuSceneVertex> vertices = new ArrayList<>(vertexCount());
-        ArrayList<Integer> indices = new ArrayList<>(indexCount());
+        int[] indices = new int[indexCount()];
+        int writeIndex = 0;
         for (int fragmentIndex = 0; fragmentIndex < fragments.size(); fragmentIndex++) {
             GpuUploadPlan fragment = fragments.get(fragmentIndex);
             for (int i = 0; i < fragment.vertexCount(); i++) {
@@ -99,11 +100,11 @@ final class LazyGpuFlatGeometry {
             }
             int vertexBase = vertexStarts[fragmentIndex];
             for (int i = 0; i < fragment.indexCount(); i++) {
-                indices.add(vertexBase + fragment.directIndexAt(i));
+                indices[writeIndex++] = vertexBase + fragment.directIndexAt(i);
             }
         }
         materializedVertices = List.copyOf(vertices);
-        materializedIndices = List.copyOf(indices);
+        materializedIndices = ImmutableIntList.wrapOwned(indices);
         materializationCount++;
     }
 
