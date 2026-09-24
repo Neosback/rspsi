@@ -73,8 +73,8 @@ class ZoneVboManagerTest {
     @Test
     void faceOnlyChangeKeepsGeometryAndVertexShadingResident() {
         ZoneVboManager.ZoneAllocation existing = new ZoneVboManager.ZoneAllocation(
-                1L, 10, 11, 12, 13, 0, 14,
-                100L, 200L, 300L, 0L, 400L);
+                1L, 10, 11, 12, 13, 0, 0, 14,
+                100L, 200L, 300L, 0L, 0L, 400L);
         GpuZoneStreamFingerprints changed =
                 new GpuZoneStreamFingerprints(100L, 200L, 301L, 400L, 999L);
 
