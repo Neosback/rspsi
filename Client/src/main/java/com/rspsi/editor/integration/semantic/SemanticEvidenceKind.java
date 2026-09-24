@@ -4,5 +4,6 @@ package com.rspsi.editor.integration.semantic;
 public enum SemanticEvidenceKind {
     SOURCE_PSI,
     SYMBOL_MAPPING,
-    DECLARATIVE_REFERENCE
+    DECLARATIVE_REFERENCE,
+    DECLARATIVE_STRUCTURE
 }
