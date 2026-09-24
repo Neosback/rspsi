@@ -168,7 +168,7 @@ public final class StudioProjectService {
         return existing;
     }
 
-    private static Path automaticProjectDataRoot(Path source, String kind) {
+    private Path automaticProjectDataRoot(Path source, String kind) {
         Path normalized = source.toAbsolutePath().normalize();
         String name = displayName(normalized, kind);
         String slug = name.toLowerCase(java.util.Locale.ROOT)
@@ -179,8 +179,11 @@ public final class StudioProjectService {
                         normalized.toString().getBytes(StandardCharsets.UTF_8))
                 .toString()
                 .substring(0, 8);
-        return Path.of(System.getProperty("user.home"),
-                ".openrune-studio", "projects", slug + "-" + stableId)
+        Path studioRoot = registry.registryFile().getParent();
+        if (studioRoot == null) {
+            studioRoot = Path.of(System.getProperty("user.home"), ".openrune-studio");
+        }
+        return studioRoot.resolve("projects").resolve(slug + "-" + stableId)
                 .toAbsolutePath().normalize();
     }
 
