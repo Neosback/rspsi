@@ -12,6 +12,7 @@ import com.rspsi.editor.inspector.ObjectReport;
 import com.rspsi.editor.inspector.ObjectResolutionSummary;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.OsrsLocShape;
+import com.rspsi.editor.render.ObjectPreviewScene;
 import com.rspsi.editor.selection.ObjectSelection;
 import com.rspsi.editor.selection.ObjectSetSelection;
 import com.rspsi.editor.selection.Selection;
@@ -79,8 +80,8 @@ public final class ObjectViewerPanel implements StudioPanel {
     private int lastPropertiesObjectId = Integer.MIN_VALUE;
 
     private final ObjectPreviewRenderer previewRenderer = new ObjectPreviewRenderer();
-    private float previewYaw = (float) Math.toRadians(200.0);
-    private float previewPitch = -0.35f;
+    private float previewYaw = ObjectPreviewScene.DEFAULT_ORBIT_YAW;
+    private float previewElevation = ObjectPreviewScene.DEFAULT_ELEVATION;
     private float previewZoom = 1.0f;
 
     // Tracks the last viewport pick this panel already reacted to, so a
@@ -243,7 +244,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         } else {
             int size = (int) PREVIEW_HEIGHT - 4;
             int texture = previewRenderer.render(cache.bundle().definitions(), objId, objectType.get(),
-                    objectRotation.get(), previewYaw, previewPitch, previewZoom, size, size);
+                    objectRotation.get(), previewYaw, previewElevation, previewZoom, size, size);
 
             ImGui.setCursorScreenPos(cx + (panelW - size) * 0.5f, cy + 2.0f);
             if (texture != 0) {
@@ -269,7 +270,8 @@ public final class ObjectViewerPanel implements StudioPanel {
             boolean previewHovered = ImGui.isItemHovered();
             if (ImGui.isItemActive() && ImGui.isMouseDragging(0)) {
                 previewYaw -= ImGui.getMouseDragDeltaX() * 0.01f;
-                previewPitch = clamp(previewPitch + ImGui.getMouseDragDeltaY() * 0.01f, -1.4f, 1.4f);
+                previewElevation = clamp(previewElevation + ImGui.getMouseDragDeltaY() * 0.01f,
+                        ObjectPreviewScene.MIN_ELEVATION, ObjectPreviewScene.MAX_ELEVATION);
                 ImGui.resetMouseDragDelta();
             }
             if (previewHovered) {
@@ -278,6 +280,11 @@ public final class ObjectViewerPanel implements StudioPanel {
                     // Scrolling "up" (positive wheel) should move the camera
                     // closer, so it shrinks the distance multiplier.
                     previewZoom = clamp(previewZoom * (1.0f - wheel * 0.1f), 0.35f, 4.0f);
+                }
+                if (ImGui.isMouseDoubleClicked(0)) {
+                    previewYaw = ObjectPreviewScene.DEFAULT_ORBIT_YAW;
+                    previewElevation = ObjectPreviewScene.DEFAULT_ELEVATION;
+                    previewZoom = 1.0f;
                 }
             }
             // beginDragDropSource must immediately follow the item it
@@ -289,7 +296,7 @@ public final class ObjectViewerPanel implements StudioPanel {
                 ImGui.text(StudioIcons.OBJECT + " Spawn Object #" + objId);
                 ImGui.endDragDropSource();
             } else if (previewHovered) {
-                ImGui.setTooltip("Drag to rotate, scroll to zoom - drop on the 3D viewport to spawn");
+                ImGui.setTooltip("Drag to orbit, scroll to zoom, double-click to reset.\nDrag onto the 3D viewport to spawn. Grid cells are one game tile.");
             }
 
             ImGui.setCursorScreenPos(cx, cy + PREVIEW_HEIGHT + 4.0f);

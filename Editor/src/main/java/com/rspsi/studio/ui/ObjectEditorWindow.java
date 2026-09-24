@@ -10,6 +10,7 @@ import com.rspsi.editor.RotateObjectCommand;
 import com.rspsi.editor.inspector.ObjectFieldCatalog;
 import com.rspsi.editor.inspector.ObjectReport;
 import com.rspsi.editor.model.OsrsLocShape;
+import com.rspsi.editor.render.ObjectPreviewScene;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.studio.theme.StudioDrawColors;
 import imgui.ImGui;
@@ -45,8 +46,8 @@ public final class ObjectEditorWindow {
     private final Map<String, ImString> textBuffers = new HashMap<>();
     private WorldObject placement;
     private int objectId = -1;
-    private float yaw = 0.8f;
-    private float pitch = 0.5f;
+    private float yaw = ObjectPreviewScene.DEFAULT_ORBIT_YAW;
+    private float elevation = ObjectPreviewScene.DEFAULT_ELEVATION;
     private float zoom = 1.0f;
     private String status = "";
     /** Field whose text box is being edited; others resync from the preview every frame. */
@@ -234,18 +235,24 @@ public final class ObjectEditorWindow {
         // TODO(object-editor): preview the edited transaction, not the cache definition. The
         // preview renderer reads DefinitionProvider, which does not see in-memory edits.
         int texture = preview.render(cache.bundle().definitions(), objectId, placement.type(),
-                placement.rotation(), yaw, pitch, zoom, size, size);
+                placement.rotation(), yaw, elevation, zoom, size, size);
         if (texture != 0) {
             ImGui.image(texture, size, size);
             if (ImGui.isItemHovered()) {
                 if (ImGui.isMouseDragging(ImGuiMouseButton.Left)) {
-                    yaw += ImGui.getIO().getMouseDeltaX() * 0.01f;
-                    pitch = Math.max(0.05f, Math.min(1.5f, pitch + ImGui.getIO().getMouseDeltaY() * 0.01f));
+                    yaw -= ImGui.getIO().getMouseDeltaX() * 0.01f;
+                    elevation = Math.max(ObjectPreviewScene.MIN_ELEVATION, Math.min(ObjectPreviewScene.MAX_ELEVATION,
+                            elevation + ImGui.getIO().getMouseDeltaY() * 0.01f));
                 }
                 float wheel = ImGui.getIO().getMouseWheel();
-                if (wheel != 0.0f) zoom = Math.max(0.25f, Math.min(4.0f, zoom * (wheel > 0 ? 0.9f : 1.1f)));
+                if (wheel != 0.0f) zoom = Math.max(0.35f, Math.min(4.0f, zoom * (wheel > 0 ? 0.9f : 1.1f)));
+                if (ImGui.isMouseDoubleClicked(ImGuiMouseButton.Left)) {
+                    yaw = ObjectPreviewScene.DEFAULT_ORBIT_YAW;
+                    elevation = ObjectPreviewScene.DEFAULT_ELEVATION;
+                    zoom = 1.0f;
+                }
             }
-            ImGui.textDisabled("Drag to orbit, scroll to zoom.");
+            ImGui.textDisabled("Drag to orbit, scroll to zoom, double-click to reset. Grid cells are one tile.");
         } else {
             ImGui.textWrapped("No renderable model for this object in its current state.");
         }

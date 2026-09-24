@@ -18,7 +18,8 @@ import java.util.Objects;
  * depth/material interpolation are performed before rasterization.</p>
  */
 public final class SoftwareSceneRenderer {
-    private static final int BACKGROUND = 0xFF101827;
+    /** Clear colour; {@link ObjectPreviewScene} draws its ground grid only over these pixels. */
+    public static final int BACKGROUND = 0xFF101827;
 
     public SoftwareRenderFrame render(GpuUploadPlan plan, CameraState camera,
                                       int width, int height) {
