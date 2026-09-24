@@ -57,7 +57,12 @@ public final class OpenRuneKotlinSemanticIndexer {
                     List.of(), List.of(),
                     List.of("Kotlin semantic index unavailable: Gradle project model is not loaded"));
         }
+        return index(model);
+    }
 
+    /** Indexes an already evaluated neutral Gradle model. */
+    public SemanticSourceIndex index(GradleProjectModel model) {
+        Objects.requireNonNull(model, "model");
         List<SourceRoot> roots = productionRoots(model);
         if (roots.isEmpty()) {
             return new SemanticSourceIndex(
