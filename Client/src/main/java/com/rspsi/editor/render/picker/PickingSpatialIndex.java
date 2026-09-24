@@ -454,9 +454,9 @@ final class PickingSpatialIndex {
                 GpuDrawCommand command = upload.commands().get(commandIndex);
                 for (int offset = command.firstIndex();
                      offset + 2 < command.firstIndex() + command.indexCount(); offset += 3) {
-                    int aIndex = upload.indices().get(offset);
-                    int bIndex = upload.indices().get(offset + 1);
-                    int cIndex = upload.indices().get(offset + 2);
+                    int aIndex = upload.indexAt(offset);
+                    int bIndex = upload.indexAt(offset + 1);
+                    int cIndex = upload.indexAt(offset + 2);
                     GpuSceneVertex a = upload.vertices().get(aIndex);
                     GpuSceneVertex b = upload.vertices().get(bIndex);
                     GpuSceneVertex c = upload.vertices().get(cIndex);
