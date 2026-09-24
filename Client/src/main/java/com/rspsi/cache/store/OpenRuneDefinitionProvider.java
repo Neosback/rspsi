@@ -21,9 +21,10 @@ import com.rspsi.cache.definition.AnimationCurveView;
 import com.rspsi.cache.definition.CachedSkeletalAnimationView;
 import com.rspsi.cache.OsrsCacheIndexLayout;
 import dev.openrune.cache.filestore.definition.ModelDecoder;
-import dev.openrune.cache.filestore.definition.SpriteDecoder;
+import dev.openrune.definition.codec.SpriteCodec;
 import static dev.openrune.cache.ArchiveIndexKt.MODELS;
 import static dev.openrune.cache.ArchiveIndexKt.CONFIGS;
+import static dev.openrune.cache.ArchiveIndexKt.SPRITES;
 import static dev.openrune.cache.ConfigTypeKt.SEQUENCE;
 import static dev.openrune.cache.ConfigTypeKt.MAP_ELEMENT;
 import dev.openrune.definition.game.IndexedSprite;
@@ -121,7 +122,8 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     private volatile Map<Integer, VarBitType> varbits;
     private final java.util.List<DecodeFailure> decodeFailures =
             java.util.Collections.synchronizedList(new java.util.ArrayList<>());
-    private volatile Map<Integer, SpriteType> textureSprites;
+    /** Sprite groups are decoded lazily by archive id instead of retaining the entire sprite index. */
+    private final Map<Integer, Optional<SpriteType>> spriteGroups = new HashMap<>();
     private final ModelDecoder modelDecoder;
     private final List<Integer> modelIds;
     private final Map<Integer, Optional<ModelType>> models = new HashMap<>();
@@ -501,7 +503,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
      * adapter rather than making minimap/editor code understand either cache
      * layout.
      */
-    private static Map<Integer, MapSceneSpriteView> loadMapScenes(Cache cache) {
+    private Map<Integer, MapSceneSpriteView> loadMapScenes(Cache cache) {
         try {
             byte[] defaults = cache.data(17, 3, 0, null);
             int group = graphicsDefaultMapSceneGroup(defaults);
@@ -509,9 +511,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                 group = cache.archiveId(8, "mapscene");
             }
             if (group < 0) return Map.of();
-            Map<Integer, SpriteType> spriteGroups = new HashMap<>();
-            new SpriteDecoder().load(cache, spriteGroups);
-            SpriteType spriteType = spriteGroups.get(group);
+            SpriteType spriteType = spriteGroup(group).orElse(null);
             if (spriteType == null) return Map.of();
             Map<Integer, MapSceneSpriteView> result = new HashMap<>();
             IndexedSprite[] sprites = spriteType.getSprites();
@@ -561,7 +561,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
 
     @Override
     public Optional<MapSceneSpriteView> sprite(int groupId, int frame) {
-        SpriteType group = textureSprites().get(groupId);
+        SpriteType group = spriteGroup(groupId).orElse(null);
         if (group == null || group.getSprites() == null || frame < 0 || frame >= group.getSprites().length) {
             return Optional.empty();
         }
@@ -657,7 +657,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
 
     @Override
     public synchronized Optional<int[]> texturePixels(int id, double brightness, int textureSize) {
-        // The pinned 3.0.2 artifact exposes the client-compatible 128px,
+        // The pinned OpenRune artifact exposes the client-compatible 128px,
         // BRIGHTNESS_MAX texture path only. Do not pretend a requested
         // alternative gamma/size was honored at the neutral boundary.
         if (id < 0 || !Double.isFinite(brightness) || Math.abs(brightness - 0.6) > 0.0001
@@ -666,31 +666,35 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
         }
         TextureType definition = textures.get(id);
         if (definition == null) return Optional.empty();
-        // Do not use TextureType.load(sprites): that compatibility overload
-        // defaults to brightness 0 and the library's default texture size.
-        // The native renderer's contract is the client-compatible 0.6/128
-        // decode used by the revision-240 texture path.
-        int[] pixels = definition.load(textureSprites(), brightness, textureSize);
+
+        // TextureType references exactly one sprite archive through fileId.
+        // Decoding the complete sprite index here retained every UI/map/item
+        // sprite after the first textured region was opened. Decode only the
+        // archive the texture actually references and let TextureType keep its
+        // own rendered pixel cache.
+        SpriteType sprite = spriteGroup(definition.getFileId()).orElse(null);
+        if (sprite == null) return Optional.empty();
+        int[] pixels = definition.load(
+                Map.of(definition.getFileId(), sprite), brightness, textureSize);
         return pixels == null ? Optional.empty() : Optional.of(pixels.clone());
     }
 
-    private Map<Integer, SpriteType> textureSprites() {
-        Map<Integer, SpriteType> current = textureSprites;
-        if (current != null) return current;
-        synchronized (this) {
-            current = textureSprites;
-            if (current == null) {
-                Map<Integer, SpriteType> decoded = new HashMap<>();
-                try {
-                    new SpriteDecoder().load(cache, decoded);
-                } catch (RuntimeException ignored) {
-                    decoded.clear();
-                }
-                current = Map.copyOf(decoded);
-                textureSprites = current;
-            }
+    private synchronized Optional<SpriteType> spriteGroup(int groupId) {
+        if (groupId < 0) return Optional.empty();
+        return spriteGroups.computeIfAbsent(groupId, this::decodeSpriteGroup);
+    }
+
+    private Optional<SpriteType> decodeSpriteGroup(int groupId) {
+        try {
+            byte[] data = cache.data(SPRITES, groupId, 0, null);
+            if (data == null) return Optional.empty();
+            return Optional.of(new SpriteCodec().loadData(groupId, data));
+        } catch (RuntimeException failure) {
+            decodeFailures.add(new DecodeFailure(
+                    "sprite", groupId,
+                    failure.getClass().getSimpleName() + ": " + failure.getMessage()));
+            return Optional.empty();
         }
-        return current;
     }
 
     /** Decodes model metadata lazily so opening a cache does not load every mesh. */

@@ -307,7 +307,7 @@ public final class GpuScenePacketBuilder {
                 .forEach(texture -> value.append("texture=").append(texture.id())
                         .append(':').append(texture.pixelStatus())
                         .append(':').append(texture.width()).append('x').append(texture.height())
-                        .append(':').append(java.util.Arrays.hashCode(texture.pixels())).append(';'));
+                        .append(':').append(texture.pixelHash()).append(';'));
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
                     .digest(value.toString().getBytes(StandardCharsets.UTF_8));

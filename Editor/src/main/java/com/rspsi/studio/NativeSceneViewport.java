@@ -37,7 +37,31 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private float imageOriginX;
     private float imageOriginY;
     private PickResult selection;
-    private boolean gpuPickingEnabled = true;
+    // CPU DDA is the authoritative editor picker and does not require a second
+    // scene render or synchronous GPU readback. GPU ID picking remains available
+    // as an explicit diagnostic/acceleration option.
+    private boolean gpuPickingEnabled = false;
+    private GpuUploadPlan cachedPickPlan;
+    private GpuZonedUploadPlan cachedPickZonedPlan;
+    private CameraState cachedPickCamera;
+    private SceneCameraProjection cachedPickProjection;
+    private Integer cachedPickPlaneRestriction;
+    private int cachedPickWidth;
+    private int cachedPickHeight;
+    private float cachedPickX = Float.NaN;
+    private float cachedPickY = Float.NaN;
+    private java.util.Optional<PickResult> cachedPickResult;
+    private GpuUploadPlan renderedPlan;
+    private GpuZonedUploadPlan renderedZonedPlan;
+    private CameraState renderedCamera;
+    private RenderPresentation renderedPresentation;
+    private int renderedWidth;
+    private int renderedHeight;
+    private int renderedSamples = -1;
+    private int renderedCullMode = -1;
+    private int renderedTextureCycle = -1;
+    private GpuUploadPlan animatedTexturePlan;
+    private boolean animatedTexturePlanValue;
     private boolean initialized;
     private boolean closed;
     private final ViewportController navigation = new ViewportController(
@@ -159,7 +183,9 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
      * because it happens to be rendered. Pass {@code null} to remove the restriction.
      */
     public void setPickPlaneRestriction(Integer plane) {
+        if (Objects.equals(this.pickPlaneRestriction, plane)) return;
         this.pickPlaneRestriction = plane;
+        invalidatePickCache();
     }
 
     /**
@@ -173,29 +199,81 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
             return java.util.Optional.empty();
         }
 
+        if (samePickQuery(x, y)) {
+            return cachedPickResult;
+        }
+
+        java.util.Optional<PickResult> result = java.util.Optional.empty();
         if (gpuPickingEnabled) {
             int packedId = renderer.pickId(
                     lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight,
                     x, y, pickPlaneRestriction);
             if (PickerId.isValid(packedId)) {
-                java.util.Optional<PickResult> exact = picker.pickMatchingId(
+                result = picker.pickMatchingId(
                         lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight,
                         x, y, lastFrameProjection, pickPlaneRestriction, packedId);
-                if (exact.isPresent()) {
-                    return exact;
-                }
             }
         }
 
-        // The DDA path remains the authoritative fallback/reference. This also
-        // protects selection if a driver rejects the optional integer pass or
-        // a future shader/visibility change temporarily breaks GPU parity.
-        return picker.pick(lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight, x, y,
-                lastFrameProjection, pickPlaneRestriction);
+        if (result.isEmpty()) {
+            // The DDA path remains the authoritative fallback/reference. This also
+            // protects selection if a driver rejects the optional integer pass or
+            // a future shader/visibility change temporarily breaks GPU parity.
+            result = picker.pick(lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight, x, y,
+                    lastFrameProjection, pickPlaneRestriction);
+        }
+
+        cachePick(x, y, result);
+        return result;
+    }
+
+    private boolean samePickQuery(float x, float y) {
+        return cachedPickResult != null
+                && cachedPickPlan == lastPlan
+                && cachedPickZonedPlan == zonedPlan
+                && Objects.equals(cachedPickCamera, lastFrameCamera)
+                && Objects.equals(cachedPickProjection, lastFrameProjection)
+                && Objects.equals(cachedPickPlaneRestriction, pickPlaneRestriction)
+                && cachedPickWidth == lastWidth
+                && cachedPickHeight == lastHeight
+                && Float.floatToIntBits(cachedPickX) == Float.floatToIntBits(x)
+                && Float.floatToIntBits(cachedPickY) == Float.floatToIntBits(y);
+    }
+
+    private void cachePick(float x, float y, java.util.Optional<PickResult> result) {
+        cachedPickPlan = lastPlan;
+        cachedPickZonedPlan = zonedPlan;
+        cachedPickCamera = lastFrameCamera;
+        cachedPickProjection = lastFrameProjection;
+        cachedPickPlaneRestriction = pickPlaneRestriction;
+        cachedPickWidth = lastWidth;
+        cachedPickHeight = lastHeight;
+        cachedPickX = x;
+        cachedPickY = y;
+        cachedPickResult = Objects.requireNonNull(result, "pick result");
+    }
+
+    private void invalidatePickCache() {
+        cachedPickPlan = null;
+        cachedPickZonedPlan = null;
+        cachedPickCamera = null;
+        cachedPickProjection = null;
+        cachedPickPlaneRestriction = null;
+        cachedPickWidth = 0;
+        cachedPickHeight = 0;
+        cachedPickX = Float.NaN;
+        cachedPickY = Float.NaN;
+        cachedPickResult = null;
     }
 
     public void setGpuPickingEnabled(boolean enabled) {
+        if (gpuPickingEnabled == enabled) return;
         gpuPickingEnabled = enabled;
+        invalidatePickCache();
+        // Auxiliary picker stream allocation is reconciled inside renderer.draw().
+        // Force one redraw so enabling/disabling the optional path immediately
+        // updates resident GPU resources even when the visible scene is static.
+        renderedPlan = null;
         if (initialized) {
             renderer.setGpuPickingEnabled(enabled);
         }
@@ -232,7 +310,6 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         int width = Math.max(1, Math.round(availableWidth));
         int height = Math.max(1, Math.round(availableHeight));
         framebuffer.resize(width, height, samples);
-        framebuffer.bindForScene();
         renderer.setFramebufferStatus(framebuffer.framebufferStatus());
 
         // Freeze the complete camera/projection state for the frame before any
@@ -241,8 +318,31 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         // below intentionally updates only the next frame.
         CameraState frameCamera = navigation.camera();
         SceneCameraProjection frameProjection = SceneCameraProjection.editorDefault();
-        renderer.draw(plan, zonedPlan, frameCamera, width, height, presentation);
-        framebuffer.resolve();
+        int textureCycle = textureAnimationCycle();
+        boolean animatedTextures = hasAnimatedTextures(plan);
+        boolean redrawScene = renderedPlan != plan
+                || renderedZonedPlan != zonedPlan
+                || !Objects.equals(renderedCamera, frameCamera)
+                || !Objects.equals(renderedPresentation, presentation)
+                || renderedWidth != width
+                || renderedHeight != height
+                || renderedSamples != framebuffer.samples()
+                || renderedCullMode != renderer.cullMode()
+                || (animatedTextures && renderedTextureCycle != textureCycle);
+        if (redrawScene) {
+            framebuffer.bindForScene();
+            renderer.draw(plan, zonedPlan, frameCamera, width, height, presentation);
+            framebuffer.resolve();
+            renderedPlan = plan;
+            renderedZonedPlan = zonedPlan;
+            renderedCamera = frameCamera;
+            renderedPresentation = presentation;
+            renderedWidth = width;
+            renderedHeight = height;
+            renderedSamples = framebuffer.samples();
+            renderedCullMode = renderer.cullMode();
+            renderedTextureCycle = textureCycle;
+        }
         recordPresentedFrame(plan, frameCamera, frameProjection, width, height);
         ImGui.image(framebuffer.texture(), width, height, 0.0f, 1.0f, 1.0f, 0.0f);
         imageOriginX = ImGui.getItemRectMinX();
@@ -250,6 +350,21 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         updateSelectionFromInput();
         updateCameraFromInput();
         updateCameraFromKeyboard();
+    }
+
+    private boolean hasAnimatedTextures(GpuUploadPlan plan) {
+        if (animatedTexturePlan != plan) {
+            animatedTexturePlan = plan;
+            animatedTexturePlanValue = plan.textures().values().stream()
+                    .anyMatch(texture -> texture.definition().animationDirection() != 0
+                            && texture.definition().animationSpeed() != 0);
+        }
+        return animatedTexturePlanValue;
+    }
+
+    private static int textureAnimationCycle() {
+        long cycle = (System.nanoTime() / 1_000_000L) / 20L;
+        return (int) (cycle & com.rspsi.editor.render.TextureAnimation.CLIENT_CYCLE_MASK);
     }
 
     public float imageOriginX() { return imageOriginX; }

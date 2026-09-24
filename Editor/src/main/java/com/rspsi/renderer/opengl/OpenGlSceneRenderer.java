@@ -1602,16 +1602,16 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
             return 4L;
         }
+        ByteBuffer pixels = BufferUtils.createByteBuffer(TEXTURE_SIZE * TEXTURE_SIZE * 4);
         for (RenderTextureResource resource : available) {
-            int[] source = resource.pixels();
-            ByteBuffer pixels = BufferUtils.createByteBuffer(TEXTURE_SIZE * TEXTURE_SIZE * 4);
+            pixels.clear();
             for (int y = 0; y < TEXTURE_SIZE; y++) {
                 int sourceY = Math.min(resource.height() - 1,
                         y * resource.height() / TEXTURE_SIZE);
                 for (int x = 0; x < TEXTURE_SIZE; x++) {
                     int sourceX = Math.min(resource.width() - 1,
                             x * resource.width() / TEXTURE_SIZE);
-                    int argb = source[sourceY * resource.width() + sourceX];
+                    int argb = resource.pixelAt(sourceX, sourceY);
                     int rgb = argb & 0xFFFFFF;
                     // The client's transparency source is the texture's own
                     // alpha channel (`src >>> 24` in the textured scanline),

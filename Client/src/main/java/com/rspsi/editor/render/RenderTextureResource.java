@@ -151,7 +151,7 @@ public final class RenderTextureResource {
      * Reads one immutable pixel without allocating. Intended for renderers
      * that already hold this immutable resource for the duration of a frame.
      */
-    int pixelAt(int x, int y) { return pixels[y * width + x]; }
+    public int pixelAt(int x, int y) { return pixels[y * width + x]; }
 
     public PixelStatus pixelStatus() { return pixelStatus; }
 

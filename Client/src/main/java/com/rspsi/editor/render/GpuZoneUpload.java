@@ -14,7 +14,7 @@ public record GpuZoneUpload(
     public GpuZoneUpload {
         zone = Objects.requireNonNull(zone, "zone");
         vertices = List.copyOf(Objects.requireNonNull(vertices, "vertices"));
-        indices = List.copyOf(Objects.requireNonNull(indices, "indices"));
+        indices = ImmutableIntList.copyOf(Objects.requireNonNull(indices, "indices"));
         commands = List.copyOf(Objects.requireNonNull(commands, "commands"));
         fingerprints = Objects.requireNonNull(fingerprints, "fingerprints");
         int vertexCount = vertices.size();
