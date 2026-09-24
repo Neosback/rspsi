@@ -14,6 +14,7 @@ import static org.lwjgl.opengl.GL11.GL_LINEAR;
 import static org.lwjgl.opengl.GL11.GL_RGBA;
 import static org.lwjgl.opengl.GL11.GL_RGBA8;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_2D;
+import static org.lwjgl.opengl.GL11.GL_TEXTURE_BINDING_2D;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_MAG_FILTER;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_MIN_FILTER;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_WRAP_S;
@@ -23,6 +24,7 @@ import static org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE;
 import static org.lwjgl.opengl.GL11.glBindTexture;
 import static org.lwjgl.opengl.GL11.glDeleteTextures;
 import static org.lwjgl.opengl.GL11.glGenTextures;
+import static org.lwjgl.opengl.GL11.glGetInteger;
 import static org.lwjgl.opengl.GL11.glPixelStorei;
 import static org.lwjgl.opengl.GL11.glTexImage2D;
 import static org.lwjgl.opengl.GL11.glTexParameteri;
@@ -89,6 +91,8 @@ public final class StudioBranding {
                 try {
                     wordmarkWidth = width.get(0);
                     wordmarkHeight = height.get(0);
+                    int previousTexture = glGetInteger(GL_TEXTURE_BINDING_2D);
+                    int previousUnpackAlignment = glGetInteger(GL_UNPACK_ALIGNMENT);
                     wordmarkTexture = glGenTextures();
                     glBindTexture(GL_TEXTURE_2D, wordmarkTexture);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -99,7 +103,8 @@ public final class StudioBranding {
                     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
                             wordmarkWidth, wordmarkHeight, 0,
                             GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-                    glBindTexture(GL_TEXTURE_2D, 0);
+                    glPixelStorei(GL_UNPACK_ALIGNMENT, previousUnpackAlignment);
+                    glBindTexture(GL_TEXTURE_2D, previousTexture);
                 } finally {
                     STBImage.stbi_image_free(pixels);
                 }
