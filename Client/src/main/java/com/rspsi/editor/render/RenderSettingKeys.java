@@ -30,6 +30,8 @@ public final class RenderSettingKeys {
     public static final SettingKey<Boolean> WIREFRAME = bool("viewport.debug.wireframe");
     public static final SettingKey<BackfacePolicy.NativeCullingMode> NATIVE_CULLING_MODE =
             new SettingKey<>("viewport.debug.native-culling", BackfacePolicy.NativeCullingMode.class);
+    public static final SettingKey<GpuDebugView> GPU_DEBUG_VIEW =
+            new SettingKey<>("viewport.debug.gpu-view", GpuDebugView.class);
     public static final SettingKey<Integer> ACTIVE_PLANE =
             new SettingKey<>("viewport.scene.active-plane", Integer.class);
     public static final SettingKey<SceneVisibilityPolicy.PlaneSelection> PLANE_SELECTION =
@@ -79,6 +81,13 @@ public final class RenderSettingKeys {
                 "Show collision diagnostics.", Set.of(SettingInvalidation.REDRAW)));
         registry.register(SettingSpec.of(WIREFRAME, false, SettingScope.VIEWPORT, "Wireframe",
                 "Show renderer geometry edges.", Set.of(SettingInvalidation.REDRAW)));
+        registry.register(SettingSpec.enumeration(GPU_DEBUG_VIEW,
+                GpuDebugView.NONE, List.of(GpuDebugView.values()), SettingScope.VIEWPORT,
+                "GPU debug view",
+                "Inspect native GPU scene inputs without changing authored data. "
+                        + "Normals activates the optional normal stream only while selected.",
+                Set.of(SettingInvalidation.REDRAW)));
+
         registry.register(SettingSpec.enumeration(NATIVE_CULLING_MODE,
                 BackfacePolicy.defaultMode(),
                 List.of(BackfacePolicy.NativeCullingMode.values()), SettingScope.VIEWPORT,
@@ -127,7 +136,7 @@ public final class RenderSettingKeys {
                 GROUND_DECORATIONS_VISIBLE, ROOFS_VISIBLE, BRIDGE_TILES_VISIBLE,
                 HIDDEN_TILES_VISIBLE, INVISIBLE_OBJECTS_VISIBLE, COLLISION_VISIBLE, WIREFRAME, ACTIVE_PLANE,
                 PLANE_SELECTION, BRIGHTNESS, EXPOSURE, MSAA_SAMPLES, FOG_DEPTH_TILES,
-                FOG_COLOR);
+                FOG_COLOR, GPU_DEBUG_VIEW);
         consumers.register("native-viewport-validation", NATIVE_CULLING_MODE);
         consumers.register("map-studio-viewport-hud", HUD_TILE_INSPECTOR_VISIBLE, HUD_TOOL_CONTROLS_VISIBLE);
         return consumers;
