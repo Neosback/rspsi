@@ -1,6 +1,7 @@
 package com.rspsi.studio;
 
 import com.rspsi.cache.workspace.CacheSessionState;
+import com.rspsi.cache.workspace.OsrsCacheHealth;
 import com.rspsi.cache.workspace.CacheDecoderSummary;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.cache.workspace.OsrsCacheSessionService;
@@ -47,8 +48,6 @@ import com.rspsi.editor.render.RenderSettingKeys;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.settings.SettingsJsonStore;
 import com.rspsi.editor.settings.EditorSettingKeys;
-import com.rspsi.editor.integration.IntegrationCapability;
-import com.rspsi.editor.integration.IntegrationOptions;
 import com.rspsi.editor.integration.ServerIntegrationService;
 import com.rspsi.editor.integration.npc.NpcSpawnService;
 import com.rspsi.editor.integration.reference.ReferenceService;
@@ -60,15 +59,10 @@ import com.rspsi.editor.symbols.CacheGamevalProvider;
 import com.rspsi.editor.symbols.SymbolService;
 import com.rspsi.editor.plugin.builtin.tool.TilePainterToolPlugin;
 import com.rspsi.editor.plugin.builtin.tool.SplinePathToolPlugin;
-import com.rspsi.plugins.server.openrune.OpenRuneServerPlugin;
 import com.rspsi.plugins.server.openrune.OpenRuneServerProvider;
-import com.rspsi.project.ProjectIntegrationCapability;
 import com.rspsi.project.StudioProjectDescriptor;
-import com.rspsi.project.StudioProjectKind;
 import com.rspsi.project.StudioProjectRegistry;
 import com.rspsi.project.StudioProjectService;
-import com.rspsi.server.ServerConnection;
-import com.rspsi.server.ServerPathKey;
 import com.rspsi.studio.integration.IntegrationCenterWindow;
 import com.rspsi.studio.workspace.InterfaceStudioView;
 import com.rspsi.studio.workspace.ObjectStudioView;
@@ -80,7 +74,6 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -103,7 +96,7 @@ public final class StudioApplication implements AutoCloseable {
             new ProjectLauncherView(projectRegistry, projectService);
     private final ProjectLoadingView projectLoading = new ProjectLoadingView();
     private final WorkspaceManager workspaces = new WorkspaceManager();
-    private final DashboardView dashboard = new DashboardView();
+    private final ContentStudioView contentStudio = new ContentStudioView();
     private final MapEditorView mapEditor = new MapEditorView();
     private final InterfaceStudioView interfaceStudio = new InterfaceStudioView();
     private final ObjectStudioView objectStudio = new ObjectStudioView();
@@ -120,6 +113,7 @@ public final class StudioApplication implements AutoCloseable {
     /** Var state the current scene was built with; a difference triggers a rebuild. */
     private RuntimeState renderedVarState = RuntimeState.EMPTY;
     private final ServerIntegrationService integrations;
+    private final ProjectOpenCoordinator projectOpenCoordinator;
     private final NativeSceneViewport sceneViewport = new NativeSceneViewport();
     private final SettingsStore renderSettings = new SettingsStore(EditorSettingKeys.registry());
     private final EditorTaskService tasks = new EditorTaskService();
@@ -136,11 +130,6 @@ public final class StudioApplication implements AutoCloseable {
                             "definition-publications.json"));
     private final ExecutorService sceneExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "openrune-scene-loader");
-        thread.setDaemon(true);
-        return thread;
-    });
-    private final ExecutorService projectExecutor = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "openrune-project-loader");
         thread.setDaemon(true);
         return thread;
     });
@@ -161,6 +150,9 @@ public final class StudioApplication implements AutoCloseable {
     private long renderedSettingsRevision = -1L;
     private String sceneStatus = "Choose a region to build the scene.";
     private Path lastReadyCache;
+    private volatile Path activeCachePath;
+    private volatile OsrsCacheHealth activeCacheHealth;
+    private volatile WorkspaceManager.Workspace pendingWorkspaceOpen;
     private volatile ApplicationState applicationState = ApplicationState.PROJECT_LAUNCHER;
     private volatile ProjectLoadStatus projectLoadStatus = ProjectLoadStatus.initial();
     private volatile StudioProjectDescriptor activeProject;
@@ -172,6 +164,7 @@ public final class StudioApplication implements AutoCloseable {
         window = new NativeWindow(1120, 820, "OpenRune Studio");
         integrations = new ServerIntegrationService(symbols, references, spawns);
         integrations.registerProvider(new OpenRuneServerProvider());
+        projectOpenCoordinator = new ProjectOpenCoordinator(projectService, integrations);
         SettingsJsonStore.load(settingsFile, renderSettings);
         imgui.initialize(window);
         sceneViewport.initialize();
@@ -216,7 +209,6 @@ public final class StudioApplication implements AutoCloseable {
         switch (applicationState) {
             case PROJECT_LAUNCHER -> projectLauncher.render(this::startProjectOpen);
             case PROJECT_LOADING -> {
-                refreshProjectLoadingProgress();
                 StudioProjectDescriptor project = activeProject;
                 if (project == null) {
                     applicationState = ApplicationState.PROJECT_LAUNCHER;
@@ -233,6 +225,7 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private void drawProjectShell() {
+        pollPendingWorkspaceOpen();
         LoadedOsrsCacheSession cache = cacheSessions.current().orElse(null);
         boolean cacheReady = cache != null
                 && cacheSessions.status().state() == CacheSessionState.READY;
@@ -282,9 +275,10 @@ public final class StudioApplication implements AutoCloseable {
                     applicationState = ApplicationState.PROJECT_LAUNCHER;
                     return;
                 }
-                dashboard.render(
+                contentStudio.render(
                         project,
                         cacheSessions.status(),
+                        activeCacheHealth,
                         integrations,
                         this::openMapEditor,
                         this::openInterfaceStudio,
@@ -304,8 +298,11 @@ public final class StudioApplication implements AutoCloseable {
         if (project == null) return;
 
         long request = projectOpenSequence.incrementAndGet();
-        closeProjectRuntime(false);
+        closeProjectRuntime();
         activeProject = project;
+        activeCachePath = null;
+        activeCacheHealth = null;
+        pendingWorkspaceOpen = null;
         applicationState = ApplicationState.PROJECT_LOADING;
         projectLoadStatus = new ProjectLoadStatus(
                 ProjectLoadStatus.Phase.VALIDATE_PROJECT,
@@ -314,125 +311,22 @@ public final class StudioApplication implements AutoCloseable {
                 project.sourcePathValue().toString(),
                 null);
 
-        if (project.kind() == StudioProjectKind.STANDALONE_OSRS_CACHE) {
-            startStandaloneProjectOpen(project, request);
-        } else {
-            startOpenRuneProjectOpen(project, request);
-        }
-    }
-
-    private void startStandaloneProjectOpen(StudioProjectDescriptor project, long request) {
-        projectLoadStatus = new ProjectLoadStatus(
-                ProjectLoadStatus.Phase.OPEN_CACHE_FILESYSTEM,
-                0.35,
-                "Opening standalone cache...",
-                project.sourcePathValue().toString(),
-                null);
-
-        pendingProjectOpen = cacheSessions
-                .load(project.sourcePathValue(), this::restoreDefinitionPublicationState)
-                .toCompletableFuture()
-                .whenComplete((cache, failure) -> {
+        pendingProjectOpen = projectOpenCoordinator
+                .openAsync(project, status -> {
+                    if (request == projectOpenSequence.get()) {
+                        projectLoadStatus = status;
+                    }
+                })
+                .whenComplete((snapshot, failure) -> {
                     if (request != projectOpenSequence.get()) return;
                     if (failure != null) {
                         failProjectOpen(failure);
                         return;
                     }
-                    projectLoadStatus = new ProjectLoadStatus(
-                            ProjectLoadStatus.Phase.BIND_REQUIRED_PROJECT_SERVICES,
-                            0.95,
-                            "Binding project services...",
-                            "Preparing cache symbols and project workspace state",
-                            null);
-                    bindReadyCacheSymbols();
+                    activeCachePath = snapshot.getCachePath();
+                    activeCacheHealth = snapshot.getCacheHealth();
                     finishProjectOpen(request);
                 });
-    }
-
-    private void startOpenRuneProjectOpen(StudioProjectDescriptor project, long request) {
-        Path root = project.sourcePathValue();
-        projectLoadStatus = new ProjectLoadStatus(
-                ProjectLoadStatus.Phase.INSPECT_INTEGRATION,
-                0.18,
-                "Finding OpenRune project cache...",
-                root.toString(),
-                null);
-
-        pendingProjectOpen = CompletableFuture.supplyAsync(() -> {
-            IntegrationOptions options = IntegrationOptions.defaults(
-                    root, integrationCapabilities(project));
-            var session = integrations.connect(ServerConnection.forRoot(root), options);
-            if (request != projectOpenSequence.get()) {
-                integrations.disconnect();
-                throw new java.util.concurrent.CancellationException("Project open cancelled");
-            }
-            return session.projectInspection().orElseThrow(
-                    () -> new IllegalStateException("OpenRune project inspection is unavailable"));
-        }, projectExecutor).thenCompose(inspection -> {
-            if (request != projectOpenSequence.get()) {
-                throw new java.util.concurrent.CancellationException("Project open cancelled");
-            }
-            projectLoadStatus = new ProjectLoadStatus(
-                    ProjectLoadStatus.Phase.RESOLVE_CACHE_ROLES,
-                    0.42,
-                    "Resolving LIVE and SERVER cache roles...",
-                    "Revision " + inspection.revision(),
-                    null);
-            Path live = inspection.path(ServerPathKey.LIVE_CACHE).orElseThrow(
-                    () -> new IllegalStateException(
-                            "OpenRune LIVE cache was not found. Build or repair the project cache first."));
-            projectLoadStatus = new ProjectLoadStatus(
-                    ProjectLoadStatus.Phase.OPEN_CACHE_FILESYSTEM,
-                    0.52,
-                    "Opening project LIVE cache...",
-                    live.toString(),
-                    null);
-            return cacheSessions.load(live, this::restoreDefinitionPublicationState)
-                    .toCompletableFuture();
-        }).whenComplete((cache, failure) -> {
-            if (request != projectOpenSequence.get()) return;
-            if (failure != null) {
-                failProjectOpen(failure);
-                return;
-            }
-            projectLoadStatus = new ProjectLoadStatus(
-                    ProjectLoadStatus.Phase.BIND_REQUIRED_PROJECT_SERVICES,
-                    0.95,
-                    "Finishing OpenRune project setup...",
-                    "Cache and project mappings are ready",
-                    null);
-            bindReadyCacheSymbols();
-            finishProjectOpen(request);
-        });
-    }
-
-    static Set<IntegrationCapability> integrationCapabilities(StudioProjectDescriptor project) {
-        /*
-         * Project startup must stay below the content-intelligence boundary.
-         * The OpenRune provider may expose symbols/GameVals, but requesting those
-         * capabilities constructs the RSCM/GameVal symbol index before the loading
-         * gate can advance past integration inspection. Defer every content-facing
-         * capability until a workspace explicitly asks for it.
-         */
-        EnumSet<IntegrationCapability> capabilities =
-                EnumSet.noneOf(IntegrationCapability.class);
-        if (project.capabilities().contains(ProjectIntegrationCapability.CACHE_BUILD)) {
-            capabilities.add(IntegrationCapability.CACHE_BUILD);
-        }
-        return Set.copyOf(capabilities);
-    }
-
-    private void refreshProjectLoadingProgress() {
-        if (projectLoadStatus.phase() != ProjectLoadStatus.Phase.OPEN_CACHE_FILESYSTEM) return;
-        var cacheStatus = cacheSessions.status();
-        if (cacheStatus.state() != CacheSessionState.LOADING) return;
-        double mapped = 0.52 + (cacheStatus.progress() * 0.35);
-        projectLoadStatus = new ProjectLoadStatus(
-                ProjectLoadStatus.Phase.OPEN_CACHE_FILESYSTEM,
-                mapped,
-                cacheStatus.message(),
-                cacheStatus.phase().name().replace('_', ' '),
-                null);
     }
 
     private void finishProjectOpen(long request) {
@@ -465,7 +359,7 @@ public final class StudioApplication implements AutoCloseable {
         projectOpenSequence.incrementAndGet();
         if (pendingProjectOpen != null) pendingProjectOpen.cancel(true);
         pendingProjectOpen = null;
-        closeProjectRuntime(true);
+        closeProjectRuntime();
         activeProject = null;
         projectLoadStatus = ProjectLoadStatus.initial();
         applicationState = ApplicationState.PROJECT_LAUNCHER;
@@ -475,7 +369,7 @@ public final class StudioApplication implements AutoCloseable {
         backToProjectLauncher();
     }
 
-    private void closeProjectRuntime(boolean clearCache) {
+    private void closeProjectRuntime() {
         closePluginLifecycle();
         cancelPendingScene();
         loadedScene = null;
@@ -483,23 +377,21 @@ public final class StudioApplication implements AutoCloseable {
         currentZonedPlan = null;
         sceneViewport.setZonedPlan(null);
         lastReadyCache = null;
+        activeCachePath = null;
+        activeCacheHealth = null;
+        pendingWorkspaceOpen = null;
         symbols.unregisterProvider("osrs.cache.gamevals");
         integrations.disconnect();
         workspaces.reset();
-        if (clearCache) cacheSessions.clear();
+        cacheSessions.clear();
     }
 
     private void openInterfaceStudio() {
-        workspaces.openInterfaceStudio(cacheSessions.status().state());
+        requestWorkspaceOpen(WorkspaceManager.Workspace.INTERFACE_STUDIO);
     }
 
     private void openObjectStudio() {
-        workspaces.openObjectStudio(cacheSessions.status().state());
-    }
-
-    private void loadCache(Path path) {
-        if (path == null) return;
-        cacheSessions.load(path, this::restoreDefinitionPublicationState);
+        requestWorkspaceOpen(WorkspaceManager.Workspace.OBJECT_STUDIO);
     }
 
     private void restoreDefinitionPublicationState(
@@ -558,8 +450,62 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private void openMapEditor() {
+        requestWorkspaceOpen(WorkspaceManager.Workspace.MAP_EDITOR);
+    }
+
+    private void requestWorkspaceOpen(WorkspaceManager.Workspace workspace) {
+        if (workspace == null || workspace == WorkspaceManager.Workspace.DASHBOARD) {
+            openDashboard();
+            return;
+        }
+
+        if (cacheSessions.status().state() == CacheSessionState.READY
+                && cacheSessions.current().isPresent()) {
+            openWorkspaceReady(workspace);
+            return;
+        }
+
+        Path cachePath = activeCachePath;
+        if (cachePath == null || activeCacheHealth == null) return;
+
+        pendingWorkspaceOpen = workspace;
+        if (cacheSessions.status().state() == CacheSessionState.LOADING) return;
+
+        cacheSessions.load(cachePath, this::restoreDefinitionPublicationState)
+                .whenComplete((cache, failure) -> {
+                    if (failure != null && pendingWorkspaceOpen == workspace) {
+                        pendingWorkspaceOpen = null;
+                    }
+                });
+    }
+
+    private void pollPendingWorkspaceOpen() {
+        WorkspaceManager.Workspace workspace = pendingWorkspaceOpen;
+        if (workspace == null) return;
+
+        CacheSessionState state = cacheSessions.status().state();
+        if (state == CacheSessionState.READY && cacheSessions.current().isPresent()) {
+            pendingWorkspaceOpen = null;
+            bindReadyCacheSymbols();
+            openWorkspaceReady(workspace);
+        } else if (state == CacheSessionState.FAILED) {
+            pendingWorkspaceOpen = null;
+        }
+    }
+
+    private void openWorkspaceReady(WorkspaceManager.Workspace workspace) {
+        switch (workspace) {
+            case MAP_EDITOR -> openMapEditorReady();
+            case INTERFACE_STUDIO -> workspaces.openInterfaceStudio(CacheSessionState.READY);
+            case OBJECT_STUDIO -> workspaces.openObjectStudio(CacheSessionState.READY);
+            case DASHBOARD -> openDashboard();
+        }
+    }
+
+    private void openMapEditorReady() {
+
         boolean alreadyOpen = workspaces.isOpen(WorkspaceManager.Workspace.MAP_EDITOR);
-        if (!workspaces.openMapEditor(cacheSessions.status().state())) return;
+        if (!workspaces.openMapEditor(CacheSessionState.READY)) return;
         if (alreadyOpen) return;
         closePluginLifecycle();
         loadedScene = null;
@@ -568,7 +514,7 @@ public final class StudioApplication implements AutoCloseable {
         renderedSettingsRevision = -1L;
         cancelPendingScene();
         sceneStatus = "Loading terrain, objects, and GPU buffers...";
-        int[] region = parseRegion(dashboard.regionText());
+        int[] region = parseRegion(contentStudio.regionText());
         if (region == null) {
             sceneStatus = "Enter a valid region as X,Y or a region ID.";
             return;
@@ -995,7 +941,6 @@ public final class StudioApplication implements AutoCloseable {
         // Without it, selecting the tool highlights fine but painting silently no-ops.
         candidates.add(new TilePainterToolPlugin());
         candidates.add(new SplinePathToolPlugin());
-        candidates.add(new OpenRuneServerPlugin());
         Map<String, SemanticVersion> hostPluginVersions = new java.util.LinkedHashMap<>();
         for (EditorPlugin candidate : candidates) {
             try {
@@ -1164,7 +1109,7 @@ public final class StudioApplication implements AutoCloseable {
         closed = true;
         projectOpenSequence.incrementAndGet();
         if (pendingProjectOpen != null) pendingProjectOpen.cancel(true);
-        projectExecutor.shutdownNow();
+        projectOpenCoordinator.close();
         sceneExecutor.shutdownNow();
         closePluginLifecycle();
         mapEditor.close();

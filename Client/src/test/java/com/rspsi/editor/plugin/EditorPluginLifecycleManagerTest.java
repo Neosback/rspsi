@@ -7,7 +7,6 @@ import com.rspsi.editor.model.WorldModel;
 import com.rspsi.editor.settings.EditorSettingKeys;
 import com.rspsi.editor.settings.SettingKey;
 import com.rspsi.editor.settings.SettingsStore;
-import com.rspsi.plugins.server.openrune.OpenRuneServerPlugin;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -191,36 +190,6 @@ class EditorPluginLifecycleManagerTest {
         assertEquals(3, manager.host().context().settingsService().get(SettingsOwningPlugin.WIDTH));
         assertEquals(ContributionOwner.plugin(SettingsOwningPlugin.ID),
                 manager.host().context().settingsService().ownerOf(SettingsOwningPlugin.WIDTH.id()).orElseThrow());
-
-        manager.close();
-    }
-
-    @Test
-    void openRuneServerPluginSettingsSurviveTogglesOfItselfAndOtherPlugins() {
-        Path file = tempDir.resolve("plugins.json");
-        SettingsStore sharedSettings = new SettingsStore(EditorSettingKeys.registry());
-        EditorPluginLifecycleManager manager = EditorPluginLifecycleManager.start(
-                List.of(new OpenRuneServerPlugin(), new PlainPlugin()),
-                EditorPluginStateStore.load(file),
-                session(),
-                EmptyAssetRepository.INSTANCE,
-                null,
-                candidates -> EditorPluginHost.initialize(candidates, session(), EmptyAssetRepository.INSTANCE,
-                        null, sharedSettings, new EditorTaskService(), new EditorNotificationService()));
-
-        assertEquals(ContributionOwner.plugin(OpenRuneServerPlugin.PLUGIN_ID),
-                manager.host().context().settingsService().ownerOf(OpenRuneServerPlugin.ENABLED.id()).orElseThrow());
-
-        assertDoesNotThrow(() -> manager.setEnabled(PlainPlugin.ID, false));
-        assertEquals(ContributionOwner.plugin(OpenRuneServerPlugin.PLUGIN_ID),
-                manager.host().context().settingsService().ownerOf(OpenRuneServerPlugin.ENABLED.id()).orElseThrow());
-
-        assertDoesNotThrow(() -> manager.setEnabled(OpenRuneServerPlugin.PLUGIN_ID, false));
-        assertTrue(manager.host().context().settingsService().ownerOf(OpenRuneServerPlugin.ENABLED.id()).isEmpty());
-
-        assertDoesNotThrow(() -> manager.setEnabled(OpenRuneServerPlugin.PLUGIN_ID, true));
-        assertEquals(ContributionOwner.plugin(OpenRuneServerPlugin.PLUGIN_ID),
-                manager.host().context().settingsService().ownerOf(OpenRuneServerPlugin.ENABLED.id()).orElseThrow());
 
         manager.close();
     }

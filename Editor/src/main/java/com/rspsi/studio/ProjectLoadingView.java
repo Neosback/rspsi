@@ -99,7 +99,8 @@ public final class ProjectLoadingView {
             case READ_DESCRIPTOR, VALIDATE_PROJECT -> "Checking project";
             case INSPECT_INTEGRATION -> "Finding OpenRune files";
             case RESOLVE_CACHE_ROLES -> "Selecting project cache";
-            case OPEN_CACHE_FILESYSTEM -> "Opening cache";
+            case VERIFY_CACHE -> "Checking FileStore";
+            case OPEN_CACHE_FILESYSTEM -> "Opening workspace cache";
             case PREPARE_DEFINITIONS -> "Preparing definitions";
             case BIND_REQUIRED_PROJECT_SERVICES -> "Finishing setup";
             case READY -> "Ready";

@@ -63,7 +63,38 @@ class StudioProjectServiceTest {
         assertTrue(descriptor.capabilities()
                 .contains(ProjectIntegrationCapability.CACHE_BUILD));
         assertFalse(descriptor.capabilities()
+                .contains(ProjectIntegrationCapability.EXTERNAL_COMMAND));
+        assertFalse(descriptor.capabilities()
                 .contains(ProjectIntegrationCapability.FRESH_CACHE_RESET));
+    }
+
+    @Test
+    void movedOpenRuneCheckoutCanBeRelinkedWithoutChangingStudioProjectIdentity() throws Exception {
+        Path original = temp.resolve("server-original");
+        Files.createDirectories(original.resolve("or-cache"));
+        Files.writeString(original.resolve("or-cache/build.gradle.kts"), "");
+        Files.writeString(original.resolve("game.yml"), "revision: 240.2\n");
+        Files.writeString(original.resolve("gradlew"), "#!/bin/sh\n");
+
+        StudioProjectRegistry registry =
+                new StudioProjectRegistry(temp.resolve("studio/recent-projects.json"));
+        StudioProjectService service = new StudioProjectService(registry);
+        StudioProjectDescriptor first =
+                service.linkOpenRune(original, ProjectIntegrationPreset.DEVELOPER);
+        Path descriptorPath =
+                StudioProjectDescriptorStore.descriptorPath(first.projectDataPath());
+
+        Path moved = temp.resolve("server-moved");
+        Files.move(original, moved);
+
+        StudioProjectDescriptor relinked = service.relocateOpenRune(descriptorPath, moved);
+
+        assertEquals(first.projectId(), relinked.projectId());
+        assertEquals(first.projectDataPath(), relinked.projectDataPath());
+        assertEquals(first.capabilities(), relinked.capabilities());
+        assertEquals(moved.toAbsolutePath().normalize(), relinked.sourcePathValue());
+        assertEquals(moved.toAbsolutePath().normalize(),
+                Path.of(registry.recent().get(0).displayPath()).toAbsolutePath().normalize());
     }
 
     @Test

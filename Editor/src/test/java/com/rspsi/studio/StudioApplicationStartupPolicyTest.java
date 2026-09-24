@@ -25,7 +25,7 @@ class StudioApplicationStartupPolicyTest {
                         ProjectIntegrationCapability.PROJECT_SOURCE_WRITE));
 
         Set<IntegrationCapability> capabilities =
-                StudioApplication.integrationCapabilities(project);
+                ProjectOpenCoordinator.startupCapabilities(project);
 
         assertEquals(Set.of(), capabilities);
         assertFalse(capabilities.contains(IntegrationCapability.SYMBOLS));
@@ -48,6 +48,6 @@ class StudioApplicationStartupPolicyTest {
 
         assertEquals(
                 Set.of(IntegrationCapability.CACHE_BUILD),
-                StudioApplication.integrationCapabilities(project));
+                ProjectOpenCoordinator.startupCapabilities(project));
     }
 }

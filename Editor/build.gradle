@@ -8,9 +8,17 @@ apply plugin: 'application'
 apply plugin: 'java-library'
 apply plugin: 'com.github.johnrengelman.shadow'
 apply plugin: 'java'
+apply plugin: 'org.jetbrains.kotlin.jvm'
 apply plugin: 'org.beryx.runtime'
 
 group = 'Editor UI'
+
+kotlin {
+    jvmToolchain(21)
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
+    }
+}
 
 run {
     standardInput = System.in
@@ -22,6 +30,8 @@ run {
 // In this section you declare the dependencies for your production and test code
 dependencies {
     api project(':Client')
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.11.0'
     implementation 'io.github.mkpaz:atlantafx-base:2.1.0'
     implementation 'org.kordamp.ikonli:ikonli-javafx:12.3.1'
     implementation 'org.kordamp.ikonli:ikonli-materialdesign2-pack:12.3.1'
@@ -140,8 +150,8 @@ runtime {
 }
 
 application {
-    // Keep the dashboard launcher as the single application entry point. The
-    // legacy cache/plugin form is only reachable from Dashboard settings.
+    // The native project launcher is the single application entry point.
+    // OpenRune connections are owned by Studio project descriptors, never plugin settings.
     mainClass = "com.rspsi.studio.StudioMain"
     applicationName = 'OpenRuneStudio'
 }

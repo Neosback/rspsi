@@ -3,6 +3,7 @@ plugins {
     id "com.gradleup.shadow" version "8.3.8" apply false
     id 'application'
     id 'java-library'
+    id 'org.jetbrains.kotlin.jvm' version '2.4.20' apply false
 
     id 'org.beryx.runtime' version '1.13.1' apply false
 

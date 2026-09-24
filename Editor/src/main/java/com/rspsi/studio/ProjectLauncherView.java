@@ -179,6 +179,14 @@ public final class ProjectLauncherView {
             tryOpen(project.descriptor(), openProject);
         }
         ImGui.endDisabled();
+
+        if (project.kind() == StudioProjectKind.OPENRUNE_SERVER && project.available()) {
+            ImGui.sameLine();
+            if (StudioWidgets.buttonSecondary("Relocate", 92.0f, 30.0f)) {
+                relocateOpenRune(project, openProject);
+            }
+        }
+
         ImGui.sameLine();
         if (StudioWidgets.buttonGhost("Remove", 82.0f, 30.0f)) {
             registry.remove(project.projectId());
@@ -293,12 +301,30 @@ public final class ProjectLauncherView {
         }
     }
 
+    private void relocateOpenRune(
+            RecentStudioProject recent,
+            Consumer<StudioProjectDescriptor> openProject) {
+        NativeFileDialogs.chooseDirectory(
+                "Relocate OpenRune-Server directory",
+                Path.of(System.getProperty("user.home")))
+                .ifPresent(path -> {
+                    try {
+                        StudioProjectDescriptor updated =
+                                projects.relocateOpenRune(recent.descriptor(), path);
+                        error = "";
+                        openProject.accept(updated);
+                    } catch (Exception failure) {
+                        error = rootMessage(failure);
+                    }
+                });
+    }
+
     private static String accessLabel(ProjectIntegrationPreset preset) {
         return switch (preset) {
             case INSPECT -> "Read only";
             case AUTHOR -> "Read + write";
             case MANAGED_BUILD -> "Read + write + build";
-            case DEVELOPER -> "Full project access";
+            case DEVELOPER -> "Development access";
         };
     }
 
@@ -307,9 +333,9 @@ public final class ProjectLauncherView {
             case INSPECT -> "Access: project read";
             case AUTHOR -> "Access: project read · supported source write";
             case MANAGED_BUILD ->
-                    "Access: project read · supported source write · cache/GameVal/CS2 build";
+                    "Access: project read · supported source write · declared cache/GameVal/CS2 builds";
             case DEVELOPER ->
-                    "Access: project read · supported source write · build · server launch";
+                    "Access: read/write · declared builds · server launch · adapter-declared external commands";
         };
     }
 
@@ -320,9 +346,9 @@ public final class ProjectLauncherView {
             case AUTHOR ->
                     "Read access plus supported source/content writes. Build and launch commands stay disabled.";
             case MANAGED_BUILD ->
-                    "Read and write access plus supported cache, GameVal and CS2 build commands and external build tasks.";
+                    "Read and write access plus Studio-recognized cache, GameVal and CS2 build tasks. It does not grant arbitrary external commands or server launch.";
             case DEVELOPER ->
-                    "All non-destructive project access above, plus permission to launch the configured server.";
+                    "Adds server launch and adapter-declared external commands for development workflows. Fresh Cache/reset and other destructive replacement operations still require separate explicit authorization.";
         };
     }
 

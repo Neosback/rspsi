@@ -4,15 +4,15 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class DashboardViewTest {
+class ContentStudioViewTest {
     @Test
     void regionTextDefaultsToLumbridge() {
-        DashboardView view = new DashboardView();
+        ContentStudioView view = new ContentStudioView();
         assertEquals("50,50", view.regionText());
     }
 
     @Test
-    void workspaceResetReturnsToPermanentDashboardHome() {
+    void workspaceResetReturnsToPermanentContentStudioHome() {
         WorkspaceManager workspaces = new WorkspaceManager();
         workspaces.openMapEditor(com.rspsi.cache.workspace.CacheSessionState.READY);
         workspaces.openInterfaceStudio(com.rspsi.cache.workspace.CacheSessionState.READY);

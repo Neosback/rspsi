@@ -292,12 +292,12 @@ public final class StudioWidgets {
     }
 
     /**
-     * The persistent workspace tab strip shared by every workspace view (Dashboard,
+     * The persistent workspace tab strip shared by every workspace view (Content Studio,
      * Map Studio, Interface Studio, Object Studio).
      *
      * <p>Only workspaces {@code workspaces} reports as open are shown, so a workspace
      * stays available as a tab once entered instead of being torn down on navigation.
-     * Dashboard is always present and has no close button; every other tab gets one.</p>
+     * Content Studio is always present and has no close button; every other tab gets one.</p>
      */
     public static void workspaceTabs(WorkspaceManager workspaces,
                                      Runnable openDashboard,
@@ -338,7 +338,7 @@ public final class StudioWidgets {
 
     private static String workspaceLabel(WorkspaceManager.Workspace workspace) {
         return switch (workspace) {
-            case DASHBOARD -> "Dashboard";
+            case DASHBOARD -> "Content Studio";
             case MAP_EDITOR -> "Map Studio";
             case INTERFACE_STUDIO -> "Interface Studio";
             case OBJECT_STUDIO -> "Object Studio";

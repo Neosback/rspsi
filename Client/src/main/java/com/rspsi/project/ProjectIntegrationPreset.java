@@ -16,8 +16,7 @@ public enum ProjectIntegrationPreset {
             ProjectIntegrationCapability.PROJECT_SOURCE_WRITE,
             ProjectIntegrationCapability.CACHE_BUILD,
             ProjectIntegrationCapability.GAMEVAL_BUILD,
-            ProjectIntegrationCapability.CS2_BUILD,
-            ProjectIntegrationCapability.EXTERNAL_COMMAND)),
+            ProjectIntegrationCapability.CS2_BUILD)),
 
     DEVELOPER(Set.of(
             ProjectIntegrationCapability.PROJECT_READ,
