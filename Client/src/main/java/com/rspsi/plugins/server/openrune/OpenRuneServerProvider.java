@@ -247,7 +247,12 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
                         && probe.supports(IntegrationCapability.NPC_SPAWNS)
                         ? new OpenRuneNpcSpawnProvider(inspection) : null;
 
-        return new OpenRuneSession(this, connection, inspection, options.enabledCapabilities(),
+        Set<IntegrationCapability> activeCapabilities =
+                EnumSet.noneOf(IntegrationCapability.class);
+        activeCapabilities.addAll(options.enabledCapabilities());
+        activeCapabilities.retainAll(probe.detectedCapabilities());
+
+        return new OpenRuneSession(this, connection, inspection, activeCapabilities,
                 symbolProvider, referenceProvider, npcSpawnProvider);
     }
 
