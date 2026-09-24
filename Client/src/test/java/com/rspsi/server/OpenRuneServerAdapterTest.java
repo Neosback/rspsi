@@ -135,6 +135,92 @@ class OpenRuneServerAdapterTest {
     }
 
     @Test
+    void connectedInspectionUsesEvaluatedGradleSourceSetsAndCustomTaskPaths() throws Exception {
+        Path root = Files.createTempDirectory("openrune-gradle-model");
+        Path live = root.resolve(".data/cache/LIVE");
+        Path module = root.resolve("modules/gameplay/mining");
+        Path sources = module.resolve("src/customKotlin");
+        Path resources = module.resolve("src/customResources");
+        Files.createDirectories(live);
+        Files.createDirectories(sources);
+        Files.createDirectories(resources.resolve("pack/configs"));
+        Files.writeString(sources.resolve("Mining.kt"), "class Mining\n");
+        Files.writeString(resources.resolve("gamevals.toml"),
+                "[gamevals.obj]\ncoal = 2000\n");
+        Files.writeString(resources.resolve("pack/configs/mining.toml"),
+                "target = \"loc.coal_rock\"\n");
+        Files.writeString(root.resolve("game.yml"), "revision: 240.2\n");
+
+        String payload = "{"
+                + "\"rootName\":\"CustomOpenRune\","
+                + "\"gradleVersion\":\"8.14.3\","
+                + "\"projects\":["
+                + "{"
+                + "\"path\":\":gameplay:mining\","
+                + "\"name\":\"mining\","
+                + "\"projectDir\":\"" + json(module) + "\","
+                + "\"buildFile\":\"" + json(module.resolve("build.gradle.kts")) + "\","
+                + "\"sourceSets\":[{"
+                + "\"name\":\"main\","
+                + "\"sources\":[\"" + json(sources) + "\"],"
+                + "\"resources\":[\"" + json(resources) + "\"],"
+                + "\"outputs\":[]"
+                + "}],"
+                + "\"tasks\":[],"
+                + "\"projectDependencies\":[\":api\"],"
+                + "\"pluginClasses\":[]"
+                + "},"
+                + "{"
+                + "\"path\":\":cache-tools\","
+                + "\"name\":\"cache-tools\","
+                + "\"projectDir\":\"" + json(root.resolve("tools/cache")) + "\","
+                + "\"buildFile\":\"" + json(root.resolve("tools/cache/build.gradle.kts")) + "\","
+                + "\"sourceSets\":[],"
+                + "\"tasks\":[{"
+                + "\"path\":\":cache-tools:buildCache\","
+                + "\"name\":\"buildCache\","
+                + "\"group\":\"cache\","
+                + "\"description\":\"Build cache\""
+                + "}],"
+                + "\"projectDependencies\":[],"
+                + "\"pluginClasses\":[]"
+                + "}"
+                + "]}";
+        Files.writeString(root.resolve("gradlew"),
+                "#!/bin/sh\n"
+                        + "printf '%s\\n' 'RSPSI_GRADLE_MODEL="
+                        + payload.replace("'", "'\\''") + "'\n");
+
+        ServerProjectInspection passive = new OpenRuneServerAdapter().inspect(root);
+        assertTrue(passive.gradleModel().isEmpty());
+        assertFalse(passive.content().stream()
+                .anyMatch(entry -> entry.path().equals(sources.resolve("Mining.kt").toAbsolutePath().normalize())));
+
+        ServerProjectInspection connected = new OpenRuneServerAdapter().inspectConnected(root);
+
+        assertTrue(connected.gradleModel().isPresent(), connected.diagnostics().toString());
+        assertTrue(connected.supports(ServerCapability.GRADLE_PROJECT_MODEL));
+        assertTrue(connected.supports(ServerCapability.CONTENT_INVENTORY));
+        assertTrue(connected.supports(ServerCapability.GAMEVALS));
+        assertTrue(connected.content().stream()
+                .anyMatch(entry -> entry.path().equals(
+                        sources.resolve("Mining.kt").toAbsolutePath().normalize())
+                        && entry.kind() == ServerContentKind.SERVER_SCRIPT));
+        assertTrue(connected.content().stream()
+                .anyMatch(entry -> entry.path().equals(
+                        resources.resolve("pack/configs/mining.toml").toAbsolutePath().normalize())
+                        && entry.kind() == ServerContentKind.CONFIG));
+
+        ServerBuildTask buildCache = connected.buildTasks().stream()
+                .filter(task -> task.id().equals("build-cache"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(":cache-tools:buildCache", buildCache.command().get(1));
+        assertEquals(":gameplay:mining",
+                connected.gradleModel().orElseThrow().projects().get(0).path());
+    }
+
+    @Test
     void connectionTomlRoundTripsOverridesAndFingerprint() throws Exception {
         Path root = fixtureRoot("240.2");
         ServerConnection original = ServerConnection.forRoot(root)
@@ -162,6 +248,12 @@ class OpenRuneServerAdapterTest {
 
         assertTrue(result.succeeded());
         assertFalse(result.output().isEmpty());
+    }
+
+    private static String json(Path path) {
+        return path.toAbsolutePath().normalize().toString()
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
     }
 
     private static Path fixtureRoot(String revision) throws Exception {
