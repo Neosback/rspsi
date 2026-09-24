@@ -81,9 +81,10 @@ final class SharedGpuArena implements AutoCloseable {
             allocateArrayBuffer(pickerVbo, (long) vertices * Integer.BYTES);
         }
 
+        glBindVertexArray(vao);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, (long) indices * Integer.BYTES, GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
         setupVao();
     }
 
@@ -230,9 +231,10 @@ final class SharedGpuArena implements AutoCloseable {
         IntBuffer data = scratch.indices(indices.size());
         for (int index : indices) data.put(vertexBase + index);
         data.flip();
+        glBindVertexArray(vao);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
         glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, (long) indexOffset * Integer.BYTES, data);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
     }
 
     boolean allocated() {
