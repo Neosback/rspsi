@@ -42,7 +42,8 @@ public record GpuZoneUpload(
         Objects.requireNonNull(indices, "indices");
 
         long geometry = mix(1125899906842597L, vertices.size());
-        long shading = mix(1125899906842597L, vertices.size());
+        long vertexShading = mix(1125899906842597L, vertices.size());
+        long faceShading = mix(1125899906842597L, vertices.size());
         long normals = mix(1125899906842597L, vertices.size());
         for (GpuSceneVertex vertex : vertices) {
             geometry = mix(geometry, Float.floatToIntBits(vertex.x()));
@@ -51,11 +52,13 @@ public record GpuZoneUpload(
             geometry = mix(geometry, Float.floatToIntBits(vertex.u()));
             geometry = mix(geometry, Float.floatToIntBits(vertex.v()));
 
-            shading = mix(shading, vertex.encodedColor());
-            shading = mix(shading, vertex.colorEncoding().ordinal());
-            shading = mix(shading, vertex.alpha());
-            shading = mix(shading, vertex.renderType());
-            shading = mix(shading, vertex.priority());
+            vertexShading = mix(vertexShading, vertex.encodedColor());
+            vertexShading = mix(vertexShading, vertex.colorEncoding().ordinal());
+
+            GpuFaceShading face = vertex.faceShading();
+            faceShading = mix(faceShading, face.alpha());
+            faceShading = mix(faceShading, face.renderType());
+            faceShading = mix(faceShading, face.priority());
 
             normals = mix(normals, vertex.normalX());
             normals = mix(normals, vertex.normalY());
@@ -65,7 +68,8 @@ public record GpuZoneUpload(
 
         long topology = mix(1125899906842597L, indices.size());
         for (int index : indices) topology = mix(topology, index);
-        return new GpuZoneStreamFingerprints(geometry, shading, topology, normals);
+        return new GpuZoneStreamFingerprints(
+                geometry, vertexShading, faceShading, topology, normals);
     }
 
     /** Current native-residency aggregate retained for flat-plan callers. */
