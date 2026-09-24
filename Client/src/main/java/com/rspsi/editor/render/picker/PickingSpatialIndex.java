@@ -363,10 +363,7 @@ final class PickingSpatialIndex {
     private static final class SourceZone {
         private final GpuZoneUpload upload;
         private final int[] localCommandIndices;
-        private final int[] vertexA;
-        private final int[] vertexB;
-        private final int[] vertexC;
-        private final int[] faceOffsets;
+        private final int[] indexOffsets;
         private final int[] minTriangleTileX;
         private final int[] maxTriangleTileX;
         private final int[] minTriangleTileY;
@@ -386,8 +383,7 @@ final class PickingSpatialIndex {
 
         private SourceZone(GpuZoneUpload upload,
                            int[] localCommandIndices,
-                           int[] vertexA, int[] vertexB, int[] vertexC,
-                           int[] faceOffsets,
+                           int[] indexOffsets,
                            int[] minTriangleTileX, int[] maxTriangleTileX,
                            int[] minTriangleTileY, int[] maxTriangleTileY,
                            int[] testedGeneration,
@@ -399,10 +395,7 @@ final class PickingSpatialIndex {
                            int minTileX, int maxTileX, int minTileY, int maxTileY) {
             this.upload = upload;
             this.localCommandIndices = localCommandIndices;
-            this.vertexA = vertexA;
-            this.vertexB = vertexB;
-            this.vertexC = vertexC;
-            this.faceOffsets = faceOffsets;
+            this.indexOffsets = indexOffsets;
             this.minTriangleTileX = minTriangleTileX;
             this.maxTriangleTileX = maxTriangleTileX;
             this.minTriangleTileY = minTriangleTileY;
@@ -426,10 +419,7 @@ final class PickingSpatialIndex {
             }
 
             int[] localCommandIndices = new int[triangleCount];
-            int[] vertexA = new int[triangleCount];
-            int[] vertexB = new int[triangleCount];
-            int[] vertexC = new int[triangleCount];
-            int[] faceOffsets = new int[triangleCount];
+            int[] indexOffsets = new int[triangleCount];
             int[] minTriangleTileX = new int[triangleCount];
             int[] maxTriangleTileX = new int[triangleCount];
             int[] minTriangleTileY = new int[triangleCount];
@@ -467,10 +457,7 @@ final class PickingSpatialIndex {
                     int triMaxY = floorTile(Math.max(a.z(), Math.max(b.z(), c.z())));
 
                     localCommandIndices[triangleIndex] = commandIndex;
-                    vertexA[triangleIndex] = aIndex;
-                    vertexB[triangleIndex] = bIndex;
-                    vertexC[triangleIndex] = cIndex;
-                    faceOffsets[triangleIndex] = offset - command.firstIndex();
+                    indexOffsets[triangleIndex] = offset;
                     minTriangleTileX[triangleIndex] = triMinX;
                     maxTriangleTileX[triangleIndex] = triMaxX;
                     minTriangleTileY[triangleIndex] = triMinY;
@@ -501,8 +488,7 @@ final class PickingSpatialIndex {
 
             return new SourceZone(upload,
                     localCommandIndices,
-                    vertexA, vertexB, vertexC,
-                    faceOffsets,
+                    indexOffsets,
                     minTriangleTileX, maxTriangleTileX,
                     minTriangleTileY, maxTriangleTileY,
                     tested, globalFirst,
@@ -540,20 +526,22 @@ final class PickingSpatialIndex {
         }
 
         GpuSceneVertex a(int triangleIndex) {
-            return upload.vertices().get(vertexA[triangleIndex]);
+            return upload.vertices().get(upload.indexAt(indexOffsets[triangleIndex]));
         }
 
         GpuSceneVertex b(int triangleIndex) {
-            return upload.vertices().get(vertexB[triangleIndex]);
+            return upload.vertices().get(upload.indexAt(indexOffsets[triangleIndex] + 1));
         }
 
         GpuSceneVertex c(int triangleIndex) {
-            return upload.vertices().get(vertexC[triangleIndex]);
+            return upload.vertices().get(upload.indexAt(indexOffsets[triangleIndex] + 2));
         }
 
         int order(int triangleIndex) {
-            return globalFirstIndices[localCommandIndices[triangleIndex]]
-                    + faceOffsets[triangleIndex];
+            int commandIndex = localCommandIndices[triangleIndex];
+            GpuDrawCommand local = upload.commands().get(commandIndex);
+            return globalFirstIndices[commandIndex]
+                    + (indexOffsets[triangleIndex] - local.firstIndex());
         }
 
         boolean overlaps(int triangleIndex, ZoneKey zone) {
