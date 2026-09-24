@@ -1,8 +1,8 @@
 package com.rspsi.editor.integration.semantic;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -17,17 +17,32 @@ public final class ServerObjectSemanticIndex {
             List<ServerObjectSemanticOverlay> overlays,
             List<String> diagnostics) {
         this.overlays = List.copyOf(overlays == null ? List.of() : overlays);
-        this.diagnostics = List.copyOf(diagnostics == null ? List.of() : diagnostics);
+        List<String> collected = new ArrayList<>(
+                diagnostics == null ? List.of() : diagnostics);
 
         LinkedHashMap<String, ServerObjectSemanticOverlay> symbols = new LinkedHashMap<>();
         LinkedHashMap<Integer, ServerObjectSemanticOverlay> ids = new LinkedHashMap<>();
         for (ServerObjectSemanticOverlay overlay : this.overlays) {
-            symbols.putIfAbsent(
-                    SemanticSymbolNames.canonical(overlay.objectSymbol()), overlay);
-            if (overlay.resolved()) ids.putIfAbsent(overlay.objectId(), overlay);
+            String canonical = SemanticSymbolNames.canonical(overlay.objectSymbol());
+            ServerObjectSemanticOverlay priorSymbol = symbols.putIfAbsent(canonical, overlay);
+            if (priorSymbol != null) {
+                collected.add("Multiple authored object overlays define " + canonical
+                        + ": " + priorSymbol.blockSource().file()
+                        + " and " + overlay.blockSource().file());
+            }
+            if (overlay.resolved()) {
+                ServerObjectSemanticOverlay priorId = ids.putIfAbsent(overlay.objectId(), overlay);
+                if (priorId != null
+                        && !SemanticSymbolNames.canonical(priorId.objectSymbol()).equals(canonical)) {
+                    collected.add("Object ID " + overlay.objectId()
+                            + " maps to multiple authored object symbols: "
+                            + priorId.objectSymbol() + " and " + overlay.objectSymbol());
+                }
+            }
         }
         bySymbol = Map.copyOf(symbols);
         byId = Map.copyOf(ids);
+        this.diagnostics = List.copyOf(collected);
     }
 
     public List<ServerObjectSemanticOverlay> overlays() {
