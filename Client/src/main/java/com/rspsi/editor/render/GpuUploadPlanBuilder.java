@@ -435,7 +435,7 @@ public final class GpuUploadPlanBuilder {
                         digest.update(texture.pixelStatus().name().getBytes(StandardCharsets.UTF_8));
                         ByteBuffer dims = ByteBuffer.allocate(12);
                         dims.putInt(texture.width()).putInt(texture.height())
-                                .putInt(java.util.Arrays.hashCode(texture.pixels()));
+                                .putInt(texture.pixelHash());
                         dims.flip();
                         digest.update(dims);
                     });
