@@ -3,6 +3,7 @@
 #include "/common/frame_uniforms.glsl"
 
 in vec2 vUv;
+in float vAlpha;
 flat in uint vPickerId;
 
 uniform sampler2DArray uTexture;
@@ -15,6 +16,13 @@ uniform int uTextureLayer;
 layout(location = 0) out uint outPickerId;
 
 void main() {
+    // Match the vanilla pass' completely-invisible face semantics. Terrain
+    // alpha is opacity; model alpha is transparency.
+    if ((uTerrain != 0 && vAlpha <= 0.0)
+            || (uTerrain == 0 && vAlpha >= 255.0)) {
+        discard;
+    }
+
     // Match the vanilla fragment shader's cutout test exactly. A transparent
     // texel must not make an otherwise invisible banner/foliage fragment
     // clickable. Texture animation and terrain wrapping therefore use the
