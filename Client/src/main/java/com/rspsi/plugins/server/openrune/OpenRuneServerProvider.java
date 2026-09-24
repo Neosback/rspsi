@@ -267,6 +267,9 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
                 EnumSet.noneOf(IntegrationCapability.class);
         activeCapabilities.addAll(options.enabledCapabilities());
         activeCapabilities.retainAll(probe.detectedCapabilities());
+        if (semanticSourceIndex == null) {
+            activeCapabilities.remove(IntegrationCapability.SOURCE_SEMANTICS);
+        }
 
         return new OpenRuneSession(this, connection, inspection, activeCapabilities,
                 symbolProvider, referenceProvider, npcSpawnProvider, semanticSourceIndex);
