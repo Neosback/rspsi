@@ -406,7 +406,7 @@ public final class StudioApplication implements AutoCloseable {
         });
     }
 
-    private Set<IntegrationCapability> integrationCapabilities(StudioProjectDescriptor project) {
+    static Set<IntegrationCapability> integrationCapabilities(StudioProjectDescriptor project) {
         /*
          * Project startup must stay below the content-intelligence boundary.
          * The OpenRune provider may expose symbols/GameVals, but requesting those
