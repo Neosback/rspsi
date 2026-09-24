@@ -158,6 +158,25 @@ class WorldFragmentTransformerTest {
                         object -> Optional.empty()));
     }
 
+    @Test
+    void doubleMirrorIsExactHalfTurnWithoutMeshMirrorWarning() {
+        WorldFragment fragment = new WorldFragment(
+                new TileBounds(10, 10, 11, 11),
+                List.of(),
+                List.of(new WorldObject(12, 0, 0, 0, 10, 10)));
+
+        WorldFragmentTransformResult result = WorldFragmentTransformer.transform(
+                fragment,
+                new WorldFragmentTransform(0, true, true),
+                resolver(Map.of(12, new ObjectFootprintResolver.ObjectFootprint(1, 1))));
+
+        assertEquals(List.of(new WorldObject(12, 0, 2, 0, 11, 11)),
+                result.fragment().objects());
+        assertTrue(result.diagnostics().stream().noneMatch(diagnostic ->
+                diagnostic.code()
+                        == WorldFragmentTransformResult.DiagnosticCode.OBJECT_MODEL_MIRROR_NOT_NATIVE));
+    }
+
     private static TileSnapshot snapshot(
             int sw, int se, int ne, int nw,
             int underlay, int overlay, int shape, int rotation
