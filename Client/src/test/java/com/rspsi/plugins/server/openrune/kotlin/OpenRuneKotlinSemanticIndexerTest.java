@@ -49,7 +49,7 @@ class OpenRuneKotlinSemanticIndexerTest {
                         fact.attributes().get("questKey"))
                         && "varp.cookquest".equals(fact.attributes().get("questVar"))));
 
-        assertFalse(index.references("obj.coal").isEmpty());
+        assertFalse(index.references("obj.cake").isEmpty());
         assertFalse(index.references("varbit.runemysteries_talisman").isEmpty());
         assertTrue(index.facts(SemanticFactKind.VAR_BINDING).stream()
                 .anyMatch(fact -> fact.arguments().contains("varbit.runemysteries_talisman")));
