@@ -1,5 +1,8 @@
 package com.rspsi.editor.render.picker;
 
+import com.rspsi.editor.render.ClientModelBounds;
+import com.rspsi.editor.render.ClientRenderablePlacement;
+import com.rspsi.editor.render.GameObjectSceneMetadata;
 import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
@@ -342,6 +345,14 @@ final class PickingSpatialIndex {
             return source.markTested(sourceTriangleIndex, generation);
         }
 
+        byte broadPhase(int generation,
+                        float ox, float oy, float oz,
+                        float dx, float dy, float dz,
+                        float near, float far) {
+            return source.broadPhase(localCommandIndex, generation,
+                    ox, oy, oz, dx, dy, dz, near, far);
+        }
+
         boolean overlaps(ZoneKey zone) {
             if (command.tile().plane() != zone.plane()) return false;
             return maxTileX >= zone.minTileX() && minTileX <= zone.maxTileX()
@@ -354,6 +365,9 @@ final class PickingSpatialIndex {
         private final TriangleRef[] triangles;
         private final int[] testedGeneration;
         private final int[] globalFirstIndices;
+        private final WorldAabb[][] commandAabbs;
+        private final int[] broadPhaseGeneration;
+        private final byte[] broadPhaseResult;
         private final Set<ZoneKey> coverage;
         private final int minTileX;
         private final int maxTileX;
@@ -363,12 +377,17 @@ final class PickingSpatialIndex {
 
         private SourceZone(GpuZoneUpload upload, TriangleRef[] triangles,
                            int[] testedGeneration, int[] globalFirstIndices,
+                           WorldAabb[][] commandAabbs,
+                           int[] broadPhaseGeneration, byte[] broadPhaseResult,
                            Set<ZoneKey> coverage,
                            int minTileX, int maxTileX, int minTileY, int maxTileY) {
             this.upload = upload;
             this.triangles = triangles;
             this.testedGeneration = testedGeneration;
             this.globalFirstIndices = globalFirstIndices;
+            this.commandAabbs = commandAabbs;
+            this.broadPhaseGeneration = broadPhaseGeneration;
+            this.broadPhaseResult = broadPhaseResult;
             this.coverage = coverage;
             this.minTileX = minTileX;
             this.maxTileX = maxTileX;
@@ -385,8 +404,15 @@ final class PickingSpatialIndex {
             TriangleRef[] refs = new TriangleRef[triangleCount];
             int[] tested = new int[triangleCount];
             int[] globalFirst = new int[upload.commands().size()];
+            WorldAabb[][] commandAabbs = new WorldAabb[upload.commands().size()][];
+            int[] broadPhaseGeneration = new int[upload.commands().size()];
+            byte[] broadPhaseResult = new byte[upload.commands().size()];
+            for (int commandIndex = 0; commandIndex < upload.commands().size(); commandIndex++) {
+                commandAabbs[commandIndex] = buildCommandAabbs(upload.commands().get(commandIndex));
+            }
             Set<ZoneKey> coverage = new LinkedHashSet<>();
-            SourceZone shell = new SourceZone(upload, refs, tested, globalFirst, coverage,
+            SourceZone shell = new SourceZone(upload, refs, tested, globalFirst,
+                    commandAabbs, broadPhaseGeneration, broadPhaseResult, coverage,
                     Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE);
 
             int triangleIndex = 0;
@@ -427,6 +453,7 @@ final class PickingSpatialIndex {
             }
 
             SourceZone result = new SourceZone(upload, refs, tested, globalFirst,
+                    commandAabbs, broadPhaseGeneration, broadPhaseResult,
                     Set.copyOf(coverage), minTileX, maxTileX, minTileY, maxTileY);
             for (int index = 0; index < refs.length; index++) {
                 TriangleRef old = refs[index];
@@ -476,8 +503,67 @@ final class PickingSpatialIndex {
             return true;
         }
 
+        /**
+         * Returns 0 when this command has no client AABB, 1/2 for a cached
+         * pass/reject, and 3/4 for a newly evaluated pass/reject.
+         */
+        byte broadPhase(int commandIndex, int generation,
+                        float ox, float oy, float oz,
+                        float dx, float dy, float dz,
+                        float near, float far) {
+            WorldAabb[] bounds = commandAabbs[commandIndex];
+            if (bounds.length == 0) return 0;
+
+            if (broadPhaseGeneration[commandIndex] == generation) {
+                return broadPhaseResult[commandIndex] == 1 ? (byte) 1 : (byte) 2;
+            }
+
+            boolean hit = false;
+            for (WorldAabb bound : bounds) {
+                if (bound.intersects(ox, oy, oz, dx, dy, dz, near, far)) {
+                    hit = true;
+                    break;
+                }
+            }
+            broadPhaseGeneration[commandIndex] = generation;
+            broadPhaseResult[commandIndex] = (byte) (hit ? 1 : 2);
+            return hit ? (byte) 3 : (byte) 4;
+        }
+
         void clearTestedGenerations() {
             Arrays.fill(testedGeneration, 0);
+            Arrays.fill(broadPhaseGeneration, 0);
+            Arrays.fill(broadPhaseResult, (byte) 0);
+        }
+
+        private static WorldAabb[] buildCommandAabbs(GpuDrawCommand command) {
+            List<ClientModelBounds> bounds = command.clientRenderableBounds();
+            if (bounds.isEmpty()) return new WorldAabb[0];
+
+            List<ClientRenderablePlacement> placements = command.clientRenderablePlacements();
+            if (placements.size() != bounds.size()) {
+                throw new IllegalStateException("Client bounds and placements must stay aligned");
+            }
+
+            GameObjectSceneMetadata scene = command.gameObjectSceneMetadata();
+            float centerX = scene.present() ? scene.sizeX() * 64.0f : 64.0f;
+            float centerZ = scene.present() ? scene.sizeY() * 64.0f : 64.0f;
+            float anchorX = command.modelAnchorX() * 128.0f + centerX;
+            float anchorY = command.placementHeight();
+            float anchorZ = command.modelAnchorY() * 128.0f + centerZ;
+
+            WorldAabb[] result = new WorldAabb[bounds.size()];
+            for (int index = 0; index < bounds.size(); index++) {
+                ClientModelBounds.Aabb local = bounds.get(index).drawAabb();
+                ClientRenderablePlacement placement = placements.get(index);
+                float tx = anchorX + placement.offsetX();
+                float tz = anchorZ + placement.offsetZ();
+                result[index] = new WorldAabb(
+                        tx + local.minX(), tx + local.maxX(),
+                        anchorY + local.minY(), anchorY + local.maxY(),
+                        tz + local.minZ(), tz + local.maxZ());
+            }
+            return result;
         }
 
         private static boolean sameCommand(GpuDrawCommand local, GpuDrawCommand global) {
@@ -493,6 +579,46 @@ final class PickingSpatialIndex {
                     && local.objectId() == global.objectId()
                     && local.renderMode() == global.renderMode()
                     && local.wallDecorationPresentation().equals(global.wallDecorationPresentation());
+        }
+    }
+
+    private record WorldAabb(float minX, float maxX,
+                             float minY, float maxY,
+                             float minZ, float maxZ) {
+        private boolean intersects(float ox, float oy, float oz,
+                                   float dx, float dy, float dz,
+                                   float near, float far) {
+            float enter = near;
+            float exit = far;
+
+            if (Math.abs(dx) <= 1.0e-5f) {
+                if (ox < minX || ox > maxX) return false;
+            } else {
+                float a = (minX - ox) / dx;
+                float b = (maxX - ox) / dx;
+                enter = Math.max(enter, Math.min(a, b));
+                exit = Math.min(exit, Math.max(a, b));
+                if (exit < enter) return false;
+            }
+
+            if (Math.abs(dy) <= 1.0e-5f) {
+                if (oy < minY || oy > maxY) return false;
+            } else {
+                float a = (minY - oy) / dy;
+                float b = (maxY - oy) / dy;
+                enter = Math.max(enter, Math.min(a, b));
+                exit = Math.min(exit, Math.max(a, b));
+                if (exit < enter) return false;
+            }
+
+            if (Math.abs(dz) <= 1.0e-5f) {
+                return oz >= minZ && oz <= maxZ;
+            }
+            float a = (minZ - oz) / dz;
+            float b = (maxZ - oz) / dz;
+            enter = Math.max(enter, Math.min(a, b));
+            exit = Math.min(exit, Math.max(a, b));
+            return exit >= enter;
         }
     }
 
