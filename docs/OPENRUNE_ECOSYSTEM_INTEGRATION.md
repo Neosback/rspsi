@@ -237,7 +237,20 @@ With exact source roots now available, the third implementation slice adds Kotli
 
 This layer is intentionally **structural**, not a claim of full K2 symbol/type resolution. A handler recognized from the PSI call shape is a high-confidence source fact, but cross-module overload/type resolution remains a later enrichment step. That distinction must be preserved in UI wording and edit safety.
 
-The next convergence step is the Semantic Content Graph: join these source facts with GameVals/RSCM, declarative TOML/JSON data, cache/map entities, quest/var state, and later CS2/runtime traces. Edit lenses should operate only where that graph can identify a writable source origin and a verified mutation strategy.
+The fourth implementation slice introduces the first read-only Semantic Content Graph:
+
+- GameVal/RSCM mappings, Kotlin PSI source facts, and declarative TOML/JSON references are joined into one Studio-owned graph;
+- OpenRune aliases such as `obj.*` canonicalize to Studio's neutral `item.*` identity while preserving the original aliases as provenance;
+- graph nodes currently represent symbols, scripts, quests, handlers, and source/resources;
+- graph edges currently represent declaration ownership, handler targets, ordinary references, quest state use, and var-state bindings;
+- every node/edge can carry one or more evidence records rather than collapsing source certainty into a boolean;
+- PSI evidence retains exact source spans while older declarative/symbol indexes may provide only file/line-level provenance;
+- `CONTENT_GRAPH` is a composite capability: Studio may privately construct source/symbol/reference prerequisites without implicitly enabling those lower-level services for unrelated consumers;
+- the graph remains query/read-only. Presence in the graph is **not** proof that a value can safely be rewritten.
+
+The first acceptance joins `onOpContentLoc1("content.rock")`, a `QuestScript` quest var, a `boolVarBit` binding, declarative TOML references, and numeric GameVal/RSCM mappings into one graph while proving `obj.coal` and neutral `item.coal` are one identity.
+
+The next convergence step is to attach map/cache entities to these existing symbol nodes, then add domain facets and edit-lens metadata only where provenance identifies a lossless writable origin and a verified mutation strategy. CS2 and runtime traces can later attach to the same graph rather than creating parallel relationship systems.
 
 ## OpenRune-FileStore
 
