@@ -3,6 +3,7 @@ package com.rspsi.studio;
 import com.rspsi.cache.workspace.CacheSessionState;
 import com.rspsi.cache.workspace.CacheSessionStatus;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import com.rspsi.cache.workspace.OsrsCacheHealth;
 import com.rspsi.editor.integration.ServerIntegrationService;
 import com.rspsi.project.ProjectIntegrationCapability;
 import com.rspsi.project.StudioProjectDescriptor;
@@ -24,10 +25,12 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * In-project home.
+ * OpenRune Content Studio project home.
  *
- * <p>Project/cache selection belongs to the pre-project launcher. This view presents project
- * health, access state, recent/continue actions, and workspace entry points.</p>
+ * <p>Project/cache selection belongs to the pre-project launcher. This surface is the durable
+ * project workspace for launching interconnected authoring and analysis tools. A lightweight
+ * FileStore health check is enough to enter Content Studio; individual workspaces request the
+ * heavier cache definitions and content indexes they actually need.</p>
  */
 public final class DashboardView {
     private static final NumberFormat NUMBER_FORMAT =
@@ -38,6 +41,7 @@ public final class DashboardView {
     public void render(
             StudioProjectDescriptor project,
             CacheSessionStatus status,
+            OsrsCacheHealth cacheHealth,
             ServerIntegrationService integrations,
             Runnable openMapEditor,
             Runnable openInterfaceStudio,
@@ -59,7 +63,7 @@ public final class DashboardView {
                 | ImGuiWindowFlags.NoSavedSettings
                 | ImGuiWindowFlags.NoBringToFrontOnFocus
                 | ImGuiWindowFlags.NoDocking;
-        if (!ImGui.begin("Project Home##openrune-studio", flags)) {
+        if (!ImGui.begin("OpenRune Content Studio##openrune-studio", flags)) {
             ImGui.end();
             return;
         }
@@ -78,21 +82,21 @@ public final class DashboardView {
         ImGui.dummy(1.0f, 12.0f);
         ImGui.indent(24.0f);
 
-        renderProjectHeader(project, status, closeProject);
+        renderProjectHeader(project, status, cacheHealth, closeProject);
         ImGui.dummy(1.0f, 10.0f);
 
-        renderContinue(project, status, openMapEditor);
+        renderContinue(project, status, cacheHealth, openMapEditor);
         ImGui.dummy(1.0f, 10.0f);
 
         if (project.kind() == StudioProjectKind.OPENRUNE_SERVER) {
-            renderOpenRuneProjectStatus(project, status, integrations, openIntegrationCenter);
+            renderOpenRuneProjectStatus(project, status, cacheHealth, integrations, openIntegrationCenter);
             ImGui.dummy(1.0f, 10.0f);
         } else {
-            renderStandaloneSummary(status);
+            renderStandaloneSummary(status, cacheHealth);
             ImGui.dummy(1.0f, 10.0f);
         }
 
-        renderWorkspaces(status, openMapEditor, openInterfaceStudio, openObjectStudio);
+        renderWorkspaces(status, cacheHealth, openMapEditor, openInterfaceStudio, openObjectStudio);
         ImGui.dummy(1.0f, 10.0f);
         renderDiagnostics(status);
 
@@ -104,6 +108,7 @@ public final class DashboardView {
     private static void renderProjectHeader(
             StudioProjectDescriptor project,
             CacheSessionStatus status,
+            OsrsCacheHealth cacheHealth,
             Runnable closeProject) {
         StudioWidgets.beginCard("project-header", -1.0f, 112.0f);
 
@@ -127,7 +132,7 @@ public final class DashboardView {
                         1.00f));
 
         ImGui.sameLine();
-        if (status.state() == CacheSessionState.READY) {
+        if (cacheHealth != null) {
             StudioWidgets.pill(
                     "HEALTHY",
                     ImGui.getColorU32(0.13f, 0.28f, 0.18f, 0.85f),
@@ -138,8 +143,11 @@ public final class DashboardView {
 
         LoadedOsrsCacheSession cache = status.currentSession().orElse(null);
         if (cache != null) {
-            ImGui.text("Revision " + cache.identity().revision()
+            ImGui.text("Workspace cache loaded  ·  Revision " + cache.identity().revision()
                     + "  ·  " + fmt(cache.mapCount()) + " map groups");
+        } else if (cacheHealth != null) {
+            ImGui.text("FileStore ready  ·  Revision " + cacheHealth.revision()
+                    + "  ·  " + fmt(cacheHealth.mapArchiveCount()) + " map groups");
         } else {
             ImGui.textDisabled(status.message());
         }
@@ -159,13 +167,17 @@ public final class DashboardView {
     private void renderContinue(
             StudioProjectDescriptor project,
             CacheSessionStatus status,
+            OsrsCacheHealth cacheHealth,
             Runnable openMapEditor) {
-        boolean ready = status.state() == CacheSessionState.READY;
+        boolean loading = status.state() == CacheSessionState.LOADING;
+        boolean ready = cacheHealth != null && !loading;
         StudioWidgets.beginCard("project-continue", -1.0f, 112.0f);
         ImGui.text(StudioIcons.MAP + "  Continue");
-        ImGui.textDisabled(ready
-                ? "Open Map Studio at a region. Workspace scene loading starts only after you enter it."
-                : "Project services are not ready.");
+        ImGui.textDisabled(loading
+                ? "Preparing cache definitions for the requested workspace..."
+                : ready
+                ? "Open Map Studio at a region. Definitions and scene data load only when you enter it."
+                : "Project FileStore is not ready.");
 
         ImGui.dummy(1.0f, 5.0f);
         ImGui.setNextItemWidth(220.0f);
@@ -188,6 +200,7 @@ public final class DashboardView {
     private static void renderOpenRuneProjectStatus(
             StudioProjectDescriptor project,
             CacheSessionStatus status,
+            OsrsCacheHealth cacheHealth,
             ServerIntegrationService integrations,
             Runnable openIntegrationCenter) {
         ImGui.separatorText("OpenRune Project");
@@ -200,7 +213,9 @@ public final class DashboardView {
         if (ImGui.beginTable("##openrune-project-health", 2,
                 ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp)) {
             statusRow("LIVE cache", cache != null
-                    ? "Ready · revision " + cache.identity().revision()
+                    ? "Workspace loaded · revision " + cache.identity().revision()
+                    : cacheHealth != null
+                    ? "FileStore healthy · revision " + cacheHealth.revision()
                     : pathLabel(inspection, ServerPathKey.LIVE_CACHE, "Unavailable"));
             statusRow("SERVER cache",
                     pathState(inspection, ServerPathKey.SERVER_CACHE, "Not detected"));
@@ -214,8 +229,9 @@ public final class DashboardView {
 
         ImGui.dummy(1.0f, 8.0f);
         ImGui.textDisabled(
-                "Studio opens the LIVE cache first. Source/content indexing is deferred until "
-                        + "a future content workspace explicitly needs it.");
+                "Content Studio starts from a lightweight FileStore health check. Definitions, "
+                        + "RSCM/GameVals, source indexing, spawns and semantic graphs activate "
+                        + "only when a tool requests them.");
         ImGui.dummy(1.0f, 8.0f);
 
         if (openIntegrationCenter != null
@@ -250,12 +266,21 @@ public final class DashboardView {
                 .orElse(fallback);
     }
 
-    private static void renderStandaloneSummary(CacheSessionStatus status) {
+    private static void renderStandaloneSummary(
+            CacheSessionStatus status,
+            OsrsCacheHealth cacheHealth) {
         ImGui.separatorText("Project Status");
         LoadedOsrsCacheSession cache = status.currentSession().orElse(null);
         StudioWidgets.beginCard("standalone-project-health", -1.0f, 94.0f);
-        if (cache == null) {
+        if (cache == null && cacheHealth == null) {
             ImGui.textDisabled(status.message());
+        } else if (cache == null) {
+            ImGui.textColored(
+                    StudioDrawColors.abgr(0xFF4ADE80),
+                    StudioIcons.CHECK + "  FileStore ready");
+            ImGui.text("Revision " + cacheHealth.revision()
+                    + "  ·  " + fmt(cacheHealth.mapArchiveCount()) + " map groups");
+            ImGui.textDisabled(cacheHealth.backendName() + "  ·  " + cacheHealth.path());
         } else {
             ImGui.textColored(
                     StudioDrawColors.abgr(0xFF4ADE80),
@@ -269,11 +294,12 @@ public final class DashboardView {
 
     private static void renderWorkspaces(
             CacheSessionStatus status,
+            OsrsCacheHealth cacheHealth,
             Runnable openMapEditor,
             Runnable openInterfaceStudio,
             Runnable openObjectStudio) {
         ImGui.separatorText("Workspaces");
-        boolean ready = status.state() == CacheSessionState.READY;
+        boolean ready = cacheHealth != null && status.state() != CacheSessionState.LOADING;
         float spacing = 12.0f;
         float width = Math.max(230.0f,
                 (ImGui.getContentRegionAvailX() - spacing * 2.0f) / 3.0f);
