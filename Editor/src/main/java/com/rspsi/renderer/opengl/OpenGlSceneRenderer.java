@@ -417,7 +417,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         frameMetrics.reset();
         if (plan == null) {
             statistics = statisticsFor(null, null, null,
-                    false, false, 0, 0, 0);
+                    false, false, 0, 0, 0, 0, 0, 0);
             captureGlError();
             return;
         }
@@ -428,7 +428,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         if (geometryStatistics.sourceVertices() == 0
                 || geometryStatistics.sourceIndices() == 0) {
             statistics = statisticsFor(plan, runtimeGeometry, null,
-                    false, false, 0, 0, 0);
+                    false, false, 0, 0, 0, 0, 0, 0);
             captureGlError();
             return;
         }
@@ -444,6 +444,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         boolean textureUploaded = false;
         int gpuZoneUploads = 0;
         int gpuReusedAllocations = 0;
+        int gpuGeometryStreamUploads = 0;
+        int gpuShadingStreamUploads = 0;
+        int gpuIndexStreamUploads = 0;
         if (!plan.fingerprint().equals(uploadedFingerprint)) {
             if (zonedGeometryActive) {
                 zoneManager.upload(zonedPlan);
@@ -452,6 +455,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             }
             gpuZoneUploads = zoneManager.dirtyZonesUploadedCount();
             gpuReusedAllocations = zoneManager.reusedAllocationsCount();
+            gpuGeometryStreamUploads = zoneManager.geometryStreamUploads();
+            gpuShadingStreamUploads = zoneManager.shadingStreamUploads();
+            gpuIndexStreamUploads = zoneManager.indexStreamUploads();
             geometryUploaded = gpuZoneUploads > 0;
             uploadedFingerprint = plan.fingerprint();
             orderedPlanFingerprint = null;
@@ -531,12 +537,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         captureGlError();
         statistics = statisticsFor(plan, runtimeGeometry, visibility,
                 geometryUploaded, textureUploaded, frameMetrics.drawCalls,
-                gpuZoneUploads, gpuReusedAllocations);
+                gpuZoneUploads, gpuReusedAllocations,
+                gpuGeometryStreamUploads, gpuShadingStreamUploads, gpuIndexStreamUploads);
         if (!diagnosticsLogged) {
             LOGGER.info("Native OpenGL {} / {} / {}; source={} vertices, rendered={} triangles, "
                             + "textures decoded={} fallback={} unavailable={} missing={}, "
                             + "draws={}, zonedBytes={}, flatMaterializations={} flatBytes={}, "
-                            + "gpuZonesUploaded={} gpuAllocationsReused={}, framebuffer=0x{}, "
+                            + "gpuZonesUploaded={} gpuAllocationsReused={}, streams[g={},s={},i={}], framebuffer=0x{}, "
                             + "polygonMode=0x{}, depthWrites={}, occlusion={}, firstGLerror={}",
                     statistics.vendor(), statistics.renderer(), statistics.version(),
                     statistics.sourceVertices(), statistics.renderedTriangles(),
@@ -545,6 +552,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                     statistics.zonedGeometryBytes(), statistics.flatMaterializationCount(),
                     statistics.flatMaterializationBytes(), statistics.gpuZoneUploads(),
                     statistics.gpuReusedAllocations(),
+                    statistics.gpuGeometryStreamUploads(), statistics.gpuShadingStreamUploads(),
+                    statistics.gpuIndexStreamUploads(),
                     Integer.toHexString(statistics.framebufferStatus()),
                     Integer.toHexString(statistics.polygonMode()), statistics.depthWritesEnabled(),
                     statistics.occlusionApplied(), statistics.firstGlError());
@@ -585,7 +594,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                                      GpuCommandVisibility visibility,
                                      boolean geometryUploaded, boolean textureUploaded,
                                      int drawCalls, int gpuZoneUploads,
-                                     int gpuReusedAllocations) {
+                                     int gpuReusedAllocations, int gpuGeometryStreamUploads,
+                                     int gpuShadingStreamUploads, int gpuIndexStreamUploads) {
         GeometryStatistics geometryStatistics = geometryStatistics(geometry);
         PlanStatistics planStatistics = planStatistics(plan);
 
@@ -610,6 +620,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 geometryStatistics.zonedGeometryBytes(),
                 flatMaterializationCount, flatMaterializationBytes,
                 gpuZoneUploads, gpuReusedAllocations,
+                gpuGeometryStreamUploads, gpuShadingStreamUploads, gpuIndexStreamUploads,
                 visibility != null && visibility.occlusionApplied());
     }
 
@@ -747,12 +758,14 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                              boolean geometryUploaded, boolean textureUploaded, int drawCalls,
                              long zonedGeometryBytes, int flatMaterializationCount,
                              long flatMaterializationBytes, int gpuZoneUploads,
-                             int gpuReusedAllocations, boolean occlusionApplied) {
+                             int gpuReusedAllocations, int gpuGeometryStreamUploads,
+                             int gpuShadingStreamUploads, int gpuIndexStreamUploads,
+                             boolean occlusionApplied) {
         private static Statistics empty() {
             return new Statistics(0, 0, 0, 0, 0, 0, 0, 0, 0,
                     "unknown", "unknown", "unknown", GL_NO_ERROR,
                     org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_COMPLETE, GL_FILL, true,
-                    false, false, 0, 0L, 0, 0L, 0, 0, false);
+                    false, false, 0, 0L, 0, 0L, 0, 0, 0, 0, 0, false);
         }
 
         public int renderedTriangles() {
