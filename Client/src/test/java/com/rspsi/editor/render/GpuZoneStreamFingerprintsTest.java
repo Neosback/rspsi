@@ -84,8 +84,10 @@ class GpuZoneStreamFingerprintsTest {
         List<GpuSceneVertex> vertices = List.of(
                 first,
                 vertex(0, 1, 0, first.encodedColor(),
+                        first.alpha(), first.renderType(), first.priority(),
                         first.normalX(), first.normalY(), first.normalZ(), first.normalMagnitude()),
                 vertex(0, 0, 1, first.encodedColor(),
+                        first.alpha(), first.renderType(), first.priority(),
                         first.normalX(), first.normalY(), first.normalZ(), first.normalMagnitude()));
         return GpuZoneUpload.fingerprints(vertices, TRIANGLE);
     }
