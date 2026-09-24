@@ -62,25 +62,30 @@ public final class IncrementalGpuUploadPlanBuilder {
         Map<WorldTileAddress, TileFragment> nextCache = new LinkedHashMap<>();
 
         Map<WorldTileAddress, SceneTileSnapshot> rebuildTiles = new LinkedHashMap<>();
+        Map<WorldZoneCoordinate, List<SceneTileSnapshot>> rebuildByZone = new LinkedHashMap<>();
         int reused = 0;
         for (SceneTileSnapshot tile : packet.tiles()) {
             TileFragment fragment = cache.get(tile.worldAddress());
-            boolean dirty = dirtyZones.contains(WorldZoneCoordinate.from(tile.worldAddress()));
+            WorldZoneCoordinate zone = WorldZoneCoordinate.from(tile.worldAddress());
+            boolean dirty = dirtyZones.contains(zone);
             if (fragment == null || dirty || !sameTile(fragment.source(), tile)) {
                 rebuildTiles.put(tile.worldAddress(), tile);
+                rebuildByZone.computeIfAbsent(zone, ignored -> new ArrayList<>()).add(tile);
             } else {
                 reused++;
             }
         }
 
-        boolean parallel = FRAGMENT_PARALLELISM > 1 && rebuildTiles.size() > 1;
-        Map<WorldTileAddress, CompletableFuture<TileFragment>> pending =
+        boolean parallel = FRAGMENT_PARALLELISM > 1 && rebuildByZone.size() > 1;
+        Map<WorldZoneCoordinate, CompletableFuture<Map<WorldTileAddress, TileFragment>>> pending =
                 parallel ? new LinkedHashMap<>() : Map.of();
         if (parallel) {
-            rebuildTiles.forEach((address, tile) -> pending.put(address,
-                    CompletableFuture.supplyAsync(() -> flattenTile(packet, tile),
-                            FRAGMENT_EXECUTOR)));
+            rebuildByZone.forEach((zone, tiles) -> pending.put(zone,
+                    CompletableFuture.supplyAsync(
+                            () -> flattenZone(packet, tiles), FRAGMENT_EXECUTOR)));
         }
+        Map<WorldZoneCoordinate, Map<WorldTileAddress, TileFragment>> completed =
+                parallel ? new LinkedHashMap<>() : Map.of();
 
         int rebuilt = rebuildTiles.size();
         int indexBase = 0;
@@ -89,9 +94,18 @@ public final class IncrementalGpuUploadPlanBuilder {
                 TileFragment fragment;
                 SceneTileSnapshot rebuild = rebuildTiles.get(tile.worldAddress());
                 if (rebuild != null) {
-                    fragment = parallel
-                            ? await(pending.get(tile.worldAddress()))
-                            : flattenTile(packet, rebuild);
+                    if (parallel) {
+                        WorldZoneCoordinate zone = WorldZoneCoordinate.from(tile.worldAddress());
+                        Map<WorldTileAddress, TileFragment> zoneFragments =
+                                completed.computeIfAbsent(zone, key -> await(pending.get(key)));
+                        fragment = zoneFragments.get(tile.worldAddress());
+                        if (fragment == null) {
+                            throw new IllegalStateException(
+                                    "Missing compiled GPU fragment for " + tile.worldAddress());
+                        }
+                    } else {
+                        fragment = flattenTile(packet, rebuild);
+                    }
                 } else {
                     fragment = cache.get(tile.worldAddress());
                     if (fragment == null) {
@@ -124,7 +138,7 @@ public final class IncrementalGpuUploadPlanBuilder {
         GpuZonedUploadPlan zonedPlan = zonedBuilder.build(plan, dirtyZones);
         return new BuildResult(plan, zonedPlan, rebuilt, reused,
                 zonedBuilder.lastRebuiltZoneCount(), zonedBuilder.lastReusedZoneCount(),
-                parallel ? rebuildTiles.size() : 0, FRAGMENT_PARALLELISM);
+                parallel ? rebuildByZone.size() : 0, FRAGMENT_PARALLELISM);
     }
 
     /** Creates an isolated cache snapshot for an asynchronous rebuild transaction. */
@@ -144,7 +158,7 @@ public final class IncrementalGpuUploadPlanBuilder {
         return cache.size();
     }
 
-    private static TileFragment await(CompletableFuture<TileFragment> future) {
+    private static <T> T await(CompletableFuture<T> future) {
         try {
             return future.join();
         } catch (CompletionException failure) {
@@ -153,6 +167,15 @@ public final class IncrementalGpuUploadPlanBuilder {
             if (cause instanceof Error error) throw error;
             throw failure;
         }
+    }
+
+    private Map<WorldTileAddress, TileFragment> flattenZone(
+            GpuScenePacket packet, List<SceneTileSnapshot> tiles) {
+        Map<WorldTileAddress, TileFragment> fragments = new LinkedHashMap<>();
+        for (SceneTileSnapshot tile : tiles) {
+            fragments.put(tile.worldAddress(), flattenTile(packet, tile));
+        }
+        return Map.copyOf(fragments);
     }
 
     private TileFragment flattenTile(GpuScenePacket packet, SceneTileSnapshot tile) {
@@ -225,17 +248,17 @@ public final class IncrementalGpuUploadPlanBuilder {
     public record BuildResult(GpuUploadPlan plan, GpuZonedUploadPlan zonedPlan,
                               int rebuiltTiles, int reusedTiles,
                               int rebuiltZones, int reusedZones,
-                              int parallelFragmentTasks, int fragmentWorkerParallelism) {
+                              int parallelZoneTasks, int fragmentWorkerParallelism) {
         public BuildResult {
             plan = Objects.requireNonNull(plan, "plan");
             zonedPlan = Objects.requireNonNull(zonedPlan, "zonedPlan");
             if (rebuiltTiles < 0 || reusedTiles < 0 || rebuiltZones < 0 || reusedZones < 0
-                    || parallelFragmentTasks < 0 || fragmentWorkerParallelism < 1) {
+                    || parallelZoneTasks < 0 || fragmentWorkerParallelism < 1) {
                 throw new IllegalArgumentException("Incremental build counts cannot be negative");
             }
-            if (parallelFragmentTasks > rebuiltTiles) {
+            if (parallelZoneTasks > rebuiltTiles) {
                 throw new IllegalArgumentException(
-                        "Parallel fragment tasks cannot exceed rebuilt tiles");
+                        "Parallel zone tasks cannot exceed rebuilt tiles");
             }
         }
 
