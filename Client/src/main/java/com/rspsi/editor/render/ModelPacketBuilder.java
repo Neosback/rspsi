@@ -72,11 +72,21 @@ public final class ModelPacketBuilder {
         for (int plane = 0; plane < document.planes(); plane++) {
             for (int x = 0; x < document.width(); x++) {
                 for (int y = 0; y < document.length(); y++) {
-                    java.util.Map<WorldObject, Integer> occurrences = new java.util.HashMap<>();
-                    for (WorldObject object : document.tile(plane, x, y).objects()) {
+                    List<WorldObject> objects = document.tile(plane, x, y).objects();
+                    if (objects.isEmpty()) continue;
+                    if (objects.size() == 1) {
+                        packets.addAll(buildScenePackets(
+                                objects.get(0), document, clientCycle, 0));
+                        continue;
+                    }
+
+                    java.util.Map<WorldObject, Integer> occurrences =
+                            new java.util.HashMap<>(objects.size());
+                    for (WorldObject object : objects) {
                         int occurrence = occurrences.getOrDefault(object, 0);
                         occurrences.put(object, occurrence + 1);
-                        packets.addAll(buildScenePackets(object, document, clientCycle, occurrence));
+                        packets.addAll(buildScenePackets(
+                                object, document, clientCycle, occurrence));
                     }
                 }
             }
@@ -104,9 +114,17 @@ public final class ModelPacketBuilder {
             throw new IllegalArgumentException("Tile is outside the model document: " + coordinate);
         }
 
+        List<WorldObject> objects = document.tile(coordinate).objects();
+        if (objects.isEmpty()) return List.of();
         List<ModelRenderPacket> packets = new ArrayList<>();
-        java.util.Map<WorldObject, Integer> occurrences = new java.util.HashMap<>();
-        for (WorldObject object : document.tile(coordinate).objects()) {
+        if (objects.size() == 1) {
+            packets.addAll(buildScenePackets(objects.get(0), document, clientCycle, 0));
+            return List.copyOf(mergeNormals(packets));
+        }
+
+        java.util.Map<WorldObject, Integer> occurrences =
+                new java.util.HashMap<>(objects.size());
+        for (WorldObject object : objects) {
             int occurrence = occurrences.getOrDefault(object, 0);
             occurrences.put(object, occurrence + 1);
             packets.addAll(buildScenePackets(object, document, clientCycle, occurrence));
