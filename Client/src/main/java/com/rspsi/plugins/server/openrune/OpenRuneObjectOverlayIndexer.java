@@ -105,7 +105,7 @@ public final class OpenRuneObjectOverlayIndexer {
         }
 
         TomlArray objects = parsed.getArray("object");
-        if (objects == null || objects.isEmpty() || !(objects.get(0) instanceof TomlTable object)) {
+        if (objects == null || objects.size() == 0 || !(objects.get(0) instanceof TomlTable object)) {
             return;
         }
 
@@ -148,7 +148,7 @@ public final class OpenRuneObjectOverlayIndexer {
     }
 
     private static Map<String, String> stringValues(TomlTable table) {
-        if (table == null || table.isEmpty()) return Map.of();
+        if (table == null || table.keySet().isEmpty()) return Map.of();
         LinkedHashMap<String, String> values = new LinkedHashMap<>();
         for (String key : table.keySet()) {
             Object raw = table.get(key);
