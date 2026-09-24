@@ -3,6 +3,7 @@ package com.rspsi.editor.plugin.builtin;
 import com.rspsi.editor.plugin.EditorPlugin;
 import com.rspsi.editor.plugin.EditorPluginContext;
 import com.rspsi.editor.plugin.EditorPluginRegistry;
+import com.rspsi.editor.plugin.EditorInspectorRegistration;
 import com.rspsi.editor.plugin.EditorToolContextRegistration;
 import com.rspsi.editor.tool.DeleteObjectTool;
 import com.rspsi.editor.tool.DuplicateObjectTool;
@@ -34,6 +35,9 @@ public final class ObjectToolsPlugin implements EditorPlugin {
                 "objects.context", "Object settings",
                 List.of("object.place", "object.move", "object.rotate", "object.duplicate",
                         "object.delete"), 0, () -> ignored -> settings.settings()));
+        registry.registerInspector(new EditorInspectorRegistration(
+                "objects.content", "Server content", "Objects",
+                ObjectContentInspector::new));
     }
 
     private void register(EditorPluginRegistry registry, String id, String label,
