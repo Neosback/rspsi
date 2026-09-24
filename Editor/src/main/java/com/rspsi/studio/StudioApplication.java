@@ -354,7 +354,7 @@ public final class StudioApplication implements AutoCloseable {
         projectLoadStatus = new ProjectLoadStatus(
                 ProjectLoadStatus.Phase.INSPECT_INTEGRATION,
                 0.18,
-                "Inspecting OpenRune project...",
+                "Finding OpenRune project cache...",
                 root.toString(),
                 null);
 
@@ -398,8 +398,8 @@ public final class StudioApplication implements AutoCloseable {
             projectLoadStatus = new ProjectLoadStatus(
                     ProjectLoadStatus.Phase.BIND_REQUIRED_PROJECT_SERVICES,
                     0.95,
-                    "Binding OpenRune content services...",
-                    "GameVals, source semantics and content graph are ready",
+                    "Finishing OpenRune project setup...",
+                    "Cache and project mappings are ready",
                     null);
             bindReadyCacheSymbols();
             finishProjectOpen(request);
@@ -407,21 +407,15 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private Set<IntegrationCapability> integrationCapabilities(StudioProjectDescriptor project) {
+        /*
+         * Startup intentionally binds only the lightweight mapping services.
+         * Content discovery, Kotlin/Gradle semantic indexing and the cross-source
+         * graph are expensive project tools and are activated later when their
+         * workspace actually requests them.
+         */
         EnumSet<IntegrationCapability> capabilities = EnumSet.of(
                 IntegrationCapability.SYMBOLS,
-                IntegrationCapability.GAMEVALS,
-                IntegrationCapability.CONTENT_INDEX,
-                IntegrationCapability.CONTENT_MANIFESTS,
-                IntegrationCapability.NPC_SPAWNS,
-                IntegrationCapability.AREAS,
-                IntegrationCapability.CONTENT_DIAGNOSTICS,
-                IntegrationCapability.LOC_REFERENCES,
-                IntegrationCapability.MAP_REFERENCES,
-                IntegrationCapability.INTERFACE_REFERENCES,
-                IntegrationCapability.CS2_SOURCES,
-                IntegrationCapability.SOURCE_NAVIGATION,
-                IntegrationCapability.SOURCE_SEMANTICS,
-                IntegrationCapability.CONTENT_GRAPH);
+                IntegrationCapability.GAMEVALS);
         if (project.capabilities().contains(ProjectIntegrationCapability.CACHE_BUILD)) {
             capabilities.add(IntegrationCapability.CACHE_BUILD);
         }
