@@ -21,13 +21,12 @@ class GpuDrawBatchPlannerTest {
                 // Different authored priority is still the same native state.
                 command(zoneA1, GpuDrawCommand.SubmissionPass.OPAQUE, 7, 0,
                         GpuDrawCommand.RenderMode.DEFAULT, 3),
-                // Texture change requires a new native state batch.
+                // Texture identity is resident per vertex and no longer splits the batch.
                 command(zoneA1, GpuDrawCommand.SubmissionPass.OPAQUE, 9, 0,
                         GpuDrawCommand.RenderMode.DEFAULT, 3),
-                // Returning to texture 7 is a new batch because ordering is preserved.
                 command(zoneA1, GpuDrawCommand.SubmissionPass.OPAQUE, 7, 0,
                         GpuDrawCommand.RenderMode.DEFAULT, 4),
-                // Same state but a different 8x8 resident zone cannot share a VAO draw.
+                // This test supplies logical zone keys, so crossing zones still splits here.
                 command(zoneB, GpuDrawCommand.SubmissionPass.OPAQUE, 7, 0,
                         GpuDrawCommand.RenderMode.DEFAULT, 4),
                 // Depth mode/state changes also split the range.
@@ -40,12 +39,10 @@ class GpuDrawBatchPlannerTest {
                 GpuDrawCommand.SubmissionPass.OPAQUE,
                 index -> zoneKey(commands.get(index).tile()));
 
-        assertEquals(5, batches.size());
-        assertEquals(List.of(0, 1), batches.get(0).commandIndices());
-        assertEquals(List.of(2), batches.get(1).commandIndices());
-        assertEquals(List.of(3), batches.get(2).commandIndices());
-        assertEquals(List.of(4), batches.get(3).commandIndices());
-        assertEquals(List.of(5), batches.get(4).commandIndices());
+        assertEquals(3, batches.size());
+        assertEquals(List.of(0, 1, 2, 3), batches.get(0).commandIndices());
+        assertEquals(List.of(4), batches.get(1).commandIndices());
+        assertEquals(List.of(5), batches.get(2).commandIndices());
     }
 
     @Test
@@ -69,18 +66,15 @@ class GpuDrawBatchPlannerTest {
                 index -> zoneKey(commands.get(index).tile()));
 
         assertEquals(true, cursor.next());
-        assertEquals(2, cursor.commandCount());
+        assertEquals(3, cursor.commandCount());
         assertEquals(0, cursor.orderedStart());
         assertEquals(0, cursor.firstCommandIndex());
         assertEquals(1, cursor.commandIndexAt(1));
+        assertEquals(2, cursor.commandIndexAt(2));
 
         assertEquals(true, cursor.next());
         assertEquals(1, cursor.commandCount());
-        assertEquals(2, cursor.orderedStart());
-        assertEquals(2, cursor.firstCommandIndex());
-
-        assertEquals(true, cursor.next());
-        assertEquals(1, cursor.commandCount());
+        assertEquals(3, cursor.orderedStart());
         assertEquals(3, cursor.firstCommandIndex());
 
         assertEquals(false, cursor.next());

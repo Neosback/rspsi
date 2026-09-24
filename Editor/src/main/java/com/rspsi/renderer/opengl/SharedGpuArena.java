@@ -1,7 +1,9 @@
 package com.rspsi.renderer.opengl;
 
 import com.rspsi.editor.render.GpuColorEncoding;
+import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuSceneVertex;
+import com.rspsi.editor.render.SceneLayer;
 import com.rspsi.editor.render.GpuZoneUpload;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
 import com.rspsi.editor.render.PickerId;
@@ -73,7 +75,7 @@ final class SharedGpuArena implements AutoCloseable {
         allocateArrayBuffer(vertexShadingVbo,
                 (long) vertices * NativeSceneVertexLayout.VERTEX_SHADING_FLOATS_PER_VERTEX * Float.BYTES);
         allocateArrayBuffer(faceMetadataVbo,
-                (long) vertices * NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX * Float.BYTES);
+                (long) vertices * NativeSceneVertexLayout.FACE_METADATA_BYTES_PER_VERTEX);
         if (normalVbo != 0) {
             allocateArrayBuffer(normalVbo,
                     (long) vertices * NativeSceneVertexLayout.NORMAL_FLOATS_PER_VERTEX * Float.BYTES);
@@ -114,12 +116,10 @@ final class SharedGpuArena implements AutoCloseable {
         glEnableVertexAttribArray(5);
 
         glBindBuffer(GL_ARRAY_BUFFER, faceMetadataVbo);
-        int faceStride = NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX * Float.BYTES;
-        glVertexAttribPointer(3, 1, GL_FLOAT, false, faceStride, 0L);
+        int faceStride = NativeSceneVertexLayout.FACE_METADATA_BYTES_PER_VERTEX;
+        glVertexAttribIPointer(3, 1, GL_UNSIGNED_INT, faceStride, 0L);
         glEnableVertexAttribArray(3);
-        glVertexAttribPointer(4, 1, GL_FLOAT, false, faceStride, Float.BYTES);
-        glEnableVertexAttribArray(4);
-        glVertexAttribPointer(6, 1, GL_FLOAT, false, faceStride, 2L * Float.BYTES);
+        glVertexAttribIPointer(6, 1, GL_UNSIGNED_INT, faceStride, Integer.BYTES);
         glEnableVertexAttribArray(6);
 
         if (normalVbo != 0) {
@@ -175,20 +175,78 @@ final class SharedGpuArena implements AutoCloseable {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
-    void uploadFaceMetadata(int vertexOffset, List<GpuSceneVertex> vertices) {
-        FloatBuffer data = scratch.vertices(
-                vertices.size() * NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX);
-        for (GpuSceneVertex vertex : vertices) {
-            data.put((float) vertex.alpha())
-                    .put((float) vertex.renderType())
-                    .put((float) vertex.priority());
+    void uploadFaceMetadata(int vertexOffset, GpuZoneUpload zone) {
+        List<GpuSceneVertex> vertices = zone.vertices();
+        IntBuffer data = scratch.faceMetadata(
+                vertices.size() * NativeSceneVertexLayout.FACE_METADATA_INTS_PER_VERTEX);
+        IntBuffer markers = scratch.markers(vertices.size());
+        for (int vertexIndex = 0; vertexIndex < vertices.size(); vertexIndex++) {
+            markers.put(vertexIndex, 0);
         }
+
+        List<GpuDrawCommand> commands = zone.commands();
+        for (int commandIndex = 0; commandIndex < commands.size(); commandIndex++) {
+            GpuDrawCommand command = commands.get(commandIndex);
+            for (int offset = command.firstIndex();
+                 offset < command.firstIndex() + command.indexCount(); offset++) {
+                int vertexIndex = zone.indexAt(offset);
+                GpuSceneVertex vertex = vertices.get(vertexIndex);
+                int word0 = packFaceWord0(vertex, command);
+                int word1 = packFaceWord1(vertex, command);
+                int marker = markers.get(vertexIndex);
+                if (marker != 0) {
+                    if (data.get(vertexIndex * 2) != word0
+                            || data.get(vertexIndex * 2 + 1) != word1) {
+                        throw new IllegalStateException(
+                                "Shared native vertex belongs to commands with conflicting face material");
+                    }
+                    continue;
+                }
+                data.put(vertexIndex * 2, word0);
+                data.put(vertexIndex * 2 + 1, word1);
+                markers.put(vertexIndex, commandIndex + 1);
+            }
+        }
+
+        // Orphan vertices are never indexed, but initialize their slots so the
+        // full zone slice always contains deterministic bytes.
+        for (int vertexIndex = 0; vertexIndex < vertices.size(); vertexIndex++) {
+            if (markers.get(vertexIndex) == 0) {
+                GpuSceneVertex vertex = vertices.get(vertexIndex);
+                data.put(vertexIndex * 2, packFaceWord0(vertex, null));
+                data.put(vertexIndex * 2 + 1, packFaceWord1(vertex, null));
+            }
+        }
+
+        data.position(vertices.size() * NativeSceneVertexLayout.FACE_METADATA_INTS_PER_VERTEX);
         data.flip();
         glBindBuffer(GL_ARRAY_BUFFER, faceMetadataVbo);
         glBufferSubData(GL_ARRAY_BUFFER,
-                (long) vertexOffset * NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX * Float.BYTES,
+                (long) vertexOffset * NativeSceneVertexLayout.FACE_METADATA_BYTES_PER_VERTEX,
                 data);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
+    static int packFaceWord0(GpuSceneVertex vertex, GpuDrawCommand command) {
+        int renderType = vertex.renderType();
+        if (renderType < 0 || renderType > 0x7FFF) {
+            throw new IllegalArgumentException("Native render type exceeds 15-bit packed range");
+        }
+        int depthBias = command == null ? 0 : command.depthBias();
+        int terrain = command != null && command.layer() == SceneLayer.Kind.TERRAIN ? 1 : 0;
+        return (vertex.alpha() & 0xFF)
+                | ((renderType & 0x7FFF) << 8)
+                | ((depthBias & 0xFF) << 23)
+                | (terrain << 31);
+    }
+
+    static int packFaceWord1(GpuSceneVertex vertex, GpuDrawCommand command) {
+        int textureId = command == null ? vertex.textureId() : command.textureId();
+        long textureCode = (long) textureId + 1L;
+        if (textureCode < 0L || textureCode > 0xFF_FFFFL) {
+            throw new IllegalArgumentException("Texture id exceeds 24-bit packed native range");
+        }
+        return (vertex.priority() & 0xFF) | ((int) textureCode << 8);
     }
 
     void uploadNormals(int vertexOffset, List<GpuSceneVertex> vertices) {

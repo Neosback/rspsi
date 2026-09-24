@@ -1,7 +1,11 @@
 package com.rspsi.renderer.opengl;
 
 import com.rspsi.editor.model.WorldTileAddress;
+import com.rspsi.editor.render.GpuColorEncoding;
+import com.rspsi.editor.render.GpuDrawCommand;
+import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuZoneStreamFingerprints;
+import com.rspsi.editor.render.SceneLayer;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -12,10 +16,37 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ZoneVboManagerTest {
 
     @Test
-    void faceMetadataSplitDoesNotIncreaseVanillaVertexBandwidth() {
-        assertEquals(12 * Float.BYTES, NativeSceneVertexLayout.BYTES_PER_VERTEX);
+    void packedFaceMetadataReducesVanillaVertexBandwidth() {
+        assertEquals(44, NativeSceneVertexLayout.BYTES_PER_VERTEX);
         assertEquals(4, NativeSceneVertexLayout.VERTEX_SHADING_FLOATS_PER_VERTEX);
-        assertEquals(3, NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX);
+        assertEquals(2, NativeSceneVertexLayout.FACE_METADATA_INTS_PER_VERTEX);
+        assertEquals(8, NativeSceneVertexLayout.FACE_METADATA_BYTES_PER_VERTEX);
+    }
+
+    @Test
+    void packedFaceWordsPreserveMaterialBitsExactly() {
+        GpuSceneVertex vertex = new GpuSceneVertex(
+                1.0f, 2.0f, 3.0f, 0.25f, 0.75f,
+                1234, GpuColorEncoding.PACKED_JAGEX_HSL,
+                0x1234, 0, 0, 0, 0,
+                41, 173, 11,
+                0, 3200, 3200, 1);
+        GpuDrawCommand command = new GpuDrawCommand(
+                WorldTileAddress.of(3200, 3200, 0),
+                SceneLayer.Kind.TERRAIN,
+                GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, 41, 11, 205, 7,
+                GpuDrawCommand.RenderMode.DEFAULT);
+
+        int word0 = SharedGpuArena.packFaceWord0(vertex, command);
+        int word1 = SharedGpuArena.packFaceWord1(vertex, command);
+
+        assertEquals(173, word0 & 0xFF);
+        assertEquals(0x1234, (word0 >>> 8) & 0x7FFF);
+        assertEquals(205, (word0 >>> 23) & 0xFF);
+        assertEquals(1, word0 >>> 31);
+        assertEquals(11, word1 & 0xFF);
+        assertEquals(42, word1 >>> 8, "texture id is stored as id + 1");
     }
 
     @Test

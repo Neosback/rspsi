@@ -19,9 +19,11 @@ public final class RenderOrderKey {
      */
     public static long nativeState(GpuDrawCommand command) {
         Objects.requireNonNull(command, "command");
-        long key = command.textureId() + 1L;
-        key = key * 17L + command.layer().ordinal();
-        key = key * 257L + command.depthBias();
+        // Texture layer and face depth bias are packed into the native
+        // per-vertex face-material stream. They no longer require a draw-state
+        // break. Terrain remains distinct because OpenGL back-face culling is
+        // fixed-function state: client models cull, shaped terrain is two-sided.
+        long key = command.layer() == SceneLayer.Kind.TERRAIN ? 1L : 0L;
         key = key * 8L + command.renderMode().ordinal();
         return key;
     }

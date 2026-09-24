@@ -46,8 +46,19 @@ public record GpuZoneUpload(
 
     public static GpuZoneStreamFingerprints fingerprints(
             List<GpuSceneVertex> vertices, List<Integer> indices) {
+        return fingerprints(vertices, indices, List.of());
+    }
+
+    /**
+     * Computes stream identities including command-owned material state that is
+     * packed into the native face stream.
+     */
+    public static GpuZoneStreamFingerprints fingerprints(
+            List<GpuSceneVertex> vertices, List<Integer> indices,
+            List<GpuDrawCommand> commands) {
         Objects.requireNonNull(vertices, "vertices");
         Objects.requireNonNull(indices, "indices");
+        Objects.requireNonNull(commands, "commands");
 
         long geometry = mix(1125899906842597L, vertices.size());
         long vertexShading = mix(1125899906842597L, vertices.size());
@@ -92,6 +103,14 @@ public record GpuZoneUpload(
             faceShading = mix(faceShading, first.alpha());
             faceShading = mix(faceShading, first.renderType());
             faceShading = mix(faceShading, first.priority());
+            faceShading = mix(faceShading, first.textureId());
+        }
+
+        for (GpuDrawCommand command : commands) {
+            faceShading = mix(faceShading, command.textureId());
+            faceShading = mix(faceShading, command.depthBias());
+            faceShading = mix(faceShading,
+                    command.layer() == SceneLayer.Kind.TERRAIN ? 1 : 0);
         }
 
         long topology = mix(1125899906842597L, indices.size());

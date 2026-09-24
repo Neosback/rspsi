@@ -18,6 +18,8 @@ final class GpuUploadScratch implements AutoCloseable {
 
     private FloatBuffer vertices;
     private IntBuffer indices;
+    private IntBuffer faceMetadata;
+    private IntBuffer markers;
     private int vertexGrowths;
     private int indexGrowths;
 
@@ -53,6 +55,36 @@ final class GpuUploadScratch implements AutoCloseable {
         return indices;
     }
 
+    IntBuffer faceMetadata(int requiredInts) {
+        if (requiredInts < 0) {
+            throw new IllegalArgumentException("Required metadata count cannot be negative");
+        }
+        if (faceMetadata == null || faceMetadata.capacity() < requiredInts) {
+            int next = nextCapacity(faceMetadata == null ? 0 : faceMetadata.capacity(),
+                    requiredInts, INITIAL_INDICES);
+            IntBuffer replacement = MemoryUtil.memAllocInt(next);
+            if (faceMetadata != null) MemoryUtil.memFree(faceMetadata);
+            faceMetadata = replacement;
+        }
+        faceMetadata.clear();
+        return faceMetadata;
+    }
+
+    IntBuffer markers(int requiredInts) {
+        if (requiredInts < 0) {
+            throw new IllegalArgumentException("Required marker count cannot be negative");
+        }
+        if (markers == null || markers.capacity() < requiredInts) {
+            int next = nextCapacity(markers == null ? 0 : markers.capacity(),
+                    requiredInts, INITIAL_INDICES);
+            IntBuffer replacement = MemoryUtil.memAllocInt(next);
+            if (markers != null) MemoryUtil.memFree(markers);
+            markers = replacement;
+        }
+        markers.clear();
+        return markers;
+    }
+
     int vertexCapacityFloats() {
         return vertices == null ? 0 : vertices.capacity();
     }
@@ -78,6 +110,14 @@ final class GpuUploadScratch implements AutoCloseable {
         if (indices != null) {
             MemoryUtil.memFree(indices);
             indices = null;
+        }
+        if (faceMetadata != null) {
+            MemoryUtil.memFree(faceMetadata);
+            faceMetadata = null;
+        }
+        if (markers != null) {
+            MemoryUtil.memFree(markers);
+            markers = null;
         }
     }
 
