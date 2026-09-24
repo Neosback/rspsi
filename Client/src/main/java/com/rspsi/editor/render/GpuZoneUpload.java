@@ -18,8 +18,11 @@ public record GpuZoneUpload(
         commands = List.copyOf(Objects.requireNonNull(commands, "commands"));
         fingerprints = Objects.requireNonNull(fingerprints, "fingerprints");
         int vertexCount = vertices.size();
-        if (indices.stream().anyMatch(index -> index == null || index < 0 || index >= vertexCount)) {
-            throw new IllegalArgumentException("Zone index references a missing vertex");
+        for (int offset = 0; offset < indices.size(); offset++) {
+            int index = primitiveIndexAt(indices, offset);
+            if (index < 0 || index >= vertexCount) {
+                throw new IllegalArgumentException("Zone index references a missing vertex");
+            }
         }
         for (GpuDrawCommand command : commands) {
             if (!zone.contains(command.tile())) {
@@ -29,6 +32,11 @@ public record GpuZoneUpload(
                 throw new IllegalArgumentException("Zone draw command exceeds the local index buffer");
             }
         }
+    }
+
+    /** Primitive index access for native/picking hot paths without Integer boxing. */
+    public int indexAt(int offset) {
+        return primitiveIndexAt(indices, offset);
     }
 
     /** Compatibility aggregate for callers that only need current native residency identity. */
@@ -70,9 +78,9 @@ public record GpuZoneUpload(
         }
 
         for (int offset = 0; offset < indices.size(); offset += 3) {
-            GpuSceneVertex first = vertices.get(indices.get(offset));
-            GpuSceneVertex second = vertices.get(indices.get(offset + 1));
-            GpuSceneVertex third = vertices.get(indices.get(offset + 2));
+            GpuSceneVertex first = vertices.get(primitiveIndexAt(indices, offset));
+            GpuSceneVertex second = vertices.get(primitiveIndexAt(indices, offset + 1));
+            GpuSceneVertex third = vertices.get(primitiveIndexAt(indices, offset + 2));
             if (!sameFaceShading(first, second) || !sameFaceShading(first, third)) {
                 throw new IllegalArgumentException(
                         "Face shading metadata must be constant across one triangle");
@@ -87,7 +95,9 @@ public record GpuZoneUpload(
         }
 
         long topology = mix(1125899906842597L, indices.size());
-        for (int index : indices) topology = mix(topology, index);
+        for (int offset = 0; offset < indices.size(); offset++) {
+            topology = mix(topology, primitiveIndexAt(indices, offset));
+        }
         return new GpuZoneStreamFingerprints(
                 geometry, vertexShading, faceShading, topology, normals, pickerIds);
     }
@@ -95,6 +105,15 @@ public record GpuZoneUpload(
     /** Current native-residency aggregate retained for flat-plan callers. */
     public static long fingerprint(List<GpuSceneVertex> vertices, List<Integer> indices) {
         return fingerprints(vertices, indices).nativeFingerprint();
+    }
+
+    private static int primitiveIndexAt(List<Integer> values, int offset) {
+        if (values instanceof ImmutableIntList primitive) {
+            return primitive.getInt(offset);
+        }
+        Integer value = values.get(offset);
+        if (value == null) throw new NullPointerException("Renderer index cannot be null");
+        return value;
     }
 
     private static boolean sameFaceShading(GpuSceneVertex first, GpuSceneVertex second) {

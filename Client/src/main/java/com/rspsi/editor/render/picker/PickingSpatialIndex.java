@@ -12,12 +12,10 @@ import com.rspsi.editor.render.GpuZonedUploadPlan;
 import com.rspsi.editor.render.GpuZonedUploadPlanBuilder;
 import com.rspsi.editor.render.WorldZoneCoordinate;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -27,19 +25,15 @@ import java.util.TreeSet;
  * Incremental CPU spatial index for scene picking.
  *
  * <p>The renderer already retains immutable geometry by 8x8 world zone. This
- * class follows that ownership boundary: unchanged {@link GpuZoneUpload}
- * instances retain their decoded triangle metadata, while picking zones are
- * rebuilt only when a changed source zone contributes geometry to them.</p>
- *
- * <p>Picking zones are spatial rather than ownership zones. A large loc
- * anchored at the edge of one GPU zone can contain triangles extending into a
- * neighboring zone. Those triangles are inserted into every spatial zone/tile
- * overlapped by their world-space bounds so incremental reuse preserves the
- * existing DDA pick behavior.</p>
+ * index follows that ownership boundary, but stores triangle metadata in flat
+ * primitive arrays rather than one Java object per triangle. Spatial buckets
+ * retain packed long handles, so large scenes do not create hundreds of
+ * thousands of TriangleRef objects plus duplicate reference arrays.</p>
  */
 final class PickingSpatialIndex {
     static final int ZONE_TILES = 8;
     static final int PLANE_COUNT = 4;
+    static final long NO_TRIANGLE = -1L;
 
     private final GpuZonedUploadPlanBuilder fallbackBuilder = new GpuZonedUploadPlanBuilder();
 
@@ -90,11 +84,29 @@ final class PickingSpatialIndex {
             }
         }
 
+        boolean sourceSetChanged = sources.size() != nextSources.size()
+                || !sources.keySet().equals(nextSources.keySet());
+
+        int ordinal = 0;
+        for (SourceZone source : nextSources.values()) {
+            source.bindSnapshotOrdinal(ordinal++);
+        }
+
         bindGlobalOrder(zonedPlan, nextSources);
 
         Set<ZoneKey> requiredSpatialZones = new TreeSet<>();
         for (SourceZone source : nextSources.values()) {
             requiredSpatialZones.addAll(source.coverage());
+        }
+
+        /*
+         * Bucket handles encode the source ordinal in their high 32 bits.
+         * Ordinals stay stable during ordinary dirty-zone rebuilds. If source
+         * zones are added/removed, rebuild every spatial bucket once so no
+         * retained handle can point at a shifted source slot.
+         */
+        if (sourceSetChanged) {
+            dirtySpatialZones.addAll(requiredSpatialZones);
         }
 
         Map<ZoneKey, PickingZone> nextZones = new LinkedHashMap<>();
@@ -113,7 +125,7 @@ final class PickingSpatialIndex {
 
         sources = Map.copyOf(nextSources);
         zones = Map.copyOf(nextZones);
-        snapshot = Snapshot.build(zones, sources.values());
+        snapshot = Snapshot.build(zones, nextSources.values());
         lastMetrics = new Metrics(rebuiltZones, reusedZones, zones.size(),
                 rebuiltSources, reusedSources, sources.size());
         currentPlan = plan;
@@ -177,7 +189,7 @@ final class PickingSpatialIndex {
     }
 
     static final class Snapshot {
-        private static final TriangleRef[] EMPTY_BUCKET = new TriangleRef[0];
+        private static final long[] EMPTY_BUCKET = new long[0];
         private static final Snapshot EMPTY = new Snapshot(new PickingZone[0],
                 0, -1, 0, -1, 0, -1, 0, -1, 0, new SourceZone[0]);
 
@@ -215,8 +227,8 @@ final class PickingSpatialIndex {
         }
 
         static Snapshot build(Map<ZoneKey, PickingZone> zones,
-                              Collection<SourceZone> sources) {
-            if (zones.isEmpty() || sources.isEmpty()) return empty();
+                              Collection<SourceZone> sourceCollection) {
+            if (zones.isEmpty() || sourceCollection.isEmpty()) return empty();
 
             int minZoneX = Integer.MAX_VALUE;
             int maxZoneX = Integer.MIN_VALUE;
@@ -240,13 +252,14 @@ final class PickingSpatialIndex {
                 dense[index] = entry.getValue();
             }
 
+            SourceZone[] sourceArray = new SourceZone[sourceCollection.size()];
             int minTileX = Integer.MAX_VALUE;
             int maxTileX = Integer.MIN_VALUE;
             int minTileY = Integer.MAX_VALUE;
             int maxTileY = Integer.MIN_VALUE;
             int triangles = 0;
-            SourceZone[] sourceArray = sources.toArray(new SourceZone[0]);
-            for (SourceZone source : sourceArray) {
+            for (SourceZone source : sourceCollection) {
+                sourceArray[source.snapshotOrdinal()] = source;
                 if (source.triangleCount() == 0) continue;
                 minTileX = Math.min(minTileX, source.minTileX());
                 maxTileX = Math.max(maxTileX, source.maxTileX());
@@ -260,7 +273,7 @@ final class PickingSpatialIndex {
                     minTileX, maxTileX, minTileY, maxTileY, triangles, sourceArray);
         }
 
-        TriangleRef[] bucket(int plane, int tileX, int tileY) {
+        long[] bucket(int plane, int tileX, int tileY) {
             if (plane < 0 || plane >= PLANE_COUNT || denseZones.length == 0) {
                 return EMPTY_BUCKET;
             }
@@ -277,6 +290,39 @@ final class PickingSpatialIndex {
             return zone == null ? EMPTY_BUCKET : zone.bucket(tileX, tileY);
         }
 
+        GpuDrawCommand command(long handle) {
+            return source(handle).command(triangleIndex(handle));
+        }
+
+        GpuSceneVertex a(long handle) {
+            return source(handle).a(triangleIndex(handle));
+        }
+
+        GpuSceneVertex b(long handle) {
+            return source(handle).b(triangleIndex(handle));
+        }
+
+        GpuSceneVertex c(long handle) {
+            return source(handle).c(triangleIndex(handle));
+        }
+
+        int order(long handle) {
+            return source(handle).order(triangleIndex(handle));
+        }
+
+        boolean markTested(long handle, int generation) {
+            return source(handle).markTested(triangleIndex(handle), generation);
+        }
+
+        byte broadPhase(long handle, int generation,
+                        float ox, float oy, float oz,
+                        float dx, float dy, float dz,
+                        float near, float far) {
+            SourceZone source = source(handle);
+            return source.broadPhase(source.localCommandIndex(triangleIndex(handle)), generation,
+                    ox, oy, oz, dx, dy, dz, near, far);
+        }
+
         int minTileX() { return minTileX; }
         int maxTileX() { return maxTileX; }
         int minTileY() { return minTileY; }
@@ -288,7 +334,21 @@ final class PickingSpatialIndex {
         }
 
         void clearTestedGenerations() {
-            for (SourceZone source : sources) source.clearTestedGenerations();
+            for (SourceZone source : sources) {
+                if (source != null) source.clearTestedGenerations();
+            }
+        }
+
+        private SourceZone source(long handle) {
+            int sourceIndex = (int) (handle >>> 32);
+            if (sourceIndex < 0 || sourceIndex >= sources.length || sources[sourceIndex] == null) {
+                throw new IllegalStateException("Invalid picking source handle: " + handle);
+            }
+            return sources[sourceIndex];
+        }
+
+        private static int triangleIndex(long handle) {
+            return (int) handle;
         }
 
         private static int denseIndex(int plane, int zoneX, int zoneY,
@@ -300,72 +360,17 @@ final class PickingSpatialIndex {
         }
     }
 
-    static final class TriangleRef {
-        private final SourceZone source;
-        private final int sourceTriangleIndex;
-        private final int localCommandIndex;
-        private final GpuDrawCommand command;
-        private final GpuSceneVertex a;
-        private final GpuSceneVertex b;
-        private final GpuSceneVertex c;
-        private final int faceOffset;
-        private final int minTileX;
-        private final int maxTileX;
-        private final int minTileY;
-        private final int maxTileY;
-
-        private TriangleRef(SourceZone source, int sourceTriangleIndex, int localCommandIndex,
-                            GpuDrawCommand command,
-                            GpuSceneVertex a, GpuSceneVertex b, GpuSceneVertex c,
-                            int faceOffset) {
-            this.source = source;
-            this.sourceTriangleIndex = sourceTriangleIndex;
-            this.localCommandIndex = localCommandIndex;
-            this.command = command;
-            this.a = a;
-            this.b = b;
-            this.c = c;
-            this.faceOffset = faceOffset;
-            this.minTileX = floorTile(Math.min(a.x(), Math.min(b.x(), c.x())));
-            this.maxTileX = floorTile(Math.max(a.x(), Math.max(b.x(), c.x())));
-            this.minTileY = floorTile(Math.min(a.z(), Math.min(b.z(), c.z())));
-            this.maxTileY = floorTile(Math.max(a.z(), Math.max(b.z(), c.z())));
-        }
-
-        GpuDrawCommand command() { return command; }
-        GpuSceneVertex a() { return a; }
-        GpuSceneVertex b() { return b; }
-        GpuSceneVertex c() { return c; }
-
-        int order() {
-            return source.globalFirstIndex(localCommandIndex) + faceOffset;
-        }
-
-        boolean markTested(int generation) {
-            return source.markTested(sourceTriangleIndex, generation);
-        }
-
-        byte broadPhase(int generation,
-                        float ox, float oy, float oz,
-                        float dx, float dy, float dz,
-                        float near, float far) {
-            return source.broadPhase(localCommandIndex, generation,
-                    ox, oy, oz, dx, dy, dz, near, far);
-        }
-
-        boolean overlaps(ZoneKey zone) {
-            if (command.tile().plane() != zone.plane()) return false;
-            return maxTileX >= zone.minTileX() && minTileX <= zone.maxTileX()
-                    && maxTileY >= zone.minTileY() && minTileY <= zone.maxTileY();
-        }
-    }
-
     private static final class SourceZone {
         private final GpuZoneUpload upload;
-        private final TriangleRef[] triangles;
+        private final int[] localCommandIndices;
+        private final int[] indexOffsets;
+        private final int[] minTriangleTileX;
+        private final int[] maxTriangleTileX;
+        private final int[] minTriangleTileY;
+        private final int[] maxTriangleTileY;
         private final int[] testedGeneration;
         private final int[] globalFirstIndices;
-        private final WorldAabb[][] commandAabbs;
+        private final float[][] commandAabbs;
         private final int[] broadPhaseGeneration;
         private final byte[] broadPhaseResult;
         private final Set<ZoneKey> coverage;
@@ -374,15 +379,27 @@ final class PickingSpatialIndex {
         private final int minTileY;
         private final int maxTileY;
         private int bindingCursor;
+        private int snapshotOrdinal;
 
-        private SourceZone(GpuZoneUpload upload, TriangleRef[] triangles,
-                           int[] testedGeneration, int[] globalFirstIndices,
-                           WorldAabb[][] commandAabbs,
-                           int[] broadPhaseGeneration, byte[] broadPhaseResult,
+        private SourceZone(GpuZoneUpload upload,
+                           int[] localCommandIndices,
+                           int[] indexOffsets,
+                           int[] minTriangleTileX, int[] maxTriangleTileX,
+                           int[] minTriangleTileY, int[] maxTriangleTileY,
+                           int[] testedGeneration,
+                           int[] globalFirstIndices,
+                           float[][] commandAabbs,
+                           int[] broadPhaseGeneration,
+                           byte[] broadPhaseResult,
                            Set<ZoneKey> coverage,
                            int minTileX, int maxTileX, int minTileY, int maxTileY) {
             this.upload = upload;
-            this.triangles = triangles;
+            this.localCommandIndices = localCommandIndices;
+            this.indexOffsets = indexOffsets;
+            this.minTriangleTileX = minTriangleTileX;
+            this.maxTriangleTileX = maxTriangleTileX;
+            this.minTriangleTileY = minTriangleTileY;
+            this.maxTriangleTileY = maxTriangleTileY;
             this.testedGeneration = testedGeneration;
             this.globalFirstIndices = globalFirstIndices;
             this.commandAabbs = commandAabbs;
@@ -401,45 +418,64 @@ final class PickingSpatialIndex {
                 triangleCount += command.indexCount() / 3;
             }
 
-            TriangleRef[] refs = new TriangleRef[triangleCount];
+            int[] localCommandIndices = new int[triangleCount];
+            int[] indexOffsets = new int[triangleCount];
+            int[] minTriangleTileX = new int[triangleCount];
+            int[] maxTriangleTileX = new int[triangleCount];
+            int[] minTriangleTileY = new int[triangleCount];
+            int[] maxTriangleTileY = new int[triangleCount];
             int[] tested = new int[triangleCount];
-            int[] globalFirst = new int[upload.commands().size()];
-            WorldAabb[][] commandAabbs = new WorldAabb[upload.commands().size()][];
-            Arrays.fill(commandAabbs, new WorldAabb[0]);
-            int[] broadPhaseGeneration = new int[upload.commands().size()];
-            byte[] broadPhaseResult = new byte[upload.commands().size()];
+
+            int commandCount = upload.commands().size();
+            int[] globalFirst = new int[commandCount];
+            float[][] commandAabbs = new float[commandCount][];
+            Arrays.fill(commandAabbs, new float[0]);
+            int[] broadPhaseGeneration = new int[commandCount];
+            byte[] broadPhaseResult = new byte[commandCount];
             Set<ZoneKey> coverage = new LinkedHashSet<>();
-            SourceZone shell = new SourceZone(upload, refs, tested, globalFirst,
-                    commandAabbs, broadPhaseGeneration, broadPhaseResult, coverage,
-                    Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE);
 
             int triangleIndex = 0;
             int minTileX = Integer.MAX_VALUE;
             int maxTileX = Integer.MIN_VALUE;
             int minTileY = Integer.MAX_VALUE;
             int maxTileY = Integer.MIN_VALUE;
-            for (int commandIndex = 0; commandIndex < upload.commands().size(); commandIndex++) {
+
+            for (int commandIndex = 0; commandIndex < commandCount; commandIndex++) {
                 GpuDrawCommand command = upload.commands().get(commandIndex);
                 for (int offset = command.firstIndex();
                      offset + 2 < command.firstIndex() + command.indexCount(); offset += 3) {
-                    GpuSceneVertex a = upload.vertices().get(upload.indices().get(offset));
-                    GpuSceneVertex b = upload.vertices().get(upload.indices().get(offset + 1));
-                    GpuSceneVertex c = upload.vertices().get(upload.indices().get(offset + 2));
-                    TriangleRef ref = new TriangleRef(shell, triangleIndex, commandIndex,
-                            command, a, b, c, offset - command.firstIndex());
-                    refs[triangleIndex++] = ref;
+                    int aIndex = upload.indexAt(offset);
+                    int bIndex = upload.indexAt(offset + 1);
+                    int cIndex = upload.indexAt(offset + 2);
+                    GpuSceneVertex a = upload.vertices().get(aIndex);
+                    GpuSceneVertex b = upload.vertices().get(bIndex);
+                    GpuSceneVertex c = upload.vertices().get(cIndex);
 
-                    minTileX = Math.min(minTileX, ref.minTileX);
-                    maxTileX = Math.max(maxTileX, ref.maxTileX);
-                    minTileY = Math.min(minTileY, ref.minTileY);
-                    maxTileY = Math.max(maxTileY, ref.maxTileY);
-                    for (int zoneX = Math.floorDiv(ref.minTileX, ZONE_TILES);
-                         zoneX <= Math.floorDiv(ref.maxTileX, ZONE_TILES); zoneX++) {
-                        for (int zoneY = Math.floorDiv(ref.minTileY, ZONE_TILES);
-                             zoneY <= Math.floorDiv(ref.maxTileY, ZONE_TILES); zoneY++) {
+                    int triMinX = floorTile(Math.min(a.x(), Math.min(b.x(), c.x())));
+                    int triMaxX = floorTile(Math.max(a.x(), Math.max(b.x(), c.x())));
+                    int triMinY = floorTile(Math.min(a.z(), Math.min(b.z(), c.z())));
+                    int triMaxY = floorTile(Math.max(a.z(), Math.max(b.z(), c.z())));
+
+                    localCommandIndices[triangleIndex] = commandIndex;
+                    indexOffsets[triangleIndex] = offset;
+                    minTriangleTileX[triangleIndex] = triMinX;
+                    maxTriangleTileX[triangleIndex] = triMaxX;
+                    minTriangleTileY[triangleIndex] = triMinY;
+                    maxTriangleTileY[triangleIndex] = triMaxY;
+
+                    minTileX = Math.min(minTileX, triMinX);
+                    maxTileX = Math.max(maxTileX, triMaxX);
+                    minTileY = Math.min(minTileY, triMinY);
+                    maxTileY = Math.max(maxTileY, triMaxY);
+
+                    for (int zoneX = Math.floorDiv(triMinX, ZONE_TILES);
+                         zoneX <= Math.floorDiv(triMaxX, ZONE_TILES); zoneX++) {
+                        for (int zoneY = Math.floorDiv(triMinY, ZONE_TILES);
+                             zoneY <= Math.floorDiv(triMaxY, ZONE_TILES); zoneY++) {
                             coverage.add(new ZoneKey(command.tile().plane(), zoneX, zoneY));
                         }
                     }
+                    triangleIndex++;
                 }
             }
 
@@ -450,24 +486,76 @@ final class PickingSpatialIndex {
                 maxTileY = -1;
             }
 
-            SourceZone result = new SourceZone(upload, refs, tested, globalFirst,
-                    commandAabbs, broadPhaseGeneration, broadPhaseResult,
-                    Set.copyOf(coverage), minTileX, maxTileX, minTileY, maxTileY);
-            for (int index = 0; index < refs.length; index++) {
-                TriangleRef old = refs[index];
-                refs[index] = new TriangleRef(result, old.sourceTriangleIndex, old.localCommandIndex,
-                        old.command, old.a, old.b, old.c, old.faceOffset);
-            }
-            return result;
+            return new SourceZone(upload,
+                    localCommandIndices,
+                    indexOffsets,
+                    minTriangleTileX, maxTriangleTileX,
+                    minTriangleTileY, maxTriangleTileY,
+                    tested, globalFirst,
+                    commandAabbs,
+                    broadPhaseGeneration, broadPhaseResult,
+                    Set.copyOf(coverage),
+                    minTileX, maxTileX, minTileY, maxTileY);
+        }
+
+        void bindSnapshotOrdinal(int ordinal) {
+            if (ordinal < 0) throw new IllegalArgumentException("Source ordinal cannot be negative");
+            snapshotOrdinal = ordinal;
+        }
+
+        int snapshotOrdinal() { return snapshotOrdinal; }
+
+        long handle(int triangleIndex) {
+            return ((long) snapshotOrdinal << 32) | (triangleIndex & 0xFFFF_FFFFL);
         }
 
         GpuZoneUpload upload() { return upload; }
         Set<ZoneKey> coverage() { return coverage; }
-        int triangleCount() { return triangles.length; }
+        int triangleCount() { return localCommandIndices.length; }
         int minTileX() { return minTileX; }
         int maxTileX() { return maxTileX; }
         int minTileY() { return minTileY; }
         int maxTileY() { return maxTileY; }
+
+        int localCommandIndex(int triangleIndex) {
+            return localCommandIndices[triangleIndex];
+        }
+
+        GpuDrawCommand command(int triangleIndex) {
+            return upload.commands().get(localCommandIndices[triangleIndex]);
+        }
+
+        GpuSceneVertex a(int triangleIndex) {
+            return upload.vertices().get(upload.indexAt(indexOffsets[triangleIndex]));
+        }
+
+        GpuSceneVertex b(int triangleIndex) {
+            return upload.vertices().get(upload.indexAt(indexOffsets[triangleIndex] + 1));
+        }
+
+        GpuSceneVertex c(int triangleIndex) {
+            return upload.vertices().get(upload.indexAt(indexOffsets[triangleIndex] + 2));
+        }
+
+        int order(int triangleIndex) {
+            int commandIndex = localCommandIndices[triangleIndex];
+            GpuDrawCommand local = upload.commands().get(commandIndex);
+            return globalFirstIndices[commandIndex]
+                    + (indexOffsets[triangleIndex] - local.firstIndex());
+        }
+
+        boolean overlaps(int triangleIndex, ZoneKey zone) {
+            if (command(triangleIndex).tile().plane() != zone.plane()) return false;
+            return maxTriangleTileX[triangleIndex] >= zone.minTileX()
+                    && minTriangleTileX[triangleIndex] <= zone.maxTileX()
+                    && maxTriangleTileY[triangleIndex] >= zone.minTileY()
+                    && minTriangleTileY[triangleIndex] <= zone.maxTileY();
+        }
+
+        int minTriangleTileX(int triangleIndex) { return minTriangleTileX[triangleIndex]; }
+        int maxTriangleTileX(int triangleIndex) { return maxTriangleTileX[triangleIndex]; }
+        int minTriangleTileY(int triangleIndex) { return minTriangleTileY[triangleIndex]; }
+        int maxTriangleTileY(int triangleIndex) { return maxTriangleTileY[triangleIndex]; }
 
         void beginBinding() {
             bindingCursor = 0;
@@ -482,10 +570,6 @@ final class PickingSpatialIndex {
                 throw new IllegalStateException("Picking command order diverged from zoned upload");
             }
             globalFirstIndices[bindingCursor] = globalCommand.firstIndex();
-            // GpuZoneUpload intentionally carries only render-critical command
-            // metadata. Bind the complete current-plan command here so client
-            // model bounds, placements and model anchors stay available to the
-            // picking broad phase without making zone geometry non-reusable.
             commandAabbs[bindingCursor] = buildCommandAabbs(globalCommand);
             broadPhaseGeneration[bindingCursor] = 0;
             broadPhaseResult[bindingCursor] = 0;
@@ -496,10 +580,6 @@ final class PickingSpatialIndex {
             if (bindingCursor != upload.commands().size()) {
                 throw new IllegalStateException("Missing global commands for picking source zone");
             }
-        }
-
-        int globalFirstIndex(int localCommandIndex) {
-            return globalFirstIndices[localCommandIndex];
         }
 
         boolean markTested(int triangleIndex, int generation) {
@@ -516,7 +596,7 @@ final class PickingSpatialIndex {
                         float ox, float oy, float oz,
                         float dx, float dy, float dz,
                         float near, float far) {
-            WorldAabb[] bounds = commandAabbs[commandIndex];
+            float[] bounds = commandAabbs[commandIndex];
             if (bounds.length == 0) return 0;
 
             if (broadPhaseGeneration[commandIndex] == generation) {
@@ -524,8 +604,8 @@ final class PickingSpatialIndex {
             }
 
             boolean hit = false;
-            for (WorldAabb bound : bounds) {
-                if (bound.intersects(ox, oy, oz, dx, dy, dz, near, far)) {
+            for (int offset = 0; offset + 5 < bounds.length; offset += 6) {
+                if (intersects(bounds, offset, ox, oy, oz, dx, dy, dz, near, far)) {
                     hit = true;
                     break;
                 }
@@ -541,11 +621,12 @@ final class PickingSpatialIndex {
             Arrays.fill(broadPhaseResult, (byte) 0);
         }
 
-        private static WorldAabb[] buildCommandAabbs(GpuDrawCommand command) {
-            List<ClientModelBounds> bounds = command.clientRenderableBounds();
-            if (bounds.isEmpty()) return new WorldAabb[0];
+        private static float[] buildCommandAabbs(GpuDrawCommand command) {
+            java.util.List<ClientModelBounds> bounds = command.clientRenderableBounds();
+            if (bounds.isEmpty()) return new float[0];
 
-            List<ClientRenderablePlacement> placements = command.clientRenderablePlacements();
+            java.util.List<ClientRenderablePlacement> placements =
+                    command.clientRenderablePlacements();
             if (placements.size() != bounds.size()) {
                 throw new IllegalStateException("Client bounds and placements must stay aligned");
             }
@@ -557,44 +638,37 @@ final class PickingSpatialIndex {
             float anchorY = command.placementHeight();
             float anchorZ = command.modelAnchorY() * 128.0f + centerZ;
 
-            WorldAabb[] result = new WorldAabb[bounds.size()];
+            float[] result = new float[bounds.size() * 6];
             for (int index = 0; index < bounds.size(); index++) {
                 ClientModelBounds.Aabb local = bounds.get(index).drawAabb();
                 ClientRenderablePlacement placement = placements.get(index);
                 float tx = anchorX + placement.offsetX();
                 float tz = anchorZ + placement.offsetZ();
-                result[index] = new WorldAabb(
-                        tx + local.minX(), tx + local.maxX(),
-                        anchorY + local.minY(), anchorY + local.maxY(),
-                        tz + local.minZ(), tz + local.maxZ());
+                int offset = index * 6;
+                result[offset] = tx + local.minX();
+                result[offset + 1] = tx + local.maxX();
+                result[offset + 2] = anchorY + local.minY();
+                result[offset + 3] = anchorY + local.maxY();
+                result[offset + 4] = tz + local.minZ();
+                result[offset + 5] = tz + local.maxZ();
             }
             return result;
         }
 
-        private static boolean sameCommand(GpuDrawCommand local, GpuDrawCommand global) {
-            return local.tile().equals(global.tile())
-                    && local.scenePlane() == global.scenePlane()
-                    && local.planeCullLevel() == global.planeCullLevel()
-                    && local.layer() == global.layer()
-                    && local.pass() == global.pass()
-                    && local.indexCount() == global.indexCount()
-                    && local.textureId() == global.textureId()
-                    && local.priority() == global.priority()
-                    && local.depthBias() == global.depthBias()
-                    && local.objectId() == global.objectId()
-                    && local.renderMode() == global.renderMode()
-                    && local.wallDecorationPresentation().equals(global.wallDecorationPresentation());
-        }
-    }
-
-    private record WorldAabb(float minX, float maxX,
-                             float minY, float maxY,
-                             float minZ, float maxZ) {
-        private boolean intersects(float ox, float oy, float oz,
-                                   float dx, float dy, float dz,
-                                   float near, float far) {
+        private static boolean intersects(
+                float[] bounds, int offset,
+                float ox, float oy, float oz,
+                float dx, float dy, float dz,
+                float near, float far) {
             float enter = near;
             float exit = far;
+
+            float minX = bounds[offset];
+            float maxX = bounds[offset + 1];
+            float minY = bounds[offset + 2];
+            float maxY = bounds[offset + 3];
+            float minZ = bounds[offset + 4];
+            float maxZ = bounds[offset + 5];
 
             if (Math.abs(dx) <= 1.0e-5f) {
                 if (ox < minX || ox > maxX) return false;
@@ -625,51 +699,71 @@ final class PickingSpatialIndex {
             exit = Math.min(exit, Math.max(a, b));
             return exit >= enter;
         }
+
+        private static boolean sameCommand(GpuDrawCommand local, GpuDrawCommand global) {
+            return local.tile().equals(global.tile())
+                    && local.scenePlane() == global.scenePlane()
+                    && local.planeCullLevel() == global.planeCullLevel()
+                    && local.layer() == global.layer()
+                    && local.pass() == global.pass()
+                    && local.indexCount() == global.indexCount()
+                    && local.textureId() == global.textureId()
+                    && local.priority() == global.priority()
+                    && local.depthBias() == global.depthBias()
+                    && local.objectId() == global.objectId()
+                    && local.renderMode() == global.renderMode()
+                    && local.wallDecorationPresentation().equals(global.wallDecorationPresentation());
+        }
     }
 
     private static final class PickingZone {
-        private static final TriangleRef[] EMPTY_BUCKET = new TriangleRef[0];
+        private static final long[] EMPTY_BUCKET = new long[0];
 
         private final ZoneKey coordinate;
-        private final TriangleRef[][] buckets;
+        private final long[][] buckets;
 
-        private PickingZone(ZoneKey coordinate, TriangleRef[][] buckets) {
+        private PickingZone(ZoneKey coordinate, long[][] buckets) {
             this.coordinate = coordinate;
             this.buckets = buckets;
         }
 
         static PickingZone build(ZoneKey coordinate, Collection<SourceZone> sources) {
-            @SuppressWarnings("unchecked")
-            List<TriangleRef>[] mutable = new List[ZONE_TILES * ZONE_TILES];
+            LongBucketBuilder[] mutable = new LongBucketBuilder[ZONE_TILES * ZONE_TILES];
 
             for (SourceZone source : sources) {
                 if (!source.coverage().contains(coordinate)) continue;
-                for (TriangleRef triangle : source.triangles) {
-                    if (!triangle.overlaps(coordinate)) continue;
-                    int minX = Math.max(triangle.minTileX, coordinate.minTileX());
-                    int maxX = Math.min(triangle.maxTileX, coordinate.maxTileX());
-                    int minY = Math.max(triangle.minTileY, coordinate.minTileY());
-                    int maxY = Math.min(triangle.maxTileY, coordinate.maxTileY());
+                for (int triangleIndex = 0;
+                     triangleIndex < source.triangleCount(); triangleIndex++) {
+                    if (!source.overlaps(triangleIndex, coordinate)) continue;
+                    int minX = Math.max(source.minTriangleTileX(triangleIndex),
+                            coordinate.minTileX());
+                    int maxX = Math.min(source.maxTriangleTileX(triangleIndex),
+                            coordinate.maxTileX());
+                    int minY = Math.max(source.minTriangleTileY(triangleIndex),
+                            coordinate.minTileY());
+                    int maxY = Math.min(source.maxTriangleTileY(triangleIndex),
+                            coordinate.maxTileY());
+                    long handle = source.handle(triangleIndex);
                     for (int tileX = minX; tileX <= maxX; tileX++) {
                         for (int tileY = minY; tileY <= maxY; tileY++) {
                             int cell = cellIndex(tileX, tileY);
-                            List<TriangleRef> bucket = mutable[cell];
-                            if (bucket == null) mutable[cell] = bucket = new ArrayList<>();
-                            bucket.add(triangle);
+                            LongBucketBuilder bucket = mutable[cell];
+                            if (bucket == null) mutable[cell] = bucket = new LongBucketBuilder();
+                            bucket.add(handle);
                         }
                     }
                 }
             }
 
-            TriangleRef[][] buckets = new TriangleRef[ZONE_TILES * ZONE_TILES][];
+            long[][] buckets = new long[ZONE_TILES * ZONE_TILES][];
             for (int index = 0; index < buckets.length; index++) {
-                List<TriangleRef> bucket = mutable[index];
-                buckets[index] = bucket == null ? EMPTY_BUCKET : bucket.toArray(new TriangleRef[0]);
+                LongBucketBuilder bucket = mutable[index];
+                buckets[index] = bucket == null ? EMPTY_BUCKET : bucket.toArray();
             }
             return new PickingZone(coordinate, buckets);
         }
 
-        TriangleRef[] bucket(int tileX, int tileY) {
+        long[] bucket(int tileX, int tileY) {
             if (tileX < coordinate.minTileX() || tileX > coordinate.maxTileX()
                     || tileY < coordinate.minTileY() || tileY > coordinate.maxTileY()) {
                 return EMPTY_BUCKET;
@@ -681,6 +775,22 @@ final class PickingSpatialIndex {
             int localX = Math.floorMod(tileX, ZONE_TILES);
             int localY = Math.floorMod(tileY, ZONE_TILES);
             return localY * ZONE_TILES + localX;
+        }
+    }
+
+    private static final class LongBucketBuilder {
+        private long[] values = new long[8];
+        private int size;
+
+        void add(long value) {
+            if (size == values.length) {
+                values = Arrays.copyOf(values, values.length << 1);
+            }
+            values[size++] = value;
+        }
+
+        long[] toArray() {
+            return size == values.length ? values : Arrays.copyOf(values, size);
         }
     }
 

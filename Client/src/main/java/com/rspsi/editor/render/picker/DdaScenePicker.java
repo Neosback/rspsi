@@ -129,7 +129,7 @@ public final class DdaScenePicker {
         float tMaxY = firstBoundaryT(scratch.oz, scratch.dz, tileY, stepY, startT, tDeltaY);
 
         int generation = spatialIndex.beginPick();
-        PickingSpatialIndex.TriangleRef bestTriangle = null;
+        long bestTriangle = PickingSpatialIndex.NO_TRIANGLE;
         float bestDistance = Float.POSITIVE_INFINITY;
         int visitedCells = 0;
         int triangleTests = 0;
@@ -148,17 +148,20 @@ public final class DdaScenePicker {
             int lastPlane = restrictToPlane == null
                     ? PickingSpatialIndex.PLANE_COUNT - 1 : restrictToPlane;
             for (int plane = firstPlane; plane <= lastPlane; plane++) {
-                PickingSpatialIndex.TriangleRef[] bucket = index.bucket(plane, tileX, tileY);
-                for (PickingSpatialIndex.TriangleRef triangle : bucket) {
-                    if (!triangle.markTested(generation)) {
+                long[] bucket = index.bucket(plane, tileX, tileY);
+                for (long triangle : bucket) {
+                    if (!index.markTested(triangle, generation)) {
                         duplicateSkips++;
                         continue;
                     }
+
+                    GpuSceneVertex a = index.a(triangle);
                     if (requiredPickerId != PickerId.INVALID
-                            && pickerId(triangle.a()) != requiredPickerId) {
+                            && pickerId(a) != requiredPickerId) {
                         continue;
                     }
-                    byte broadPhase = triangle.broadPhase(generation,
+
+                    byte broadPhase = index.broadPhase(triangle, generation,
                             scratch.ox, scratch.oy, scratch.oz,
                             scratch.dx, scratch.dy, scratch.dz,
                             projection.nearPlane(), projection.farPlane());
@@ -171,18 +174,21 @@ public final class DdaScenePicker {
                         continue;
                     }
 
-                    if (SceneOcclusionResolver.occludesTriangle(triangle.command(),
-                            triangle.a(), triangle.b(), triangle.c(), camera, plan.occluders())) {
+                    GpuSceneVertex b = index.b(triangle);
+                    GpuSceneVertex c = index.c(triangle);
+                    GpuDrawCommand command = index.command(triangle);
+                    if (SceneOcclusionResolver.occludesTriangle(
+                            command, a, b, c, camera, plan.occluders())) {
                         continue;
                     }
                     triangleTests++;
-                    float distance = intersect(scratch, triangle.a(), triangle.b(), triangle.c());
+                    float distance = intersect(scratch, a, b, c);
                     if (!Float.isFinite(distance)
                             || distance < projection.nearPlane()
                             || distance > projection.farPlane()) {
                         continue;
                     }
-                    if (precedes(triangle, distance, bestTriangle, bestDistance)) {
+                    if (precedes(index, triangle, distance, bestTriangle, bestDistance)) {
                         bestTriangle = triangle;
                         bestDistance = distance;
                     }
@@ -190,11 +196,12 @@ public final class DdaScenePicker {
             }
 
             float nextBoundary = Math.min(Math.min(tMaxX, tMaxY), scratch.intervalExit);
-            if (bestTriangle != null && bestDistance <= nextBoundary + EPSILON) {
+            if (bestTriangle != PickingSpatialIndex.NO_TRIANGLE
+                    && bestDistance <= nextBoundary + EPSILON) {
                 lastMetrics = new Metrics(visitedCells, triangleTests, duplicateSkips,
                         index.triangleCount(), true, broadPhaseTests, broadPhaseRejects,
                         broadPhaseTriangleSkips);
-                return Optional.of(toResult(bestTriangle, bestDistance, scratch));
+                return Optional.of(toResult(index, bestTriangle, bestDistance, scratch));
             }
 
             if (stepX == 0 && stepY == 0) break;
@@ -217,11 +224,11 @@ public final class DdaScenePicker {
         }
 
         lastMetrics = new Metrics(visitedCells, triangleTests, duplicateSkips,
-                index.triangleCount(), bestTriangle != null, broadPhaseTests,
-                broadPhaseRejects, broadPhaseTriangleSkips);
-        return bestTriangle == null
+                index.triangleCount(), bestTriangle != PickingSpatialIndex.NO_TRIANGLE,
+                broadPhaseTests, broadPhaseRejects, broadPhaseTriangleSkips);
+        return bestTriangle == PickingSpatialIndex.NO_TRIANGLE
                 ? Optional.empty()
-                : Optional.of(toResult(bestTriangle, bestDistance, scratch));
+                : Optional.of(toResult(index, bestTriangle, bestDistance, scratch));
     }
 
     private static int pickerId(GpuSceneVertex vertex) {
@@ -242,22 +249,26 @@ public final class DdaScenePicker {
                 metrics.totalSourceZones());
     }
 
-    private static boolean precedes(PickingSpatialIndex.TriangleRef candidate,
+    private static boolean precedes(PickingSpatialIndex.Snapshot index,
+                                    long candidate,
                                     float candidateDistance,
-                                    PickingSpatialIndex.TriangleRef current,
+                                    long current,
                                     float currentDistance) {
-        if (current == null) return true;
+        if (current == PickingSpatialIndex.NO_TRIANGLE) return true;
         if (candidateDistance < currentDistance - EPSILON) return true;
         if (Math.abs(candidateDistance - currentDistance) > EPSILON) return false;
-        if (candidate.command().priority() != current.command().priority()) {
-            return candidate.command().priority() > current.command().priority();
+        GpuDrawCommand candidateCommand = index.command(candidate);
+        GpuDrawCommand currentCommand = index.command(current);
+        if (candidateCommand.priority() != currentCommand.priority()) {
+            return candidateCommand.priority() > currentCommand.priority();
         }
-        return candidate.order() < current.order();
+        return index.order(candidate) < index.order(current);
     }
 
-    private static PickResult toResult(PickingSpatialIndex.TriangleRef triangle,
+    private static PickResult toResult(PickingSpatialIndex.Snapshot index,
+                                       long triangle,
                                        float distance, PickScratch ray) {
-        GpuDrawCommand command = triangle.command();
+        GpuDrawCommand command = index.command(triangle);
         WorldTileAddress address = command.tile();
         float hitX = ray.ox + distance * ray.dx;
         float hitZ = ray.oz + distance * ray.dz;
