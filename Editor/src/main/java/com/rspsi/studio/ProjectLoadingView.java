@@ -49,7 +49,7 @@ public final class ProjectLoadingView {
         StudioBranding.drawWordmark(logoWidth);
         ImGui.dummy(1.0f, 18.0f);
 
-        ImGui.pushFont(StudioFonts.heading());
+        ImGui.pushFont(StudioFonts.heading(), 23.0f);
         ImGui.pushStyleColor(ImGuiCol.Text, 0.95f, 0.97f, 1.0f, 1.0f);
         centered(project.name());
         ImGui.popStyleColor();
