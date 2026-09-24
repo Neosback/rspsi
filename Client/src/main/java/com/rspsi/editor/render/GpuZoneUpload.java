@@ -48,6 +48,7 @@ public record GpuZoneUpload(
         }
         long faceShading = mix(1125899906842597L, indices.size() / 3);
         long normals = mix(1125899906842597L, vertices.size());
+        long pickerIds = mix(1125899906842597L, vertices.size());
         for (GpuSceneVertex vertex : vertices) {
             geometry = mix(geometry, Float.floatToIntBits(vertex.x()));
             geometry = mix(geometry, Float.floatToIntBits(vertex.y()));
@@ -62,6 +63,10 @@ public record GpuZoneUpload(
             normals = mix(normals, vertex.normalY());
             normals = mix(normals, vertex.normalZ());
             normals = mix(normals, vertex.normalMagnitude());
+
+            pickerIds = mix(pickerIds, PickerId.encode(
+                    vertex.pickerPlane(), vertex.pickerTileX(),
+                    vertex.pickerTileY(), vertex.pickerSlot()));
         }
 
         for (int offset = 0; offset < indices.size(); offset += 3) {
@@ -80,7 +85,7 @@ public record GpuZoneUpload(
         long topology = mix(1125899906842597L, indices.size());
         for (int index : indices) topology = mix(topology, index);
         return new GpuZoneStreamFingerprints(
-                geometry, vertexShading, faceShading, topology, normals);
+                geometry, vertexShading, faceShading, topology, normals, pickerIds);
     }
 
     /** Current native-residency aggregate retained for flat-plan callers. */
