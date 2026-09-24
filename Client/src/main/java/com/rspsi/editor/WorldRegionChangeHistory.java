@@ -174,6 +174,13 @@ public final class WorldRegionChangeHistory {
                 }
             } catch (RuntimeException rollbackFailure) {
                 failure.addSuppressed(rollbackFailure);
+            } finally {
+                CommandHistory history = step.session().history();
+                if (history.position() == step.beforePosition()
+                        && history.canRedo()
+                        && history.nextCommand() == step.command()) {
+                    history.discardRedo();
+                }
             }
         }
     }
