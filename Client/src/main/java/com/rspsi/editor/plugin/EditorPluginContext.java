@@ -132,9 +132,14 @@ public record EditorPluginContext(
         return com.rspsi.editor.plugin.services.PluginServices.resolve(session, assets, registry);
     }
 
-    /** Typed synchronous event bus shared by every plugin in this host. */
+    /** Typed event bus shared by every plugin in this host. */
     public com.rspsi.editor.plugin.event.EditorEventBus events() {
         return services().events();
+    }
+
+    /** Host-owned background execution, delayed scheduling and debounce service. */
+    public EditorExecutionService execution() {
+        return services().execution();
     }
 
     /** Tracks a plugin-owned resource for automatic host cleanup. */

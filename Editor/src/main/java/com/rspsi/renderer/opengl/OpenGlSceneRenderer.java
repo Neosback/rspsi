@@ -269,6 +269,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int lastFramePolygonMode = GL_FILL;
     private String orderedPlanFingerprint;
     private List<Integer> cachedOpaqueOrder = List.of();
+    private final ArrayList<Integer> opaqueOrderWorkspace = new ArrayList<>();
     private final ArrayList<GpuDrawCommand> alphaCommands = new ArrayList<>();
     private final java.util.IdentityHashMap<GpuDrawCommand, Integer> alphaIndices =
             new java.util.IdentityHashMap<>();
@@ -913,9 +914,15 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 && plan.fingerprint().equals(orderedPlanFingerprint)) {
             return cachedOpaqueOrder;
         }
-        boolean cameraOrderedDecorations = commands.stream()
-                .anyMatch(command -> command.wallDecorationPresentation().cameraOrdered());
-        List<Integer> result = new ArrayList<>();
+        boolean cameraOrderedDecorations = false;
+        for (GpuDrawCommand command : commands) {
+            if (command.wallDecorationPresentation().cameraOrdered()) {
+                cameraOrderedDecorations = true;
+                break;
+            }
+        }
+        opaqueOrderWorkspace.clear();
+        List<Integer> result = opaqueOrderWorkspace;
         for (int index = 0; index < commands.size(); index++) {
             if (commands.get(index).pass() == GpuDrawCommand.SubmissionPass.OPAQUE
                     && visibility.visible(index)) {
@@ -945,6 +952,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         if (!cameraOrderedDecorations && !visibility.occlusionApplied()) {
             orderedPlanFingerprint = plan.fingerprint();
             cachedOpaqueOrder = List.copyOf(result);
+            return cachedOpaqueOrder;
         }
         return result;
     }
@@ -1225,6 +1233,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         cachedFogBounds = null;
         orderedPlanFingerprint = null;
         cachedOpaqueOrder = List.of();
+        opaqueOrderWorkspace.clear();
         alphaCommands.clear();
         alphaIndices.clear();
         indexedCommands = List.of();

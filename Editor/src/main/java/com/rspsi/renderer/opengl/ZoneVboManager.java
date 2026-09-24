@@ -10,8 +10,6 @@ import com.rspsi.editor.render.GpuZonedDrawCommand;
 import com.rspsi.editor.render.GpuZonedUploadPlan;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
 import com.rspsi.editor.render.WorldZoneCoordinate;
-import org.lwjgl.BufferUtils;
-
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
@@ -45,6 +43,7 @@ public final class ZoneVboManager implements AutoCloseable {
     public record ZoneAllocation(long zoneKey, int vao, int vbo, int ibo, long fingerprint) { }
 
     private final Map<Long, ZoneAllocation> allocations = new HashMap<>();
+    private final GpuUploadScratch uploadScratch = new GpuUploadScratch();
     private int[] commandLocalFirstIndices = new int[0];
     private long[] commandZoneKeys = new long[0];
     private int dirtyZonesUploadedCount = 0;
@@ -252,10 +251,10 @@ public final class ZoneVboManager implements AutoCloseable {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
 
-    private static void uploadZoneBuffers(int vao, int vbo, int ibo,
-                                          List<GpuSceneVertex> vertices,
-                                          List<Integer> indices) {
-        FloatBuffer vertexData = BufferUtils.createFloatBuffer(vertices.size() * FLOATS_PER_VERTEX);
+    private void uploadZoneBuffers(int vao, int vbo, int ibo,
+                                   List<GpuSceneVertex> vertices,
+                                   List<Integer> indices) {
+        FloatBuffer vertexData = uploadScratch.vertices(vertices.size() * FLOATS_PER_VERTEX);
         for (GpuSceneVertex vertex : vertices) {
             int rgb = vertex.colorEncoding() == GpuColorEncoding.PACKED_JAGEX_HSL
                     ? OsrsTerrainColorMath.packedHslToRgb(vertex.encodedColor(), 0.6)
@@ -270,7 +269,7 @@ public final class ZoneVboManager implements AutoCloseable {
         }
         vertexData.flip();
 
-        IntBuffer indexData = BufferUtils.createIntBuffer(indices.size());
+        IntBuffer indexData = uploadScratch.indices(indices.size());
         indices.forEach(indexData::put);
         indexData.flip();
 
@@ -308,6 +307,22 @@ public final class ZoneVboManager implements AutoCloseable {
         return reusedAllocationsCount;
     }
 
+    int stagingVertexCapacityFloats() {
+        return uploadScratch.vertexCapacityFloats();
+    }
+
+    int stagingIndexCapacity() {
+        return uploadScratch.indexCapacity();
+    }
+
+    int stagingVertexGrowths() {
+        return uploadScratch.vertexGrowths();
+    }
+
+    int stagingIndexGrowths() {
+        return uploadScratch.indexGrowths();
+    }
+
     @Override
     public void close() {
         for (ZoneAllocation alloc : allocations.values()) {
@@ -321,5 +336,6 @@ public final class ZoneVboManager implements AutoCloseable {
         dirtyZonesUploadedCount = 0;
         reusedAllocationsCount = 0;
         totalZonesCount = 0;
+        uploadScratch.close();
     }
 }
