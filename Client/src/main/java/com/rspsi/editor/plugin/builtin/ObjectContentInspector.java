@@ -49,7 +49,7 @@ final class ObjectContentInspector implements EditorInspector {
                 "object.content.source", "Authored source", source)));
         fields.add(new EditorInspectorField(
                 "object.content.sourceWritable",
-                "Authored source",
+                "Source type",
                 value.authoredSourceWritable() ? "Source-controlled" : "Read-only / generated"));
         fields.add(new EditorInspectorField(
                 "object.content.editability",
