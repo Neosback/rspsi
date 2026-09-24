@@ -35,6 +35,13 @@ import java.util.Optional;
  * vertex heights afterwards).</p>
  */
 public final class ModelPacketBuilder {
+    /**
+     * RuneLite-style thread-confined scratch: scene workers reuse primitive
+     * transform/normal arrays across model builds and animation refreshes.
+     */
+    private static final ThreadLocal<ModelBuildWorkspace> BUILD_WORKSPACE =
+            ThreadLocal.withInitial(ModelBuildWorkspace::new);
+
     private final DefinitionProvider definitions;
     private final ObjectDefinitionResolver definitionResolver;
     private final LightingProfile lighting;
@@ -491,29 +498,26 @@ public final class ModelPacketBuilder {
 
     private void append(PacketParts parts, WorldObject object, ObjectAppearanceView appearance,
                         ModelGeometryView geometry,
-        WorldDocument document, WallRules.LocModelVariant variant,
+                        WorldDocument document, WallRules.LocModelVariant variant,
                         int footprintWidth, int footprintLength) {
         int vertexOffset = parts.vertices.size();
+        int vertexCount = geometry.vertexCount();
         int[] positions = geometry.vertexPositions();
+        ModelBuildWorkspace workspace = BUILD_WORKSPACE.get();
+        workspace.prepare(vertexCount);
+
         // The client's getModelData mirrors via isRotated XOR (rotationParam
         // > 3), applied uniformly for every shape through the rotation value
-        // passed to it - not an OR gated to sourceType==2. The ">3" case
-        // covers shape 2's first wall piece (rot+4) and every diagonal
-        // wall-decoration variant (shapes 6/7/8/11, which also use a "+4"
-        // rotation); those must mirror only when isRotated is false, and a
-        // straight variant (rotation always <=3) must mirror only when
-        // isRotated is true - an unconditional OR mirrors straight-shape-2
-        // pieces and never mirrors diagonal decorations at all when
-        // isRotated is false, which is the common case.
+        // passed to it - not an OR gated to sourceType==2.
         boolean mirror = appearance.rotated() ^ (variant.rotation() > 3);
-        // TSPS/RuneLite place a location at the centre of its footprint, not
-        // at the south-west corner. The packet keeps x/z relative to the
-        // anchor tile, so the centre is footprint * halfTile.
         int centerX = footprintWidth * 64;
         int centerZ = footprintLength * 64;
+        int minX = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxZ = Integer.MIN_VALUE;
 
-        List<RawVertex> transformed = new ArrayList<>(geometry.vertexCount());
-        for (int index = 0; index < geometry.vertexCount(); index++) {
+        for (int index = 0; index < vertexCount; index++) {
             int offset = index * 3;
             int x = positions[offset];
             int y = positions[offset + 1];
@@ -533,11 +537,6 @@ public final class ModelPacketBuilder {
             x = x * appearance.scaleX() / 128;
             y = y * appearance.scaleY() / 128;
             z = z * appearance.scaleZ() / 128;
-            // LocModelLoader applies definition offsets in model-local space,
-            // then applies the NORMAL diagonal 256-angle rotation, and only
-            // then places the model at the footprint centre. Rotating after
-            // adding centerX/centerZ would rotate the world placement and
-            // definition offsets around the wrong origin.
             x += appearance.offsetX();
             y += appearance.offsetY();
             z += appearance.offsetZ();
@@ -548,21 +547,24 @@ public final class ModelPacketBuilder {
             }
             x += centerX + variant.decorX();
             z += centerZ + variant.decorZ();
-            transformed.add(new RawVertex(x, y, z));
+            workspace.setVertex(index, x, y, z);
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minZ = Math.min(minZ, z);
+            maxZ = Math.max(maxZ, z);
         }
 
-        // The client bakes lighting from pre-contour normals: LocModelLoader
-        // lights the placed model and SceneBuilder applies contourGround to
-        // the already-lit result. Contouring first would feed the light pass
-        // slope-shifted normals and visibly tilt shading on hills.
-        List<Normal> normals = calculateNormals(transformed, geometry, mirror);
+        // Pre-contour normals are accumulated directly into reusable primitive
+        // arrays. Final ModelVertex records remain immutable packet output.
+        calculateNormals(workspace, vertexCount, geometry, mirror);
         short[] colors = geometry.triangleColors();
         int[] alphas = geometry.triangleAlphas();
         int[] textures = geometry.triangleTextures();
         int[] renderTypes = geometry.triangleRenderTypes();
         int[] priorities = geometry.triangleRenderPriorities();
         int[] depthBias = geometry.triangleDepthBias();
-        int renderPriority = definitions.model(geometry.id()).map(view -> view.renderPriority()).orElse(0);
+        int renderPriority = definitions.model(geometry.id())
+                .map(view -> view.renderPriority()).orElse(0);
         int[] indices = geometry.triangleIndices();
         TextureProjection[] textureProjections = buildTextureProjections(geometry);
         for (int face = 0; face < geometry.triangleCount(); face++) {
@@ -579,75 +581,59 @@ public final class ModelPacketBuilder {
             }
             int rawAlpha = valueAt(alphas, face, 0);
             int renderType = valueAt(renderTypes, face, 0);
-            // The cache stores one SIGNED byte of per-face transparency and the
-            // client normalises it to 0..255 while loading (MeshOSRSType3:
-            // `if (faceTransparencies[face] < 0) faceTransparencies[face] += 256`).
-            // The definition provider hands that raw signed byte through, so
-            // 0x80..0xFF arrives negative. Clamping it to zero instead drew
-            // every translucent face fully opaque - which is what made gates and
-            // doors read as solid slabs and left translucent wall trim fighting
-            // the wall it decorates. 0xFF is invisible in the client (its
-            // transparency is spent before the write), so it stays out of both
-            // submission passes exactly as the old -1 sentinel did.
             int alpha = rawAlpha & 0xFF;
             if (renderType == -1) renderType = 2;
             if (alpha == 255) renderType = 2;
             int texture = valueAt(textures, face, -1);
-            int color = unsignedValueAt(colors, face, 0);
-            color = recolor(color, appearance.recolors());
+            int color = recolor(unsignedValueAt(colors, face, 0), appearance.recolors());
             int priority = clamp(valueAt(priorities, face, renderPriority), 0, 255);
             int bias = clamp(valueAt(depthBias, face, 0), 0, 255);
-            Normal faceNormal = faceNormal(transformed.get(a), transformed.get(b), transformed.get(c));
+
+            workspace.computeFaceNormal(a, b, c);
             ModelFaceColorContract.LitFace lit = ModelFaceColorContract.shade(
                     color, texture >= 0, renderType,
-                    lightness(normals.get(a), appearance),
-                    lightness(normals.get(b), appearance),
-                    lightness(normals.get(c), appearance),
-                    flatLightness(faceNormal, appearance));
+                    lightness(workspace.normalX(a), workspace.normalY(a),
+                            workspace.normalZ(a), workspace.normalMagnitude(a), appearance),
+                    lightness(workspace.normalX(b), workspace.normalY(b),
+                            workspace.normalZ(b), workspace.normalMagnitude(b), appearance),
+                    lightness(workspace.normalX(c), workspace.normalY(c),
+                            workspace.normalZ(c), workspace.normalMagnitude(c), appearance),
+                    flatLightness(workspace.faceNormalX(), workspace.faceNormalY(),
+                            workspace.faceNormalZ(), appearance));
             parts.triangles.add(new ModelTriangle(vertexOffset + a, vertexOffset + b,
                     vertexOffset + c, lit.colorA(), lit.colorB(), lit.colorC(),
                     texture < 0 ? -1 : retexture(texture, appearance.retextures()),
                     alpha, priority, renderType, uv.u0, uv.v0, uv.u1, uv.v1, uv.u2, uv.v2,
                     color, bias));
         }
-        // Lighting and face colors are locked in above from pre-contour
-        // geometry; the client warps vertex Y afterwards (SceneBuilder applies
-        // contourGround to the already-lit model). Retain that pre-contour Y
-        // stream so HILLSKEW-style consumers can reconstruct the unskewed
-        // model when the client actually creates a contoured copy.
-        int[] unskewedY = null;
-        // The client gates on clipType >= 0, not on the legacy boolean. Only
-        // contour-capable models need the unskewed-Y side channel; allocating
-        // and boxing it for every ordinary object was pure hot-path overhead.
-        if (appearance.contourGroundType() >= 0) {
-            unskewedY = new int[transformed.size()];
-            for (int vertex = 0; vertex < transformed.size(); vertex++) {
-                unskewedY[vertex] = transformed.get(vertex).y();
-            }
-            List<RawVertex> contoured = applyContour(document, object, footprintWidth,
-                    footprintLength, transformed, appearance,
-                    variant.decorX(), variant.decorZ());
-            if (contoured != null) {
-                transformed = contoured;
+
+        boolean retainUnskewedY = appearance.contourGroundType() >= 0;
+        if (retainUnskewedY) {
+            workspace.captureUnskewedY(vertexCount);
+            if (applyContour(document, object, footprintWidth, footprintLength,
+                    workspace, vertexCount, appearance, variant.decorX(), variant.decorZ())) {
                 parts.contourApplied = true;
             }
         }
-        VertexExtents extents = vertexExtents(transformed);
-        for (int vertex = 0; vertex < transformed.size(); vertex++) {
-            RawVertex value = transformed.get(vertex);
-            Normal normal = normals.get(vertex);
-            if (unskewedY != null) {
-                parts.unskewedVertexY.add(unskewedY[vertex]);
+
+        for (int vertex = 0; vertex < vertexCount; vertex++) {
+            int x = workspace.x(vertex);
+            int y = workspace.y(vertex);
+            int z = workspace.z(vertex);
+            if (retainUnskewedY) {
+                parts.unskewedVertexY.add(workspace.unskewedY(vertex));
             }
-            parts.vertices.add(new ModelVertex(value.x, value.y, value.z,
-                    normal.x, normal.y, normal.z, normal.magnitude,
-                    normalized(value.x, extents.minX(), extents.maxX()),
-                    normalized(value.z, extents.minZ(), extents.maxZ())));
+            parts.vertices.add(new ModelVertex(x, y, z,
+                    workspace.normalX(vertex), workspace.normalY(vertex),
+                    workspace.normalZ(vertex), workspace.normalMagnitude(vertex),
+                    normalized(x, minX, maxX),
+                    normalized(z, minZ, maxZ)));
             parts.clientBoundsVertices.add(new ModelVertex(
-                    value.x - centerX - variant.decorX(), value.y,
-                    value.z - centerZ - variant.decorZ(),
+                    x - centerX - variant.decorX(), y,
+                    z - centerZ - variant.decorZ(),
                     0, 0, 0, 0, 0.0f, 0.0f));
         }
+
         int[] textureIndices = geometry.textureTriangleIndices();
         for (int index = 0; index + 2 < textureIndices.length; index += 3) {
             int textureTriangle = index / 3;
