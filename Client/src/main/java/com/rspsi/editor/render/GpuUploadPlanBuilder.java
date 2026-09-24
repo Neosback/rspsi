@@ -75,7 +75,8 @@ public final class GpuUploadPlanBuilder {
         return new GpuSceneVertex(tile.worldX() * 128.0f + vertex.x(), vertex.height(),
                 tile.worldY() * 128.0f + vertex.y(), vertex.u() / 128.0f, vertex.v() / 128.0f,
                 vertex.packedHsl(), encoding,
-                0, 0, 0, 0, 0, face.textureId(), face.alpha(), face.priority(),
+                0, vertex.normalX(), vertex.normalY(), vertex.normalZ(), vertex.normalMagnitude(),
+                face.textureId(), face.alpha(), face.priority(),
                 tile.plane(), tile.worldX(), tile.worldY(), PickerId.terrainSlot());
     }
 

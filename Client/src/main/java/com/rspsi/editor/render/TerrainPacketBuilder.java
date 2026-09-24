@@ -25,10 +25,19 @@ public final class TerrainPacketBuilder {
                                      TerrainMesh topology,
                                      TerrainAppearance appearance,
                                      TerrainLight cornerLighting) {
+        return build(coordinate, topology, appearance, cornerLighting, TerrainNormalTile.flat());
+    }
+
+    public TerrainRenderPacket build(TileCoordinate coordinate,
+                                     TerrainMesh topology,
+                                     TerrainAppearance appearance,
+                                     TerrainLight cornerLighting,
+                                     TerrainNormalTile cornerNormals) {
         Objects.requireNonNull(coordinate, "coordinate");
         Objects.requireNonNull(topology, "topology");
         Objects.requireNonNull(appearance, "appearance");
         Objects.requireNonNull(cornerLighting, "cornerLighting");
+        Objects.requireNonNull(cornerNormals, "cornerNormals");
 
         List<TerrainRenderVertex> vertices = new ArrayList<>();
         List<TerrainRenderFace> faces = new ArrayList<>();
@@ -46,11 +55,11 @@ public final class TerrainPacketBuilder {
             }
 
             int a = vertexIndex(sourceFace.material(), sourceFace.a(), topology,
-                    cornerLighting, appearance, vertices, vertexIndexes);
+                    cornerLighting, cornerNormals, appearance, vertices, vertexIndexes);
             int b = vertexIndex(sourceFace.material(), sourceFace.b(), topology,
-                    cornerLighting, appearance, vertices, vertexIndexes);
+                    cornerLighting, cornerNormals, appearance, vertices, vertexIndexes);
             int c = vertexIndex(sourceFace.material(), sourceFace.c(), topology,
-                    cornerLighting, appearance, vertices, vertexIndexes);
+                    cornerLighting, cornerNormals, appearance, vertices, vertexIndexes);
 
             int textureId = sourceFace.material() == 1 ? appearance.textureId() : -1;
             faces.add(new TerrainRenderFace(a, b, c, sourceFace.material(),
@@ -110,6 +119,7 @@ public final class TerrainPacketBuilder {
                                    int sourceIndex,
                                    TerrainMesh topology,
                                      TerrainLight lighting,
+                                     TerrainNormalTile normals,
                                      TerrainAppearance appearance,
                                    List<TerrainRenderVertex> vertices,
                                    Map<VertexKey, Integer> vertexIndexes) {
@@ -133,10 +143,11 @@ public final class TerrainPacketBuilder {
             baseHsl = OsrsTerrainColorMath.adjustPackedHslLight(
                     underlayHsl(sourceIndex, topology, appearance), light);
         }
+        TerrainNormal normal = normals.at(source.x(), source.y());
         int index = vertices.size();
         vertices.add(new TerrainRenderVertex(source.x(), source.y(), source.height(),
-                baseHsl,
-                source.x(), source.y()));
+                baseHsl, source.x(), source.y(),
+                normal.x(), normal.y(), normal.z(), normal.magnitude()));
         vertexIndexes.put(key, index);
         return index;
     }

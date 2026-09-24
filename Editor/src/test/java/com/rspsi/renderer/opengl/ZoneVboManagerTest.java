@@ -58,6 +58,28 @@ class ZoneVboManagerTest {
         assertTrue(decision.indices());
     }
 
+
+    @Test
+    void normalOnlyChangeIsIgnoredByVanillaButScheduledWhenNormalStreamIsEnabled() {
+        ZoneVboManager.ZoneAllocation existing = new ZoneVboManager.ZoneAllocation(
+                1L, 10, 11, 12, 14, 13,
+                100L, 200L, 400L, 300L);
+        GpuZoneStreamFingerprints changed =
+                new GpuZoneStreamFingerprints(100L, 200L, 300L, 401L);
+
+        ZoneVboManager.StreamUploadDecision vanilla =
+                ZoneVboManager.streamUploadDecision(existing, changed, false);
+        ZoneVboManager.StreamUploadDecision withNormals =
+                ZoneVboManager.streamUploadDecision(existing, changed, true);
+
+        assertFalse(vanilla.any());
+        assertFalse(vanilla.normals());
+        assertFalse(withNormals.geometry());
+        assertFalse(withNormals.shading());
+        assertTrue(withNormals.normals());
+        assertFalse(withNormals.indices());
+    }
+
     @Test
     void differentPlanesProduceDistinctZoneKeys() {
         WorldTileAddress plane0 = WorldTileAddress.of(3200, 3200, 0);
