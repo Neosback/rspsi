@@ -32,11 +32,11 @@ public record WorldFragmentTransform(
         return new WorldFragmentTransform(quarterTurns, false, false);
     }
 
-    public static WorldFragmentTransform mirrorX() {
+    public static WorldFragmentTransform reflectX() {
         return new WorldFragmentTransform(0, true, false);
     }
 
-    public static WorldFragmentTransform mirrorY() {
+    public static WorldFragmentTransform reflectY() {
         return new WorldFragmentTransform(0, false, true);
     }
 
