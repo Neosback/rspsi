@@ -162,5 +162,10 @@ public final class OpenRuneReferenceProvider implements ReferenceProvider {
                 .filter(ref -> ref.module().equalsIgnoreCase(module)).toList();
     }
 
+    @Override
+    public List<ContentReference> allReferences() {
+        return List.copyOf(allReferences);
+    }
+
     @Override public int totalReferenceCount() { return allReferences.size(); }
 }
