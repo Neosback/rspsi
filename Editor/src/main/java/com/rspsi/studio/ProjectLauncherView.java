@@ -78,7 +78,7 @@ public final class ProjectLauncherView {
         renderHeader();
         ImGui.dummy(1.0f, 20.0f);
 
-        ImGui.pushFont(StudioFonts.heading());
+        ImGui.pushFont(StudioFonts.heading(), 23.0f);
         ImGui.pushStyleColor(ImGuiCol.Text, 0.94f, 0.97f, 1.0f, 1.0f);
         ImGui.textUnformatted("Projects");
         ImGui.popStyleColor();
