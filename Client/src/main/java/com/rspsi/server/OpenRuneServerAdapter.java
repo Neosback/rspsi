@@ -257,9 +257,9 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
                                                   List<String> diagnostics) {
         if (!detection.matched()) return ServerIntegrationStatus.NOT_DETECTED;
         if (!revision.isEmpty() && !(revision.equals("240") || revision.startsWith("240."))) {
-            diagnostics.add("Detected server revision is outside the supported first-party profile: "
+            diagnostics.add("Detected cache revision is outside the verified first-party cache profile; "
+                    + "project integration remains available but cache semantics require validation: "
                     + revision);
-            return ServerIntegrationStatus.INCOMPATIBLE;
         }
         if (!connection.expectedFingerprint().isEmpty()
                 && !connection.expectedFingerprint().equals(fingerprint)) {
