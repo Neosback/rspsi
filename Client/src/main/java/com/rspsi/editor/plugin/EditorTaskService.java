@@ -54,15 +54,20 @@ public final class EditorTaskService {
         Objects.requireNonNull(execution, "execution");
         Objects.requireNonNull(task, "task");
         begin(id, label);
-        return execution.runAsync(() -> {
-            try {
-                task.run();
-                complete(id, "");
-            } catch (RuntimeException | Error failure) {
-                fail(id, failureMessage(failure));
-                throw failure;
-            }
-        });
+        try {
+            return execution.runAsync(() -> {
+                try {
+                    task.run();
+                    complete(id, "");
+                } catch (RuntimeException | Error failure) {
+                    fail(id, failureMessage(failure));
+                    throw failure;
+                }
+            });
+        } catch (RuntimeException failure) {
+            fail(id, failureMessage(failure));
+            throw failure;
+        }
     }
 
     /**
@@ -77,16 +82,21 @@ public final class EditorTaskService {
         Objects.requireNonNull(execution, "execution");
         Objects.requireNonNull(task, "task");
         begin(id, label);
-        return execution.supplyAsync(() -> {
-            try {
-                T result = task.get();
-                complete(id, "");
-                return result;
-            } catch (RuntimeException | Error failure) {
-                fail(id, failureMessage(failure));
-                throw failure;
-            }
-        });
+        try {
+            return execution.supplyAsync(() -> {
+                try {
+                    T result = task.get();
+                    complete(id, "");
+                    return result;
+                } catch (RuntimeException | Error failure) {
+                    fail(id, failureMessage(failure));
+                    throw failure;
+                }
+            });
+        } catch (RuntimeException failure) {
+            fail(id, failureMessage(failure));
+            throw failure;
+        }
     }
 
     private static String failureMessage(Throwable failure) {
