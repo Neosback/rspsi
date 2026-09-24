@@ -15,6 +15,7 @@ Detailed supporting contracts:
 - OPENRUNE_ECOSYSTEM_INTEGRATION.md - OpenRune Server/cache/source integration guardrails
 - OPENRUNE_MAVEN_CATALOG.md - published OpenRune artifact inventory, adoption matrix, version status, and XTEA boundary
 - RENDERING_PARITY_MANIFEST.json - live rendering correctness backlog
+- HD_RENDERING_ARCHITECTURE.md - renderer-neutral HD foundation and future 117HD/RLHD compatibility plan
 
 The roadmap deliberately does not duplicate every entry in the rendering parity manifest. The manifest remains the detailed renderer checklist. This file decides product order and architectural dependencies.
 
@@ -1115,6 +1116,13 @@ The GPU residency layer is already more advanced than the CPU authoring path.
 
 OpenGlSceneRenderer/ZoneVboManager already partitions native geometry into canonical 8x8 zones and can reuse unchanged GPU allocations.
 
+The incremental GPU path now also provides:
+
+- reusable primitive model-build workspaces
+- zone-resident DDA picking with direct 8x8 buckets
+- client-AABB picking broad phase and picking instrumentation
+- bounded parallel compilation of immutable dirty-zone GPU fragments with deterministic final assembly
+
 ## 7.2 Remaining gap
 
 Studio still rebuilds too much upstream CPU-derived scene data after edits.
@@ -1131,6 +1139,23 @@ Studio still rebuilds too much upstream CPU-derived scene data after edits.
 ## 7.4 Authoring relevance
 
 This becomes increasingly important once brushes, scatter, conditional replace, and generators can affect large areas interactively.
+
+## 7.5 HD renderer preparation
+
+Do not build a second HD scene system.
+
+The vanilla renderer and future HD renderer must consume the same authored/resolved scene, zone invalidation, picking identity, animation state, and editor semantics.
+
+The ordered HD foundation is defined in HD_RENDERING_ARCHITECTURE.md. The first implementation work after the current performance/parity gates should establish renderer-neutral data plumbing before porting substantial RLHD shader behavior:
+
+1. preserve model normals through the native GPU layout and add authoritative terrain normals
+2. split per-face shading/material metadata from geometry
+3. introduce Studio-owned material IDs and a material table
+4. introduce shader include/define/uniform infrastructure and migrate vanilla shaders onto it
+5. generalize texture arrays into color/normal/roughness/AO/displacement/flow texture sets
+6. add render-pass/target abstraction before shadows and tiled lighting
+
+117HD/RLHD compatibility is an adapter into these Studio-owned contracts. It must not expose RuneLite live-client/plugin types through ordinary Studio APIs.
 
 ---
 
