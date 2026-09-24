@@ -270,6 +270,10 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         if (gpuPickingEnabled == enabled) return;
         gpuPickingEnabled = enabled;
         invalidatePickCache();
+        // Auxiliary picker stream allocation is reconciled inside renderer.draw().
+        // Force one redraw so enabling/disabling the optional path immediately
+        // updates resident GPU resources even when the visible scene is static.
+        renderedPlan = null;
         if (initialized) {
             renderer.setGpuPickingEnabled(enabled);
         }
