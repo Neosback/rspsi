@@ -1,5 +1,8 @@
 package com.rspsi.server;
 
+import com.rspsi.server.gradle.GradleProjectModel;
+import com.rspsi.server.gradle.GradleProjectModelInspector;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -23,11 +26,20 @@ import java.util.stream.Stream;
 /** First-party, capability-only integration for an OpenRune-Server checkout. */
 public final class OpenRuneServerAdapter implements ServerAdapter {
     public static final String ID = "openrune-server";
+    private final GradleProjectModelInspector gradleModelInspector;
     private static final Pattern REVISION = Pattern.compile(
             "(?m)^\\s*revision\\s*:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*$");
     private static final List<String> IMPORTANT_FILES = List.of(
             "game.yml", "game.example.yml", "settings.gradle.kts", "build.gradle.kts",
             "or-cache/build.gradle.kts", "gradle.properties");
+
+    public OpenRuneServerAdapter() {
+        this(new GradleProjectModelInspector());
+    }
+
+    OpenRuneServerAdapter(GradleProjectModelInspector gradleModelInspector) {
+        this.gradleModelInspector = Objects.requireNonNull(gradleModelInspector, "gradleModelInspector");
+    }
 
     @Override
     public String id() {
@@ -104,6 +116,45 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
         return inspect(ServerConnection.forRoot(root));
     }
 
+    /**
+     * Enriches a trusted/opened project by evaluating its own Gradle wrapper and attaching the
+     * exact project/source-set/task model. Passive detection intentionally does not call this.
+     */
+    public ServerProjectInspection inspectConnected(ServerConnection connection) {
+        ServerProjectInspection base = inspect(connection);
+        if (!base.detection().matched()) return base;
+
+        var gradleInspection = gradleModelInspector.inspect(connection.root());
+        List<String> diagnostics = new ArrayList<>(base.diagnostics());
+        diagnostics.addAll(gradleInspection.diagnostics());
+        if (gradleInspection.model().isEmpty()) {
+            return new ServerProjectInspection(
+                    base.connection(), base.detection(), base.status(), base.paths(), base.revision(),
+                    base.git(), base.content(), base.plugins(), base.buildTasks(), base.capabilities(),
+                    java.util.Optional.empty(), diagnostics, base.fingerprint());
+        }
+
+        GradleProjectModel model = gradleInspection.model().orElseThrow();
+        List<ServerContentEntry> content =
+                OpenRuneGradleModelSupport.inventoryContent(model, base.content());
+        List<ServerBuildTask> tasks =
+                OpenRuneGradleModelSupport.buildTasks(connection, connection.root(), base.paths(),
+                        model, diagnostics);
+        EnumSet<ServerCapability> capabilities = capabilities(base.paths(), content, tasks);
+        capabilities.add(ServerCapability.GRADLE_PROJECT_MODEL);
+
+        ServerIntegrationStatus status = status(connection, base.detection(), base.revision(),
+                base.paths(), tasks, base.fingerprint(), diagnostics);
+        return new ServerProjectInspection(
+                base.connection(), base.detection(), status, base.paths(), base.revision(),
+                base.git(), content, base.plugins(), tasks, capabilities,
+                java.util.Optional.of(model), diagnostics, base.fingerprint());
+    }
+
+    public ServerProjectInspection inspectConnected(Path root) {
+        return inspectConnected(ServerConnection.forRoot(root));
+    }
+
     @Override
     public ServerProject project(Path root) {
         ServerProjectInspection inspection = inspect(root);
@@ -123,7 +174,7 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
 
     @Override
     public Optional<ServerBuildProvider> buildProvider(Path root) {
-        ServerProjectInspection inspection = inspect(root);
+        ServerProjectInspection inspection = inspectConnected(root);
         requireDetected(root);
         return Optional.of(() -> inspection.buildTasks());
     }
@@ -236,10 +287,11 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
         if (Files.exists(paths.get(ServerPathKey.SERVER_CACHE))) {
             capabilities.add(ServerCapability.SERVER_CACHE);
         }
-        if (Files.exists(paths.get(ServerPathKey.CONTENT))) {
+        if (Files.exists(paths.get(ServerPathKey.CONTENT)) || !content.isEmpty()) {
             capabilities.add(ServerCapability.CONTENT_INVENTORY);
         }
-        if (Files.exists(paths.get(ServerPathKey.GAMEVALS))) {
+        if (Files.exists(paths.get(ServerPathKey.GAMEVALS))
+                || content.stream().anyMatch(entry -> entry.kind() == ServerContentKind.GAMEVAL)) {
             capabilities.add(ServerCapability.GAMEVALS);
         }
         if (content.stream().anyMatch(entry -> entry.kind() == ServerContentKind.PACK_MODULE)) {
