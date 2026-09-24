@@ -16,6 +16,7 @@ import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.osrs.rules.loc.WallRules;
 import com.rspsi.osrs.rules.loc.LocModelSelection;
+import com.rspsi.osrs.rules.model.ModelTransformPipeline;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -71,11 +72,21 @@ public final class ModelPacketBuilder {
         for (int plane = 0; plane < document.planes(); plane++) {
             for (int x = 0; x < document.width(); x++) {
                 for (int y = 0; y < document.length(); y++) {
-                    java.util.Map<WorldObject, Integer> occurrences = new java.util.HashMap<>();
-                    for (WorldObject object : document.tile(plane, x, y).objects()) {
+                    List<WorldObject> objects = document.tile(plane, x, y).objects();
+                    if (objects.isEmpty()) continue;
+                    if (objects.size() == 1) {
+                        packets.addAll(buildScenePackets(
+                                objects.get(0), document, clientCycle, 0));
+                        continue;
+                    }
+
+                    java.util.Map<WorldObject, Integer> occurrences =
+                            new java.util.HashMap<>(objects.size());
+                    for (WorldObject object : objects) {
                         int occurrence = occurrences.getOrDefault(object, 0);
                         occurrences.put(object, occurrence + 1);
-                        packets.addAll(buildScenePackets(object, document, clientCycle, occurrence));
+                        packets.addAll(buildScenePackets(
+                                object, document, clientCycle, occurrence));
                     }
                 }
             }
@@ -103,9 +114,17 @@ public final class ModelPacketBuilder {
             throw new IllegalArgumentException("Tile is outside the model document: " + coordinate);
         }
 
+        List<WorldObject> objects = document.tile(coordinate).objects();
+        if (objects.isEmpty()) return List.of();
         List<ModelRenderPacket> packets = new ArrayList<>();
-        java.util.Map<WorldObject, Integer> occurrences = new java.util.HashMap<>();
-        for (WorldObject object : document.tile(coordinate).objects()) {
+        if (objects.size() == 1) {
+            packets.addAll(buildScenePackets(objects.get(0), document, clientCycle, 0));
+            return List.copyOf(mergeNormals(packets));
+        }
+
+        java.util.Map<WorldObject, Integer> occurrences =
+                new java.util.HashMap<>(objects.size());
+        for (WorldObject object : objects) {
             int occurrence = occurrences.getOrDefault(object, 0);
             occurrences.put(object, occurrence + 1);
             packets.addAll(buildScenePackets(object, document, clientCycle, occurrence));
@@ -503,13 +522,14 @@ public final class ModelPacketBuilder {
                 z = -z;
             }
             if (variant.sourceType() == 4 && variant.rotation() > 3) {
-                int[] diagonal = rotateJagexAngle(x, z, 256);
-                x = diagonal[0] + 45;
-                z = diagonal[1] - 45;
+                long diagonal = ModelTransformPipeline.rotateJagexAnglePacked(x, z, 256);
+                x = ModelTransformPipeline.unpackX(diagonal) + 45;
+                z = ModelTransformPipeline.unpackZ(diagonal) - 45;
             }
-            int[] rotated = rotateQuarterTurn(x, z, variant.rotation());
-            x = rotated[0];
-            z = rotated[1];
+            long rotated = ModelTransformPipeline.rotateQuarterTurnPacked(
+                    x, z, variant.rotation());
+            x = ModelTransformPipeline.unpackX(rotated);
+            z = ModelTransformPipeline.unpackZ(rotated);
             x = x * appearance.scaleX() / 128;
             y = y * appearance.scaleY() / 128;
             z = z * appearance.scaleZ() / 128;
@@ -522,9 +542,9 @@ public final class ModelPacketBuilder {
             y += appearance.offsetY();
             z += appearance.offsetZ();
             if (variant.rotateAfterScale()) {
-                int[] diagonal = rotateJagexAngle(x, z, 256);
-                x = diagonal[0];
-                z = diagonal[1];
+                long diagonal = ModelTransformPipeline.rotateJagexAnglePacked(x, z, 256);
+                x = ModelTransformPipeline.unpackX(diagonal);
+                z = ModelTransformPipeline.unpackZ(diagonal);
             }
             x += centerX + variant.decorX();
             z += centerZ + variant.decorZ();
@@ -536,7 +556,7 @@ public final class ModelPacketBuilder {
         // the already-lit result. Contouring first would feed the light pass
         // slope-shifted normals and visibly tilt shading on hills.
         List<Normal> normals = calculateNormals(transformed, geometry, mirror);
-        int[] colors = toUnsignedColors(geometry.triangleColors());
+        short[] colors = geometry.triangleColors();
         int[] alphas = geometry.triangleAlphas();
         int[] textures = geometry.triangleTextures();
         int[] renderTypes = geometry.triangleRenderTypes();
@@ -573,7 +593,7 @@ public final class ModelPacketBuilder {
             if (renderType == -1) renderType = 2;
             if (alpha == 255) renderType = 2;
             int texture = valueAt(textures, face, -1);
-            int color = valueAt(colors, face, 0);
+            int color = unsignedValueAt(colors, face, 0);
             color = recolor(color, appearance.recolors());
             int priority = clamp(valueAt(priorities, face, renderPriority), 0, 255);
             int bias = clamp(valueAt(depthBias, face, 0), 0, 255);
@@ -595,9 +615,15 @@ public final class ModelPacketBuilder {
         // contourGround to the already-lit model). Retain that pre-contour Y
         // stream so HILLSKEW-style consumers can reconstruct the unskewed
         // model when the client actually creates a contoured copy.
-        List<RawVertex> unskewed = List.copyOf(transformed);
-        // The client gates on clipType >= 0, not on the legacy boolean.
+        int[] unskewedY = null;
+        // The client gates on clipType >= 0, not on the legacy boolean. Only
+        // contour-capable models need the unskewed-Y side channel; allocating
+        // and boxing it for every ordinary object was pure hot-path overhead.
         if (appearance.contourGroundType() >= 0) {
+            unskewedY = new int[transformed.size()];
+            for (int vertex = 0; vertex < transformed.size(); vertex++) {
+                unskewedY[vertex] = transformed.get(vertex).y();
+            }
             List<RawVertex> contoured = applyContour(document, object, footprintWidth,
                     footprintLength, transformed, appearance,
                     variant.decorX(), variant.decorZ());
@@ -606,14 +632,17 @@ public final class ModelPacketBuilder {
                 parts.contourApplied = true;
             }
         }
+        VertexExtents extents = vertexExtents(transformed);
         for (int vertex = 0; vertex < transformed.size(); vertex++) {
             RawVertex value = transformed.get(vertex);
             Normal normal = normals.get(vertex);
-            parts.unskewedVertexY.add(unskewed.get(vertex).y());
+            if (unskewedY != null) {
+                parts.unskewedVertexY.add(unskewedY[vertex]);
+            }
             parts.vertices.add(new ModelVertex(value.x, value.y, value.z,
                     normal.x, normal.y, normal.z, normal.magnitude,
-                    normalized(value.x, transformed, true),
-                    normalized(value.z, transformed, false)));
+                    normalized(value.x, extents.minX(), extents.maxX()),
+                    normalized(value.z, extents.minZ(), extents.maxZ())));
             parts.clientBoundsVertices.add(new ModelVertex(
                     value.x - centerX - variant.decorX(), value.y,
                     value.z - centerZ - variant.decorZ(),
@@ -634,15 +663,6 @@ public final class ModelPacketBuilder {
                     valueAt(geometry.textureTranslationsU(), textureTriangle, 0),
                     valueAt(geometry.textureTranslationsV(), textureTriangle, 0)));
         }
-    }
-
-    private static int[] rotateQuarterTurn(int x, int z, int rotation) {
-        return switch (rotation & 3) {
-            case 1 -> new int[]{z, -x};
-            case 2 -> new int[]{-x, -z};
-            case 3 -> new int[]{-z, x};
-            default -> new int[]{x, z};
-        };
     }
 
     /**
@@ -885,15 +905,6 @@ public final class ModelPacketBuilder {
     }
 
     private record VertexReference(int packetIndex, int vertexIndex, ModelVertex vertex) {
-    }
-
-    /** Matches the client ModelData.rotate(angle) 2048-unit angle table. */
-    private static int[] rotateJagexAngle(int x, int z, int angle) {
-        int sine = (int) (65536.0 * Math.sin(angle * Math.PI * 2.0 / 2048.0));
-        int cosine = (int) (65536.0 * Math.cos(angle * Math.PI * 2.0 / 2048.0));
-        int rotatedX = (sine * z + cosine * x) >> 16;
-        int rotatedZ = (cosine * z - sine * x) >> 16;
-        return new int[]{rotatedX, rotatedZ};
     }
 
     /**
@@ -1577,10 +1588,8 @@ public final class ModelPacketBuilder {
         return replacements.getOrDefault(texture, texture);
     }
 
-    private static int[] toUnsignedColors(short[] colors) {
-        int[] result = new int[colors.length];
-        for (int index = 0; index < colors.length; index++) result[index] = colors[index] & 0xFFFF;
-        return result;
+    private static int unsignedValueAt(short[] values, int index, int fallback) {
+        return index < values.length ? values[index] & 0xFFFF : fallback;
     }
 
     private static int valueAt(int[] values, int index, int fallback) {
@@ -1591,14 +1600,21 @@ public final class ModelPacketBuilder {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static float normalized(int value, List<RawVertex> vertices, boolean xAxis) {
-        int min = Integer.MAX_VALUE;
-        int max = Integer.MIN_VALUE;
+    private static VertexExtents vertexExtents(List<RawVertex> vertices) {
+        int minX = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxZ = Integer.MIN_VALUE;
         for (RawVertex vertex : vertices) {
-            int candidate = xAxis ? vertex.x : vertex.z;
-            min = Math.min(min, candidate);
-            max = Math.max(max, candidate);
+            minX = Math.min(minX, vertex.x);
+            maxX = Math.max(maxX, vertex.x);
+            minZ = Math.min(minZ, vertex.z);
+            maxZ = Math.max(maxZ, vertex.z);
         }
+        return new VertexExtents(minX, maxX, minZ, maxZ);
+    }
+
+    private static float normalized(int value, int min, int max) {
         return max == min ? 0.0f : (value - min) / (float) (max - min);
     }
 
@@ -1637,6 +1653,9 @@ public final class ModelPacketBuilder {
     }
 
     private record RawVertex(int x, int y, int z) {
+    }
+
+    private record VertexExtents(int minX, int maxX, int minZ, int maxZ) {
     }
 
     private record Normal(int x, int y, int z, int magnitude) {
