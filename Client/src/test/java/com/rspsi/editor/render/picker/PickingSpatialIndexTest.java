@@ -83,14 +83,14 @@ class PickingSpatialIndexTest {
         GpuZonedUploadPlan zoned = new IncrementalGpuZonedUploadPlanBuilder().buildInitial(plan);
         PickingSpatialIndex index = new PickingSpatialIndex();
         PickingSpatialIndex.Snapshot snapshot = index.indexFor(plan, zoned);
-        PickingSpatialIndex.TriangleRef triangle = snapshot.bucket(0, 0, 0)[0];
+        long triangle = snapshot.bucket(0, 0, 0)[0];
 
         int firstGeneration = index.beginPick();
-        assertTrue(triangle.markTested(firstGeneration));
-        assertFalse(triangle.markTested(firstGeneration));
+        assertTrue(snapshot.markTested(triangle, firstGeneration));
+        assertFalse(snapshot.markTested(triangle, firstGeneration));
 
         int secondGeneration = index.beginPick();
-        assertTrue(triangle.markTested(secondGeneration));
+        assertTrue(snapshot.markTested(triangle, secondGeneration));
     }
 
     private static GpuUploadPlan twoZonePlan(float secondOffsetX) {
