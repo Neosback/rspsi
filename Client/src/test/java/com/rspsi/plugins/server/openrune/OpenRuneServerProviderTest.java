@@ -215,7 +215,11 @@ class OpenRuneServerProviderTest {
                         + "  override fun ScriptContext.startup() {\n"
                         + "    onOpContentLoc1(\"content.rock\") { mine(\"obj.coal\") }\n"
                         + "  }\n"
-                        + "  private fun mine(item: String) {}\n"
+                        + "  private fun mine(item: String) {\n"
+                        + "    useRow(\"dbrow.mining_coalrock\")\n"
+                        + "    xp(\"stat.mining\", 50.0)\n"
+                        + "    readParam(\"param.skill_xp\")\n"
+                        + "  }\n"
                         + "}\n");
         Files.writeString(sourceRoot.resolve("example/CooksAssistant.kt"),
                 "package example\n"
@@ -224,13 +228,19 @@ class OpenRuneServerProviderTest {
                         + "  override fun ScriptContext.init() { onOpNpc1(\"npc.cook\") {} }\n"
                         + "}\n");
         Files.writeString(resourceRoot.resolve("data/mining.toml"),
-                "rock = \"loc.coal_rock\"\nreward = \"obj.coal\"\n");
+                "rock = \"loc.coal_rock\"\n"
+                        + "reward = \"obj.coal\"\n"
+                        + "xp_param = \"param.skill_xp\"\n");
 
         Files.writeString(gamevals.resolve("loc.rscm"), "coal_rock=1234\n");
         Files.writeString(gamevals.resolve("obj.rscm"), "coal=2000\ncake=2001\n");
         Files.writeString(gamevals.resolve("varp.rscm"), "cookquest=3000\n");
         Files.writeString(gamevals.resolve("varbit.rscm"), "cook_done=4000\n");
         Files.writeString(gamevals.resolve("npc.rscm"), "cook=5000\n");
+        Files.writeString(gamevals.resolve("content.rscm"), "rock=6000\n");
+        Files.writeString(gamevals.resolve("dbrow.rscm"), "mining_coalrock=55487\n");
+        Files.writeString(gamevals.resolve("stat.rscm"), "mining=14\n");
+        Files.writeString(gamevals.resolve("param.rscm"), "skill_xp=65493\n");
 
         String payload = "{"
                 + "\"rootName\":\"CustomOpenRune\","
@@ -281,10 +291,23 @@ class OpenRuneServerProviderTest {
         assertEquals("true", coalFromObj.attributes().get("resolved"));
 
         var rock = graph.symbol("content.rock").orElseThrow();
+        assertEquals("6000", rock.attributes().get("numericId"));
         assertTrue(graph.incoming(rock.id(), SemanticRelationKind.TARGETS).stream()
                 .map(edge -> graph.node(edge.from()).orElseThrow())
                 .anyMatch(node -> node.kind() == SemanticContentNodeKind.HANDLER
                         && node.label().equals("onOpContentLoc1")));
+
+        assertEquals("55487",
+                graph.symbol("dbrow.mining_coalrock").orElseThrow()
+                        .attributes().get("numericId"));
+        assertEquals("14",
+                graph.symbol("stat.mining").orElseThrow()
+                        .attributes().get("numericId"));
+        var skillXpParam = graph.symbol("param.skill_xp").orElseThrow();
+        assertEquals("65493", skillXpParam.attributes().get("numericId"));
+        assertTrue(graph.incoming(skillXpParam.id(), SemanticRelationKind.REFERENCES).stream()
+                .flatMap(edge -> edge.evidence().stream())
+                .anyMatch(evidence -> evidence.kind() == SemanticEvidenceKind.DECLARATIVE_REFERENCE));
 
         var quest = graph.nodes(SemanticContentNodeKind.QUEST).stream()
                 .filter(node -> node.label().equals("CooksAssistant"))
