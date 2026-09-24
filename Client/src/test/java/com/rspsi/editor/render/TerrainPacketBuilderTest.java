@@ -34,6 +34,34 @@ class TerrainPacketBuilderTest {
         assertFalse(packet.faces().stream().anyMatch(face -> face.material() == 1));
     }
 
+
+    @Test
+    void carriesAuthoritativeTerrainNormalsIntoRenderVertices() {
+        TileSnapshot tile = new TileSnapshot(0, 0, 0, 0,
+                1, 0, 0, 0, 0, List.of());
+        TerrainNormal southWest = new TerrainNormal(32, 250, -16, 1);
+        TerrainNormalTile normals = new TerrainNormalTile(
+                southWest, TerrainNormal.FLAT, TerrainNormal.FLAT, TerrainNormal.FLAT);
+
+        TerrainRenderPacket packet = new TerrainPacketBuilder().build(
+                new TileCoordinate(0, 0, 0),
+                new TerrainMeshBuilder().build(tile),
+                new TerrainAppearance(
+                        OsrsTerrainColorMath.packHsl(64, 128, 96), -1, -1,
+                        -1, -1, 0, 0, false),
+                new TerrainLight(96, 96, 96, 96),
+                normals);
+
+        TerrainRenderVertex corner = packet.vertices().stream()
+                .filter(vertex -> vertex.x() == 0 && vertex.y() == 0)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(southWest.x(), corner.normalX());
+        assertEquals(southWest.y(), corner.normalY());
+        assertEquals(southWest.z(), corner.normalZ());
+        assertEquals(southWest.magnitude(), corner.normalMagnitude());
+    }
+
     @Test
     void hiddenOverlayFacesAreOmittedButUnderlayFacesRemain() {
         TileSnapshot tile = new TileSnapshot(0, 0, 0, 0,
