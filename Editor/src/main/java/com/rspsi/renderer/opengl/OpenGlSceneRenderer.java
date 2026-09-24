@@ -19,6 +19,8 @@ import com.rspsi.editor.render.SceneFog;
 import com.rspsi.editor.render.SceneOcclusionResolver;
 import com.rspsi.editor.render.TextureAnimation;
 import com.rspsi.editor.render.RsFaceOrderPlanner;
+import com.rspsi.renderer.opengl.shader.GlShaderProgram;
+import com.rspsi.renderer.opengl.shader.ShaderSourceLoader;
 
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL;
@@ -102,22 +104,8 @@ import static org.lwjgl.opengl.GL15.GL_STATIC_DRAW;
 import static org.lwjgl.opengl.GL15.glBindBuffer;
 import static org.lwjgl.opengl.GL15.glBufferData;
 import static org.lwjgl.opengl.GL15.glGenBuffers;
-import static org.lwjgl.opengl.GL20.GL_COMPILE_STATUS;
-import static org.lwjgl.opengl.GL20.GL_FRAGMENT_SHADER;
-import static org.lwjgl.opengl.GL20.GL_LINK_STATUS;
-import static org.lwjgl.opengl.GL20.GL_VERTEX_SHADER;
-import static org.lwjgl.opengl.GL20.glAttachShader;
-import static org.lwjgl.opengl.GL20.glCompileShader;
-import static org.lwjgl.opengl.GL20.glCreateProgram;
-import static org.lwjgl.opengl.GL20.glCreateShader;
-import static org.lwjgl.opengl.GL20.glDeleteShader;
 import static org.lwjgl.opengl.GL20.glEnableVertexAttribArray;
-import static org.lwjgl.opengl.GL20.glGetShaderInfoLog;
-import static org.lwjgl.opengl.GL20.glGetShaderi;
-import static org.lwjgl.opengl.GL20.glGetProgramInfoLog;
-import static org.lwjgl.opengl.GL20.glGetProgrami;
 import static org.lwjgl.opengl.GL20.glGetUniformLocation;
-import static org.lwjgl.opengl.GL20.glShaderSource;
 import static org.lwjgl.opengl.GL20.glUseProgram;
 import static org.lwjgl.opengl.GL20.glUniform1f;
 import static org.lwjgl.opengl.GL20.glUniform1i;
@@ -138,6 +126,7 @@ import static org.lwjgl.opengl.GL30.glGenVertexArrays;
 /** OpenGL 3.3 consumer of the immutable world-space upload plan. */
 public final class OpenGlSceneRenderer implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenGlSceneRenderer.class);
+    private static final ShaderSourceLoader SHADER_SOURCES = new ShaderSourceLoader("shaders");
     // Position, UV, encoded light/color, alpha, render type, and native RGB.
     // The reference packet retains normals; this backend does not need them
     // after ModelPacketBuilder has produced its lit face values.
@@ -308,7 +297,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // A core context has no usable default VAO. Bind the editor-owned VAO
         // before shader validation and all attribute setup so initialization
         // never depends on compatibility-profile behavior.
-        program = link(VERTEX_SHADER_SOURCE, FRAGMENT_SHADER_SOURCE);
+        program = GlShaderProgram.link(
+                SHADER_SOURCES.load("scene/vanilla.vert"),
+                SHADER_SOURCES.load("scene/vanilla.frag"));
         glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
         int stride = FLOATS_PER_VERTEX * Float.BYTES;
         glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0L);
@@ -1252,199 +1243,5 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         diagnosticsLogged = false;
     }
 
-    private static int link(String vertexSource, String fragmentSource) {
-        int vertex = compile(GL_VERTEX_SHADER, vertexSource);
-        int fragment = compile(GL_FRAGMENT_SHADER, fragmentSource);
-        int program = glCreateProgram();
-        glAttachShader(program, vertex);
-        glAttachShader(program, fragment);
-        org.lwjgl.opengl.GL20.glLinkProgram(program);
-        glDeleteShader(vertex);
-        glDeleteShader(fragment);
-        if (glGetProgrami(program, GL_LINK_STATUS) == 0) {
-            throw new IllegalStateException("OpenGL program link failed: " + glGetProgramInfoLog(program));
-        }
-        return program;
-    }
 
-    private static int compile(int type, String source) {
-        int shader = glCreateShader(type);
-        glShaderSource(shader, source);
-        glCompileShader(shader);
-        if (glGetShaderi(shader, GL_COMPILE_STATUS) == 0) {
-            throw new IllegalStateException("OpenGL shader compile failed: " + glGetShaderInfoLog(shader));
-        }
-        return shader;
-    }
-
-    private static final String VERTEX_SHADER_SOURCE = """
-            #version 330 core
-            layout(location = 0) in vec3 aPosition;
-            layout(location = 1) in vec2 aUv;
-            layout(location = 2) in float aEncodedColor;
-            layout(location = 3) in float aAlpha;
-            layout(location = 4) in float aRenderType;
-            layout(location = 5) in vec3 aColor;
-            layout(location = 6) in float aPriority;
-            uniform vec3 uCamera;
-            uniform float uPitch;
-            uniform float uYaw;
-            uniform float uFocal;
-            uniform float uAspect;
-            uniform float uDepthA;
-            uniform float uDepthB;
-            uniform float uFaceBias;
-            // Constant depth-buffer separation per bias step, on top of the
-            // view-space bias. The view-space term is correct up close but its
-            // depth-buffer effect falls off as 1 / depth^2, so coplanar pairs
-            // stop separating once the camera is far out. This uniform is added
-            // to Z_ndc directly - i.e. it is applied to clip Z scaled by the
-            // unbiased W (k * depth), not as a bare clip-space offset, which W
-            // would divide back down by depth and turn into yet another
-            // distance-dependent term. Only Z moves and W stays unbiased, so
-            // screen X/Y and the silhouette are unchanged.
-            uniform float uDepthBiasNudge;
-            uniform int uUseFog;
-            uniform float uFogWest;
-            uniform float uFogEast;
-            uniform float uFogSouth;
-            uniform float uFogNorth;
-            uniform float uFogDepth;
-            out vec2 vUv;
-            noperspective out float vEncodedColor;
-            out float vAlpha;
-            out float vRenderType;
-            out vec3 vColor;
-            out float vFogAmount;
-            void main() {
-                vec3 d = aPosition - uCamera;
-                float cy = cos(uYaw), sy = sin(uYaw);
-                float x = d.x * cy - d.z * sy;
-                float forward = d.x * sy + d.z * cy;
-                float cp = cos(uPitch), sp = sin(uPitch);
-                // The cache stores higher OSRS terrain with a smaller (more
-                // negative) world-Y value. Negate that down-axis before the
-                // camera pitch rotation; otherwise slopes render backwards.
-                float up = -d.y;
-                float y = up * cp - forward * sp;
-                float depth = up * sp + forward * cp;
-                // The real client subtracts faceBias * 2 from the vertex's
-                // VIEW-SPACE depth, in world units, and applies it to the
-                // depth value only - screen x/y come from the unbiased
-                // divisor (Model.java: field3037[v] - faceBias * 2, while
-                // modelViewportXs/Ys divide by the raw field3037). So keep w
-                // at the true depth and rewrite z so that, after the
-                // perspective divide, z_ndc equals uDepthA + uDepthB /
-                // biasedDepth. A clip-space "z += bias / 128" instead makes
-                // the offset shrink with proximity, which is why flush wall
-                // decorations z-fought their wall when zoomed in.
-                float biasedDepth = max(depth - uFaceBias * 2.0, 1.0);
-                // Multiplying the nudge by depth (the unbiased W) is what makes
-                // it survive the perspective divide as a constant separation in
-                // normalised depth, independent of camera distance.
-                vec4 projected = vec4(uFocal / uAspect * x, uFocal * y,
-                                      uDepthA * depth + uDepthB * (depth / biasedDepth)
-                                              + uFaceBias * uDepthBiasNudge * depth,
-                                      depth);
-                gl_Position = projected;
-                vUv = aUv;
-                vEncodedColor = aEncodedColor;
-                vAlpha = aAlpha;
-                vRenderType = aRenderType;
-                vColor = aColor;
-                if (uUseFog == 0 || uFogDepth <= 0.0) {
-                    vFogAmount = 0.0;
-                } else {
-                    float xDistance = min(aPosition.x - uFogWest, uFogEast - aPosition.x);
-                    float zDistance = min(aPosition.z - uFogSouth, uFogNorth - aPosition.z);
-                    float nearest = min(xDistance, zDistance);
-                    float second = max(xDistance, zDistance);
-                    float rounding = 192.0;
-                    float distance = nearest - rounding * max(0.0,
-                            (nearest + rounding * rounding)
-                                    / (second + rounding * rounding));
-                    vFogAmount = 1.0 - clamp(distance / uFogDepth, 0.0, 1.0);
-                }
-            }
-            """;
-
-    private static final String FRAGMENT_SHADER_SOURCE = """
-            #version 330 core
-            in vec2 vUv;
-            noperspective in float vEncodedColor;
-            in float vAlpha;
-            in float vRenderType;
-            in vec3 vColor;
-            in float vFogAmount;
-            uniform sampler2DArray uTexture;
-            uniform sampler2D uPalette;
-            uniform int uTextured;
-            uniform int uTextureAvailable;
-            uniform int uTextureMissing;
-            uniform int uTerrain;
-            uniform vec2 uTextureOffset;
-            uniform int uTextureLayer;
-            uniform vec2 uTextureScale;
-            uniform float uBrightness;
-            uniform float uExposure;
-            uniform int uSmoothBanding;
-            uniform vec3 uFogColor;
-            out vec4 outColor;
-            void main() {
-                vec3 color;
-                if (uTextured != 0) {
-                    vec2 textureUv = vUv + uTextureOffset;
-                    if (uTerrain != 0 || uTextureOffset.x != 0.0 || uTextureOffset.y != 0.0) {
-                        textureUv = fract(textureUv);
-                    }
-                    if (uTextureAvailable != 0) {
-                        vec3 texCoord = vec3(textureUv * uTextureScale, float(uTextureLayer));
-                        // Base LOD 0 alpha test prevents cutout erosion at distance
-                        vec4 texel0 = textureLod(uTexture, texCoord, 0.0);
-                        // RuneLite GPU frag.glsl rejects any texel whose
-                        // base-LOD alpha is not fully opaque, for terrain and
-                        // models alike. Keep cutouts in the opaque stream for
-                        // depth ownership.
-                        if (texel0.a < 1.0) discard;
-
-                        vec4 texel = texture(uTexture, texCoord);
-                        // Textured triangles keep the texture's own RGB and
-                        // scale it by a 7-bit light (2-126): the client's
-                        // textured span multiplies each texel channel by the
-                        // shade (runescape-client class272), and RuneLite
-                        // GPU computes texture * (hsl / 127). Terrain vertices
-                        // carry that light in the low 7 bits of their HSL.
-                        float lightness = clamp(float(int(vEncodedColor) & 0x7F) / 127.0, 0.0, 1.0);
-                        color = texel.rgb * lightness;
-                    } else if (uTextureMissing != 0) {
-                        float lightness = clamp(vEncodedColor / 127.0, 0.0, 1.0);
-                        color = vec3(1.0, 0.0, 1.0) * lightness;
-                    } else {
-                        color = vec3(clamp(vEncodedColor / 64.0, 0.0, 1.0));
-                    }
-                } else {
-                    int hsl = clamp(int(vEncodedColor), 0, 65535);
-                    vec3 paletteColor = texelFetch(uPalette, ivec2(hsl & 255, (hsl >> 8) & 255), 0).rgb;
-                    color = mix(vColor, paletteColor, float(uSmoothBanding));
-                }
-                float alpha;
-                if (uTerrain != 0) {
-                    // Terrain vertex alpha is opacity (255 opaque), and a
-                    // textured floor stays opaque even where its texture is
-                    // partly transparent - that transparency was already spent
-                    // mixing toward the tile colour above.
-                    alpha = clamp(vAlpha / 255.0, 0.0, 1.0);
-                } else {
-                    // Model alpha is transparency (0 opaque, 255 invisible).
-                    // Render type is a shading selector (1 and 3 are flat
-                    // single-colour faces), never an opacity: the client's
-                    // Mesh.renderFace only switches on it to choose shaded,
-                    // flat-colour or textured output.
-                    alpha = 1.0 - clamp(vAlpha / 255.0, 0.0, 1.0);
-                }
-                color = clamp(color * uBrightness * exp2(uExposure), 0.0, 1.0);
-                color = mix(color, uFogColor, vFogAmount);
-                outColor = vec4(color, alpha);
-            }
-            """;
 }
