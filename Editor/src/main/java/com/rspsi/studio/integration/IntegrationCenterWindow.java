@@ -70,7 +70,7 @@ public final class IntegrationCenterWindow {
                 ImGui.textDisabled("No optional integration services are bound.");
             } else {
                 session.activeCapabilities().stream()
-                        .sorted(java.util.Comparator.comparing(Enum::name))
+                        .sorted(java.util.Comparator.comparing(capability -> capability.name()))
                         .forEach(capability -> ImGui.bulletText(capability.description()));
             }
 
