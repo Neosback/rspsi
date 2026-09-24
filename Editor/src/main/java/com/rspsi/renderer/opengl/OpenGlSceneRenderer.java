@@ -649,7 +649,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         int sourceVertices = geometry.vertexCount();
         int sourceIndices = geometry.indexCount();
         long zonedGeometryBytes = geometry instanceof GpuZonedUploadPlan
-                ? (long) sourceVertices * FLOATS_PER_VERTEX * Float.BYTES
+                ? (long) sourceVertices * NativeSceneVertexLayout.BYTES_PER_VERTEX
                         + (long) sourceIndices * Integer.BYTES
                 : 0L;
 
@@ -661,7 +661,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
 
     private static long geometryBytes(GpuCommandGeometry geometry) {
         if (geometry == null) return 0L;
-        return (long) geometry.vertexCount() * FLOATS_PER_VERTEX * Float.BYTES
+        return (long) geometry.vertexCount() * NativeSceneVertexLayout.BYTES_PER_VERTEX
                 + (long) geometry.indexCount() * Integer.BYTES;
     }
 
