@@ -256,6 +256,10 @@ final class SharedGpuArena implements AutoCloseable {
     int stagingVertexGrowths() { return scratch.vertexGrowths(); }
     int stagingIndexGrowths() { return scratch.indexGrowths(); }
 
+    void reset() {
+        closeNative();
+    }
+
     private void closeNative() {
         if (vao != 0) glDeleteVertexArrays(vao);
         if (geometryVbo != 0) glDeleteBuffers(geometryVbo);
