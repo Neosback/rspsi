@@ -134,6 +134,10 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
                     java.util.Optional.empty(), diagnostics, base.fingerprint());
         }
 
+        diagnostics.removeIf(message ->
+                message.startsWith("Gradle task not found in or-cache build:")
+                        || message.startsWith("Build task unavailable without a wrapper or override:"));
+
         GradleProjectModel model = gradleInspection.model().orElseThrow();
         List<ServerContentEntry> content =
                 OpenRuneGradleModelSupport.inventoryContent(model, base.content());
