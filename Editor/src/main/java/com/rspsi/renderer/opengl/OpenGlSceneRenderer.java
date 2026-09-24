@@ -1199,7 +1199,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         textureArray = 0;
         textureStateBuffer.close();
         textureLayers.clear();
-        textureScales.clear();
         if (program != 0) org.lwjgl.opengl.GL20.glDeleteProgram(program);
         program = 0;
         uploadedFingerprint = null;
