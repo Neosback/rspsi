@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenRuneServerProviderTest {
@@ -39,6 +40,36 @@ class OpenRuneServerProviderTest {
         assertTrue(probe.valid());
         assertTrue(probe.supports(IntegrationCapability.CACHE_BUILD));
         assertEquals("317", probe.details().get("Revision"));
+    }
+
+    @Test
+    void lightweightStartupDefersGradleAndContentInventory() throws Exception {
+        Path root = fixtureRoot();
+        Files.createDirectories(root.resolve(".data/cache/LIVE"));
+        Files.createDirectories(root.resolve(".data/gamevals"));
+        Files.createDirectories(root.resolve("content/skills/mining"));
+        Files.writeString(root.resolve(".data/gamevals/loc.rscm"), "coal_rock=1234\n");
+        Files.writeString(root.resolve("content/skills/mining/Mining.kt"),
+                "class Mining : PluginScript() {}\n");
+        Files.writeString(root.resolve("content/skills/mining/rocks.toml"),
+                "target = \"loc.coal_rock\"\n");
+
+        IntegrationOptions options = IntegrationOptions.defaults(
+                root, Set.of(IntegrationCapability.SYMBOLS, IntegrationCapability.GAMEVALS));
+
+        OpenRuneServerProvider provider = new OpenRuneServerProvider();
+        IntegrationSession session = provider.open(ServerConnection.forRoot(root), options);
+        var inspection = session.projectInspection().orElseThrow();
+
+        assertTrue(inspection.content().isEmpty(),
+                "startup should not recursively inventory OpenRune content");
+        assertTrue(inspection.gradleModel().isEmpty(),
+                "startup should not evaluate the Gradle project model");
+        assertFalse(session.activeCapabilities().contains(IntegrationCapability.CONTENT_INDEX));
+        assertFalse(session.activeCapabilities().contains(IntegrationCapability.SOURCE_SEMANTICS));
+        assertEquals(1234, session.symbolProvider().orElseThrow()
+                .resolve(SymbolNamespace.LOC, "coal_rock").orElseThrow().id());
+        session.close();
     }
 
     @Test
