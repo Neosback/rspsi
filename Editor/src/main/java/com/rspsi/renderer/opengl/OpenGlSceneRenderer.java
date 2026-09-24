@@ -1072,6 +1072,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     }
 
     private void uploadTextureArray(Map<Integer, RenderTextureResource> resources) {
+        int depth = requiredTextureCapacity(resources);
+        capabilityProfile.requireTextureArrayLayers(depth);
+
         if (textureArray != 0) org.lwjgl.opengl.GL11.glDeleteTextures(textureArray);
         textureLayers.clear();
         List<RenderTextureResource> available = resources.values().stream()
@@ -1106,8 +1109,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // path into undefined output. The shader still receives
         // uTextureAvailable=0 for these commands and uses its explicit
         // lightness fallback instead of sampling this diagnostic layer.
-        int depth = requiredTextureCapacity(resources);
-        capabilityProfile.requireTextureArrayLayers(depth);
         glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, width, height, depth,
                 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
         if (available.isEmpty()) {
