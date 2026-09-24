@@ -73,6 +73,7 @@ public final class PluginServices {
     private final ToolService tools = new ToolServiceImpl();
     private final UiService ui = new UiServiceImpl();
     private final CommandService commands = new CommandServiceImpl();
+    private volatile java.util.function.Supplier<com.rspsi.api.Client> client = () -> null;
 
     private PluginServices(EditorSession session, AssetRepository assets,
                            EditorPluginRegistry registry) {
@@ -353,5 +354,20 @@ public final class PluginServices {
         if (tiles != null && !tiles.isEmpty()) {
             events.publish(new TileEditedEvent(tiles, description));
         }
+    }
+
+    /**
+     * The RuneLite-shaped {@link com.rspsi.api.Client} for the loaded cache:
+     * player vars, object definitions, models, map elements and the map
+     * navigator. Empty until the host binds one (no cache loaded yet), so call
+     * it when acting rather than caching it during plugin initialization.
+     */
+    public java.util.Optional<com.rspsi.api.Client> client() {
+        return java.util.Optional.ofNullable(client.get());
+    }
+
+    /** Host-side: binds the client supplier plugins see through {@link #client()}. */
+    public void bindClient(java.util.function.Supplier<com.rspsi.api.Client> supplier) {
+        client = Objects.requireNonNull(supplier, "supplier");
     }
 }

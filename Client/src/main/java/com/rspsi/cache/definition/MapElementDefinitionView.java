@@ -14,12 +14,21 @@ public record MapElementDefinitionView(
         boolean worldMapVisible,
         boolean minimapVisible,
         boolean randomizePosition,
-        List<String> actions) {
+        List<String> actions,
+        int category) {
+    /** Compatibility constructor for callers without the opcode 19 category. */
+    public MapElementDefinitionView(int id, int spriteId, int hoverSpriteId, String name, int textColor,
+                                    int hoverTextColor, int textSize, boolean worldMapVisible,
+                                    boolean minimapVisible, boolean randomizePosition, List<String> actions) {
+        this(id, spriteId, hoverSpriteId, name, textColor, hoverTextColor, textSize, worldMapVisible,
+                minimapVisible, randomizePosition, actions, -1);
+    }
+
     public MapElementDefinitionView {
         if (id < 0 || spriteId < -1 || hoverSpriteId < -1
                 || textColor < 0 || textColor > 0xFFFFFF
                 || hoverTextColor < 0 || hoverTextColor > 0xFFFFFF
-                || textSize < 0 || name == null || actions == null) {
+                || textSize < 0 || name == null || actions == null || category < -1) {
             throw new IllegalArgumentException("Invalid map element definition");
         }
         name = name.trim();

@@ -404,10 +404,14 @@ world; they never mutate a snapshot.
 | `WorldPoint` / `LocalPoint` / `Point` | `com.rspsi.api.coords.*`, `com.rspsi.api.Point` | **implemented** |
 | `Perspective.getTileHeight` | `com.rspsi.api.Perspective.getTileHeight` | **implemented** bit-for-bit, including bridge-level promotion |
 | `WorldArea` | future world-space bounds/query value | Phase 3 should add a world-area type rather than misuse local `TileBounds` |
-| `ObjectComposition` transforms | `ObjectDefinitionResolver` / resolution view | one-step client transform is implemented; future simulated var state should be an explicit resolution context |
+| `ObjectComposition` | `com.rspsi.api.ObjectComposition`; impl `api.cache.CacheObjectComposition` | **implemented** read side: positional actions (`DefinitionProvider.objectActions`), map scene/icon, impostor ids, `getImpostor()` through `ObjectDefinitionResolver` with the simulated var state, access mask, size, int/string params |
+| `Client` (vars, lookups) | `com.rspsi.api.Client`; impl `api.runtime.SimulatedClient` | **implemented**: varbits/varps over `SimulationEngine`, `getObjectDefinition`, `loadModelData`, `loadModel` (+ recolour), `getMapElementConfig`, `getWorldMap`. Plugins reach it through `PluginApi.client()` once a cache is loaded |
 | collision APIs / flags | existing `CollisionTileSnapshot` / `CollisionFlag` | reuse existing OSRS bit vocabulary |
 | `JagexColor` | existing `OsrsTerrainColorMath` where terrain-specific | do not conflate generic packed-HSL helpers with source-domain terrain blending |
-| `Model` / `AABB` | existing `ClientModelBounds` + semantic geometry | keep screen projection/backend details out of normal scene API |
+| `Mesh` / `ModelData` / `Model` / `AABB` | same names in `com.rspsi.api`; impl `api.model.DecodedModelData`, `LitModel` | **implemented**: fresh mutable copies per load; rotations, translate, `scale` (`resize`), recolour/retexture, shallow copy + clone*, and `light()` ported from deob `ModelData.toModel` (matches scene lighting face-for-face on real objects); bounds and `getAABB(orientation)` via `ClientModelBounds`. GPU buffer bookkeeping and draw calls are omitted |
+| `Renderable` | `com.rspsi.api.Renderable` | `getModel`/`getModelHeight`; `WallObject.getModelA/B`, renderables and convex hulls wait for a per-placement model builder over `ObjectComposition` |
+| `MapElementConfig` / `SpritePixels` | `com.rspsi.api.worldmap.MapElementConfig`, `com.rspsi.api.SpritePixels`; impl `api.cache.*` | **implemented**: icon sprite, category (opcode 19, now decoded), name, minimap/world-map visibility |
+| `WorldMap` | `com.rspsi.api.worldmap.WorldMap`; impl `NavigatorWorldMap` | **implemented** over the camera navigator: position = camera tile (the minimap radar centre), zoom = radar pixels per tile, position target = a navigator jump. No separate world-map view exists yet |
 | `Perspective` / clickbox helpers | internal projection + canonical `SurfaceHit` | plugins should consume semantic hit/geometry instead of rebuilding viewport projection |
 | instance template/source mapping | existing instance model/builders; future scene provenance view | expose source/template coordinates only when instance authoring/debugging consumes them |
 | draw callbacks | optional render-extension capability | separate from normal semantic API |
@@ -453,7 +457,8 @@ The vendored RuneLite API contains many live-client concepts that Studio should 
 - **Color/texture:** reuse client-backed terrain color math and texture resources; generic RuneLite color helpers are references, not automatic replacement APIs.
 - **Instances:** reuse existing `InstanceChunkTemplate`, transforms, materializer, and instance parity fixtures. Public source/template provenance waits for an instance-aware tool.
 - **Projection/canvas helpers:** remain frontend/internal. A plugin should normally ask for `SurfaceHit`, world geometry, or overlay primitives rather than calculate RuneLite-style canvas clickboxes itself.
-- **Actors, players, NPCs, projectiles, widgets, menus, chat, social, inventory, game ticks, client vars and networking:** live-client domains are intentionally outside the static map-editor semantic API. Add them later only through the simulation/content-runtime roadmap when a Studio feature requires them.
+- **Client vars** are in: varbits/varps drive multiloc appearance, so `Client` exposes them over the simulation engine (Player State panel).
+- **Actors, players, NPCs, projectiles, widgets, menus, chat, social, inventory, game ticks and networking:** live-client domains are intentionally outside the static map-editor semantic API. Add them later only through the simulation/content-runtime roadmap when a Studio feature requires them.
 
 Definition fields such as interaction access masks, map-area/map-icon IDs, sound metadata, parameters, and support-item flags already remain available through decoded/raw definition data even when they are not promoted into `ObjectDefinitionView`. Promote one into the stable semantic view only when a first-party or public capability consumes it.
 

@@ -16,6 +16,21 @@ public interface DefinitionProvider {
     }
 
     /**
+     * Right-click options 1-5 by position ({@code null} where unset). Unlike
+     * {@link ObjectDefinitionView#interactions()}, gaps are kept: a bank booth's
+     * "Bank" is option 2.
+     */
+    default Optional<List<String>> objectActions(int id) {
+        return object(id).map(definition -> {
+            List<String> actions = new java.util.ArrayList<>(java.util.Collections.nCopies(5, (String) null));
+            for (int i = 0; i < Math.min(5, definition.interactions().size()); i++) {
+                actions.set(i, definition.interactions().get(i));
+            }
+            return java.util.Collections.unmodifiableList(actions);
+        });
+    }
+
+    /**
      * Starts an isolated in-memory edit transaction when the backend supports
      * writable object-definition semantics. The transaction itself never
      * persists to the source cache.

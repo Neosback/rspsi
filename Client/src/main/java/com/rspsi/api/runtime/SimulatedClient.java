@@ -1,7 +1,14 @@
 package com.rspsi.api.runtime;
 
 import com.rspsi.api.Client;
+import com.rspsi.api.ModelData;
+import com.rspsi.api.ObjectComposition;
 import com.rspsi.api.VarbitComposition;
+import com.rspsi.api.cache.CacheMapElementConfig;
+import com.rspsi.api.cache.CacheObjectComposition;
+import com.rspsi.api.model.DecodedModelData;
+import com.rspsi.api.worldmap.MapElementConfig;
+import com.rspsi.api.worldmap.WorldMap;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.ObjectVarState;
 import com.rspsi.cache.definition.VarbitDefinitionView;
@@ -18,10 +25,38 @@ import java.util.Objects;
 public final class SimulatedClient implements Client, ObjectVarState {
     private final SimulationEngine engine;
     private final DefinitionProvider definitions;
+    private final WorldMap worldMap;
 
     public SimulatedClient(SimulationEngine engine, DefinitionProvider definitions) {
+        this(engine, definitions, null);
+    }
+
+    /** @param worldMap the Studio map navigator, or {@code null} when headless */
+    public SimulatedClient(SimulationEngine engine, DefinitionProvider definitions, WorldMap worldMap) {
         this.engine = Objects.requireNonNull(engine, "engine");
         this.definitions = Objects.requireNonNull(definitions, "definitions");
+        this.worldMap = worldMap;
+    }
+
+    @Override
+    public ObjectComposition getObjectDefinition(int objectId) {
+        return CacheObjectComposition.of(objectId, definitions, this).orElse(null);
+    }
+
+    @Override
+    public ModelData loadModelData(int id) {
+        return DecodedModelData.load(definitions, id).orElse(null);
+    }
+
+    @Override
+    public MapElementConfig getMapElementConfig(int id) {
+        return definitions.mapElement(id).map(element -> (MapElementConfig) new CacheMapElementConfig(element,
+                definitions)).orElse(null);
+    }
+
+    @Override
+    public WorldMap getWorldMap() {
+        return worldMap;
     }
 
     public DefinitionProvider definitions() {

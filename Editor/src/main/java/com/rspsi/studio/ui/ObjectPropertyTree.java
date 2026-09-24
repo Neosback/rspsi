@@ -254,12 +254,11 @@ public final class ObjectPropertyTree {
 
     private static List<String> actions(Source source) {
         if (source.transaction() != null) return source.transaction().actions();
-        List<String> result = new ArrayList<>(Arrays.asList(new String[5]));
-        if (source.definition() != null) {
-            List<String> interactions = source.definition().interactions();
-            for (int i = 0; i < Math.min(5, interactions.size()); i++) result.set(i, interactions.get(i));
+        if (source.definitions() != null) {
+            List<String> positional = source.definitions().objectActions(source.objectId()).orElse(null);
+            if (positional != null) return positional;
         }
-        return result;
+        return Arrays.asList(new String[5]);
     }
 
     // ---- integer lists ----------------------------------------------------------------------

@@ -208,6 +208,17 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     }
 
     @Override
+    public Optional<List<String>> objectActions(int id) {
+        ObjectType definition = objects.get(id);
+        if (definition == null) return Optional.empty();
+        List<String> actions = new java.util.ArrayList<>(5);
+        for (int index = 0; index < 5; index++) {
+            actions.add(definition.getActions() == null ? null : definition.getActions().getOpOrNull(index));
+        }
+        return Optional.of(java.util.Collections.unmodifiableList(actions));
+    }
+
+    @Override
     public Optional<ObjectDefinitionEditTransaction> editObject(int id) {
         ObjectType definition = objects.get(id);
         return definition == null
@@ -1210,6 +1221,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             boolean worldMapVisible = true;
             boolean minimapVisible = false;
             boolean randomizePosition = true;
+            int category = -1;
             List<String> actions = new java.util.ArrayList<>();
             while (cursor.remaining() > 0) {
                 int opcode = cursor.readUnsignedByte();
@@ -1233,7 +1245,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
                     case 16 -> { }
                     case 17 -> cursor.readString();
                     case 18 -> cursor.readBigSmart();
-                    case 19 -> cursor.skip(2);
+                    case 19 -> category = cursor.readUnsignedShort();
                     case 20 -> cursor.skip(12);
                     case 21, 22 -> cursor.skip(4);
                     case 23 -> cursor.skip(3);
@@ -1246,7 +1258,7 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
             }
             return Optional.of(new MapElementDefinitionView(id, spriteId, hoverSpriteId, name,
                     textColor, hoverTextColor, textSize, worldMapVisible,
-                    minimapVisible, randomizePosition, actions));
+                    minimapVisible, randomizePosition, actions, category));
         } catch (RuntimeException failure) {
             recordFailure("map element", id, failure);
             return Optional.empty();

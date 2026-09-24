@@ -78,6 +78,15 @@ public final class PluginApi {
         return context.services().decodedData();
     }
 
+    /**
+     * The RuneLite-shaped client ({@code com.rspsi.api}): vars, object
+     * definitions, models, map elements and the map navigator. Empty until a
+     * cache is loaded; look it up when acting instead of keeping it.
+     */
+    public Optional<com.rspsi.api.Client> client() {
+        return context.services().client();
+    }
+
     public Optional<EditorSceneAccess> scene() {
         return context.scene();
     }

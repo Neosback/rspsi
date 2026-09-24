@@ -53,6 +53,7 @@ import com.rspsi.editor.integration.reference.ReferenceService;
 import com.rspsi.editor.simulation.SimulationEngine;
 import com.rspsi.editor.simulation.state.RuntimeState;
 import com.rspsi.api.runtime.SimulatedClient;
+import com.rspsi.api.worldmap.NavigatorWorldMap;
 import com.rspsi.editor.symbols.CacheGamevalProvider;
 import com.rspsi.editor.symbols.SymbolService;
 import com.rspsi.editor.plugin.builtin.tool.TilePainterToolPlugin;
@@ -506,13 +507,19 @@ public final class StudioApplication implements AutoCloseable {
 
     /** Editor presentation bound to the simulated player of this cache session. */
     private ScenePresentation editorPresentation(LoadedOsrsCacheSession cache) {
+        return ScenePresentation.EDITOR.withVarState(playerFor(cache));
+    }
+
+    /** The simulated player/client for this cache session, shared by scene builds and plugins. */
+    private SimulatedClient playerFor(LoadedOsrsCacheSession cache) {
         var definitions = cache.bundle().definitions();
         SimulatedClient current = player;
         if (current == null || current.definitions() != definitions) {
-            current = new SimulatedClient(simulation, definitions);
+            current = new SimulatedClient(simulation, definitions,
+                    new NavigatorWorldMap(sceneViewport.navigationService()));
             player = current;
         }
-        return ScenePresentation.EDITOR.withVarState(current);
+        return current;
     }
 
     private int currentClientCycle() {
@@ -741,6 +748,8 @@ public final class StudioApplication implements AutoCloseable {
                             assets, sceneAccess, renderSettings, tasks, notifications,
                             null, null, symbols, references, spawns, simulation, integrations);
                     host.context().services().decodedData().mergeSummary(decodedSummary);
+                    host.context().services().bindClient(
+                            () -> cacheSessions.current().map(this::playerFor).orElse(null));
                     return host;
                 },
                 discovery);
