@@ -255,7 +255,7 @@ public final class GradleProjectModelInspector {
                 import groovy.json.JsonOutput
                 import org.gradle.api.artifacts.ProjectDependency
 
-                gradle.projectsEvaluated {
+                gradle.projectsLoaded {
                     def root = gradle.rootProject
                     root.tasks.register("rspsiStudioModel") {
                         group = "rspsi"
@@ -287,8 +287,12 @@ public final class GradleProjectModelInspector {
                                 p.configurations.each { cfg ->
                                     cfg.dependencies.withType(ProjectDependency).each { dep ->
                                         try {
-                                            projectDependencies.add(dep.dependencyProject.path)
+                                            projectDependencies.add(dep.path)
                                         } catch (ignored) {
+                                            try {
+                                                projectDependencies.add(dep.dependencyProject.path)
+                                            } catch (ignoredLegacy) {
+                                            }
                                         }
                                     }
                                 }
