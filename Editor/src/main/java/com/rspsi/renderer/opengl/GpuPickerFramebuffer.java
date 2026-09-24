@@ -138,6 +138,12 @@ final class GpuPickerFramebuffer implements AutoCloseable {
         return framebuffer != 0;
     }
 
+    /** Releases GPU storage without permanently closing this reusable target. */
+    void release() {
+        ensureOpen();
+        destroyResources();
+    }
+
     int framebufferStatus() {
         return framebufferStatus;
     }
