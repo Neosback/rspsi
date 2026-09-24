@@ -248,9 +248,13 @@ public final class ContentStudioView {
                 ProjectIntegrationCapability.CACHE_BUILD);
         boolean launch = project.capabilities().contains(
                 ProjectIntegrationCapability.SERVER_LAUNCH);
-        if (launch) return "Read + write + build + server launch";
-        if (build) return "Read + write + build";
-        if (write) return "Read + write";
+        boolean commands = project.capabilities().contains(
+                ProjectIntegrationCapability.EXTERNAL_COMMAND);
+        if (launch || commands) {
+            return "Development access · read/write/build/launch/declared commands";
+        }
+        if (build) return "Managed build · read/write/declared builds";
+        if (write) return "Read + write · supported source";
         return "Read only";
     }
 
