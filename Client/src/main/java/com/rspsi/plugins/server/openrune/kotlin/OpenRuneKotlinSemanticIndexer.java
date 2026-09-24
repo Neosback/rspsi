@@ -47,7 +47,9 @@ public final class OpenRuneKotlinSemanticIndexer {
     private static final Set<String> SYMBOL_PREFIXES = Set.of(
             "loc", "npc", "obj", "item", "varbit", "varp", "varc", "varcon",
             "interface", "component", "clientscript", "dbtable", "dbrow", "area",
-            "seq", "spotanim", "stat", "content", "synth");
+            "seq", "spotanim", "bas", "category", "content", "controller", "currency",
+            "enum", "font", "headbar", "hitmark", "mesanim", "midi", "param", "projanim",
+            "queue", "stalk", "stat", "synth", "timer", "varn", "varobj", "walktrigger");
 
     public SemanticSourceIndex index(ServerProjectInspection inspection) {
         Objects.requireNonNull(inspection, "inspection");
