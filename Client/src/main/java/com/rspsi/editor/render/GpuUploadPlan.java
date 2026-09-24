@@ -153,7 +153,7 @@ public record GpuUploadPlan(
         }
         if (vertexOwner == null) {
             vertices = List.copyOf(vertices);
-            indices = List.copyOf(indices);
+            indices = ImmutableIntList.copyOf(indices);
             int vertexCount = vertices.size();
             if (indices.stream().anyMatch(index -> index == null || index < 0 || index >= vertexCount)) {
                 throw new IllegalArgumentException("GPU upload index references a missing vertex");
