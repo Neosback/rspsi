@@ -42,6 +42,8 @@ class ZoneVboManagerTest {
                 ZoneVboManager.streamUploadDecision(existing, changed);
 
         assertFalse(decision.geometry());
+        assertTrue(decision.vertexShading());
+        assertFalse(decision.faceMetadata());
         assertTrue(decision.shading());
         assertFalse(decision.indices());
         assertTrue(decision.any());
@@ -54,10 +56,32 @@ class ZoneVboManagerTest {
                         null, new GpuZoneStreamFingerprints(100L, 200L, 300L, 400L));
 
         assertTrue(decision.geometry());
+        assertTrue(decision.vertexShading());
+        assertTrue(decision.faceMetadata());
         assertTrue(decision.shading());
         assertTrue(decision.indices());
     }
 
+
+    @Test
+    void faceOnlyChangeKeepsGeometryAndVertexShadingResident() {
+        ZoneVboManager.ZoneAllocation existing = new ZoneVboManager.ZoneAllocation(
+                1L, 10, 11, 12, 13, 0, 14,
+                100L, 200L, 300L, 0L, 400L);
+        GpuZoneStreamFingerprints changed =
+                new GpuZoneStreamFingerprints(100L, 200L, 301L, 400L, 999L);
+
+        ZoneVboManager.StreamUploadDecision decision =
+                ZoneVboManager.streamUploadDecision(existing, changed);
+
+        assertFalse(decision.geometry());
+        assertFalse(decision.vertexShading());
+        assertTrue(decision.faceMetadata());
+        assertTrue(decision.shading());
+        assertFalse(decision.normals());
+        assertFalse(decision.indices());
+        assertTrue(decision.any());
+    }
 
     @Test
     void normalOnlyChangeIsIgnoredByVanillaButScheduledWhenNormalStreamIsEnabled() {
