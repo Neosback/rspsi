@@ -2,6 +2,8 @@ package com.rspsi.editor.render.picker;
 
 import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.render.CameraState;
+import com.rspsi.editor.render.ClientModelBounds;
+import com.rspsi.editor.render.GameObjectSceneMetadata;
 import com.rspsi.editor.render.GpuColorEncoding;
 import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuSceneVertex;
@@ -129,6 +131,80 @@ class DdaScenePickerTest {
         // Object root anchor tile is (3200, 3200)
         assertEquals(3200, hit.objectTile().x());
         assertEquals(3200, hit.objectTile().y());
+    }
+
+
+    @Test
+    void clientAabbBroadPhaseRejectsUnrelatedCommandsBeforeTriangleTests() {
+        List<GpuSceneVertex> vertices = new ArrayList<>();
+        List<Integer> indices = new ArrayList<>();
+        List<GpuDrawCommand> commands = new ArrayList<>();
+        int[] centers = {8, 24, 40, 64, 88, 104, 120};
+
+        for (int commandIndex = 0; commandIndex < centers.length; commandIndex++) {
+            int centerX = centers[commandIndex];
+            int base = vertices.size();
+            vertices.add(vertex(centerX - 4, -4, 100));
+            vertices.add(vertex(centerX + 4, -4, 100));
+            vertices.add(vertex(centerX, 4, 100));
+            indices.add(base);
+            indices.add(base + 1);
+            indices.add(base + 2);
+
+            ClientModelBounds bounds = new ClientModelBounds(true, 8, 8, 8, 12, 24, false,
+                    new ClientModelBounds.Aabb(true, 0,
+                            centerX - 64, 0, 36, 8, 8, 8));
+            commands.add(new GpuDrawCommand(WorldTileAddress.of(0, 0, 0), 0, 0,
+                    SceneLayer.Kind.GROUND_OBJECT, GpuDrawCommand.SubmissionPass.OPAQUE,
+                    commandIndex * 3, 3, -1, 0, 0, commandIndex,
+                    GpuDrawCommand.RenderMode.DEFAULT,
+                    com.rspsi.editor.render.WallDecorationPresentation.none(),
+                    GameObjectSceneMetadata.none(), List.of(bounds)));
+        }
+
+        GpuUploadPlan plan = new GpuUploadPlan(vertices, indices, commands,
+                List.of(), Map.of(), "aabb-broad-phase");
+        DdaScenePicker picker = new DdaScenePicker();
+
+        var hit = picker.pick(plan, new CameraState(64, 0, 0, 0, 0),
+                100, 100, 50, 50).orElseThrow();
+
+        assertEquals(3, hit.objectId());
+        assertEquals(7, picker.lastMetrics().broadPhaseTests());
+        assertEquals(6, picker.lastMetrics().broadPhaseRejects());
+        assertEquals(6, picker.lastMetrics().broadPhaseTriangleSkips());
+        assertEquals(1, picker.lastMetrics().triangleTests(),
+                "only the AABB-hit command should reach exact triangle intersection");
+    }
+
+    @Test
+    void gameObjectAabbUsesRotatedSceneFootprintCenter() {
+        ClientModelBounds bounds = new ClientModelBounds(true, 16, 16, 32, 36, 72, false,
+                new ClientModelBounds.Aabb(true, 0, 20, 0, 20, 24, 24, 24));
+        GameObjectSceneMetadata scene = GameObjectSceneMetadata.of(0, 0, 2, 3, 0, 0);
+        GpuDrawCommand command = new GpuDrawCommand(WorldTileAddress.of(0, 0, 0), 0, 0,
+                SceneLayer.Kind.GROUND_OBJECT, GpuDrawCommand.SubmissionPass.OPAQUE,
+                0, 3, -1, 0, 0, 44,
+                GpuDrawCommand.RenderMode.DEFAULT,
+                com.rspsi.editor.render.WallDecorationPresentation.none(),
+                scene, List.of(bounds));
+
+        GpuUploadPlan plan = new GpuUploadPlan(
+                List.of(
+                        vertex(140, -8, 212),
+                        vertex(156, -8, 212),
+                        vertex(148, 8, 212)),
+                List.of(0, 1, 2), List.of(command), List.of(), Map.of(),
+                "multi-tile-aabb-center");
+        DdaScenePicker picker = new DdaScenePicker();
+
+        var hit = picker.pick(plan, new CameraState(148, 0, 0, 0, 0),
+                100, 100, 50, 50).orElseThrow();
+
+        assertEquals(44, hit.objectId());
+        assertEquals(1, picker.lastMetrics().broadPhaseTests());
+        assertEquals(0, picker.lastMetrics().broadPhaseRejects());
+        assertEquals(1, picker.lastMetrics().triangleTests());
     }
 
     private static GpuSceneVertex vertex(float x, float y, float z) {
