@@ -5,8 +5,10 @@ import com.rspsi.server.OpenRuneServerAdapter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Creates/opens launcher-level Studio projects without loading caches or entering a workspace.
@@ -20,6 +22,65 @@ public final class StudioProjectService {
 
     public StudioProjectService(StudioProjectRegistry registry) {
         this.registry = Objects.requireNonNull(registry, "registry");
+    }
+
+
+    /**
+     * Creates or reopens a lightweight standalone project using a deterministic
+     * Studio-managed data directory. The launcher therefore only needs the
+     * cache directory from the user.
+     */
+    public StudioProjectDescriptor createStandalone(Path cacheRoot) throws IOException {
+        Path cache = normalize(cacheRoot, "cacheRoot");
+        validateStandaloneCache(cache);
+        String name = displayName(cache, "OSRS Cache");
+        Path data = automaticProjectDataRoot(cache, "cache");
+        StudioProjectDescriptor existing = existingAutomaticProject(
+                data, StudioProjectKind.STANDALONE_OSRS_CACHE, cache);
+        if (existing != null) return existing;
+        return createStandalone(name, data, cache);
+    }
+
+    /**
+     * Links or reopens an OpenRune server checkout using a deterministic
+     * Studio-managed data directory. The server checkout itself is never used
+     * as Studio's private project-data directory.
+     */
+    public StudioProjectDescriptor linkOpenRune(
+            Path serverRoot,
+            ProjectIntegrationPreset preset) throws IOException {
+        Objects.requireNonNull(preset, "preset");
+        Path root = normalize(serverRoot, "serverRoot");
+        if (!Files.isDirectory(root)) {
+            throw new IOException("Server project directory does not exist: " + root);
+        }
+        if (!openRune.detect(root).matched()) {
+            throw new IOException("OpenRune project markers were not detected at: " + root);
+        }
+        String name = displayName(root, "OpenRune Server");
+        Path data = automaticProjectDataRoot(root, "openrune");
+        StudioProjectDescriptor existing = existingAutomaticProject(
+                data, StudioProjectKind.OPENRUNE_SERVER, root);
+        if (existing != null) {
+            if (!existing.capabilities().equals(preset.capabilities())) {
+                StudioProjectDescriptor updated = new StudioProjectDescriptor(
+                        existing.formatVersion(),
+                        existing.projectId(),
+                        existing.name(),
+                        existing.kind(),
+                        existing.createdAtEpochMillis(),
+                        existing.projectDataLocation(),
+                        existing.sourcePath(),
+                        existing.providerId(),
+                        preset.capabilities());
+                Path descriptorPath = StudioProjectDescriptorStore.descriptorPath(data);
+                StudioProjectDescriptorStore.write(descriptorPath, updated);
+                registry.remember(descriptorPath, updated);
+                return updated;
+            }
+            return existing;
+        }
+        return linkOpenRune(name, data, root, preset);
     }
 
     public StudioProjectDescriptor createStandalone(
@@ -105,6 +166,50 @@ public final class StudioProjectService {
                 }
             }
         }
+    }
+
+    private StudioProjectDescriptor existingAutomaticProject(
+            Path projectDataRoot,
+            StudioProjectKind expectedKind,
+            Path expectedSource) throws IOException {
+        Path descriptorPath = StudioProjectDescriptorStore.descriptorPath(projectDataRoot);
+        if (!Files.isRegularFile(descriptorPath)) return null;
+
+        StudioProjectDescriptor existing = StudioProjectDescriptorStore.read(descriptorPath);
+        if (existing.kind() != expectedKind
+                || !existing.sourcePathValue().equals(expectedSource.toAbsolutePath().normalize())) {
+            throw new IOException("Studio project data is already used by another source: "
+                    + descriptorPath);
+        }
+        validateSource(existing);
+        registry.remember(descriptorPath, existing);
+        return existing;
+    }
+
+    private Path automaticProjectDataRoot(Path source, String kind) {
+        Path normalized = source.toAbsolutePath().normalize();
+        String name = displayName(normalized, kind);
+        String slug = name.toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9._-]+", "-")
+                .replaceAll("^-+|-+$", "");
+        if (slug.isBlank()) slug = kind;
+        String stableId = UUID.nameUUIDFromBytes(
+                        normalized.toString().getBytes(StandardCharsets.UTF_8))
+                .toString()
+                .substring(0, 8);
+        Path studioRoot = registry.registryFile().getParent();
+        if (studioRoot == null) {
+            studioRoot = Path.of(System.getProperty("user.home"), ".openrune-studio");
+        }
+        return studioRoot.resolve("projects").resolve(slug + "-" + stableId)
+                .toAbsolutePath().normalize();
+    }
+
+    private static String displayName(Path source, String fallback) {
+        Path fileName = source.getFileName();
+        if (fileName == null) return fallback;
+        String value = fileName.toString().trim();
+        return value.isBlank() ? fallback : value;
     }
 
     private static void validateStandaloneCache(Path cache) throws IOException {

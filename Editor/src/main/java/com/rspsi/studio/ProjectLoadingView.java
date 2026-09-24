@@ -2,6 +2,7 @@ package com.rspsi.studio;
 
 import com.rspsi.project.StudioProjectDescriptor;
 import com.rspsi.project.StudioProjectKind;
+import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
@@ -39,14 +40,22 @@ public final class ProjectLoadingView {
         ImGui.dummy(1.0f, Math.max(70.0f, viewport.getSizeY() * 0.16f));
 
         ImGui.setCursorPosX(ImGui.getCursorPosX() + x);
-        ImGui.beginChild("##project-loading-card", width, 330.0f, true);
+        ImGui.beginChild("##project-loading-card", width, 390.0f, true);
+        ImGui.dummy(1.0f, 16.0f);
+
+        float logoWidth = Math.min(270.0f, ImGui.getContentRegionAvailX() * 0.58f);
+        ImGui.setCursorPosX(ImGui.getCursorPosX()
+                + Math.max(0.0f, (ImGui.getContentRegionAvailX() - logoWidth) * 0.5f));
+        StudioBranding.drawWordmark(logoWidth);
         ImGui.dummy(1.0f, 18.0f);
 
-        ImGui.pushStyleColor(ImGuiCol.Text, 0.90f, 0.93f, 1.0f, 1.0f);
+        ImGui.pushFont(StudioFonts.heading(), 23.0f);
+        ImGui.pushStyleColor(ImGuiCol.Text, 0.95f, 0.97f, 1.0f, 1.0f);
         centered(project.name());
         ImGui.popStyleColor();
+        ImGui.popFont();
         centered(project.kind() == StudioProjectKind.OPENRUNE_SERVER
-                ? "OpenRune Server Project" : "Standalone OSRS Cache Project");
+                ? "OpenRune-Server project" : "OSRS cache");
         ImGui.dummy(1.0f, 18.0f);
 
         if (status.failed()) {
@@ -65,9 +74,11 @@ public final class ProjectLoadingView {
         } else {
             centered(status.message());
             ImGui.dummy(1.0f, 14.0f);
+            ImGui.pushStyleColor(ImGuiCol.PlotHistogram, 0.00f, 0.75f, 0.72f, 1.0f);
             ImGui.progressBar((float) status.progress(), -1.0f, 12.0f);
+            ImGui.popStyleColor();
             ImGui.dummy(1.0f, 10.0f);
-            centered(status.phase().name().replace('_', ' '));
+            centered(phaseLabel(status.phase()));
             if (!status.detail().isBlank()) {
                 ImGui.dummy(1.0f, 6.0f);
                 ImGui.textDisabled(status.detail());
@@ -81,6 +92,19 @@ public final class ProjectLoadingView {
 
         ImGui.endChild();
         ImGui.end();
+    }
+
+    private static String phaseLabel(ProjectLoadStatus.Phase phase) {
+        return switch (phase) {
+            case READ_DESCRIPTOR, VALIDATE_PROJECT -> "Checking project";
+            case INSPECT_INTEGRATION -> "Finding OpenRune files";
+            case RESOLVE_CACHE_ROLES -> "Selecting project cache";
+            case OPEN_CACHE_FILESYSTEM -> "Opening cache";
+            case PREPARE_DEFINITIONS -> "Preparing definitions";
+            case BIND_REQUIRED_PROJECT_SERVICES -> "Finishing setup";
+            case READY -> "Ready";
+            case FAILED -> "Unable to open";
+        };
     }
 
     private static void centered(String text) {

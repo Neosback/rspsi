@@ -20,9 +20,10 @@ public final class StudioFonts {
             (short) 0xf000, (short) 0xf8ff, 0
     };
 
-    public static final float BASE_FONT_SIZE = 16.0f;
+    public static final float BASE_FONT_SIZE = 17.0f;
 
     private static ImFont ui;
+    private static ImFont heading;
     private static ImFont icon;
     private static ImFont mono;
 
@@ -46,6 +47,13 @@ public final class StudioFonts {
         uiConfig.setPixelSnapH(false);
         byte[] roboto = resource("/font/Roboto-Regular.ttf");
         ui = atlas.addFontFromMemoryTTF(roboto, BASE_FONT_SIZE * uiScale, uiConfig);
+
+        ImFontConfig headingConfig = new ImFontConfig();
+        headingConfig.setOversampleH(3);
+        headingConfig.setOversampleV(3);
+        headingConfig.setPixelSnapH(false);
+        heading = atlas.addFontFromMemoryTTF(resource("/font/Roboto-Regular.ttf"),
+                23.0f * uiScale, headingConfig);
 
         // Merge Google Fonts Material Icons into primary UI font
         ImFontConfig materialIconConfig = new ImFontConfig();
@@ -94,10 +102,12 @@ public final class StudioFonts {
         // the font metrics in logical points so dock rails do not become
         // twice as wide or clip their labels on macOS.
         ui.setScale(1.0f / uiScale);
+        heading.setScale(1.0f / uiScale);
         icon.setScale(1.0f / uiScale);
         mono.setScale(1.0f / uiScale);
         io.setFontDefault(ui);
         uiConfig.destroy();
+        headingConfig.destroy();
         materialIconConfig.destroy();
         faConfig.destroy();
         railIconConfig.destroy();
@@ -107,6 +117,10 @@ public final class StudioFonts {
 
     public static ImFont ui() {
         return Objects.requireNonNull(ui, "Studio fonts are not initialized");
+    }
+
+    public static ImFont heading() {
+        return Objects.requireNonNull(heading, "Studio fonts are not initialized");
     }
 
     public static ImFont mono() {

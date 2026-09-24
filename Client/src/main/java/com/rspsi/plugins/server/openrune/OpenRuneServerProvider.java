@@ -73,10 +73,16 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
     public IntegrationProbe probe(ServerConnection connection) {
         Objects.requireNonNull(connection, "connection");
         ServerProjectInspection inspection = adapter.inspect(connection);
-        return probe(connection, inspection);
+        return probe(connection, inspection, true);
     }
 
     private IntegrationProbe probe(ServerConnection connection, ServerProjectInspection inspection) {
+        return probe(connection, inspection, true);
+    }
+
+    private IntegrationProbe probe(ServerConnection connection,
+                                   ServerProjectInspection inspection,
+                                   boolean discoverDeclarativeContent) {
         Path project = connection.root();
         if (!inspection.detection().matched()) {
             return IntegrationProbe.invalid(project, id());
@@ -163,56 +169,58 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
         });
 
         /*
-         * Content manifests and declarative schema adapters are intentionally best-effort here.
-         * They enrich the authoritative project inspection; they no longer decide whether the
-         * checkout is an OpenRune project.
+         * Declarative content discovery can walk a large project tree. It is
+         * intentionally skipped by the lightweight Studio startup path and is
+         * performed only when content tooling explicitly requests it.
          */
-        try {
-            OpenRuneContentCatalog catalog = new OpenRuneContentCatalog(project);
-            var discovery = catalog.discovery();
-            var known = catalog.layout().knownRoots();
+        if (discoverDeclarativeContent) {
+            try {
+                OpenRuneContentCatalog catalog = new OpenRuneContentCatalog(project);
+                var discovery = catalog.discovery();
+                var known = catalog.layout().knownRoots();
 
-            if (known.containsKey(ContentCapability.GAMEVALS)) {
-                capabilities.add(IntegrationCapability.SYMBOLS);
-                capabilities.add(IntegrationCapability.GAMEVALS);
-            }
-            if (known.containsKey(ContentCapability.NPC_SPAWNS)) {
-                capabilities.add(IntegrationCapability.NPC_SPAWNS);
-            }
-            if (known.containsKey(ContentCapability.AREAS)) {
-                capabilities.add(IntegrationCapability.AREAS);
-            }
-
-            if (!discovery.manifests().isEmpty()) {
-                capabilities.add(IntegrationCapability.CONTENT_MANIFESTS);
-                for (var manifest : discovery.manifests()) {
-                    manifest.schemaVersions().forEach(schemas::putIfAbsent);
-                    for (ContentCapability capability : manifest.capabilities()) {
-                        addCapability(capabilities, capability);
-                    }
+                if (known.containsKey(ContentCapability.GAMEVALS)) {
+                    capabilities.add(IntegrationCapability.SYMBOLS);
+                    capabilities.add(IntegrationCapability.GAMEVALS);
                 }
-                details.put("Manifests", discovery.manifests().size()
-                        + " content-manifest.toml sidecar(s)");
-            }
+                if (known.containsKey(ContentCapability.NPC_SPAWNS)) {
+                    capabilities.add(IntegrationCapability.NPC_SPAWNS);
+                }
+                if (known.containsKey(ContentCapability.AREAS)) {
+                    capabilities.add(IntegrationCapability.AREAS);
+                }
 
-            if (!discovery.artifacts().isEmpty()) {
-                capabilities.add(IntegrationCapability.CONTENT_INDEX);
-                capabilities.add(IntegrationCapability.CONTENT_DIAGNOSTICS);
-                capabilities.add(IntegrationCapability.LOC_REFERENCES);
-                capabilities.add(IntegrationCapability.MAP_REFERENCES);
-                details.put("Declarative content", discovery.artifacts().size()
-                        + " TOML/JSON artifact(s)");
+                if (!discovery.manifests().isEmpty()) {
+                    capabilities.add(IntegrationCapability.CONTENT_MANIFESTS);
+                    for (var manifest : discovery.manifests()) {
+                        manifest.schemaVersions().forEach(schemas::putIfAbsent);
+                        for (ContentCapability capability : manifest.capabilities()) {
+                            addCapability(capabilities, capability);
+                        }
+                    }
+                    details.put("Manifests", discovery.manifests().size()
+                            + " content-manifest.toml sidecar(s)");
+                }
+
+                if (!discovery.artifacts().isEmpty()) {
+                    capabilities.add(IntegrationCapability.CONTENT_INDEX);
+                    capabilities.add(IntegrationCapability.CONTENT_DIAGNOSTICS);
+                    capabilities.add(IntegrationCapability.LOC_REFERENCES);
+                    capabilities.add(IntegrationCapability.MAP_REFERENCES);
+                    details.put("Declarative content", discovery.artifacts().size()
+                            + " TOML/JSON artifact(s)");
+                }
+                if (!discovery.unrecognized().isEmpty()) {
+                    details.put("Unrecognized content", discovery.unrecognized().size()
+                            + " declarative file(s) available in the generic inspector");
+                }
+                if (!discovery.diagnostics().entries().isEmpty()) {
+                    details.put("Diagnostics", discovery.diagnostics().entries().size()
+                            + " discovery/parse diagnostic(s)");
+                }
+            } catch (RuntimeException ignored) {
+                // A custom checkout can still be a valid OpenRune project without the stock data layout.
             }
-            if (!discovery.unrecognized().isEmpty()) {
-                details.put("Unrecognized content", discovery.unrecognized().size()
-                        + " declarative file(s) available in the generic inspector");
-            }
-            if (!discovery.diagnostics().entries().isEmpty()) {
-                details.put("Diagnostics", discovery.diagnostics().entries().size()
-                        + " discovery/parse diagnostic(s)");
-            }
-        } catch (RuntimeException ignored) {
-            // A custom checkout can still be a valid OpenRune project without the stock data layout.
         }
 
         return new IntegrationProbe(project, id(), name(), true, capabilities, schemas, details);
@@ -243,12 +251,30 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
         Objects.requireNonNull(connection, "connection");
         Objects.requireNonNull(options, "options");
 
-        ServerProjectInspection inspection = adapter.inspectConnected(connection);
+        boolean sourceModelRequested =
+                options.isEnabled(IntegrationCapability.SOURCE_SEMANTICS)
+                        || options.isEnabled(IntegrationCapability.CONTENT_GRAPH);
+        boolean declarativeDiscoveryRequested =
+                options.isEnabled(IntegrationCapability.CONTENT_INDEX)
+                        || options.isEnabled(IntegrationCapability.CONTENT_MANIFESTS)
+                        || options.isEnabled(IntegrationCapability.CONTENT_DIAGNOSTICS)
+                        || options.isEnabled(IntegrationCapability.LOC_REFERENCES)
+                        || options.isEnabled(IntegrationCapability.MAP_REFERENCES)
+                        || options.isEnabled(IntegrationCapability.NPC_SPAWNS)
+                        || options.isEnabled(IntegrationCapability.AREAS)
+                        || options.isEnabled(IntegrationCapability.DROP_TABLES)
+                        || options.isEnabled(IntegrationCapability.SKILL_NODES);
+
+        ServerProjectInspection inspection = sourceModelRequested
+                ? adapter.inspectConnected(connection)
+                : declarativeDiscoveryRequested
+                        ? adapter.inspect(connection)
+                        : adapter.inspectStartup(connection);
         if (!inspection.detection().matched()) {
             throw new IllegalArgumentException("OpenRune Server was not detected at: " + connection.root());
         }
 
-        IntegrationProbe probe = probe(connection, inspection);
+        IntegrationProbe probe = probe(connection, inspection, declarativeDiscoveryRequested);
         Path project = connection.root();
 
         boolean graphRequested = options.isEnabled(IntegrationCapability.CONTENT_GRAPH)

@@ -6,13 +6,11 @@ import com.rspsi.project.StudioProjectDescriptor;
 import com.rspsi.project.StudioProjectKind;
 import com.rspsi.project.StudioProjectRegistry;
 import com.rspsi.project.StudioProjectService;
-import com.rspsi.studio.theme.StudioDrawColors;
+import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
-import imgui.flag.ImGuiTableFlags;
 import imgui.flag.ImGuiWindowFlags;
-import imgui.type.ImString;
 
 import java.nio.file.Path;
 import java.time.Instant;
@@ -23,26 +21,23 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * Pre-project launcher. Rendering this view never opens or decodes a cache.
+ * Lightweight launcher shown before any cache or server project is opened.
  *
- * <p>The launcher intentionally resembles an IDE project chooser: recent projects are primary;
- * creating/linking a project is a separate action; project-specific tools do not exist here.</p>
+ * <p>The startup contract is intentionally small: pick a recent project, import
+ * an OpenRune-Server checkout, or choose a cache directly. Studio owns the
+ * project name/data directory automatically so startup never turns into a
+ * configuration form.</p>
  */
 public final class ProjectLauncherView {
-    private enum CreateMode { NONE, OPEN_EXISTING, OPENRUNE, STANDALONE }
-
     private static final DateTimeFormatter RECENT_TIME =
             DateTimeFormatter.ofPattern("MMM d, yyyy  h:mm a");
+    private static final float PANEL_MAX_WIDTH = 860.0f;
+    private static final float PANEL_MAX_HEIGHT = 700.0f;
 
     private final StudioProjectRegistry registry;
     private final StudioProjectService projects;
 
-    private final ImString descriptorPath = new ImString(1024);
-    private final ImString projectName = new ImString(160);
-    private final ImString sourcePath = new ImString(1024);
-    private final ImString projectDataPath = new ImString(1024);
-
-    private CreateMode mode = CreateMode.NONE;
+    private Path pendingOpenRuneRoot;
     private ProjectIntegrationPreset preset = ProjectIntegrationPreset.MANAGED_BUILD;
     private String error = "";
 
@@ -67,249 +62,225 @@ public final class ProjectLauncherView {
             return;
         }
 
+        float panelWidth = Math.min(PANEL_MAX_WIDTH,
+                Math.max(520.0f, ImGui.getContentRegionAvailX() - 80.0f));
+        float panelHeight = Math.min(PANEL_MAX_HEIGHT,
+                Math.max(560.0f, ImGui.getContentRegionAvailY() - 60.0f));
+        float left = Math.max(24.0f,
+                (ImGui.getContentRegionAvailX() - panelWidth) * 0.5f);
+        float top = Math.max(20.0f,
+                (ImGui.getContentRegionAvailY() - panelHeight) * 0.5f);
+
+        ImGui.setCursorPosX(ImGui.getCursorPosX() + left);
+        ImGui.setCursorPosY(ImGui.getCursorPosY() + top);
+        ImGui.beginChild("##project-launcher-shell", panelWidth, panelHeight, false);
+
+        renderHeader();
         ImGui.dummy(1.0f, 20.0f);
-        ImGui.indent(30.0f);
-        ImGui.pushStyleColor(ImGuiCol.Text, 0.91f, 0.94f, 1.0f, 1.0f);
-        ImGui.text("OPENRUNE STUDIO");
+
+        ImGui.pushFont(StudioFonts.heading(), 23.0f);
+        ImGui.pushStyleColor(ImGuiCol.Text, 0.94f, 0.97f, 1.0f, 1.0f);
+        ImGui.textUnformatted("Projects");
         ImGui.popStyleColor();
-        ImGui.textDisabled("Choose a project to continue, or start a new content workspace.");
-        ImGui.dummy(1.0f, 16.0f);
+        ImGui.popFont();
+        ImGui.textDisabled("Open a recent project or choose how Studio should start.");
+        ImGui.dummy(1.0f, 12.0f);
 
-        float available = ImGui.getContentRegionAvailX();
-        float actionsWidth = Math.min(360.0f, Math.max(300.0f, available * 0.30f));
-        float recentWidth = Math.max(420.0f, available - actionsWidth - 20.0f);
+        renderRecent(openProject);
+        ImGui.dummy(1.0f, 12.0f);
+        renderStartActions(openProject);
 
-        if (ImGui.beginTable("##project-launcher-layout", 2,
-                ImGuiTableFlags.SizingStretchProp)) {
-            ImGui.tableSetupColumn("Recent", 0, recentWidth);
-            ImGui.tableSetupColumn("Actions", 0, actionsWidth);
-            ImGui.tableNextRow();
-
-            ImGui.tableNextColumn();
-            renderRecent(openProject);
-
-            ImGui.tableNextColumn();
-            renderActions(openProject);
-
-            ImGui.endTable();
+        if (pendingOpenRuneRoot != null) {
+            ImGui.dummy(1.0f, 12.0f);
+            renderAccessSelection(openProject);
         }
 
-        ImGui.unindent(30.0f);
+        if (!error.isBlank()) {
+            ImGui.dummy(1.0f, 10.0f);
+            ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 0.48f, 0.48f, 1.0f);
+            ImGui.textWrapped(error);
+            ImGui.popStyleColor();
+        }
+
+        ImGui.endChild();
         ImGui.end();
     }
 
+    private void renderHeader() {
+        float logoWidth = Math.min(300.0f, ImGui.getContentRegionAvailX() * 0.44f);
+        float x = Math.max(0.0f,
+                (ImGui.getContentRegionAvailX() - logoWidth) * 0.5f);
+        ImGui.setCursorPosX(ImGui.getCursorPosX() + x);
+        StudioBranding.drawWordmark(logoWidth);
+    }
+
     private void renderRecent(Consumer<StudioProjectDescriptor> openProject) {
-        ImGui.separatorText("Recent Projects");
         List<RecentStudioProject> recent = registry.recent();
+        float height = pendingOpenRuneRoot == null ? 310.0f : 205.0f;
+
+        ImGui.pushStyleColor(ImGuiCol.ChildBg,
+                ImGui.getColorU32(0.075f, 0.085f, 0.11f, 0.70f));
+        ImGui.beginChild("##recent-project-list", -1.0f, height, true);
+
         if (recent.isEmpty()) {
-            StudioWidgets.beginCard("recent-empty", -1.0f, 130.0f);
-            ImGui.text("No Studio projects yet.");
-            ImGui.textDisabled("Link an OpenRune server project or create a standalone cache project.");
-            StudioWidgets.endCard();
+            float y = Math.max(20.0f, height * 0.38f);
+            ImGui.dummy(1.0f, y);
+            centeredMuted("No recent projects yet");
+            ImGui.endChild();
+            ImGui.popStyleColor();
             return;
         }
 
         int row = 0;
         for (RecentStudioProject project : recent) {
-            float height = project.available() ? 102.0f : 118.0f;
-            StudioWidgets.beginCard("recent-project-" + row++, -1.0f, height);
-
-            String kind = project.kind() == StudioProjectKind.OPENRUNE_SERVER
-                    ? "OpenRune Server" : "Standalone Cache";
-            ImGui.text(project.name());
-            ImGui.sameLine(0.0f, 10.0f);
-            int pillBg = project.kind() == StudioProjectKind.OPENRUNE_SERVER
-                    ? ImGui.getColorU32(0.18f, 0.23f, 0.38f, 0.85f)
-                    : ImGui.getColorU32(0.17f, 0.27f, 0.20f, 0.85f);
-            int pillText = project.kind() == StudioProjectKind.OPENRUNE_SERVER
-                    ? ImGui.getColorU32(0.58f, 0.70f, 1.0f, 1.0f)
-                    : ImGui.getColorU32(0.45f, 0.90f, 0.58f, 1.0f);
-            StudioWidgets.pill(kind, pillBg, pillText);
-            if (project.pinned()) {
-                ImGui.sameLine(0.0f, 8.0f);
-                ImGui.textDisabled("PINNED");
-            }
-
-            ImGui.textDisabled(project.displayPath());
-            ImGui.textDisabled("Last opened "
-                    + RECENT_TIME.format(Instant.ofEpochMilli(project.lastOpenedEpochMillis())
-                    .atZone(ZoneId.systemDefault())));
-
-            if (!project.available()) {
-                ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 0.67f, 0.25f, 1.0f);
-                ImGui.text("Project descriptor is missing or moved.");
-                ImGui.popStyleColor();
-            }
-
-            ImGui.beginDisabled(!project.available());
-            if (StudioWidgets.buttonPrimary("Open##" + project.projectId(), 88.0f, 26.0f)) {
-                tryOpen(project.descriptor(), openProject);
-            }
-            ImGui.endDisabled();
-
-            ImGui.sameLine();
-            if (StudioWidgets.buttonGhost(
-                    project.pinned() ? "Unpin##" + project.projectId()
-                            : "Pin##" + project.projectId(), 70.0f, 26.0f)) {
-                registry.setPinned(project.projectId(), !project.pinned());
-            }
-            ImGui.sameLine();
-            if (StudioWidgets.buttonGhost("Remove##" + project.projectId(), 78.0f, 26.0f)) {
-                registry.remove(project.projectId());
-            }
-
-            StudioWidgets.endCard();
-            ImGui.dummy(1.0f, 8.0f);
+            renderRecentProject(project, row++, openProject);
+            if (row < recent.size()) ImGui.separator();
         }
+
+        ImGui.endChild();
+        ImGui.popStyleColor();
     }
 
-    private void renderActions(Consumer<StudioProjectDescriptor> openProject) {
-        ImGui.separatorText("Start");
-        if (StudioWidgets.buttonPrimary("Link OpenRune Server", -1.0f, 36.0f)) {
-            setMode(CreateMode.OPENRUNE);
-        }
-        ImGui.dummy(1.0f, 6.0f);
-        if (StudioWidgets.buttonSecondary("Standalone Cache Project", -1.0f, 34.0f)) {
-            setMode(CreateMode.STANDALONE);
-        }
-        ImGui.dummy(1.0f, 6.0f);
-        if (StudioWidgets.buttonSecondary("Open Existing Studio Project", -1.0f, 34.0f)) {
-            setMode(CreateMode.OPEN_EXISTING);
-        }
+    private void renderRecentProject(
+            RecentStudioProject project,
+            int row,
+            Consumer<StudioProjectDescriptor> openProject) {
+        ImGui.pushID("recent-" + row + "-" + project.projectId());
+        ImGui.dummy(1.0f, 5.0f);
 
-        ImGui.dummy(1.0f, 14.0f);
-        switch (mode) {
-            case OPEN_EXISTING -> renderOpenExisting(openProject);
-            case OPENRUNE -> renderOpenRune(openProject);
-            case STANDALONE -> renderStandalone(openProject);
-            default -> {
-                StudioWidgets.beginCard("launcher-hint", -1.0f, 146.0f);
-                ImGui.text("OpenRune-first workflow");
-                ImGui.textWrapped(
-                        "Link the server checkout once. Studio will resolve LIVE/SERVER caches, "
-                                + "GameVals, Gradle modules, source semantics and content graph "
-                                + "during the project loading gate.");
-                ImGui.dummy(1.0f, 6.0f);
-                ImGui.textDisabled(
-                        "Only need map/cache editing? Use Standalone Cache Project instead.");
-                StudioWidgets.endCard();
-            }
-        }
+        ImGui.pushStyleColor(ImGuiCol.Text, 0.94f, 0.96f, 1.0f, 1.0f);
+        ImGui.textUnformatted(project.name());
+        ImGui.popStyleColor();
 
-        if (!error.isBlank()) {
-            ImGui.dummy(1.0f, 10.0f);
-            ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 0.40f, 0.40f, 1.0f);
-            ImGui.textWrapped(error);
+        ImGui.sameLine(0.0f, 10.0f);
+        String kind = project.kind() == StudioProjectKind.OPENRUNE_SERVER
+                ? "OpenRune-Server" : "Cache";
+        int pillBg = project.kind() == StudioProjectKind.OPENRUNE_SERVER
+                ? ImGui.getColorU32(0.00f, 0.55f, 0.55f, 0.20f)
+                : ImGui.getColorU32(0.18f, 0.23f, 0.32f, 0.85f);
+        int pillText = project.kind() == StudioProjectKind.OPENRUNE_SERVER
+                ? ImGui.getColorU32(0.18f, 0.92f, 0.88f, 1.0f)
+                : ImGui.getColorU32(0.72f, 0.78f, 0.88f, 1.0f);
+        StudioWidgets.pill(kind, pillBg, pillText);
+
+        ImGui.textDisabled(project.displayPath());
+        ImGui.textDisabled("Last opened "
+                + RECENT_TIME.format(Instant.ofEpochMilli(project.lastOpenedEpochMillis())
+                .atZone(ZoneId.systemDefault())));
+
+        if (!project.available()) {
+            ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 0.67f, 0.25f, 1.0f);
+            ImGui.textUnformatted("Project file is missing or has moved.");
             ImGui.popStyleColor();
         }
-    }
 
-    private void renderOpenExisting(Consumer<StudioProjectDescriptor> openProject) {
-        ImGui.separatorText("Open Existing");
-        ImGui.textDisabled("Select an existing Studio project.json descriptor.");
-        ImGui.setNextItemWidth(-1.0f);
-        ImGui.inputTextWithHint("##descriptor-path", "/path/to/project.json", descriptorPath);
-        ImGui.dummy(1.0f, 6.0f);
-        ImGui.beginDisabled(descriptorPath.isEmpty());
-        if (StudioWidgets.buttonPrimary("Open Project", -1.0f, 32.0f)) {
-            tryOpen(Path.of(descriptorPath.get().trim()), openProject);
+        ImGui.beginDisabled(!project.available());
+        if (StudioWidgets.buttonPrimary("Open", 92.0f, 30.0f)) {
+            tryOpen(project.descriptor(), openProject);
         }
         ImGui.endDisabled();
+        ImGui.sameLine();
+        if (StudioWidgets.buttonGhost("Remove", 82.0f, 30.0f)) {
+            registry.remove(project.projectId());
+        }
+
+        ImGui.dummy(1.0f, 5.0f);
+        ImGui.popID();
     }
 
-    private void renderOpenRune(Consumer<StudioProjectDescriptor> openProject) {
-        ImGui.separatorText("Link OpenRune Server");
-        ImGui.textDisabled("Studio data stays outside the server repository by default.");
-        commonCreateFields("Server project root", "/path/to/OpenRune-Server");
+    private void renderStartActions(Consumer<StudioProjectDescriptor> openProject) {
+        float gap = 10.0f;
+        float width = Math.max(180.0f,
+                (ImGui.getContentRegionAvailX() - gap) * 0.5f);
+
+        if (StudioWidgets.buttonPrimary("Import OpenRune-Server", width, 44.0f)) {
+            chooseOpenRuneRoot();
+        }
+        ImGui.sameLine(0.0f, gap);
+        if (StudioWidgets.buttonSecondary("Continue without import", width, 44.0f)) {
+            chooseStandaloneCache(openProject);
+        }
+    }
+
+    private void chooseOpenRuneRoot() {
+        NativeFileDialogs.chooseDirectory(
+                "Choose OpenRune-Server directory",
+                Path.of(System.getProperty("user.home")))
+                .ifPresent(path -> {
+                    pendingOpenRuneRoot = path;
+                    error = "";
+                });
+    }
+
+    private void chooseStandaloneCache(Consumer<StudioProjectDescriptor> openProject) {
+        NativeFileDialogs.chooseDirectory(
+                "Choose OSRS cache directory",
+                Path.of(System.getProperty("user.home")))
+                .ifPresent(path -> {
+                    try {
+                        StudioProjectDescriptor descriptor = projects.createStandalone(path);
+                        pendingOpenRuneRoot = null;
+                        error = "";
+                        openProject.accept(descriptor);
+                    } catch (Exception failure) {
+                        error = rootMessage(failure);
+                    }
+                });
+    }
+
+    private void renderAccessSelection(Consumer<StudioProjectDescriptor> openProject) {
+        StudioWidgets.beginCard("openrune-import-access", -1.0f, 0.0f);
+
+        ImGui.pushStyleColor(ImGuiCol.Text, 0.94f, 0.97f, 1.0f, 1.0f);
+        ImGui.textUnformatted("OpenRune-Server access");
+        ImGui.popStyleColor();
+        ImGui.textDisabled(pendingOpenRuneRoot.toString());
+        ImGui.dummy(1.0f, 8.0f);
+        ImGui.textWrapped(
+                "Choose exactly how much access Studio gets. These labels describe permissions, "
+                        + "not user roles.");
 
         ImGui.dummy(1.0f, 8.0f);
-        ImGui.textDisabled("Integration policy");
         for (ProjectIntegrationPreset candidate : ProjectIntegrationPreset.values()) {
             boolean selected = candidate == preset;
             if (selected) {
-                ImGui.pushStyleColor(ImGuiCol.Button, 0.24f, 0.34f, 0.62f, 1.0f);
-            }
-            if (ImGui.smallButton(label(candidate) + "##preset-" + candidate.name())) {
+                if (StudioWidgets.buttonPrimary(
+                        accessLabel(candidate) + "##access-" + candidate.name(),
+                        -1.0f, 34.0f)) {
+                    preset = candidate;
+                }
+            } else if (StudioWidgets.buttonSecondary(
+                    accessLabel(candidate) + "##access-" + candidate.name(),
+                    -1.0f, 34.0f)) {
                 preset = candidate;
             }
-            if (selected) ImGui.popStyleColor();
-            if (candidate != ProjectIntegrationPreset.DEVELOPER) ImGui.sameLine();
+            ImGui.dummy(1.0f, 4.0f);
         }
-        ImGui.textDisabled(policyDescription(preset));
 
-        ImGui.dummy(1.0f, 8.0f);
-        boolean ready = !projectName.isEmpty() && !sourcePath.isEmpty();
-        ImGui.beginDisabled(!ready);
-        if (StudioWidgets.buttonPrimary("Link & Open Project", -1.0f, 34.0f)) {
+        ImGui.pushStyleColor(ImGuiCol.Text, 0.76f, 0.82f, 0.90f, 1.0f);
+        ImGui.textWrapped(accessDescription(preset));
+        ImGui.popStyleColor();
+        ImGui.textDisabled("Destructive Fresh Cache reset is never granted automatically.");
+
+        ImGui.dummy(1.0f, 10.0f);
+        if (StudioWidgets.buttonPrimary("Import project", 150.0f, 34.0f)) {
             try {
-                StudioProjectDescriptor descriptor = projects.linkOpenRune(
-                        projectName.get().trim(),
-                        effectiveProjectDataPath(),
-                        Path.of(sourcePath.get().trim()),
-                        preset);
+                StudioProjectDescriptor descriptor =
+                        projects.linkOpenRune(pendingOpenRuneRoot, preset);
+                pendingOpenRuneRoot = null;
                 error = "";
                 openProject.accept(descriptor);
             } catch (Exception failure) {
                 error = rootMessage(failure);
             }
         }
-        ImGui.endDisabled();
-    }
-
-    private void renderStandalone(Consumer<StudioProjectDescriptor> openProject) {
-        ImGui.separatorText("Standalone Cache Project");
-        ImGui.textDisabled("Use Studio without a server integration.");
-        commonCreateFields("OSRS cache root", "/path/to/cache");
-
-        ImGui.dummy(1.0f, 8.0f);
-        boolean ready = !projectName.isEmpty() && !sourcePath.isEmpty();
-        ImGui.beginDisabled(!ready);
-        if (StudioWidgets.buttonPrimary("Create & Open Project", -1.0f, 34.0f)) {
-            try {
-                StudioProjectDescriptor descriptor = projects.createStandalone(
-                        projectName.get().trim(),
-                        effectiveProjectDataPath(),
-                        Path.of(sourcePath.get().trim()));
-                error = "";
-                openProject.accept(descriptor);
-            } catch (Exception failure) {
-                error = rootMessage(failure);
-            }
+        ImGui.sameLine();
+        if (StudioWidgets.buttonGhost("Cancel", 86.0f, 34.0f)) {
+            pendingOpenRuneRoot = null;
+            error = "";
         }
-        ImGui.endDisabled();
-    }
 
-    private void commonCreateFields(String sourceLabel, String sourceHint) {
-        ImGui.textDisabled("Project name");
-        ImGui.setNextItemWidth(-1.0f);
-        ImGui.inputTextWithHint("##project-name", "My OpenRune Project", projectName);
-
-        ImGui.dummy(1.0f, 6.0f);
-        ImGui.textDisabled(sourceLabel);
-        ImGui.setNextItemWidth(-1.0f);
-        ImGui.inputTextWithHint("##project-source", sourceHint, sourcePath);
-
-        ImGui.dummy(1.0f, 6.0f);
-        ImGui.textDisabled("Studio data location (optional)");
-        ImGui.setNextItemWidth(-1.0f);
-        ImGui.inputTextWithHint(
-                "##project-data",
-                defaultProjectDataPath(projectName.get()).toString(),
-                projectDataPath);
-    }
-
-    private Path effectiveProjectDataPath() {
-        String value = projectDataPath.get().trim();
-        return value.isBlank() ? defaultProjectDataPath(projectName.get()) : Path.of(value);
-    }
-
-    private static Path defaultProjectDataPath(String name) {
-        String value = name == null ? "" : name.trim().toLowerCase();
-        String slug = value.replaceAll("[^a-z0-9._-]+", "-")
-                .replaceAll("^-+|-+$", "");
-        if (slug.isBlank()) slug = "project";
-        return Path.of(System.getProperty("user.home"),
-                ".openrune-studio", "projects", slug);
+        StudioWidgets.endCard();
     }
 
     private void tryOpen(
@@ -324,27 +295,33 @@ public final class ProjectLauncherView {
         }
     }
 
-    private void setMode(CreateMode next) {
-        mode = next;
-        error = "";
-    }
-
-    private static String label(ProjectIntegrationPreset preset) {
+    private static String accessLabel(ProjectIntegrationPreset preset) {
         return switch (preset) {
-            case INSPECT -> "Inspect";
-            case AUTHOR -> "Author";
-            case MANAGED_BUILD -> "Managed Build";
-            case DEVELOPER -> "Developer";
+            case INSPECT -> "Read only";
+            case AUTHOR -> "Read + write";
+            case MANAGED_BUILD -> "Read + write + build";
+            case DEVELOPER -> "Full project access";
         };
     }
 
-    private static String policyDescription(ProjectIntegrationPreset preset) {
+    private static String accessDescription(ProjectIntegrationPreset preset) {
         return switch (preset) {
-            case INSPECT -> "Read-only project/source integration.";
-            case AUTHOR -> "Read project content and write supported authored source.";
-            case MANAGED_BUILD -> "Author content and allow supported project build tasks.";
-            case DEVELOPER -> "Managed Build plus server/development controls. FreshCache stays explicit.";
+            case INSPECT ->
+                    "Can read the project, cache paths and supported project metadata. No source writes or build commands.";
+            case AUTHOR ->
+                    "Read access plus supported source/content writes. Build and launch commands stay disabled.";
+            case MANAGED_BUILD ->
+                    "Read and write access plus supported cache, GameVal and CS2 build commands and external build tasks.";
+            case DEVELOPER ->
+                    "All non-destructive project access above, plus permission to launch the configured server.";
         };
+    }
+
+    private static void centeredMuted(String text) {
+        float width = ImGui.calcTextSize(text).x;
+        ImGui.setCursorPosX(ImGui.getCursorPosX()
+                + Math.max(0.0f, (ImGui.getContentRegionAvailX() - width) * 0.5f));
+        ImGui.textDisabled(text);
     }
 
     private static String rootMessage(Throwable failure) {

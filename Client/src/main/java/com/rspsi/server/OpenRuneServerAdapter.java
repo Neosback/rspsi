@@ -116,6 +116,48 @@ public final class OpenRuneServerAdapter implements ServerAdapter {
         return inspect(ServerConnection.forRoot(root));
     }
 
+
+    /**
+     * Lightweight inspection for the Studio startup gate.
+     *
+     * <p>This resolves cache roles, revision, build-task availability and basic
+     * project identity without walking content trees or evaluating Gradle. Full
+     * source/content inventory remains available through {@link #inspect} and
+     * {@link #inspectConnected} when an integration feature actually needs it.</p>
+     */
+    public ServerProjectInspection inspectStartup(ServerConnection connection) {
+        Objects.requireNonNull(connection, "connection");
+        Path root = normalize(connection.root());
+        ServerDetection detection = detect(root);
+        Map<ServerPathKey, Path> paths = resolvePaths(connection);
+        List<String> diagnostics = new ArrayList<>();
+        ServerGitState git = readGit(root);
+        String revision = readRevision(root);
+        List<ServerContentEntry> content = List.of();
+        List<ServerPluginInfo> plugins = List.of();
+        List<ServerBuildTask> tasks = buildTasks(connection, root, paths, diagnostics);
+        EnumSet<ServerCapability> capabilities = capabilities(paths, content, tasks);
+
+        for (Map.Entry<ServerPathKey, Path> entry : paths.entrySet()) {
+            if (!Files.exists(entry.getValue()) && isRequiredPath(entry.getKey())) {
+                diagnostics.add("Missing " + entry.getKey().configName() + ": " + entry.getValue());
+            }
+        }
+        if (!hasWrapper(root) && connection.commandOverrides().isEmpty()) {
+            diagnostics.add("No Gradle wrapper found; configure command overrides to enable builds");
+        }
+
+        String fingerprint = fingerprint(root, paths, content, plugins, git, revision);
+        ServerIntegrationStatus status = status(connection, detection, revision, paths, tasks,
+                fingerprint, diagnostics);
+        return new ServerProjectInspection(connection, detection, status, paths, revision, git,
+                content, plugins, tasks, capabilities, diagnostics, fingerprint);
+    }
+
+    public ServerProjectInspection inspectStartup(Path root) {
+        return inspectStartup(ServerConnection.forRoot(root));
+    }
+
     /**
      * Enriches a trusted/opened project by evaluating its own Gradle wrapper and attaching the
      * exact project/source-set/task model. Passive detection intentionally does not call this.

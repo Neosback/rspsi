@@ -33,7 +33,7 @@ class StudioThemeAndWidgetsTest {
 
     @Test
     void testStudioFontsConfiguration() {
-        assertEquals(16.0f, StudioFonts.BASE_FONT_SIZE, "Main UI font size should be crisp 16px");
+        assertEquals(17.0f, StudioFonts.BASE_FONT_SIZE, "Main UI font size should remain readable at 17px");
     }
 
     @Test
