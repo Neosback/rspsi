@@ -38,7 +38,6 @@ import static org.lwjgl.opengl.GL30C.glGenVertexArrays;
  */
 public final class ZoneVboManager implements AutoCloseable {
     public static final int ZONE_SIZE = 8;
-    private static final int FLOATS_PER_VERTEX = 12;
 
     public record ZoneAllocation(long zoneKey, int vao, int vbo, int ibo, long fingerprint) { }
 
@@ -230,7 +229,7 @@ public final class ZoneVboManager implements AutoCloseable {
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
 
-        int stride = FLOATS_PER_VERTEX * Float.BYTES;
+        int stride = NativeSceneVertexLayout.FLOATS_PER_VERTEX * Float.BYTES;
         glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0L);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(1, 2, GL_FLOAT, false, stride, 3L * Float.BYTES);
@@ -254,7 +253,7 @@ public final class ZoneVboManager implements AutoCloseable {
     private void uploadZoneBuffers(int vao, int vbo, int ibo,
                                    List<GpuSceneVertex> vertices,
                                    List<Integer> indices) {
-        FloatBuffer vertexData = uploadScratch.vertices(vertices.size() * FLOATS_PER_VERTEX);
+        FloatBuffer vertexData = uploadScratch.vertices(vertices.size() * NativeSceneVertexLayout.FLOATS_PER_VERTEX);
         for (GpuSceneVertex vertex : vertices) {
             int rgb = vertex.colorEncoding() == GpuColorEncoding.PACKED_JAGEX_HSL
                     ? OsrsTerrainColorMath.packedHslToRgb(vertex.encodedColor(), 0.6)
