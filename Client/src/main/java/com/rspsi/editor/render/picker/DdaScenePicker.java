@@ -101,6 +101,9 @@ public final class DdaScenePicker {
         int visitedCells = 0;
         int triangleTests = 0;
         int duplicateSkips = 0;
+        int broadPhaseTests = 0;
+        int broadPhaseRejects = 0;
+        int broadPhaseTriangleSkips = 0;
         float currentT = startT;
 
         while (currentT <= scratch.intervalExit + EPSILON
@@ -118,12 +121,24 @@ public final class DdaScenePicker {
                         duplicateSkips++;
                         continue;
                     }
-                    triangleTests++;
+                    byte broadPhase = triangle.broadPhase(generation,
+                            scratch.ox, scratch.oy, scratch.oz,
+                            scratch.dx, scratch.dy, scratch.dz,
+                            projection.nearPlane(), projection.farPlane());
+                    if (broadPhase == 3 || broadPhase == 4) {
+                        broadPhaseTests++;
+                        if (broadPhase == 4) broadPhaseRejects++;
+                    }
+                    if (broadPhase == 2 || broadPhase == 4) {
+                        broadPhaseTriangleSkips++;
+                        continue;
+                    }
 
                     if (SceneOcclusionResolver.occludesTriangle(triangle.command(),
                             triangle.a(), triangle.b(), triangle.c(), camera, plan.occluders())) {
                         continue;
                     }
+                    triangleTests++;
                     float distance = intersect(scratch, triangle.a(), triangle.b(), triangle.c());
                     if (!Float.isFinite(distance)
                             || distance < projection.nearPlane()
@@ -140,7 +155,8 @@ public final class DdaScenePicker {
             float nextBoundary = Math.min(Math.min(tMaxX, tMaxY), scratch.intervalExit);
             if (bestTriangle != null && bestDistance <= nextBoundary + EPSILON) {
                 lastMetrics = new Metrics(visitedCells, triangleTests, duplicateSkips,
-                        index.triangleCount(), true);
+                        index.triangleCount(), true, broadPhaseTests, broadPhaseRejects,
+                        broadPhaseTriangleSkips);
                 return Optional.of(toResult(bestTriangle, bestDistance, scratch));
             }
 
@@ -164,7 +180,8 @@ public final class DdaScenePicker {
         }
 
         lastMetrics = new Metrics(visitedCells, triangleTests, duplicateSkips,
-                index.triangleCount(), bestTriangle != null);
+                index.triangleCount(), bestTriangle != null, broadPhaseTests,
+                broadPhaseRejects, broadPhaseTriangleSkips);
         return bestTriangle == null
                 ? Optional.empty()
                 : Optional.of(toResult(bestTriangle, bestDistance, scratch));
@@ -317,15 +334,22 @@ public final class DdaScenePicker {
     }
 
     public record Metrics(int visitedCells, int triangleTests, int duplicateSkips,
-                          int indexedTriangles, boolean hit) {
+                          int indexedTriangles, boolean hit,
+                          int broadPhaseTests, int broadPhaseRejects,
+                          int broadPhaseTriangleSkips) {
         public Metrics {
-            if (visitedCells < 0 || triangleTests < 0 || duplicateSkips < 0 || indexedTriangles < 0) {
+            if (visitedCells < 0 || triangleTests < 0 || duplicateSkips < 0
+                    || indexedTriangles < 0 || broadPhaseTests < 0
+                    || broadPhaseRejects < 0 || broadPhaseTriangleSkips < 0) {
                 throw new IllegalArgumentException("Picker metrics cannot be negative");
+            }
+            if (broadPhaseRejects > broadPhaseTests) {
+                throw new IllegalArgumentException("AABB rejects cannot exceed AABB tests");
             }
         }
 
         public static Metrics empty() {
-            return new Metrics(0, 0, 0, 0, false);
+            return new Metrics(0, 0, 0, 0, false, 0, 0, 0);
         }
     }
 
