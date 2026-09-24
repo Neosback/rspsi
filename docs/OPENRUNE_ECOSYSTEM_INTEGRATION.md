@@ -212,7 +212,19 @@ The first implementation slice establishes these invariants:
 
 The stock `OpenRuneProjectLayoutResolver` remains useful as a **format-specific declarative adapter** for known OpenRune sidecars and manifests, but it is no longer allowed to decide whether a checkout is an OpenRune project.
 
-The next convergence step is to replace path-convention-heavy content-module discovery with the connected project's real Gradle model (projects, source sets, resources, dependencies, tasks, and outputs). Kotlin semantic indexing, the semantic content graph, edit lenses, and runtime simulation build on that project model rather than bypassing it.
+The second implementation slice adds the connected project's evaluated Gradle model:
+
+- passive folder detection remains non-executing;
+- opening a trusted project invokes that checkout's own Gradle wrapper with a temporary Studio init script;
+- the resulting neutral model records every evaluated project, project directory, build file, source set, source/resource/output root, declared project dependency, applied plugin implementation class, and task path;
+- source/content inventory is enriched from those evaluated source/resource roots, so a module does not have to live under stock `content/**`;
+- known OpenRune cache/server actions bind to the actual discovered Gradle task path, so a task such as `:cache-tools:buildCache` works without pretending the module is named `:or-cache`;
+- explicit command overrides remain the escape hatch when a fork renames the semantic task itself;
+- the evaluated model is attached to `ServerProjectInspection` and exposed through the active first-party OpenRune session.
+
+Gradle build configuration is executable code. The project browser/probe path therefore **must not** evaluate Gradle. Model evaluation belongs only to the explicit trusted/open-project path. The injected reporting task reads configured build structure and deliberately avoids resolving external dependency configurations or executing game/server classes.
+
+With exact source roots now available, the next convergence step is Kotlin semantic indexing over those roots, followed by the semantic content graph, provenance/edit lenses, and runtime simulation.
 
 ## OpenRune-FileStore
 
