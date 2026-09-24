@@ -28,6 +28,10 @@ class ChangePlanTest {
         assertEquals(java.util.Set.of((50 << 8) | 50, (51 << 8) | 50),
                 plan.affectedRegionIds());
         assertEquals(java.util.Set.of(west, east), plan.affectedTiles());
+        assertEquals(java.util.Set.of(0), plan.affectedPlanes());
+        assertEquals(new com.rspsi.editor.model.TileBounds(
+                        west.x(), west.y(), east.x(), east.y()),
+                plan.affectedWorldBounds().orElseThrow());
         assertEquals(List.of("preview-ready"), plan.diagnostics());
     }
 
@@ -42,6 +46,7 @@ class ChangePlanTest {
 
         assertTrue(plan.isEmpty());
         assertTrue(plan.affectedTiles().isEmpty());
+        assertTrue(plan.affectedWorldBounds().isEmpty());
     }
 
     private static TileSnapshot snapshot(int underlay) {
