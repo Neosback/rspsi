@@ -12,10 +12,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ZoneVboManagerTest {
 
     @Test
-    void faceMetadataSplitDoesNotIncreaseVanillaVertexBandwidth() {
-        assertEquals(12 * Float.BYTES, NativeSceneVertexLayout.BYTES_PER_VERTEX);
+    void packedFaceMetadataReducesVanillaVertexBandwidth() {
+        assertEquals(44, NativeSceneVertexLayout.BYTES_PER_VERTEX);
         assertEquals(4, NativeSceneVertexLayout.VERTEX_SHADING_FLOATS_PER_VERTEX);
-        assertEquals(3, NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX);
+        assertEquals(2, NativeSceneVertexLayout.FACE_METADATA_INTS_PER_VERTEX);
+        assertEquals(8, NativeSceneVertexLayout.FACE_METADATA_BYTES_PER_VERTEX);
     }
 
     @Test
