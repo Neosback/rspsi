@@ -125,6 +125,8 @@ public final class StudioApplication implements AutoCloseable {
         return thread;
     });
     private final AtomicBoolean sceneDirty = new AtomicBoolean(false);
+    private final AnimationRefreshDiagnostics animationRefreshDiagnostics =
+            new AnimationRefreshDiagnostics();
     private final Object sceneChangeLock = new Object();
     private final Set<TileCoordinate> pendingSceneChanges = new LinkedHashSet<>();
     private CompletableFuture<LoadedMapScene> pendingScene;
@@ -456,31 +458,46 @@ public final class StudioApplication implements AutoCloseable {
     private LoadedMapScene refreshMapAnimation(LoadedOsrsCacheSession cache,
                                                 LoadedMapScene baseScene,
                                                 int clientCycle) {
+        long totalStart = System.nanoTime();
+        long heapBefore = usedHeapBytes();
+
         var definitions = cache.bundle().definitions();
-        RenderWindowSceneBuilder windowBuilder = new RenderWindowSceneBuilder(definitions, editorPresentation(cache));
+        RenderWindowSceneBuilder windowBuilder =
+                new RenderWindowSceneBuilder(definitions, editorPresentation(cache));
+
+        long windowStart = System.nanoTime();
         RenderWindowSceneBuilder.AnimationRefreshResult animation =
                 windowBuilder.refreshAnimations(baseScene.windowScene(), clientCycle);
+        long windowRefreshNanos = System.nanoTime() - windowStart;
         RenderWindowScene scene = animation.scene();
+
+        long semanticStart = System.nanoTime();
         RenderScene renderScene = new RenderSceneBuilder(definitions, editorPresentation(cache))
                 .refreshAnimations(baseScene.renderScene(), clientCycle);
+        long semanticSceneNanos = System.nanoTime() - semanticStart;
 
         GpuScenePacket packet = baseScene.packet();
+        GpuScenePacketBuilder.IncrementalBuildResult packetUpdate = null;
+        long packetStart = System.nanoTime();
         long settingsRevision = renderSettings.revision();
         boolean settingsChanged = settingsRevision != baseScene.settingsRevision();
         if (!animation.dirtyZones().isEmpty()) {
             SceneWindow sceneWindow = SceneWindow.from(scene.window());
-            packet = new GpuScenePacketBuilder().buildIncremental(
-                    baseScene.packet(), sceneWindow, scene, animation.dirtyZones()).packet();
+            packetUpdate = new GpuScenePacketBuilder().buildIncremental(
+                    baseScene.packet(), sceneWindow, scene, animation.dirtyZones());
+            packet = packetUpdate.packet();
         }
+        long packetNanos = System.nanoTime() - packetStart;
 
         GpuUploadPlan plan = baseScene.plan();
         GpuZonedUploadPlan zonedPlan = baseScene.zonedPlan();
         IncrementalGpuUploadPlanBuilder incrementalPlanBuilder = baseScene.planBuilder();
+        IncrementalGpuUploadPlanBuilder.BuildResult planUpdate = null;
+        long planStart = System.nanoTime();
         if (settingsChanged || !animation.dirtyZones().isEmpty()) {
             RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
             GpuScenePacket visiblePacket = config.apply(packet);
             incrementalPlanBuilder = baseScene.planBuilder().fork();
-            IncrementalGpuUploadPlanBuilder.BuildResult planUpdate;
             if (settingsChanged) {
                 incrementalPlanBuilder.invalidateAll();
                 planUpdate = incrementalPlanBuilder.buildInitial(visiblePacket);
@@ -490,15 +507,36 @@ public final class StudioApplication implements AutoCloseable {
             plan = planUpdate.plan();
             zonedPlan = planUpdate.zonedPlan();
         }
+        long planNanos = System.nanoTime() - planStart;
 
-        if (!animation.dirtyZones().isEmpty()) {
-            LOGGER.debug("Animation cycle {} changed {} model tiles across {} GPU zones "
-                            + "(rebuiltModelTiles={}, fullModelRebuild={})",
-                    clientCycle, animation.changedTiles(), animation.dirtyZones().size(),
-                    animation.rebuiltModelTiles(), animation.fullModelRebuild());
-        }
         int nextAnimationRefreshCycle = AnimationRefreshScheduler.nextPresentationCycle(
                 scene, definitions, clientCycle);
+        long totalNanos = System.nanoTime() - totalStart;
+        long heapAfter = usedHeapBytes();
+
+        animationRefreshDiagnostics.record(new AnimationPipelineMetrics(
+                clientCycle,
+                animation.timings(),
+                windowRefreshNanos,
+                semanticSceneNanos,
+                packetNanos,
+                planNanos,
+                totalNanos,
+                animation.dirtyZones().size(),
+                animation.changedTiles(),
+                animation.rebuiltModelTiles(),
+                animation.fullModelRebuild(),
+                packetUpdate != null,
+                packetUpdate == null ? 0 : packetUpdate.rebuiltTiles(),
+                packetUpdate == null ? 0 : packetUpdate.reusedTiles(),
+                planUpdate != null,
+                planUpdate == null ? 0 : planUpdate.rebuiltTiles(),
+                planUpdate == null ? 0 : planUpdate.reusedTiles(),
+                planUpdate == null ? 0 : planUpdate.rebuiltZones(),
+                planUpdate == null ? 0 : planUpdate.reusedZones(),
+                heapBefore,
+                heapAfter));
+
         return new LoadedMapScene(
                 baseScene.opened(), baseScene.session(), scene, renderScene, packet, plan,
                 zonedPlan, incrementalPlanBuilder, settingsRevision,
@@ -895,6 +933,193 @@ public final class StudioApplication implements AutoCloseable {
                 metrics.planMillis(), metrics.renderSceneMillis(),
                 metrics.vertices(), metrics.indices(), metrics.commands(), metrics.textures(),
                 metrics.geometryKiB());
+    }
+
+    private static long usedHeapBytes() {
+        Runtime runtime = Runtime.getRuntime();
+        return runtime.totalMemory() - runtime.freeMemory();
+    }
+
+    private record AnimationPipelineMetrics(
+            int clientCycle,
+            RenderWindowSceneBuilder.AnimationRefreshTimings windowTimings,
+            long windowRefreshNanos,
+            long semanticSceneNanos,
+            long packetNanos,
+            long planNanos,
+            long totalNanos,
+            int dirtyZones,
+            int changedTiles,
+            int rebuiltModelTiles,
+            boolean fullModelRebuild,
+            boolean packetUpdated,
+            int packetRebuiltTiles,
+            int packetReusedTiles,
+            boolean planUpdated,
+            int planRebuiltTiles,
+            int planReusedTiles,
+            int planRebuiltZones,
+            int planReusedZones,
+            long heapBeforeBytes,
+            long heapAfterBytes
+    ) {
+        private AnimationPipelineMetrics {
+            if (clientCycle < 0 || windowRefreshNanos < 0L || semanticSceneNanos < 0L
+                    || packetNanos < 0L || planNanos < 0L || totalNanos < 0L
+                    || dirtyZones < 0 || changedTiles < 0 || rebuiltModelTiles < 0
+                    || packetRebuiltTiles < 0 || packetReusedTiles < 0
+                    || planRebuiltTiles < 0 || planReusedTiles < 0
+                    || planRebuiltZones < 0 || planReusedZones < 0
+                    || heapBeforeBytes < 0L || heapAfterBytes < 0L) {
+                throw new IllegalArgumentException("Animation pipeline metrics cannot be negative");
+            }
+            windowTimings = java.util.Objects.requireNonNull(windowTimings, "windowTimings");
+        }
+    }
+
+    /**
+     * Low-overhead rolling diagnostics for the animation hot path. Detailed
+     * per-refresh data stays at DEBUG; an aggregate INFO line is emitted every
+     * 100 refreshes so normal Studio logs can reveal sustained CPU/allocation
+     * pressure without producing one line per animation frame.
+     */
+    private static final class AnimationRefreshDiagnostics {
+        private static final int REPORT_INTERVAL = 100;
+
+        private int samples;
+        private int fullModelRebuilds;
+        private long totalNanos;
+        private long windowNanos;
+        private long paddedWorldNanos;
+        private long modelRebuildNanos;
+        private long semanticNanos;
+        private long packetNanos;
+        private long planNanos;
+        private long maxTotalNanos;
+        private long peakHeapBytes;
+        private long changedTiles;
+        private long rebuiltModelTiles;
+        private long packetRebuiltTiles;
+        private long planRebuiltTiles;
+        private long planRebuiltZones;
+
+        synchronized void record(AnimationPipelineMetrics metric) {
+            RenderWindowSceneBuilder.AnimationRefreshTimings inner = metric.windowTimings();
+            long heapDelta = metric.heapAfterBytes() - metric.heapBeforeBytes();
+
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug(
+                        "Animation perf cycle={} total={}ms window={}ms "
+                                + "(scan={} padded={} normalMerge={} models={} detect={}) "
+                                + "semantic={}ms packet={}ms plan={}ms dirtyZones={} changedTiles={} "
+                                + "rebuiltModelTiles={} fullModelRebuild={} packetUpdated={} "
+                                + "packetTiles={}/{} planUpdated={} planTiles={}/{} planZones={}/{} "
+                                + "heap={}MiB delta={}KiB",
+                        metric.clientCycle(),
+                        millis(metric.totalNanos()),
+                        millis(metric.windowRefreshNanos()),
+                        millis(inner.activeScanNanos()),
+                        millis(inner.paddedWorldNanos()),
+                        millis(inner.normalMergeCheckNanos()),
+                        millis(inner.modelRebuildNanos()),
+                        millis(inner.changeDetectionNanos()),
+                        millis(metric.semanticSceneNanos()),
+                        millis(metric.packetNanos()),
+                        millis(metric.planNanos()),
+                        metric.dirtyZones(),
+                        metric.changedTiles(),
+                        metric.rebuiltModelTiles(),
+                        metric.fullModelRebuild(),
+                        metric.packetUpdated(),
+                        metric.packetRebuiltTiles(),
+                        metric.packetReusedTiles(),
+                        metric.planUpdated(),
+                        metric.planRebuiltTiles(),
+                        metric.planReusedTiles(),
+                        metric.planRebuiltZones(),
+                        metric.planReusedZones(),
+                        mebibytes(metric.heapAfterBytes()),
+                        kibibytes(heapDelta));
+            }
+
+            samples++;
+            if (metric.fullModelRebuild()) fullModelRebuilds++;
+            totalNanos += metric.totalNanos();
+            windowNanos += metric.windowRefreshNanos();
+            paddedWorldNanos += inner.paddedWorldNanos();
+            modelRebuildNanos += inner.modelRebuildNanos();
+            semanticNanos += metric.semanticSceneNanos();
+            packetNanos += metric.packetNanos();
+            planNanos += metric.planNanos();
+            maxTotalNanos = Math.max(maxTotalNanos, metric.totalNanos());
+            peakHeapBytes = Math.max(peakHeapBytes, metric.heapAfterBytes());
+            changedTiles += metric.changedTiles();
+            rebuiltModelTiles += metric.rebuiltModelTiles();
+            packetRebuiltTiles += metric.packetRebuiltTiles();
+            planRebuiltTiles += metric.planRebuiltTiles();
+            planRebuiltZones += metric.planRebuiltZones();
+
+            if (samples >= REPORT_INTERVAL) {
+                LOGGER.info(
+                        "Animation perf {} refreshes: avg total={}ms window={}ms "
+                                + "(padded={} models={}) semantic={}ms packet={}ms plan={}ms, "
+                                + "max={}ms, fullModelRebuilds={}, avgChangedTiles={}, "
+                                + "avgRebuiltModelTiles={}, avgPacketRebuiltTiles={}, "
+                                + "avgPlanRebuiltTiles={}, avgPlanRebuiltZones={}, peakHeap={}MiB",
+                        samples,
+                        millis(totalNanos / samples),
+                        millis(windowNanos / samples),
+                        millis(paddedWorldNanos / samples),
+                        millis(modelRebuildNanos / samples),
+                        millis(semanticNanos / samples),
+                        millis(packetNanos / samples),
+                        millis(planNanos / samples),
+                        millis(maxTotalNanos),
+                        fullModelRebuilds,
+                        ratio(changedTiles, samples),
+                        ratio(rebuiltModelTiles, samples),
+                        ratio(packetRebuiltTiles, samples),
+                        ratio(planRebuiltTiles, samples),
+                        ratio(planRebuiltZones, samples),
+                        mebibytes(peakHeapBytes));
+                reset();
+            }
+        }
+
+        private void reset() {
+            samples = 0;
+            fullModelRebuilds = 0;
+            totalNanos = 0L;
+            windowNanos = 0L;
+            paddedWorldNanos = 0L;
+            modelRebuildNanos = 0L;
+            semanticNanos = 0L;
+            packetNanos = 0L;
+            planNanos = 0L;
+            maxTotalNanos = 0L;
+            peakHeapBytes = 0L;
+            changedTiles = 0L;
+            rebuiltModelTiles = 0L;
+            packetRebuiltTiles = 0L;
+            planRebuiltTiles = 0L;
+            planRebuiltZones = 0L;
+        }
+
+        private static double millis(long nanos) {
+            return nanos / 1_000_000.0;
+        }
+
+        private static double mebibytes(long bytes) {
+            return bytes / (1024.0 * 1024.0);
+        }
+
+        private static double kibibytes(long bytes) {
+            return bytes / 1024.0;
+        }
+
+        private static double ratio(long total, int count) {
+            return count == 0 ? 0.0 : (double) total / count;
+        }
     }
 
     private record SceneBuildMetrics(long windowNanos,

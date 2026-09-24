@@ -183,6 +183,10 @@ class RenderWindowSceneBuilderTest {
         assertSame(staticPacket,
                 refresh.scene().modelPackets().get(staticAddress).get(0),
                 "stationary model packets must remain resident by identity");
+        assertTrue(refresh.timings().totalNanos() >= refresh.timings().modelRebuildNanos());
+        assertTrue(refresh.timings().totalNanos() >= refresh.timings().paddedWorldNanos());
+        assertTrue(refresh.timings().activeScanNanos() >= 0L);
+        assertTrue(refresh.timings().normalMergeCheckNanos() >= 0L);
     }
 
     @Test
@@ -205,6 +209,9 @@ class RenderWindowSceneBuilderTest {
                 "mergeNormals animation tiles must preserve the scene-wide normal merge pass");
         assertEquals(1, refresh.changedTiles());
         assertTrue(refresh.rebuiltModelTiles() >= 1);
+        assertTrue(refresh.timings().totalNanos() >= refresh.timings().modelRebuildNanos());
+        assertTrue(refresh.timings().totalNanos() >= refresh.timings().normalMergeCheckNanos());
+        assertTrue(refresh.timings().paddedWorldNanos() >= 0L);
     }
 
     @Test
