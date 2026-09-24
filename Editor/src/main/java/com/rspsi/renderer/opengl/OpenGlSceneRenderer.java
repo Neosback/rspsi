@@ -403,6 +403,16 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // trigger a glBufferData re-upload. geometryUploaded/textureUploaded
         // are surfaced through Statistics so camera-drag regressions can be
         // caught by a debug overlay/log rather than assumed fixed.
+        boolean normalLayoutChanged =
+                zoneManager.setNormalStreamEnabled(presentation.debugView().requiresNormals());
+        if (normalLayoutChanged) {
+            // The VAO layout changed (attribute 7 appears/disappears), so the
+            // current plan must be made resident again even though its neutral
+            // scene fingerprint is unchanged.
+            uploadedFingerprint = null;
+            orderedPlanFingerprint = null;
+        }
+
         boolean geometryUploaded = false;
         boolean textureUploaded = false;
         int gpuZoneUploads = 0;

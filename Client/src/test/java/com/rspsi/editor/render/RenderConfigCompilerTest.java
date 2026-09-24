@@ -32,6 +32,7 @@ class RenderConfigCompilerTest {
         assertEquals(4, config.msaaSamples());
         assertEquals(BackfacePolicy.NativeCullingMode.CLIENT_FRONT,
                 RenderSettingKeys.registry().defaults().get(RenderSettingKeys.NATIVE_CULLING_MODE));
+        assertEquals(GpuDebugView.NONE, config.gpuDebugView());
     }
 
     @Test
@@ -56,6 +57,16 @@ class RenderConfigCompilerTest {
         assertEquals(2, config.visibilityPolicy().selectedPlane());
         assertTrue(config.visibilityPolicy().hideRoofGeometry());
         assertTrue(config.visibilityPolicy().hideBridgeUpperGeometry());
+    }
+
+    @Test
+    void gpuDebugViewCompilesIntoPresentationOnly() {
+        RenderConfig config = new RenderConfigCompiler().compile(
+                RenderSettingKeys.registry().defaults()
+                        .with(RenderSettingKeys.GPU_DEBUG_VIEW, GpuDebugView.NORMALS));
+
+        assertEquals(GpuDebugView.NORMALS, config.gpuDebugView());
+        assertEquals(GpuDebugView.NORMALS, config.presentation().debugView());
     }
 
     @Test
@@ -116,7 +127,7 @@ class RenderConfigCompilerTest {
                 RenderSettingKeys.ACTIVE_PLANE.id(), RenderSettingKeys.PLANE_SELECTION.id(),
                 RenderSettingKeys.BRIGHTNESS.id(), RenderSettingKeys.EXPOSURE.id(),
                 RenderSettingKeys.MSAA_SAMPLES.id(), RenderSettingKeys.FOG_DEPTH_TILES.id(),
-                RenderSettingKeys.FOG_COLOR.id());
+                RenderSettingKeys.FOG_COLOR.id(), RenderSettingKeys.GPU_DEBUG_VIEW.id());
 
         assertEquals(handled, renderConfigKeys);
         SettingsRegistry registry = RenderSettingKeys.registry();

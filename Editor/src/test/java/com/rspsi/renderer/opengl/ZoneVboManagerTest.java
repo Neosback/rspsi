@@ -112,6 +112,19 @@ class ZoneVboManagerTest {
     }
 
     @Test
+    void normalStreamLayoutCanBeEnabledOnlyWhileAConsumerNeedsIt() {
+        ZoneVboManager manager = new ZoneVboManager();
+        assertFalse(manager.normalStreamEnabled());
+
+        assertTrue(manager.setNormalStreamEnabled(true));
+        assertTrue(manager.normalStreamEnabled());
+        assertFalse(manager.setNormalStreamEnabled(true));
+
+        assertTrue(manager.setNormalStreamEnabled(false));
+        assertFalse(manager.normalStreamEnabled());
+    }
+
+    @Test
     void differentPlanesProduceDistinctZoneKeys() {
         WorldTileAddress plane0 = WorldTileAddress.of(3200, 3200, 0);
         WorldTileAddress plane1 = WorldTileAddress.of(3200, 3200, 1);

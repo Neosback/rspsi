@@ -115,7 +115,7 @@ public final class ZoneVboManager implements AutoCloseable {
 
     private final Map<Long, ZoneAllocation> allocations = new HashMap<>();
     private final GpuUploadScratch uploadScratch = new GpuUploadScratch();
-    private final boolean normalStreamEnabled;
+    private boolean normalStreamEnabled;
     private int[] commandLocalFirstIndices = new int[0];
     private long[] commandZoneKeys = new long[0];
     private int dirtyZonesUploadedCount;
@@ -133,6 +133,22 @@ public final class ZoneVboManager implements AutoCloseable {
 
     ZoneVboManager(boolean normalStreamEnabled) {
         this.normalStreamEnabled = normalStreamEnabled;
+    }
+
+    /**
+     * Enables the auxiliary normal VBO only for consumers that need it.
+     *
+     * <p>Changing the layout releases resident zone allocations so the next
+     * upload rebuilds VAOs with the correct attribute-7 binding. The reusable
+     * staging buffers remain alive.</p>
+     *
+     * @return true when the native zone layout changed
+     */
+    boolean setNormalStreamEnabled(boolean enabled) {
+        if (normalStreamEnabled == enabled) return false;
+        normalStreamEnabled = enabled;
+        clearAllocations();
+        return true;
     }
 
     public static long zoneKey(WorldTileAddress tile) {
@@ -522,8 +538,7 @@ public final class ZoneVboManager implements AutoCloseable {
         return uploadScratch.indexGrowths();
     }
 
-    @Override
-    public void close() {
+    private void clearAllocations() {
         for (ZoneAllocation allocation : allocations.values()) {
             delete(allocation);
         }
@@ -532,6 +547,11 @@ public final class ZoneVboManager implements AutoCloseable {
         commandZoneKeys = new long[0];
         resetUploadMetrics();
         totalZonesCount = 0;
+    }
+
+    @Override
+    public void close() {
+        clearAllocations();
         uploadScratch.close();
     }
 }
