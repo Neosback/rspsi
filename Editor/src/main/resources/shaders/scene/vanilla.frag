@@ -6,6 +6,7 @@ in vec2 vUv;
 noperspective in float vEncodedColor;
 in float vAlpha;
 in float vRenderType;
+in float vPriority;
 in vec3 vColor;
 in float vFogAmount;
 in vec3 vNormal;
@@ -80,7 +81,7 @@ void main() {
     }
     vec3 debugColor;
     if (gpuDebugColor(
-            uDebugView, color, alpha, vRenderType, aPriorityPlaceholder,
+            uDebugView, color, alpha, vRenderType, vPriority,
             uTextured, uTextureAvailable, uTextureMissing, uTextureLayer,
             vNormal, vFogAmount, vViewDepth, debugColor)) {
         outColor = vec4(debugColor, 1.0);
