@@ -77,8 +77,7 @@ public final class DdaScenePicker {
             float screenX, float screenY,
             SceneCameraProjection projection, Integer restrictToPlane,
             int pickerId) {
-        if (!PickerId.isValid(pickerId)
-                || (restrictToPlane != null && PickerId.plane(pickerId) != restrictToPlane)) {
+        if (!PickerId.isValid(pickerId)) {
             lastMetrics = Metrics.empty();
             return Optional.empty();
         }
