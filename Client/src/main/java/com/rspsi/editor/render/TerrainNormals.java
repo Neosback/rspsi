@@ -56,7 +56,7 @@ public final class TerrainNormals {
             return com.rspsi.osrs.rules.terrain.TerrainLightRules.calculateCornerNormal(
                     heightDeltaX, heightDeltaY, profile.heightScale());
         } catch (IndexOutOfBoundsException missingNeighbor) {
-            return TerrainNormal.FLAT;
+            return flat(profile);
         }
     }
 
@@ -64,7 +64,7 @@ public final class TerrainNormals {
                                               LightingProfile profile,
                                               int plane, int vx, int vy) {
         if (vx <= 0 || vy <= 0 || vx >= document.width() || vy >= document.length()) {
-            return TerrainNormal.FLAT;
+            return flat(profile);
         }
         int heightDeltaX = cornerHeight(document, plane, vx + 1, vy)
                 - cornerHeight(document, plane, vx - 1, vy);
@@ -72,6 +72,11 @@ public final class TerrainNormals {
                 - cornerHeight(document, plane, vx, vy - 1);
         return com.rspsi.osrs.rules.terrain.TerrainLightRules.calculateCornerNormal(
                 heightDeltaX, heightDeltaY, profile.heightScale());
+    }
+
+    private static TerrainNormal flat(LightingProfile profile) {
+        return com.rspsi.osrs.rules.terrain.TerrainLightRules.calculateCornerNormal(
+                0, 0, profile.heightScale());
     }
 
     private static int cornerHeight(WorldDocument document, int plane, int vx, int vy) {
