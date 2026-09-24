@@ -2,7 +2,7 @@ package com.rspsi.renderer.opengl;
 
 import com.rspsi.editor.render.RenderTextureResource;
 import com.rspsi.editor.render.TextureAnimation;
-import org.lwjgl.BufferUtils;
+import org.lwjgl.system.MemoryUtil;
 
 import java.nio.FloatBuffer;
 import java.util.Map;
@@ -30,6 +30,8 @@ import static org.lwjgl.opengl.GL31.glTexBuffer;
  */
 final class TextureStateBuffer implements AutoCloseable {
     static final int FLOATS_PER_ENTRY = 4;
+    /** scaleU=0 marks an unavailable texture entry to the shaders. */
+    static final Entry UNAVAILABLE = new Entry(0.0f, 0.0f, 0.0f, 0.0f);
     static final Entry DEFAULT = new Entry(1.0f, 1.0f, 0.0f, 0.0f);
 
     record Entry(float scaleU, float scaleV,
@@ -40,10 +42,11 @@ final class TextureStateBuffer implements AutoCloseable {
     private int texture;
     private int entryCount;
     private long lastUploadBytes;
+    private FloatBuffer staging;
 
     static Entry entryFor(RenderTextureResource resource) {
         Objects.requireNonNull(resource, "resource");
-        if (!resource.hasGpuPixels()) return DEFAULT;
+        if (!resource.hasGpuPixels()) return UNAVAILABLE;
         TextureAnimation.UvOffset rate = TextureAnimation.rate(resource);
         return new Entry(1.0f, 1.0f, rate.u(), rate.v());
     }
@@ -62,10 +65,19 @@ final class TextureStateBuffer implements AutoCloseable {
         entryCount = Math.max(minimumCapacity, largestTextureId + 1);
         lastUploadBytes = (long) entryCount * FLOATS_PER_ENTRY * Float.BYTES;
 
-        FloatBuffer data = BufferUtils.createFloatBuffer(entryCount * FLOATS_PER_ENTRY);
+        int requiredFloats = entryCount * FLOATS_PER_ENTRY;
+        if (staging == null || staging.capacity() < requiredFloats) {
+            int capacity = Integer.highestOneBit(Math.max(1, requiredFloats - 1)) << 1;
+            if (capacity < requiredFloats) capacity = requiredFloats;
+            FloatBuffer replacement = MemoryUtil.memAllocFloat(capacity);
+            if (staging != null) MemoryUtil.memFree(staging);
+            staging = replacement;
+        }
+        FloatBuffer data = staging;
+        data.clear();
         for (int textureId = 0; textureId < entryCount; textureId++) {
             RenderTextureResource resource = resources.get(textureId);
-            Entry entry = resource == null ? DEFAULT : entryFor(resource);
+            Entry entry = resource == null ? UNAVAILABLE : entryFor(resource);
             data.put(entry.scaleU())
                     .put(entry.scaleV())
                     .put(entry.animationUPerCycle())
@@ -111,5 +123,9 @@ final class TextureStateBuffer implements AutoCloseable {
         buffer = 0;
         entryCount = 0;
         lastUploadBytes = 0L;
+        if (staging != null) {
+            MemoryUtil.memFree(staging);
+            staging = null;
+        }
     }
 }
