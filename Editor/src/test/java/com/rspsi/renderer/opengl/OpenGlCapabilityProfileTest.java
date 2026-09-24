@@ -43,6 +43,21 @@ class OpenGlCapabilityProfileTest {
     }
 
     @Test
+    void derivesFutureFeatureEligibilityFromOneCapabilitySnapshot() {
+        OpenGlCapabilityProfile baseline = profile(4, 256, 65_536, 16_384, 16);
+        assertTrue(baseline.supportsPickerIdPass());
+
+        OpenGlCapabilityProfile optional = new OpenGlCapabilityProfile(
+                "Vendor", "Renderer", "4.6",
+                4, 6, true,
+                8, 16_384, 2048, 65_536,
+                65_536, 84, 192, 16, 8, 8,
+                true, 16.0f,
+                true, true, true);
+        assertTrue(optional.supportsPersistentMapping());
+    }
+
+    @Test
     void diagnosticSummaryIncludesFutureFeatureSelectionFlags() {
         OpenGlCapabilityProfile profile = new OpenGlCapabilityProfile(
                 "Vendor", "Renderer", "4.6",
