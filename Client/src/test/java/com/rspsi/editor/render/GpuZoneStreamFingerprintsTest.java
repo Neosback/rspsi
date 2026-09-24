@@ -16,7 +16,8 @@ class GpuZoneStreamFingerprintsTest {
         GpuZoneStreamFingerprints changed = fingerprints(vertex(0.25f, 0, 0, 100, 1, 2, 3, 4));
 
         assertNotEquals(first.geometry(), changed.geometry());
-        assertEquals(first.shading(), changed.shading());
+        assertEquals(first.vertexShading(), changed.vertexShading());
+        assertEquals(first.faceShading(), changed.faceShading());
         assertEquals(first.indices(), changed.indices());
         assertEquals(first.normals(), changed.normals());
     }
@@ -27,7 +28,22 @@ class GpuZoneStreamFingerprintsTest {
         GpuZoneStreamFingerprints changed = fingerprints(vertex(0, 0, 0, 200, 1, 2, 3, 4));
 
         assertEquals(first.geometry(), changed.geometry());
-        assertNotEquals(first.shading(), changed.shading());
+        assertNotEquals(first.vertexShading(), changed.vertexShading());
+        assertEquals(first.faceShading(), changed.faceShading());
+        assertEquals(first.indices(), changed.indices());
+        assertEquals(first.normals(), changed.normals());
+    }
+
+    @Test
+    void alphaChangeInvalidatesFaceMetadataWithoutReuploadingVertexShading() {
+        GpuZoneStreamFingerprints first = fingerprints(
+                vertex(0, 0, 0, 100, 255, 0, 0, 1, 2, 3, 4));
+        GpuZoneStreamFingerprints changed = fingerprints(
+                vertex(0, 0, 0, 100, 128, 0, 0, 1, 2, 3, 4));
+
+        assertEquals(first.geometry(), changed.geometry());
+        assertEquals(first.vertexShading(), changed.vertexShading());
+        assertNotEquals(first.faceShading(), changed.faceShading());
         assertEquals(first.indices(), changed.indices());
         assertEquals(first.normals(), changed.normals());
     }
@@ -38,7 +54,8 @@ class GpuZoneStreamFingerprintsTest {
         GpuZoneStreamFingerprints changed = fingerprints(vertex(0, 0, 0, 100, 9, 8, 7, 6));
 
         assertEquals(first.geometry(), changed.geometry());
-        assertEquals(first.shading(), changed.shading());
+        assertEquals(first.vertexShading(), changed.vertexShading());
+        assertEquals(first.faceShading(), changed.faceShading());
         assertEquals(first.indices(), changed.indices());
         assertNotEquals(first.normals(), changed.normals());
         assertEquals(first.nativeFingerprint(), changed.nativeFingerprint());
@@ -57,7 +74,8 @@ class GpuZoneStreamFingerprintsTest {
                 GpuZoneUpload.fingerprints(vertices, List.of(0, 2, 1));
 
         assertEquals(first.geometry(), changed.geometry());
-        assertEquals(first.shading(), changed.shading());
+        assertEquals(first.vertexShading(), changed.vertexShading());
+        assertEquals(first.faceShading(), changed.faceShading());
         assertNotEquals(first.indices(), changed.indices());
         assertEquals(first.normals(), changed.normals());
     }
@@ -75,11 +93,19 @@ class GpuZoneStreamFingerprintsTest {
     private static GpuSceneVertex vertex(float u, float xOffset, float zOffset, int color,
                                          int normalX, int normalY, int normalZ,
                                          int normalMagnitude) {
+        return vertex(u, xOffset, zOffset, color, 255, 0, 0,
+                normalX, normalY, normalZ, normalMagnitude);
+    }
+
+    private static GpuSceneVertex vertex(float u, float xOffset, float zOffset, int color,
+                                         int alpha, int renderType, int priority,
+                                         int normalX, int normalY, int normalZ,
+                                         int normalMagnitude) {
         return new GpuSceneVertex(
                 128.0f + xOffset, 0.0f, 128.0f + zOffset,
                 u, 0.5f, color, GpuColorEncoding.PACKED_JAGEX_HSL,
-                0, normalX, normalY, normalZ, normalMagnitude,
-                -1, 255, 0,
+                renderType, normalX, normalY, normalZ, normalMagnitude,
+                -1, alpha, priority,
                 0, 1, 1, PickerId.terrainSlot());
     }
 }
