@@ -63,6 +63,14 @@ public final class WorkspaceManager {
         return true;
     }
 
+    /** Resets project workspaces when switching/closing the active Studio project. */
+    public void reset() {
+        open.clear();
+        open.add(Workspace.DASHBOARD);
+        active = Workspace.DASHBOARD;
+        pendingFocus = Workspace.DASHBOARD;
+    }
+
     /** Removes a tab. Dashboard can never be closed; it is the permanent home tab. */
     public void close(Workspace workspace) {
         if (workspace == Workspace.DASHBOARD) return;

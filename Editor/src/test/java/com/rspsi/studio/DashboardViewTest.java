@@ -1,49 +1,25 @@
 package com.rspsi.studio;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class DashboardViewTest {
-
-    @Test
-    void emptyPathDoesNotPointToDirectoryOrValidCache() {
-        DashboardView view = new DashboardView("");
-        assertFalse(view.pointsToDirectory());
-        assertFalse(view.pointsToValidCache());
-    }
-
-    @Test
-    void nonExistentPathDoesNotPointToDirectoryOrValidCache(@TempDir Path tempDir) {
-        Path missing = tempDir.resolve("does-not-exist");
-        DashboardView view = new DashboardView(missing.toString());
-        assertFalse(view.pointsToDirectory());
-        assertFalse(view.pointsToValidCache());
-    }
-
-    @Test
-    void directoryWithoutDat2PointsToDirectoryButNotValidCache(@TempDir Path tempDir) {
-        DashboardView view = new DashboardView(tempDir.toString());
-        assertTrue(view.pointsToDirectory());
-        assertFalse(view.pointsToValidCache());
-    }
-
-    @Test
-    void directoryWithDat2PointsToDirectoryAndValidCache(@TempDir Path tempDir) throws IOException {
-        Files.createFile(tempDir.resolve("main_file_cache.dat2"));
-        DashboardView view = new DashboardView(tempDir.toString());
-        assertTrue(view.pointsToDirectory());
-        assertTrue(view.pointsToValidCache());
-    }
-
     @Test
     void regionTextDefaultsToLumbridge() {
-        DashboardView view = new DashboardView(null);
+        DashboardView view = new DashboardView();
         assertEquals("50,50", view.regionText());
+    }
+
+    @Test
+    void workspaceResetReturnsToPermanentDashboardHome() {
+        WorkspaceManager workspaces = new WorkspaceManager();
+        workspaces.openMapEditor(com.rspsi.cache.workspace.CacheSessionState.READY);
+        workspaces.openInterfaceStudio(com.rspsi.cache.workspace.CacheSessionState.READY);
+
+        workspaces.reset();
+
+        assertEquals(WorkspaceManager.Workspace.DASHBOARD, workspaces.active());
+        assertEquals(java.util.Set.of(WorkspaceManager.Workspace.DASHBOARD), workspaces.open());
     }
 }
