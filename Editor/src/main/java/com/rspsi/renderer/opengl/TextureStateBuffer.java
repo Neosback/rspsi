@@ -24,9 +24,9 @@ import static org.lwjgl.opengl.GL31.glTexBuffer;
  * GPU-resident per-texture state indexed by the native texture-array layer.
  *
  * <p>Each RGBA32F entry stores {@code scaleU, scaleV, animationUPerCycle,
- * animationVPerCycle}. The cache texture id is also the texture-array layer,
- * so the shader can fetch state directly with {@code uTextureLayer} without
- * any second indirection or per-command animation uniforms.</p>
+ * animationVPerCycle}. The cache texture id is also the texture-array layer
+ * and is carried in the packed face-material stream, so the shader fetches
+ * state directly without per-command material uniforms.</p>
  */
 final class TextureStateBuffer implements AutoCloseable {
     static final int FLOATS_PER_ENTRY = 4;
