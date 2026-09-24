@@ -125,6 +125,53 @@ class ZoneVboManagerTest {
     }
 
     @Test
+    void pickerOnlyChangeIsIgnoredByVanillaButScheduledWhenPickerStreamIsEnabled() {
+        ZoneVboManager.ZoneAllocation existing = new ZoneVboManager.ZoneAllocation(
+                1L, 10, 11, 12, 13, 14, 15, 16,
+                100L, 200L, 300L, 400L, 500L, 600L);
+        GpuZoneStreamFingerprints changed =
+                new GpuZoneStreamFingerprints(100L, 200L, 300L, 600L, 400L, 501L);
+
+        ZoneVboManager.StreamUploadDecision vanilla =
+                ZoneVboManager.streamUploadDecision(existing, changed, false, false);
+        ZoneVboManager.StreamUploadDecision withPicker =
+                ZoneVboManager.streamUploadDecision(existing, changed, false, true);
+
+        assertFalse(vanilla.any());
+        assertFalse(vanilla.pickers());
+        assertFalse(withPicker.geometry());
+        assertFalse(withPicker.shading());
+        assertFalse(withPicker.normals());
+        assertTrue(withPicker.pickers());
+        assertFalse(withPicker.indices());
+        assertTrue(withPicker.any());
+    }
+
+    @Test
+    void normalAndPickerLayoutsCanBeEnabledIndependently() {
+        ZoneVboManager manager = new ZoneVboManager();
+        assertFalse(manager.normalStreamEnabled());
+        assertFalse(manager.pickerStreamEnabled());
+
+        assertTrue(manager.setAuxiliaryStreams(true, false));
+        assertTrue(manager.normalStreamEnabled());
+        assertFalse(manager.pickerStreamEnabled());
+
+        assertTrue(manager.setAuxiliaryStreams(true, true));
+        assertTrue(manager.normalStreamEnabled());
+        assertTrue(manager.pickerStreamEnabled());
+
+        assertTrue(manager.setAuxiliaryStreams(false, true));
+        assertFalse(manager.normalStreamEnabled());
+        assertTrue(manager.pickerStreamEnabled());
+
+        assertTrue(manager.setAuxiliaryStreams(false, false));
+        assertFalse(manager.normalStreamEnabled());
+        assertFalse(manager.pickerStreamEnabled());
+        assertFalse(manager.setAuxiliaryStreams(false, false));
+    }
+
+    @Test
     void differentPlanesProduceDistinctZoneKeys() {
         WorldTileAddress plane0 = WorldTileAddress.of(3200, 3200, 0);
         WorldTileAddress plane1 = WorldTileAddress.of(3200, 3200, 1);
