@@ -337,9 +337,13 @@ public final class GpuUploadPlanBuilder {
             digest.update(counts);
 
             if (!commands.isEmpty()) {
+                int commandBufferBytes = commands.stream()
+                        .mapToInt(cmd -> 192 + cmd.clientRenderableBounds().size() * 68)
+                        .max()
+                        .orElse(192);
+                ByteBuffer cmdBuffer = ByteBuffer.allocate(commandBufferBytes);
                 for (GpuDrawCommand cmd : commands) {
-                    ByteBuffer cmdBuffer = ByteBuffer.allocate(
-                            192 + cmd.clientRenderableBounds().size() * 68);
+                    cmdBuffer.clear();
                     cmdBuffer.putInt(cmd.tile().plane())
                             .putInt(cmd.tile().worldX())
                             .putInt(cmd.tile().worldY())
@@ -429,16 +433,18 @@ public final class GpuUploadPlanBuilder {
                 digest.update(idxBuffer);
             }
 
-            textures.values().stream().sorted(java.util.Comparator.comparingInt(RenderTextureResource::id))
-                    .forEach(texture -> {
-                        digest.update(Integer.toString(texture.id()).getBytes(StandardCharsets.UTF_8));
-                        digest.update(texture.pixelStatus().name().getBytes(StandardCharsets.UTF_8));
-                        ByteBuffer dims = ByteBuffer.allocate(12);
-                        dims.putInt(texture.width()).putInt(texture.height())
-                                .putInt(texture.pixelHash());
-                        dims.flip();
-                        digest.update(dims);
-                    });
+            ByteBuffer textureMetadata = ByteBuffer.allocate(12);
+            for (RenderTextureResource texture : textures.values().stream()
+                    .sorted(java.util.Comparator.comparingInt(RenderTextureResource::id))
+                    .toList()) {
+                digest.update(Integer.toString(texture.id()).getBytes(StandardCharsets.UTF_8));
+                digest.update(texture.pixelStatus().name().getBytes(StandardCharsets.UTF_8));
+                textureMetadata.clear();
+                textureMetadata.putInt(texture.width()).putInt(texture.height())
+                        .putInt(texture.pixelHash());
+                textureMetadata.flip();
+                digest.update(textureMetadata);
+            }
 
             byte[] hash = digest.digest();
             StringBuilder result = new StringBuilder(hash.length * 2);
