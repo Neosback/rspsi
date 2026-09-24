@@ -5,9 +5,9 @@ package com.rspsi.editor.render;
  *
  * <p>{@code pickerPlane}/{@code pickerTileX}/{@code pickerTileY}/{@code pickerSlot} carry the
  * same value across every vertex of one tile's terrain, or one object's mesh (broadcast, not
- * deduplicated) - a future GPU picker-ID render pass packs them per {@link PickerId} so a click
- * resolves to an exact tile/object via a single pixel readback instead of a CPU ray-triangle
- * scan. See {@code docs/UI_UX_BACKLOG_2026-09-20.md} for the full plan.</p>
+ * deduplicated). The optional GPU picker-ID pass packs these values per {@link PickerId}; its
+ * single-pixel result then constrains the zone-resident DDA picker so duplicate objects sharing
+ * one tile/layer ID still resolve to exact object metadata.</p>
  */
 public record GpuSceneVertex(
         float x,
