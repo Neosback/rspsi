@@ -15,6 +15,8 @@ final class RendererPerformanceMetrics {
 
     private final long[] cpuFrameSamples = new long[WINDOW_SIZE];
     private final long[] gpuSceneSamples = new long[WINDOW_SIZE];
+    private final long[] cpuSortedScratch = new long[WINDOW_SIZE];
+    private final long[] gpuSortedScratch = new long[WINDOW_SIZE];
     private int cpuFrameSampleCount;
     private int gpuSceneSampleCount;
     private int cpuFrameCursor;
@@ -84,6 +86,8 @@ final class RendererPerformanceMetrics {
     }
 
     Snapshot snapshot() {
+        sortSamples(cpuFrameSamples, cpuFrameSampleCount, cpuSortedScratch);
+        sortSamples(gpuSceneSamples, gpuSceneSampleCount, gpuSortedScratch);
         return new Snapshot(
                 lastCpuFrameNanos,
                 geometryUploadNanos,
@@ -92,10 +96,10 @@ final class RendererPerformanceMetrics {
                 orderingNanos,
                 submissionNanos,
                 lastGpuSceneNanos,
-                percentile(cpuFrameSamples, cpuFrameSampleCount, 0.50),
-                percentile(cpuFrameSamples, cpuFrameSampleCount, 0.95),
-                percentile(gpuSceneSamples, gpuSceneSampleCount, 0.50),
-                percentile(gpuSceneSamples, gpuSceneSampleCount, 0.95),
+                rankedPercentile(cpuSortedScratch, cpuFrameSampleCount, 0.50),
+                rankedPercentile(cpuSortedScratch, cpuFrameSampleCount, 0.95),
+                rankedPercentile(gpuSortedScratch, gpuSceneSampleCount, 0.50),
+                rankedPercentile(gpuSortedScratch, gpuSceneSampleCount, 0.95),
                 cpuFrameSampleCount,
                 gpuSceneSampleCount,
                 lastPickerCpuNanos,
@@ -105,6 +109,8 @@ final class RendererPerformanceMetrics {
     void reset() {
         Arrays.fill(cpuFrameSamples, 0L);
         Arrays.fill(gpuSceneSamples, 0L);
+        Arrays.fill(cpuSortedScratch, 0L);
+        Arrays.fill(gpuSortedScratch, 0L);
         cpuFrameSampleCount = 0;
         gpuSceneSampleCount = 0;
         cpuFrameCursor = 0;
@@ -131,9 +137,20 @@ final class RendererPerformanceMetrics {
         }
         long[] copy = Arrays.copyOf(samples, count);
         Arrays.sort(copy);
+        return rankedPercentile(copy, count, percentile);
+    }
+
+    private static void sortSamples(long[] samples, int count, long[] scratch) {
+        if (count <= 0) return;
+        System.arraycopy(samples, 0, scratch, 0, count);
+        Arrays.sort(scratch, 0, count);
+    }
+
+    private static long rankedPercentile(long[] sortedSamples, int count, double percentile) {
+        if (count <= 0) return 0L;
         int index = Math.max(0, Math.min(count - 1,
                 (int) Math.ceil(percentile * count) - 1));
-        return copy[index];
+        return sortedSamples[index];
     }
 
     private static long nonNegative(long nanos) {
