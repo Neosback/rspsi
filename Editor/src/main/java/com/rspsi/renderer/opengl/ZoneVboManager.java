@@ -353,10 +353,10 @@ public final class ZoneVboManager implements AutoCloseable {
                     * NativeSceneVertexLayout.VERTEX_SHADING_FLOATS_PER_VERTEX * Float.BYTES;
         }
         if (decision.faceMetadata()) {
-            arena.uploadFaceMetadata(allocation.vertexOffset(), vertices);
+            arena.uploadFaceMetadata(allocation.vertexOffset(), zone);
             faceMetadataStreamUploads++;
             faceMetadataBytesUploaded += (long) vertices.size()
-                    * NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX * Float.BYTES;
+                    * NativeSceneVertexLayout.FACE_METADATA_BYTES_PER_VERTEX;
         }
         if (decision.normals()) {
             arena.uploadNormals(allocation.vertexOffset(), vertices);
