@@ -65,16 +65,16 @@ public record GpuZoneUpload(
         }
 
         for (int offset = 0; offset < indices.size(); offset += 3) {
-            GpuFaceShading face = vertices.get(indices.get(offset)).faceShading();
-            GpuFaceShading second = vertices.get(indices.get(offset + 1)).faceShading();
-            GpuFaceShading third = vertices.get(indices.get(offset + 2)).faceShading();
-            if (!face.equals(second) || !face.equals(third)) {
+            GpuSceneVertex first = vertices.get(indices.get(offset));
+            GpuSceneVertex second = vertices.get(indices.get(offset + 1));
+            GpuSceneVertex third = vertices.get(indices.get(offset + 2));
+            if (!sameFaceShading(first, second) || !sameFaceShading(first, third)) {
                 throw new IllegalArgumentException(
                         "Face shading metadata must be constant across one triangle");
             }
-            faceShading = mix(faceShading, face.alpha());
-            faceShading = mix(faceShading, face.renderType());
-            faceShading = mix(faceShading, face.priority());
+            faceShading = mix(faceShading, first.alpha());
+            faceShading = mix(faceShading, first.renderType());
+            faceShading = mix(faceShading, first.priority());
         }
 
         long topology = mix(1125899906842597L, indices.size());
@@ -86,6 +86,12 @@ public record GpuZoneUpload(
     /** Current native-residency aggregate retained for flat-plan callers. */
     public static long fingerprint(List<GpuSceneVertex> vertices, List<Integer> indices) {
         return fingerprints(vertices, indices).nativeFingerprint();
+    }
+
+    private static boolean sameFaceShading(GpuSceneVertex first, GpuSceneVertex second) {
+        return first.alpha() == second.alpha()
+                && first.renderType() == second.renderType()
+                && first.priority() == second.priority();
     }
 
     private static long mix(long hash, int value) {
