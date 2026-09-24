@@ -93,7 +93,7 @@ class WorldFragmentTransformerTest {
 
         WorldFragmentTransformResult result = WorldFragmentTransformer.transform(
                 fragment,
-                WorldFragmentTransform.mirrorX(),
+                WorldFragmentTransform.reflectX(),
                 resolver(Map.of(77, new ObjectFootprintResolver.ObjectFootprint(2, 1))));
 
         WorldObject transformed = result.fragment().objects().get(0);
