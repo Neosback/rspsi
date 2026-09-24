@@ -16,6 +16,8 @@ bool gpuDebugColor(
     float renderType,
     float priority,
     int textured,
+    int textureAvailable,
+    int textureMissing,
     int textureLayer,
     vec3 normal,
     float fogAmount,
@@ -34,9 +36,15 @@ bool gpuDebugColor(
         float value = clamp(priority / 11.0, 0.0, 1.0);
         result = vec3(value, 1.0 - abs(value * 2.0 - 1.0), 1.0 - value);
     } else if (mode == 5) {
-        result = textured != 0
-                ? debugHashColor(max(0, textureLayer))
-                : vec3(0.08);
+        if (textured == 0) {
+            result = vec3(0.08);
+        } else if (textureMissing != 0) {
+            result = vec3(1.0, 0.0, 1.0);
+        } else if (textureAvailable == 0) {
+            result = vec3(1.0, 0.45, 0.0);
+        } else {
+            result = debugHashColor(max(0, textureLayer));
+        }
     } else if (mode == 6) {
         float normalLength = length(normal);
         result = normalLength > 0.0001
