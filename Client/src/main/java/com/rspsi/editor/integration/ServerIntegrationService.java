@@ -3,6 +3,8 @@ package com.rspsi.editor.integration;
 import com.rspsi.editor.integration.npc.NpcSpawnService;
 import com.rspsi.editor.integration.reference.ReferenceService;
 import com.rspsi.editor.symbols.SymbolService;
+import com.rspsi.server.ServerConnection;
+import com.rspsi.server.ServerProjectInspection;
 
 import java.nio.file.Path;
 import java.util.Collections;
@@ -74,6 +76,11 @@ public final class ServerIntegrationService {
         return activeSession != null;
     }
 
+    /** Returns the authoritative inspection for the active project when the provider exposes one. */
+    public Optional<ServerProjectInspection> activeProjectInspection() {
+        return activeSession == null ? Optional.empty() : activeSession.projectInspection();
+    }
+
     /**
      * Probes all registered providers against a prospective server project folder.
      */
@@ -93,23 +100,43 @@ public final class ServerIntegrationService {
     public IntegrationSession connect(Path path, IntegrationOptions options) {
         Objects.requireNonNull(path, "path");
         Objects.requireNonNull(options, "options");
+        return connectPath(path, options);
+    }
+
+    /**
+     * Connects an already-persisted server connection without throwing away path, command or
+     * fingerprint overrides established by project inspection/settings.
+     */
+    public IntegrationSession connect(ServerConnection connection, IntegrationOptions options) {
+        Objects.requireNonNull(connection, "connection");
+        Objects.requireNonNull(options, "options");
 
         disconnect();
-
+        Path path = connection.root();
         for (ServerIntegrationProvider provider : providers) {
             if (provider.canOpen(path)) {
-                IntegrationSession session = provider.open(path, options);
-                this.activeSession = session;
-
-                session.symbolProvider().ifPresent(symbolService::registerProvider);
-                session.referenceProvider().ifPresent(referenceService::registerProvider);
-                session.npcSpawnProvider().ifPresent(npcSpawnService::registerProvider);
-
-                return session;
+                return bind(provider.open(connection, options));
             }
         }
-
         throw new IllegalArgumentException("No server integration provider recognized project at: " + path);
+    }
+
+    private IntegrationSession connectPath(Path path, IntegrationOptions options) {
+        disconnect();
+        for (ServerIntegrationProvider provider : providers) {
+            if (provider.canOpen(path)) {
+                return bind(provider.open(path, options));
+            }
+        }
+        throw new IllegalArgumentException("No server integration provider recognized project at: " + path);
+    }
+
+    private IntegrationSession bind(IntegrationSession session) {
+        this.activeSession = Objects.requireNonNull(session, "session");
+        session.symbolProvider().ifPresent(symbolService::registerProvider);
+        session.referenceProvider().ifPresent(referenceService::registerProvider);
+        session.npcSpawnProvider().ifPresent(npcSpawnService::registerProvider);
+        return session;
     }
 
     /**
