@@ -124,6 +124,24 @@ public final class EditorExecutionService implements AutoCloseable {
         debounced.clear();
         scheduler.shutdownNow();
         background.shutdownNow();
+        awaitTermination(scheduler);
+        awaitTermination(background);
+    }
+
+    private static void awaitTermination(java.util.concurrent.ExecutorService executor) {
+        boolean interrupted = false;
+        try {
+            try {
+                if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                }
+            } catch (InterruptedException interruption) {
+                interrupted = true;
+                executor.shutdownNow();
+            }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
+        }
     }
 
     private void requireOpen() {
