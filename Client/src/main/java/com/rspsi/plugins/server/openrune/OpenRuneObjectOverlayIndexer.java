@@ -45,14 +45,29 @@ public final class OpenRuneObjectOverlayIndexer {
             if (name.endsWith(".toml")) files.add(entry.path());
         });
 
+        return indexFiles(files, symbols);
+    }
+
+    /** Indexes an explicit TOML set; used by bundled-source acceptance and focused tooling. */
+    public ServerObjectSemanticIndex indexFiles(
+            Iterable<Path> files,
+            SymbolProvider symbols) {
+        Objects.requireNonNull(files, "files");
+        Objects.requireNonNull(symbols, "symbols");
+
+        LinkedHashSet<Path> unique = new LinkedHashSet<>();
+        for (Path file : files) {
+            if (file != null) unique.add(file.toAbsolutePath().normalize());
+        }
+
         List<ServerObjectSemanticOverlay> overlays = new ArrayList<>();
         List<String> diagnostics = new ArrayList<>();
-        for (Path file : files) {
+        for (Path file : unique) {
             indexFile(file, symbols, overlays, diagnostics);
         }
 
         diagnostics.add("OpenRune object overlays indexed " + overlays.size()
-                + " authored object block(s) from " + files.size() + " TOML file(s)");
+                + " authored object block(s) from " + unique.size() + " TOML file(s)");
         return new ServerObjectSemanticIndex(overlays, diagnostics);
     }
 
