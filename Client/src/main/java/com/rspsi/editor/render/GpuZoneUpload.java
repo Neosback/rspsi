@@ -77,6 +77,10 @@ public record GpuZoneUpload(
                 throw new IllegalArgumentException(
                         "Face shading metadata must be constant across one triangle");
             }
+            if (!samePickerId(first, second) || !samePickerId(first, third)) {
+                throw new IllegalArgumentException(
+                        "Picker metadata must be constant across one triangle");
+            }
             faceShading = mix(faceShading, first.alpha());
             faceShading = mix(faceShading, first.renderType());
             faceShading = mix(faceShading, first.priority());
@@ -97,6 +101,13 @@ public record GpuZoneUpload(
         return first.alpha() == second.alpha()
                 && first.renderType() == second.renderType()
                 && first.priority() == second.priority();
+    }
+
+    private static boolean samePickerId(GpuSceneVertex first, GpuSceneVertex second) {
+        return first.pickerPlane() == second.pickerPlane()
+                && first.pickerTileX() == second.pickerTileX()
+                && first.pickerTileY() == second.pickerTileY()
+                && first.pickerSlot() == second.pickerSlot();
     }
 
     private static long mix(long hash, int value) {
