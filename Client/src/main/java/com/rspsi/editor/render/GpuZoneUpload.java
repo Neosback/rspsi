@@ -41,9 +41,9 @@ public record GpuZoneUpload(
         Objects.requireNonNull(vertices, "vertices");
         Objects.requireNonNull(indices, "indices");
 
-        long geometry = 1125899906842597L;
-        long shading = 1125899906842597L;
-        long normals = 1125899906842597L;
+        long geometry = mix(1125899906842597L, vertices.size());
+        long shading = mix(1125899906842597L, vertices.size());
+        long normals = mix(1125899906842597L, vertices.size());
         for (GpuSceneVertex vertex : vertices) {
             geometry = mix(geometry, Float.floatToIntBits(vertex.x()));
             geometry = mix(geometry, Float.floatToIntBits(vertex.y()));
@@ -52,7 +52,7 @@ public record GpuZoneUpload(
             geometry = mix(geometry, Float.floatToIntBits(vertex.v()));
 
             shading = mix(shading, vertex.encodedColor());
-            shading = mix(shading, vertex.colorEncoding().name().hashCode());
+            shading = mix(shading, vertex.colorEncoding().ordinal());
             shading = mix(shading, vertex.alpha());
             shading = mix(shading, vertex.renderType());
             shading = mix(shading, vertex.priority());
@@ -63,7 +63,7 @@ public record GpuZoneUpload(
             normals = mix(normals, vertex.normalMagnitude());
         }
 
-        long topology = 1125899906842597L;
+        long topology = mix(1125899906842597L, indices.size());
         for (int index : indices) topology = mix(topology, index);
         return new GpuZoneStreamFingerprints(geometry, shading, topology, normals);
     }
