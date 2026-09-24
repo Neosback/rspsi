@@ -12,6 +12,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ZoneVboManagerTest {
 
     @Test
+    void faceMetadataSplitDoesNotIncreaseVanillaVertexBandwidth() {
+        assertEquals(12 * Float.BYTES, NativeSceneVertexLayout.BYTES_PER_VERTEX);
+        assertEquals(4, NativeSceneVertexLayout.VERTEX_SHADING_FLOATS_PER_VERTEX);
+        assertEquals(3, NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX);
+    }
+
+    @Test
     void tilesInSameEightByEightZoneShareZoneKey() {
         // WorldTileAddress.of(worldX, worldY, plane)
         WorldTileAddress origin = WorldTileAddress.of(3200, 3200, 0);
