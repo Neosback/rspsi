@@ -9,13 +9,14 @@ public record GpuZoneUpload(
         List<GpuSceneVertex> vertices,
         List<Integer> indices,
         List<GpuDrawCommand> commands,
-        long fingerprint
+        GpuZoneStreamFingerprints fingerprints
 ) {
     public GpuZoneUpload {
         zone = Objects.requireNonNull(zone, "zone");
         vertices = List.copyOf(Objects.requireNonNull(vertices, "vertices"));
         indices = List.copyOf(Objects.requireNonNull(indices, "indices"));
         commands = List.copyOf(Objects.requireNonNull(commands, "commands"));
+        fingerprints = Objects.requireNonNull(fingerprints, "fingerprints");
         int vertexCount = vertices.size();
         if (indices.stream().anyMatch(index -> index == null || index < 0 || index >= vertexCount)) {
             throw new IllegalArgumentException("Zone index references a missing vertex");
@@ -30,21 +31,49 @@ public record GpuZoneUpload(
         }
     }
 
-    public static long fingerprint(List<GpuSceneVertex> vertices, List<Integer> indices) {
+    /** Compatibility aggregate for callers that only need current native residency identity. */
+    public long fingerprint() {
+        return fingerprints.nativeFingerprint();
+    }
+
+    public static GpuZoneStreamFingerprints fingerprints(
+            List<GpuSceneVertex> vertices, List<Integer> indices) {
         Objects.requireNonNull(vertices, "vertices");
         Objects.requireNonNull(indices, "indices");
-        long hash = 1125899906842597L;
-        for (GpuSceneVertex v : vertices) {
-            hash = hash * 31L + Float.floatToIntBits(v.x());
-            hash = hash * 31L + Float.floatToIntBits(v.y());
-            hash = hash * 31L + Float.floatToIntBits(v.z());
-            hash = hash * 31L + v.encodedColor();
-            hash = hash * 31L + v.alpha();
-            hash = hash * 31L + v.renderType();
-            hash = hash * 31L + v.textureId();
-            hash = hash * 31L + v.priority();
+
+        long geometry = 1125899906842597L;
+        long shading = 1125899906842597L;
+        long normals = 1125899906842597L;
+        for (GpuSceneVertex vertex : vertices) {
+            geometry = mix(geometry, Float.floatToIntBits(vertex.x()));
+            geometry = mix(geometry, Float.floatToIntBits(vertex.y()));
+            geometry = mix(geometry, Float.floatToIntBits(vertex.z()));
+            geometry = mix(geometry, Float.floatToIntBits(vertex.u()));
+            geometry = mix(geometry, Float.floatToIntBits(vertex.v()));
+
+            shading = mix(shading, vertex.encodedColor());
+            shading = mix(shading, vertex.colorEncoding().name().hashCode());
+            shading = mix(shading, vertex.alpha());
+            shading = mix(shading, vertex.renderType());
+            shading = mix(shading, vertex.priority());
+
+            normals = mix(normals, vertex.normalX());
+            normals = mix(normals, vertex.normalY());
+            normals = mix(normals, vertex.normalZ());
+            normals = mix(normals, vertex.normalMagnitude());
         }
-        for (int index : indices) hash = hash * 31L + index;
-        return hash;
+
+        long topology = 1125899906842597L;
+        for (int index : indices) topology = mix(topology, index);
+        return new GpuZoneStreamFingerprints(geometry, shading, topology, normals);
+    }
+
+    /** Current native-residency aggregate retained for flat-plan callers. */
+    public static long fingerprint(List<GpuSceneVertex> vertices, List<Integer> indices) {
+        return fingerprints(vertices, indices).nativeFingerprint();
+    }
+
+    private static long mix(long hash, int value) {
+        return hash * 31L + value;
     }
 }
