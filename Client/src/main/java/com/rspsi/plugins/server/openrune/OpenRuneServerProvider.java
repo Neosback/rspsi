@@ -267,7 +267,9 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
 
         ServerProjectInspection inspection = sourceModelRequested
                 ? adapter.inspectConnected(connection)
-                : adapter.inspectStartup(connection);
+                : declarativeDiscoveryRequested
+                        ? adapter.inspect(connection)
+                        : adapter.inspectStartup(connection);
         if (!inspection.detection().matched()) {
             throw new IllegalArgumentException("OpenRune Server was not detected at: " + connection.root());
         }
