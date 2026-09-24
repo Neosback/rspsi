@@ -111,8 +111,8 @@ public final class RenderSettingKeys {
                 Set.of(SettingInvalidation.REDRAW)));
         registry.register(SettingSpec.integer(MSAA_SAMPLES, 4, 0, 8, SettingScope.GLOBAL,
                 "MSAA samples", "Multisample anti-aliasing for the scene framebuffer. "
-                        + "GlFramebuffer clamps the requested value to the driver's GL_MAX_SAMPLES "
-                        + "and rounds down to a power of two; 0 disables MSAA.",
+                        + "The captured OpenGL capability profile clamps the requested value to the driver's "
+                        + "MSAA limit and rounds down to a power of two; 0 disables MSAA.",
                 Set.of(SettingInvalidation.FRAMEBUFFER)));
         registry.register(SettingSpec.integer(FOG_DEPTH_TILES, 0, 0, 1000, SettingScope.VIEWPORT,
                 "Fog depth", "Distance from the scene edge where presentation fog reaches the background.",
