@@ -298,7 +298,7 @@ public final class StudioApplication implements AutoCloseable {
         if (project == null) return;
 
         long request = projectOpenSequence.incrementAndGet();
-        closeProjectRuntime(true);
+        closeProjectRuntime();
         activeProject = project;
         activeCachePath = null;
         activeCacheHealth = null;
@@ -359,7 +359,7 @@ public final class StudioApplication implements AutoCloseable {
         projectOpenSequence.incrementAndGet();
         if (pendingProjectOpen != null) pendingProjectOpen.cancel(true);
         pendingProjectOpen = null;
-        closeProjectRuntime(true);
+        closeProjectRuntime();
         activeProject = null;
         projectLoadStatus = ProjectLoadStatus.initial();
         applicationState = ApplicationState.PROJECT_LAUNCHER;
@@ -369,7 +369,7 @@ public final class StudioApplication implements AutoCloseable {
         backToProjectLauncher();
     }
 
-    private void closeProjectRuntime(boolean clearCache) {
+    private void closeProjectRuntime() {
         closePluginLifecycle();
         cancelPendingScene();
         loadedScene = null;
@@ -383,7 +383,7 @@ public final class StudioApplication implements AutoCloseable {
         symbols.unregisterProvider("osrs.cache.gamevals");
         integrations.disconnect();
         workspaces.reset();
-        if (clearCache) cacheSessions.clear();
+        cacheSessions.clear();
     }
 
     private void openInterfaceStudio() {
@@ -392,11 +392,6 @@ public final class StudioApplication implements AutoCloseable {
 
     private void openObjectStudio() {
         requestWorkspaceOpen(WorkspaceManager.Workspace.OBJECT_STUDIO);
-    }
-
-    private void loadCache(Path path) {
-        if (path == null) return;
-        cacheSessions.load(path, this::restoreDefinitionPublicationState);
     }
 
     private void restoreDefinitionPublicationState(
