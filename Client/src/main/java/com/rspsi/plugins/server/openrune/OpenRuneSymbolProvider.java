@@ -3,6 +3,9 @@ package com.rspsi.plugins.server.openrune;
 import com.rspsi.editor.symbols.Symbol;
 import com.rspsi.editor.symbols.SymbolNamespace;
 import com.rspsi.editor.symbols.SymbolProvider;
+import com.rspsi.server.ServerContentKind;
+import com.rspsi.server.ServerPathKey;
+import com.rspsi.server.ServerProjectInspection;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -26,16 +29,33 @@ public final class OpenRuneSymbolProvider implements SymbolProvider {
     private final Map<SymbolNamespace, Map<Integer, List<Symbol>>> symbolsById = new HashMap<>();
 
     public OpenRuneSymbolProvider(Path projectRoot) {
+        this(projectRoot,
+                Objects.requireNonNull(projectRoot, "projectRoot").resolve(".data").resolve("gamevals"),
+                List.of(projectRoot.resolve("gamevals.toml")));
+    }
+
+    public OpenRuneSymbolProvider(ServerProjectInspection inspection) {
+        this(Objects.requireNonNull(inspection, "inspection").connection().root(),
+                inspection.path(ServerPathKey.GAMEVALS)
+                        .orElse(inspection.connection().root().resolve(".data").resolve("gamevals")),
+                inspection.content().stream()
+                        .filter(entry -> entry.kind() == ServerContentKind.GAMEVAL)
+                        .map(entry -> entry.path())
+                        .filter(path -> path.getFileName().toString().equalsIgnoreCase("gamevals.toml"))
+                        .distinct()
+                        .toList());
+    }
+
+    private OpenRuneSymbolProvider(Path projectRoot, Path gamevalsDir, List<Path> authoredGamevals) {
         this.projectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
         for (SymbolNamespace ns : SymbolNamespace.values()) {
             symbolsByName.put(ns, new HashMap<>());
             symbolsById.put(ns, new HashMap<>());
         }
-        indexProject();
+        indexProject(gamevalsDir, authoredGamevals);
     }
 
-    private void indexProject() {
-        Path gamevalsDir = projectRoot.resolve(".data").resolve("gamevals");
+    private void indexProject(Path gamevalsDir, List<Path> authoredGamevals) {
         if (Files.isDirectory(gamevalsDir)) {
             indexRscmFile(gamevalsDir.resolve("loc.rscm"), SymbolNamespace.LOC);
             indexRscmFile(gamevalsDir.resolve("npc.rscm"), SymbolNamespace.NPC);
@@ -46,9 +66,10 @@ public final class OpenRuneSymbolProvider implements SymbolProvider {
             indexRscmFile(gamevalsDir.resolve("clientscript.rscm"), SymbolNamespace.CLIENTSCRIPT);
         }
 
-        Path tomlFile = projectRoot.resolve("gamevals.toml");
-        if (Files.isRegularFile(tomlFile)) {
-            indexTomlFile(tomlFile);
+        for (Path tomlFile : authoredGamevals) {
+            if (Files.isRegularFile(tomlFile)) {
+                indexTomlFile(tomlFile);
+            }
         }
     }
 
