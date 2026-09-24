@@ -2,6 +2,7 @@ package com.rspsi.editor.integration;
 
 import com.rspsi.editor.integration.npc.NpcSpawnService;
 import com.rspsi.editor.integration.reference.ReferenceService;
+import com.rspsi.editor.integration.semantic.SemanticSourceIndex;
 import com.rspsi.editor.symbols.SymbolService;
 import com.rspsi.server.ServerConnection;
 import com.rspsi.server.ServerProjectInspection;
@@ -79,6 +80,11 @@ public final class ServerIntegrationService {
     /** Returns the authoritative inspection for the active project when the provider exposes one. */
     public Optional<ServerProjectInspection> activeProjectInspection() {
         return activeSession == null ? Optional.empty() : activeSession.projectInspection();
+    }
+
+    /** Returns the active provider-neutral semantic source snapshot when available. */
+    public Optional<SemanticSourceIndex> activeSemanticSourceIndex() {
+        return activeSession == null ? Optional.empty() : activeSession.semanticSourceIndex();
     }
 
     /**
