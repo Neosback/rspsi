@@ -84,15 +84,11 @@ import static org.lwjgl.opengl.GL11.glEnable;
 import static org.lwjgl.opengl.GL11.glDepthFunc;
 import static org.lwjgl.opengl.GL11.glGenTextures;
 import static org.lwjgl.opengl.GL11.glGetError;
-import static org.lwjgl.opengl.GL11.glGetString;
 import static org.lwjgl.opengl.GL11.glTexImage2D;
 import static org.lwjgl.opengl.GL11.glTexParameteri;
 import static org.lwjgl.opengl.GL11.glViewport;
 import static org.lwjgl.opengl.GL11.glPolygonMode;
 import static org.lwjgl.opengl.GL11.GL_NO_ERROR;
-import static org.lwjgl.opengl.GL11.GL_RENDERER;
-import static org.lwjgl.opengl.GL11.GL_VENDOR;
-import static org.lwjgl.opengl.GL11.GL_VERSION;
 import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
 import static org.lwjgl.opengl.GL12.GL_TEXTURE_WRAP_R;
 import static org.lwjgl.opengl.GL12.glTexImage3D;
@@ -249,16 +245,16 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private String glVendor = "unknown";
     private String glRenderer = "unknown";
     private String glVersion = "unknown";
+    private OpenGlCapabilityProfile capabilityProfile;
 
     public void initialize() {
         GLCapabilities capabilities = GL.createCapabilities();
-        glVendor = safeGlString(GL_VENDOR);
-        glRenderer = safeGlString(GL_RENDERER);
-        glVersion = safeGlString(GL_VERSION);
-        if (!capabilities.OpenGL33) {
-            throw new IllegalStateException("RSPSi requires an OpenGL 3.3 core context; detected "
-                    + org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_VERSION));
-        }
+        capabilityProfile = OpenGlCapabilityProfile.capture(capabilities);
+        capabilityProfile.requireVanillaBaseline();
+        glVendor = capabilityProfile.vendor();
+        glRenderer = capabilityProfile.renderer();
+        glVersion = capabilityProfile.version();
+        LOGGER.info("OpenGL capability profile: {}", capabilityProfile.diagnosticSummary());
         // ZoneVboManager owns all resident scene VAOs/VBOs. Shader compilation
         // is independent of vertex-array state, so keep one authoritative
         // native scene layout instead of maintaining a second empty VAO here.
@@ -437,6 +433,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
         String textureStateFingerprint = textureStateFingerprintCached(plan.textures());
         if (!textureStateFingerprint.equals(uploadedTextureStateFingerprint)) {
+            capabilityProfile.requireTextureStateEntries(requiredTextureCapacity(plan.textures()));
             textureStateBuffer.upload(plan.textures(), TEXTURE_LAYER_CAPACITY);
             uploadedTextureStateFingerprint = textureStateFingerprint;
         }
@@ -556,6 +553,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return statistics;
     }
 
+    public OpenGlCapabilityProfile capabilityProfile() {
+        if (capabilityProfile == null) {
+            throw new IllegalStateException("OpenGL renderer is not initialized");
+        }
+        return capabilityProfile;
+    }
+
     private Statistics statisticsFor(GpuUploadPlan plan, GpuCommandGeometry geometry,
                                      GpuCommandVisibility visibility,
                                      boolean geometryUploaded, boolean textureUploaded,
@@ -645,11 +649,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private void captureGlError() {
         int error = glGetError();
         if (firstGlError == GL_NO_ERROR && error != GL_NO_ERROR) firstGlError = error;
-    }
-
-    private static String safeGlString(int name) {
-        String value = glGetString(name);
-        return value == null ? "unknown" : value;
     }
 
     /**
@@ -1062,7 +1061,20 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
     }
 
+    private static int requiredTextureCapacity(
+            Map<Integer, RenderTextureResource> resources) {
+        int largestTextureId = resources.values().stream()
+                .filter(RenderTextureResource::hasGpuPixels)
+                .mapToInt(RenderTextureResource::id)
+                .max()
+                .orElse(-1);
+        return Math.max(TEXTURE_LAYER_CAPACITY, largestTextureId + 1);
+    }
+
     private void uploadTextureArray(Map<Integer, RenderTextureResource> resources) {
+        int depth = requiredTextureCapacity(resources);
+        capabilityProfile.requireTextureArrayLayers(depth);
+
         if (textureArray != 0) org.lwjgl.opengl.GL11.glDeleteTextures(textureArray);
         textureLayers.clear();
         List<RenderTextureResource> available = resources.values().stream()
@@ -1097,9 +1109,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // path into undefined output. The shader still receives
         // uTextureAvailable=0 for these commands and uses its explicit
         // lightness fallback instead of sampling this diagnostic layer.
-        int largestTextureId = available.stream().mapToInt(RenderTextureResource::id)
-                .max().orElse(-1);
-        int depth = Math.max(TEXTURE_LAYER_CAPACITY, largestTextureId + 1);
         glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, width, height, depth,
                 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
         if (available.isEmpty()) {
@@ -1190,6 +1199,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         statisticsGeometry = null;
         cachedGeometryStatistics = GeometryStatistics.empty();
         diagnosticsLogged = false;
+        capabilityProfile = null;
     }
 
 

@@ -48,6 +48,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     public void initialize() {
         if (initialized) return;
         renderer.initialize();
+        framebuffer.setCapabilityProfile(renderer.capabilityProfile());
         initialized = true;
     }
 
@@ -100,6 +101,10 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
 
     public OpenGlSceneRenderer.Statistics statistics() {
         return renderer.statistics();
+    }
+
+    public com.rspsi.renderer.opengl.OpenGlCapabilityProfile capabilityProfile() {
+        return renderer.capabilityProfile();
     }
 
     @Override

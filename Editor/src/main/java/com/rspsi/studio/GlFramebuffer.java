@@ -1,5 +1,7 @@
 package com.rspsi.studio;
 
+import com.rspsi.renderer.opengl.OpenGlCapabilityProfile;
+
 import static org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT;
 import static org.lwjgl.opengl.GL11.GL_LINEAR;
 import static org.lwjgl.opengl.GL11.GL_NEAREST;
@@ -57,7 +59,14 @@ public final class GlFramebuffer implements AutoCloseable {
     private int height;
     private int samples;
     private int framebufferStatus = GL_FRAMEBUFFER_COMPLETE;
+    private OpenGlCapabilityProfile capabilityProfile;
     private boolean closed;
+
+    public void setCapabilityProfile(OpenGlCapabilityProfile capabilityProfile) {
+        ensureOpen();
+        this.capabilityProfile = java.util.Objects.requireNonNull(
+                capabilityProfile, "capabilityProfile");
+    }
 
     public void resize(int width, int height, int requestedSamples) {
         ensureOpen();
@@ -146,10 +155,11 @@ public final class GlFramebuffer implements AutoCloseable {
     }
 
     private int normalizeSamples(int requested) {
-        if (requested <= 1) return 0;
-        int maximum = org.lwjgl.opengl.GL11.glGetInteger(org.lwjgl.opengl.GL30.GL_MAX_SAMPLES);
-        int value = Math.min(requested, Math.max(1, maximum));
-        return Integer.highestOneBit(value);
+        if (capabilityProfile == null) {
+            throw new IllegalStateException(
+                    "Framebuffer capability profile has not been configured");
+        }
+        return capabilityProfile.normalizeSamples(requested);
     }
 
     private void checkComplete(String target) {
