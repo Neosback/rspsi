@@ -50,6 +50,27 @@ class PickingSpatialIndexTest {
     }
 
     @Test
+    void rebuildsPackedHandlesWhenSourceZoneSetChanges() {
+        GpuUploadPlan first = twoZonePlan(0.0f);
+        GpuUploadPlan second = secondZoneOnlyPlan();
+        WorldZoneCoordinate removed = new WorldZoneCoordinate(0, 0, 0);
+
+        IncrementalGpuZonedUploadPlanBuilder builder = new IncrementalGpuZonedUploadPlanBuilder();
+        GpuZonedUploadPlan zonedFirst = builder.buildInitial(first);
+        GpuZonedUploadPlan zonedSecond = builder.build(second, Set.of(removed));
+
+        PickingSpatialIndex index = new PickingSpatialIndex();
+        index.indexFor(first, zonedFirst);
+        PickingSpatialIndex.Snapshot snapshot = index.indexFor(second, zonedSecond);
+
+        long handle = snapshot.bucket(0, 9, 0)[0];
+        assertEquals(20, snapshot.command(handle).objectId());
+        assertEquals(1, index.lastMetrics().totalSourceZones());
+        assertEquals(1, index.lastMetrics().rebuiltZones(),
+                "source ordinal changes must rebuild retained packed bucket handles");
+    }
+
+    @Test
     void indexesTriangleIntoNeighborZoneWhenGeometryCrossesAnchorBoundary() {
         float boundary = 8 * 128.0f;
         GpuUploadPlan plan = new GpuUploadPlan(
@@ -91,6 +112,18 @@ class PickingSpatialIndexTest {
 
         int secondGeneration = index.beginPick();
         assertTrue(snapshot.markTested(triangle, secondGeneration));
+    }
+
+    private static GpuUploadPlan secondZoneOnlyPlan() {
+        float secondX = 9 * 128.0f + 64.0f;
+        return new GpuUploadPlan(
+                List.of(
+                        vertex(secondX - 20, -20, 32),
+                        vertex(secondX + 20, -20, 32),
+                        vertex(secondX, 20, 96)),
+                List.of(0, 1, 2),
+                List.of(command(9, 0, 0, 3, 20)),
+                List.of(), Map.of(), "second-zone-only");
     }
 
     private static GpuUploadPlan twoZonePlan(float secondOffsetX) {
