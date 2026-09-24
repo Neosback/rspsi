@@ -1,5 +1,6 @@
 package com.rspsi.editor.paste;
 
+import com.rspsi.editor.WorldRegionSessionWindow;
 import com.rspsi.editor.change.ChangePlan;
 import com.rspsi.editor.model.WorldTile;
 
@@ -41,6 +42,15 @@ public record WorldFragmentPasteResult(
         return candidatePlan;
     }
 
+    /**
+     * Safe commit convenience that enforces the planning conflict policy
+     * before entering the canonical multi-region transaction boundary.
+     */
+    public boolean commit(WorldRegionSessionWindow window) {
+        return Objects.requireNonNull(window, "window")
+                .commit(requireCommittablePlan());
+    }
+
     public enum ConflictCode {
         UNLOADED_REGION,
         READ_ONLY_REGION,
@@ -56,6 +66,7 @@ public record WorldFragmentPasteResult(
     ) {
         public Conflict {
             code = Objects.requireNonNull(code, "code");
+            tile = Objects.requireNonNull(tile, "tile");
             message = Objects.requireNonNull(message, "message");
             if (message.isBlank()) {
                 throw new IllegalArgumentException("Paste conflict message cannot be blank");
