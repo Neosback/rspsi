@@ -74,7 +74,7 @@ public final class WorldFragmentPastePlanner {
         Integer heightDelta = resolveHeightDelta(
                 window, fragment, targetX, targetY, policy, terrain, conflicts);
 
-        Set<SourceTile> scope = sourceScope(policy, terrain.keySet(), objects.keySet());
+        List<SourceTile> scope = sourceScope(policy, terrain.keySet(), objects.keySet());
         ChangePlan.Builder plan = ChangePlan.builder(label)
                 .provenance(new ChangePlan.Provenance(
                         PRODUCER_ID,
@@ -164,7 +164,7 @@ public final class WorldFragmentPastePlanner {
         return grouped;
     }
 
-    private static Set<SourceTile> sourceScope(
+    private static List<SourceTile> sourceScope(
             WorldFragmentPastePolicy policy,
             Set<SourceTile> terrain,
             Set<SourceTile> objectAnchors
@@ -188,7 +188,7 @@ public final class WorldFragmentPastePlanner {
             }
         }
 
-        return Set.copyOf(scope);
+        return List.copyOf(scope);
     }
 
     private static Integer resolveHeightDelta(
@@ -259,8 +259,12 @@ public final class WorldFragmentPastePlanner {
         int flags = before.flags();
         TerrainHeightSource heightSource = before.heightSource();
 
+        boolean terrainAlignmentAvailable =
+                policy.heightMode() != WorldFragmentPastePolicy.HeightMode.OFFSET_FROM_ANCHOR
+                        || heightDelta != null;
         if (policy.terrainMode() == WorldFragmentPastePolicy.TerrainMode.REPLACE
-                && sourceTerrain != null) {
+                && sourceTerrain != null
+                && terrainAlignmentAvailable) {
             TileSnapshot source = sourceTerrain.snapshot();
             underlay = source.underlayId();
             overlay = source.overlayId();
@@ -332,7 +336,7 @@ public final class WorldFragmentPastePlanner {
         }
 
         if (policy.objectTypes().isEmpty()) {
-            return List.copyOf(localized);
+            return List.copyOf(new LinkedHashSet<>(localized));
         }
 
         List<WorldObject> replacedCategories = new ArrayList<>();
