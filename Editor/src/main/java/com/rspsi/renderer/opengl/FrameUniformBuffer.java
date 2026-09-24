@@ -103,7 +103,7 @@ final class FrameUniformBuffer implements AutoCloseable {
         target.putInt(presentation.smoothBanding() ? 1 : 0);
         target.putInt(fogBounds != null ? 1 : 0);
         target.putInt(clientCycle);
-        target.putInt(0);
+        target.putInt(presentation.debugView().shaderCode());
 
         // slot 4: fog bounds
         if (fogBounds == null) {
