@@ -8,6 +8,7 @@ import com.rspsi.editor.render.GpuColorEncoding;
 import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
+import com.rspsi.editor.render.PickerId;
 import com.rspsi.editor.render.SceneLayer;
 import org.junit.jupiter.api.Test;
 
@@ -135,6 +136,44 @@ class DdaScenePickerTest {
 
 
     @Test
+    void gpuPickerIdNarrowsCandidatesWithoutLosingSameTileObjectIdentity() {
+        int slot = PickerId.slotFor(SceneLayer.Kind.GROUND_OBJECT);
+        GpuUploadPlan plan = new GpuUploadPlan(
+                List.of(
+                        pickerVertex(-20, -20, 100, 0, 0, 0, slot),
+                        pickerVertex(20, -20, 100, 0, 0, 0, slot),
+                        pickerVertex(0, 20, 100, 0, 0, 0, slot),
+                        pickerVertex(-20, -20, 200, 0, 0, 0, slot),
+                        pickerVertex(20, -20, 200, 0, 0, 0, slot),
+                        pickerVertex(0, 20, 200, 0, 0, 0, slot)),
+                List.of(0, 1, 2, 3, 4, 5),
+                List.of(
+                        new GpuDrawCommand(WorldTileAddress.of(0, 0, 0),
+                                SceneLayer.Kind.GROUND_OBJECT, GpuDrawCommand.SubmissionPass.OPAQUE,
+                                0, 3, -1, 0, 101),
+                        new GpuDrawCommand(WorldTileAddress.of(0, 0, 0),
+                                SceneLayer.Kind.GROUND_OBJECT, GpuDrawCommand.SubmissionPass.OPAQUE,
+                                3, 3, -1, 0, 202)),
+                List.of(), Map.of(), "dda-gpu-id-collision");
+
+        DdaScenePicker picker = new DdaScenePicker();
+        int packed = PickerId.encode(0, 0, 0, slot);
+        var hit = picker.pickMatchingId(
+                plan, null, new CameraState(0, 0, 0, 0, 0),
+                100, 100, 50, 50,
+                com.rspsi.editor.render.SceneCameraProjection.editorDefault(), null, packed)
+                .orElseThrow();
+
+        assertEquals(101, hit.objectId(),
+                "same tile/layer IDs must still resolve the exact nearest object");
+        assertTrue(picker.pickMatchingId(
+                plan, null, new CameraState(0, 0, 0, 0, 0),
+                100, 100, 50, 50,
+                com.rspsi.editor.render.SceneCameraProjection.editorDefault(), null,
+                PickerId.encode(0, 1, 0, slot)).isEmpty());
+    }
+
+    @Test
     void clientAabbBroadPhaseRejectsUnrelatedCommandsBeforeTriangleTests() {
         List<GpuSceneVertex> vertices = new ArrayList<>();
         List<Integer> indices = new ArrayList<>();
@@ -211,5 +250,14 @@ class DdaScenePickerTest {
         return new GpuSceneVertex(x, y, z, 0, 0, 0x1200,
                 GpuColorEncoding.PACKED_JAGEX_HSL, 0,
                 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0);
+    }
+
+    private static GpuSceneVertex pickerVertex(
+            float x, float y, float z,
+            int plane, int tileX, int tileY, int slot) {
+        return new GpuSceneVertex(x, y, z, 0, 0, 0x1200,
+                GpuColorEncoding.PACKED_JAGEX_HSL, 0,
+                0, 0, 0, 0, -1, 0, 0,
+                plane, tileX, tileY, slot);
     }
 }
