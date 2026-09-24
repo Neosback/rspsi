@@ -127,6 +127,12 @@ public final class GpuDrawBatchPlanner {
             return end - start;
         }
 
+        /** Position of this batch inside the caller's ordered command list. */
+        public int orderedStart() {
+            ensurePositioned();
+            return start;
+        }
+
         public int commandIndexAt(int offset) {
             ensurePositioned();
             if (offset < 0 || start + offset >= end) {
