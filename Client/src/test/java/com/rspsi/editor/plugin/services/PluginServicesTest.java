@@ -38,4 +38,17 @@ class PluginServicesTest {
         tileSub.close();
         selectionSub.close();
     }
+
+    @Test
+    void releaseClosesHostOwnedExecutionService() {
+        EditorSession session = new EditorSession(new WorldDocument(4, 4, 1));
+        EditorPluginRegistry registry = new EditorPluginRegistry();
+        PluginServices services = PluginServices.resolve(
+                session, AssetRepository.empty(), registry);
+
+        PluginServices.release(registry);
+
+        assertTrue(services.execution().isClosed());
+    }
+
 }
