@@ -8,6 +8,8 @@ import com.rspsi.editor.integration.ServerIntegrationProvider;
 import com.rspsi.editor.integration.content.ContentCapability;
 import com.rspsi.editor.integration.npc.NpcSpawnProvider;
 import com.rspsi.editor.integration.reference.ReferenceProvider;
+import com.rspsi.editor.integration.semantic.SemanticContentGraph;
+import com.rspsi.editor.integration.semantic.SemanticContentGraphBuilder;
 import com.rspsi.editor.integration.semantic.SemanticSourceIndex;
 import com.rspsi.editor.symbols.SymbolProvider;
 import com.rspsi.server.OpenRuneServerAdapter;
@@ -111,6 +113,7 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
                 .anyMatch(entry -> entry.kind() == ServerContentKind.SERVER_SCRIPT)) {
             capabilities.add(IntegrationCapability.SOURCE_NAVIGATION);
             capabilities.add(IntegrationCapability.SOURCE_SEMANTICS);
+            capabilities.add(IntegrationCapability.CONTENT_GRAPH);
             details.put("Server source", "Kotlin/Java source inventory available");
             details.put("Source semantics",
                     inspection.gradleModel().isPresent()
@@ -119,6 +122,7 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
         } else if (Files.isRegularFile(project.resolve("gradlew"))
                 || Files.isRegularFile(project.resolve("gradlew.bat"))) {
             capabilities.add(IntegrationCapability.SOURCE_SEMANTICS);
+            capabilities.add(IntegrationCapability.CONTENT_GRAPH);
             details.put("Source semantics",
                     "Available after trusted Gradle project-model evaluation");
         }
@@ -246,22 +250,35 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
         IntegrationProbe probe = probe(connection, inspection);
         Path project = connection.root();
 
-        OpenRuneSymbolProvider symbolProvider =
-                options.isEnabled(IntegrationCapability.SYMBOLS)
-                        && probe.supports(IntegrationCapability.SYMBOLS)
-                        ? new OpenRuneSymbolProvider(inspection) : null;
-        OpenRuneReferenceProvider referenceProvider =
-                options.isEnabled(IntegrationCapability.CONTENT_INDEX)
-                        && probe.supports(IntegrationCapability.CONTENT_INDEX)
-                        ? new OpenRuneReferenceProvider(inspection) : null;
+        boolean graphRequested = options.isEnabled(IntegrationCapability.CONTENT_GRAPH)
+                && probe.supports(IntegrationCapability.CONTENT_GRAPH);
+        boolean sourceRequested = options.isEnabled(IntegrationCapability.SOURCE_SEMANTICS)
+                && probe.supports(IntegrationCapability.SOURCE_SEMANTICS);
+        boolean symbolsRequested = options.isEnabled(IntegrationCapability.SYMBOLS)
+                && probe.supports(IntegrationCapability.SYMBOLS);
+        boolean referencesRequested = options.isEnabled(IntegrationCapability.CONTENT_INDEX)
+                && probe.supports(IntegrationCapability.CONTENT_INDEX);
+
+        OpenRuneSymbolProvider graphSymbols =
+                (symbolsRequested || graphRequested) ? new OpenRuneSymbolProvider(inspection) : null;
+        OpenRuneReferenceProvider graphReferences =
+                (referencesRequested || graphRequested) ? new OpenRuneReferenceProvider(inspection) : null;
+        SemanticSourceIndex indexedSource =
+                (sourceRequested || graphRequested) && inspection.gradleModel().isPresent()
+                        ? new OpenRuneKotlinSemanticIndexer().index(inspection) : null;
+
+        SymbolProvider symbolProvider = symbolsRequested ? graphSymbols : null;
+        ReferenceProvider referenceProvider = referencesRequested ? graphReferences : null;
         OpenRuneNpcSpawnProvider npcSpawnProvider =
                 options.isEnabled(IntegrationCapability.NPC_SPAWNS)
                         && probe.supports(IntegrationCapability.NPC_SPAWNS)
                         ? new OpenRuneNpcSpawnProvider(inspection) : null;
-        SemanticSourceIndex semanticSourceIndex =
-                options.isEnabled(IntegrationCapability.SOURCE_SEMANTICS)
-                        && inspection.gradleModel().isPresent()
-                        ? new OpenRuneKotlinSemanticIndexer().index(inspection) : null;
+        SemanticSourceIndex semanticSourceIndex = sourceRequested ? indexedSource : null;
+        SemanticContentGraph semanticContentGraph =
+                graphRequested && indexedSource != null
+                        ? new SemanticContentGraphBuilder().build(
+                                project, indexedSource, graphSymbols, graphReferences)
+                        : null;
 
         Set<IntegrationCapability> activeCapabilities =
                 EnumSet.noneOf(IntegrationCapability.class);
@@ -270,9 +287,13 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
         if (semanticSourceIndex == null) {
             activeCapabilities.remove(IntegrationCapability.SOURCE_SEMANTICS);
         }
+        if (semanticContentGraph == null) {
+            activeCapabilities.remove(IntegrationCapability.CONTENT_GRAPH);
+        }
 
         return new OpenRuneSession(this, connection, inspection, activeCapabilities,
-                symbolProvider, referenceProvider, npcSpawnProvider, semanticSourceIndex);
+                symbolProvider, referenceProvider, npcSpawnProvider,
+                semanticSourceIndex, semanticContentGraph);
     }
 
     private static String display(Path root, Path path) {
@@ -292,6 +313,7 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
         private final ReferenceProvider referenceProvider;
         private final NpcSpawnProvider npcSpawnProvider;
         private final SemanticSourceIndex semanticSourceIndex;
+        private final SemanticContentGraph semanticContentGraph;
 
         private OpenRuneSession(ServerIntegrationProvider provider,
                                 ServerConnection connection,
@@ -300,7 +322,8 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
                                 SymbolProvider symbolProvider,
                                 ReferenceProvider referenceProvider,
                                 NpcSpawnProvider npcSpawnProvider,
-                                SemanticSourceIndex semanticSourceIndex) {
+                                SemanticSourceIndex semanticSourceIndex,
+                                SemanticContentGraph semanticContentGraph) {
             this.provider = provider;
             this.connection = connection;
             this.inspection = inspection;
@@ -309,6 +332,7 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
             this.referenceProvider = referenceProvider;
             this.npcSpawnProvider = npcSpawnProvider;
             this.semanticSourceIndex = semanticSourceIndex;
+            this.semanticContentGraph = semanticContentGraph;
         }
 
         @Override public ServerIntegrationProvider provider() { return provider; }
@@ -329,6 +353,9 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
         }
         @Override public Optional<SemanticSourceIndex> semanticSourceIndex() {
             return Optional.ofNullable(semanticSourceIndex);
+        }
+        @Override public Optional<SemanticContentGraph> semanticContentGraph() {
+            return Optional.ofNullable(semanticContentGraph);
         }
         @Override public void close() { }
     }

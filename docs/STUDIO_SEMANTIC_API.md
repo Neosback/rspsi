@@ -108,13 +108,48 @@ For example, seeing a call named `onOpContentLoc1("content.rock")` is strong str
 
 The public semantic/content graph should consume these neutral facts rather than exposing Kotlin PSI nodes directly. This keeps future parser/compiler upgrades from changing plugin/editor contracts.
 
-### 2.4 Real content truth
+### 2.4 Semantic Content Graph
+
+The graph is the cross-domain relationship layer; it is not a replacement for the authored world API, source index, symbol service, or runtime.
+
+The first graph contract has these invariants:
+
+- **canonical identity:** aliases that represent the same neutral game concept share one node (for example OpenRune `obj.coal` and Studio `item.coal`);
+- **typed relationships:** ownership, handler targets, ordinary references, state use, and state binding are different edge kinds rather than generic strings;
+- **evidence on every promoted relationship:** a relationship must retain the PSI/source/declarative/mapping evidence that justified it;
+- **partial knowledge is explicit:** unresolved symbolic nodes are valid graph members and may later gain a numeric mapping or additional evidence;
+- **multiple sources may agree:** source PSI, declarative data, and RSCM/GameVals can all contribute evidence to one logical node;
+- **conflicts are diagnostics:** competing numeric IDs or incompatible attributes must remain visible instead of silently choosing a new truth;
+- **read-only first:** graph connectivity alone never grants mutation authority.
+
+Initial node kinds:
+
+    SYMBOL
+    SCRIPT
+    QUEST
+    HANDLER
+    RESOURCE
+
+Initial directed relation kinds:
+
+    DECLARED_IN
+    OWNS
+    TARGETS
+    REFERENCES
+    BINDS_STATE
+    USES_STATE
+
+A later map/cache integration should attach authored/resolved map entities to the existing canonical symbol nodes rather than create a second object-identity graph.
+
+Likewise, edit lenses must be an additional capability layered on graph provenance. A node is editable only when Studio can identify a supported writable origin, a mutation strategy, stale-source validation, and post-write verification. A read-only reference or generated mapping is never sufficient by itself.
+
+### 2.5 Real content truth
 
 Use real OSRS cache/map fixtures for acceptance.
 
 A code path matching RuneLite or OpenRune in isolation is not enough when a user-observed problem concerns a real scene. Curated fixtures must prove the authored placements, decoded definitions, resolved scene semantics, and rendered result agree for representative locations.
 
-### 2.5 Secondary implementation references
+### 2.6 Secondary implementation references
 
 TSPS and other open implementations are useful cross-checks for algorithms and renderer architecture, but they are secondary evidence.
 

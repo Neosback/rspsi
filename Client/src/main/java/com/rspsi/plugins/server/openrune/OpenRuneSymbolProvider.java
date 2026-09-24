@@ -64,13 +64,36 @@ public final class OpenRuneSymbolProvider implements SymbolProvider {
             indexRscmFile(gamevalsDir.resolve("varbit.rscm"), SymbolNamespace.VARBIT);
             indexRscmFile(gamevalsDir.resolve("varp.rscm"), SymbolNamespace.VARP);
             indexRscmFile(gamevalsDir.resolve("varc.rscm"), SymbolNamespace.VARC);
+            indexRscmFile(gamevalsDir.resolve("varcon.rscm"), SymbolNamespace.VARC);
             indexRscmFile(gamevalsDir.resolve("interface.rscm"), SymbolNamespace.INTERFACE);
             indexRscmFile(gamevalsDir.resolve("component.rscm"), SymbolNamespace.COMPONENT);
             indexRscmFile(gamevalsDir.resolve("clientscript.rscm"), SymbolNamespace.CLIENTSCRIPT);
             indexRscmFile(gamevalsDir.resolve("dbtable.rscm"), SymbolNamespace.DB_TABLE);
+            indexRscmFile(gamevalsDir.resolve("dbrow.rscm"), SymbolNamespace.DB_ROW);
             indexRscmFile(gamevalsDir.resolve("area.rscm"), SymbolNamespace.AREA);
             indexRscmFile(gamevalsDir.resolve("seq.rscm"), SymbolNamespace.SEQUENCE);
             indexRscmFile(gamevalsDir.resolve("spotanim.rscm"), SymbolNamespace.SPOTANIM);
+            indexRscmFile(gamevalsDir.resolve("bas.rscm"), SymbolNamespace.BAS);
+            indexRscmFile(gamevalsDir.resolve("category.rscm"), SymbolNamespace.CATEGORY);
+            indexRscmFile(gamevalsDir.resolve("content.rscm"), SymbolNamespace.CONTENT);
+            indexRscmFile(gamevalsDir.resolve("controller.rscm"), SymbolNamespace.CONTROLLER);
+            indexRscmFile(gamevalsDir.resolve("currency.rscm"), SymbolNamespace.CURRENCY);
+            indexRscmFile(gamevalsDir.resolve("enum.rscm"), SymbolNamespace.ENUM);
+            indexRscmFile(gamevalsDir.resolve("font.rscm"), SymbolNamespace.FONT);
+            indexRscmFile(gamevalsDir.resolve("headbar.rscm"), SymbolNamespace.HEADBAR);
+            indexRscmFile(gamevalsDir.resolve("hitmark.rscm"), SymbolNamespace.HITMARK);
+            indexRscmFile(gamevalsDir.resolve("mesanim.rscm"), SymbolNamespace.MESANIM);
+            indexRscmFile(gamevalsDir.resolve("midi.rscm"), SymbolNamespace.MIDI);
+            indexRscmFile(gamevalsDir.resolve("param.rscm"), SymbolNamespace.PARAM);
+            indexRscmFile(gamevalsDir.resolve("projanim.rscm"), SymbolNamespace.PROJANIM);
+            indexRscmFile(gamevalsDir.resolve("queue.rscm"), SymbolNamespace.QUEUE);
+            indexRscmFile(gamevalsDir.resolve("stalk.rscm"), SymbolNamespace.STALK);
+            indexRscmFile(gamevalsDir.resolve("stat.rscm"), SymbolNamespace.STAT);
+            indexRscmFile(gamevalsDir.resolve("synth.rscm"), SymbolNamespace.SYNTH);
+            indexRscmFile(gamevalsDir.resolve("timer.rscm"), SymbolNamespace.TIMER);
+            indexRscmFile(gamevalsDir.resolve("varn.rscm"), SymbolNamespace.VARN);
+            indexRscmFile(gamevalsDir.resolve("varobj.rscm"), SymbolNamespace.VAROBJ);
+            indexRscmFile(gamevalsDir.resolve("walktrigger.rscm"), SymbolNamespace.WALK_TRIGGER);
         }
 
         for (Path tomlFile : authoredGamevals) {
@@ -123,9 +146,31 @@ public final class OpenRuneSymbolProvider implements SymbolProvider {
             case "component" -> SymbolNamespace.COMPONENT;
             case "clientscript" -> SymbolNamespace.CLIENTSCRIPT;
             case "dbtable" -> SymbolNamespace.DB_TABLE;
+            case "dbrow" -> SymbolNamespace.DB_ROW;
             case "area" -> SymbolNamespace.AREA;
             case "seq" -> SymbolNamespace.SEQUENCE;
             case "spotanim" -> SymbolNamespace.SPOTANIM;
+            case "bas" -> SymbolNamespace.BAS;
+            case "category" -> SymbolNamespace.CATEGORY;
+            case "content" -> SymbolNamespace.CONTENT;
+            case "controller" -> SymbolNamespace.CONTROLLER;
+            case "currency" -> SymbolNamespace.CURRENCY;
+            case "enum" -> SymbolNamespace.ENUM;
+            case "font" -> SymbolNamespace.FONT;
+            case "headbar" -> SymbolNamespace.HEADBAR;
+            case "hitmark" -> SymbolNamespace.HITMARK;
+            case "mesanim" -> SymbolNamespace.MESANIM;
+            case "midi" -> SymbolNamespace.MIDI;
+            case "param" -> SymbolNamespace.PARAM;
+            case "projanim" -> SymbolNamespace.PROJANIM;
+            case "queue" -> SymbolNamespace.QUEUE;
+            case "stalk" -> SymbolNamespace.STALK;
+            case "stat" -> SymbolNamespace.STAT;
+            case "synth" -> SymbolNamespace.SYNTH;
+            case "timer" -> SymbolNamespace.TIMER;
+            case "varn" -> SymbolNamespace.VARN;
+            case "varobj" -> SymbolNamespace.VAROBJ;
+            case "walktrigger" -> SymbolNamespace.WALK_TRIGGER;
             default -> null;
         };
     }

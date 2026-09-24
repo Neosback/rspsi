@@ -15,5 +15,14 @@ public interface ReferenceProvider {
 
     List<ContentReference> referencesInModule(String module);
 
+    /**
+     * Enumerates this provider's current reference snapshot for graph/index consumers.
+     *
+     * <p>Query-only providers may keep the default empty implementation.</p>
+     */
+    default List<ContentReference> allReferences() {
+        return List.of();
+    }
+
     int totalReferenceCount();
 }

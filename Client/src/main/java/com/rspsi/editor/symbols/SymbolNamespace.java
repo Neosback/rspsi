@@ -16,9 +16,31 @@ public enum SymbolNamespace {
     COMPONENT("component."),
     CLIENTSCRIPT("clientscript."),
     DB_TABLE("dbtable."),
+    DB_ROW("dbrow."),
     AREA("area."),
     SEQUENCE("seq."),
-    SPOTANIM("spotanim.");
+    SPOTANIM("spotanim."),
+    BAS("bas."),
+    CATEGORY("category."),
+    CONTENT("content."),
+    CONTROLLER("controller."),
+    CURRENCY("currency."),
+    ENUM("enum."),
+    FONT("font."),
+    HEADBAR("headbar."),
+    HITMARK("hitmark."),
+    MESANIM("mesanim."),
+    MIDI("midi."),
+    PARAM("param."),
+    PROJANIM("projanim."),
+    QUEUE("queue."),
+    STALK("stalk."),
+    STAT("stat."),
+    SYNTH("synth."),
+    TIMER("timer."),
+    VARN("varn."),
+    VAROBJ("varobj."),
+    WALK_TRIGGER("walktrigger.");
 
     private final String prefix;
 
@@ -36,7 +58,7 @@ public enum SymbolNamespace {
         return name.startsWith(prefix) ? name : prefix + name;
     }
 
-    /** Strips the prefix if present, returning the bare symbol name. */
+    /** Strips the prefix if present, returning the bare unqualified name. */
     public String unqualify(String name) {
         Objects.requireNonNull(name, "name");
         return name.startsWith(prefix) ? name.substring(prefix.length()) : name;

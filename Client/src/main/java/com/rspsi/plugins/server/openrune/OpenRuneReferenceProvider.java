@@ -93,10 +93,12 @@ public final class OpenRuneReferenceProvider implements ReferenceProvider {
     }
 
     private void indexLine(String line, int lineNum, String module, String relativePath) {
-        scanPattern(line, lineNum, module, relativePath, "loc.", SymbolNamespace.LOC);
-        scanPattern(line, lineNum, module, relativePath, "npc.", SymbolNamespace.NPC);
+        for (SymbolNamespace namespace : SymbolNamespace.values()) {
+            scanPattern(line, lineNum, module, relativePath, namespace.prefix(), namespace);
+        }
+        // OpenRune source aliases whose neutral Studio namespace uses a different public prefix.
         scanPattern(line, lineNum, module, relativePath, "obj.", SymbolNamespace.ITEM);
-        scanPattern(line, lineNum, module, relativePath, "item.", SymbolNamespace.ITEM);
+        scanPattern(line, lineNum, module, relativePath, "varcon.", SymbolNamespace.VARC);
     }
 
     private void scanPattern(String line, int lineNum, String module, String relativePath,
@@ -160,6 +162,11 @@ public final class OpenRuneReferenceProvider implements ReferenceProvider {
     public List<ContentReference> referencesInModule(String module) {
         return allReferences.stream()
                 .filter(ref -> ref.module().equalsIgnoreCase(module)).toList();
+    }
+
+    @Override
+    public List<ContentReference> allReferences() {
+        return List.copyOf(allReferences);
     }
 
     @Override public int totalReferenceCount() { return allReferences.size(); }

@@ -4,7 +4,10 @@ import com.rspsi.editor.integration.IntegrationCapability;
 import com.rspsi.editor.integration.IntegrationOptions;
 import com.rspsi.editor.integration.IntegrationSession;
 import com.rspsi.editor.integration.ServerIntegrationService;
+import com.rspsi.editor.integration.semantic.SemanticContentNodeKind;
+import com.rspsi.editor.integration.semantic.SemanticEvidenceKind;
 import com.rspsi.editor.integration.semantic.SemanticFactKind;
+import com.rspsi.editor.integration.semantic.SemanticRelationKind;
 import com.rspsi.editor.symbols.SymbolNamespace;
 import com.rspsi.server.ServerConnection;
 import com.rspsi.server.ServerIntegrationStatus;
@@ -189,6 +192,146 @@ class OpenRuneServerProviderTest {
         assertEquals(mining.toAbsolutePath().normalize(), handler.source().file());
         assertEquals(4, handler.source().startLine());
         assertTrue(handler.source().endOffset() > handler.source().startOffset());
+        service.disconnect();
+    }
+
+    @Test
+    void contentGraphJoinsHandlersGamevalsQuestStateAndDeclarativeReferences() throws Exception {
+        Path root = Files.createTempDirectory("openrune-content-graph");
+        Path project = root.resolve("modules/gameplay");
+        Path sourceRoot = project.resolve("src/customKotlin");
+        Path resourceRoot = project.resolve("src/customResources");
+        Path gamevals = root.resolve(".data/gamevals");
+
+        Files.createDirectories(sourceRoot.resolve("example"));
+        Files.createDirectories(resourceRoot.resolve("data"));
+        Files.createDirectories(gamevals);
+        Files.createDirectories(root.resolve(".data/cache/LIVE"));
+        Files.writeString(root.resolve("game.yml"), "revision: 240.2\n");
+
+        Files.writeString(sourceRoot.resolve("example/Mining.kt"),
+                "package example\n"
+                        + "class Mining : PluginScript() {\n"
+                        + "  override fun ScriptContext.startup() {\n"
+                        + "    onOpContentLoc1(\"content.rock\") { mine(\"obj.coal\") }\n"
+                        + "  }\n"
+                        + "  private fun mine(item: String) {\n"
+                        + "    useRow(\"dbrow.mining_coalrock\")\n"
+                        + "    xp(\"stat.mining\", 50.0)\n"
+                        + "    readParam(\"param.skill_xp\")\n"
+                        + "  }\n"
+                        + "}\n");
+        Files.writeString(sourceRoot.resolve("example/CooksAssistant.kt"),
+                "package example\n"
+                        + "class CooksAssistant : QuestScript(\"quest_cooksassistant\", \"varp.cookquest\", rewards {}, ItemRewardDisplay(\"obj.cake\")) {\n"
+                        + "  private val done by boolVarBit(\"varbit.cook_done\")\n"
+                        + "  override fun ScriptContext.init() { onOpNpc1(\"npc.cook\") {} }\n"
+                        + "}\n");
+        Files.writeString(resourceRoot.resolve("data/mining.toml"),
+                "rock = \"loc.coal_rock\"\n"
+                        + "reward = \"obj.coal\"\n"
+                        + "xp_param = \"param.skill_xp\"\n");
+
+        Files.writeString(gamevals.resolve("loc.rscm"), "coal_rock=1234\n");
+        Files.writeString(gamevals.resolve("obj.rscm"), "coal=2000\ncake=2001\n");
+        Files.writeString(gamevals.resolve("varp.rscm"), "cookquest=3000\n");
+        Files.writeString(gamevals.resolve("varbit.rscm"), "cook_done=4000\n");
+        Files.writeString(gamevals.resolve("npc.rscm"), "cook=5000\n");
+        Files.writeString(gamevals.resolve("content.rscm"), "rock=6000\n");
+        Files.writeString(gamevals.resolve("dbrow.rscm"), "mining_coalrock=55487\n");
+        Files.writeString(gamevals.resolve("stat.rscm"), "mining=14\n");
+        Files.writeString(gamevals.resolve("param.rscm"), "skill_xp=65493\n");
+
+        String payload = "{"
+                + "\"rootName\":\"CustomOpenRune\","
+                + "\"gradleVersion\":\"8.14.3\","
+                + "\"projects\":[{"
+                + "\"path\":\":gameplay\","
+                + "\"name\":\"gameplay\","
+                + "\"projectDir\":\"" + json(project) + "\","
+                + "\"buildFile\":\"" + json(project.resolve("build.gradle.kts")) + "\","
+                + "\"sourceSets\":[{"
+                + "\"name\":\"main\","
+                + "\"sources\":[\"" + json(sourceRoot) + "\"],"
+                + "\"resources\":[\"" + json(resourceRoot) + "\"],"
+                + "\"outputs\":[]"
+                + "}],"
+                + "\"tasks\":[],"
+                + "\"projectDependencies\":[],"
+                + "\"pluginClasses\":[]"
+                + "}]}";
+        Files.writeString(root.resolve("gradlew"),
+                "#!/bin/sh\n"
+                        + "printf '%s\\n' 'RSPSI_GRADLE_MODEL="
+                        + payload.replace("'", "'\\''") + "'\n");
+
+        OpenRuneServerProvider provider = new OpenRuneServerProvider();
+        assertTrue(provider.probe(root).supports(IntegrationCapability.CONTENT_GRAPH));
+
+        IntegrationOptions options = IntegrationOptions.defaults(
+                root, Set.of(IntegrationCapability.CONTENT_GRAPH));
+        ServerIntegrationService service = new ServerIntegrationService();
+        service.registerProvider(provider);
+        IntegrationSession session = service.connect(root, options);
+
+        assertTrue(session.symbolProvider().isEmpty(),
+                "graph prerequisites must not implicitly expose disabled symbol capability");
+        assertTrue(session.referenceProvider().isEmpty(),
+                "graph prerequisites must not implicitly expose disabled reference capability");
+        assertTrue(session.semanticSourceIndex().isEmpty(),
+                "graph prerequisites must not implicitly expose disabled source-semantic capability");
+
+        var graph = service.activeSemanticContentGraph().orElseThrow();
+        assertEquals(graph, session.semanticContentGraph().orElseThrow());
+
+        var coalFromObj = graph.symbol("obj.coal").orElseThrow();
+        var coalFromNeutral = graph.symbol("item.coal").orElseThrow();
+        assertEquals(coalFromNeutral.id(), coalFromObj.id());
+        assertEquals("2000", coalFromObj.attributes().get("numericId"));
+        assertEquals("true", coalFromObj.attributes().get("resolved"));
+
+        var rock = graph.symbol("content.rock").orElseThrow();
+        assertEquals("6000", rock.attributes().get("numericId"));
+        assertTrue(graph.incoming(rock.id(), SemanticRelationKind.TARGETS).stream()
+                .map(edge -> graph.node(edge.from()).orElseThrow())
+                .anyMatch(node -> node.kind() == SemanticContentNodeKind.HANDLER
+                        && node.label().equals("onOpContentLoc1")));
+
+        assertEquals("55487",
+                graph.symbol("dbrow.mining_coalrock").orElseThrow()
+                        .attributes().get("numericId"));
+        assertEquals("14",
+                graph.symbol("stat.mining").orElseThrow()
+                        .attributes().get("numericId"));
+        var skillXpParam = graph.symbol("param.skill_xp").orElseThrow();
+        assertEquals("65493", skillXpParam.attributes().get("numericId"));
+        assertTrue(graph.incoming(skillXpParam.id(), SemanticRelationKind.REFERENCES).stream()
+                .flatMap(edge -> edge.evidence().stream())
+                .anyMatch(evidence -> evidence.kind() == SemanticEvidenceKind.DECLARATIVE_REFERENCE));
+
+        var quest = graph.nodes(SemanticContentNodeKind.QUEST).stream()
+                .filter(node -> node.label().equals("CooksAssistant"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("quest_cooksassistant", quest.attributes().get("questKey"));
+        var questVar = graph.symbol("varp.cookquest").orElseThrow();
+        assertTrue(graph.outgoing(quest.id(), SemanticRelationKind.USES_STATE).stream()
+                .anyMatch(edge -> edge.to().equals(questVar.id())));
+
+        var cookDone = graph.symbol("varbit.cook_done").orElseThrow();
+        assertTrue(graph.incoming(cookDone.id(), SemanticRelationKind.BINDS_STATE).stream()
+                .anyMatch(edge -> edge.from().equals(quest.id())));
+
+        var loc = graph.symbol("loc.coal_rock").orElseThrow();
+        assertEquals("1234", loc.attributes().get("numericId"));
+        assertTrue(graph.incoming(loc.id(), SemanticRelationKind.REFERENCES).stream()
+                .flatMap(edge -> edge.evidence().stream())
+                .anyMatch(evidence -> evidence.kind() == SemanticEvidenceKind.DECLARATIVE_REFERENCE));
+
+        assertTrue(graph.incoming(coalFromObj.id(), SemanticRelationKind.REFERENCES).stream()
+                .flatMap(edge -> edge.evidence().stream())
+                .anyMatch(evidence -> evidence.kind() == SemanticEvidenceKind.DECLARATIVE_REFERENCE));
+
         service.disconnect();
     }
 
