@@ -143,6 +143,19 @@ public final class CommandHistory {
     }
 
     /**
+     * Drops every redo entry after the current cursor without changing
+     * authored state. Package-private so transaction coordinators can erase a
+     * rolled-back speculative branch while normal editing continues to use
+     * execute(), which already performs the same branch truncation.
+     */
+    void discardRedo() {
+        while (commands.size() > cursor) {
+            commands.remove(commands.size() - 1);
+            sessionSaveStateTokens.remove(sessionSaveStateTokens.size() - 1);
+        }
+    }
+
+    /**
      * Identity token for the currently applied state that is persisted by the
      * normal {@link EditorSession} save handler.
      */
