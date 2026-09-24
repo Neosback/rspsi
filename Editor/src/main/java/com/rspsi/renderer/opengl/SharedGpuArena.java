@@ -137,7 +137,6 @@ final class SharedGpuArena implements AutoCloseable {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
         glBindVertexArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
 
     void uploadGeometry(int vertexOffset, List<GpuSceneVertex> vertices) {
