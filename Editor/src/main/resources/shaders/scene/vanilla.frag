@@ -8,6 +8,8 @@ in float vAlpha;
 in float vRenderType;
 in vec3 vColor;
 in float vFogAmount;
+in vec3 vNormal;
+in float vViewDepth;
 uniform sampler2DArray uTexture;
 uniform sampler2D uPalette;
 uniform samplerBuffer uTextureState;
@@ -17,6 +19,9 @@ uniform int uTextureMissing;
 uniform int uTerrain;
 uniform int uTextureLayer;
 out vec4 outColor;
+
+#include "/common/debug_views.glsl"
+
 void main() {
     vec3 color;
     if (uTextured != 0) {
@@ -73,6 +78,15 @@ void main() {
         // flat-colour or textured output.
         alpha = 1.0 - clamp(vAlpha / 255.0, 0.0, 1.0);
     }
+    vec3 debugColor;
+    if (gpuDebugColor(
+            uDebugView, color, alpha, vRenderType, aPriorityPlaceholder,
+            uTextured, uTextureAvailable, uTextureMissing, uTextureLayer,
+            vNormal, vFogAmount, vViewDepth, debugColor)) {
+        outColor = vec4(debugColor, 1.0);
+        return;
+    }
+
     color = clamp(color * uBrightness * exp2(uExposure), 0.0, 1.0);
     color = mix(color, uFogColor, vFogAmount);
     outColor = vec4(color, alpha);
