@@ -2,6 +2,7 @@ package com.rspsi.editor.integration;
 
 import com.rspsi.editor.integration.npc.NpcSpawnProvider;
 import com.rspsi.editor.integration.reference.ReferenceProvider;
+import com.rspsi.editor.integration.semantic.SemanticContentGraph;
 import com.rspsi.editor.integration.semantic.SemanticSourceIndex;
 import com.rspsi.editor.symbols.SymbolProvider;
 import com.rspsi.server.ServerConnection;
@@ -48,6 +49,11 @@ public interface IntegrationSession extends AutoCloseable {
 
     /** Source-derived semantic facts with exact provenance when the provider supports them. */
     default Optional<SemanticSourceIndex> semanticSourceIndex() {
+        return Optional.empty();
+    }
+
+    /** Cross-source semantic graph when the provider can assemble one. */
+    default Optional<SemanticContentGraph> semanticContentGraph() {
         return Optional.empty();
     }
 
