@@ -3,7 +3,6 @@ package com.rspsi.renderer.opengl;
 import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.render.GpuColorEncoding;
 import com.rspsi.editor.render.GpuDrawCommand;
-import com.rspsi.editor.render.GpuFaceShading;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.GpuZoneStreamFingerprints;
@@ -385,10 +384,9 @@ public final class ZoneVboManager implements AutoCloseable {
         FloatBuffer data = uploadScratch.vertices(
                 vertices.size() * NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX);
         for (GpuSceneVertex vertex : vertices) {
-            GpuFaceShading face = vertex.faceShading();
-            data.put((float) face.alpha())
-                    .put((float) face.renderType())
-                    .put((float) face.priority());
+            data.put((float) vertex.alpha())
+                    .put((float) vertex.renderType())
+                    .put((float) vertex.priority());
         }
         data.flip();
 
