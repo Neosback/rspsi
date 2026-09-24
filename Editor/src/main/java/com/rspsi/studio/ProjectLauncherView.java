@@ -31,7 +31,7 @@ import java.util.function.Consumer;
 public final class ProjectLauncherView {
     private static final DateTimeFormatter RECENT_TIME =
             DateTimeFormatter.ofPattern("MMM d, yyyy  h:mm a");
-    private static final float PANEL_MAX_WIDTH = 860.0f;
+    private static final float PANEL_MAX_WIDTH = 740.0f;
     private static final float PANEL_MAX_HEIGHT = 700.0f;
 
     private final StudioProjectRegistry registry;
@@ -189,15 +189,11 @@ public final class ProjectLauncherView {
     }
 
     private void renderStartActions(Consumer<StudioProjectDescriptor> openProject) {
-        float gap = 10.0f;
-        float width = Math.max(180.0f,
-                (ImGui.getContentRegionAvailX() - gap) * 0.5f);
-
-        if (StudioWidgets.buttonPrimary("Import OpenRune-Server", width, 44.0f)) {
+        if (StudioWidgets.buttonPrimary("Import OpenRune-Server", -1.0f, 44.0f)) {
             chooseOpenRuneRoot();
         }
-        ImGui.sameLine(0.0f, gap);
-        if (StudioWidgets.buttonSecondary("Continue without import", width, 44.0f)) {
+        ImGui.dummy(1.0f, 8.0f);
+        if (StudioWidgets.buttonSecondary("Continue without import", -1.0f, 44.0f)) {
             chooseStandaloneCache(openProject);
         }
     }
@@ -260,7 +256,9 @@ public final class ProjectLauncherView {
         ImGui.pushStyleColor(ImGuiCol.Text, 0.76f, 0.82f, 0.90f, 1.0f);
         ImGui.textWrapped(accessDescription(preset));
         ImGui.popStyleColor();
-        ImGui.textDisabled("Destructive Fresh Cache reset is never granted automatically.");
+        ImGui.dummy(1.0f, 5.0f);
+        ImGui.textDisabled(accessCapabilities(preset));
+        ImGui.textDisabled("Fresh Cache/reset access is never granted automatically.");
 
         ImGui.dummy(1.0f, 10.0f);
         if (StudioWidgets.buttonPrimary("Import project", 150.0f, 34.0f)) {
@@ -301,6 +299,17 @@ public final class ProjectLauncherView {
             case AUTHOR -> "Read + write";
             case MANAGED_BUILD -> "Read + write + build";
             case DEVELOPER -> "Full project access";
+        };
+    }
+
+    private static String accessCapabilities(ProjectIntegrationPreset preset) {
+        return switch (preset) {
+            case INSPECT -> "Access: project read";
+            case AUTHOR -> "Access: project read · supported source write";
+            case MANAGED_BUILD ->
+                    "Access: project read · supported source write · cache/GameVal/CS2 build";
+            case DEVELOPER ->
+                    "Access: project read · supported source write · build · server launch";
         };
     }
 

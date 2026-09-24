@@ -198,6 +198,28 @@ The target is for the OpenRune plugin/provider to reuse one neutral project insp
 
 This convergence also prevents the UI, plugin, and legacy adapter paths from disagreeing about where a project's caches live or which build command is authoritative.
 
+### Startup inspection boundary
+
+Project startup is a separate, bounded inspection tier:
+
+- detect the OpenRune checkout;
+- resolve known cache-role paths;
+- read revision/config identity;
+- discover declared build availability without executing Gradle;
+- open LIVE through the normal cache session.
+
+Startup does **not**:
+
+- run `git status`;
+- recursively fingerprint LIVE, SERVER, raw-cache, content, GameVals, plugin, or source trees;
+- inventory server content;
+- evaluate the Gradle project model;
+- build Kotlin PSI indexes or the semantic content graph.
+
+A lightweight startup identity is sufficient to enter the project shell. Full source/content
+fingerprints remain mandatory immediately before workflows that read/write those source domains or
+enforce stale-source protection.
+
 ### First-class project convergence status
 
 The first implementation slice establishes these invariants:
@@ -215,14 +237,15 @@ The stock `OpenRuneProjectLayoutResolver` remains useful as a **format-specific 
 The second implementation slice adds the connected project's evaluated Gradle model:
 
 - passive folder detection remains non-executing;
-- opening a trusted project invokes that checkout's own Gradle wrapper with a temporary Studio init script;
+- ordinary project startup does **not** invoke the checkout's Gradle wrapper;
+- when a trusted content/source/build workflow explicitly requests the Gradle model, Studio invokes that checkout's wrapper with a temporary Studio init script;
 - the resulting neutral model records every evaluated project, project directory, build file, source set, source/resource/output root, declared project dependency, applied plugin implementation class, and task path;
 - source/content inventory is enriched from those evaluated source/resource roots, so a module does not have to live under stock `content/**`;
 - known OpenRune cache/server actions bind to the actual discovered Gradle task path, so a task such as `:cache-tools:buildCache` works without pretending the module is named `:or-cache`;
 - explicit command overrides remain the escape hatch when a fork renames the semantic task itself;
 - the evaluated model is attached to `ServerProjectInspection` and exposed through the active first-party OpenRune session.
 
-Gradle build configuration is executable code. The project browser/probe path therefore **must not** evaluate Gradle. Model evaluation belongs only to the explicit trusted/open-project path. The injected reporting task reads configured build structure and deliberately avoids resolving external dependency configurations or executing game/server classes.
+Gradle build configuration is executable code. The project browser, import flow, and ordinary project-loading gate therefore **must not** evaluate Gradle. Model evaluation belongs only to an explicit trusted content/source/build workflow after the project is open. The injected reporting task reads configured build structure and deliberately avoids resolving external dependency configurations or executing game/server classes.
 
 With exact source roots now available, the third implementation slice adds Kotlin PSI-backed source indexing over the evaluated production source sets:
 

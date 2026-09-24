@@ -1140,7 +1140,63 @@ Studio still rebuilds too much upstream CPU-derived scene data after edits.
 
 This becomes increasingly important once brushes, scatter, conditional replace, and generators can affect large areas interactively.
 
-## 7.5 HD renderer preparation
+## 7.5 Native renderer performance continuation
+
+The September 24 renderer pass established the low-overhead baseline without reducing
+view distance, scene quality, OSRS ordering semantics, or editor mutability.
+
+Landed:
+
+- #82: lazy texture/sprite residency, primitive final indices, CPU DDA picking by default,
+  static framebuffer reuse, and reduced texture/fingerprint allocation churn
+- #84: one shared GPU geometry arena while retaining logical 8x8 dirty-zone ownership
+- #85: capability-gated `glMultiDrawElementsIndirect` on OpenGL 4.3+ with the ordered
+  `glMultiDrawElements` fallback retained for macOS/OpenGL 3.3-4.1
+- #86: primitive packed picking handles/buckets instead of one retained Java object per triangle
+- #87: packed face/material metadata, larger ordered native batches, and removal of
+  texture/depth-bias material uniforms as batch barriers
+
+Next performance work is deliberately deferred while the project-first OpenRune lifecycle is
+finished. Preserve this order when renderer work resumes:
+
+1. **Persistent mapped shared-buffer uploads**
+   - use `ARB_buffer_storage` / persistent coherent mapping only when the capability exists
+   - keep the current shared-arena `glBufferSubData` path as the macOS-safe baseline
+   - use fenced/ring-buffer ownership so editing never overwrites in-flight GPU ranges
+
+2. **Model geometry deduplication and instancing**
+   - decode/store one immutable base mesh per compatible OSRS model/material variant
+   - represent repeated trees, rocks, walls, fences, decorations, etc. as compact instances
+   - preserve contouring, recolor/retexture, orientation, animation and editor identity semantics
+   - fall back to unique geometry whenever an instance cannot be represented losslessly
+
+3. **Tighter native vertex packing**
+   - quantify the current 44-byte mandatory native vertex footprint before changing it
+   - evaluate 16-bit/normalized position, UV, color/light and normal encodings against real-cache
+     parity fixtures
+   - do not adopt a smaller format if it introduces visible terrain/model precision loss
+
+4. **Primitive command/order workspaces**
+   - remove remaining boxed `List<Integer>` / temporary sort structures from visibility,
+     ordering and submission hot paths
+   - retain exact OSRS priority and alpha ordering
+
+5. **Zone-first visibility**
+   - reject non-visible 8x8 zones before per-command visibility work
+   - keep current command-level checks as the correctness fallback
+   - consider compute-driven visibility only as an optional later capability path
+
+6. **Performance acceptance gate**
+   - retest the same one-region scene that previously showed roughly 1.2 GB process memory,
+     about 30 FPS stationary and 3-7 FPS while interacting
+   - capture JVM used/committed heap, direct-buffer usage, native geometry bytes, draw calls,
+     submission CPU time, GPU time, camera-movement FPS and active-edit FPS
+   - do not claim a target memory/FPS number until measured on the real macOS and Windows paths
+
+The core rule remains: performance work changes residency, submission and data layout, not
+OSRS rendering semantics or editor functionality.
+
+## 7.6 HD renderer preparation
 
 Do not build a second HD scene system.
 

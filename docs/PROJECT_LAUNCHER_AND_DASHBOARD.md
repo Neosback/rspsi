@@ -70,42 +70,41 @@ The launcher is a dedicated pre-project full-window surface inspired by modern I
 
 ### 3.1 Primary layout
 
-Recommended structure:
+Recommended first-release structure:
 
 ```
-+-------------------------------------------------------------------+
-| OpenRune Studio                                                   |
-|                                                                   |
-| Recent Projects                         Actions                    |
-|                                                                   |
-| [Project A] OpenRune Server             + New Project              |
-|  /projects/my-server                    Open Project...             |
-|  last opened 10 min ago                 Import/Link...             |
-|                                                                   |
-| [Project B] Standalone Cache                                      |
-|  ~/StudioProjects/world-edit                                      |
-|  last opened yesterday                                            |
-|                                                                   |
-| [Project C] ...                                                   |
-|                                                                   |
-| Settings   Plugins   About                                        |
-+-------------------------------------------------------------------+
++------------------------------------------------------------+
+|                    OpenRune Studio                         |
+|                                                            |
+| Projects                                                   |
+| +--------------------------------------------------------+ |
+| | My OpenRune Server          OpenRune-Server            | |
+| | /projects/my-server                                   | |
+| | Last opened ...                    [ Open ] [ Remove ] | |
+| |                                                        | |
+| | Local Cache                  Cache                    | |
+| | ~/.openrune-studio/...                               | |
+| +--------------------------------------------------------+ |
+|                                                            |
+| [               Import OpenRune-Server                  ] |
+| [               Continue without import                ] |
++------------------------------------------------------------+
 ```
 
-The launcher should support:
+The first-release launcher supports:
 
 - recent projects;
-- pinned projects;
-- project name;
+- project name derived from the imported source initially;
 - project type;
 - project root/source summary;
 - last-opened time;
 - missing/moved project indication;
 - remove from recent list without deleting project data;
-- New Project;
-- Open Existing Studio Project;
-- link/import an existing OpenRune Server project;
-- application-level Settings and Plugins without opening a project.
+- Import OpenRune-Server;
+- Continue without import using a native cache-directory chooser.
+
+Pinning, arbitrary descriptor browsing, rename, application-level Settings/Plugins and advanced
+project repair can be added later without complicating the normal startup path.
 
 The launcher should **not** decode a cache merely to render the recent-project list.
 
@@ -200,135 +199,76 @@ Do not duplicate complete mutable project configuration into the recent-project 
 
 Missing projects remain visible with a clear unavailable state until the user removes or relocates them.
 
-## 6. New Project wizard
+## 6. First-release project creation/import flow
 
-`New Project` should be a guided wizard rather than a raw collection of cache/server fields.
+The first-release launcher deliberately does **not** use a multi-step project wizard.
 
-### Step 1 - Name and Studio location
+Startup should ask for the minimum information required to establish a durable project:
 
-Required:
+### 6.1 Import OpenRune-Server
 
-- project name;
-- Studio project-data location when applicable.
+Flow:
 
-The project name is first-class and is used by the launcher, title bar, Dashboard, recent-project registry, and logs.
+1. user chooses **Import OpenRune-Server**;
+2. Studio opens the native OS folder chooser;
+3. user selects the OpenRune server checkout root;
+4. Studio detects the project and asks only for the amount of access Studio may have;
+5. Studio creates/reuses its private descriptor under `~/.openrune-studio/projects/`;
+6. the project is remembered in Recent Projects and opened through the normal loading gate.
 
-### Step 2 - Project type
+The user does **not** enter:
 
-Initial choices:
+- a separate Studio project name;
+- a Studio metadata directory;
+- a LIVE-cache path;
+- a SERVER-cache path;
+- content/source roots;
+- GameVal paths;
+- Gradle module paths.
 
-#### Standalone OSRS Cache Project
+The checkout directory name is the initial display name. Rename/settings support can be added later
+without making startup a form.
 
-For users who only want Studio/map editing.
+User-facing access labels are permission descriptions, not developer-role names:
 
-The user selects an existing supported cache directory.
+- **Read only**
+- **Read + write**
+- **Read + write + build**
+- **Full project access**
 
-Optional later action:
+The persisted descriptor still stores granular `ProjectIntegrationCapability` values. "Full project
+access" does not silently grant destructive/reset operations. Fresh-cache/reset remains explicit.
 
-- acquire a revisioned reference cache through OpenRune FileStore/FreshCache.
+Import performs only bounded project/cache-role inspection. It must not recursively scan server
+content, evaluate the Gradle project model, build semantic graphs, or run repository-wide content
+indexing before the Dashboard is usable.
 
-Acquisition is explicit. It is not performed just because this project type was selected.
+### 6.2 Continue without import
 
-#### OpenRune Server Project
+Flow:
 
-For users integrating Studio with an OpenRune Server checkout.
+1. user chooses **Continue without import**;
+2. Studio opens the native OS folder chooser;
+3. user selects an existing supported OSRS cache directory;
+4. Studio creates/reuses a private standalone descriptor automatically;
+5. the cache project appears in Recent Projects and opens through the same loading gate.
 
-Initial implementation should support linking an existing OpenRune project root.
+No project name is required for this flow.
 
-A later dedicated bootstrap may create/clone a new OpenRune Server checkout, but that should be implemented only when Studio has a deliberate Git/template/bootstrap workflow. Do not hide shell cloning behind the project wizard without a maintained lifecycle.
+### 6.3 Deferred advanced setup
 
-The wizard detects:
+The following belong in later project settings/content tooling, not first-run startup:
 
-- OpenRune project markers;
-- revision/environment;
-- LIVE cache;
-- SERVER cache;
-- source/content roots;
-- GameVals;
-- build tasks;
-- project fingerprint.
+- custom OpenRune path overrides;
+- source/content indexing;
+- Kotlin PSI / Gradle semantic models;
+- content graph configuration;
+- server runtime controls;
+- custom build-task overrides;
+- project rename and portable/project-local metadata;
+- bootstrap/clone/create-new-OpenRune workflows.
 
-The user does not manually select `.data/cache/LIVE` under the normal OpenRune layout.
-
-### Step 3 - Integration and control policy
-
-Do not reduce permissions to an ambiguous single "full control" switch.
-
-Offer understandable presets backed by explicit capabilities.
-
-#### Inspect
-
-Read-only integration:
-
-- read LIVE;
-- read SERVER where appropriate;
-- load GameVals/symbols;
-- inspect source/content references;
-- no source writes;
-- no Gradle task execution.
-
-#### Author
-
-Everything in Inspect, plus:
-
-- write only supported, losslessly mapped OpenRune source artifacts;
-- Studio does not execute cache builds automatically;
-- publication remains pending until an external/project build is observed and verified.
-
-#### Managed Build - recommended for active OpenRune development
-
-Everything in Author, plus:
-
-- invoke the detected project `:or-cache:buildCache`;
-- reload LIVE and SERVER after build;
-- verify expected outputs before marking Studio changes published;
-- run safe supporting tasks when explicitly requested and capability-approved.
-
-#### Developer
-
-Managed Build plus additional development controls such as:
-
-- merge GameVals;
-- clean/rebuild CS2 where supported;
-- launch/stop the server when a proper lifecycle service exists;
-- advanced project task access.
-
-Destructive/reset operations such as `:or-cache:freshCache` must **not** become silently authorized by choosing Developer mode. They remain explicit per-action operations with clear confirmation because they can replace generated project caches.
-
-### 6.1 Capability model underneath presets
-
-Presets should resolve into granular capabilities such as:
-
-```
-PROJECT_READ
-PROJECT_SOURCE_WRITE
-CACHE_BUILD
-GAMEVAL_BUILD
-CS2_BUILD
-SERVER_LAUNCH
-EXTERNAL_COMMAND
-FRESH_CACHE_RESET   // explicit operation, never automatic
-```
-
-The saved project policy records the chosen capabilities, not merely a display label.
-
-This makes the integration auditable and lets future providers expose different supported controls.
-
-### Step 4 - Validation summary
-
-Before Create/Link is enabled, show:
-
-- project name;
-- project kind;
-- selected root/cache;
-- detected revision;
-- LIVE/SERVER status for OpenRune;
-- selected integration policy;
-- source-write/build permissions;
-- warnings;
-- any path overrides.
-
-Project creation itself must not rebuild caches.
+This keeps first launch fast and makes the access granted to Studio understandable.
 
 ## 7. Open Existing Project
 
@@ -397,6 +337,11 @@ For an OpenRune project, required service binding includes enough integration st
 
 Optional expensive services such as thumbnail generation, broad content search indexes, or corpus analysis should not block the Dashboard unless a workspace actually requires them. They can expose their own warming/indexing status after the project is usable.
 
+For OpenRune specifically, the startup inspection is bounded: it checks project markers, revision,
+cache-role paths and declared build availability without recursively fingerprinting LIVE/SERVER,
+raw-cache, content, GameVals, plugin, or source trees. Full stale-source/content fingerprints are
+computed only by workflows that require them.
+
 ### 8.2 Loading UI
 
 The loading view should be deliberately simple and polished:
@@ -464,9 +409,14 @@ At a glance the user should know:
 - what project is open;
 - what kind of project it is;
 - whether its cache/integration is healthy;
+- what access Studio has to an imported OpenRune project;
 - whether there are dirty/unpublished changes;
 - what they were working on recently;
 - what major workspace/action they can enter next.
+
+The first-release Dashboard must not show zero-valued modules/scripts/quests/content-graph metrics
+simply because expensive content indexing was intentionally deferred. Broader OpenRune content data
+belongs to a future content workspace and is activated on demand.
 
 ### 9.2 Recommended layout
 

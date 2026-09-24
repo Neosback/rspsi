@@ -10,6 +10,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenRuneServerAdapterTest {
@@ -88,6 +89,51 @@ class OpenRuneServerAdapterTest {
         assertEquals(1, inspection.plugins().size());
         assertEquals("Example", inspection.plugins().get(0).name());
         assertTrue(inspection.plugins().get(0).external());
+    }
+
+    @Test
+    void startupInspectionDoesNotWalkCacheOrContentTrees() throws Exception {
+        Path root = fixtureRoot("240.2");
+        Path livePayload = root.resolve(".data/cache/LIVE/7/42.dat");
+        Path contentPayload = root.resolve("content/skills/mining/Mining.kt");
+        Files.createDirectories(livePayload.getParent());
+        Files.createDirectories(contentPayload.getParent());
+        Files.writeString(livePayload, "first");
+        Files.writeString(contentPayload, "class MiningOne");
+
+        OpenRuneServerAdapter adapter = new OpenRuneServerAdapter();
+        ServerProjectInspection first = adapter.inspectStartup(root);
+
+        assertTrue(first.content().isEmpty());
+        assertTrue(first.gradleModel().isEmpty());
+        assertFalse(first.git().available(),
+                "startup should not run repository-wide Git status");
+
+        Files.writeString(livePayload, "second");
+        Files.writeString(contentPayload, "class MiningTwo");
+        ServerProjectInspection nestedChange = adapter.inspectStartup(root);
+        assertEquals(first.fingerprint(), nestedChange.fingerprint(),
+                "nested cache/content file changes must not require startup tree traversal");
+
+        Files.writeString(root.resolve("game.yml"),
+                "revision: 240.2\nname: Changed Startup Identity\n");
+        ServerProjectInspection identityChange = adapter.inspectStartup(root);
+        assertNotEquals(first.fingerprint(), identityChange.fingerprint(),
+                "startup identity should still react to important project configuration");
+    }
+
+    @Test
+    void startupDefersFullStaleFingerprintValidation() throws Exception {
+        Path root = fixtureRoot("240.2");
+        OpenRuneServerAdapter adapter = new OpenRuneServerAdapter();
+        ServerConnection expected = ServerConnection.forRoot(root)
+                .withExpectedFingerprint("full-inspection-fingerprint");
+
+        ServerProjectInspection startup = adapter.inspectStartup(expected);
+        assertFalse(startup.status() == ServerIntegrationStatus.STALE);
+
+        ServerProjectInspection full = adapter.inspect(expected);
+        assertEquals(ServerIntegrationStatus.STALE, full.status());
     }
 
     @Test
