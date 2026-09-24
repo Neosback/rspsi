@@ -1541,9 +1541,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // supplied texture metadata. macOS validates sampler targets at draw
         // time, so binding texture 0 here makes every textured command emit
         // the "texture unloadable" warning and can turn the whole textured
-        // path into undefined output. The shader still receives
-        // uTextureAvailable=0 for these commands and uses its explicit
-        // lightness fallback instead of sampling this diagnostic layer.
+        // path into undefined output. Availability now comes from the
+        // resident texture-state entry, whose zero scale marks an unavailable
+        // layer and keeps the shader out of the sampler array.
         glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, width, height, depth,
                 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
         if (available.isEmpty()) {
