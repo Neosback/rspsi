@@ -55,6 +55,8 @@ class OpenGlCapabilityProfileTest {
                 true, 16.0f,
                 true, true, true);
         assertTrue(optional.supportsPersistentMapping());
+        assertTrue(optional.supportsMultiDrawIndirect());
+        org.junit.jupiter.api.Assertions.assertFalse(baseline.supportsMultiDrawIndirect());
     }
 
     @Test
@@ -71,6 +73,7 @@ class OpenGlCapabilityProfileTest {
 
         assertTrue(diagnostic.contains("arrayLayers=2048"));
         assertTrue(diagnostic.contains("anisotropy=16.0"));
+        assertTrue(diagnostic.contains("multiDrawIndirect=true"));
         assertTrue(diagnostic.contains("bufferStorage=true"));
         assertTrue(diagnostic.contains("ssbo=true"));
         assertTrue(diagnostic.contains("imageLoadStore=true"));
