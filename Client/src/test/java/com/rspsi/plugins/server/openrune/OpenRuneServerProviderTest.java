@@ -55,7 +55,7 @@ class OpenRuneServerProviderTest {
                         + "coords = \"0_50_50_1_1\"\n");
         Files.writeString(customGamevals.resolve("loc.rscm"), "coal_rock=1234\n");
         Files.writeString(customContent.resolve("skills/mining/rocks.toml"),
-                "target = \"loc.coal_rock\"\n");
+                "target = \"loc.coal_rock\"\nreward = \"obj.coal\"\n");
         Files.writeString(customContent.resolve("skills/mining/gamevals.toml"),
                 "[gamevals.obj]\ncoal = 2000\n");
 
@@ -97,7 +97,9 @@ class OpenRuneServerProviderTest {
                 .resolve(SymbolNamespace.ITEM, "coal").orElseThrow();
         assertEquals(2000, item.id());
         assertEquals(1, session.npcSpawnProvider().orElseThrow().totalSpawnCount());
-        assertTrue(session.referenceProvider().orElseThrow().totalReferenceCount() > 0);
+        var references = session.referenceProvider().orElseThrow();
+        assertTrue(references.totalReferenceCount() > 0);
+        assertTrue(!references.referencesFor(SymbolNamespace.ITEM, -1, "item.coal").isEmpty());
 
         service.disconnect();
     }
