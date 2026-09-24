@@ -100,7 +100,7 @@ public final class SemanticContentGraphBuilder {
             boolean quest = fact.kind() == SemanticFactKind.QUEST_SCRIPT;
             String pkg = fact.attributes().getOrDefault("package", "").trim();
             String qualifiedName = pkg.isBlank() ? fact.name() : pkg + "." + fact.name();
-            String id = (quest ? "quest:" : "script:") + qualifiedName.toLowerCase(Locale.ROOT);
+            String id = (quest ? "quest:" : "script:") + qualifiedName;
 
             MutableNode script = state.ensureNode(
                     id,
@@ -167,8 +167,7 @@ public final class SemanticContentGraphBuilder {
             List<ScriptRef> scripts,
             SemanticSourceFact fact) {
         String relative = state.relative(fact.source().file());
-        String handlerId = "handler:" + relative.toLowerCase(Locale.ROOT)
-                + ":" + fact.source().startOffset();
+        String handlerId = "handler:" + relative + ":" + fact.source().startOffset();
 
         MutableNode handler = state.ensureNode(
                 handlerId,
@@ -345,7 +344,7 @@ public final class SemanticContentGraphBuilder {
                 Map<String, String> attributes) {
             Path normalized = file.toAbsolutePath().normalize();
             String relative = relative(normalized);
-            String id = "resource:" + relative.toLowerCase(Locale.ROOT);
+            String id = "resource:" + relative;
             MutableNode resource = ensureNode(
                     id,
                     SemanticContentNodeKind.RESOURCE,
