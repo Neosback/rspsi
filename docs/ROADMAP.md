@@ -1196,7 +1196,7 @@ finished. Preserve this order when renderer work resumes:
 The core rule remains: performance work changes residency, submission and data layout, not
 OSRS rendering semantics or editor functionality.
 
-## 7.5 HD renderer preparation
+## 7.6 HD renderer preparation
 
 Do not build a second HD scene system.
 
