@@ -254,6 +254,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private List<Integer> cachedAlphaOrder = List.of();
     private final java.util.HashSet<Integer> missingTextureIds = new java.util.HashSet<>();
     private final FrameMetrics frameMetrics = new FrameMetrics();
+    private final RendererPerformanceMetrics performanceMetrics = new RendererPerformanceMetrics();
+    private final GpuTimerQuery gpuTimerQuery = new GpuTimerQuery();
     private GpuUploadPlan statisticsPlan;
     private PlanStatistics cachedPlanStatistics = PlanStatistics.empty();
     private GpuCommandGeometry statisticsGeometry;
@@ -383,6 +385,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                      CameraState camera, int width, int height,
                      RenderPresentation presentation, int clientCycle) {
         if (presentation == null) throw new IllegalArgumentException("presentation cannot be null");
+        performanceMetrics.beginFrame();
+        drainGpuTimerQueries();
         lastDrawPresentation = presentation;
         lastDrawClientCycle = clientCycle & TextureAnimation.CLIENT_CYCLE_MASK;
         // Reassert all state that the previous alpha pass or the ImGui backend
@@ -429,9 +433,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
 
         if (plan == null) {
+            captureGlError();
+            finishPerformanceFrame();
             statistics = statisticsFor(null, null, null,
                     false, false, 0, 0, 0, 0, 0, 0);
-            captureGlError();
             return;
         }
         boolean zonedGeometryActive = zonedPlan != null
@@ -440,9 +445,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         GeometryStatistics geometryStatistics = geometryStatistics(runtimeGeometry);
         if (geometryStatistics.sourceVertices() == 0
                 || geometryStatistics.sourceIndices() == 0) {
+            captureGlError();
+            finishPerformanceFrame();
             statistics = statisticsFor(plan, runtimeGeometry, null,
                     false, false, 0, 0, 0, 0, 0, 0);
-            captureGlError();
             return;
         }
         // Geometry/texture upload is gated on the plan's own camera-independent
@@ -457,11 +463,14 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         int gpuShadingStreamUploads = 0;
         int gpuIndexStreamUploads = 0;
         if (!plan.fingerprint().equals(uploadedFingerprint)) {
+            long uploadStarted = System.nanoTime();
             if (zonedGeometryActive) {
                 zoneManager.upload(zonedPlan);
             } else {
                 zoneManager.upload(plan);
             }
+            performanceMetrics.addGeometryUploadNanos(System.nanoTime() - uploadStarted);
+            frameMetrics.captureZoneUploads(zoneManager);
             gpuZoneUploads = zoneManager.dirtyZonesUploadedCount();
             gpuReusedAllocations = zoneManager.reusedAllocationsCount();
             gpuGeometryStreamUploads = zoneManager.geometryStreamUploads();
@@ -473,18 +482,26 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
         String textureFingerprint = textureFingerprintCached(plan.textures());
         if (!textureFingerprint.equals(uploadedTextureFingerprint)) {
-            uploadTextureArray(plan.textures());
+            long textureUploadStarted = System.nanoTime();
+            long texturePixelBytes = uploadTextureArray(plan.textures());
+            performanceMetrics.addTextureUploadNanos(System.nanoTime() - textureUploadStarted);
+            frameMetrics.recordTexturePixels(texturePixelBytes, textureLayers.size());
             uploadedTextureFingerprint = textureFingerprint;
             textureUploaded = true;
         }
         String textureStateFingerprint = textureStateFingerprintCached(plan.textures());
         if (!textureStateFingerprint.equals(uploadedTextureStateFingerprint)) {
             capabilityProfile.requireTextureStateEntries(requiredTextureCapacity(plan.textures()));
+            long textureStateStarted = System.nanoTime();
             textureStateBuffer.upload(plan.textures(), TEXTURE_LAYER_CAPACITY);
+            performanceMetrics.addTextureUploadNanos(System.nanoTime() - textureStateStarted);
+            frameMetrics.recordTextureState(textureStateBuffer.lastUploadBytes());
             uploadedTextureStateFingerprint = textureStateFingerprint;
         }
+        long visibilityStarted = System.nanoTime();
         GpuCommandVisibility visibility = visibilityCache.resolve(
                 runtimeGeometry, camera, plan.occluders(), plan.sceneWindow());
+        performanceMetrics.addVisibilityNanos(System.nanoTime() - visibilityStarted);
 
         boolean fogEnabled = presentation.fogDepthTiles() > 0;
         SceneFog.Bounds frameFogBounds = fogEnabled ? fogBounds(runtimeGeometry) : null;
@@ -515,15 +532,25 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // wall trim/decor faces can be resolved by the OSRS submission order
         // instead of failing a strict depth test. List.sort is stable, so
         // indices are only reordered relative to distinct priority values.
+        long orderingStarted = System.nanoTime();
         List<Integer> opaqueOrder = opaqueOrder(plan, commands, visibility, camera);
-        drawBatches(commands, opaqueOrder, visibility, camera, false);
         // The software reference renderer composites transparent triangles
         // back-to-front. Keep opaque submission order stable, but apply the
         // same depth ordering to alpha ranges in the native backend.
         List<Integer> alphaOrder = alphaOrderFor(
                 runtimeGeometry, commands, visibility, camera);
-        drawBatches(
-                commands, alphaOrder, visibility, camera, true);
+        performanceMetrics.addOrderingNanos(System.nanoTime() - orderingStarted);
+
+        boolean gpuTimingActive = capabilityProfile.supportsTimerQueries()
+                && gpuTimerQuery.begin();
+        long submissionStarted = System.nanoTime();
+        try {
+            drawBatches(commands, opaqueOrder, visibility, camera, false);
+            drawBatches(commands, alphaOrder, visibility, camera, true);
+        } finally {
+            performanceMetrics.addSubmissionNanos(System.nanoTime() - submissionStarted);
+            if (gpuTimingActive) gpuTimerQuery.end();
+        }
         // Alpha and no-depth submissions disable depth writes. Restore the
         // baseline before handing the context back to ImGui and before the
         // next frame's clear.
@@ -544,6 +571,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
         glUseProgram(0);
         captureGlError();
+        finishPerformanceFrame();
         statistics = statisticsFor(plan, runtimeGeometry, visibility,
                 geometryUploaded, textureUploaded, frameMetrics.drawCalls,
                 gpuZoneUploads, gpuReusedAllocations,
@@ -634,6 +662,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             return PickerId.INVALID;
         }
 
+        long pickerStarted = System.nanoTime();
         GpuCommandVisibility visibility = visibilityCache.resolve(
                 runtimeGeometry, camera, plan.occluders(), plan.sceneWindow());
 
@@ -720,6 +749,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                         org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
                 glViewport(previousViewport.get(0), previousViewport.get(1),
                         previousViewport.get(2), previousViewport.get(3));
+                performanceMetrics.recordPicker(
+                        System.nanoTime() - pickerStarted,
+                        pickerFramebuffer.lastReadbackNanos());
             }
         }
     }
@@ -886,7 +918,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 flatMaterializationCount, flatMaterializationBytes,
                 gpuZoneUploads, gpuReusedAllocations,
                 gpuGeometryStreamUploads, gpuShadingStreamUploads, gpuIndexStreamUploads,
-                visibility != null && visibility.occlusionApplied());
+                visibility != null && visibility.occlusionApplied(),
+                performanceStatistics());
     }
 
     private PlanStatistics planStatistics(GpuUploadPlan plan) {
@@ -946,6 +979,55 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         if (firstGlError == GL_NO_ERROR && error != GL_NO_ERROR) firstGlError = error;
     }
 
+    private void drainGpuTimerQueries() {
+        if (capabilityProfile == null || !capabilityProfile.supportsTimerQueries()) return;
+        long sample;
+        while ((sample = gpuTimerQuery.pollCompletedNanos()) >= 0L) {
+            performanceMetrics.recordGpuSceneNanos(sample);
+        }
+    }
+
+    private void finishPerformanceFrame() {
+        drainGpuTimerQueries();
+        performanceMetrics.endFrame();
+    }
+
+    private PerformanceStatistics performanceStatistics() {
+        RendererPerformanceMetrics.Snapshot timing = performanceMetrics.snapshot();
+        return new PerformanceStatistics(
+                timing.cpuFrameNanos(),
+                timing.cpuGeometryUploadNanos(),
+                timing.cpuTextureUploadNanos(),
+                timing.cpuVisibilityNanos(),
+                timing.cpuOrderingNanos(),
+                timing.cpuSubmissionNanos(),
+                timing.gpuSceneNanos(),
+                timing.cpuFrameP50Nanos(),
+                timing.cpuFrameP95Nanos(),
+                timing.gpuSceneP50Nanos(),
+                timing.gpuSceneP95Nanos(),
+                timing.cpuFrameSampleCount(),
+                timing.gpuSceneSampleCount(),
+                frameMetrics.submittedCommands,
+                frameMetrics.singleDrawCalls,
+                frameMetrics.multiDrawCalls,
+                frameMetrics.gpuBufferBytesUploaded,
+                frameMetrics.gpuGeometryBytesUploaded,
+                frameMetrics.gpuVertexShadingBytesUploaded,
+                frameMetrics.gpuFaceMetadataBytesUploaded,
+                frameMetrics.gpuNormalBytesUploaded,
+                frameMetrics.gpuPickerBytesUploaded,
+                frameMetrics.gpuIndexBytesUploaded,
+                frameMetrics.texturePixelBytesUploaded,
+                frameMetrics.textureStateBytesUploaded,
+                frameMetrics.textureLayersUploaded,
+                frameMetrics.gpuNormalStreamUploads,
+                frameMetrics.gpuPickerStreamUploads,
+                frameMetrics.gpuRemovedAllocations,
+                timing.pickerCpuNanos(),
+                timing.pickerReadbackNanos());
+    }
+
     /**
      * {@code geometryUploaded}/{@code textureUploaded} report whether this
      * frame performed a {@code glBufferData}/texture-array upload; both
@@ -974,22 +1056,77 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         private int renderedIndices;
         private int terrainTriangles;
         private int objectTriangles;
+        private int submittedCommands;
+        private int singleDrawCalls;
+        private int multiDrawCalls;
+        private int gpuNormalStreamUploads;
+        private int gpuPickerStreamUploads;
+        private int gpuRemovedAllocations;
+        private int textureLayersUploaded;
+        private long gpuBufferBytesUploaded;
+        private long gpuGeometryBytesUploaded;
+        private long gpuVertexShadingBytesUploaded;
+        private long gpuFaceMetadataBytesUploaded;
+        private long gpuNormalBytesUploaded;
+        private long gpuPickerBytesUploaded;
+        private long gpuIndexBytesUploaded;
+        private long texturePixelBytesUploaded;
+        private long textureStateBytesUploaded;
 
         void reset() {
             drawCalls = 0;
             renderedIndices = 0;
             terrainTriangles = 0;
             objectTriangles = 0;
+            submittedCommands = 0;
+            singleDrawCalls = 0;
+            multiDrawCalls = 0;
+            gpuNormalStreamUploads = 0;
+            gpuPickerStreamUploads = 0;
+            gpuRemovedAllocations = 0;
+            textureLayersUploaded = 0;
+            gpuBufferBytesUploaded = 0L;
+            gpuGeometryBytesUploaded = 0L;
+            gpuVertexShadingBytesUploaded = 0L;
+            gpuFaceMetadataBytesUploaded = 0L;
+            gpuNormalBytesUploaded = 0L;
+            gpuPickerBytesUploaded = 0L;
+            gpuIndexBytesUploaded = 0L;
+            texturePixelBytesUploaded = 0L;
+            textureStateBytesUploaded = 0L;
         }
 
         void record(GpuDrawCommand command) {
             int triangles = command.indexCount() / 3;
+            submittedCommands++;
             renderedIndices += command.indexCount();
             if (command.layer() == SceneLayer.Kind.TERRAIN) {
                 terrainTriangles += triangles;
             } else {
                 objectTriangles += triangles;
             }
+        }
+
+        void captureZoneUploads(ZoneVboManager manager) {
+            gpuBufferBytesUploaded = manager.totalBytesUploaded();
+            gpuGeometryBytesUploaded = manager.geometryBytesUploaded();
+            gpuVertexShadingBytesUploaded = manager.vertexShadingBytesUploaded();
+            gpuFaceMetadataBytesUploaded = manager.faceMetadataBytesUploaded();
+            gpuNormalBytesUploaded = manager.normalBytesUploaded();
+            gpuPickerBytesUploaded = manager.pickerBytesUploaded();
+            gpuIndexBytesUploaded = manager.indexBytesUploaded();
+            gpuNormalStreamUploads = manager.normalStreamUploads();
+            gpuPickerStreamUploads = manager.pickerStreamUploads();
+            gpuRemovedAllocations = manager.removedAllocationsCount();
+        }
+
+        void recordTexturePixels(long bytes, int layers) {
+            texturePixelBytesUploaded += Math.max(0L, bytes);
+            textureLayersUploaded += Math.max(0, layers);
+        }
+
+        void recordTextureState(long bytes) {
+            textureStateBytesUploaded += Math.max(0L, bytes);
         }
 
         int drawCalls() {
@@ -1009,6 +1146,53 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
     }
 
+    public record PerformanceStatistics(
+            long cpuFrameNanos,
+            long cpuGeometryUploadNanos,
+            long cpuTextureUploadNanos,
+            long cpuVisibilityNanos,
+            long cpuOrderingNanos,
+            long cpuSubmissionNanos,
+            long gpuSceneNanos,
+            long cpuFrameP50Nanos,
+            long cpuFrameP95Nanos,
+            long gpuSceneP50Nanos,
+            long gpuSceneP95Nanos,
+            int cpuFrameSampleCount,
+            int gpuSceneSampleCount,
+            int submittedCommands,
+            int singleDrawCalls,
+            int multiDrawCalls,
+            long gpuBufferBytesUploaded,
+            long gpuGeometryBytesUploaded,
+            long gpuVertexShadingBytesUploaded,
+            long gpuFaceMetadataBytesUploaded,
+            long gpuNormalBytesUploaded,
+            long gpuPickerBytesUploaded,
+            long gpuIndexBytesUploaded,
+            long texturePixelBytesUploaded,
+            long textureStateBytesUploaded,
+            int textureLayersUploaded,
+            int gpuNormalStreamUploads,
+            int gpuPickerStreamUploads,
+            int gpuRemovedAllocations,
+            long pickerCpuNanos,
+            long pickerReadbackNanos
+    ) {
+        private static PerformanceStatistics empty() {
+            return new PerformanceStatistics(
+                    0L, 0L, 0L, 0L, 0L, 0L, 0L,
+                    0L, 0L, 0L, 0L, 0, 0,
+                    0, 0, 0,
+                    0L, 0L, 0L, 0L, 0L, 0L, 0L,
+                    0L, 0L, 0, 0, 0, 0, 0L, 0L);
+        }
+
+        public long totalUploadBytes() {
+            return gpuBufferBytesUploaded + texturePixelBytesUploaded + textureStateBytesUploaded;
+        }
+    }
+
     public record Statistics(int sourceVertices, int sourceIndices, int renderedIndices,
                              int terrainTriangles, int objectTriangles,
                              int decodedTextures, int fallbackTextures, int unavailableTextures,
@@ -1020,12 +1204,13 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                              long flatMaterializationBytes, int gpuZoneUploads,
                              int gpuReusedAllocations, int gpuGeometryStreamUploads,
                              int gpuShadingStreamUploads, int gpuIndexStreamUploads,
-                             boolean occlusionApplied) {
+                             boolean occlusionApplied, PerformanceStatistics performance) {
         private static Statistics empty() {
             return new Statistics(0, 0, 0, 0, 0, 0, 0, 0, 0,
                     "unknown", "unknown", "unknown", GL_NO_ERROR,
                     org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_COMPLETE, GL_FILL, true,
-                    false, false, 0, 0L, 0, 0L, 0, 0, 0, 0, 0, false);
+                    false, false, 0, 0L, 0, 0L, 0, 0, 0, 0, 0, false,
+                    PerformanceStatistics.empty());
         }
 
         public int renderedTriangles() {
@@ -1060,6 +1245,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 int localFirst = zoneManager.localFirstIndex(firstIndex);
                 glDrawElements(GL_TRIANGLES, first.indexCount(), GL_UNSIGNED_INT,
                         (long) localFirst * Integer.BYTES);
+                frameMetrics.singleDrawCalls++;
             } else {
                 try (MemoryStack stack = MemoryStack.stackPush()) {
                     IntBuffer counts = stack.mallocInt(batches.commandCount());
@@ -1076,6 +1262,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                     offsets.flip();
                     glMultiDrawElements(GL_TRIANGLES, counts, GL_UNSIGNED_INT, offsets);
                 }
+                frameMetrics.multiDrawCalls++;
             }
             frameMetrics.drawCalls++;
         }
@@ -1366,7 +1553,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return Math.max(TEXTURE_LAYER_CAPACITY, largestTextureId + 1);
     }
 
-    private void uploadTextureArray(Map<Integer, RenderTextureResource> resources) {
+    private long uploadTextureArray(Map<Integer, RenderTextureResource> resources) {
         int depth = requiredTextureCapacity(resources);
         capabilityProfile.requireTextureArrayLayers(depth);
 
@@ -1413,7 +1600,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, 1, 1, 1,
                     GL_RGBA, GL_UNSIGNED_BYTE, fallback);
             glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
-            return;
+            return 4L;
         }
         for (RenderTextureResource resource : available) {
             int[] source = resource.pixels();
@@ -1451,6 +1638,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             textureLayers.put(resource.id(), resource.id());
         }
         glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+        return (long) available.size() * TEXTURE_SIZE * TEXTURE_SIZE * 4L;
     }
 
     @Override
@@ -1464,6 +1652,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         textureArray = 0;
         textureStateBuffer.close();
         frameUniformBuffer.close();
+        gpuTimerQuery.close();
+        performanceMetrics.reset();
         textureLayers.clear();
         if (program != 0) org.lwjgl.opengl.GL20.glDeleteProgram(program);
         program = 0;

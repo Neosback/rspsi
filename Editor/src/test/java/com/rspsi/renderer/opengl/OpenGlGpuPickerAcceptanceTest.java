@@ -186,6 +186,53 @@ class OpenGlGpuPickerAcceptanceTest {
         }
     }
 
+    @Test
+    void profilingReportsFirstFrameBandwidthAndResidentSecondFrame() {
+        glfwMakeContextCurrent(window);
+        try (OpenGlSceneRenderer renderer = new OpenGlSceneRenderer()) {
+            renderer.initialize();
+            renderer.setCullMode(OpenGlSceneRenderer.CULL_OFF);
+            renderer.setGpuPickingEnabled(true);
+            GpuUploadPlan plan = centeredPlan(0, 42);
+
+            renderer.draw(plan, camera(), SIZE, SIZE, RenderPresentation.neutral(), 0);
+            OpenGlSceneRenderer.Statistics first = renderer.statistics();
+            OpenGlSceneRenderer.PerformanceStatistics firstPerformance = first.performance();
+
+            assertTrue(first.geometryUploaded());
+            assertTrue(first.textureUploaded());
+            assertTrue(firstPerformance.cpuFrameSampleCount() >= 1);
+            assertEquals(1, firstPerformance.submittedCommands());
+            assertEquals(1, firstPerformance.singleDrawCalls());
+            assertEquals(0, firstPerformance.multiDrawCalls());
+            assertTrue(firstPerformance.gpuBufferBytesUploaded() > 0L);
+            assertTrue(firstPerformance.texturePixelBytesUploaded() > 0L);
+            assertTrue(firstPerformance.textureStateBytesUploaded() > 0L);
+            assertTrue(firstPerformance.totalUploadBytes() > firstPerformance.gpuBufferBytesUploaded());
+
+            int expected = PickerId.encode(
+                    0, 0, 0, PickerId.slotFor(SceneLayer.Kind.GROUND_OBJECT));
+            assertEquals(expected,
+                    renderer.pickId(plan, null, camera(), SIZE, SIZE,
+                            SIZE / 2.0f, SIZE / 2.0f, null));
+
+            renderer.draw(plan, camera(), SIZE, SIZE, RenderPresentation.neutral(), 1);
+            OpenGlSceneRenderer.Statistics resident = renderer.statistics();
+            OpenGlSceneRenderer.PerformanceStatistics residentPerformance = resident.performance();
+
+            assertFalse(resident.geometryUploaded());
+            assertFalse(resident.textureUploaded());
+            assertEquals(0L, residentPerformance.gpuBufferBytesUploaded());
+            assertEquals(0L, residentPerformance.texturePixelBytesUploaded());
+            assertEquals(0L, residentPerformance.textureStateBytesUploaded());
+            assertEquals(1, residentPerformance.submittedCommands());
+            assertEquals(1, residentPerformance.singleDrawCalls());
+            assertTrue(residentPerformance.pickerCpuNanos() > 0L);
+            assertTrue(residentPerformance.pickerReadbackNanos() > 0L);
+            assertEquals(GL_NO_ERROR, glGetError());
+        }
+    }
+
     private static CameraState camera() {
         return new CameraState(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     }

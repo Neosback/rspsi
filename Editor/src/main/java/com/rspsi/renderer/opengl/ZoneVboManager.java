@@ -142,6 +142,13 @@ public final class ZoneVboManager implements AutoCloseable {
     private int indexStreamUploads;
     private int normalStreamUploads;
     private int pickerStreamUploads;
+    private int removedAllocationsCount;
+    private long geometryBytesUploaded;
+    private long vertexShadingBytesUploaded;
+    private long faceMetadataBytesUploaded;
+    private long normalBytesUploaded;
+    private long pickerBytesUploaded;
+    private long indexBytesUploaded;
 
     public ZoneVboManager() {
         this(false, false);
@@ -331,26 +338,36 @@ public final class ZoneVboManager implements AutoCloseable {
         if (decision.geometry()) {
             uploadGeometry(geometryVbo, vertices);
             geometryStreamUploads++;
+            geometryBytesUploaded += (long) vertices.size()
+                    * NativeSceneVertexLayout.GEOMETRY_FLOATS_PER_VERTEX * Float.BYTES;
         }
         if (decision.vertexShading()) {
             uploadVertexShading(vertexShadingVbo, vertices);
             vertexShadingStreamUploads++;
+            vertexShadingBytesUploaded += (long) vertices.size()
+                    * NativeSceneVertexLayout.VERTEX_SHADING_FLOATS_PER_VERTEX * Float.BYTES;
         }
         if (decision.faceMetadata()) {
             uploadFaceMetadata(faceMetadataVbo, vertices);
             faceMetadataStreamUploads++;
+            faceMetadataBytesUploaded += (long) vertices.size()
+                    * NativeSceneVertexLayout.FACE_METADATA_FLOATS_PER_VERTEX * Float.BYTES;
         }
         if (decision.normals()) {
             uploadNormals(normalVbo, vertices);
             normalStreamUploads++;
+            normalBytesUploaded += (long) vertices.size()
+                    * NativeSceneVertexLayout.NORMAL_FLOATS_PER_VERTEX * Float.BYTES;
         }
         if (decision.pickers()) {
             uploadPickerIds(pickerVbo, vertices);
             pickerStreamUploads++;
+            pickerBytesUploaded += (long) vertices.size() * Integer.BYTES;
         }
         if (decision.indices()) {
             uploadIndices(vao, ibo, indices);
             indexStreamUploads++;
+            indexBytesUploaded += (long) indices.size() * Integer.BYTES;
         }
 
         allocations.put(key, new ZoneAllocation(
@@ -513,7 +530,10 @@ public final class ZoneVboManager implements AutoCloseable {
         allocations.keySet().removeIf(key -> {
             if (activeZones.contains(key)) return false;
             ZoneAllocation allocation = allocations.get(key);
-            if (allocation != null) delete(allocation);
+            if (allocation != null) {
+                delete(allocation);
+                removedAllocationsCount++;
+            }
             return true;
         });
     }
@@ -537,6 +557,13 @@ public final class ZoneVboManager implements AutoCloseable {
         indexStreamUploads = 0;
         normalStreamUploads = 0;
         pickerStreamUploads = 0;
+        removedAllocationsCount = 0;
+        geometryBytesUploaded = 0L;
+        vertexShadingBytesUploaded = 0L;
+        faceMetadataBytesUploaded = 0L;
+        normalBytesUploaded = 0L;
+        pickerBytesUploaded = 0L;
+        indexBytesUploaded = 0L;
     }
 
     public int localFirstIndex(int commandIndex) {
@@ -589,6 +616,40 @@ public final class ZoneVboManager implements AutoCloseable {
 
     int pickerStreamUploads() {
         return pickerStreamUploads;
+    }
+
+    int removedAllocationsCount() {
+        return removedAllocationsCount;
+    }
+
+    long geometryBytesUploaded() {
+        return geometryBytesUploaded;
+    }
+
+    long vertexShadingBytesUploaded() {
+        return vertexShadingBytesUploaded;
+    }
+
+    long faceMetadataBytesUploaded() {
+        return faceMetadataBytesUploaded;
+    }
+
+    long normalBytesUploaded() {
+        return normalBytesUploaded;
+    }
+
+    long pickerBytesUploaded() {
+        return pickerBytesUploaded;
+    }
+
+    long indexBytesUploaded() {
+        return indexBytesUploaded;
+    }
+
+    long totalBytesUploaded() {
+        return geometryBytesUploaded + vertexShadingBytesUploaded
+                + faceMetadataBytesUploaded + normalBytesUploaded
+                + pickerBytesUploaded + indexBytesUploaded;
     }
 
     boolean normalStreamEnabled() {

@@ -158,6 +158,11 @@ public record OpenGlCapabilityProfile(
         return openGl33 && maxColorAttachments >= 2 && maxDrawBuffers >= 2;
     }
 
+    /** OpenGL 3.3 promotes ARB_timer_query, which is used non-blockingly by profiling. */
+    public boolean supportsTimerQueries() {
+        return openGl33;
+    }
+
     /** Persistent mapped buffers are only selected when buffer-storage semantics exist. */
     public boolean supportsPersistentMapping() {
         return bufferStorage;
@@ -173,6 +178,7 @@ public record OpenGlCapabilityProfile(
                 + ", uboBindings=" + maxUniformBufferBindings
                 + ", textureUnits=" + maxCombinedTextureUnits
                 + ", anisotropy=" + (anisotropicFiltering ? maxAnisotropy : "off")
+                + ", timerQueries=" + supportsTimerQueries()
                 + ", bufferStorage=" + bufferStorage
                 + ", ssbo=" + shaderStorageBuffers
                 + ", imageLoadStore=" + imageLoadStore;

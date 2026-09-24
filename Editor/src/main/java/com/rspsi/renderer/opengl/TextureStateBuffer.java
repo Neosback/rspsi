@@ -39,6 +39,7 @@ final class TextureStateBuffer implements AutoCloseable {
     private int buffer;
     private int texture;
     private int entryCount;
+    private long lastUploadBytes;
 
     static Entry entryFor(RenderTextureResource resource) {
         Objects.requireNonNull(resource, "resource");
@@ -59,6 +60,7 @@ final class TextureStateBuffer implements AutoCloseable {
                 .max()
                 .orElse(-1);
         entryCount = Math.max(minimumCapacity, largestTextureId + 1);
+        lastUploadBytes = (long) entryCount * FLOATS_PER_ENTRY * Float.BYTES;
 
         FloatBuffer data = BufferUtils.createFloatBuffer(entryCount * FLOATS_PER_ENTRY);
         for (int textureId = 0; textureId < entryCount; textureId++) {
@@ -97,6 +99,10 @@ final class TextureStateBuffer implements AutoCloseable {
         return entryCount;
     }
 
+    long lastUploadBytes() {
+        return lastUploadBytes;
+    }
+
     @Override
     public void close() {
         if (texture != 0) glDeleteTextures(texture);
@@ -104,5 +110,6 @@ final class TextureStateBuffer implements AutoCloseable {
         texture = 0;
         buffer = 0;
         entryCount = 0;
+        lastUploadBytes = 0L;
     }
 }
