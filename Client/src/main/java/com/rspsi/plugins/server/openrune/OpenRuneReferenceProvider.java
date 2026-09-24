@@ -3,6 +3,7 @@ package com.rspsi.plugins.server.openrune;
 import com.rspsi.editor.integration.reference.ContentReference;
 import com.rspsi.editor.integration.reference.ReferenceProvider;
 import com.rspsi.editor.symbols.SymbolNamespace;
+import com.rspsi.server.ServerProjectInspection;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -35,6 +36,19 @@ public final class OpenRuneReferenceProvider implements ReferenceProvider {
         indexDeclarativeContent();
     }
 
+    public OpenRuneReferenceProvider(ServerProjectInspection inspection) {
+        Objects.requireNonNull(inspection, "inspection");
+        this.projectRoot = inspection.connection().root();
+        Set<Path> files = new LinkedHashSet<>();
+        inspection.content().forEach(entry -> {
+            String name = entry.path().getFileName().toString().toLowerCase(Locale.ROOT);
+            if (name.endsWith(".toml") || name.endsWith(".json")) {
+                files.add(entry.path());
+            }
+        });
+        indexFiles(files);
+    }
+
     private void indexDeclarativeContent() {
         OpenRuneContentCatalog catalog;
         try {
@@ -45,6 +59,10 @@ public final class OpenRuneReferenceProvider implements ReferenceProvider {
 
         Set<Path> files = new LinkedHashSet<>();
         catalog.discovery().artifacts().forEach(artifact -> files.add(artifact.path()));
+        indexFiles(files);
+    }
+
+    private void indexFiles(Set<Path> files) {
         for (Path file : files) {
             String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
             if (name.endsWith(".toml") || name.endsWith(".json")) indexDataFile(file);
