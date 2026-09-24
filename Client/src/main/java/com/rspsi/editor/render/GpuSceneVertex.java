@@ -31,7 +31,7 @@ public record GpuSceneVertex(
         int pickerSlot
 ) {
     public GpuFaceShading faceShading() {
-        return new GpuFaceShading(alpha, renderType, priority);
+        return GpuFaceShading.from(this);
     }
 
     public GpuSceneVertex {
