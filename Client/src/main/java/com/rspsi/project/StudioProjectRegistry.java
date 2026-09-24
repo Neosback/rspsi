@@ -47,7 +47,9 @@ public final class StudioProjectRegistry {
         return document.projects().stream()
                 .sorted(Comparator
                         .comparing(RecentStudioProject::pinned).reversed()
-                        .thenComparing(RecentStudioProject::lastOpenedEpochMillis).reversed())
+                        .thenComparing(Comparator
+                                .comparingLong(RecentStudioProject::lastOpenedEpochMillis)
+                                .reversed()))
                 .toList();
     }
 
