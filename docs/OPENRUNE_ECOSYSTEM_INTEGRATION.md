@@ -198,6 +198,22 @@ The target is for the OpenRune plugin/provider to reuse one neutral project insp
 
 This convergence also prevents the UI, plugin, and legacy adapter paths from disagreeing about where a project's caches live or which build command is authoritative.
 
+### First-class project convergence status
+
+The first implementation slice establishes these invariants:
+
+- `OpenRuneServerAdapter` / `ServerProjectInspection` are the authoritative OpenRune project-detection and layout model used by the first-party integration provider;
+- a persisted `ServerConnection` can flow through probe/connect/open without losing path overrides, command overrides, or its expected project fingerprint;
+- an active integration session can expose the exact inspection that established LIVE/SERVER/source/build ownership;
+- OpenRune GameVal, declarative-reference, and NPC-spawn providers can consume inspected roots instead of silently re-resolving the stock layout;
+- custom OpenRune checkouts remain discoverable even when the old stock declarative layout resolver cannot recognize their content tree;
+- structural OpenRune project support is separate from cache-revision verification: a revision outside the currently verified revision-240 cache profile produces a diagnostic instead of disabling all project/source integration;
+- OpenRune `obj.*` / `gamevals.obj` conventions map into Studio's neutral item namespace without changing the backend-neutral public namespace contract.
+
+The stock `OpenRuneProjectLayoutResolver` remains useful as a **format-specific declarative adapter** for known OpenRune sidecars and manifests, but it is no longer allowed to decide whether a checkout is an OpenRune project.
+
+The next convergence step is to replace path-convention-heavy content-module discovery with the connected project's real Gradle model (projects, source sets, resources, dependencies, tasks, and outputs). Kotlin semantic indexing, the semantic content graph, edit lenses, and runtime simulation build on that project model rather than bypassing it.
+
 ## OpenRune-FileStore
 
 ### Definitions, builders, and codecs
