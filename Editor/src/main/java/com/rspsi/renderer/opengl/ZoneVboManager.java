@@ -58,10 +58,25 @@ public final class ZoneVboManager implements AutoCloseable {
             long indexFingerprint
     ) {
         boolean matches(GpuZoneStreamFingerprints fingerprints) {
-            return geometryFingerprint == fingerprints.geometry()
-                    && shadingFingerprint == fingerprints.shading()
-                    && indexFingerprint == fingerprints.indices();
+            return !streamUploadDecision(this, fingerprints).any();
         }
+    }
+
+    record StreamUploadDecision(boolean geometry, boolean shading, boolean indices) {
+        boolean any() {
+            return geometry || shading || indices;
+        }
+    }
+
+    static StreamUploadDecision streamUploadDecision(
+            ZoneAllocation existing, GpuZoneStreamFingerprints fingerprints) {
+        if (fingerprints == null) {
+            throw new IllegalArgumentException("Zone stream fingerprints cannot be null");
+        }
+        return new StreamUploadDecision(
+                existing == null || existing.geometryFingerprint() != fingerprints.geometry(),
+                existing == null || existing.shadingFingerprint() != fingerprints.shading(),
+                existing == null || existing.indexFingerprint() != fingerprints.indices());
     }
 
     private final Map<Long, ZoneAllocation> allocations = new HashMap<>();
@@ -185,7 +200,8 @@ public final class ZoneVboManager implements AutoCloseable {
                             List<Integer> indices,
                             GpuZoneStreamFingerprints fingerprints) {
         ZoneAllocation existing = allocations.get(key);
-        if (existing != null && existing.matches(fingerprints)) {
+        StreamUploadDecision decision = streamUploadDecision(existing, fingerprints);
+        if (!decision.any()) {
             reusedAllocationsCount++;
             return;
         }
@@ -207,15 +223,15 @@ public final class ZoneVboManager implements AutoCloseable {
             ibo = existing.ibo();
         }
 
-        if (existing == null || existing.geometryFingerprint() != fingerprints.geometry()) {
+        if (decision.geometry()) {
             uploadGeometry(geometryVbo, vertices);
             geometryStreamUploads++;
         }
-        if (existing == null || existing.shadingFingerprint() != fingerprints.shading()) {
+        if (decision.shading()) {
             uploadShading(shadingVbo, vertices);
             shadingStreamUploads++;
         }
-        if (existing == null || existing.indexFingerprint() != fingerprints.indices()) {
+        if (decision.indices()) {
             uploadIndices(vao, ibo, indices);
             indexStreamUploads++;
         }
