@@ -54,6 +54,7 @@ public final class GradleProjectModelInspector {
 
         Path initScript = null;
         Path output = null;
+        Process process = null;
         try {
             initScript = Files.createTempFile("rspsi-gradle-model-", ".gradle");
             output = Files.createTempFile("rspsi-gradle-model-", ".log");
@@ -64,7 +65,7 @@ public final class GradleProjectModelInspector {
                     .directory(root.toFile())
                     .redirectErrorStream(true)
                     .redirectOutput(output.toFile());
-            Process process = builder.start();
+            process = builder.start();
 
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly();
@@ -102,6 +103,7 @@ public final class GradleProjectModelInspector {
             diagnostics.add("Gradle model failed: " + message(error));
             return new Inspection(Optional.empty(), diagnostics);
         } catch (InterruptedException interrupted) {
+            if (process != null && process.isAlive()) process.destroyForcibly();
             Thread.currentThread().interrupt();
             diagnostics.add("Gradle model interrupted");
             return new Inspection(Optional.empty(), diagnostics);
