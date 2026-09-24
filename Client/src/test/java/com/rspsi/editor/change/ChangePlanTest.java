@@ -19,6 +19,7 @@ class ChangePlanTest {
         TileSnapshot eastAfter = snapshot(8);
 
         ChangePlan plan = ChangePlan.builder("path")
+                .provenance(ChangePlan.Provenance.deterministic("studio.path", 12345L))
                 .setTile(west, empty, westAfter)
                 .setTile(east, empty, eastAfter)
                 .addDiagnostic("preview-ready")
@@ -32,6 +33,9 @@ class ChangePlanTest {
         assertEquals(new com.rspsi.editor.model.TileBounds(
                         west.x(), west.y(), east.x(), east.y()),
                 plan.affectedWorldBounds().orElseThrow());
+        assertEquals("studio.path", plan.provenance().producer());
+        assertTrue(plan.provenance().seed().isPresent());
+        assertEquals(12345L, plan.provenance().seed().getAsLong());
         assertEquals(List.of("preview-ready"), plan.diagnostics());
     }
 
@@ -45,6 +49,8 @@ class ChangePlanTest {
                 .build();
 
         assertTrue(plan.isEmpty());
+        assertEquals("manual", plan.provenance().producer());
+        assertTrue(plan.provenance().seed().isEmpty());
         assertTrue(plan.affectedTiles().isEmpty());
         assertTrue(plan.affectedWorldBounds().isEmpty());
     }
