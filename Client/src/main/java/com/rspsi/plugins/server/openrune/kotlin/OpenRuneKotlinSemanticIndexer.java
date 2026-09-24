@@ -19,7 +19,7 @@ import org.jetbrains.kotlin.psi.KtPsiFactory;
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression;
 import org.jetbrains.kotlin.psi.KtSuperTypeCallEntry;
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid;
-import org.jetbrains.kotlin.psi.KtValueArgument;
+import org.jetbrains.kotlin.psi.ValueArgument;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -318,9 +318,9 @@ public final class OpenRuneKotlinSemanticIndexer {
         }
     }
 
-    private static List<String> directStringArguments(List<? extends KtValueArgument> arguments) {
+    private static List<String> directStringArguments(List<? extends ValueArgument> arguments) {
         List<String> result = new ArrayList<>();
-        for (KtValueArgument argument : arguments) {
+        for (ValueArgument argument : arguments) {
             if (argument.getArgumentExpression() instanceof KtStringTemplateExpression expression) {
                 String value = plainString(expression.getText());
                 if (value != null) result.add(value);
