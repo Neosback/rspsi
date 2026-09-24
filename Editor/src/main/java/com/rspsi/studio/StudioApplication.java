@@ -96,7 +96,7 @@ public final class StudioApplication implements AutoCloseable {
             new ProjectLauncherView(projectRegistry, projectService);
     private final ProjectLoadingView projectLoading = new ProjectLoadingView();
     private final WorkspaceManager workspaces = new WorkspaceManager();
-    private final DashboardView dashboard = new DashboardView();
+    private final ContentStudioView contentStudio = new ContentStudioView();
     private final MapEditorView mapEditor = new MapEditorView();
     private final InterfaceStudioView interfaceStudio = new InterfaceStudioView();
     private final ObjectStudioView objectStudio = new ObjectStudioView();
@@ -275,7 +275,7 @@ public final class StudioApplication implements AutoCloseable {
                     applicationState = ApplicationState.PROJECT_LAUNCHER;
                     return;
                 }
-                dashboard.render(
+                contentStudio.render(
                         project,
                         cacheSessions.status(),
                         activeCacheHealth,
@@ -519,7 +519,7 @@ public final class StudioApplication implements AutoCloseable {
         renderedSettingsRevision = -1L;
         cancelPendingScene();
         sceneStatus = "Loading terrain, objects, and GPU buffers...";
-        int[] region = parseRegion(dashboard.regionText());
+        int[] region = parseRegion(contentStudio.regionText());
         if (region == null) {
             sceneStatus = "Enter a valid region as X,Y or a region ID.";
             return;
