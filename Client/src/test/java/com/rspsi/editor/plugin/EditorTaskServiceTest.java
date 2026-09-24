@@ -38,4 +38,19 @@ class EditorTaskServiceTest {
             assertEquals("boom", snapshot.message());
         }
     }
+
+    @Test
+    void rejectedSubmissionDoesNotLeaveTaskRunning() {
+        EditorTaskService tasks = new EditorTaskService();
+        EditorExecutionService execution = new EditorExecutionService("task-closed");
+        execution.close();
+
+        assertThrows(IllegalStateException.class,
+                () -> tasks.runAsync(execution, "closed", "Closed executor", () -> { }));
+
+        EditorTaskService.TaskSnapshot snapshot = tasks.snapshots().get(0);
+        assertEquals(EditorTaskService.TaskState.FAILED, snapshot.state());
+        assertTrue(snapshot.message().contains("closed"));
+    }
+
 }
