@@ -168,6 +168,15 @@ public record OpenGlCapabilityProfile(
         return bufferStorage;
     }
 
+    /**
+     * Multi-draw indirect is a core OpenGL 4.3 feature. macOS remains on the
+     * OpenGL 3.3/4.1 ordered multi-draw fallback while modern Windows/Linux
+     * drivers can submit the same shared-arena command ranges indirectly.
+     */
+    public boolean supportsMultiDrawIndirect() {
+        return majorVersion > 4 || (majorVersion == 4 && minorVersion >= 3);
+    }
+
     public String diagnosticSummary() {
         return vendor + " / " + renderer + " / " + version
                 + "; GL=" + majorVersion + "." + minorVersion
@@ -179,6 +188,7 @@ public record OpenGlCapabilityProfile(
                 + ", textureUnits=" + maxCombinedTextureUnits
                 + ", anisotropy=" + (anisotropicFiltering ? maxAnisotropy : "off")
                 + ", timerQueries=" + supportsTimerQueries()
+                + ", multiDrawIndirect=" + supportsMultiDrawIndirect()
                 + ", bufferStorage=" + bufferStorage
                 + ", ssbo=" + shaderStorageBuffers
                 + ", imageLoadStore=" + imageLoadStore;
