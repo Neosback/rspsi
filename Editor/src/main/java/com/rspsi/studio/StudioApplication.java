@@ -408,14 +408,14 @@ public final class StudioApplication implements AutoCloseable {
 
     private Set<IntegrationCapability> integrationCapabilities(StudioProjectDescriptor project) {
         /*
-         * Startup intentionally binds only the lightweight mapping services.
-         * Content discovery, Kotlin/Gradle semantic indexing and the cross-source
-         * graph are expensive project tools and are activated later when their
-         * workspace actually requests them.
+         * Project startup must stay below the content-intelligence boundary.
+         * The OpenRune provider may expose symbols/GameVals, but requesting those
+         * capabilities constructs the RSCM/GameVal symbol index before the loading
+         * gate can advance past integration inspection. Defer every content-facing
+         * capability until a workspace explicitly asks for it.
          */
-        EnumSet<IntegrationCapability> capabilities = EnumSet.of(
-                IntegrationCapability.SYMBOLS,
-                IntegrationCapability.GAMEVALS);
+        EnumSet<IntegrationCapability> capabilities =
+                EnumSet.noneOf(IntegrationCapability.class);
         if (project.capabilities().contains(ProjectIntegrationCapability.CACHE_BUILD)) {
             capabilities.add(IntegrationCapability.CACHE_BUILD);
         }
