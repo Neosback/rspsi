@@ -6,6 +6,7 @@ layout(location = 3) in float aAlpha;
 layout(location = 4) in float aRenderType;
 layout(location = 5) in vec3 aColor;
 layout(location = 6) in float aPriority;
+layout(location = 7) in vec4 aNormal;
 
 #include "/common/frame_uniforms.glsl"
 
@@ -25,6 +26,8 @@ out float vAlpha;
 out float vRenderType;
 out vec3 vColor;
 out float vFogAmount;
+out vec3 vNormal;
+out float vViewDepth;
 
 #include "/common/fog.glsl"
 
@@ -64,6 +67,8 @@ void main() {
     vAlpha = aAlpha;
     vRenderType = aRenderType;
     vColor = aColor;
+    vNormal = aNormal.xyz;
+    vViewDepth = depth;
     vFogAmount = sceneFogAmount(
         aPosition, uUseFog, uFogWest, uFogEast,
         uFogSouth, uFogNorth, uFogDepth
