@@ -94,22 +94,40 @@ public final class OpenRuneSymbolProvider implements SymbolProvider {
     private void indexTomlFile(Path file) {
         try (BufferedReader reader = Files.newBufferedReader(file)) {
             String line;
-            SymbolNamespace currentNs = SymbolNamespace.LOC;
+            SymbolNamespace currentNs = null;
             while ((line = reader.readLine()) != null) {
                 String trimmed = line.trim();
                 if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                    String section = trimmed.substring(1, trimmed.length() - 1).toLowerCase(Locale.ROOT);
-                    if (section.contains("loc")) currentNs = SymbolNamespace.LOC;
-                    else if (section.contains("npc")) currentNs = SymbolNamespace.NPC;
-                    else if (section.contains("item")) currentNs = SymbolNamespace.ITEM;
-                    else if (section.contains("varbit")) currentNs = SymbolNamespace.VARBIT;
-                    else if (section.contains("interface")) currentNs = SymbolNamespace.INTERFACE;
-                } else if (trimmed.contains("=")) {
+                    String section = trimmed.substring(1, trimmed.length() - 1)
+                            .toLowerCase(Locale.ROOT);
+                    currentNs = namespaceForGamevalSection(section);
+                } else if (currentNs != null && trimmed.contains("=")) {
                     parseAndAdd(trimmed, currentNs, file.toString());
                 }
             }
         } catch (IOException ignored) {
         }
+    }
+
+    private static SymbolNamespace namespaceForGamevalSection(String section) {
+        String normalized = section.startsWith("gamevals.")
+                ? section.substring("gamevals.".length()) : section;
+        return switch (normalized) {
+            case "loc" -> SymbolNamespace.LOC;
+            case "npc" -> SymbolNamespace.NPC;
+            case "obj", "item" -> SymbolNamespace.ITEM;
+            case "varbit" -> SymbolNamespace.VARBIT;
+            case "varp" -> SymbolNamespace.VARP;
+            case "varc", "varcon" -> SymbolNamespace.VARC;
+            case "interface" -> SymbolNamespace.INTERFACE;
+            case "component" -> SymbolNamespace.COMPONENT;
+            case "clientscript" -> SymbolNamespace.CLIENTSCRIPT;
+            case "dbtable" -> SymbolNamespace.DB_TABLE;
+            case "area" -> SymbolNamespace.AREA;
+            case "seq" -> SymbolNamespace.SEQUENCE;
+            case "spotanim" -> SymbolNamespace.SPOTANIM;
+            default -> null;
+        };
     }
 
     private void parseAndAdd(String line, SymbolNamespace namespace, String sourceFile) {
