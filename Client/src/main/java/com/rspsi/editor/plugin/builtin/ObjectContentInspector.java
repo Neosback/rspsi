@@ -8,6 +8,7 @@ import com.rspsi.editor.selection.ObjectSelection;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /** First-party inspector projection for OpenRune server/content semantics on a selected object. */
 final class ObjectContentInspector implements EditorInspector {
