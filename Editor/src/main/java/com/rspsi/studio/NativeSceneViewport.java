@@ -164,7 +164,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
                 || lastWidth <= 0 || lastHeight <= 0) {
             return java.util.Optional.empty();
         }
-        return picker.pick(lastPlan, lastFrameCamera, lastWidth, lastHeight, x, y,
+        return picker.pick(lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight, x, y,
                 lastFrameProjection, pickPlaneRestriction);
     }
 
