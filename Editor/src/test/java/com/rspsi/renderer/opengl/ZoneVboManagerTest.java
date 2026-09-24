@@ -172,6 +172,15 @@ class ZoneVboManagerTest {
     }
 
     @Test
+    void sharedArenaSlotsLeaveBoundedGrowthRoomForInteractiveEdits() {
+        int required = 1_000;
+        int capacity = ZoneVboManager.slotCapacity(required);
+        assertTrue(capacity >= required);
+        assertEquals(0, capacity % 64);
+        assertTrue(capacity < required * 2);
+    }
+
+    @Test
     void differentPlanesProduceDistinctZoneKeys() {
         WorldTileAddress plane0 = WorldTileAddress.of(3200, 3200, 0);
         WorldTileAddress plane1 = WorldTileAddress.of(3200, 3200, 1);
