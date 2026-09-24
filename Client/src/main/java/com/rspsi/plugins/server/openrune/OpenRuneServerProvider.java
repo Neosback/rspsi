@@ -11,6 +11,7 @@ import com.rspsi.editor.integration.reference.ReferenceProvider;
 import com.rspsi.editor.integration.semantic.SemanticContentGraph;
 import com.rspsi.editor.integration.semantic.SemanticContentGraphBuilder;
 import com.rspsi.editor.integration.semantic.SemanticSourceIndex;
+import com.rspsi.editor.integration.semantic.ServerObjectSemanticIndex;
 import com.rspsi.editor.symbols.SymbolProvider;
 import com.rspsi.server.OpenRuneServerAdapter;
 import com.rspsi.server.ServerCapability;
@@ -274,10 +275,14 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
                         && probe.supports(IntegrationCapability.NPC_SPAWNS)
                         ? new OpenRuneNpcSpawnProvider(inspection) : null;
         SemanticSourceIndex semanticSourceIndex = sourceRequested ? indexedSource : null;
+        ServerObjectSemanticIndex objectOverlays =
+                graphRequested && graphSymbols != null
+                        ? new OpenRuneObjectOverlayIndexer().index(inspection, graphSymbols)
+                        : null;
         SemanticContentGraph semanticContentGraph =
                 graphRequested && indexedSource != null
                         ? new SemanticContentGraphBuilder().build(
-                                project, indexedSource, graphSymbols, graphReferences)
+                                project, indexedSource, graphSymbols, graphReferences, objectOverlays)
                         : null;
 
         Set<IntegrationCapability> activeCapabilities =
