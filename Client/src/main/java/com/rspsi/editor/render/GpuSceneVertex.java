@@ -5,9 +5,10 @@ package com.rspsi.editor.render;
  *
  * <p>{@code pickerPlane}/{@code pickerTileX}/{@code pickerTileY}/{@code pickerSlot} carry the
  * same value across every vertex of one tile's terrain, or one object's mesh (broadcast, not
- * deduplicated). The optional GPU picker-ID pass packs these values per {@link PickerId}; its
- * single-pixel result then constrains the zone-resident DDA picker so duplicate objects sharing
- * one tile/layer ID still resolve to exact object metadata.</p>
+ * deduplicated). The optional GPU picker-ID pass packs tile X/Y and category per
+ * {@link PickerId}; plane stays in vertex/command metadata because the 32-bit GPU key reserves
+ * 14 bits for each Jagex world axis. Its single-pixel result then constrains the zone-resident
+ * DDA picker, which resolves the exact plane and object metadata.</p>
  */
 public record GpuSceneVertex(
         float x,
