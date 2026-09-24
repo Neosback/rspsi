@@ -1,7 +1,9 @@
 package com.rspsi.studio;
 
 import com.rspsi.editor.model.WorldTile;
+import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.PickResult;
+import com.rspsi.editor.render.SceneCameraProjection;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,6 +39,39 @@ class NativeSceneViewportTest {
         assertEquals(1000.0f, viewport.navigation().camera().x(), 0.001f);
         assertEquals(-2100.0f, viewport.navigation().camera().y(), 0.001f);
         assertEquals(-400.0f, viewport.navigation().camera().z(), 0.001f);
+    }
+
+    @Test
+    void presentedFrameCameraDoesNotFollowNavigationUntilNextFrame() {
+        NativeSceneViewport viewport = new NativeSceneViewport();
+        CameraState renderedCamera = new CameraState(
+                3200.0f, -2400.0f, -4200.0f,
+                (float) -Math.toRadians(28.0), 0.0f);
+        SceneCameraProjection projection = SceneCameraProjection.editorDefault();
+
+        viewport.recordPresentedFrame(null, renderedCamera, projection, 1280, 720);
+        viewport.setCamera(new CameraState(
+                3600.0f, -1800.0f, -3900.0f,
+                (float) -Math.toRadians(20.0), (float) Math.toRadians(35.0)));
+
+        assertEquals(renderedCamera, viewport.lastFrameCamera(),
+                "presented overlays/picks must retain the camera that produced the scene image");
+        assertEquals(projection, viewport.lastFrameProjection());
+        assertEquals(1280, viewport.lastWidth());
+        assertEquals(720, viewport.lastHeight());
+    }
+
+    @Test
+    void rejectsInvalidPresentedFrameDimensions() {
+        NativeSceneViewport viewport = new NativeSceneViewport();
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> viewport.recordPresentedFrame(
+                        null,
+                        new CameraState(0.0f, 0.0f, 0.0f, 0.0f, 0.0f),
+                        SceneCameraProjection.editorDefault(),
+                        0,
+                        720));
     }
 
     @Test
