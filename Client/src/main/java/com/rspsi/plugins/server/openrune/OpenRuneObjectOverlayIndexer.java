@@ -133,7 +133,7 @@ public final class OpenRuneObjectOverlayIndexer {
 
         String inherit = clean(object.getString("inherit"));
         String contentGroup = clean(object.getString("contentGroup"));
-        Map<String, String> params = stringValues(object.getTable("params"));
+        Map<String, String> params = parseParams(lines, block);
 
         int numericId = symbols.resolve(SymbolNamespace.LOC, SymbolNamespace.LOC.unqualify(id))
                 .map(symbol -> symbol.id())
@@ -162,14 +162,38 @@ public final class OpenRuneObjectOverlayIndexer {
                 true));
     }
 
-    private static Map<String, String> stringValues(TomlTable table) {
-        if (table == null || table.keySet().isEmpty()) return Map.of();
+    private static Map<String, String> parseParams(TextLines lines, Block block) {
         LinkedHashMap<String, String> values = new LinkedHashMap<>();
-        for (String key : table.keySet()) {
-            Object raw = table.get(key);
-            if (raw != null) values.put(key, String.valueOf(raw));
+        boolean inParams = false;
+        for (int lineIndex = block.startLine(); lineIndex < block.endLineExclusive(); lineIndex++) {
+            String raw = lines.line(lineIndex);
+            String trimmed = raw.trim();
+            if (trimmed.equals("[object.params]")) {
+                inParams = true;
+                continue;
+            }
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                if (inParams) break;
+                continue;
+            }
+            if (!inParams || trimmed.isBlank() || trimmed.startsWith("#")) continue;
+
+            int equals = raw.indexOf('=');
+            if (equals < 0) continue;
+            String key = unquote(raw.substring(0, equals).trim());
+            if (key.isBlank()) continue;
+            String rhs = raw.substring(equals + 1).trim();
+            Object value = parseTomlValue(rhs);
+            if (value != null) values.put(key, String.valueOf(value));
         }
         return Map.copyOf(values);
+    }
+
+    private static Object parseTomlValue(String rhs) {
+        if (rhs == null || rhs.isBlank()) return null;
+        TomlParseResult parsed = Toml.parse("value = " + rhs);
+        if (parsed.hasErrors()) return rhs;
+        return parsed.get("value");
     }
 
     private static Optional<SourceSpan> fieldSpan(
