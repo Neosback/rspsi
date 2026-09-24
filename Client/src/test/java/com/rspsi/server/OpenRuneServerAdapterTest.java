@@ -220,6 +220,8 @@ class OpenRuneServerAdapterTest {
                 .findFirst()
                 .orElseThrow();
         assertEquals(":cache-tools:buildCache", buildCache.command().get(1));
+        assertFalse(connected.diagnostics().stream()
+                .anyMatch(message -> message.contains("Gradle task not found in or-cache build: buildCache")));
         assertEquals(":gameplay:mining",
                 connected.gradleModel().orElseThrow().projects().get(0).path());
     }
