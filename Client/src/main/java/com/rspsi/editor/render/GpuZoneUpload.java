@@ -43,7 +43,10 @@ public record GpuZoneUpload(
 
         long geometry = mix(1125899906842597L, vertices.size());
         long vertexShading = mix(1125899906842597L, vertices.size());
-        long faceShading = mix(1125899906842597L, vertices.size());
+        if (indices.size() % 3 != 0) {
+            throw new IllegalArgumentException("Zone topology must contain complete triangles");
+        }
+        long faceShading = mix(1125899906842597L, indices.size() / 3);
         long normals = mix(1125899906842597L, vertices.size());
         for (GpuSceneVertex vertex : vertices) {
             geometry = mix(geometry, Float.floatToIntBits(vertex.x()));
@@ -55,15 +58,23 @@ public record GpuZoneUpload(
             vertexShading = mix(vertexShading, vertex.encodedColor());
             vertexShading = mix(vertexShading, vertex.colorEncoding().ordinal());
 
-            GpuFaceShading face = vertex.faceShading();
-            faceShading = mix(faceShading, face.alpha());
-            faceShading = mix(faceShading, face.renderType());
-            faceShading = mix(faceShading, face.priority());
-
             normals = mix(normals, vertex.normalX());
             normals = mix(normals, vertex.normalY());
             normals = mix(normals, vertex.normalZ());
             normals = mix(normals, vertex.normalMagnitude());
+        }
+
+        for (int offset = 0; offset < indices.size(); offset += 3) {
+            GpuFaceShading face = vertices.get(indices.get(offset)).faceShading();
+            GpuFaceShading second = vertices.get(indices.get(offset + 1)).faceShading();
+            GpuFaceShading third = vertices.get(indices.get(offset + 2)).faceShading();
+            if (!face.equals(second) || !face.equals(third)) {
+                throw new IllegalArgumentException(
+                        "Face shading metadata must be constant across one triangle");
+            }
+            faceShading = mix(faceShading, face.alpha());
+            faceShading = mix(faceShading, face.renderType());
+            faceShading = mix(faceShading, face.priority());
         }
 
         long topology = mix(1125899906842597L, indices.size());
