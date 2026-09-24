@@ -4,6 +4,7 @@ import com.rspsi.editor.integration.IntegrationCapability;
 import com.rspsi.editor.integration.IntegrationOptions;
 import com.rspsi.editor.integration.IntegrationSession;
 import com.rspsi.editor.integration.ServerIntegrationService;
+import com.rspsi.editor.integration.semantic.SemanticFactKind;
 import com.rspsi.editor.symbols.SymbolNamespace;
 import com.rspsi.server.ServerConnection;
 import com.rspsi.server.ServerIntegrationStatus;
@@ -102,6 +103,95 @@ class OpenRuneServerProviderTest {
         assertTrue(!references.referencesFor(SymbolNamespace.ITEM, -1, "item.coal").isEmpty());
 
         service.disconnect();
+    }
+
+    @Test
+    void indexesOpenRuneKotlinHandlersQuestsVarsAndSymbolsFromGradleSourceRoots() throws Exception {
+        Path root = Files.createTempDirectory("openrune-semantic");
+        Path sourceRoot = root.resolve("modules/gameplay/src/customKotlin");
+        Files.createDirectories(sourceRoot.resolve("example"));
+        Files.createDirectories(root.resolve(".data/cache/LIVE"));
+        Files.writeString(root.resolve("game.yml"), "revision: 240.2\n");
+
+        Path mining = sourceRoot.resolve("example/Mining.kt");
+        Files.writeString(mining,
+                "package example\n"
+                        + "class Mining : PluginScript() {\n"
+                        + "  override fun ScriptContext.startup() {\n"
+                        + "    onOpContentLoc1(\"content.rock\") { mine(\"obj.coal\") }\n"
+                        + "  }\n"
+                        + "  private fun mine(item: String) { soundSynth(\"synth.mine\") }\n"
+                        + "}\n");
+
+        Path quest = sourceRoot.resolve("example/CooksAssistant.kt");
+        Files.writeString(quest,
+                "package example\n"
+                        + "class CooksAssistant : QuestScript(\"quest_cooksassistant\", \"varp.cookquest\", rewards {}, ItemRewardDisplay(\"obj.cake\")) {\n"
+                        + "  private val done by boolVarBit(\"varbit.cook_done\")\n"
+                        + "  override fun ScriptContext.init() { onOpNpc1(\"npc.cook\") {} }\n"
+                        + "}\n");
+
+        String payload = "{"
+                + "\"rootName\":\"CustomOpenRune\","
+                + "\"gradleVersion\":\"8.14.3\","
+                + "\"projects\":[{"
+                + "\"path\":\":gameplay\","
+                + "\"name\":\"gameplay\","
+                + "\"projectDir\":\"" + json(root.resolve("modules/gameplay")) + "\","
+                + "\"buildFile\":\"" + json(root.resolve("modules/gameplay/build.gradle.kts")) + "\","
+                + "\"sourceSets\":[{"
+                + "\"name\":\"main\","
+                + "\"sources\":[\"" + json(sourceRoot) + "\"],"
+                + "\"resources\":[],"
+                + "\"outputs\":[]"
+                + "}],"
+                + "\"tasks\":[],"
+                + "\"projectDependencies\":[],"
+                + "\"pluginClasses\":[]"
+                + "}]}";
+        Files.writeString(root.resolve("gradlew"),
+                "#!/bin/sh\n"
+                        + "printf '%s\\n' 'RSPSI_GRADLE_MODEL="
+                        + payload.replace("'", "'\\''") + "'\n");
+
+        OpenRuneServerProvider provider = new OpenRuneServerProvider();
+        var passiveProbe = provider.probe(root);
+        assertTrue(passiveProbe.supports(IntegrationCapability.SOURCE_SEMANTICS));
+
+        IntegrationOptions options = IntegrationOptions.defaults(
+                root, Set.of(IntegrationCapability.SOURCE_SEMANTICS));
+        IntegrationSession session = provider.open(root, options);
+        var index = session.semanticSourceIndex().orElseThrow();
+
+        assertEquals(2, index.files().size());
+        assertTrue(index.facts(SemanticFactKind.PLUGIN_SCRIPT).stream()
+                .anyMatch(fact -> fact.name().equals("Mining")));
+        assertTrue(index.facts(SemanticFactKind.QUEST_SCRIPT).stream()
+                .anyMatch(fact -> fact.name().equals("CooksAssistant")));
+        assertTrue(index.facts(SemanticFactKind.SCRIPT_HANDLER).stream()
+                .anyMatch(fact -> fact.name().equals("onOpContentLoc1")
+                        && fact.arguments().contains("content.rock")));
+        assertTrue(index.facts(SemanticFactKind.QUEST_DEFINITION).stream()
+                .anyMatch(fact -> fact.attributes().get("questKey").equals("quest_cooksassistant")
+                        && fact.attributes().get("questVar").equals("varp.cookquest")));
+        assertTrue(index.facts(SemanticFactKind.VAR_BINDING).stream()
+                .anyMatch(fact -> fact.arguments().contains("varbit.cook_done")));
+        assertTrue(!index.references("obj.coal").isEmpty());
+        assertTrue(!index.references("npc.cook").isEmpty());
+
+        var handler = index.facts(SemanticFactKind.SCRIPT_HANDLER).stream()
+                .filter(fact -> fact.name().equals("onOpContentLoc1"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(mining.toAbsolutePath().normalize(), handler.source().file());
+        assertEquals(4, handler.source().startLine());
+        assertTrue(handler.source().endOffset() > handler.source().startOffset());
+    }
+
+    private static String json(Path path) {
+        return path.toAbsolutePath().normalize().toString()
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
     }
 
     private static Path fixtureRoot() throws Exception {
