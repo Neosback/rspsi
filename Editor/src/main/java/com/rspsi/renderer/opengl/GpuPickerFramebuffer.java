@@ -58,6 +58,7 @@ final class GpuPickerFramebuffer implements AutoCloseable {
     private int width;
     private int height;
     private int framebufferStatus = GL_FRAMEBUFFER_COMPLETE;
+    private long lastReadbackNanos;
     private boolean closed;
 
     void resize(int width, int height) {
@@ -125,13 +126,16 @@ final class GpuPickerFramebuffer implements AutoCloseable {
         ensureReady();
         if (!Float.isFinite(x) || !Float.isFinite(y)
                 || x < 0.0f || y < 0.0f || x >= width || y >= height) {
+            lastReadbackNanos = 0L;
             return PickerId.INVALID;
         }
         int pixelX = Math.min(width - 1, (int) x);
         int pixelY = height - 1 - Math.min(height - 1, (int) y);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer value = stack.mallocInt(1);
+            long started = System.nanoTime();
             glReadPixels(pixelX, pixelY, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_INT, value);
+            lastReadbackNanos = Math.max(0L, System.nanoTime() - started);
             return value.get(0);
         }
     }
@@ -148,6 +152,10 @@ final class GpuPickerFramebuffer implements AutoCloseable {
 
     int framebufferStatus() {
         return framebufferStatus;
+    }
+
+    long lastReadbackNanos() {
+        return lastReadbackNanos;
     }
 
     @Override
@@ -180,5 +188,6 @@ final class GpuPickerFramebuffer implements AutoCloseable {
         width = 0;
         height = 0;
         framebufferStatus = GL_FRAMEBUFFER_COMPLETE;
+        lastReadbackNanos = 0L;
     }
 }
