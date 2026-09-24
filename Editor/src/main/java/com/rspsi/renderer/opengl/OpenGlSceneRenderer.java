@@ -662,6 +662,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             return PickerId.INVALID;
         }
 
+        long pickerStarted = System.nanoTime();
         GpuCommandVisibility visibility = visibilityCache.resolve(
                 runtimeGeometry, camera, plan.occluders(), plan.sceneWindow());
 
@@ -748,6 +749,9 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                         org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
                 glViewport(previousViewport.get(0), previousViewport.get(1),
                         previousViewport.get(2), previousViewport.get(3));
+                performanceMetrics.recordPicker(
+                        System.nanoTime() - pickerStarted,
+                        pickerFramebuffer.lastReadbackNanos());
             }
         }
     }
@@ -1549,7 +1553,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         return Math.max(TEXTURE_LAYER_CAPACITY, largestTextureId + 1);
     }
 
-    private void uploadTextureArray(Map<Integer, RenderTextureResource> resources) {
+    private long uploadTextureArray(Map<Integer, RenderTextureResource> resources) {
         int depth = requiredTextureCapacity(resources);
         capabilityProfile.requireTextureArrayLayers(depth);
 
@@ -1596,7 +1600,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, 1, 1, 1,
                     GL_RGBA, GL_UNSIGNED_BYTE, fallback);
             glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
-            return;
+            return 4L;
         }
         for (RenderTextureResource resource : available) {
             int[] source = resource.pixels();
@@ -1634,6 +1638,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
             textureLayers.put(resource.id(), resource.id());
         }
         glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+        return (long) available.size() * TEXTURE_SIZE * TEXTURE_SIZE * 4L;
     }
 
     @Override
@@ -1647,6 +1652,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         textureArray = 0;
         textureStateBuffer.close();
         frameUniformBuffer.close();
+        gpuTimerQuery.close();
+        performanceMetrics.reset();
         textureLayers.clear();
         if (program != 0) org.lwjgl.opengl.GL20.glDeleteProgram(program);
         program = 0;
