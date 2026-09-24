@@ -2,6 +2,7 @@ package com.rspsi.editor.integration;
 
 import com.rspsi.editor.integration.npc.NpcSpawnProvider;
 import com.rspsi.editor.integration.reference.ReferenceProvider;
+import com.rspsi.editor.integration.semantic.SemanticSourceIndex;
 import com.rspsi.editor.symbols.SymbolProvider;
 import com.rspsi.server.ServerConnection;
 import com.rspsi.server.ServerProjectInspection;
@@ -44,6 +45,11 @@ public interface IntegrationSession extends AutoCloseable {
     Optional<ReferenceProvider> referenceProvider();
 
     Optional<NpcSpawnProvider> npcSpawnProvider();
+
+    /** Source-derived semantic facts with exact provenance when the provider supports them. */
+    default Optional<SemanticSourceIndex> semanticSourceIndex() {
+        return Optional.empty();
+    }
 
     @Override
     void close();
