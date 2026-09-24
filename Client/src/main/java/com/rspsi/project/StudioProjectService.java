@@ -151,6 +151,42 @@ public final class StudioProjectService {
         return descriptor;
     }
 
+    /**
+     * Relinks an existing OpenRune Studio project after its server checkout moved.
+     *
+     * <p>The Studio project identity, private data directory, name and permissions are preserved.
+     * Only the external checkout path changes. This avoids creating a second Studio project merely
+     * because the same server repository was moved or recloned elsewhere.</p>
+     */
+    public StudioProjectDescriptor relocateOpenRune(
+            Path descriptorPath,
+            Path newServerRoot) throws IOException {
+        Path descriptorFile = normalize(descriptorPath, "descriptorPath");
+        StudioProjectDescriptor existing = StudioProjectDescriptorStore.read(descriptorFile);
+        if (existing.kind() != StudioProjectKind.OPENRUNE_SERVER) {
+            throw new IOException("Only OpenRune server projects can be relinked");
+        }
+
+        Path root = normalize(newServerRoot, "newServerRoot");
+        if (!Files.isDirectory(root) || !openRune.detect(root).matched()) {
+            throw new IOException("OpenRune project markers were not detected at: " + root);
+        }
+
+        StudioProjectDescriptor updated = new StudioProjectDescriptor(
+                existing.formatVersion(),
+                existing.projectId(),
+                existing.name(),
+                existing.kind(),
+                existing.createdAtEpochMillis(),
+                existing.projectDataLocation(),
+                root.toString(),
+                existing.providerId(),
+                existing.capabilities());
+        StudioProjectDescriptorStore.write(descriptorFile, updated);
+        registry.remember(descriptorFile, updated);
+        return updated;
+    }
+
     public void validateSource(StudioProjectDescriptor descriptor) throws IOException {
         Objects.requireNonNull(descriptor, "descriptor");
         switch (descriptor.kind()) {
