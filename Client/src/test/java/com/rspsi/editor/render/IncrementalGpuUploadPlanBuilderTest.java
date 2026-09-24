@@ -7,6 +7,7 @@ import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.model.WorldTileAddress;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,6 +57,30 @@ class IncrementalGpuUploadPlanBuilderTest {
         assertEquals(1, update.plan().flatMaterializationCount());
         assertTrue(update.plan().flatMaterialized());
         assertNotEquals(seeded.plan().fingerprint(), update.plan().fingerprint());
+    }
+
+    @Test
+    void parallelFragmentCompilationPreservesDeterministicFullPlan() {
+        List<SceneTileSnapshot> tiles = new ArrayList<>();
+        for (int index = 0; index < 16; index++) {
+            tiles.add(terrainTile(index, 2, 100 + index));
+        }
+        GpuScenePacket packet = packet(tiles, "parallel-fragments");
+
+        IncrementalGpuUploadPlanBuilder.BuildResult result =
+                new IncrementalGpuUploadPlanBuilder().buildInitial(packet);
+        GpuUploadPlan expected = new GpuUploadPlanBuilder().build(packet);
+
+        assertEquals(tiles.size(), result.rebuiltTiles());
+        assertEquals(expected.vertices(), result.plan().vertices());
+        assertEquals(expected.indices(), result.plan().indices());
+        assertEquals(expected.commands(), result.plan().commands());
+        assertEquals(expected.textureTriangles(), result.plan().textureTriangles());
+        assertEquals(expected.occluders(), result.plan().occluders());
+        assertEquals(expected.fingerprint(), result.plan().fingerprint());
+
+        int expectedParallelTasks = result.fragmentWorkerParallelism() > 1 ? 2 : 0;
+        assertEquals(expectedParallelTasks, result.parallelZoneTasks());
     }
 
     @Test

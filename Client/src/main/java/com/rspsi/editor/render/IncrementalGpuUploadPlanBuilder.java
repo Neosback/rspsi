@@ -9,6 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Incremental flattener that caches immutable per-tile GPU fragments.
@@ -23,8 +28,19 @@ import java.util.Set;
 public final class IncrementalGpuUploadPlanBuilder {
     private static final GpuUploadPlan EMPTY_GEOMETRY = new GpuUploadPlan(
             List.of(), List.of(), List.of(), List.of(), Map.of(), List.of(), "empty-tile-fragment");
+    private static final int FRAGMENT_PARALLELISM = Math.max(1, Math.min(8,
+            Runtime.getRuntime().availableProcessors() - 1));
+    private static final AtomicInteger WORKER_IDS = new AtomicInteger();
+    private static final ExecutorService FRAGMENT_EXECUTOR = Executors.newFixedThreadPool(
+            FRAGMENT_PARALLELISM, task -> {
+                Thread thread = new Thread(task,
+                        "rspsi-gpu-fragment-" + WORKER_IDS.incrementAndGet());
+                thread.setDaemon(true);
+                return thread;
+            });
+    private static final ThreadLocal<GpuUploadPlanBuilder> FRAGMENT_BUILDERS =
+            ThreadLocal.withInitial(GpuUploadPlanBuilder::new);
 
-    private final GpuUploadPlanBuilder fullBuilder = new GpuUploadPlanBuilder();
     private final Map<WorldTileAddress, TileFragment> cache = new LinkedHashMap<>();
     private IncrementalGpuZonedUploadPlanBuilder zonedBuilder =
             new IncrementalGpuZonedUploadPlanBuilder();
@@ -45,23 +61,68 @@ public final class IncrementalGpuUploadPlanBuilder {
         LinkedHashSet<SceneOccluder> occluders = new LinkedHashSet<>();
         Map<WorldTileAddress, TileFragment> nextCache = new LinkedHashMap<>();
 
-        int rebuilt = 0;
+        Map<WorldTileAddress, SceneTileSnapshot> rebuildTiles = new LinkedHashMap<>();
+        Map<WorldZoneCoordinate, List<SceneTileSnapshot>> rebuildByZone = new LinkedHashMap<>();
         int reused = 0;
-        int indexBase = 0;
         for (SceneTileSnapshot tile : packet.tiles()) {
             TileFragment fragment = cache.get(tile.worldAddress());
-            boolean dirty = dirtyZones.contains(WorldZoneCoordinate.from(tile.worldAddress()));
+            WorldZoneCoordinate zone = WorldZoneCoordinate.from(tile.worldAddress());
+            boolean dirty = dirtyZones.contains(zone);
             if (fragment == null || dirty || !sameTile(fragment.source(), tile)) {
-                fragment = flattenTile(packet, tile);
-                rebuilt++;
+                rebuildTiles.put(tile.worldAddress(), tile);
+                rebuildByZone.computeIfAbsent(zone, ignored -> new ArrayList<>()).add(tile);
             } else {
                 reused++;
             }
-            nextCache.put(tile.worldAddress(), fragment);
-            GpuUploadPlan fragmentPlan = fragment.plan();
-            flatFragments.add(fragmentPlan);
-            append(fragment, indexBase, commands, textureTriangles, occluders);
-            indexBase = Math.addExact(indexBase, fragmentPlan.indexCount());
+        }
+
+        boolean parallel = FRAGMENT_PARALLELISM > 1 && rebuildByZone.size() > 1;
+        Map<WorldZoneCoordinate, CompletableFuture<Map<WorldTileAddress, TileFragment>>> pending =
+                parallel ? new LinkedHashMap<>() : Map.of();
+        if (parallel) {
+            rebuildByZone.forEach((zone, tiles) -> pending.put(zone,
+                    CompletableFuture.supplyAsync(
+                            () -> flattenZone(packet, tiles), FRAGMENT_EXECUTOR)));
+        }
+        Map<WorldZoneCoordinate, Map<WorldTileAddress, TileFragment>> completed =
+                parallel ? new LinkedHashMap<>() : Map.of();
+
+        int rebuilt = rebuildTiles.size();
+        int indexBase = 0;
+        try {
+            for (SceneTileSnapshot tile : packet.tiles()) {
+                TileFragment fragment;
+                SceneTileSnapshot rebuild = rebuildTiles.get(tile.worldAddress());
+                if (rebuild != null) {
+                    if (parallel) {
+                        WorldZoneCoordinate zone = WorldZoneCoordinate.from(tile.worldAddress());
+                        Map<WorldTileAddress, TileFragment> zoneFragments =
+                                completed.computeIfAbsent(zone, key -> await(pending.get(key)));
+                        fragment = zoneFragments.get(tile.worldAddress());
+                        if (fragment == null) {
+                            throw new IllegalStateException(
+                                    "Missing compiled GPU fragment for " + tile.worldAddress());
+                        }
+                    } else {
+                        fragment = flattenTile(packet, rebuild);
+                    }
+                } else {
+                    fragment = cache.get(tile.worldAddress());
+                    if (fragment == null) {
+                        throw new IllegalStateException(
+                                "Missing cached GPU fragment for " + tile.worldAddress());
+                    }
+                }
+
+                nextCache.put(tile.worldAddress(), fragment);
+                GpuUploadPlan fragmentPlan = fragment.plan();
+                flatFragments.add(fragmentPlan);
+                append(fragment, indexBase, commands, textureTriangles, occluders);
+                indexBase = Math.addExact(indexBase, fragmentPlan.indexCount());
+            }
+        } catch (RuntimeException | Error failure) {
+            if (parallel) pending.values().forEach(future -> future.cancel(true));
+            throw failure;
         }
 
         cache.clear();
@@ -76,7 +137,8 @@ public final class IncrementalGpuUploadPlanBuilder {
                 packet.textures(), mergedOccluders, fingerprint, packet.window());
         GpuZonedUploadPlan zonedPlan = zonedBuilder.build(plan, dirtyZones);
         return new BuildResult(plan, zonedPlan, rebuilt, reused,
-                zonedBuilder.lastRebuiltZoneCount(), zonedBuilder.lastReusedZoneCount());
+                zonedBuilder.lastRebuiltZoneCount(), zonedBuilder.lastReusedZoneCount(),
+                parallel ? rebuildByZone.size() : 0, FRAGMENT_PARALLELISM);
     }
 
     /** Creates an isolated cache snapshot for an asynchronous rebuild transaction. */
@@ -96,6 +158,26 @@ public final class IncrementalGpuUploadPlanBuilder {
         return cache.size();
     }
 
+    private static <T> T await(CompletableFuture<T> future) {
+        try {
+            return future.join();
+        } catch (CompletionException failure) {
+            Throwable cause = failure.getCause();
+            if (cause instanceof RuntimeException runtime) throw runtime;
+            if (cause instanceof Error error) throw error;
+            throw failure;
+        }
+    }
+
+    private Map<WorldTileAddress, TileFragment> flattenZone(
+            GpuScenePacket packet, List<SceneTileSnapshot> tiles) {
+        Map<WorldTileAddress, TileFragment> fragments = new LinkedHashMap<>();
+        for (SceneTileSnapshot tile : tiles) {
+            fragments.put(tile.worldAddress(), flattenTile(packet, tile));
+        }
+        return Map.copyOf(fragments);
+    }
+
     private TileFragment flattenTile(GpuScenePacket packet, SceneTileSnapshot tile) {
         if (tile.terrain().isEmpty() && tile.models().isEmpty()) {
             return new TileFragment(tile, EMPTY_GEOMETRY);
@@ -108,7 +190,7 @@ public final class IncrementalGpuUploadPlanBuilder {
         GpuScenePacket singleTile = new GpuScenePacket(
                 packet.window(), List.of(tile), packet.lightingProfile(),
                 "tile:" + tile.worldAddress() + ":" + tile.hashCode(), Map.of());
-        return new TileFragment(tile, fullBuilder.build(singleTile));
+        return new TileFragment(tile, FRAGMENT_BUILDERS.get().build(singleTile));
     }
 
     private static boolean sameTile(SceneTileSnapshot cached, SceneTileSnapshot current) {
@@ -165,13 +247,27 @@ public final class IncrementalGpuUploadPlanBuilder {
 
     public record BuildResult(GpuUploadPlan plan, GpuZonedUploadPlan zonedPlan,
                               int rebuiltTiles, int reusedTiles,
-                              int rebuiltZones, int reusedZones) {
+                              int rebuiltZones, int reusedZones,
+                              int parallelZoneTasks, int fragmentWorkerParallelism) {
         public BuildResult {
             plan = Objects.requireNonNull(plan, "plan");
             zonedPlan = Objects.requireNonNull(zonedPlan, "zonedPlan");
-            if (rebuiltTiles < 0 || reusedTiles < 0 || rebuiltZones < 0 || reusedZones < 0) {
+            if (rebuiltTiles < 0 || reusedTiles < 0 || rebuiltZones < 0 || reusedZones < 0
+                    || parallelZoneTasks < 0 || fragmentWorkerParallelism < 1) {
                 throw new IllegalArgumentException("Incremental build counts cannot be negative");
             }
+            if (parallelZoneTasks > rebuiltTiles) {
+                throw new IllegalArgumentException(
+                        "Parallel zone tasks cannot exceed rebuilt tiles");
+            }
+        }
+
+        /** Compatibility constructor for callers that do not consume concurrency diagnostics. */
+        public BuildResult(GpuUploadPlan plan, GpuZonedUploadPlan zonedPlan,
+                           int rebuiltTiles, int reusedTiles,
+                           int rebuiltZones, int reusedZones) {
+            this(plan, zonedPlan, rebuiltTiles, reusedTiles, rebuiltZones, reusedZones,
+                    0, 1);
         }
     }
 }
