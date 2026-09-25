@@ -43,6 +43,7 @@ import com.rspsi.studio.ui.hud.DeclarativeOverlayRenderer;
 import com.rspsi.studio.ui.hud.BrushSettingsHud;
 import com.rspsi.studio.ui.diagnostics.TerrainDiagnosticsOverlay;
 import com.rspsi.studio.plugin.StudioPluginManager;
+import com.rspsi.studio.plugin.StudioToolPlugin;
 import com.rspsi.studio.plugin.builtin.TileInfoHudPlugin;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
@@ -275,7 +276,7 @@ public final class MapEditorView {
                         .filter(ObjectViewerPanel.class::isInstance)
                         .map(ObjectViewerPanel.class::cast)
                         .ifPresent(viewer -> {
-                            viewer.inspectObject(object.id());
+                            viewer.inspectObject(object);
                             panelManager.setActiveRightPanelId(ObjectViewerPanel.ID);
                         });
             }
