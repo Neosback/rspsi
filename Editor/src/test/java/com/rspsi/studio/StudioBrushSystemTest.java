@@ -59,6 +59,34 @@ class StudioBrushSystemTest {
     }
 
     @Test
+    void hostExtensionBrushesAppearAndUnloadCleanly() {
+        StudioBrushManager manager = new StudioBrushManager();
+
+        EditorBrush extensionBrush = new EditorBrush() {
+            @Override public String id() { return "community.star"; }
+            @Override public String name() { return "Star"; }
+            @Override public Set<BrushCapability> capabilities() {
+                return Set.of(BrushCapability.SPATIAL_FOOTPRINT);
+            }
+            @Override public double weight(int dx, int dy, int radius) {
+                return dx == 0 || dy == 0 ? 1.0 : 0.0;
+            }
+        };
+
+        manager.syncHostBrushes(java.util.List.of(extensionBrush));
+        assertTrue(manager.allBrushes().stream()
+                .anyMatch(brush -> "community.star".equals(brush.id())));
+
+        manager.setActiveBrush("community.tool", "community.star");
+        assertEquals("community.star", manager.activeBrush(
+                "community.tool", Set.of(BrushCapability.SPATIAL_FOOTPRINT)).id());
+
+        manager.syncHostBrushes(java.util.List.of());
+        assertFalse(manager.allBrushes().stream()
+                .anyMatch(brush -> "community.star".equals(brush.id())));
+    }
+
+    @Test
     void radiusIsValidated() {
         StudioBrushManager manager = new StudioBrushManager();
         manager.setBrushRadius(5);
