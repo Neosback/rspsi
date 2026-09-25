@@ -25,6 +25,7 @@ public final class IntegrationCenterWindow {
         Objects.requireNonNull(open, "open");
         if (!open.get()) return;
 
+        StudioWidgets.windowBackdrop("project-integration");
         ImGui.setNextWindowSize(620, 420, imgui.flag.ImGuiCond.FirstUseEver);
         if (!ImGui.begin("Project Integration", open, ImGuiWindowFlags.NoCollapse)) {
             ImGui.end();
