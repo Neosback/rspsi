@@ -1,10 +1,10 @@
 package com.rspsi.studio.ui;
 
-import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.StudioToolPlugin;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.studio.ui.hud.BrushSettingsHud;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
@@ -51,14 +51,7 @@ public final class LeftBrushRail {
      * it, so the two never disagree about whether something is showing.
      */
     public static boolean isBrushToolActive(StudioPluginManager plugins, String activeToolId) {
-        if (plugins == null || activeToolId == null) return false;
-        for (StudioToolPlugin tool : plugins.toolPlugins()) {
-            if (!tool.isBrushTool()) continue;
-            if (tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId)) {
-                return true;
-            }
-        }
-        return false;
+        return plugins != null && plugins.usesSharedBrushSettings(activeToolId);
     }
 
     /**
@@ -76,8 +69,8 @@ public final class LeftBrushRail {
         ImGui.setNextWindowSize(RAIL_WIDTH, height, imgui.flag.ImGuiCond.Always);
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
-        ImGui.pushStyleColor(ImGuiCol.WindowBg, StudioDrawColors.abgr(0xF50E1015));
-        ImGui.pushStyleColor(ImGuiCol.Border, StudioDrawColors.abgr(0xD0272C38));
+        ImGui.pushStyleColor(ImGuiCol.WindowBg, StudioPalette.CHROME_BG);
+        ImGui.pushStyleColor(ImGuiCol.Border, StudioPalette.BORDER);
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 4.0f, 8.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 0.0f, 6.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
@@ -89,23 +82,23 @@ public final class LeftBrushRail {
                         .filter(BrushSettingsHud.class::isInstance)
                         .map(BrushSettingsHud.class::cast)
                         .orElse(null);
-        boolean open = hud != null && !hud.isMinimized();
+        boolean open = hud != null && hud.isVisible();
 
         if (open) {
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF6366F1));
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF818CF8));
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF4F46E5));
-            ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
         } else {
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF181A22));
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF262A37));
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF1E212B));
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.CHROME_BG);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
         }
 
         ImGui.pushFont(StudioFonts.icon(), 0.0f);
         if (ImGui.button(StudioIcons.BRUSH + "##brush-rail-settings", 38.0f, 38.0f) && hud != null) {
-            hud.setMinimized(open);
+            hud.setVisible(!open);
         }
         ImGui.popFont();
         ImGui.popStyleColor(4);
