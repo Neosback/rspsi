@@ -16,6 +16,8 @@ import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.editor.tool.MoveSelectionTool;
 import com.rspsi.editor.tool.RotateSelectionTool;
 import com.rspsi.editor.tool.ReplaceSelectionTool;
+import com.rspsi.editor.viewport.SurfaceHit;
+import com.rspsi.editor.viewport.Viewport;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -57,6 +59,42 @@ class CoreBoxSelectToolTest {
 
         ObjectSetSelection selection = assertInstanceOf(ObjectSetSelection.class, session.selection().current());
         assertEquals(java.util.Set.of(first, second), selection.objects());
+    }
+
+    @Test
+    void singleObjectModeUsesSemanticSurfaceHitInsteadOfSelectingEveryObjectOnTile() {
+        WorldDocument world = new WorldDocument(8, 8);
+        WorldObject wall = new WorldObject(7, 0, 0, 0, 2, 2);
+        WorldObject ground = new WorldObject(8, 22, 0, 0, 2, 2);
+        world.tile(0, 2, 2).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(wall, ground)));
+
+        EditorSession session = new EditorSession(world);
+        WorldTile worldTile = session.coordinates().toWorld(new com.rspsi.editor.model.LocalTile(0, 2, 2));
+        Viewport viewport = new Viewport() {
+            @Override
+            public Optional<WorldTile> tileAt(float x, float y) {
+                return Optional.of(worldTile);
+            }
+
+            @Override
+            public Optional<SurfaceHit> hitAt(float x, float y) {
+                return Optional.of(SurfaceHit.object(worldTile, ground.id(), worldTile, ground));
+            }
+        };
+
+        BoxSelectTool tool = new BoxSelectTool();
+        tool.setTarget(BoxSelectTool.Target.OBJECTS);
+        tool.setMode(BoxSelectTool.Mode.SINGLE);
+
+        EditorToolController controller = new EditorToolController();
+        controller.activate(tool, new ToolContext(session, new EmptyAssets(), viewport));
+        controller.pointerDown(pointer(2, 2));
+        controller.pointerUp(pointer(2, 2));
+
+        ObjectSetSelection selection =
+                assertInstanceOf(ObjectSetSelection.class, session.selection().current());
+        assertEquals(java.util.Set.of(ground), selection.objects());
     }
 
     @Test
