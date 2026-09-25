@@ -92,9 +92,10 @@ class CoreBoxSelectToolTest {
         controller.pointerDown(pointer(2, 2));
         controller.pointerUp(pointer(2, 2));
 
-        ObjectSetSelection selection =
-                assertInstanceOf(ObjectSetSelection.class, session.selection().current());
-        assertEquals(java.util.Set.of(ground), selection.objects());
+        com.rspsi.editor.selection.ObjectSelection selection =
+                assertInstanceOf(com.rspsi.editor.selection.ObjectSelection.class,
+                        session.selection().current());
+        assertEquals(ground, selection.object());
     }
 
     @Test
