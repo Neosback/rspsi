@@ -144,13 +144,14 @@ public final class EditorPluginHost implements AutoCloseable {
             EditorSession session,
             AssetRepository assets,
             Optional<EditorSceneAccess> scene) {
-        return initialize(List.of(), plugins, session, assets, scene,
+        return initialize(coreModules, plugins, session, assets, scene,
                 new SettingsStore(EditorSettingKeys.registry()),
                 new EditorTaskService(), new EditorNotificationService(),
                 null, null, null, null, null, null, null);
     }
 
     private static EditorPluginHost initialize(
+            Iterable<? extends CoreEditorModule> coreModules,
             Iterable<? extends EditorPlugin> plugins,
             EditorSession session,
             AssetRepository assets,
@@ -165,6 +166,7 @@ public final class EditorPluginHost implements AutoCloseable {
             com.rspsi.editor.integration.npc.NpcSpawnService spawns,
             com.rspsi.editor.simulation.SimulationEngine simulation,
             com.rspsi.editor.integration.ServerIntegrationService integrations) {
+        Objects.requireNonNull(coreModules, "coreModules");
         Objects.requireNonNull(plugins, "plugins");
         EditorPluginRegistry registry = new EditorPluginRegistry();
         EditorPluginResources resources = new EditorPluginResources();
