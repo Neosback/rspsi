@@ -668,3 +668,11 @@ The Content Studio summarizes an already-trustworthy project.
 Workspaces edit that project.
 
 That separation should remain true even as Studio expands from map editing into interfaces, assets, scripts, server content, simulation, and broader OpenRune tooling.
+
+
+## Startup visual contract
+
+The launcher/loading identity is text-first: **OPENRUNE CONTENT STUDIO** in the shared Studio blue
+display style. The old bitmap wordmark is not part of startup. The application version is shown
+quietly at the bottom. Startup uses the same `StudioPalette`, typography, control states and
+visible-scrollbar rules as the project shell.
