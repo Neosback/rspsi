@@ -428,10 +428,14 @@ public final class MapEditorView {
     private void activateTool(EditorPluginLifecycleManager pluginLifecycle, String registrationId) {
         String previousToolId = activeToolId;
         activeToolId = registrationId;
-        // Auto-open context drawer for tools with shelf content (Path Builder, Tile Painter),
-        // and collapse it for tools without shelf content (Single/Multi Select).
+        // Tools that own drawer content may bring it forward. Picker/inspection tools
+        // with no drawer content leave the user's existing drawer exactly as it was.
         studioPluginManager.toolPlugin(registrationId)
-                .ifPresent(tool -> bottomBar.setDrawerOpen(tool.hasContextDrawerContent()));
+                .filter(StudioToolPlugin::hasContextDrawerContent)
+                .ifPresent(tool -> {
+                    bottomBar.setDrawerMode(StudioBottomBar.DrawerMode.AUTO_TOOL);
+                    bottomBar.setDrawerOpen(true);
+                });
         if (inputRouter == null || pluginLifecycle == null || pluginLifecycle.host() == null) return;
 
         // Single/Multi (tile) Select and Single/Multi Select Objects are all Studio-level
