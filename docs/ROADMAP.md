@@ -75,7 +75,7 @@ The target includes:
 - biome generation and WFC-assisted world building
 - rich object and definition inspection/editing
 - project-first IDE-style startup with persistent recent projects and a real project loading lifecycle
-- plugin-first extensibility through one public extension SDK rather than a separate privileged built-in tool API
+- extension-first extensibility through one shared SDK, with built-in and installed tools using the same supported capability contracts
 - first-class third-party map tools that obey the same rail/drawer/brush/inspector/HUD layout contract as built-ins
 - a stable Studio-owned semantic API for authored-world and resolved-scene access
 - later, an explainable Theme/Context Engine learned from real OSRS world placement
