@@ -71,7 +71,7 @@ public final class TileBrushPanel implements StudioPanel {
 
     @Override
     public Set<DockRegion> allowedRegions() {
-        return java.util.EnumSet.of(DockRegion.RIGHT, DockRegion.BOTTOM);
+        return java.util.EnumSet.of(DockRegion.RIGHT);
     }
 
     @Override
