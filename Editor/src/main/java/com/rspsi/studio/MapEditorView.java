@@ -472,7 +472,6 @@ public final class MapEditorView {
         studioPluginManager.toolView(registrationId)
                 .filter(StudioPluginManager.StudioToolView::hasContextDrawerContent)
                 .ifPresent(tool -> {
-                    bottomBar.setDrawerMode(StudioBottomBar.DrawerMode.AUTO_TOOL);
                     bottomBar.setDrawerOpen(true);
                 });
         if (inputRouter == null || pluginLifecycle == null || pluginLifecycle.host() == null) return;
