@@ -282,13 +282,13 @@ public final class BrushSettingsHud implements StudioPlugin {
         ImGui.textDisabled("Shape:");
         ImGui.sameLine(0.0f, 6.0f);
 
-        renderShapeButton(context, brushTool, brushes, StudioIcons.SHAPE_SQUARE + " Sq", "brush.square", activeShapeId, "Square footprint");
+        renderShapeButton(context, brushTool, brushes, StudioIcons.SHAPE_SQUARE + " Sq", "square", activeShapeId, "Square footprint");
         ImGui.sameLine(0.0f, 3.0f);
-        renderShapeButton(context, brushTool, brushes, StudioIcons.SHAPE_CIRCLE + " Circ", "brush.circle", activeShapeId, "Circle footprint");
+        renderShapeButton(context, brushTool, brushes, StudioIcons.SHAPE_CIRCLE + " Circ", "circle", activeShapeId, "Circle footprint");
         ImGui.sameLine(0.0f, 3.0f);
-        renderShapeButton(context, brushTool, brushes, StudioIcons.SHAPE_DIAMOND + " Dia", "brush.diamond", activeShapeId, "Diamond footprint");
+        renderShapeButton(context, brushTool, brushes, StudioIcons.SHAPE_DIAMOND + " Dia", "diamond", activeShapeId, "Diamond footprint");
         ImGui.sameLine(0.0f, 3.0f);
-        renderShapeButton(context, brushTool, brushes, StudioIcons.SHAPE_FALLOFF + " Soft", "brush.gaussian", activeShapeId, "Gaussian falloff footprint");
+        renderShapeButton(context, brushTool, brushes, StudioIcons.SHAPE_FALLOFF + " Soft", "gaussian", activeShapeId, "Gaussian falloff footprint");
 
         // More brushes popup button
         ImGui.sameLine(0.0f, 4.0f);
@@ -693,7 +693,7 @@ public final class BrushSettingsHud implements StudioPlugin {
             EditorBrush active = brushes.activeBrush(toolId, Set.of(BrushCapability.SPATIAL_FOOTPRINT));
             if (active != null) return active.id();
         }
-        return "brush.square";
+        return "square";
     }
 
     private String resolveActiveBrushName(StudioPanelContext context, BrushAwareTool brushTool, StudioBrushManager brushes) {
