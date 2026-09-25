@@ -1,5 +1,6 @@
 package com.rspsi.editor.integration;
 
+import com.rspsi.editor.integration.content.ContentDiscoveryService;
 import com.rspsi.editor.integration.npc.NpcSpawnService;
 import com.rspsi.editor.integration.reference.ReferenceService;
 import com.rspsi.editor.integration.semantic.SemanticContentGraph;
@@ -12,7 +13,9 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.EnumSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -83,6 +86,11 @@ public final class ServerIntegrationService {
         return activeSession == null ? Optional.empty() : activeSession.projectInspection();
     }
 
+    /** Returns the active neutral declarative content catalog when it has been loaded. */
+    public Optional<ContentDiscoveryService.Discovery> activeContentDiscovery() {
+        return activeSession == null ? Optional.empty() : activeSession.contentDiscovery();
+    }
+
     /** Returns the active provider-neutral semantic source snapshot when available. */
     public Optional<SemanticSourceIndex> activeSemanticSourceIndex() {
         return activeSession == null ? Optional.empty() : activeSession.semanticSourceIndex();
@@ -116,6 +124,60 @@ public final class ServerIntegrationService {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * Promotes the active project-owned integration session to include additional capabilities.
+     *
+     * <p>This is the canonical lazy-loading path for expensive OpenRune services such as source
+     * semantics, declarative content, references and NPC spawns. The existing persisted
+     * connection/overrides and provider settings are preserved. If opening the promoted session
+     * fails, the currently active session remains bound.</p>
+     */
+    public synchronized IntegrationSession ensureCapabilities(Set<IntegrationCapability> requested) {
+        Objects.requireNonNull(requested, "requested");
+        if (activeSession == null) {
+            throw new IllegalStateException("No server integration session is active");
+        }
+        if (requested.isEmpty() || activeSession.activeCapabilities().containsAll(requested)) {
+            return activeSession;
+        }
+
+        EnumSet<IntegrationCapability> desired = EnumSet.noneOf(IntegrationCapability.class);
+        desired.addAll(activeSession.activeCapabilities());
+        desired.addAll(requested);
+
+        IntegrationSession current = activeSession;
+        ServerIntegrationProvider provider = current.provider();
+        ServerConnection connection = current.connection()
+                .orElseGet(() -> ServerConnection.forRoot(current.projectRoot()));
+        IntegrationOptions previous = current.options();
+        IntegrationOptions promotedOptions = new IntegrationOptions(
+                current.projectRoot(), desired, previous.settings());
+
+        IntegrationSession promoted = provider.open(connection, promotedOptions);
+
+        unbind(current);
+        activeSession = null;
+        try {
+            return bind(promoted);
+        } catch (RuntimeException failure) {
+            try {
+                promoted.close();
+            } catch (RuntimeException ignored) {
+            }
+            // Re-open the previous capability set so callers do not lose the project-owned
+            // integration merely because an optional lazy capability failed to bind.
+            IntegrationSession restored = provider.open(connection, previous);
+            return bind(restored);
+        }
+    }
+
+    public IntegrationSession ensureCapabilities(IntegrationCapability... requested) {
+        Objects.requireNonNull(requested, "requested");
+        EnumSet<IntegrationCapability> capabilities = EnumSet.noneOf(IntegrationCapability.class);
+        java.util.Collections.addAll(capabilities, requested);
+        return ensureCapabilities(capabilities);
     }
 
     /**
@@ -166,14 +228,17 @@ public final class ServerIntegrationService {
     /**
      * Disconnects the active session and unbinds its providers.
      */
-    public void disconnect() {
-        if (activeSession != null) {
-            activeSession.symbolProvider().ifPresent(p -> symbolService.unregisterProvider(p.id()));
-            activeSession.referenceProvider().ifPresent(p -> referenceService.unregisterProvider(p.id()));
-            activeSession.npcSpawnProvider().ifPresent(p -> npcSpawnService.unregisterProvider(p.id()));
+    public synchronized void disconnect() {
+        if (activeSession == null) return;
+        IntegrationSession closing = activeSession;
+        activeSession = null;
+        unbind(closing);
+    }
 
-            activeSession.close();
-            activeSession = null;
-        }
+    private void unbind(IntegrationSession session) {
+        session.symbolProvider().ifPresent(p -> symbolService.unregisterProvider(p.id()));
+        session.referenceProvider().ifPresent(p -> referenceService.unregisterProvider(p.id()));
+        session.npcSpawnProvider().ifPresent(p -> npcSpawnService.unregisterProvider(p.id()));
+        session.close();
     }
 }
