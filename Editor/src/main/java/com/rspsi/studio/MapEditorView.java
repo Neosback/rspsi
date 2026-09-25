@@ -233,6 +233,9 @@ public final class MapEditorView {
                 defaultToolActivated = true;
                 activateTool(pluginLifecycle, activeToolId);
             }
+        } else {
+            studioPluginManager.bindEditorPluginRegistry(null);
+            brushManager.syncHostBrushes(java.util.List.of());
         }
 
         BrushSettingsHud brushSettings = studioPluginManager.plugin(BrushSettingsHud.ID)
