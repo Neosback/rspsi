@@ -191,9 +191,7 @@ public final class KnowledgePanel implements StudioPanel {
     }
 
     private static void renderFact(KnowledgeFact<SemanticTag> fact) {
-        StudioWidgets.beginCard(
-                "knowledge-fact-" + fact.value().qualifiedName() + "-" + fact.source(),
-                -1.0f, 0.0f);
+        ImGui.pushID("knowledge-fact-" + fact.value().qualifiedName() + "-" + fact.source());
         ImGui.textColored(StudioPalette.ACCENT, fact.value().qualifiedName());
         ImGui.sameLine();
         StudioWidgets.pill(
@@ -203,19 +201,15 @@ public final class KnowledgePanel implements StudioPanel {
         ImGui.sameLine();
         ImGui.textDisabled(fact.source().toString());
 
-        if (!fact.evidence().isEmpty()) {
-            ImGui.dummy(1.0f, 4.0f);
-            for (Evidence evidence : fact.evidence()) {
-                if (StudioWidgets.beginPropertyTable(
-                        "evidence-" + fact.value().qualifiedName() + "-" + evidence.hashCode())) {
-                    StudioWidgets.propertyRow("Evidence", evidence.description());
-                    StudioWidgets.propertyRow("Signal", String.format("%.2f", evidence.weight()));
-                    StudioWidgets.endPropertyTable();
-                }
+        for (Evidence evidence : fact.evidence()) {
+            if (StudioWidgets.beginPropertyTable("evidence-" + evidence.hashCode())) {
+                StudioWidgets.propertyRow("Evidence", evidence.description());
+                StudioWidgets.propertyRow("Signal", String.format("%.2f", evidence.weight()));
+                StudioWidgets.endPropertyTable();
             }
         }
-        StudioWidgets.endCard();
-        ImGui.dummy(1.0f, 6.0f);
+        ImGui.separator();
+        ImGui.popID();
     }
 
     private static void renderRuleTrace(
