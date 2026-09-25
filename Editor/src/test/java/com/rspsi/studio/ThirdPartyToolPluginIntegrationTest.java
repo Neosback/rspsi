@@ -3,6 +3,8 @@ package com.rspsi.studio;
 import com.rspsi.editor.plugin.EditorPluginRegistry;
 import com.rspsi.editor.plugin.EditorToolRegistration;
 import com.rspsi.editor.plugin.ToolUiDescriptor;
+import com.rspsi.editor.plugin.ui.EditorUiNode;
+import com.rspsi.editor.plugin.ui.ToolUiContent;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.tool.EditorTool;
 import com.rspsi.editor.tool.ToolContext;
@@ -101,7 +103,13 @@ class ThirdPartyToolPluginIntegrationTest {
                         ToolUiDescriptor.ToolCapability.TILE_TARGET,
                         ToolUiDescriptor.ToolCapability.BRUSH_FOOTPRINT,
                         ToolUiDescriptor.ToolCapability.WORLD_EDIT),
-                false);
+                true,
+                new ToolUiContent(
+                        () -> EditorUiNode.section(
+                                "Biome",
+                                EditorUiNode.text("Paint semantic biome data")),
+                        null,
+                        null));
 
         registry.registerTool(new EditorToolRegistration(
                 "community.biome-painter",
@@ -126,6 +134,9 @@ class ThirdPartyToolPluginIntegrationTest {
         assertTrue(projected.surfaces().contains(StudioToolPlugin.ToolSurface.FLOATING_TOOLBAR));
         assertEquals(StudioToolPlugin.BrushUiMode.SHARED_SETTINGS, projected.brushUiMode());
         assertTrue(manager.usesSharedBrushSettings("community.biome-painter"));
+        assertTrue(projected.hasContextDrawerContent());
+        assertTrue(projected.contextDrawerNode().orElseThrow()
+                instanceof EditorUiNode.Section);
         assertFalse(projected.isNativeProjection());
     }
 
