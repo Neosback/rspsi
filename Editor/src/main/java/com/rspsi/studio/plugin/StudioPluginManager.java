@@ -59,7 +59,10 @@ public final class StudioPluginManager {
     }
 
     public synchronized void setSurfaceOverride(String toolPluginId, Set<StudioToolPlugin.ToolSurface> surfaces) {
-        surfaceOverrides.put(toolPluginId, EnumSet.copyOf(surfaces));
+        Set<StudioToolPlugin.ToolSurface> value = surfaces == null || surfaces.isEmpty()
+                ? EnumSet.noneOf(StudioToolPlugin.ToolSurface.class)
+                : EnumSet.copyOf(surfaces);
+        surfaceOverrides.put(toolPluginId, value);
     }
 
     public synchronized void resetSurfaceOverride(String toolPluginId) {
