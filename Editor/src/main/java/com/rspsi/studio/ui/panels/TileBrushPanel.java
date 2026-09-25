@@ -28,6 +28,7 @@ import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.studio.theme.StudioWidgets;
+import com.rspsi.studio.plugin.builtin.TileInfoHudPlugin;
 import com.rspsi.studio.ui.OverlayTextureCache;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
@@ -246,6 +247,19 @@ public final class TileBrushPanel implements StudioPanel {
 
         ImGui.dummy(1.0f, 8.0f);
         renderDrawCommandsSection(inspection.drawCommands());
+
+        ImGui.dummy(1.0f, 8.0f);
+        renderInspectionHudSettings(context);
+    }
+
+    private static void renderInspectionHudSettings(StudioPanelContext context) {
+        if (!ImGui.collapsingHeader("Inspection HUD")) return;
+        context.studioPlugins().plugin(TileInfoHudPlugin.ID)
+                .filter(TileInfoHudPlugin.class::isInstance)
+                .map(TileInfoHudPlugin.class::cast)
+                .ifPresentOrElse(
+                        hud -> hud.renderSettings(context),
+                        () -> ImGui.textDisabled("Inspection HUD plugin is unavailable."));
     }
 
     private record TileInspection(
