@@ -179,17 +179,24 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
      */
     @Override
     public java.util.Optional<SurfaceHit> hitAt(float x, float y) {
-        return pickAt(x, y).map(hit -> {
-            if (!hit.objectHit()) {
-                return SurfaceHit.terrain(hit.tile());
-            }
+        return pickAt(x, y).map(this::semanticHit);
+    }
 
-            WorldTile anchor = hit.objectTile() != null ? hit.objectTile() : hit.tile();
-            com.rspsi.editor.model.WorldObject placement = objectResolver == null
-                    ? null
-                    : objectResolver.resolve(anchor, hit.objectId()).orElse(null);
-            return SurfaceHit.object(hit.tile(), hit.objectId(), anchor, placement);
-        });
+    /**
+     * Package-visible for native contract tests. This is the only conversion
+     * point where renderer picking metadata becomes public editor semantics.
+     */
+    SurfaceHit semanticHit(PickResult hit) {
+        Objects.requireNonNull(hit, "hit");
+        if (!hit.objectHit()) {
+            return SurfaceHit.terrain(hit.tile());
+        }
+
+        WorldTile anchor = hit.objectTile() != null ? hit.objectTile() : hit.tile();
+        com.rspsi.editor.model.WorldObject placement = objectResolver == null
+                ? null
+                : objectResolver.resolve(anchor, hit.objectId()).orElse(null);
+        return SurfaceHit.object(hit.tile(), hit.objectId(), anchor, placement);
     }
 
     private Integer pickPlaneRestriction;
