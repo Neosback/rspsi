@@ -9,12 +9,14 @@ import com.rspsi.editor.inspector.ObjectReport;
 import com.rspsi.editor.model.OsrsLocShape;
 import com.rspsi.editor.render.ObjectPreviewScene;
 import com.rspsi.editor.model.WorldObject;
-import com.rspsi.studio.theme.StudioDrawColors;
+import com.rspsi.studio.theme.StudioPalette;
+import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImGui;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiMouseButton;
 import imgui.flag.ImGuiTableColumnFlags;
 import imgui.flag.ImGuiTableFlags;
+import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 
 import java.util.Objects;
@@ -51,11 +53,13 @@ public final class ObjectEditorWindow {
 
     public void render(LoadedOsrsCacheSession cache, EditorSession session) {
         if (!open.get() || cache == null || objectId < 0) return;
+        StudioWidgets.windowBackdrop("object-editor");
         float unit = ImGui.getFontSize();
         ImGui.setNextWindowSize(unit * 78.0f, unit * 44.0f, ImGuiCond.FirstUseEver);
         String name = cache.bundle().definitions().object(objectId)
                 .map(def -> def.displayName()).orElse("Object #" + objectId);
-        if (!ImGui.begin("Edit game object - " + name + "###object-editor", open)) {
+        if (!ImGui.begin("Edit game object - " + name + "###object-editor", open,
+                ImGuiWindowFlags.NoCollapse)) {
             ImGui.end();
             return;
         }
@@ -132,7 +136,7 @@ public final class ObjectEditorWindow {
     }
 
     private void renderPlacement(LoadedOsrsCacheSession cache, EditorSession session) {
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Placed object");
+        ImGui.textColored(StudioPalette.ACCENT, "Placed object");
         if (ImGui.beginTable("##oe-placement", 2, ImGuiTableFlags.SizingStretchProp)) {
             row("Position", placement.x() + ", " + placement.y() + "  plane " + placement.plane());
             row("Type", placement.type() + " - " + placement.shape().map(OsrsLocShape::displayName).orElse("?"));
