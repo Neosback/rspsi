@@ -189,6 +189,16 @@ public final class StudioPluginManager {
         return Optional.empty();
     }
 
+    public synchronized StudioToolPlugin.BrushUiMode brushUiMode(String toolId) {
+        return toolPlugin(toolId)
+                .map(StudioToolPlugin::brushUiMode)
+                .orElse(StudioToolPlugin.BrushUiMode.NONE);
+    }
+
+    public synchronized boolean usesSharedBrushSettings(String toolId) {
+        return brushUiMode(toolId) == StudioToolPlugin.BrushUiMode.SHARED_SETTINGS;
+    }
+
     /**
      * Dispatches viewport overlay rendering to all active plugins.
      */
