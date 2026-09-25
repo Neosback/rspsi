@@ -9,7 +9,8 @@ import imgui.ImGui
 import imgui.type.ImBoolean
 import imgui.type.ImInt
 import java.util.EnumSet
-import java.util.Set
+import java.util.Collections
+import java.util.LinkedHashSet
 
 /**
  * Native Studio projection for the composite Height Sculptor surface.
@@ -41,16 +42,7 @@ class HeightSculptorToolPlugin : StudioToolPlugin {
      * Preserve Java's immutable Set.of contract because callers treat this as descriptor data,
      * not mutable runtime state.
      */
-    override fun toolIds(): Set<String> =
-        Set.of(
-            "terrain.raise",
-            "terrain.lower",
-            "terrain.flatten",
-            "terrain.smooth",
-            "terrain.blend",
-            "terrain.terrace",
-            "terrain.ramp",
-        )
+    override fun toolIds(): MutableSet<String> = TOOL_IDS
 
     override fun shortcut(): String = "H"
 
@@ -99,5 +91,23 @@ class HeightSculptorToolPlugin : StudioToolPlugin {
     companion object {
         const val ID = "studio.tool.height_sculptor"
         const val ENGINE_TOOL_ID = "terrain.raise"
+
+        // Java's Set return type is a mutable platform type to Kotlin even though the
+        // original implementation returned Set.of(...). Keep the override JVM-compatible
+        // while preserving the original immutable descriptor contract at runtime.
+        private val TOOL_IDS: MutableSet<String> =
+            Collections.unmodifiableSet(
+                LinkedHashSet(
+                    listOf(
+                        "terrain.raise",
+                        "terrain.lower",
+                        "terrain.flatten",
+                        "terrain.smooth",
+                        "terrain.blend",
+                        "terrain.terrace",
+                        "terrain.ramp",
+                    ),
+                ),
+            )
     }
 }
