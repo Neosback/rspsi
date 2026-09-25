@@ -1,6 +1,5 @@
 package com.rspsi.studio.ui.panels;
 
-import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.editor.model.FloorId;
@@ -170,7 +169,7 @@ public final class TilePainterPalette implements StudioPanel {
                 state.flags(), List.of());
         TerrainMesh mesh = meshBuilder.build(preview);
 
-        draw.addRectFilled(x, y, x + box, y + box, underlayColor, 3.0f);
+        draw.addRectFilled(x, y, x + box, y + box, StudioPalette.draw(underlayColor), 3.0f);
         for (var face : mesh.faces()) {
             if (face.material() == 1 && state.overlayId() <= 0) continue;
             int color = face.material() == 1 ? overlayColor : underlayColor;
@@ -179,7 +178,7 @@ public final class TilePainterPalette implements StudioPanel {
             var c = mesh.vertices().get(face.c());
             draw.addTriangleFilled(px(x, box, a.x()), py(y, box, a.y()),
                     px(x, box, b.x()), py(y, box, b.y()),
-                    px(x, box, c.x()), py(y, box, c.y()), color);
+                    px(x, box, c.x()), py(y, box, c.y()), StudioPalette.draw(color));
         }
 
         draw.addRect(x, y, x + box, y + box, StudioPalette.draw(StudioPalette.BORDER_STRONG),
@@ -253,25 +252,23 @@ public final class TilePainterPalette implements StudioPanel {
     }
 
     private void renderSectionTabs() {
+        if (!ImGui.beginTable("##tile-painter-tabs", 6, ImGuiTableFlags.SizingStretchSame)) {
+            return;
+        }
         sectionTab(0, "Overlay", state.applyOverlay(), state::setApplyOverlay);
-        ImGui.sameLine();
         sectionTab(1, "Underlay", state.applyUnderlay(), state::setApplyUnderlay);
-        ImGui.sameLine();
         sectionTab(2, "Shape", state.applyShape(), state::setApplyShape);
-        ImGui.sameLine();
         sectionTab(3, "Height", state.applyHeight(), state::setApplyHeight);
-        ImGui.sameLine();
         sectionTab(4, "Mask", state.applyFlags(), state::setApplyFlags);
-        ImGui.sameLine();
         sectionTab(5, "Rotation", state.applyRotation(), state::setApplyRotation);
+        ImGui.endTable();
     }
 
     private void sectionTab(int index, String label, boolean enabled, Consumer<Boolean> setter) {
+        ImGui.tableNextColumn();
         boolean current = activeTab == index;
-        float available = Math.max(1.0f, ImGui.getContentRegionAvailX());
-        float segmentWidth = Math.max(92.0f, available / Math.max(1, 6 - index));
-        float checkWidth = ImGui.getFrameHeight() + 4.0f;
-        float labelWidth = Math.max(58.0f, segmentWidth - checkWidth);
+        float checkWidth = ImGui.getFrameHeight() + 6.0f;
+        float labelWidth = Math.max(44.0f, ImGui.getContentRegionAvailX() - checkWidth);
 
         ImGui.pushStyleColor(ImGuiCol.Button,
                 current ? StudioPalette.ACCENT : StudioPalette.PANEL_ELEVATED);
@@ -330,12 +327,13 @@ public final class TilePainterPalette implements StudioPanel {
             int color = floorColor(cache, encoded, underlay, underlay ? 0xFF333333 : 0xFF4A4A4A);
             float sx = ImGui.getCursorScreenPos().x;
             float sy = ImGui.getCursorScreenPos().y;
-            draw.addRectFilled(sx, sy, sx + size, sy + size, color);
+            draw.addRectFilled(sx, sy, sx + size, sy + size, StudioPalette.draw(color));
             int selected = underlay ? state.underlayId() : state.overlayId();
             boolean isSelected = encoded == selected;
             draw.addRect(sx - (isSelected ? 1 : 0), sy - (isSelected ? 1 : 0),
                     sx + size + (isSelected ? 1 : 0), sy + size + (isSelected ? 1 : 0),
-                    isSelected ? 0xFFFFFFFF : 0xFF222222, 0.0f, 0, isSelected ? 2.0f : 1.0f);
+                    StudioPalette.draw(isSelected ? StudioPalette.TEXT : StudioPalette.BORDER),
+                    0.0f, 0, isSelected ? 2.0f : 1.0f);
             if (ImGui.invisibleButton((underlay ? "und-" : "ovr-") + i, size, size)) {
                 if (underlay) {
                     state.setUnderlayId(encoded); state.setApplyUnderlay(true);
@@ -386,7 +384,7 @@ public final class TilePainterPalette implements StudioPanel {
                 state.underlayId(), state.overlayId(), shape, state.rotation(),
                 0, List.of());
         TerrainMesh mesh = meshBuilder.build(preview);
-        draw.addRectFilled(px, py, px + size, py + size, underlayColor, 2.0f);
+        draw.addRectFilled(px, py, px + size, py + size, StudioPalette.draw(underlayColor), 2.0f);
         for (var face : mesh.faces()) {
             int color = face.material() == 1 ? overlayColor : underlayColor;
             var a = mesh.vertices().get(face.a());
@@ -395,14 +393,14 @@ public final class TilePainterPalette implements StudioPanel {
             draw.addTriangleFilled(
                     px(px, size, a.x()), py(py, size, a.y()),
                     px(px, size, b.x()), py(py, size, b.y()),
-                    px(px, size, cc.x()), py(py, size, cc.y()), color);
+                    px(px, size, cc.x()), py(py, size, cc.y()), StudioPalette.draw(color));
         }
         draw.addRect(px, py, px + size, py + size,
                 StudioPalette.draw(StudioPalette.BORDER_STRONG), 2.0f);
 
         String caption = shape + " · " + SHAPE_NAMES[shape];
-        var text = ImGui.calcTextSize(caption);
-        draw.addText(x + Math.max(5.0f, (width - text.x) * 0.5f), y + 63.0f,
+        float captionSize = 12.0f;
+        draw.addText(StudioFonts.ui(), captionSize, x + 6.0f, y + 64.0f,
                 StudioPalette.draw(StudioPalette.TEXT), caption);
     }
 
