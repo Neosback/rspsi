@@ -65,7 +65,7 @@ The project additionally declares Netty explicitly because OpenRune definition e
 
 The `tools` dependency currently excludes `me.filby:clientscript-compiler` because the previously referenced optional compiler dependency chain was not needed for the writable-cache adapter. Revisit that exclusion only when Studio actually implements CS2/source compilation.
 
-Studio also retains the legacy external Displee cache library for compatibility paths. OpenRune itself publishes its own `dev.or2:displee` fork, so long-term duplication should be evaluated deliberately rather than allowed to grow accidentally.
+Studio retains the legacy external Displee cache library **only** for old/custom RSPSi compatibility paths. It is not a modern OSRS backend or output path. Modern OSRS uses OpenRune FileStore for reads, definitions, writable standalone output, reference-cache acquisition, and OpenRune project/cache integration. OpenRune also publishes `dev.or2:displee`, but Studio should not add that artifact unless a concrete legacy-compatibility migration requires it.
 
 ---
 
@@ -86,7 +86,7 @@ The following artifact directories are currently present in `OpenRune/hosting`.
 | `dev.or2:filestore` | 3.0.3 | **high**; shared FileStore abstraction |
 | `dev.or2:osrs-fs` | 3.0.3 | **high**; OSRS FileStore implementation |
 | `dev.or2:tools` | 3.0.3 | **high**; acquisition, packing, building, writable cache, source tooling |
-| `dev.or2:displee` | 3.0.3 | medium; OpenRune fork/compatibility cache library |
+| `dev.or2:displee` | 3.0.3 | legacy-only; do not add as a modern OSRS backend |
 | `dev.or2:r718` | 3.0.3 | out of current OSRS scope |
 | `dev.or2:r718-fs` | 3.0.3 | out of current OSRS scope |
 | `dev.or2:rs3` | 3.0.3 | out of current OSRS scope |
