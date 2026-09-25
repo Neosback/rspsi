@@ -1,6 +1,6 @@
 package com.rspsi.studio.ui.hud;
 
-import com.rspsi.studio.theme.StudioDrawColors;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.editor.model.FloorId;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.brush.BrushAwareTool;
@@ -128,10 +128,14 @@ public final class BrushSettingsHud implements StudioPlugin {
         int bgColor = (alphaByte << 24) | 0x0E1015;
         int borderColor = (alphaByte << 24) | 0x272C38;
 
-        ImGui.pushStyleColor(ImGuiCol.WindowBg, bgColor);
-        ImGui.pushStyleColor(ImGuiCol.Border, borderColor);
-        ImGui.pushStyleColor(ImGuiCol.TitleBg, (alphaByte << 24) | 0x14161D);
-        ImGui.pushStyleColor(ImGuiCol.TitleBgActive, (alphaByte << 24) | 0x6366F1);
+        ImGui.pushStyleColor(ImGuiCol.WindowBg,
+                (alphaByte << 24) | (StudioPalette.CHROME_BG & 0x00FFFFFF));
+        ImGui.pushStyleColor(ImGuiCol.Border,
+                (alphaByte << 24) | (StudioPalette.BORDER & 0x00FFFFFF));
+        ImGui.pushStyleColor(ImGuiCol.TitleBg,
+                (alphaByte << 24) | (StudioPalette.CHROME_BG & 0x00FFFFFF));
+        ImGui.pushStyleColor(ImGuiCol.TitleBgActive,
+                (alphaByte << 24) | (StudioPalette.ACCENT_ACTIVE & 0x00FFFFFF));
         ImGui.pushStyleVar(ImGuiStyleVar.WindowRounding, 10.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 10.0f, 8.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 6.0f, 6.0f);
@@ -140,7 +144,7 @@ public final class BrushSettingsHud implements StudioPlugin {
 
         String windowTitle = minimized
                 ? "Brush##hud_min"
-                : StudioIcons.BRUSH + "  Brush Settings##hud_main";
+                : "Brush Settings##hud_main";
 
         try {
             if (ImGui.begin(windowTitle, flags)) {
@@ -228,7 +232,7 @@ public final class BrushSettingsHud implements StudioPlugin {
         String shapeName = resolveActiveBrushName(context, brushTool, brushes);
 
         ImGui.alignTextToFramePadding();
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.BRUSH + " " + shapeName + " R:" + radius);
+        ImGui.textColored(StudioPalette.ACCENT, shapeName + "  R:" + radius);
 
         ImGui.sameLine(0.0f, 6.0f);
         if (ImGui.button(StudioIcons.REMOVE + "##min-dec", 20.0f, 20.0f)) {
@@ -299,9 +303,9 @@ public final class BrushSettingsHud implements StudioPlugin {
 
         ImGui.sameLine(0.0f, 10.0f);
         if (pinned) {
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF38BDF8));
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.ACCENT);
         } else {
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF64748B));
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_DISABLED);
         }
         if (ImGui.smallButton(StudioIcons.PIN + "##pin-btn")) {
             pinned = !pinned;
@@ -358,9 +362,9 @@ public final class BrushSettingsHud implements StudioPlugin {
                                    String activeShapeId, String tooltip) {
         boolean active = brushId.equals(activeShapeId);
         if (active) {
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF0284C7));
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF0369A1));
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF075985));
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
         }
         if (ImGui.button(label + "##shp-" + brushId, 54.0f, 22.0f)) {
             applyBrush(context, brushTool, brushes, brushId);
@@ -543,8 +547,9 @@ public final class BrushSettingsHud implements StudioPlugin {
         float sx = ImGui.getCursorScreenPosX();
         float sy = ImGui.getCursorScreenPosY();
         ImDrawList draw = ImGui.getWindowDrawList();
-        draw.addRectFilled(sx, sy, sx + 22.0f, sy + 22.0f, color, 4.0f);
-        draw.addRect(sx, sy, sx + 22.0f, sy + 22.0f, 0xFF94A3B8, 4.0f, 0, 1.0f);
+        draw.addRectFilled(sx, sy, sx + 22.0f, sy + 22.0f, StudioPalette.draw(color), 4.0f);
+        draw.addRect(sx, sy, sx + 22.0f, sy + 22.0f,
+                StudioPalette.draw(StudioPalette.TEXT_MUTED), 4.0f, 0, 1.0f);
         if (ImGui.invisibleButton("##swatch-" + popupId, 22.0f, 22.0f)) {
             ImGui.openPopup(popupId);
         }
@@ -565,8 +570,9 @@ public final class BrushSettingsHud implements StudioPlugin {
             int color = TilePainterPalette.floorColor(cache, i, underlay, underlay ? 0xFF2A2A2A : 0xFF4A4A4A);
             float sx = ImGui.getCursorScreenPosX();
             float sy = ImGui.getCursorScreenPosY();
-            draw.addRectFilled(sx, sy, sx + size, sy + size, color, 2.0f);
-            draw.addRect(sx, sy, sx + size, sy + size, 0xFF334155, 2.0f, 0, 1.0f);
+            draw.addRectFilled(sx, sy, sx + size, sy + size, StudioPalette.draw(color), 2.0f);
+            draw.addRect(sx, sy, sx + size, sy + size,
+                    StudioPalette.draw(StudioPalette.BORDER_STRONG), 2.0f, 0, 1.0f);
 
             if (ImGui.invisibleButton("pop-sw-" + (underlay ? "u-" : "o-") + i, size, size)) {
                 if (underlay) {
@@ -703,22 +709,22 @@ public final class BrushSettingsHud implements StudioPlugin {
 
         // Row 2: Node counter & Build / Clear actions
         ImGui.alignTextToFramePadding();
-        ImGui.textColored(nodeCount >= 2 ? 0xFF34D399 : 0xFF94A3B8, "Nodes: " + nodeCount);
+        ImGui.textColored(nodeCount >= 2 ? StudioPalette.SUCCESS : StudioPalette.TEXT_MUTED, "Nodes: " + nodeCount);
 
         ImGui.sameLine(0.0f, 10.0f);
         boolean canBuild = (pathTool != null && nodeCount >= 2);
         if (!canBuild) ImGui.pushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
-        ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF16A34A));
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF15803D));
+        ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.SUCCESS);
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.SUCCESS);
 
-        if (ImGui.button(StudioIcons.CHECK + " Build [Enter]##hud-build-path", 96.0f, 22.0f)) {
+        if (ImGui.button("Build [Enter]##hud-build-path", 96.0f, 22.0f)) {
             if (canBuild) pathTool.buildPath();
         }
         ImGui.popStyleColor(2);
         if (!canBuild) ImGui.popStyleVar();
 
         ImGui.sameLine(0.0f, 4.0f);
-        if (ImGui.button(StudioIcons.CLOSE + " Clear##hud-clr-path", 64.0f, 22.0f)) {
+        if (ImGui.button("Clear##hud-clr-path", 64.0f, 22.0f)) {
             if (pathTool != null) pathTool.clear();
         }
     }
