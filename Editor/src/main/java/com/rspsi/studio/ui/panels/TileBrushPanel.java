@@ -549,7 +549,7 @@ public final class TileBrushPanel implements StudioPanel {
         }
         draw.addRect(x, y, x + size, y + size,
                 StudioPalette.draw(StudioPalette.BORDER_STRONG), 2.0f, 0, 1.5f);
-        draw.addText(StudioFonts.icon(), 18.0f,
+        draw.addText(StudioFonts.icon(), 18,
                 x + size - 20.0f, y + 4.0f,
                 StudioPalette.draw(StudioPalette.TEXT), StudioIcons.EXPLORE);
         ImGui.dummy(size, size);
