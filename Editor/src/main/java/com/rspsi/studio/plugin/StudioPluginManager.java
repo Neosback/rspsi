@@ -91,7 +91,7 @@ public final class StudioPluginManager {
     }
 
     /**
-     * Registers internal Studio projections only. Third-party discovery lives
+     * Registers internal Studio projections only. Installed-extension discovery lives
      * exclusively on the neutral EditorPlugin boundary in Client.
      */
     public void discoverPlugins() {
