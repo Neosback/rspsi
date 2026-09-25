@@ -1,811 +1,315 @@
-# OpenRune Studio UI Workspace Contract
+# UI Workspace Contract
 
-_This document defines the layout contract for the native OpenRune Studio map/content editor **after a project is open**. The pre-project launcher and project-loading lifecycle are defined by `PROJECT_LAUNCHER_AND_DASHBOARD.md`. It is intentionally stricter than a collection of movable panels._
+> **Status:** authoritative post-project workspace layout.
 
-## 1. Name and scope
+## 1. Product model
 
-OpenRune Studio will use the project term **Contextual Multi-Rail Workspace** for its main editor shell.
+The main editor shell is a **Contextual Multi-Rail Workspace**.
 
-That is an OpenRune architectural name, not a claim that the industry has one universally standardized term for this exact arrangement. The individual patterns are established and recognizable: tool or mode rails, shelves or palettes, drawers, floating palettes/HUDs, and inspectors.
+The goal is predictable placement with progressive disclosure. The user should not have to hunt through arbitrary floating windows to find the controls for the active operation.
 
-The goal is to optimize three things at the same time:
+## 2. Canonical layout
 
-1. Keep the 3D viewport as large and unobstructed as possible.
-2. Reduce pointer travel during repetitive world-authoring tasks.
-3. Surface only the controls that are relevant to the current tool, selection, and editing context.
+    +---------------------------------------------------------------+
+    | project tabs / workspace tabs                                |
+    +---------------------------------------------------------------+
+    | Brush Shelf |              Viewport             | Inspector   |
+    | when needed |                                   | right rail  |
+    |             |          movable HUD layer         |             |
+    |             |                                   |             |
+    +---------------------------------------------------------------+
+    |                 Context Drawer                               |
+    +---------------------------------------------------------------+
+    |                 Primary Tool Rail                            |
+    +---------------------------------------------------------------+
 
-The shell must remain predictable. Plugins contribute into known slots instead of inventing new chrome around the viewport.
+The viewport should regain space when a contextual surface is not needed.
 
-## 2. Workspace hierarchy
+## 3. Primary Tool Rail
 
-The Project Launcher and project-loading screen are outside this hierarchy.
-
-Once a project reaches `PROJECT_OPEN`, **Content Studio** is the permanent home workspace and the editing workspaces use the shell below.
-
-The canonical editing layout is:
-
-    +--------------------------------------------------------------------------------+
-    | Top Status Strip: coordinates | plane | project | build/dirty | diagnostics   |
-    +--------------------------------------------------------------------------------+
-    | Left Contextual     |                    3D VIEWPORT             | Right Rail   |
-    | Brush/Stamp Shelf   |                                           | + Inspector  |
-    |                     |       Floating Quick Palette / HUDs        |              |
-    | progressive         |       Hover / pinned information           | selection    |
-    | disclosure          |                                           | editing      |
-    +---------------------+---------------------------------------------+--------------+
-    |                        Active Bottom Context Drawer                              |
-    +--------------------------------------------------------------------------------+
-    |                         Persistent Bottom Tool Rail                              |
-    +--------------------------------------------------------------------------------+
-
-The hierarchy is:
-
-    Primary operation
-        -> Bottom Tool Rail
-
-    Tool-specific content and libraries
-        -> Bottom Context Drawer
-
-    Brush/stamp execution dynamics
-        -> Left Contextual Brush Shelf
-
-    Fast target/material/object switching
-        -> Floating Quick Palette
-
-    Exact selected-item inspection and direct editing
-        -> Right Inspector
-
-    Persistent or glanceable information
-        -> HUD layer
-
-## 3. Core surface definitions
-
-### 3.1 Bottom Tool Rail
-
-Canonical name: **Primary Tool Rail**
-
-Role:
-
-- persistent horizontal rail
-- selects the active editing tool or high-level authoring operation
-- remains visible unless the entire editor chrome is intentionally hidden
-- owns activation, not deep configuration
+The bottom horizontal rail chooses the active editing mode.
 
 Examples:
 
-- Select / Inspect
-- Tile Painter
-- Height Sculpt
-- Path / Linear Feature
-- Object Placement
-- Flags / Collision
-- Building / Fragment
-- Biome / Generation
+- select;
+- multi-select;
+- terrain sculpt;
+- tile paint;
+- object placement;
+- path/road tools;
+- future structure/procedural tools.
 
 Rules:
 
-- the rail is not a generic plugin button dumping ground
-- each visible item activates an editor tool or authoring mode
-- tools may be grouped by category, but activation remains singular
-- only one modal world-editing tool is active at a time
-- tool buttons must have icon, tooltip, shortcut when applicable, and active state
-- deep asset catalogs, sliders, and inspectors do not belong on this rail
+- one active primary editing mode;
+- icon + tooltip;
+- shortcut where useful;
+- visible active state;
+- no unrelated settings in the rail itself.
 
-### 3.2 Bottom Context Drawer
+The rail is navigation between tool modes, not a dumping ground for commands.
 
-Canonical name: **Context Drawer**
+## 4. Context Drawer
 
-Role:
-
-- a single expandable panel directly above the Primary Tool Rail
-- hosts the active tool's broad content UI
-- one drawer is visible at a time
-- collapsible without deactivating the tool
+The drawer directly above the Primary Tool Rail contains workflow-specific controls for the active tool.
 
 Examples:
 
-Tile Painter:
-- underlay palette
-- overlay palette
-- tile shape palette
-- rotation
-- tile flags
-- conditional replacement rules
-
-Object Placement:
-- searchable object catalog
-- category filters
-- cached thumbnails
-- selected object variants
-
-Height Sculpt:
-- flatten target
-- ramp controls
-- noise presets
-- height operation mode
-
-Biome / WFC:
-- generation preset
-- seed
-- rule set
-- diagnostics
-- preview/commit controls
+- tile material/palette;
+- selected object/catalog;
+- path parameters;
+- replacement query;
+- generator preview controls.
 
 Rules:
 
-- a tool should not open multiple competing bottom panels
-- drawer content is contextual to the active tool
-- switching tools swaps drawer ownership atomically
-- drawer open/collapsed state is remembered per tool
-- the drawer must not duplicate brush size, brush shape, falloff, spacing, or stamp dynamics when those belong on the Left Brush Shelf
-- large asset libraries belong here, not in the floating quick palette
+- only active-tool content is shown;
+- a tool should not open multiple competing bottom panels;
+- shared brush mechanics do not belong here when Brush Shelf already owns them;
+- the drawer may collapse when a tool needs no extended controls.
 
-### 3.3 Left Brush Rail + Brush Settings
+## 5. Brush Shelf
 
-Canonical names:
+The left Brush Shelf exists only when the active operation declares shared brush capability.
 
-- **Brush Rail** for the thin contextual rail
-- **Brush Settings** for the narrow dockable/floating controls surface
+It owns shared mechanics such as:
 
-Role:
+- shape;
+- radius/size;
+- falloff;
+- strength;
+- spacing;
+- stamp dynamics where shared.
 
-- both are conditional and appear only when the active tool declares shared brush controls;
-- Brush Settings docks immediately beside the Brush Rail by default;
-- Brush Settings may be detached and moved as a floating window;
-- content/palette choices remain in the tool's Context Drawer.
+If the Path tool currently does not use brush mechanics, selecting Path must not open Brush Settings.
 
-Typical shared controls:
+A tool-specific custom palette stays in its Context Drawer unless it is genuinely a shared brush mechanic.
 
-- brush radius / size
-- footprint shape
-- falloff/hardness where supported
-- strength/spacing/scatter controls when they are genuinely shared brush mechanics
+## 6. Brush Settings docking
 
-Tool-specific controls remain in that tool's Context Drawer.
+Brush Settings may be:
 
-Every tool declares one explicit brush UI mode:
+- docked as a narrow panel beside the Brush Shelf;
+- detached and moved as a floating panel;
+- re-docked;
+- hidden automatically when the active tool has no brush capability.
 
-- `NONE`: no shared brush rail/settings;
-- `SHARED_SETTINGS`: show the shared Brush Rail + Brush Settings;
-- `TOOL_OWNED`: the tool is brush-aware but owns its controls inside its own drawer/panel.
+Detaching must return its docked width to the viewport.
 
-Rules:
+The same settings state backs both docked and floating presentation. Do not maintain duplicate brush settings models.
 
-- never infer brush UI from class names, tool ids, or incidental surface placement;
-- Path/selection tools do not receive Brush Settings unless they explicitly opt in;
-- a plugin cannot force shared brush chrome permanently visible merely because it has settings;
-- if a tool has no shared brush UI, the shell reserves zero width for it;
-- detaching Brush Settings must return that width to the viewport.
+## 7. Viewport Quick Palette
 
-### 3.4 Floating Quick Palette
-
-Canonical name: **Viewport Quick Palette**
-
-Role:
-
-- modeless semi-transparent palette over the viewport
-- minimizes pointer travel for frequently switched targets
-- contains a small active working set, not the full library
-
-Examples in Tile Painter:
-
-- armed underlay
-- armed overlay
-- armed shape
-- recent materials
-- favorite/recent tile materials
-
-Examples in Object Placement:
-
-- active object thumbnail
-- current rotation
-- recent objects
-- favorites / quick slots
-
-Examples in Select / Inspect:
-
-- tile picker
-- object picker
-- selection mode
-- additive/subtractive mode
-
-Rules:
-
-- keep the palette compact
-- 4 to 8 quick slots is the expected scale, not thousands of assets
-- deep search and browsing belongs in the Context Drawer
-- users may move or pin the palette within the viewport
-- inactivity auto-collapse may be supported
-- a plugin can contribute a quick palette only when the content genuinely benefits from near-cursor switching
-- the quick palette may mirror the currently armed value from the drawer, but must not become a second full settings panel
-
-### 3.5 Right Tool Rail and Inspector
-
-Canonical names:
-
-- **Inspector Rail** for the vertical category/tool strip
-- **Inspector Panel** for the expanded details surface
-
-Role:
-
-- selection-driven inspection
-- precise direct editing
-- diagnostics and metadata
-- one primary inspector panel at a time
-
-The Inspector Panel is editable, not read-only.
-
-Typical sections:
-
-Tile:
-- exact world/local coordinate
-- plane
-- corner heights
-- effective/render plane
-- underlay
-- overlay
-- shape
-- rotation
-- flags
-
-Objects:
-- all locs on the selected tile
-- stable scene identity
-- object id/name
-- shape/type
-- rotation
-- footprint
-- animation
-- collision
-- transforms/multiloc state
-- delete/replace/rotate actions
-
-Rendering diagnostics:
-- draw layer
-- texture
-- priority
-- depth bias
-- model bounds
-- contour metadata
-- scene plane/cull level
-
-Rules:
-
-- inspect and edit the selected thing, not the currently armed placement asset
-- selection changes update the inspector immediately
-- tools may contribute inspector sections tied to supported selection types
-- inspectors must not create modal dialogs for ordinary numeric property edits
-- direct edits go through canonical command/change-plan APIs so they remain undoable
-
-### 3.6 HUD Layer
-
-Canonical name: **Viewport HUD Layer**
-
-Role:
-
-- small persistent/glanceable information over the canvas
-- may stay visible even when the related drawer or inspector is closed
-- user-configurable and pinnable where appropriate
+The Viewport Quick Palette is a compact floating picker for values that benefit from near-cursor switching.
 
 Examples:
 
-- coordinate/plane/elevation badge
-- current brush summary
-- active material/object summary
-- generation preview diagnostics
-- hovered tile/object information
-- pinned comparison probes
-- performance counters
+- armed material;
+- object rotation;
+- active plane;
+- small variant choice.
+
+It may mirror the armed value shown in the Context Drawer, but it must not become a second full configuration panel.
+
+## 8. Right Inspector
+
+The right side is for exact understanding and property work.
+
+It owns:
+
+- selection details;
+- tile/object properties;
+- exact numeric edits;
+- map/render settings;
+- validation/diagnostics;
+- content relationships;
+- source/provenance information.
+
+Direct edits route through commands/change plans.
+
+The inspector does not mutate the renderer or cache directly.
+
+## 9. HUD layer
+
+HUDs are compact, glanceable viewport information.
+
+Examples:
+
+- current tile/world coordinate;
+- sampled height;
+- selected object identity;
+- active brush summary;
+- render/plane diagnostics;
+- performance counters;
+- inspection preview.
 
 Rules:
 
-- HUDs are informational first
-- small quick actions are allowed, but a HUD must not become a hidden replacement for a full panel
-- multiple HUDs are managed by one placement/collision system
-- plugins may contribute HUDs independently of drawer visibility
-- users can hide, pin, move, or reset HUDs without disabling the underlying tool/plugin when practical
+- movable and pinnable where useful;
+- opacity/position persisted separately from tool semantics;
+- no full settings form hidden inside a HUD;
+- consume canonical snapshots/services, not repeated world rescans.
 
-## 4. Context state model
+## 10. Inspection HUDs
 
-Workspace visibility must be derived from explicit state, not incidental widget placement.
+Inspection features should be able to choose which facts appear in the viewport.
 
-At minimum:
+Example tile inspection options:
+
+- coordinate;
+- plane;
+- height;
+- underlay/overlay;
+- shape/rotation;
+- flag summary;
+- miniature tile/surface preview.
+
+The same inspection snapshot feeds both the Inspector and HUD presentation.
+
+Do not implement a second tile-inspection query for the HUD.
+
+## 11. Context state model
+
+Workspace visibility must derive from explicit state:
 
     WorkspaceContext
       activeTool
       activeToolCapabilities
       selection
-      hoveredTarget
-      activePlane
-      activeAsset
-      drawerState
-      pinnedHudState
+      activeResource
+      brushState
+      inspectionState
+      viewportState
+      projectCapabilities
 
-A tool exposes capabilities. The shell resolves those capabilities into surfaces.
+Presentation reads this context.
 
-Example conceptual descriptor:
+Do not infer behavior from whether a widget happens to be currently docked.
 
-    ToolUiDescriptor
-      toolId
-      primaryRailEntry
-      drawerContribution
-      brushShelfCapability
-      quickPaletteContribution
-      inspectorContributions
-      hudContributions
-      shortcuts
+## 12. Tool capability model
 
-This should replace ad hoc checks such as "is this plugin currently placed on the left rail?" as a way of inferring tool behavior.
+A built-in tool may declare capabilities such as:
 
-## 5. Tool capability model
+- requires brush shelf;
+- has context drawer;
+- supports viewport quick palette;
+- supports HUD data;
+- accepts object selection;
+- accepts tile selection;
+- owns wheel rotation;
+- provides preview;
+- commits through ChangePlan.
 
-Useful capability flags should include concepts such as:
+The capability describes behavior, not arbitrary coordinates on screen.
 
-- BRUSH_FOOTPRINT
-- BRUSH_FALLOFF
-- BRUSH_STRENGTH
-- STAMP
-- SCATTER
-- ASSET_PALETTE
-- QUICK_PICK
-- TILE_PICK
-- OBJECT_PICK
-- SELECTION_INSPECTION
-- DIRECT_PROPERTY_EDIT
-- PREVIEWABLE_CHANGE_PLAN
+The shell determines presentation.
 
-A capability declares behavior. Surface placement is then derived from behavior plus optional plugin contributions.
+## 13. Icon policy
 
-This keeps the UI strict without preventing plugins from having rich controls.
+Built-in actions should use one consistent icon vocabulary.
 
-## 6. Control ownership rules
+Preferred sources:
 
-Every editor control has one primary home.
+1. host Material icon for standard actions;
+2. bundled PNG resource when a custom visual identity is genuinely needed;
+3. deterministic fallback icon if the asset is missing.
 
-### Brush dynamics
+PNG resources are loaded/cached by the host UI layer. Domain/tool code does not own native texture IDs.
 
-Primary home: Brush Shelf
+The same semantic action should use the same icon throughout Studio.
 
-Examples:
-- size
-- shape
-- falloff
-- strength
-- spacing
-- jitter
-- scatter density
+## 14. Input ownership
 
-### Content selection
-
-Primary home: Context Drawer
-
-Examples:
-- underlay/overlay catalog
-- tile shapes and presets
-- object catalog
-- biome presets
-- WFC rule sets
-
-### Fast armed-state switching
-
-Primary home: Viewport Quick Palette
-
-Examples:
-- recent materials
-- recent objects
-- active rotation
-- favorite presets
-
-### Exact selected-state editing
-
-Primary home: Inspector Panel
-
-Examples:
-- exact height values
-- object id
-- object rotation
-- flags
-- render metadata
-
-### Glanceable state
-
-Primary home: HUD Layer
-
-Examples:
-- coordinates
-- current brush radius
-- current material
-- selection summary
-- warnings
-
-Controls may be mirrored only when the second copy is intentionally a compact quick control or read-only summary. Two full editors for the same property are not allowed.
-
-## 7. Context matrix
-
-| Active tool | Brush Shelf | Context Drawer | Inspector | Quick Palette | HUD |
-|---|---|---|---|---|---|
-| Tile Painter | Size, footprint, falloff, strength, noise/scatter dynamics | Underlays, overlays, shapes, rotation, flags, conditional rules | Exact selected tile properties | Armed/recent tile materials | Brush/material summary |
-| Height Sculpt | Size, falloff, strength | Raise/lower/flatten/ramp/noise presets | Exact vertex/corner heights, slope | Target height quick control | Elevation/slope summary |
-| Object Placement | Hidden for single placement, visible for scatter/stamp mode | Object search/catalog/categories/thumbnails | Selected placed object properties | Armed object, rotation, recent objects | Active object summary |
-| Flags / Collision | Stamp size/shape if stamping | Flag/collision presets | Exact bitmask and collision diagnostics | Recent flag presets | Hovered flag badge |
-| Select / Inspect | Hidden | Selection groups/history/actions when useful | Full tile/object inspector | Tile/object picker modes | Hover/pinned inspection HUD |
-| Path / Stream / Fence | Width/brush profile when applicable | Material, linear-feature type, rule presets | Selected feature/control-point details | Active path/fence material | Width/grade/rule summary |
-| Building / Fragment | Stamp footprint modifiers when applicable | Fragment library, transform, paste policy | Selected fragment/placed content details | Active fragment and rotation | Paste/conflict summary |
-| Biome / WFC | Brush mask if painting generation area | Generator/rules/seed/theme controls | Generated-cell diagnostics | Active preset | Constraint/conflict summary |
-
-## 8. Pointer-travel and input rules
-
-The layout should minimize repeated edge-to-center movement.
-
-Target interactions:
-
-- Alt + left click on terrain samples tile material into the active tile workflow.
-- Alt + right click on an object samples its object id/type/rotation into the active object workflow.
-- R rotates the active placement or fragment where unambiguous.
-- Mouse wheel may rotate active placement when the current tool explicitly owns that gesture.
-- Holding Space may later expose a temporary cursor-local quick palette, but this is optional and should not precede the core workspace contract.
-- Escape cancels current transient interaction before changing tool state.
-- common shortcuts remain stable across tools where their meaning is shared.
-
-Keyboard/mouse gestures must route through the active tool and must not bypass undoable command/change-plan boundaries.
-
-## 9. Screen-space rules
-
-Core rails are structural, not freely dockable windows.
+Input routes through the active tool/controller.
 
 Rules:
 
-- Primary Tool Rail is anchored to the bottom.
-- Context Drawer is anchored immediately above it.
-- Brush Shelf is anchored to the viewport's left edge when active.
-- Inspector Rail/Panel is anchored right.
-- the viewport owns the central remaining space.
-- HUDs and the Quick Palette are viewport overlays.
-- plugin content cannot create a second competing core rail.
-- user-resizable widths/heights are allowed within defined limits.
-- core layout state is recoverable with one "Reset Workspace" action.
-- free multi-viewport tear-off may be supported for non-core panels later, but core rails must remain recoverable and predictable.
+- viewport drag/orbit/pan gestures are centralized;
+- active tool receives edit gestures only when the viewport owns input;
+- text/numeric input prevents viewport hotkeys from leaking through;
+- Escape cancels transient interaction before changing tool state;
+- mouse wheel behavior is explicit per active tool;
+- edits still pass through command/change-plan boundaries.
 
-Recommended layout tokens should live in one theme/layout configuration rather than magic numbers spread across plugins:
+## 15. Panel persistence
 
-- rail thickness
-- brush shelf width
-- inspector width
-- drawer default/min/max height
-- HUD margin
-- spacing
-- animation duration
+Persist presentation state separately from domain state.
 
-## 10. Visual system, overflow, and auxiliary-window rules
+Safe persisted UI data includes:
 
-OpenRune Content Studio uses one host-owned visual system. Plugins do not invent a second theme.
+- panel widths;
+- collapsed/expanded state;
+- floating Brush Settings position;
+- HUD position/opacity;
+- active workspace tab;
+- last selected tool where appropriate.
 
-### Color semantics
+Corrupt or obsolete layout state must fall back to a known default.
 
-- the primary interaction/selection color is Studio blue (`StudioPalette.ACCENT`);
-- active tabs, selected entities, check marks, slider grabs, selection affordances and primary actions use that same blue family;
-- green is success, amber is warning/attention, red is error/destructive;
-- purple/cyan/red must not be used as arbitrary per-panel decoration;
-- inactive controls retain readable neutral/white text instead of fading into the background;
-- ImDrawList code converts ARGB theme tokens through `StudioPalette.draw(...)`; normal ImGui style/text APIs consume the ARGB token directly.
+Never make project data unrecoverable because a UI layout file failed.
 
-### Typography
+## 16. Progressive disclosure
 
-- normal UI text uses the shared Studio UI face;
-- launch/product titles use the shared display face;
-- section headings use the shared heading face;
-- monospace is reserved for code, identifiers, raw values and data where fixed-width alignment adds information;
-- inspection panels use structured label/value rows instead of console-style walls of monospace text.
-
-### Layering
-
-- application/background, chrome, panel body, elevated panel/card and field/control surfaces use distinct shared tokens;
-- toolbar/chrome must remain visually separable from its corresponding content panel without high-contrast novelty borders;
-- scrollbars must remain visible against panel backgrounds;
-- auxiliary windows dim and input-block the owning workspace behind them so they read as a separate interaction layer;
-- ordinary auxiliary windows do not collapse/minimize into title bars.
-
-### Right Inspector overflow
-
-Right-side panels are **vertical-scroll-first**.
-
-- the shell targets an approximately 390 px inspector on a normal desktop window, with panel-specific width hints and a viewport-safe clamp;
-- horizontal scrolling is disabled by default;
-- a panel must reflow controls, wrap prose, or use responsive rows/tables before requesting horizontal scrolling;
-- horizontal scrolling is opt-in only for data whose horizontal axis carries real meaning, such as a timeline or wide matrix;
-- third-party panel contributions inherit the same default;
-- a panel may request more right-side width through the host contract, but it cannot force the viewport below the shell minimum.
-
-### Tabs and icons
-
-- workspace tabs do not expose a permanent close X;
-- right-clicking a closable workspace tab exposes **Close**;
-- text glyphs such as `>`, `<`, `[x]`, or ASCII arrows are not substitutes for controls/icons;
-- use Material icons for true icon-only actions, and always provide a tooltip;
-- do not decorate every heading, HUD value or button with an icon merely because an icon exists;
-- HUD content is information-first; icons are reserved for controls or meaning that is materially faster to recognize visually.
-
-#### Plugin icon sources
-
-Plugins may use two icon sources:
-
-1. **Material icon by semantic name** for normal tools/actions. This is preferred because the host owns size, color, active state and DPI behavior.
-2. **Bundled PNG resource** for custom plugin identity or artwork that does not exist in the Material set.
-
-PNG icons are loaded by the Studio host from plugin-owned bytes/resources and cached as host-owned textures. Public plugins never receive or manage OpenGL texture ids. A PNG must degrade to a Material/default icon if loading fails.
-
-The same semantic action should use the same Material icon throughout Studio. Plugin authors should not choose different icons merely to make a built-in action look branded.
-
-
-## 11. Progressive disclosure rules
-
-A surface should appear only when it answers a current user question.
+A surface appears only when it answers a current user question.
 
 Examples:
 
-"What operation am I doing?"
-- Primary Tool Rail
+- Brush Shelf appears because the current tool uses a brush.
+- Context Drawer appears because the tool has context controls.
+- selection inspector content appears because something is selected.
+- diagnostic HUD appears because the user enabled that diagnostic.
+- project/build controls appear only when the project supports them.
 
-"What content am I applying?"
-- Context Drawer
+This keeps the viewport large and the interaction model learnable.
 
-"How am I applying it?"
-- Brush Shelf
+## 17. Performance
 
-"What do I need to switch quickly?"
-- Quick Palette
+Dear ImGui rendering must not become a cache-processing loop.
 
-"What exactly did I select?"
-- Inspector
+Do not perform these synchronously every frame from a panel:
 
-"What do I want to keep seeing while I work?"
-- HUD
+- broad cache decoding;
+- recursive project/source scans;
+- semantic graph rebuilds;
+- whole-world selection scans;
+- texture decoding;
+- expensive source parsing.
 
-This decision model is the baseline for reviewing every new panel or plugin contribution.
+Use generation-aware snapshots and background/domain work already owned by the appropriate service.
 
-## 12. Plugin UI contract
+## 18. Accessibility and scaling
 
-The full public extension model is defined in `PLUGIN_EXTENSION_SDK.md`; system-wide API layering and stability are defined in `STUDIO_API_SYSTEM.md`. This section remains authoritative for where contributed UI belongs in the workspace.
+- controls must remain usable with high DPI;
+- text fields retain keyboard focus correctly;
+- icons require tooltips;
+- active states cannot rely on color alone;
+- inspectors reflow before forcing horizontal scroll;
+- contrast must remain readable over both bright and dark scenes.
 
-Public plugins should contribute declaratively into host-owned surfaces.
+## 19. Migration direction
 
-A plugin may contribute:
+Older classes may still contain placement logic that predates this contract.
 
-- tool rail activation entry
-- context drawer content associated with a tool
-- brush/stamp shelf control group associated with eligible capabilities
-- viewport quick palette content
-- selection-aware inspector section
-- HUD contribution
-- scene overlay
-- menu/shortcut/settings entries
+When touching them:
 
-A plugin may not:
+- move behavior into explicit tool capabilities/state;
+- keep one brush state;
+- remove arbitrary placement inference;
+- avoid new permanent panels;
+- migrate inspection data to shared snapshots;
+- keep native rendering details out of tool/domain code.
 
-- create its own permanent competing bottom/left/right rail
-- bypass the one-active-drawer rule
-- infer editing capability from arbitrary surface placement
-- require direct Dear ImGui access for ordinary public-plugin UI
-- mutate world state directly from a UI callback outside canonical command/change-plan services
+## 20. Acceptance
 
-The eventual neutral rich UI component model should cover:
+A workspace change is complete when:
 
-- labels
-- buttons
-- toggles
-- numeric fields
-- text fields
-- combo/select
-- asset pickers
-- groups/sections
-- rows/columns
-- lists/tables
-- progress
-- compact previews
-
-Studio projects these neutral components to ImGui.
-
-Direct ImGui/GLFW/OpenGL UI remains an internal Studio implementation boundary.
-
-## 13. State memory
-
-Context changes must not reset authoring state unexpectedly.
-
-Remember per tool:
-
-- drawer collapsed/open state
-- last selected asset
-- brush radius
-- brush shape
-- falloff
-- strength
-- scatter/noise parameters
-- quick palette contents
-- tool-specific presets
-- inspector section expansion where appropriate
-
-Remember globally:
-
-- rail/panel sizes
-- HUD positions
-- HUD opacity
-- HUD visibility
-- pinned HUD state
-- user visibility preferences
-- workspace reset baseline
-
-A plugin unload must release its contributions without corrupting the remaining layout.
-
-## 14. Object and tile picking relationship
-
-Pickers and inspectors are different concerns.
-
-Picker tools answer:
-
-- what should the active operation target?
-- tile, object, vertex, area, path point, or fragment?
-
-Inspector surfaces answer:
-
-- what is currently selected?
-- what are its exact properties?
-
-The floating picker palette may change targeting mode without replacing the Inspector Panel.
-
-Selection should carry stable semantic identity wherever possible so scene rebuilds do not invalidate the inspector unnecessarily.
-
-## 15. Current migration targets
-
-The existing code is useful but must converge on this contract.
-
-### LeftBrushRail
-
-Current:
-- narrow rail whose principal action opens BrushSettingsHud
-
-Target:
-- actual contextual Brush Shelf
-- common brush controls inline
-- plugin-specific brush/stamp groups appended declaratively
-- zero-width when inactive unless user-pinned
-
-### BrushSettingsHud
-
-Current:
-- primary brush settings UI
-
-Target:
-- optional compact HUD/quick summary and perhaps small quick adjustments
-- not the sole owner of brush configuration
-
-### TilePainterPalette
-
-Target home:
-- Context Drawer
-
-### ObjectViewerPanel
-
-Target split:
-- deep object catalog/browser in Context Drawer while Object Placement is active
-- exact selected placed-object editing in Inspector Panel
-- quick armed object/rotation in Viewport Quick Palette
-
-### Inspection HUDs
-
-Target:
-- inspectors expose an in-panel **HUD** section for visibility, field selection, anchor/reset and opacity;
-- the same inspection snapshot drives both the detailed inspector and its HUD;
-- HUDs are movable by default and persist their user offset/opacity independently of plugin state;
-- tile inspection may expose preview, coordinate, plane, height, shape and rotation fields;
-- object inspection may expose object name/id, tile/plane, shape/type, rotation and selected definition/runtime facts;
-- public plugins use the frontend-neutral `PluginApi.hud(...)` path rather than ImGui.
-
-### StudioToolPlugin / UiSurfaceContribution
-
-Target:
-- introduce the neutral map-tool contribution / `ToolUiDescriptor` model defined in `PLUGIN_EXTENSION_SDK.md`;
-- move brush ownership, tool capabilities, context-drawer content, quick palettes, inspector sections, HUDs, icons, shortcuts and ordering into that neutral descriptor;
-- make native Studio project those declarations into the existing rails/drawer/inspector/HUD system;
-- retain `StudioToolPlugin` only as an internal compatibility adapter while first-party tools migrate;
-- do not expose Dear ImGui as the ordinary third-party extension boundary.
-
-## 16. UI correctness acceptance gates
-
-A UI feature is not complete because the widgets render.
-
-The workspace must verify:
-
-1. one modal world tool is active
-2. only one Context Drawer owns the bottom content surface
-3. Brush Shelf appears only for declared brush/stamp capabilities
-4. changing tools preserves relevant prior state
-5. closing a drawer does not deactivate the tool
-6. HUD visibility is independent of drawer visibility
-7. inspectors update from semantic selection
-8. plugin unload removes its contributions cleanly
-9. no hidden duplicate control owns a conflicting value
-10. workspace reset restores a known usable layout
-11. the central viewport never receives negative/zero usable dimensions from panel combinations
-12. core editing remains usable at supported minimum window size
-
-These rules should be unit-tested at the state/layout resolver level even though pixel-perfect ImGui rendering still needs live verification.
-
-## 17. Accessibility, focus, scaling, and performance
-
-The workspace must remain usable as the tool set and asset catalogs grow.
-
-### Accessibility and discoverability
-
-- every icon-only control requires a tooltip and stable accessible label
-- color cannot be the only indicator of active/error/warning state
-- keyboard focus order follows the visible workspace hierarchy
-- core actions expose shortcuts when practical
-- focus must not leak into the viewport while a text/numeric field is actively capturing input
-- Escape should cancel transient tool interaction before closing persistent workspace surfaces
-- destructive actions require clear intent and remain undoable where technically possible
-
-### DPI and sizing
-
-- rails, hit targets, fonts, thumbnails, and spacing derive from shared layout/theme tokens
-- high-DPI scaling must not require per-plugin pixel constants
-- the workspace defines a supported minimum window size
-- when space is constrained, contextual surfaces collapse before the central viewport becomes unusable
-- user-resized rail/drawer dimensions are clamped to sane min/max values
-
-### Transparency and readability
-
-- translucency is appropriate for viewport HUDs and the Viewport Quick Palette
-- core drawers, shelves, and inspectors must retain sufficient contrast for prolonged editing
-- text/background contrast must remain readable over bright and dark OSRS scenes
-- pinned HUDs may expose opacity controls but cannot become effectively invisible while still intercepting input
-
-### UI/render-loop performance
-
-Dear ImGui rendering must not become an implicit cache-processing loop.
-
-Rules:
-
-- large object/material catalogs use virtualization
-- search indexes are cached/incremental rather than rebuilt every frame
-- model/thumbnail generation is asynchronous or amortized and never blocks the frame loop on thousands of assets
-- cache decoding, world-corpus analysis, and expensive semantic queries do not run synchronously from ordinary render callbacks
-- unavailable thumbnails show stable placeholders rather than shifting layout
-- plugin UI contributions receive the same performance expectations as first-party UI
-- HUDs and inspectors consume canonical snapshots/services instead of repeatedly rescanning the world independently
-
-The target is a stable interactive viewport even while deep libraries contain tens of thousands of definitions.
-
-## 18. Workspace persistence and schema evolution
-
-Workspace state is persistent user data and needs a migration strategy.
-
-Persist using stable semantic ids, not array positions:
-
-- tool id
-- surface contribution id
-- inspector section id
-- HUD id
-- quick-palette slot id
-- plugin id
-
-Workspace layout/settings storage should carry a schema version.
-
-When surfaces are renamed or migrated, provide an explicit migration where reasonable. Corrupt or obsolete workspace state must fall back to a known default layout rather than preventing Studio startup.
-
-Plugin-owned persisted UI state is removed or quarantined cleanly when a plugin disappears, without corrupting host workspace state.
-
-## 19. Guiding principle
-
-The workspace is contextual, not modal-window-driven.
-
-The editor should feel like one continuous canvas with tools around it, not a collection of dialogs.
-
-The design rule is:
-
-    operation below
-    execution dynamics left
-    fast target switching over the canvas
-    exact details right
-    persistent information in HUDs
-
-That rule provides plugins more room, reduces pointer travel, preserves screen space, and gives OpenRune Studio a consistent visual and behavioral language as the tool set grows.
+1. active tool is unambiguous;
+2. irrelevant surfaces disappear;
+3. brush settings appear only for brush-capable tools;
+4. detached/docked Brush Settings share one state;
+5. Context Drawer never duplicates shared brush mechanics;
+6. inspectors edit through canonical commands;
+7. HUD and inspector agree on semantic facts;
+8. layout survives restart;
+9. corrupt layout can reset safely;
+10. UI work does not add expensive per-frame domain processing.
