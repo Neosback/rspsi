@@ -42,7 +42,7 @@ class ProjectLoadStatus(
         if (this === other) return true
         if (other !is ProjectLoadStatus) return false
         return phaseValue == other.phaseValue &&
-            progressValue == other.progressValue &&
+            java.lang.Double.compare(progressValue, other.progressValue) == 0 &&
             messageValue == other.messageValue &&
             detailValue == other.detailValue &&
             failureValue == other.failureValue
