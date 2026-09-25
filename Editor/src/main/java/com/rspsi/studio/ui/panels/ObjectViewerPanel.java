@@ -22,6 +22,7 @@ import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.studio.theme.SettingRows;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioWidgets;
 import com.rspsi.studio.ui.ObjectPreviewRenderer;
 import com.rspsi.studio.ui.ObjectPropertyTree;
 import com.rspsi.studio.ui.StudioPanel;
@@ -32,9 +33,12 @@ import imgui.ImGuiListClipper;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiStyleVar;
+import imgui.flag.ImGuiWindowFlags;
+import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import imgui.type.ImString;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -53,6 +57,7 @@ public final class ObjectViewerPanel implements StudioPanel {
     public static final String ID = "studio.object-viewer";
 
     private int activeSubTab = 0; // 0: Object viewer, 1: Object properties
+    private boolean objectSearchOpen;
     private final ImInt typeFilter = new ImInt(0);
     private final ImString searchFilter = new ImString(64);
     private final ImString rawPropertyFilter = new ImString(64);
@@ -82,7 +87,9 @@ public final class ObjectViewerPanel implements StudioPanel {
     // fresh Select-Object/Multi-Select-Object pick takes over the preview
     // without fighting a selection the user then browses away from
     // manually (e.g. clicking a different row in the grid below).
-    private int lastSyncedPickedObjectId = Integer.MIN_VALUE;
+    private WorldObject inspectedPlacement;
+    private WorldObject lastSyncedPickedObject;
+    private final ArrayDeque<Integer> recentObjectIds = new ArrayDeque<>(20);
 
     // Filter cache state
     private List<Integer> allObjectIds = null;
@@ -153,10 +160,14 @@ public final class ObjectViewerPanel implements StudioPanel {
         ImGui.separator();
 
         if (activeSubTab == 0) {
+            // Viewer owns its own nested scrolling areas; keep the preview/header pinned.
+            ImGui.setScrollY(0.0f);
             renderObjectViewerSubTab(context, cache, settings);
         } else {
             renderObjectPropertiesSubTab(context, cache, settings);
         }
+
+        renderObjectSearchWindow(cache, settings);
     }
 
     /**
@@ -170,14 +181,38 @@ public final class ObjectViewerPanel implements StudioPanel {
         Selection current = context.session().selection().current();
         WorldObject picked = switch (current) {
             case ObjectSelection single -> single.object();
-            case ObjectSetSelection set -> set.objects().iterator().next();
+            case ObjectSetSelection set -> set.objects().stream().findFirst().orElse(null);
             case null, default -> null;
         };
-        if (picked == null) return;
-        if (picked.id() == lastSyncedPickedObjectId) return;
-        lastSyncedPickedObjectId = picked.id();
-        selectedObjectId.set(picked.id());
+        if (picked == null || picked.equals(lastSyncedPickedObject)) return;
+        lastSyncedPickedObject = picked;
+        inspectObject(picked);
+    }
+
+    /** Opens a cache definition in Viewer without a world placement context. */
+    public void inspectObject(int id) {
+        if (id < 0) return;
+        selectedObjectId.set(id);
+        inspectedPlacement = null;
         activeSubTab = 0;
+        rememberObject(id);
+    }
+
+    /** Opens a placed world object and retains its tile/shape/rotation context. */
+    public void inspectObject(WorldObject object) {
+        if (object == null) return;
+        selectedObjectId.set(object.id());
+        objectType.set(object.type());
+        objectRotation.set(object.rotation());
+        inspectedPlacement = object;
+        activeSubTab = 0;
+        rememberObject(object.id());
+    }
+
+    private void rememberObject(int id) {
+        recentObjectIds.remove(id);
+        recentObjectIds.addFirst(id);
+        while (recentObjectIds.size() > 20) recentObjectIds.removeLast();
     }
 
     private void renderSubTabButton(String label, int tabIndex, float width) {
@@ -206,26 +241,27 @@ public final class ObjectViewerPanel implements StudioPanel {
     private void renderObjectViewerSubTab(StudioPanelContext context,
                                           LoadedOsrsCacheSession cache,
                                           SettingsStore settings) {
-        // Filter dropdown & Search
-        ImGui.setNextItemWidth(-Float.MIN_VALUE);
-        ImGui.inputTextWithHint("##obj-search", StudioIcons.SEARCH + "  Search by ID or name...", searchFilter);
-        if (SettingRows.beginPlain("object-filter")) {
-            SettingRows.combo("Show", typeFilter, FILTER_OPTIONS);
-            SettingRows.end();
-        }
-        ImGui.separator();
-
         int objId = selectedObjectId.get();
         float panelW = ImGui.getContentRegionAvailX();
 
         renderPreviewAndControls(context, cache, settings, objId, panelW);
 
-        ImGui.separator();
+        if (inspectedPlacement != null && inspectedPlacement.id() == objId) {
+            renderPlacementContext(context, cache, inspectedPlacement);
+        }
 
-        // Virtualized thumbnail grid
-        updateFilteredList(cache);
-        ImGui.textDisabled("Objects (" + filteredObjectIds.size() + " matches):");
-        renderThumbnailGrid(cache, settings, panelW);
+        ImGui.dummy(1.0f, 6.0f);
+        if (StudioWidgets.buttonSecondary(
+                StudioIcons.SEARCH + "  Search objects...", -1.0f, 30.0f)) {
+            objectSearchOpen = true;
+        }
+
+        ImGui.dummy(1.0f, 6.0f);
+        StudioWidgets.section("Recently inspected");
+        float historyHeight = Math.max(96.0f, ImGui.getContentRegionAvailY());
+        ImGui.beginChild("##object-recent-history", 0.0f, historyHeight, false);
+        renderRecentObjects(cache, settings);
+        ImGui.endChild();
     }
 
     /** The persistent, rotatable preview and its placement controls - stays put above the grid. */
@@ -240,7 +276,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         draw.addRect(cx, cy, cx + panelW, cy + previewHeight, StudioPalette.draw(StudioPalette.BORDER_STRONG), 4.0f);
 
         if (objId < 0 || cache == null) {
-            String prompt = cache == null ? "No cache loaded." : "Select an object below to preview it.";
+            String prompt = cache == null ? "No cache loaded." : "Inspect an object or open Search objects.";
             draw.addText(StudioFonts.ui(), 13, cx + 12, cy + previewHeight * 0.5f - 8.0f,
                     StudioPalette.draw(StudioPalette.TEXT_DISABLED), prompt);
             ImGui.dummy(panelW, previewHeight + 8.0f);
@@ -337,6 +373,87 @@ public final class ObjectViewerPanel implements StudioPanel {
         }
     }
 
+    private void renderPlacementContext(
+            StudioPanelContext context,
+            LoadedOsrsCacheSession cache,
+            WorldObject placement) {
+        StudioWidgets.section("Placed on tile");
+        if (StudioWidgets.beginPropertyTable("object-placement")) {
+            StudioWidgets.propertyRow("Location",
+                    placement.x() + ", " + placement.y() + " · plane " + placement.plane());
+            StudioWidgets.propertyRow("Shape",
+                    placement.type() + " · "
+                            + placement.shape().map(OsrsLocShape::displayName).orElse("Unknown"));
+            StudioWidgets.propertyRow("Rotation",
+                    placement.rotation() + " · " + (placement.rotation() * 90) + "°");
+            StudioWidgets.endPropertyTable();
+        }
+        if (StudioWidgets.buttonSecondary("Edit placed object...", -1.0f, 28.0f)
+                && context.navigation() != null) {
+            context.navigation().editObject(placement);
+        }
+    }
+
+    private void renderRecentObjects(LoadedOsrsCacheSession cache, SettingsStore settings) {
+        if (recentObjectIds.isEmpty()) {
+            ImGui.textDisabled("Objects you inspect from the viewport, Tile Inspector, or search will appear here.");
+            return;
+        }
+
+        int row = 0;
+        for (int id : recentObjectIds) {
+            String label = cache == null
+                    ? "Object #" + id
+                    : cache.bundle().definitions().object(id)
+                            .map(def -> objectLabel(def.displayName(), id))
+                            .orElse("Object #" + id);
+            boolean current = selectedObjectId.get() == id;
+            ImGui.pushID("recent-" + id);
+            if (ImGui.selectable(label, current, 0, 0.0f, 28.0f)) {
+                inspectObject(id);
+                settings.set(EditorSettingKeys.OBJECT_ID, id);
+            }
+            ImGui.popID();
+            row++;
+            if (row >= 20) break;
+        }
+    }
+
+    private void renderObjectSearchWindow(LoadedOsrsCacheSession cache, SettingsStore settings) {
+        if (!objectSearchOpen) return;
+
+        StudioWidgets.windowBackdrop("object-search");
+        var viewport = ImGui.getMainViewport();
+        ImGui.setNextWindowPos(viewport.getCenter().x, viewport.getCenter().y,
+                ImGuiCond.Appearing, 0.5f, 0.5f);
+        ImGui.setNextWindowSize(760.0f, 620.0f, ImGuiCond.Appearing);
+
+        ImBoolean open = new ImBoolean(objectSearchOpen);
+        int flags = ImGuiWindowFlags.NoCollapse;
+        if (!ImGui.begin("Object Search##object-search-window", open, flags)) {
+            objectSearchOpen = open.get();
+            ImGui.end();
+            return;
+        }
+        objectSearchOpen = open.get();
+
+        ImGui.setNextItemWidth(-Float.MIN_VALUE);
+        ImGui.inputTextWithHint(
+                "##obj-search",
+                StudioIcons.SEARCH + "  Search by ID or name...",
+                searchFilter);
+        if (SettingRows.beginPlain("object-search-filter")) {
+            SettingRows.combo("Show", typeFilter, FILTER_OPTIONS);
+            SettingRows.end();
+        }
+
+        updateFilteredList(cache);
+        ImGui.textDisabled(filteredObjectIds.size() + " matching objects");
+        ImGui.separator();
+        renderThumbnailGrid(cache, settings, ImGui.getContentRegionAvailX());
+        ImGui.end();
+    }
+
     private static String objectLabel(String name, int id) {
         String fallback = "Object #" + id;
         if (name == null || name.isBlank() || "null".equalsIgnoreCase(name.trim())
@@ -396,7 +513,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         ImGui.invisibleButton("##cell", CELL_SIZE, CELL_SIZE);
         boolean hovered = ImGui.isItemHovered();
         if (ImGui.isItemClicked()) {
-            selectedObjectId.set(id);
+            inspectObject(id);
             settings.set(EditorSettingKeys.OBJECT_ID, id);
         }
         if (ImGui.beginDragDropSource()) {
