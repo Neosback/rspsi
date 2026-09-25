@@ -221,6 +221,8 @@ public final class MapEditorView {
 
         if (pluginLifecycle != null && pluginLifecycle.host() != null) {
             studioPluginManager.bindEditorPluginRegistry(pluginLifecycle.host().registry());
+            brushManager.syncHostBrushes(
+                    pluginLifecycle.host().context().services().brushes().brushes());
             panelManager.syncPluginContributions(pluginLifecycle.host().registry().panelRegistrations());
             panelManager.syncUiSurfaces(pluginLifecycle.host().registry().uiSurfaceContributions());
             if (!defaultToolActivated) {
