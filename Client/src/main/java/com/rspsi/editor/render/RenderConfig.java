@@ -33,6 +33,7 @@ public record RenderConfig(
         int fogDepthTiles,
         int fogColor,
         boolean invisibleObjectsVisible,
+        BackfacePolicy.NativeCullingMode nativeCullingMode,
         GpuDebugView gpuDebugView
 ) {
     public RenderConfig {
@@ -49,7 +50,24 @@ public record RenderConfig(
         if (fogDepthTiles < 0 || fogColor < 0 || fogColor > 0xFFFFFF) {
             throw new IllegalArgumentException("Invalid fog configuration");
         }
+        nativeCullingMode = Objects.requireNonNull(nativeCullingMode, "nativeCullingMode");
         gpuDebugView = Objects.requireNonNull(gpuDebugView, "gpuDebugView");
+    }
+
+    /** Compatibility constructor from before native culling joined the compiled config. */
+    public RenderConfig(RenderProfile profile, boolean terrainVisible, boolean objectsVisible,
+                        boolean wallsVisible, boolean wallDecorationsVisible,
+                        boolean groundObjectsVisible, boolean groundDecorationsVisible,
+                        boolean roofsVisible, boolean bridgeTilesVisible, boolean hiddenTilesVisible,
+                        boolean collisionVisible, boolean wireframe, int activePlane,
+                        SceneVisibilityPolicy.PlaneSelection planeSelection, double brightness,
+                        double exposure, int msaaSamples, int fogDepthTiles, int fogColor,
+                        boolean invisibleObjectsVisible, GpuDebugView gpuDebugView) {
+        this(profile, terrainVisible, objectsVisible, wallsVisible, wallDecorationsVisible,
+                groundObjectsVisible, groundDecorationsVisible, roofsVisible, bridgeTilesVisible,
+                hiddenTilesVisible, collisionVisible, wireframe, activePlane, planeSelection,
+                brightness, exposure, msaaSamples, fogDepthTiles, fogColor,
+                invisibleObjectsVisible, BackfacePolicy.defaultMode(), gpuDebugView);
     }
 
     /** Compatibility constructor before GPU debug views were part of the frame config. */
@@ -65,7 +83,7 @@ public record RenderConfig(
                 groundObjectsVisible, groundDecorationsVisible, roofsVisible, bridgeTilesVisible,
                 hiddenTilesVisible, collisionVisible, wireframe, activePlane, planeSelection,
                 brightness, exposure, msaaSamples, fogDepthTiles, fogColor,
-                invisibleObjectsVisible, GpuDebugView.NONE);
+                invisibleObjectsVisible, BackfacePolicy.defaultMode(), GpuDebugView.NONE);
     }
 
     /** Compatibility constructor before fog settings were part of the frame config. */
@@ -79,7 +97,8 @@ public record RenderConfig(
         this(profile, terrainVisible, objectsVisible, wallsVisible, wallDecorationsVisible,
                 groundObjectsVisible, groundDecorationsVisible, roofsVisible, bridgeTilesVisible,
                 hiddenTilesVisible, collisionVisible, wireframe, activePlane, planeSelection,
-                brightness, exposure, msaaSamples, 0, 0x101827, false, GpuDebugView.NONE);
+                brightness, exposure, msaaSamples, 0, 0x101827, false,
+                BackfacePolicy.defaultMode(), GpuDebugView.NONE);
     }
 
     /** Converts the frame settings into the shared scene projection policy. */
@@ -209,6 +228,7 @@ public record RenderConfig(
         return new RenderConfig(RenderProfile.VANILLA_COMPATIBILITY,
                 true, true, true, true, true, true, true, true, false,
                 false, false, 0, SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL,
-                1.0, 0.0, 0, 0, 0x101827, false, GpuDebugView.NONE);
+                1.0, 0.0, 0, 0, 0x101827, false,
+                BackfacePolicy.defaultMode(), GpuDebugView.NONE);
     }
 }
