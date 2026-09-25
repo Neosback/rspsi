@@ -2,6 +2,8 @@ package com.rspsi.editor.plugin;
 
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.assets.AssetRepository;
+import com.rspsi.editor.core.CoreEditorModule;
+import com.rspsi.editor.core.CoreEditorModules;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.settings.EditorSettingKeys;
 import com.rspsi.editor.plugin.services.PluginServices;
@@ -26,22 +28,30 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class EditorPluginHost implements AutoCloseable {
     private final List<EditorPlugin> plugins;
+    private final List<String> coreModuleIds;
     private final EditorPluginRegistry registry;
     private final EditorPluginContext context;
     private final List<LoadedPlugin> loadedPlugins;
     private final AtomicBoolean closed = new AtomicBoolean();
 
     private EditorPluginHost(List<LoadedPlugin> loadedPlugins,
+                             List<String> coreModuleIds,
                              EditorPluginRegistry registry,
                              EditorPluginContext context) {
         this.loadedPlugins = new ArrayList<>(loadedPlugins);
         this.plugins = new ArrayList<>(this.loadedPlugins.stream().map(LoadedPlugin::plugin).toList());
+        this.coreModuleIds = List.copyOf(coreModuleIds);
         this.registry = Objects.requireNonNull(registry, "registry");
         this.context = Objects.requireNonNull(context, "context");
     }
 
     public List<EditorPlugin> plugins() {
         return List.copyOf(plugins);
+    }
+
+    /** Always-on application modules installed before optional extensions. */
+    public List<String> coreModuleIds() {
+        return coreModuleIds;
     }
 
     public EditorPluginRegistry registry() {
@@ -56,7 +66,7 @@ public final class EditorPluginHost implements AutoCloseable {
             Iterable<? extends EditorPlugin> plugins,
             EditorSession session,
             AssetRepository assets) {
-        return initialize(plugins, session, assets, Optional.empty());
+        return initialize(List.of(), plugins, session, assets, Optional.empty());
     }
 
     public static EditorPluginHost initialize(
@@ -64,7 +74,7 @@ public final class EditorPluginHost implements AutoCloseable {
             EditorSession session,
             AssetRepository assets,
             EditorSceneAccess scene) {
-        return initialize(plugins, session, assets, Optional.of(scene));
+        return initialize(List.of(), plugins, session, assets, Optional.of(scene));
     }
 
     /** Initializes plugins with application-owned neutral services. */
@@ -76,8 +86,35 @@ public final class EditorPluginHost implements AutoCloseable {
             SettingsStore settings,
             EditorTaskService tasks,
             EditorNotificationService notifications) {
-        return initialize(plugins, session, assets, Optional.ofNullable(scene),
+        return initialize(List.of(), plugins, session, assets, Optional.ofNullable(scene),
                 settings, tasks, notifications, null, null, null, null, null, null, null);
+    }
+
+    /**
+     * Initializes the application runtime with always-on core modules plus
+     * optional external extensions. Core modules are not plugin candidates:
+     * they cannot be disabled independently and are not exposed as installed
+     * JAR plugins, but both paths register into this same host/registry.
+     */
+    public static EditorPluginHost initializeWithCoreModules(
+            Iterable<? extends CoreEditorModule> coreModules,
+            Iterable<? extends EditorPlugin> plugins,
+            EditorSession session,
+            AssetRepository assets,
+            EditorSceneAccess scene,
+            SettingsStore settings,
+            EditorTaskService tasks,
+            EditorNotificationService notifications,
+            com.rspsi.editor.knowledge.WorldKnowledgeService knowledge,
+            com.rspsi.editor.generation.GeneratorService generators,
+            com.rspsi.editor.symbols.SymbolService symbols,
+            com.rspsi.editor.integration.reference.ReferenceService references,
+            com.rspsi.editor.integration.npc.NpcSpawnService spawns,
+            com.rspsi.editor.simulation.SimulationEngine simulation,
+            com.rspsi.editor.integration.ServerIntegrationService integrations) {
+        return initialize(coreModules, plugins, session, assets, Optional.ofNullable(scene),
+                settings, tasks, notifications, knowledge, generators,
+                symbols, references, spawns, simulation, integrations);
     }
 
     /** Initializes plugins with full studio runtime services. */
@@ -96,17 +133,18 @@ public final class EditorPluginHost implements AutoCloseable {
             com.rspsi.editor.integration.npc.NpcSpawnService spawns,
             com.rspsi.editor.simulation.SimulationEngine simulation,
             com.rspsi.editor.integration.ServerIntegrationService integrations) {
-        return initialize(plugins, session, assets, Optional.ofNullable(scene),
+        return initialize(List.of(), plugins, session, assets, Optional.ofNullable(scene),
                 settings, tasks, notifications, knowledge, generators,
                 symbols, references, spawns, simulation, integrations);
     }
 
     private static EditorPluginHost initialize(
+            Iterable<? extends CoreEditorModule> coreModules,
             Iterable<? extends EditorPlugin> plugins,
             EditorSession session,
             AssetRepository assets,
             Optional<EditorSceneAccess> scene) {
-        return initialize(plugins, session, assets, scene,
+        return initialize(List.of(), plugins, session, assets, scene,
                 new SettingsStore(EditorSettingKeys.registry()),
                 new EditorTaskService(), new EditorNotificationService(),
                 null, null, null, null, null, null, null);
@@ -137,7 +175,13 @@ public final class EditorPluginHost implements AutoCloseable {
                 knowledge, generators, symbols, references, spawns, simulation, integrations);
         List<LoadedPlugin> initialized = new ArrayList<>();
         Set<String> pluginIds = new HashSet<>();
+        List<CoreEditorModule> coreSnapshot = new ArrayList<>();
         try {
+            for (CoreEditorModule module : coreModules) {
+                coreSnapshot.add(Objects.requireNonNull(module, "core module"));
+            }
+            CoreEditorModules.install(coreSnapshot, context);
+
             List<EditorPlugin> discoveredPlugins = new ArrayList<>();
             for (EditorPlugin plugin : plugins) {
                 discoveredPlugins.add(Objects.requireNonNull(plugin, "plugin"));
@@ -159,7 +203,12 @@ public final class EditorPluginHost implements AutoCloseable {
                 initialized.add(new LoadedPlugin(checked, contributions));
             }
             registry.validateReferences();
-            return new EditorPluginHost(initialized, registry, context);
+            List<String> installedCoreIds = coreSnapshot.stream()
+                    .sorted(Comparator.comparingInt(CoreEditorModule::order)
+                            .thenComparing(CoreEditorModule::id))
+                    .map(CoreEditorModule::id)
+                    .toList();
+            return new EditorPluginHost(initialized, installedCoreIds, registry, context);
         } catch (RuntimeException | Error failure) {
             shutdownReverse(initialized, registry, context, failure);
             closeResources(resources, failure);
