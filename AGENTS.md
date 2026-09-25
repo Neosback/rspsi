@@ -12,20 +12,35 @@ desktop shell, and its own plugin/settings architecture. It is not a RuneLite pl
 not embed RuneLite's client - RuneLite is present in this repo purely as **reference source**
 for correctness (see below), the same way a spec document would be.
 
+## Start here before adding architecture
+
+Read [docs/EDITOR_DEVELOPMENT_ARCHITECTURE.md](docs/EDITOR_DEVELOPMENT_ARCHITECTURE.md)
+before creating a new manager, registry, service, plugin, tool-registration path, or native
+projection. OpenRune Studio is a **modular monolith**:
+
+- core Studio features are compile-time `CoreEditorModule`s listed once in `CoreEditorModules`;
+- external JARs use `EditorPlugin`;
+- both paths share one registry/service graph;
+- do not add one-tool core plugins or special registrations in `StudioApplication`;
+- search the canonical-path table before creating a parallel abstraction.
+
+If a feature ships with Studio, it is core, not a plugin.
+
 ## Module layout
 
 Two Gradle modules, declared in `settings.gradle`:
 
 - **`Client`** - cache/definition loading, the world document model, the rendering pipeline
-  (both software and OpenGL-neutral packet builders), editor tools, selection, and the public
-  neutral `EditorPlugin` extension point. No ImGui/GLFW UI code lives here. Buildable and
-  testable headless.
+  (both software and OpenGL-neutral packet builders), editor tools, selection, always-on
+  `CoreEditorModule`s, and the public neutral `EditorPlugin` extension point. No ImGui/GLFW
+  UI code lives here. Buildable and testable headless.
 - **`Editor`** - the Dear ImGui/GLFW native desktop shell ("Studio"), including internal
   Studio projection code, all panels/HUDs/toolbars, and the OpenGL scene renderer that actually
   draws to a window.
 
-**Public plugin boundary**: third-party and first-party feature plugins should prefer
-`EditorPlugin` and neutral services. `EditorPluginContext` intentionally does not expose a raw
+**Extension boundary**: externally installable features use `EditorPlugin` and neutral services.
+Built-in Studio features use `CoreEditorModule` and the same registry/services; they are not
+plugin lifecycle candidates. `EditorPluginContext` intentionally does not expose a raw
 `DefinitionProvider`, but it does expose neutral cache-facing access through
 `AssetRepository`, `PluginApi.data()`, and `DecodedDataCatalog`. Direct cache backend types,
 Dear ImGui, GLFW, and OpenGL remain internal Studio implementation details. `StudioPlugin`
