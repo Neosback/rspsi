@@ -127,6 +127,11 @@ public final class ObjectViewerPanel implements StudioPanel {
     }
 
     @Override
+    public float preferredRightSidebarWidth() {
+        return 420.0f;
+    }
+
+    @Override
     public void render(StudioPanelContext context) {
         LoadedOsrsCacheSession cache = context.cache();
         SettingsStore settings = context.settings();
