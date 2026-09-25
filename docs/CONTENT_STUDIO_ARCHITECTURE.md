@@ -480,21 +480,44 @@ These should be reference-audited before removal or migration:
 
 Do not remove a transitional API until callers/tests are enumerated and its remaining responsibility has a project-owned replacement.
 
-## 15. Near-term implementation order
+## 15. OpenRune authority and compatibility
 
-1. Finish the Kotlin lightweight project-open coordinator.
-2. Keep Content Studio usable before full cache decoding.
-3. Load the existing heavy cache session only when the first cache-backed workspace requests it.
-4. Remove the old settings-driven OpenRune integration path.
-5. Add moved-checkout relinking.
-6. Introduce project-domain generation/change services.
-7. Make RSCM/GameVals the first lazy refreshable content domain.
-8. Split the current monolithic full cache session into workspace-specific lazy domains.
-9. Add lazy server-content/spawn indexing and project information cards.
-10. Define neutral cross-tool navigation.
-11. Build content/skill flow tooling on the semantic graph.
-12. Add RSProx Session Inspector/Timeline.
-13. Add normalized Studio replay and cutscene tooling.
+Content Studio may understand an imported OpenRune project deeply, but every projected fact must
+retain both its **domain** and its **authority**.
+
+Examples:
+
+- LIVE terrain/loc: generated cache domain;
+- raw NPC spawn: `.data/raw-cache/map/npcs` authored source;
+- raw area polygon: `.data/raw-cache/map/area` authored source;
+- GameVal symbol: source-aware mapping with originating file;
+- teleport marker: semantic fact extracted from Kotlin/cache params;
+- dynamic loc: runtime observation from a future bridge.
+
+The same Map Studio viewport may render all of those at once. A write action must route back to the
+correct authority rather than mutating the nearest binary representation.
+
+OpenRune revision compatibility is also multidimensional. A project can have a FileStore-readable
+cache while its server protocol or Studio rendering profile is not verified for that revision.
+Content Studio must show these statuses separately.
+
+See `OPENRUNE_SERVER_INTEGRATION_MODEL.md` for the verified cache/build/map/GameVal/API/fork model.
+
+## 16. Near-term implementation order
+
+1. Add project-domain generation/change tracking for LIVE, SERVER, mappings, raw map source and source semantics.
+2. Add lightweight import metadata for game name, revision/environment/world, OR2 version and rsprot protocol target.
+3. Make RSCM/GameVals source-aware and refreshable, including `openRune-intelliJ-tools.toml` mapping roots.
+4. Split the current monolithic full cache session into narrower workspace-demanded domains.
+5. Add raw NPC/ground-object/area overlays to Map Studio with explicit source provenance.
+6. Add source-safe editors for raw spawn/area TOML and publish only through the project's build.
+7. Define neutral cross-tool navigation targets and evidence-aware semantic facts.
+8. Expand Mining into the first end-to-end skill-flow acceptance fixture.
+9. Add semantic teleport extraction and a Map Studio teleport overlay.
+10. Add lazy server-config overlay inspection for PackServerConfig-authored semantics.
+11. Prototype a read-only, version-matched Studio Bridge instead of live JVM reflection/attach.
+12. Add RSProx Session Inspector/Timeline and normalized Studio replay.
+13. Add cutscene tooling on top of semantic/runtime/session events.
 14. Revisit Kotlin Multiplatform boundaries before beginning a web client.
 
 The architectural invariant is simple:
