@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -242,6 +243,7 @@ class PluginApiTest {
     @Test
     void testMapToolBuilderCarriesFirstClassStudioMetadata() {
         EditorSession session = new EditorSession(new WorldModel(1, 1, 1));
+        AtomicInteger density = new AtomicInteger(35);
 
         EditorPlugin testPlugin = new EditorPlugin() {
             @Override
@@ -266,7 +268,13 @@ class PluginApiTest {
                                 ToolUiDescriptor.ToolCapability.WORLD_READ,
                                 ToolUiDescriptor.ToolCapability.WORLD_EDIT,
                                 ToolUiDescriptor.ToolCapability.PREVIEW)
-                        .contextDrawer(true)
+                        .contextDrawer(ctx -> List.of(EditorSetting.integer(
+                                "density",
+                                "Density",
+                                1,
+                                100,
+                                density::get,
+                                density::set)))
                         .factory(() -> new NoOpTool("test.biome-painter"))
                         .register();
             }
@@ -296,6 +304,13 @@ class PluginApiTest {
         assertTrue(ui.has(ToolUiDescriptor.ToolCapability.WORLD_EDIT));
         assertTrue(ui.has(ToolUiDescriptor.ToolCapability.CONTEXT_DRAWER));
         assertTrue(ui.hasContextDrawerContent());
+
+        List<EditorSetting> drawerSettings =
+                host.registry().settingsForTool(host.context(), "test.biome-painter");
+        assertEquals(1, drawerSettings.size());
+        assertEquals("Density", drawerSettings.get(0).label());
+        drawerSettings.get(0).setValue(72);
+        assertEquals(72, density.get());
 
         assertEquals("test.biome-painter", host.registry().createTool(registration.id()).id());
         host.close();
