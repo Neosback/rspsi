@@ -199,6 +199,13 @@ public final class EditorPluginHost implements AutoCloseable {
             Set<String> availableCoreIds = coreSnapshot.stream()
                     .map(CoreEditorModule::id)
                     .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            for (EditorPlugin plugin : discoveredPlugins) {
+                String pluginId = requireId(plugin.id());
+                if (availableCoreIds.contains(pluginId)) {
+                    throw new IllegalArgumentException(
+                            "External plugin id conflicts with core editor module: " + pluginId);
+                }
+            }
             List<EditorPlugin> orderedPlugins = orderPlugins(discoveredPlugins, availableCoreIds);
             for (EditorPlugin checked : orderedPlugins) {
                 String pluginId = requireId(checked.id());
