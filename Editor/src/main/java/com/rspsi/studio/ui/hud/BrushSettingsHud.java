@@ -298,7 +298,7 @@ public final class BrushSettingsHud implements StudioPlugin {
         if (ImGui.isItemHovered()) ImGui.setTooltip("More brushes (Checker, Slope, Terrace)");
 
         if (ImGui.beginPopup("hud_more_brushes_popup")) {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.BRUSH + "  Additional Brushes");
+            ImGui.textColored(StudioPalette.ACCENT, StudioIcons.BRUSH + "  Additional Brushes");
             ImGui.separator();
             if (brushes != null) {
                 for (EditorBrush brush : brushes.enabledBrushes()) {
@@ -447,14 +447,14 @@ public final class BrushSettingsHud implements StudioPlugin {
 
         // Palette popups
         if (ImGui.beginPopup("hud_underlay_palette")) {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.PALETTE + "  Select Underlay Material");
+            ImGui.textColored(StudioPalette.ACCENT, StudioIcons.PALETTE + "  Select Underlay Material");
             ImGui.separator();
             renderGridPopup(cache, painter, palette, true);
             ImGui.endPopup();
         }
 
         if (ImGui.beginPopup("hud_overlay_palette")) {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.PALETTE + "  Select Overlay Material");
+            ImGui.textColored(StudioPalette.ACCENT, StudioIcons.PALETTE + "  Select Overlay Material");
             ImGui.separator();
             renderGridPopup(cache, painter, palette, false);
             ImGui.endPopup();
@@ -612,9 +612,9 @@ public final class BrushSettingsHud implements StudioPlugin {
                                        String label, HeightToolPanel.HeightMode current) {
         boolean active = (mode == current);
         if (active) {
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF0284C7));
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF0369A1));
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF075985));
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
         }
         if (ImGui.button(label + "##hm-btn-" + mode.name())) {
             if (context.activateTool() != null) {
@@ -644,9 +644,9 @@ public final class BrushSettingsHud implements StudioPlugin {
         for (SplineBrushStyle styleOption : SplineBrushStyle.values()) {
             boolean active = (currentStyle == styleOption);
             if (active) {
-                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF0284C7));
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF0369A1));
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF075985));
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
             }
             if (ImGui.button(styleOption.displayName() + "##hud-spl-" + styleOption.name())) {
                 if (pathTool != null) pathTool.setStyle(styleOption);
@@ -710,7 +710,7 @@ public final class BrushSettingsHud implements StudioPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.TUNE + "  Brush Settings HUD Preferences");
+        ImGui.textColored(StudioPalette.ACCENT, StudioIcons.TUNE + "  Brush Settings HUD Preferences");
         ImGui.separator();
 
         String[] cornerNames = { "Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right" };
