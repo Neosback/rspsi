@@ -1,5 +1,6 @@
 package com.rspsi.editor.integration;
 
+import com.rspsi.editor.integration.content.ContentDiscoveryService;
 import com.rspsi.editor.integration.npc.NpcSpawnProvider;
 import com.rspsi.editor.integration.reference.ReferenceProvider;
 import com.rspsi.editor.integration.semantic.SemanticContentGraph;
@@ -24,6 +25,17 @@ public interface IntegrationSession extends AutoCloseable {
     Set<IntegrationCapability> activeCapabilities();
 
     /**
+     * Returns the options that produced this session.
+     *
+     * <p>The default preserves compatibility for providers that do not retain explicit
+     * session options. Core Studio providers should override this so the host can
+     * promote a lightweight session without losing provider settings.</p>
+     */
+    default IntegrationOptions options() {
+        return IntegrationOptions.defaults(projectRoot(), activeCapabilities());
+    }
+
+    /**
      * Returns the persisted neutral connection when this integration was opened from one.
      */
     default Optional<ServerConnection> connection() {
@@ -46,6 +58,11 @@ public interface IntegrationSession extends AutoCloseable {
     Optional<ReferenceProvider> referenceProvider();
 
     Optional<NpcSpawnProvider> npcSpawnProvider();
+
+    /** Neutral declarative content inventory/manifests/diagnostics when loaded. */
+    default Optional<ContentDiscoveryService.Discovery> contentDiscovery() {
+        return Optional.empty();
+    }
 
     /** Source-derived semantic facts with exact provenance when the provider supports them. */
     default Optional<SemanticSourceIndex> semanticSourceIndex() {

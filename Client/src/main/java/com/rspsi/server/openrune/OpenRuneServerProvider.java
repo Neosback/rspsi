@@ -6,6 +6,7 @@ import com.rspsi.editor.integration.IntegrationProbe;
 import com.rspsi.editor.integration.IntegrationSession;
 import com.rspsi.editor.integration.ServerIntegrationProvider;
 import com.rspsi.editor.integration.content.ContentCapability;
+import com.rspsi.editor.integration.content.ContentDiscoveryService;
 import com.rspsi.editor.integration.npc.NpcSpawnProvider;
 import com.rspsi.editor.integration.reference.ReferenceProvider;
 import com.rspsi.editor.integration.semantic.SemanticContentGraph;
@@ -77,12 +78,19 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
     }
 
     private IntegrationProbe probe(ServerConnection connection, ServerProjectInspection inspection) {
-        return probe(connection, inspection, true);
+        return probe(connection, inspection, tryCatalog(connection.root()).orElse(null));
     }
 
     private IntegrationProbe probe(ServerConnection connection,
                                    ServerProjectInspection inspection,
                                    boolean discoverDeclarativeContent) {
+        return probe(connection, inspection,
+                discoverDeclarativeContent ? tryCatalog(connection.root()).orElse(null) : null);
+    }
+
+    private IntegrationProbe probe(ServerConnection connection,
+                                   ServerProjectInspection inspection,
+                                   OpenRuneContentCatalog catalog) {
         Path project = connection.root();
         if (!inspection.detection().matched()) {
             return IntegrationProbe.invalid(project, id());
@@ -173,57 +181,69 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
          * intentionally skipped by the lightweight Studio startup path and is
          * performed only when content tooling explicitly requests it.
          */
-        if (discoverDeclarativeContent) {
-            try {
-                OpenRuneContentCatalog catalog = new OpenRuneContentCatalog(project);
-                var discovery = catalog.discovery();
-                var known = catalog.layout().knownRoots();
+        if (catalog != null) {
+            var discovery = catalog.discovery();
+            var known = catalog.layout().knownRoots();
 
-                if (known.containsKey(ContentCapability.GAMEVALS)) {
-                    capabilities.add(IntegrationCapability.SYMBOLS);
-                    capabilities.add(IntegrationCapability.GAMEVALS);
-                }
-                if (known.containsKey(ContentCapability.NPC_SPAWNS)) {
-                    capabilities.add(IntegrationCapability.NPC_SPAWNS);
-                }
-                if (known.containsKey(ContentCapability.AREAS)) {
-                    capabilities.add(IntegrationCapability.AREAS);
-                }
+            if (known.containsKey(ContentCapability.GAMEVALS)) {
+                capabilities.add(IntegrationCapability.SYMBOLS);
+                capabilities.add(IntegrationCapability.GAMEVALS);
+            }
+            if (known.containsKey(ContentCapability.NPC_SPAWNS)) {
+                capabilities.add(IntegrationCapability.NPC_SPAWNS);
+            }
+            if (known.containsKey(ContentCapability.AREAS)) {
+                capabilities.add(IntegrationCapability.AREAS);
+            }
 
-                if (!discovery.manifests().isEmpty()) {
-                    capabilities.add(IntegrationCapability.CONTENT_MANIFESTS);
-                    for (var manifest : discovery.manifests()) {
-                        manifest.schemaVersions().forEach(schemas::putIfAbsent);
-                        for (ContentCapability capability : manifest.capabilities()) {
-                            addCapability(capabilities, capability);
-                        }
+            if (!discovery.manifests().isEmpty()) {
+                capabilities.add(IntegrationCapability.CONTENT_MANIFESTS);
+                for (var manifest : discovery.manifests()) {
+                    manifest.schemaVersions().forEach(schemas::putIfAbsent);
+                    for (ContentCapability capability : manifest.capabilities()) {
+                        addCapability(capabilities, capability);
                     }
-                    details.put("Manifests", discovery.manifests().size()
-                            + " content-manifest.toml sidecar(s)");
                 }
+                details.put("Manifests", discovery.manifests().size()
+                        + " content-manifest.toml sidecar(s)");
+            }
 
-                if (!discovery.artifacts().isEmpty()) {
-                    capabilities.add(IntegrationCapability.CONTENT_INDEX);
-                    capabilities.add(IntegrationCapability.CONTENT_DIAGNOSTICS);
-                    capabilities.add(IntegrationCapability.LOC_REFERENCES);
-                    capabilities.add(IntegrationCapability.MAP_REFERENCES);
-                    details.put("Declarative content", discovery.artifacts().size()
-                            + " TOML/JSON artifact(s)");
-                }
-                if (!discovery.unrecognized().isEmpty()) {
-                    details.put("Unrecognized content", discovery.unrecognized().size()
-                            + " declarative file(s) available in the generic inspector");
-                }
-                if (!discovery.diagnostics().entries().isEmpty()) {
-                    details.put("Diagnostics", discovery.diagnostics().entries().size()
-                            + " discovery/parse diagnostic(s)");
-                }
-            } catch (RuntimeException ignored) {
-                // A custom checkout can still be a valid OpenRune project without the stock data layout.
+            if (!discovery.artifacts().isEmpty()) {
+                capabilities.add(IntegrationCapability.CONTENT_INDEX);
+                capabilities.add(IntegrationCapability.CONTENT_DIAGNOSTICS);
+                capabilities.add(IntegrationCapability.LOC_REFERENCES);
+                capabilities.add(IntegrationCapability.MAP_REFERENCES);
+                details.put("Declarative content", discovery.artifacts().size()
+                        + " TOML/JSON artifact(s)");
+            }
+            if (!discovery.unrecognized().isEmpty()) {
+                details.put("Unrecognized content", discovery.unrecognized().size()
+                        + " declarative file(s) available in the generic inspector");
+            }
+            if (!discovery.diagnostics().entries().isEmpty()) {
+                details.put("Diagnostics", discovery.diagnostics().entries().size()
+                        + " discovery/parse diagnostic(s)");
             }
         }
 
+        long packModules = inspection.content().stream()
+                .filter(entry -> entry.kind() == ServerContentKind.PACK_MODULE)
+                .count();
+        if (packModules > 0 || inspection.supports(ServerCapability.PACK_MODULES)) {
+            capabilities.add(IntegrationCapability.CUSTOM_CACHE_ASSETS);
+            details.put("Cache packs", packModules + " Gradle pack module(s)");
+        }
+
         return new IntegrationProbe(project, id(), name(), true, capabilities, schemas, details);
+    }
+
+    private static Optional<OpenRuneContentCatalog> tryCatalog(Path project) {
+        try {
+            return Optional.of(new OpenRuneContentCatalog(project));
+        } catch (RuntimeException ignored) {
+            // Custom OpenRune layouts remain valid through the authoritative project inspection.
+            return Optional.empty();
+        }
     }
 
     private static void addCapability(Set<IntegrationCapability> target,
@@ -260,31 +280,44 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
                         || options.isEnabled(IntegrationCapability.CONTENT_DIAGNOSTICS)
                         || options.isEnabled(IntegrationCapability.LOC_REFERENCES)
                         || options.isEnabled(IntegrationCapability.MAP_REFERENCES)
+                        || options.isEnabled(IntegrationCapability.INTERFACE_REFERENCES)
                         || options.isEnabled(IntegrationCapability.NPC_SPAWNS)
                         || options.isEnabled(IntegrationCapability.AREAS)
                         || options.isEnabled(IntegrationCapability.DROP_TABLES)
                         || options.isEnabled(IntegrationCapability.SKILL_NODES);
+        boolean projectInventoryRequested = declarativeDiscoveryRequested
+                || options.isEnabled(IntegrationCapability.CS2_SOURCES)
+                || options.isEnabled(IntegrationCapability.CUSTOM_CACHE_ASSETS);
 
         ServerProjectInspection inspection = sourceModelRequested
                 ? adapter.inspectConnected(connection)
-                : declarativeDiscoveryRequested
+                : projectInventoryRequested
                         ? adapter.inspect(connection)
                         : adapter.inspectStartup(connection);
         if (!inspection.detection().matched()) {
             throw new IllegalArgumentException("OpenRune Server was not detected at: " + connection.root());
         }
 
-        IntegrationProbe probe = probe(connection, inspection, declarativeDiscoveryRequested);
+        OpenRuneContentCatalog catalog = declarativeDiscoveryRequested
+                ? tryCatalog(connection.root()).orElse(null)
+                : null;
+        IntegrationProbe probe = probe(connection, inspection, catalog);
         Path project = connection.root();
 
         boolean graphRequested = options.isEnabled(IntegrationCapability.CONTENT_GRAPH)
                 && probe.supports(IntegrationCapability.CONTENT_GRAPH);
         boolean sourceRequested = options.isEnabled(IntegrationCapability.SOURCE_SEMANTICS)
                 && probe.supports(IntegrationCapability.SOURCE_SEMANTICS);
-        boolean symbolsRequested = options.isEnabled(IntegrationCapability.SYMBOLS)
-                && probe.supports(IntegrationCapability.SYMBOLS);
-        boolean referencesRequested = options.isEnabled(IntegrationCapability.CONTENT_INDEX)
-                && probe.supports(IntegrationCapability.CONTENT_INDEX);
+        boolean symbolsRequested =
+                (options.isEnabled(IntegrationCapability.SYMBOLS)
+                        || options.isEnabled(IntegrationCapability.GAMEVALS))
+                        && probe.supports(IntegrationCapability.SYMBOLS);
+        boolean referencesRequested =
+                (options.isEnabled(IntegrationCapability.CONTENT_INDEX)
+                        || options.isEnabled(IntegrationCapability.LOC_REFERENCES)
+                        || options.isEnabled(IntegrationCapability.MAP_REFERENCES)
+                        || options.isEnabled(IntegrationCapability.INTERFACE_REFERENCES))
+                        && probe.supports(IntegrationCapability.CONTENT_INDEX);
 
         OpenRuneSymbolProvider graphSymbols =
                 (symbolsRequested || graphRequested) ? new OpenRuneSymbolProvider(inspection) : null;
@@ -300,6 +333,8 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
                 options.isEnabled(IntegrationCapability.NPC_SPAWNS)
                         && probe.supports(IntegrationCapability.NPC_SPAWNS)
                         ? new OpenRuneNpcSpawnProvider(inspection) : null;
+        ContentDiscoveryService.Discovery contentDiscovery =
+                catalog == null ? null : catalog.discovery();
         SemanticSourceIndex semanticSourceIndex = sourceRequested ? indexedSource : null;
         ServerObjectSemanticIndex objectOverlays =
                 graphRequested && graphSymbols != null
@@ -315,6 +350,22 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
                 EnumSet.noneOf(IntegrationCapability.class);
         activeCapabilities.addAll(options.enabledCapabilities());
         activeCapabilities.retainAll(probe.detectedCapabilities());
+        if (symbolProvider == null) {
+            activeCapabilities.remove(IntegrationCapability.SYMBOLS);
+            activeCapabilities.remove(IntegrationCapability.GAMEVALS);
+        }
+        if (referenceProvider == null) {
+            activeCapabilities.remove(IntegrationCapability.LOC_REFERENCES);
+            activeCapabilities.remove(IntegrationCapability.MAP_REFERENCES);
+            activeCapabilities.remove(IntegrationCapability.INTERFACE_REFERENCES);
+        }
+        if (npcSpawnProvider == null) {
+            activeCapabilities.remove(IntegrationCapability.NPC_SPAWNS);
+        }
+        if (contentDiscovery == null) {
+            activeCapabilities.remove(IntegrationCapability.CONTENT_MANIFESTS);
+            activeCapabilities.remove(IntegrationCapability.CONTENT_DIAGNOSTICS);
+        }
         if (semanticSourceIndex == null) {
             activeCapabilities.remove(IntegrationCapability.SOURCE_SEMANTICS);
         }
@@ -322,8 +373,8 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
             activeCapabilities.remove(IntegrationCapability.CONTENT_GRAPH);
         }
 
-        return new OpenRuneSession(this, connection, inspection, activeCapabilities,
-                symbolProvider, referenceProvider, npcSpawnProvider,
+        return new OpenRuneSession(this, connection, inspection, options, activeCapabilities,
+                symbolProvider, referenceProvider, npcSpawnProvider, contentDiscovery,
                 semanticSourceIndex, semanticContentGraph);
     }
 
@@ -339,35 +390,42 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
         private final ServerIntegrationProvider provider;
         private final ServerConnection connection;
         private final ServerProjectInspection inspection;
+        private final IntegrationOptions options;
         private final Set<IntegrationCapability> capabilities;
         private final SymbolProvider symbolProvider;
         private final ReferenceProvider referenceProvider;
         private final NpcSpawnProvider npcSpawnProvider;
+        private final ContentDiscoveryService.Discovery contentDiscovery;
         private final SemanticSourceIndex semanticSourceIndex;
         private final SemanticContentGraph semanticContentGraph;
 
         private OpenRuneSession(ServerIntegrationProvider provider,
                                 ServerConnection connection,
                                 ServerProjectInspection inspection,
+                                IntegrationOptions options,
                                 Set<IntegrationCapability> capabilities,
                                 SymbolProvider symbolProvider,
                                 ReferenceProvider referenceProvider,
                                 NpcSpawnProvider npcSpawnProvider,
+                                ContentDiscoveryService.Discovery contentDiscovery,
                                 SemanticSourceIndex semanticSourceIndex,
                                 SemanticContentGraph semanticContentGraph) {
             this.provider = provider;
             this.connection = connection;
             this.inspection = inspection;
+            this.options = options;
             this.capabilities = Set.copyOf(capabilities);
             this.symbolProvider = symbolProvider;
             this.referenceProvider = referenceProvider;
             this.npcSpawnProvider = npcSpawnProvider;
+            this.contentDiscovery = contentDiscovery;
             this.semanticSourceIndex = semanticSourceIndex;
             this.semanticContentGraph = semanticContentGraph;
         }
 
         @Override public ServerIntegrationProvider provider() { return provider; }
         @Override public Path projectRoot() { return connection.root(); }
+        @Override public IntegrationOptions options() { return options; }
         @Override public Set<IntegrationCapability> activeCapabilities() { return capabilities; }
         @Override public Optional<ServerConnection> connection() { return Optional.of(connection); }
         @Override public Optional<ServerProjectInspection> projectInspection() {
@@ -381,6 +439,9 @@ public final class OpenRuneServerProvider implements ServerIntegrationProvider {
         }
         @Override public Optional<NpcSpawnProvider> npcSpawnProvider() {
             return Optional.ofNullable(npcSpawnProvider);
+        }
+        @Override public Optional<ContentDiscoveryService.Discovery> contentDiscovery() {
+            return Optional.ofNullable(contentDiscovery);
         }
         @Override public Optional<SemanticSourceIndex> semanticSourceIndex() {
             return Optional.ofNullable(semanticSourceIndex);

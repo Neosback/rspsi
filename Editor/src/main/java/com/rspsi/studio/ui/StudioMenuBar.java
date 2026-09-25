@@ -2,6 +2,7 @@ package com.rspsi.studio.ui;
 
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.integration.IntegrationCapability;
 import com.rspsi.editor.integration.ServerIntegrationService;
 import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
 import com.rspsi.studio.PluginManagerWindow;
@@ -66,7 +67,7 @@ public final class StudioMenuBar {
 
         // 3. View Menu (Program-level window/view toggles)
         if (ImGui.beginMenu("View")) {
-            if (ImGui.menuItem(StudioIcons.TUNE + "  Utility Drawer", "Ctrl+Space", drawerVisible)) {
+            if (ImGui.menuItem(StudioIcons.TUNE + "  Context Drawer", "Ctrl+Space", drawerVisible)) {
                 if (toggleDrawer != null) toggleDrawer.run();
             }
             if (ImGui.menuItem(StudioIcons.VIEWPORT + "  Tile Information HUD", null, hudVisible)) {
@@ -109,18 +110,30 @@ public final class StudioMenuBar {
             if (openIntegrationCenter != null) {
                 if (ImGui.menuItem(StudioIcons.TERMINAL + "  Integration Center...")) openIntegrationCenter.run();
             }
-            if (integrations != null && integrations.isConnected()) {
+            boolean connected = integrations != null && integrations.isConnected();
+            if (connected) {
                 var session = integrations.activeSession().orElseThrow();
-                ImGui.textDisabled("Connected: " + session.provider().name());
-                if (ImGui.menuItem(StudioIcons.CLOSE + "  Disconnect Server Project")) {
-                    integrations.disconnect();
-                }
+                ImGui.textDisabled("Project-owned: " + session.provider().name());
+                ImGui.textDisabled("Close the Studio project to disconnect this integration.");
             } else {
                 ImGui.textDisabled("No server project connected");
             }
             ImGui.separator();
-            if (ImGui.menuItem(StudioIcons.CHECK + "  Show Server NPC Spawns", null, showServerSpawns)) {
-                if (setShowServerSpawns != null) setShowServerSpawns.accept(!showServerSpawns);
+            if (ImGui.menuItem(StudioIcons.CHECK + "  Show Server NPC Spawns", null,
+                    showServerSpawns, connected)) {
+                boolean next = !showServerSpawns;
+                if (next) {
+                    try {
+                        var promoted = integrations.ensureCapabilities(IntegrationCapability.NPC_SPAWNS);
+                        next = promoted.activeCapabilities().contains(IntegrationCapability.NPC_SPAWNS);
+                    } catch (RuntimeException ignored) {
+                        next = false;
+                    }
+                }
+                if (setShowServerSpawns != null) setShowServerSpawns.accept(next);
+            }
+            if (connected && !showServerSpawns) {
+                ImGui.textDisabled("Spawn data loads lazily when enabled.");
             }
             ImGui.endMenu();
         }

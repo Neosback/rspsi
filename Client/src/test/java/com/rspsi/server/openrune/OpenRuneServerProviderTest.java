@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,6 +70,77 @@ class OpenRuneServerProviderTest {
         assertFalse(session.activeCapabilities().contains(IntegrationCapability.SOURCE_SEMANTICS));
         assertEquals(1234, session.symbolProvider().orElseThrow()
                 .resolve(SymbolNamespace.LOC, "coal_rock").orElseThrow().id());
+        session.close();
+    }
+
+    @Test
+    void lightweightSessionCanPromoteCapabilitiesWithoutLosingProjectConnection() throws Exception {
+        Path root = fixtureRoot();
+        Files.createDirectories(root.resolve(".data/raw-cache/map/npcs"));
+        Files.createDirectories(root.resolve(".data/gamevals"));
+        Files.writeString(root.resolve(".data/raw-cache/map/npcs/lumbridge.toml"),
+                "[[spawn]]\n"
+                        + "npc = \"npc.goblin\"\n"
+                        + "coords = \"0_50_50_1_1\"\n");
+        Files.writeString(root.resolve(".data/gamevals/npc.rscm"), "goblin=42\n");
+
+        ServerConnection connection = ServerConnection.forRoot(root);
+        IntegrationOptions startup = new IntegrationOptions(
+                root, Set.of(IntegrationCapability.CACHE_BUILD), Map.of("mode", "project-owned"));
+
+        ServerIntegrationService service = new ServerIntegrationService();
+        service.registerProvider(new OpenRuneServerProvider());
+        IntegrationSession initial = service.connect(connection, startup);
+
+        assertEquals(Set.of(IntegrationCapability.CACHE_BUILD), initial.activeCapabilities());
+        assertTrue(initial.symbolProvider().isEmpty());
+        assertTrue(initial.npcSpawnProvider().isEmpty());
+        assertTrue(initial.contentDiscovery().isEmpty());
+
+        IntegrationSession promoted = service.ensureCapabilities(Set.of(
+                IntegrationCapability.GAMEVALS,
+                IntegrationCapability.NPC_SPAWNS,
+                IntegrationCapability.CONTENT_INDEX,
+                IntegrationCapability.CONTENT_DIAGNOSTICS));
+
+        assertEquals(connection, promoted.connection().orElseThrow());
+        assertEquals("project-owned", promoted.options().settings().get("mode"));
+        assertTrue(promoted.activeCapabilities().contains(IntegrationCapability.CACHE_BUILD));
+        assertTrue(promoted.activeCapabilities().contains(IntegrationCapability.GAMEVALS));
+        assertTrue(promoted.activeCapabilities().contains(IntegrationCapability.NPC_SPAWNS));
+        assertTrue(promoted.activeCapabilities().contains(IntegrationCapability.CONTENT_INDEX));
+        assertTrue(promoted.symbolProvider().isPresent(),
+                "GAMEVALS must bind the symbol provider that makes those mappings usable");
+        assertEquals(42, promoted.symbolProvider().orElseThrow()
+                .resolve(SymbolNamespace.NPC, "goblin").orElseThrow().id());
+        assertEquals(1, promoted.npcSpawnProvider().orElseThrow().totalSpawnCount());
+        assertTrue(promoted.contentDiscovery().isPresent());
+        assertTrue(service.activeContentDiscovery().isPresent());
+
+        // Re-requesting an already active capability must not rebuild the session.
+        assertEquals(promoted, service.ensureCapabilities(IntegrationCapability.NPC_SPAWNS));
+        service.disconnect();
+    }
+
+    @Test
+    void packModulesAreExposedAsCustomCacheAssetCapability() throws Exception {
+        Path root = fixtureRoot();
+        Path pack = root.resolve("content/events/example/pack");
+        Files.createDirectories(pack.resolve("src/main/resources/pack/configs"));
+        Files.writeString(pack.resolve("build.gradle.kts"), "plugins {}\n");
+        Files.writeString(pack.resolve("src/main/resources/pack/configs/example.toml"), "x = 1\n");
+
+        OpenRuneServerProvider provider = new OpenRuneServerProvider();
+        var probe = provider.probe(root);
+
+        assertTrue(probe.supports(IntegrationCapability.CUSTOM_CACHE_ASSETS));
+        assertTrue(probe.details().get("Cache packs").contains("pack module"));
+
+        IntegrationSession session = provider.open(root, IntegrationOptions.defaults(
+                root, Set.of(IntegrationCapability.CUSTOM_CACHE_ASSETS)));
+        assertTrue(session.activeCapabilities().contains(IntegrationCapability.CUSTOM_CACHE_ASSETS));
+        assertTrue(session.projectInspection().orElseThrow().content().stream()
+                .anyMatch(entry -> entry.kind() == com.rspsi.server.ServerContentKind.PACK_MODULE));
         session.close();
     }
 
