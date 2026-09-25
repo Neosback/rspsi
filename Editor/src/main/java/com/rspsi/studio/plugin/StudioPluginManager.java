@@ -361,7 +361,7 @@ public final class StudioPluginManager {
                     registration.order(),
                     Set.copyOf(surfaces),
                     brushUi,
-                    false,
+                    ui.hasContextDrawerContent(),
                     null);
         }
 
