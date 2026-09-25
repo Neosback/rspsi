@@ -14,7 +14,11 @@ public final class LegacyDispleeCacheStore implements CacheStore {
     private final CacheLibrary library;
     private boolean closed;
 
-    LegacyDispleeCacheStore(CacheLibrary library) {
+    /**
+     * Legacy bridge for old RSPSi/Jagex compatibility code that already owns a Displee
+     * CacheLibrary. Modern OSRS code must not call this constructor.
+     */
+    public LegacyDispleeCacheStore(CacheLibrary library) {
         this.library = Objects.requireNonNull(library, "library");
     }
 
