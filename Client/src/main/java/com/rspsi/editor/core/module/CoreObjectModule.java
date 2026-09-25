@@ -4,7 +4,7 @@ import com.rspsi.editor.core.CoreEditorModule;
 import com.rspsi.editor.plugin.EditorInspectorRegistration;
 import com.rspsi.editor.plugin.EditorPluginContext;
 import com.rspsi.editor.plugin.EditorToolContextRegistration;
-import com.rspsi.editor.plugin.builtin.ObjectContentInspector;
+import com.rspsi.editor.core.inspector.ObjectContentInspector;
 import com.rspsi.editor.plugin.builtin.ObjectToolSettings;
 import com.rspsi.editor.tool.DeleteObjectTool;
 import com.rspsi.editor.tool.DuplicateObjectTool;
