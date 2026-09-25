@@ -935,12 +935,14 @@ public final class MapEditorView {
             float height = Math.max(1.0f, main.getSizeY() - menuBarH - menuBarGap);
 
             float leftRailW = brushRailVisible ? LeftBrushRail.RAIL_WIDTH : 0.0f;
-            float responsiveBase = Math.max(340.0f, width * 0.34f);
+            float usableWidth = Math.max(1.0f, width - leftRailW);
+            float minViewport = Math.min(500.0f, Math.max(260.0f, usableWidth * 0.48f));
+            float responsiveBase = Math.min(390.0f, Math.max(320.0f, usableWidth * 0.34f));
             float requested = Math.max(responsiveBase, requestedRightWidth);
-            float maxRight = Math.max(340.0f, width - leftRailW - 500.0f);
+            float maxRight = Math.max(260.0f, usableWidth - minViewport);
             float rightWidth = Math.min(Math.min(460.0f, requested), maxRight);
             float viewportX = x + leftRailW;
-            float viewportWidth = Math.max(500.0f, width - leftRailW - rightWidth);
+            float viewportWidth = Math.max(minViewport, usableWidth - rightWidth);
             float rightX = viewportX + viewportWidth;
 
             float availContentH = Math.max(100.0f, height - wsBarH - statusBarH);
