@@ -4,6 +4,7 @@ import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.inspector.ObjectResolutionSummary;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.studio.NativeSceneViewport;
@@ -30,6 +31,8 @@ public final class TileInfoHudPlugin implements StudioPlugin {
     private final ImBoolean showCoordinates = new ImBoolean(true);
     private final ImBoolean showPlane = new ImBoolean(true);
     private final ImBoolean showHeight = new ImBoolean(true);
+    private final ImBoolean showShape = new ImBoolean(false);
+    private final ImBoolean showRotation = new ImBoolean(false);
     private final ImBoolean showObject = new ImBoolean(true);
     private final ImInt anchorCorner = new ImInt(0); // 0=Bottom-Left, 1=Top-Left, 2=Bottom-Right, 3=Top-Right
     private final ImFloat bgAlpha = new ImFloat(0.75f);
@@ -82,10 +85,12 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         PickResult hit = lastPick.get();
         WorldTile coord = hit.tile();
         int height = 0;
+        TileSnapshot tileSnapshot = null;
         if (context.session() != null) {
             var local = context.session().coordinates().toLocal(coord).orElse(null);
             if (local != null) {
-                height = context.session().world().tile(local).snapshot().southWestHeight();
+                tileSnapshot = context.session().world().tile(local).snapshot();
+                height = tileSnapshot.southWestHeight();
             }
         }
 
@@ -103,6 +108,16 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         if (showHeight.get()) {
             if (!sb.isEmpty()) sb.append("  ·  ");
             sb.append("Height ").append(height);
+        }
+
+        if (showShape.get() && tileSnapshot != null) {
+            if (!sb.isEmpty()) sb.append("  ·  ");
+            sb.append("Shape ").append(tileSnapshot.overlayShape());
+        }
+
+        if (showRotation.get() && tileSnapshot != null) {
+            if (!sb.isEmpty()) sb.append("  ·  ");
+            sb.append("Rotation ").append(tileSnapshot.overlayRotation() * 90).append('°');
         }
 
         if (showObject.get() && hit.objectHit()) {
@@ -134,6 +149,11 @@ public final class TileInfoHudPlugin implements StudioPlugin {
             }
             if (!sb.isEmpty()) sb.append("  ·  ");
             sb.append(objName);
+            if (hit.hasSceneObjectIdentity()) {
+                var identity = hit.sceneObjectIdentity();
+                sb.append(" · shape ").append(identity.shape())
+                        .append(" · rot ").append(identity.rotation() * 90).append('°');
+            }
         }
 
         String text = sb.toString();
@@ -152,14 +172,15 @@ public final class TileInfoHudPlugin implements StudioPlugin {
             case 3 -> ViewportHudManager.Quadrant.TOP_RIGHT;
             default -> ViewportHudManager.Quadrant.BOTTOM_LEFT;
         };
-        context.huds().register(ID, quadrant, 20);
+        context.huds().register(ID, quadrant, 20, true, bgAlpha.get());
+        context.huds().setOpacity(ID, bgAlpha.get());
         var placement = context.huds().place(ID, badgeW, badgeH);
         if (placement == null) return;
         float hudX = placement.x();
         float hudY = placement.y();
 
         ImDrawList dl = ImGui.getWindowDrawList();
-        int alphaByte = (int) (Math.max(0.1f, Math.min(1.0f, bgAlpha.get())) * 255.0f);
+        int alphaByte = (int) (context.huds().opacity(ID) * 255.0f);
         int bgColor = StudioPalette.draw((alphaByte << 24) | (StudioPalette.CHROME_BG & 0x00FFFFFF));
         int borderColor = StudioPalette.draw((alphaByte << 24) | (StudioPalette.BORDER_STRONG & 0x00FFFFFF));
 
@@ -169,6 +190,18 @@ public final class TileInfoHudPlugin implements StudioPlugin {
 
         // Text
         dl.addText(hudX + padX, hudY + padY, StudioPalette.draw(StudioPalette.TEXT), text);
+
+        float restoreX = ImGui.getCursorScreenPosX();
+        float restoreY = ImGui.getCursorScreenPosY();
+        ImGui.setCursorScreenPos(hudX, hudY);
+        ImGui.invisibleButton("##tile-info-hud-drag", badgeW, badgeH);
+        if (ImGui.isItemActive() && ImGui.isMouseDragging(0)) {
+            context.huds().moveBy(ID, ImGui.getIO().getMouseDeltaX(), ImGui.getIO().getMouseDeltaY());
+        }
+        if (ImGui.isItemHovered()) {
+            ImGui.setTooltip("Tile Inspection HUD\nDrag to reposition");
+        }
+        ImGui.setCursorScreenPos(restoreX, restoreY);
     }
 
     private static String labelWithId(String displayName, int id) {
@@ -182,6 +215,8 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         ImGui.checkbox("Show Tile Coordinates##hud-coords", showCoordinates);
         ImGui.checkbox("Show Plane##hud-plane", showPlane);
         ImGui.checkbox("Show Elevation / Height##hud-height", showHeight);
+        ImGui.checkbox("Show Tile Shape##hud-shape", showShape);
+        ImGui.checkbox("Show Tile Rotation##hud-rotation", showRotation);
         ImGui.checkbox("Show Hovered Object##hud-obj", showObject);
 
         ImGui.separator();
@@ -193,6 +228,8 @@ public final class TileInfoHudPlugin implements StudioPlugin {
             showCoordinates.set(true);
             showPlane.set(true);
             showHeight.set(true);
+            showShape.set(false);
+            showRotation.set(false);
             showObject.set(true);
             anchorCorner.set(0);
             bgAlpha.set(0.75f);
