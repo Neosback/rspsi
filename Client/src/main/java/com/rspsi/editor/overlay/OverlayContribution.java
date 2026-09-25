@@ -13,7 +13,23 @@ public record OverlayContribution(
         boolean movable,
         boolean enabledByDefault,
         float preferredWidth,
+        float defaultOpacity,
         Supplier<? extends OverlayComponent> content) {
+
+    /** Compatibility constructor for pre-opacity contributions. */
+    public OverlayContribution(
+            String id,
+            String label,
+            OverlayPosition position,
+            OverlayLayer layer,
+            int priority,
+            boolean movable,
+            boolean enabledByDefault,
+            float preferredWidth,
+            Supplier<? extends OverlayComponent> content) {
+        this(id, label, position, layer, priority, movable, enabledByDefault,
+                preferredWidth, 0.86f, content);
+    }
 
     public OverlayContribution {
         id = text(id, "overlay id");
@@ -23,6 +39,10 @@ public record OverlayContribution(
         if (!Float.isFinite(preferredWidth) || preferredWidth <= 0.0f) {
             throw new IllegalArgumentException("preferredWidth must be positive and finite");
         }
+        if (!Float.isFinite(defaultOpacity)) {
+            throw new IllegalArgumentException("defaultOpacity must be finite");
+        }
+        defaultOpacity = Math.max(0.15f, Math.min(1.0f, defaultOpacity));
         Objects.requireNonNull(content, "content");
     }
 
