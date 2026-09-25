@@ -71,7 +71,7 @@ public final class PluginManagerWindow {
         if (pluginLifecycle == null && studioPlugins == null) return;
 
         StudioWidgets.windowBackdrop("plugins");
-        ImGui.setNextWindowSize(720.0f, 480.0f, ImGuiCond.Appearing);
+        ImGui.setNextWindowSize(880.0f, 600.0f, ImGuiCond.Appearing);
         ImBoolean pOpen = new ImBoolean(open);
         if (!ImGui.begin(StudioIcons.EXTENSION + "  Plugins##studio-plugins", pOpen, ImGuiWindowFlags.NoCollapse)) {
             open = pOpen.get();
