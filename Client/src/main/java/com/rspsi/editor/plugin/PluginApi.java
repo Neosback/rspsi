@@ -40,9 +40,9 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * Fluent, user-friendly, and powerful API front door for first-party and community editor plugins.
+ * Fluent, user-friendly, and powerful API front door for first-class editor extensions.
  *
- * <p>All contributions registered through {@code PluginApi} are automatically bound to
+ * <p>All extension registrations created through {@code PluginApi} are automatically bound to
  * {@link ContributionOwner#plugin(String)}, and any closable resources or dynamic settings
  * are registered with {@link EditorPluginContext#track(AutoCloseable)} so that unload/reload
  * cleans them up automatically without leaving stale state behind.</p>
