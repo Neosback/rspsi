@@ -380,7 +380,7 @@ public final class ContentStudioView {
         var summary = cache.decoderSummary();
         if (summary.allDecodersPassed()) {
             ImGui.textColored(
-                    StudioDrawColors.abgr(0xFF4ADE80),
+                    StudioPalette.SUCCESS,
                     StudioIcons.CHECK + "  Required decoders healthy");
         } else {
             ImGui.text("Decoder diagnostics: " + summary.failures().size());
