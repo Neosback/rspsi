@@ -5,144 +5,123 @@ import imgui.ImGuiStyle;
 import imgui.flag.ImGuiCol;
 
 /**
- * One-time Dear ImGui style pass for the native OpenRune Studio shell.
+ * Single authoritative Dear ImGui theme for OpenRune Content Studio.
  *
- * <p>Implements the theme rules recorded in {@code docs/UI_UX_FOUNDATION.md}:
- * dark viewport/panel separation, a restrained accent color reserved for
- * active/selected state, visible focus rings, and low corner rounding in the
- * spirit of dense technical tools rather than a rounded consumer application.
- * Controls are deliberately flat; hierarchy comes from spacing, typography,
- * and quiet surfaces instead of stock ImGui bevels.</p>
+ * <p>The shell uses one blue interaction language throughout the product.
+ * Green/amber/red are reserved for semantic success/warning/error states.
+ * Individual panels should consume {@link StudioPalette} instead of inventing
+ * local purple/cyan/red variants.</p>
  */
 public final class StudioTheme {
-    private StudioTheme() {
-    }
+    private StudioTheme() {}
 
-    // Backgrounds, darkest to lightest in modern layered Zinc/Neutral scale.
-    private static final float[] BG_APP = rgb(0x0E, 0x10, 0x15);
-    private static final float[] BG_PANEL = rgb(0x14, 0x16, 0x1D);
-    private static final float[] BG_PANEL_ALT = rgb(0x1B, 0x1E, 0x27);
-    private static final float[] BG_FIELD = rgb(0x11, 0x13, 0x1A);
-    private static final float[] BG_FIELD_HOVERED = rgb(0x22, 0x26, 0x33);
-
-    private static final float[] BORDER = rgb(0x27, 0x2C, 0x38);
-
-    // Modern Indigo / Violet primary accents (#6366F1), plus OSRS gold for telemetry/badges
-    private static final float[] ACCENT = rgb(0x63, 0x66, 0xF1);
-    private static final float[] ACCENT_HOVER = rgb(0x81, 0x8C, 0xF8);
-    private static final float[] ACCENT_ACTIVE = rgb(0x4F, 0x46, 0xE5);
-    private static final float[] ACCENT_MUTED = rgb(0x25, 0x28, 0x3D);
-    private static final float[] ACCENT_GOLD = rgb(0xF5, 0x9E, 0x0B);
-
-    private static final float[] TEXT = rgb(0xF1, 0xF5, 0xF9);
-    private static final float[] TEXT_MUTED = rgb(0x94, 0xA3, 0xB8);
-    private static final float[] TEXT_DISABLED = rgb(0x64, 0x74, 0x8B);
-
-    /** Applies the theme once. Call after {@code ImGui.createContext()}. */
+    /** Applies the theme once after {@code ImGui.createContext()}. */
     public static void apply() {
-        // Start from the stock dark palette so every ImGuiCol slot this
-        // theme does not explicitly override still has a sane, readable
-        // value instead of defaulting to ImGui's light theme.
         ImGui.styleColorsDark();
         ImGuiStyle style = ImGui.getStyle();
 
-        // Modern SaaS-grade border radii (Linear / Raycast aesthetic)
-        style.setWindowRounding(10.0f);
-        style.setChildRounding(8.0f);
-        style.setFrameRounding(6.0f);
-        style.setPopupRounding(8.0f);
-        style.setScrollbarRounding(10.0f);
-        style.setGrabRounding(6.0f);
-        style.setTabRounding(6.0f);
+        // Dense desktop/web-app geometry. Rounded enough to read as modern,
+        // without turning technical panels into floating consumer cards.
+        style.setWindowRounding(8.0f);
+        style.setChildRounding(6.0f);
+        style.setFrameRounding(5.0f);
+        style.setPopupRounding(7.0f);
+        style.setScrollbarRounding(7.0f);
+        style.setGrabRounding(5.0f);
+        style.setTabRounding(5.0f);
         style.setWindowBorderSize(1.0f);
         style.setChildBorderSize(1.0f);
         style.setPopupBorderSize(1.0f);
         style.setFrameBorderSize(1.0f);
 
-        // Generous spacing & whitespace: components have room to breathe
-        style.setWindowPadding(14.0f, 12.0f);
-        style.setFramePadding(10.0f, 6.0f);
-        style.setItemSpacing(8.0f, 8.0f);
-        style.setItemInnerSpacing(6.0f, 6.0f);
+        style.setWindowPadding(12.0f, 10.0f);
+        style.setFramePadding(9.0f, 5.0f);
+        style.setItemSpacing(8.0f, 7.0f);
+        style.setItemInnerSpacing(6.0f, 5.0f);
         style.setIndentSpacing(18.0f);
-        style.setScrollbarSize(10.0f);
 
-        color(style, ImGuiCol.Text, TEXT);
-        color(style, ImGuiCol.TextDisabled, TEXT_DISABLED);
-        color(style, ImGuiCol.WindowBg, BG_APP);
-        color(style, ImGuiCol.ChildBg, BG_PANEL);
-        color(style, ImGuiCol.PopupBg, BG_PANEL_ALT);
-        color(style, ImGuiCol.Border, BORDER);
-        color(style, ImGuiCol.BorderShadow, BG_APP, 0.0f);
+        // Scrollbars are intentionally visible. A hidden-dark grab made panels
+        // feel broken even when vertical scrolling was correct.
+        style.setScrollbarSize(12.0f);
 
-        color(style, ImGuiCol.FrameBg, BG_FIELD);
-        color(style, ImGuiCol.FrameBgHovered, BG_FIELD_HOVERED);
-        color(style, ImGuiCol.FrameBgActive, ACCENT_MUTED);
+        color(style, ImGuiCol.Text, StudioPalette.TEXT);
+        color(style, ImGuiCol.TextDisabled, StudioPalette.TEXT_DISABLED);
+        color(style, ImGuiCol.WindowBg, StudioPalette.APP_BG);
+        color(style, ImGuiCol.ChildBg, StudioPalette.PANEL_BG);
+        color(style, ImGuiCol.PopupBg, StudioPalette.PANEL_ELEVATED);
+        color(style, ImGuiCol.Border, StudioPalette.BORDER);
+        color(style, ImGuiCol.BorderShadow, 0x00000000);
 
-        color(style, ImGuiCol.TitleBg, BG_APP);
-        color(style, ImGuiCol.TitleBgActive, BG_PANEL_ALT);
-        color(style, ImGuiCol.TitleBgCollapsed, BG_APP, 0.6f);
-        color(style, ImGuiCol.MenuBarBg, BG_PANEL);
+        color(style, ImGuiCol.FrameBg, StudioPalette.FIELD_BG);
+        color(style, ImGuiCol.FrameBgHovered, StudioPalette.FIELD_HOVER);
+        color(style, ImGuiCol.FrameBgActive, StudioPalette.ACCENT_SOFT);
 
-        color(style, ImGuiCol.ScrollbarBg, BG_APP);
-        color(style, ImGuiCol.ScrollbarGrab, BG_PANEL_ALT);
-        color(style, ImGuiCol.ScrollbarGrabHovered, BG_FIELD_HOVERED);
-        color(style, ImGuiCol.ScrollbarGrabActive, ACCENT_ACTIVE);
+        color(style, ImGuiCol.TitleBg, StudioPalette.CHROME_BG);
+        color(style, ImGuiCol.TitleBgActive, StudioPalette.PANEL_ELEVATED);
+        color(style, ImGuiCol.TitleBgCollapsed, StudioPalette.CHROME_BG);
+        color(style, ImGuiCol.MenuBarBg, StudioPalette.CHROME_BG);
 
-        color(style, ImGuiCol.CheckMark, ACCENT);
-        color(style, ImGuiCol.SliderGrab, ACCENT);
-        color(style, ImGuiCol.SliderGrabActive, ACCENT_ACTIVE);
+        color(style, ImGuiCol.ScrollbarBg, StudioPalette.APP_BG);
+        color(style, ImGuiCol.ScrollbarGrab, StudioPalette.BORDER_STRONG);
+        color(style, ImGuiCol.ScrollbarGrabHovered, 0xFF52677F);
+        color(style, ImGuiCol.ScrollbarGrabActive, StudioPalette.ACCENT);
 
-        // Buttons stay quiet and layered until interacted with
-        color(style, ImGuiCol.Button, BG_PANEL_ALT);
-        color(style, ImGuiCol.ButtonHovered, rgb(0x25, 0x2A, 0x38));
-        color(style, ImGuiCol.ButtonActive, ACCENT);
+        color(style, ImGuiCol.CheckMark, StudioPalette.ACCENT);
+        color(style, ImGuiCol.SliderGrab, StudioPalette.ACCENT);
+        color(style, ImGuiCol.SliderGrabActive, StudioPalette.ACCENT_HOVER);
 
-        color(style, ImGuiCol.Header, ACCENT_MUTED, 0.85f);
-        color(style, ImGuiCol.HeaderHovered, rgb(0x28, 0x2F, 0x42));
-        color(style, ImGuiCol.HeaderActive, ACCENT_ACTIVE);
+        color(style, ImGuiCol.Button, StudioPalette.PANEL_ELEVATED);
+        color(style, ImGuiCol.ButtonHovered, 0xFF24364A);
+        color(style, ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
 
-        color(style, ImGuiCol.Separator, BORDER, 0.85f);
-        color(style, ImGuiCol.SeparatorHovered, ACCENT);
-        color(style, ImGuiCol.SeparatorActive, ACCENT_ACTIVE);
+        color(style, ImGuiCol.Header, StudioPalette.ACCENT_SOFT);
+        color(style, ImGuiCol.HeaderHovered, StudioPalette.ACCENT_MUTED);
+        color(style, ImGuiCol.HeaderActive, StudioPalette.ACCENT_ACTIVE);
 
-        // Visible focus rings: resize grips use the accent
-        color(style, ImGuiCol.ResizeGrip, ACCENT_MUTED, 0.4f);
-        color(style, ImGuiCol.ResizeGripHovered, ACCENT_HOVER);
-        color(style, ImGuiCol.ResizeGripActive, ACCENT_ACTIVE);
+        color(style, ImGuiCol.Separator, StudioPalette.BORDER);
+        color(style, ImGuiCol.SeparatorHovered, StudioPalette.ACCENT);
+        color(style, ImGuiCol.SeparatorActive, StudioPalette.ACCENT_ACTIVE);
 
-        color(style, ImGuiCol.Tab, BG_PANEL);
-        color(style, ImGuiCol.TabHovered, ACCENT_HOVER);
-        color(style, ImGuiCol.TabSelected, ACCENT_MUTED);
-        color(style, ImGuiCol.TabDimmed, BG_APP);
-        color(style, ImGuiCol.TabDimmedSelected, BG_PANEL_ALT);
+        color(style, ImGuiCol.ResizeGrip, StudioPalette.BORDER_STRONG);
+        color(style, ImGuiCol.ResizeGripHovered, StudioPalette.ACCENT_HOVER);
+        color(style, ImGuiCol.ResizeGripActive, StudioPalette.ACCENT_ACTIVE);
 
-        color(style, ImGuiCol.DockingPreview, ACCENT, 0.5f);
-        color(style, ImGuiCol.DockingEmptyBg, BG_APP);
+        color(style, ImGuiCol.Tab, StudioPalette.CHROME_BG);
+        color(style, ImGuiCol.TabHovered, StudioPalette.ACCENT_MUTED);
+        color(style, ImGuiCol.TabSelected, StudioPalette.ACCENT);
+        color(style, ImGuiCol.TabDimmed, StudioPalette.APP_BG);
+        color(style, ImGuiCol.TabDimmedSelected, StudioPalette.PANEL_ELEVATED);
 
-        color(style, ImGuiCol.TableHeaderBg, BG_PANEL_ALT);
-        color(style, ImGuiCol.TableBorderStrong, BORDER);
-        color(style, ImGuiCol.TableBorderLight, BORDER, 0.6f);
-        color(style, ImGuiCol.TableRowBg, BG_PANEL, 0.0f);
-        color(style, ImGuiCol.TableRowBgAlt, BG_PANEL_ALT, 0.35f);
+        color(style, ImGuiCol.DockingPreview, withAlpha(StudioPalette.ACCENT, 0x80));
+        color(style, ImGuiCol.DockingEmptyBg, StudioPalette.APP_BG);
 
-        color(style, ImGuiCol.TextLink, ACCENT_HOVER);
-        color(style, ImGuiCol.TextSelectedBg, ACCENT_MUTED);
+        color(style, ImGuiCol.TableHeaderBg, StudioPalette.PANEL_ELEVATED);
+        color(style, ImGuiCol.TableBorderStrong, StudioPalette.BORDER);
+        color(style, ImGuiCol.TableBorderLight, withAlpha(StudioPalette.BORDER, 0x99));
+        color(style, ImGuiCol.TableRowBg, 0x00000000);
+        color(style, ImGuiCol.TableRowBgAlt, 0x331B2736);
 
-        color(style, ImGuiCol.NavCursor, ACCENT);
-        color(style, ImGuiCol.DragDropTarget, ACCENT);
-        color(style, ImGuiCol.UnsavedMarker, ACCENT_GOLD);
+        color(style, ImGuiCol.TextLink, StudioPalette.ACCENT_HOVER);
+        color(style, ImGuiCol.TextSelectedBg, withAlpha(StudioPalette.ACCENT, 0x55));
+
+        color(style, ImGuiCol.NavCursor, StudioPalette.ACCENT);
+        color(style, ImGuiCol.DragDropTarget, StudioPalette.ACCENT);
+        color(style, ImGuiCol.UnsavedMarker, StudioPalette.WARNING);
+
+        // All modal windows dim the owning workspace like the command palette.
+        color(style, ImGuiCol.ModalWindowDimBg, 0x99070B11);
+        color(style, ImGuiCol.NavWindowingDimBg, 0x66070B11);
     }
 
-    private static void color(ImGuiStyle style, int slot, float[] rgb) {
-        color(style, slot, rgb, 1.0f);
+    private static void color(ImGuiStyle style, int slot, int argb) {
+        float a = ((argb >>> 24) & 0xFF) / 255.0f;
+        float r = ((argb >>> 16) & 0xFF) / 255.0f;
+        float g = ((argb >>> 8) & 0xFF) / 255.0f;
+        float b = (argb & 0xFF) / 255.0f;
+        style.setColor(slot, r, g, b, a);
     }
 
-    private static void color(ImGuiStyle style, int slot, float[] rgb, float alpha) {
-        style.setColor(slot, rgb[0], rgb[1], rgb[2], alpha);
-    }
-
-    private static float[] rgb(int r, int g, int b) {
-        return new float[]{r / 255.0f, g / 255.0f, b / 255.0f};
+    private static int withAlpha(int argb, int alpha) {
+        return (argb & 0x00FFFFFF) | ((alpha & 0xFF) << 24);
     }
 }
