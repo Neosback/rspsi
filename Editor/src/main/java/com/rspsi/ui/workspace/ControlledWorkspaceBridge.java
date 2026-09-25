@@ -13,7 +13,7 @@ import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
 import com.rspsi.editor.plugin.EditorPluginLoader;
 import com.rspsi.editor.plugin.EditorPluginStateStore;
 import com.rspsi.editor.plugin.PluginDiscovery;
-import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
+import com.rspsi.editor.core.CoreEditorModules;
 import com.rspsi.editor.model.WorldWindow;
 import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.render.CameraState;
@@ -213,20 +213,19 @@ public final class ControlledWorkspaceBridge {
             }
             if (shell.panelNode("tools") instanceof AdaptiveToolPanel tools) {
                 tools.showCanonical(viewport.canonicalViewport());
-                List<EditorPlugin> pluginsToLoad = new ArrayList<>();
-                pluginsToLoad.addAll(CoreToolsPlugin.builtIns());
                 PluginDiscovery discovery = EditorPluginLoader.discoverOwned(
                         java.nio.file.Path.of("plugins"),
                         Thread.currentThread().getContextClassLoader());
-                pluginsToLoad.addAll(discovery.plugins());
+                List<EditorPlugin> extensionsToLoad = new ArrayList<>(discovery.plugins());
                 EditorPluginLifecycleManager lifecycle = EditorPluginLifecycleManager.start(
-                        pluginsToLoad,
+                        extensionsToLoad,
                         pluginState == null
                                 ? EditorPluginStateStore.defaultStore() : pluginState,
                         session,
                         assets == null ? EmptyAssetRepository.INSTANCE : assets,
                         viewport.canonicalViewport()::sceneSnapshotView,
-                        candidates -> EditorPluginHost.initialize(
+                        candidates -> EditorPluginHost.initializeWithCoreModules(
+                                CoreEditorModules.all(),
                                 candidates,
                                 session,
                                 assets == null ? EmptyAssetRepository.INSTANCE : assets,

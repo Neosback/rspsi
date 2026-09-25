@@ -1,4 +1,4 @@
-package com.rspsi.editor.plugin.builtin;
+package com.rspsi.editor.core.settings;
 
 import com.rspsi.editor.plugin.EditorSetting;
 import com.rspsi.editor.settings.EditorSettingKeys;

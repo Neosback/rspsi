@@ -1,4 +1,4 @@
-package com.rspsi.editor.plugin.builtin;
+package com.rspsi.editor.core.inspector;
 
 import com.rspsi.editor.inspector.ObjectContentFacetResolver;
 import com.rspsi.editor.plugin.EditorInspector;
@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 /** First-party inspector projection for OpenRune server/content semantics on a selected object. */
-final class ObjectContentInspector implements EditorInspector {
+public final class ObjectContentInspector implements EditorInspector {
     private final ObjectContentFacetResolver resolver = new ObjectContentFacetResolver();
 
     @Override

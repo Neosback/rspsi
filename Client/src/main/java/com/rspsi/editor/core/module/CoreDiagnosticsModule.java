@@ -1,28 +1,21 @@
-package com.rspsi.editor.plugin.builtin;
+package com.rspsi.editor.core.module;
 
+import com.rspsi.editor.core.CoreEditorModule;
 import com.rspsi.editor.debug.DebugColor;
 import com.rspsi.editor.plugin.EditorOverlayRegistration;
-import com.rspsi.editor.plugin.EditorPlugin;
 import com.rspsi.editor.plugin.EditorPluginContext;
-import com.rspsi.editor.plugin.EditorPluginRegistry;
 import com.rspsi.editor.plugin.EditorSceneOverlay;
 
-/**
- * Grouped first-party diagnostics contribution for scene/render inspection.
- * The overlay reads only the immutable scene projection and is safe for both
- * JavaFX and Dear ImGui frontends.
- */
-public final class RendererDiagnosticsPlugin implements EditorPlugin {
+/** Canonical always-on renderer/scene diagnostics module. */
+public final class CoreDiagnosticsModule implements CoreEditorModule {
     public static final String ID = "rspsi.tools.renderer-debug";
 
     @Override public String id() { return ID; }
-
-    @Override public int loadOrder() { return 40; }
+    @Override public int order() { return 40; }
 
     @Override
-    public void initialize(EditorPluginContext context) {
-        EditorPluginRegistry registry = context.registry();
-        registry.registerOverlay(new EditorOverlayRegistration(
+    public void install(EditorPluginContext context) {
+        context.registry().registerOverlay(new EditorOverlayRegistration(
                 "renderer-debug.scene-semantics",
                 "Scene semantics",
                 "Renderer diagnostics",
@@ -50,7 +43,6 @@ public final class RendererDiagnosticsPlugin implements EditorPlugin {
         }
     }
 
-    /** Stable semantic defaults exposed for frontend palette adapters. */
     public static DebugColor defaultMarkerColor() {
         return DebugColor.YELLOW;
     }

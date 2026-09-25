@@ -1,22 +1,21 @@
-package com.rspsi.editor.plugin.builtin;
+package com.rspsi.editor.core.module;
 
-import com.rspsi.editor.plugin.EditorPlugin;
+import com.rspsi.editor.core.CoreEditorModule;
 import com.rspsi.editor.plugin.EditorPluginContext;
 import com.rspsi.editor.plugin.ui.UiSurfaceContribution;
 import com.rspsi.editor.ui.DockRegion;
 
 import java.util.EnumSet;
 
-/** Neutral built-in declarations for Studio-managed utility/HUD surfaces. */
-public final class CoreUiSurfacesPlugin implements EditorPlugin {
+/** Canonical always-on declarations for Studio-managed utility/HUD surfaces. */
+public final class CoreUiModule implements CoreEditorModule {
     public static final String ID = "rspsi.ui.core-surfaces";
 
     @Override public String id() { return ID; }
-
-    @Override public int loadOrder() { return 50; }
+    @Override public int order() { return 50; }
 
     @Override
-    public void initialize(EditorPluginContext context) {
+    public void install(EditorPluginContext context) {
         context.registry().registerUiSurface(new UiSurfaceContribution(
                 "studio.minimap-hud", "Minimap HUD", "map",
                 UiSurfaceContribution.SurfaceType.VIEWPORT_HUD,

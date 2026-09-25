@@ -11,6 +11,7 @@ Detailed supporting contracts:
 - PROJECT_LAUNCHER_AND_DASHBOARD.md - project-first startup, recent-project launcher, loading gate, project wizard, and in-project Dashboard contract
 - RUNELITE_REFERENCE_GUIDE.md - fast problem-to-source lookup for vendored RuneLite/deob/API/mixins/GPU reference work
 - STUDIO_SEMANTIC_API.md - Studio-owned authored-world/resolved-scene API contract and RuneLite reference policy
+- EDITOR_DEVELOPMENT_ARCHITECTURE.md - canonical internal modular-monolith composition, code-placement, and anti-duplication rules
 - STUDIO_API_SYSTEM.md - canonical API layering, stability, lifecycle, permissions, threading, and package-boundary contract
 - PLUGIN_EXTENSION_SDK.md - public plugin/extension SDK and first-class map-tool contribution contract
 - PHASE0_LUMBRIDGE_ACCEPTANCE.md - pinned real-cache object-resolution acceptance for Lumbridge region 50,50
@@ -28,15 +29,16 @@ When project documents disagree, use this order:
 1. current production code plus passing tests for what the repository actually does
 2. RENDERING_PARITY_MANIFEST.json for rendering-status claims
 3. ROADMAP.md for project execution order and architectural sequencing
-4. STUDIO_API_SYSTEM.md for system-wide API layering, stability, lifecycle, permissions, and package boundaries
-5. STUDIO_SEMANTIC_API.md for the stable authored-world/resolved-scene boundary
-6. PLUGIN_EXTENSION_SDK.md for public plugin/map-tool capability and extension rules
-7. PROJECT_LAUNCHER_AND_DASHBOARD.md for application startup/project lifecycle and Dashboard behavior
-8. UI_WORKSPACE_CONTRACT.md for in-project editor-shell and plugin UI placement
-9. CONTENT_STUDIO_FOUNDATION.md for advanced-authoring prerequisite detail
-10. OPENRUNE_ECOSYSTEM_INTEGRATION.md for OpenRune subsystem integration detail
-11. OPENRUNE_MAVEN_CATALOG.md for published OpenRune dependency/capability inventory
-12. explicitly historical acceptance/reference documents for background only
+4. EDITOR_DEVELOPMENT_ARCHITECTURE.md for internal composition, canonical code locations, and anti-duplication rules
+5. STUDIO_API_SYSTEM.md for system-wide API layering, stability, lifecycle, permissions, and package boundaries
+6. STUDIO_SEMANTIC_API.md for the stable authored-world/resolved-scene boundary
+7. PLUGIN_EXTENSION_SDK.md for public plugin/map-tool capability and extension rules
+8. PROJECT_LAUNCHER_AND_DASHBOARD.md for application startup/project lifecycle and Dashboard behavior
+9. UI_WORKSPACE_CONTRACT.md for in-project editor-shell and plugin UI placement
+10. CONTENT_STUDIO_FOUNDATION.md for advanced-authoring prerequisite detail
+11. OPENRUNE_ECOSYSTEM_INTEGRATION.md for OpenRune subsystem integration detail
+12. OPENRUNE_MAVEN_CATALOG.md for published OpenRune dependency/capability inventory
+13. explicitly historical acceptance/reference documents for background only
 
 A lower item must not silently override a higher item. When work makes a lower document stale, update it in the same PR when practical.
 

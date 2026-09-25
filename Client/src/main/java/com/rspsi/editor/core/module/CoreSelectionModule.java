@@ -1,0 +1,71 @@
+package com.rspsi.editor.core.module;
+
+import com.rspsi.editor.core.CoreEditorModule;
+import com.rspsi.editor.plugin.EditorPluginContext;
+import com.rspsi.editor.plugin.EditorToolContextRegistration;
+import com.rspsi.editor.core.settings.SelectionToolSettings;
+import com.rspsi.editor.tool.AttributeSelectionTool;
+import com.rspsi.editor.tool.BoxSelectTool;
+import com.rspsi.editor.tool.DuplicateSelectionTool;
+import com.rspsi.editor.tool.LassoSelectTool;
+import com.rspsi.editor.tool.MoveSelectionTool;
+import com.rspsi.editor.tool.ReplaceSelectionTool;
+import com.rspsi.editor.tool.RotateSelectionTool;
+
+import java.util.List;
+import java.util.function.Supplier;
+
+/** Canonical always-on selection and transform module. */
+public final class CoreSelectionModule implements CoreEditorModule {
+    public static final String ID = "rspsi.tools.selection";
+
+    @Override public String id() { return ID; }
+    @Override public int order() { return 30; }
+
+    @Override
+    public void install(EditorPluginContext context) {
+        SelectionToolSettings settings = new SelectionToolSettings(context.settings());
+
+        register(context, settings, "selection.box", "Box select",
+                "Selection", "Selector", "SELECT_BOX", "1", 10, BoxSelectTool::new);
+        register(context, settings, "selection.lasso", "Lasso select",
+                "Selection", "Selector", "SELECT_LASSO", "Shift+1", 20, LassoSelectTool::new);
+        register(context, settings, "selection.attribute", "Select by attribute",
+                "Selection", "Selector", "SELECT_ATTR", null, 30, AttributeSelectionTool::new);
+        register(context, settings, "selection.move", "Move selection",
+                "Selection", "Selector", "MOVE", "W", 40, MoveSelectionTool::new);
+        register(context, settings, "selection.rotate", "Rotate selection",
+                "Selection", "Selector", "ROTATE", "R", 50, RotateSelectionTool::new);
+        register(context, settings, "selection.duplicate", "Duplicate selection",
+                "Selection", "Selector", "DUPLICATE", "Shift+D", 60, DuplicateSelectionTool::new);
+        register(context, settings, "selection.replace", "Replace selection",
+                "Selection", "Selector", "REPLACE", null, 70, () -> new ReplaceSelectionTool(0));
+
+        context.registry().registerToolContext(new EditorToolContextRegistration(
+                "selection.context", "Selection settings",
+                List.of("selection.box", "selection.lasso", "selection.attribute",
+                        "selection.move", "selection.rotate", "selection.duplicate",
+                        "selection.replace"),
+                0, () -> ignored -> settings.settings()));
+    }
+
+    private static void register(
+            EditorPluginContext context,
+            SelectionToolSettings settings,
+            String id,
+            String label,
+            String category,
+            String group,
+            String icon,
+            String shortcut,
+            int order,
+            Supplier<? extends com.rspsi.editor.tool.EditorTool> factory) {
+        context.registry().registerTool(
+                id, label, category, group, icon, shortcut, order,
+                () -> {
+                    var tool = factory.get();
+                    settings.configure(id, tool);
+                    return tool;
+                });
+    }
+}
