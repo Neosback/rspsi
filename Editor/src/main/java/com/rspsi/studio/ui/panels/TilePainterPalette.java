@@ -82,7 +82,7 @@ public final class TilePainterPalette implements StudioPanel {
     @Override public String icon() { return StudioIcons.PALETTE; }
     @Override public DockRegion preferredRegion() { return DockRegion.BOTTOM; }
     @Override public Set<DockRegion> allowedRegions() {
-        return EnumSet.of(DockRegion.BOTTOM, DockRegion.RIGHT);
+        return EnumSet.of(DockRegion.BOTTOM);
     }
     @Override public int order() { return 5; }
 
