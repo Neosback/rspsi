@@ -5,6 +5,7 @@ import com.displee.cache.index.Index;
 import com.rspsi.cache.CacheStoreCapabilities;
 import com.rspsi.cache.CacheWriteMode;
 
+import java.nio.file.Path;
 import java.util.Objects;
 
 /** Displee adapter retained for 317 and custom/legacy cache compatibility. */
@@ -13,8 +14,15 @@ public final class LegacyDispleeCacheStore implements CacheStore {
     private final CacheLibrary library;
     private boolean closed;
 
-    public LegacyDispleeCacheStore(CacheLibrary library) {
+    LegacyDispleeCacheStore(CacheLibrary library) {
         this.library = Objects.requireNonNull(library, "library");
+    }
+
+    /** Opens the explicit legacy/custom cache backend. Modern OSRS code must use FileStore. */
+    public static LegacyDispleeCacheStore open(Path path) {
+        Objects.requireNonNull(path, "path");
+        Path normalized = path.toAbsolutePath().normalize();
+        return new LegacyDispleeCacheStore(new CacheLibrary(normalized.toString(), false, null));
     }
 
     @Override
