@@ -101,7 +101,7 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         }
 
         if (showHeight.get()) {
-            if (sb.length() > 2) sb.append("  |  ");
+            if (!sb.isEmpty()) sb.append("  ·  ");
             sb.append("Height ").append(height);
         }
 
@@ -132,7 +132,7 @@ public final class TileInfoHudPlugin implements StudioPlugin {
                     objName = labelWithId(placedLabel, hit.objectId());
                 }
             }
-            if (sb.length() > 2) sb.append("  |  ");
+            if (!sb.isEmpty()) sb.append("  ·  ");
             sb.append(objName);
         }
 
