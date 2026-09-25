@@ -24,6 +24,7 @@ public final class StudioFonts {
 
     private static ImFont ui;
     private static ImFont heading;
+    private static ImFont display;
     private static ImFont icon;
     private static ImFont mono;
 
@@ -53,7 +54,14 @@ public final class StudioFonts {
         headingConfig.setOversampleV(3);
         headingConfig.setPixelSnapH(false);
         heading = atlas.addFontFromMemoryTTF(resource("/font/Roboto-Regular.ttf"),
-                23.0f * uiScale, headingConfig);
+                24.0f * uiScale, headingConfig);
+
+        ImFontConfig displayConfig = new ImFontConfig();
+        displayConfig.setOversampleH(3);
+        displayConfig.setOversampleV(3);
+        displayConfig.setPixelSnapH(false);
+        display = atlas.addFontFromMemoryTTF(resource("/font/Roboto-Regular.ttf"),
+                31.0f * uiScale, displayConfig);
 
         // Merge Google Fonts Material Icons into primary UI font
         ImFontConfig materialIconConfig = new ImFontConfig();
@@ -92,7 +100,7 @@ public final class StudioFonts {
         monoConfig.setOversampleV(1);
         monoConfig.setPixelSnapH(true);
         mono = atlas.addFontFromMemoryTTF(resource("/font/JetBrainsMono-Regular.ttf"),
-                13.0f * uiScale, monoConfig);
+                14.0f * uiScale, monoConfig);
 
         if (!atlas.build()) {
             throw new IllegalStateException("Unable to build the OpenRune Studio font atlas");
@@ -103,11 +111,13 @@ public final class StudioFonts {
         // twice as wide or clip their labels on macOS.
         ui.setScale(1.0f / uiScale);
         heading.setScale(1.0f / uiScale);
+        display.setScale(1.0f / uiScale);
         icon.setScale(1.0f / uiScale);
         mono.setScale(1.0f / uiScale);
         io.setFontDefault(ui);
         uiConfig.destroy();
         headingConfig.destroy();
+        displayConfig.destroy();
         materialIconConfig.destroy();
         faConfig.destroy();
         railIconConfig.destroy();
@@ -121,6 +131,11 @@ public final class StudioFonts {
 
     public static ImFont heading() {
         return Objects.requireNonNull(heading, "Studio fonts are not initialized");
+    }
+
+    /** Large display face used only for launch/loading/product titles. */
+    public static ImFont display() {
+        return Objects.requireNonNull(display, "Studio fonts are not initialized");
     }
 
     public static ImFont mono() {
