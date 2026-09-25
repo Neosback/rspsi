@@ -1,11 +1,11 @@
 package com.rspsi.studio
 
 /** Immutable status snapshot rendered by the pre-dashboard project loading gate. */
-data class ProjectLoadStatus private constructor(
-    private val phaseValue: Phase,
-    private val progressValue: Double,
-    private val messageValue: String,
-    private val detailValue: String,
+class ProjectLoadStatus(
+    phase: Phase?,
+    progress: Double,
+    message: String?,
+    detail: String?,
     private val failureValue: Throwable?,
 ) {
     enum class Phase {
@@ -21,19 +21,10 @@ data class ProjectLoadStatus private constructor(
         FAILED,
     }
 
-    constructor(
-        phase: Phase?,
-        progress: Double,
-        message: String?,
-        detail: String?,
-        failure: Throwable?,
-    ) : this(
-        phaseValue = phase ?: Phase.READ_DESCRIPTOR,
-        progressValue = progress.coerceIn(0.0, 1.0),
-        messageValue = message.orEmpty(),
-        detailValue = detail.orEmpty(),
-        failureValue = failure,
-    )
+    private val phaseValue: Phase = phase ?: Phase.READ_DESCRIPTOR
+    private val progressValue: Double = progress.coerceIn(0.0, 1.0)
+    private val messageValue: String = message.orEmpty()
+    private val detailValue: String = detail.orEmpty()
 
     fun phase(): Phase = phaseValue
 
@@ -46,6 +37,29 @@ data class ProjectLoadStatus private constructor(
     fun failure(): Throwable? = failureValue
 
     fun failed(): Boolean = phaseValue == Phase.FAILED
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ProjectLoadStatus) return false
+        return phaseValue == other.phaseValue &&
+            progressValue == other.progressValue &&
+            messageValue == other.messageValue &&
+            detailValue == other.detailValue &&
+            failureValue == other.failureValue
+    }
+
+    override fun hashCode(): Int {
+        var result = phaseValue.hashCode()
+        result = 31 * result + progressValue.hashCode()
+        result = 31 * result + messageValue.hashCode()
+        result = 31 * result + detailValue.hashCode()
+        result = 31 * result + (failureValue?.hashCode() ?: 0)
+        return result
+    }
+
+    override fun toString(): String =
+        "ProjectLoadStatus[phase=$phaseValue, progress=$progressValue, " +
+            "message=$messageValue, detail=$detailValue, failure=$failureValue]"
 
     companion object {
         @JvmStatic
