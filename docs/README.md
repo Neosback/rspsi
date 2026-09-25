@@ -73,7 +73,7 @@ If a document cannot answer one of those questions and only repeats another docu
 
 ## Retired directions
 
-OpenRune Studio no longer has a separate installable extension architecture as a product goal. Built-in features use core modules and shared services. Existing source names from earlier experiments are migration debt until removed or renamed.
+Built-in features use core modules and shared services. Existing source names from earlier architecture experiments are migration debt until removed or renamed.
 
 The following old document families were consolidated into the active documents above:
 
