@@ -7,6 +7,7 @@ import com.rspsi.project.StudioProjectKind;
 import com.rspsi.project.StudioProjectRegistry;
 import com.rspsi.project.StudioProjectService;
 import com.rspsi.studio.theme.StudioFonts;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
@@ -76,7 +77,7 @@ public final class ProjectLauncherView {
         ImGui.beginChild("##project-launcher-shell", panelWidth, panelHeight, false);
 
         renderHeader();
-        ImGui.dummy(1.0f, 20.0f);
+        ImGui.dummy(1.0f, 24.0f);
 
         ImGui.pushFont(StudioFonts.heading(), 23.0f);
         ImGui.pushStyleColor(ImGuiCol.Text, 0.94f, 0.97f, 1.0f, 1.0f);
@@ -97,21 +98,30 @@ public final class ProjectLauncherView {
 
         if (!error.isBlank()) {
             ImGui.dummy(1.0f, 10.0f);
-            ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 0.48f, 0.48f, 1.0f);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.DANGER);
             ImGui.textWrapped(error);
             ImGui.popStyleColor();
         }
 
+        renderVersionFooter(panelHeight);
         ImGui.endChild();
         ImGui.end();
     }
 
     private void renderHeader() {
-        float logoWidth = Math.min(300.0f, ImGui.getContentRegionAvailX() * 0.44f);
-        float x = Math.max(0.0f,
-                (ImGui.getContentRegionAvailX() - logoWidth) * 0.5f);
-        ImGui.setCursorPosX(ImGui.getCursorPosX() + x);
-        StudioBranding.drawWordmark(logoWidth);
+        ImGui.pushFont(StudioFonts.display(), 31.0f);
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.ACCENT);
+        centered("OPENRUNE CONTENT STUDIO");
+        ImGui.popStyleColor();
+        ImGui.popFont();
+        ImGui.dummy(1.0f, 6.0f);
+        centeredMuted("Project-first OSRS authoring and inspection");
+    }
+
+    private static void renderVersionFooter(float panelHeight) {
+        float footerY = panelHeight - ImGui.getTextLineHeightWithSpacing() - 10.0f;
+        if (ImGui.getCursorPosY() < footerY) ImGui.setCursorPosY(footerY);
+        centeredMuted(StudioBuildInfo.displayVersion());
     }
 
     private void renderRecent(Consumer<StudioProjectDescriptor> openProject) {
@@ -350,6 +360,13 @@ public final class ProjectLauncherView {
             case DEVELOPER ->
                     "Adds server launch and adapter-declared external commands for development workflows. Fresh Cache/reset and other destructive replacement operations still require separate explicit authorization.";
         };
+    }
+
+    private static void centered(String text) {
+        float width = ImGui.calcTextSize(text).x;
+        ImGui.setCursorPosX(ImGui.getCursorPosX()
+                + Math.max(0.0f, (ImGui.getContentRegionAvailX() - width) * 0.5f));
+        ImGui.textUnformatted(text);
     }
 
     private static void centeredMuted(String text) {
