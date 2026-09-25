@@ -8,6 +8,7 @@ import com.rspsi.editor.tool.EditorTool;
 import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.StudioToolPlugin;
+import com.rspsi.studio.theme.StudioIcons;
 import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
@@ -47,7 +48,7 @@ class NeutralMapToolProjectionTest {
         var tool = manager.toolView("community.biome-painter").orElseThrow();
 
         assertEquals("Biome Painter", tool.name());
-        assertEquals("forest", tool.icon());
+        assertEquals(StudioIcons.byName("forest"), tool.icon());
         assertEquals("B", tool.shortcut());
         assertEquals(35, tool.railPriority());
         assertTrue(tool.surfaces().contains(StudioToolPlugin.ToolSurface.BOTTOM_BAR));
