@@ -28,10 +28,10 @@ public final class CoreTerrainModule implements CoreEditorModule {
     public void install(EditorPluginContext context) {
         TerrainToolSettings settings = new TerrainToolSettings(context.settings());
 
-        register(context, settings, "terrain.paint-overlay", "Paint overlay",
-                "Terrain", "Paint", "BRUSH", "2", 10, () -> new PaintOverlayTool(1));
         register(context, settings, "terrain.paint-underlay", "Paint underlay",
                 "Terrain", "Paint", "PENCIL", "Shift+2", 20, () -> new PaintUnderlayTool(1));
+        register(context, settings, "terrain.paint-overlay", "Paint overlay",
+                "Terrain", "Paint", "BRUSH", "2", 10, () -> new PaintOverlayTool(1));
         register(context, settings, "terrain.flags", "Paint flags",
                 "Terrain", "Paint", "FLAGS", null, 30, () -> new PaintFlagsTool(0));
 
