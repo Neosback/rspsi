@@ -5,12 +5,14 @@ import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.inspector.ObjectResolutionSummary;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.terrain.TerrainMeshBuilder;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.studio.NativeSceneViewport;
 import com.rspsi.studio.plugin.StudioPlugin;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.StudioPanelContext;
+import com.rspsi.studio.ui.panels.TilePainterPalette;
 import com.rspsi.studio.ui.hud.ViewportHudManager;
 import imgui.ImDrawList;
 import imgui.ImGui;
@@ -28,12 +30,15 @@ public final class TileInfoHudPlugin implements StudioPlugin {
 
     public static final String ID = "studio.tile-info-hud";
 
+    private final ImBoolean showPreview = new ImBoolean(false);
     private final ImBoolean showCoordinates = new ImBoolean(true);
     private final ImBoolean showPlane = new ImBoolean(true);
     private final ImBoolean showHeight = new ImBoolean(true);
     private final ImBoolean showShape = new ImBoolean(false);
     private final ImBoolean showRotation = new ImBoolean(false);
     private final ImBoolean showObject = new ImBoolean(true);
+    private final ImBoolean showObjectTransform = new ImBoolean(true);
+    private final TerrainMeshBuilder meshBuilder = new TerrainMeshBuilder();
     private final ImInt anchorCorner = new ImInt(0); // 0=Bottom-Left, 1=Top-Left, 2=Bottom-Right, 3=Top-Right
     private final ImFloat bgAlpha = new ImFloat(0.75f);
 
@@ -149,21 +154,24 @@ public final class TileInfoHudPlugin implements StudioPlugin {
             }
             if (!sb.isEmpty()) sb.append("  ·  ");
             sb.append(objName);
-            if (hit.hasSceneObjectIdentity()) {
+            if (showObjectTransform.get() && hit.hasSceneObjectIdentity()) {
                 var identity = hit.sceneObjectIdentity();
-                sb.append(" · shape ").append(identity.shape())
-                        .append(" · rot ").append(identity.rotation() * 90).append('°');
+                sb.append(" · obj shape ").append(identity.shape())
+                        .append(" · obj rot ").append(identity.rotation() * 90).append('°');
             }
         }
 
         String text = sb.toString();
-        if (text.isBlank()) return;
+        boolean drawPreview = showPreview.get() && tileSnapshot != null;
+        if (text.isBlank() && !drawPreview) return;
 
         float padX = 10.0f;
-        float padY = 4.0f;
-        float textW = ImGui.calcTextSize(text).x;
-        float badgeW = textW + padX * 2.0f;
-        float badgeH = 22.0f;
+        float padY = 6.0f;
+        float previewSize = drawPreview ? 52.0f : 0.0f;
+        float previewGap = drawPreview && !text.isBlank() ? 10.0f : 0.0f;
+        float textW = text.isBlank() ? 0.0f : ImGui.calcTextSize(text).x;
+        float badgeW = padX * 2.0f + previewSize + previewGap + textW;
+        float badgeH = Math.max(26.0f, previewSize + padY * 2.0f);
 
         if (context.huds() == null) return;
         ViewportHudManager.Quadrant quadrant = switch (anchorCorner.get()) {
@@ -188,8 +196,15 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         dl.addRectFilled(hudX, hudY, hudX + badgeW, hudY + badgeH, bgColor, 6.0f);
         dl.addRect(hudX, hudY, hudX + badgeW, hudY + badgeH, borderColor, 6.0f, 0, 1.0f);
 
-        // Text
-        dl.addText(hudX + padX, hudY + padY, StudioPalette.draw(StudioPalette.TEXT), text);
+        float contentX = hudX + padX;
+        if (drawPreview) {
+            drawTilePreview(context.cache(), tileSnapshot, dl, contentX, hudY + padY, previewSize);
+            contentX += previewSize + previewGap;
+        }
+        if (!text.isBlank()) {
+            float textY = hudY + Math.max(padY, (badgeH - ImGui.getTextLineHeight()) * 0.5f);
+            dl.addText(contentX, textY, StudioPalette.draw(StudioPalette.TEXT), text);
+        }
 
         float restoreX = ImGui.getCursorScreenPosX();
         float restoreY = ImGui.getCursorScreenPosY();
@@ -204,6 +219,43 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         ImGui.setCursorScreenPos(restoreX, restoreY);
     }
 
+    private void drawTilePreview(
+            LoadedOsrsCacheSession cache,
+            TileSnapshot snapshot,
+            ImDrawList draw,
+            float x,
+            float y,
+            float size) {
+        int underlay = TilePainterPalette.floorColor(
+                cache, snapshot.underlayId(), true, 0xFF334155);
+        int overlay = TilePainterPalette.floorColor(
+                cache, snapshot.overlayId(), false, 0xFF9A6B32);
+        var mesh = meshBuilder.build(snapshot);
+
+        draw.addRectFilled(x, y, x + size, y + size, StudioPalette.draw(underlay), 3.0f);
+        for (var face : mesh.faces()) {
+            int color = face.material() == 1 ? overlay : underlay;
+            var a = mesh.vertices().get(face.a());
+            var b = mesh.vertices().get(face.b());
+            var cc = mesh.vertices().get(face.c());
+            draw.addTriangleFilled(
+                    tilePx(x, size, a.x()), tilePy(y, size, a.y()),
+                    tilePx(x, size, b.x()), tilePy(y, size, b.y()),
+                    tilePx(x, size, cc.x()), tilePy(y, size, cc.y()),
+                    StudioPalette.draw(color));
+        }
+        draw.addRect(x, y, x + size, y + size,
+                StudioPalette.draw(StudioPalette.BORDER_STRONG), 3.0f, 0, 1.0f);
+    }
+
+    private static float tilePx(float x, float size, int vertexX) {
+        return x + vertexX / 128.0f * size;
+    }
+
+    private static float tilePy(float y, float size, int vertexY) {
+        return y + size - vertexY / 128.0f * size;
+    }
+
     private static String labelWithId(String displayName, int id) {
         String fallback = "Object #" + id;
         return fallback.equals(displayName) ? fallback : displayName + " (#" + id + ")";
@@ -212,12 +264,16 @@ public final class TileInfoHudPlugin implements StudioPlugin {
     @Override
     public void renderSettings(StudioPanelContext context) {
         ImGui.textColored(StudioPalette.ACCENT, "Display");
+        ImGui.checkbox("Show Tile Preview##hud-preview", showPreview);
         ImGui.checkbox("Show Tile Coordinates##hud-coords", showCoordinates);
         ImGui.checkbox("Show Plane##hud-plane", showPlane);
         ImGui.checkbox("Show Elevation / Height##hud-height", showHeight);
         ImGui.checkbox("Show Tile Shape##hud-shape", showShape);
         ImGui.checkbox("Show Tile Rotation##hud-rotation", showRotation);
         ImGui.checkbox("Show Hovered Object##hud-obj", showObject);
+        ImGui.beginDisabled(!showObject.get());
+        ImGui.checkbox("Show Object Shape / Rotation##hud-obj-transform", showObjectTransform);
+        ImGui.endDisabled();
 
         ImGui.separator();
         ImGui.textColored(StudioPalette.ACCENT, "Layout & Style");
@@ -225,12 +281,14 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         ImGui.sliderFloat("Background Opacity##hud-alpha", bgAlpha.getData(), 0.1f, 1.0f, "%.2f");
 
         if (ImGui.button("Reset HUD Defaults##hud-reset")) {
+            showPreview.set(false);
             showCoordinates.set(true);
             showPlane.set(true);
             showHeight.set(true);
             showShape.set(false);
             showRotation.set(false);
             showObject.set(true);
+            showObjectTransform.set(true);
             anchorCorner.set(0);
             bgAlpha.set(0.75f);
         }
