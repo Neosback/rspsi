@@ -36,9 +36,11 @@ public record StudioPanelContext(
         com.rspsi.studio.plugin.StudioPluginManager studioPlugins,
         StudioBrushManager brushes,
         ViewportHudManager huds,
+        StudioNavigation navigation,
         Consumer<LoadedOsrsCacheSession> persistDefinitionPublication) {
 
     public StudioPanelContext {
+        navigation = navigation == null ? StudioNavigation.NONE : navigation;
         persistDefinitionPublication = persistDefinitionPublication == null
                 ? ignored -> { }
                 : persistDefinitionPublication;
@@ -64,7 +66,8 @@ public record StudioPanelContext(
             ViewportHudManager huds) {
         this(cache, settings, session, pluginLifecycle, viewport, simulation, symbols,
                 references, spawns, integrations, activateTool, activeToolId,
-                toolController, studioPlugins, brushes, huds, ignored -> { });
+                toolController, studioPlugins, brushes, huds, StudioNavigation.NONE,
+                ignored -> { });
     }
 
     /** Compatibility constructor for tests and transitional callers. */
@@ -87,6 +90,6 @@ public record StudioPanelContext(
         this(cache, settings, session, pluginLifecycle, viewport, simulation, symbols,
                 references, spawns, integrations, activateTool, activeToolId,
                 toolController, studioPlugins, brushes, new ViewportHudManager(),
-                ignored -> { });
+                StudioNavigation.NONE, ignored -> { });
     }
 }
