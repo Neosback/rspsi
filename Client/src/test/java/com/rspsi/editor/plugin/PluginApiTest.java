@@ -271,6 +271,12 @@ class PluginApiTest {
                                 "Biome",
                                 EditorUiNode.text("Paint semantic biome data"),
                                 EditorUiNode.button("Apply", () -> { })))
+                        .quickPalette(() -> EditorUiNode.row(
+                                EditorUiNode.button("Forest", () -> { }),
+                                EditorUiNode.button("Swamp", () -> { })))
+                        .inspectorUi(() -> EditorUiNode.section(
+                                "Selection",
+                                EditorUiNode.text("Selected biome facts")))
                         .factory(() -> new NoOpTool("test.biome-painter"))
                         .register();
             }
@@ -301,7 +307,15 @@ class PluginApiTest {
         assertTrue(ui.has(ToolUiDescriptor.ToolCapability.CONTEXT_DRAWER));
         assertTrue(ui.hasContextDrawerContent());
         assertTrue(ui.content().hasContextDrawer());
+        assertTrue(ui.content().hasQuickPalette());
+        assertTrue(ui.content().hasInspector());
+        assertTrue(ui.has(ToolUiDescriptor.ToolCapability.QUICK_PALETTE));
+        assertTrue(ui.has(ToolUiDescriptor.ToolCapability.SELECTION_INSPECTOR));
         assertTrue(ui.content().contextDrawerNode().orElseThrow()
+                instanceof EditorUiNode.Section);
+        assertTrue(ui.content().quickPaletteNode().orElseThrow()
+                instanceof EditorUiNode.Row);
+        assertTrue(ui.content().inspectorNode().orElseThrow()
                 instanceof EditorUiNode.Section);
 
         assertEquals("test.biome-painter", host.registry().createTool(registration.id()).id());
