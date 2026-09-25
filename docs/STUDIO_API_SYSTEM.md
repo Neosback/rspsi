@@ -28,9 +28,11 @@ The architecture should allow all of the following without exposing Dear ImGui, 
 - integrate future simulation/content-runtime capabilities;
 - remain compatible across renderer and UI rewrites.
 
-The central rule is:
+The central rules are:
 
-**Public consumers depend on stable semantics and host-owned capabilities. Internal subsystems depend on implementations.**
+**Extensions and built-ins are peers at the supported API boundary.** A first-party module must not receive a secret richer map-editing contract merely because it ships with Studio.
+
+**Consumers depend on stable semantics and host-owned capabilities. Internal subsystems depend on implementations.** Restricting access to implementation objects is an architectural boundary, not a reduced feature tier.
 
 ---
 
@@ -693,12 +695,12 @@ The highest-value sequence is:
 
 ## 15. Decision
 
-OpenRune Studio should keep a plugin system.
+OpenRune Studio should keep an extension/plugin system, but enabled extensions should be treated as first-class editor modules.
 
 The problem is not that "plugin" is the wrong concept. The current problem is that the public extension boundary is less expressive than the native built-in tool boundary.
 
 The target is:
 
-**one public extension SDK, many contribution types, one host-owned workspace/layout system, and renderer-independent semantic/editing services.**
+**one shared extension SDK for built-ins and installed modules, many extension types, one host-owned workspace/layout system, and renderer-independent semantic/editing services.**
 
-A community developer should be able to build a new map editor tool that feels native without needing Studio source changes, direct ImGui access, or a renderer fork.
+A developer should be able to build a new map editor tool with the same supported editing authority as an equivalent built-in tool, without needing Studio source changes, direct ImGui access, or a renderer fork.
