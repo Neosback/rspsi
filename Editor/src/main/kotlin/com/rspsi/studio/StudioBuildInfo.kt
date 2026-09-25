@@ -11,7 +11,7 @@ object StudioBuildInfo {
             ?.takeIf { it.isNotBlank() }
             ?.let { return it }
 
-        return StudioBuildInfo::class.java.package
+        return StudioBuildInfo::class.java.getPackage()
             ?.implementationVersion
             ?.takeIf { it.isNotBlank() }
             ?: DEVELOPMENT_VERSION
