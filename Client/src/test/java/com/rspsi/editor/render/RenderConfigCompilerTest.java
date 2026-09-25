@@ -33,6 +33,7 @@ class RenderConfigCompilerTest {
         assertEquals(BackfacePolicy.NativeCullingMode.CLIENT_FRONT,
                 RenderSettingKeys.registry().defaults().get(RenderSettingKeys.NATIVE_CULLING_MODE));
         assertEquals(GpuDebugView.NONE, config.gpuDebugView());
+        assertEquals(BackfacePolicy.NativeCullingMode.CLIENT_FRONT, config.nativeCullingMode());
     }
 
     @Test
@@ -127,7 +128,8 @@ class RenderConfigCompilerTest {
                 RenderSettingKeys.ACTIVE_PLANE.id(), RenderSettingKeys.PLANE_SELECTION.id(),
                 RenderSettingKeys.BRIGHTNESS.id(), RenderSettingKeys.EXPOSURE.id(),
                 RenderSettingKeys.MSAA_SAMPLES.id(), RenderSettingKeys.FOG_DEPTH_TILES.id(),
-                RenderSettingKeys.FOG_COLOR.id(), RenderSettingKeys.GPU_DEBUG_VIEW.id());
+                RenderSettingKeys.FOG_COLOR.id(), RenderSettingKeys.NATIVE_CULLING_MODE.id(),
+                RenderSettingKeys.GPU_DEBUG_VIEW.id());
 
         assertEquals(handled, renderConfigKeys);
         SettingsRegistry registry = RenderSettingKeys.registry();
