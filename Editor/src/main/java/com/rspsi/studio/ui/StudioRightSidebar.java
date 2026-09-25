@@ -4,6 +4,7 @@ import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioPalette;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
@@ -38,10 +39,18 @@ public final class StudioRightSidebar {
         this.pinnedTopPanelId = panelId;
     }
 
+    public float preferredWidth(StudioPanelManager panelManager) {
+        if (panelManager == null) return 390.0f;
+        String activeId = panelManager.activeRightPanelId();
+        return panelManager.panel(activeId)
+                .map(StudioPanel::preferredRightSidebarWidth)
+                .orElse(390.0f);
+    }
+
     public void render(StudioPanelManager panelManager,
                        StudioPanelContext context,
                        float x, float y, float width, float height) {
-        float effectiveWidth = Math.max(280.0f, width);
+        float effectiveWidth = Math.max(320.0f, width);
 
         ImGui.setNextWindowPos(x, y, ImGuiCond.Always);
         ImGui.setNextWindowSize(effectiveWidth, height, ImGuiCond.Always);
@@ -76,20 +85,20 @@ public final class StudioRightSidebar {
             boolean isPinned = p.id().equals(pinnedTopPanelId);
 
             if (isSel) {
-                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF6366F1)); // Indigo 500
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF818CF8));
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF4F46E5));
-                ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
             } else if (isPinned) {
-                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFFD97706)); // Amber 600
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFFF59E0B));
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFFB45309));
-                ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.WARNING);
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.WARNING);
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.WARNING);
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
             } else {
-                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF181A22)); // Zinc dark surface
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF262A37));
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF1E212B));
-                ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.CHROME_BG);
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
             }
 
             ImGui.pushFont(StudioFonts.icon(), 0.0f);
@@ -156,8 +165,10 @@ public final class StudioRightSidebar {
             ImGui.beginGroup();
 
             // --- Top Pinned Section ---
-            ImGui.beginChild("right-split-top", contentW, topH, true);
-            ImGui.textColored(StudioDrawColors.abgr(0xFFD49B35), StudioIcons.PIN + " " + pinnedPanel.title());
+            ImGui.beginChild("right-split-top", contentW, topH, true,
+                    pinnedPanel.allowHorizontalScroll() ? ImGuiWindowFlags.HorizontalScrollbar : ImGuiWindowFlags.None);
+            if (!pinnedPanel.allowHorizontalScroll()) ImGui.setScrollX(0.0f);
+            ImGui.textColored(StudioPalette.WARNING, StudioIcons.PIN + " " + pinnedPanel.title());
             String unpin = StudioIcons.CLOSE + " Unpin";
             ImGui.sameLine(Math.max(0.0f, ImGui.getWindowContentRegionMaxX()
                     - ImGui.calcTextSize(unpin).x - ImGui.getStyle().getFramePaddingX() * 2.0f));
@@ -177,8 +188,10 @@ public final class StudioRightSidebar {
                     .findFirst()
                     .orElse(rightPanels.get(0));
 
-            ImGui.beginChild("right-split-bottom", contentW, botH, true);
-            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), activePanel.title());
+            ImGui.beginChild("right-split-bottom", contentW, botH, true,
+                    activePanel.allowHorizontalScroll() ? ImGuiWindowFlags.HorizontalScrollbar : ImGuiWindowFlags.None);
+            if (!activePanel.allowHorizontalScroll()) ImGui.setScrollX(0.0f);
+            ImGui.textColored(StudioPalette.ACCENT, activePanel.title());
             ImGui.separator();
             ImGui.pushTextWrapPos(0.0f);
             activePanel.render(context);
@@ -187,15 +200,19 @@ public final class StudioRightSidebar {
 
             ImGui.endGroup();
         } else {
-            // Normal Single Panel Mode
-            ImGui.beginChild("right-sidebar-content", contentW, totalH, false);
-            ImGui.pushTextWrapPos(0.0f);
-
+            // Normal Single Panel Mode. Horizontal overflow is opt-in; the default
+            // contract is responsive reflow + vertical scrolling only.
             final String finalActiveId = activeId;
             StudioPanel activePanel = rightPanels.stream()
                     .filter(p -> p.id().equals(finalActiveId))
                     .findFirst()
                     .orElse(rightPanels.get(0));
+            int contentFlags = activePanel.allowHorizontalScroll()
+                    ? ImGuiWindowFlags.HorizontalScrollbar
+                    : ImGuiWindowFlags.None;
+            ImGui.beginChild("right-sidebar-content", contentW, totalH, false, contentFlags);
+            if (!activePanel.allowHorizontalScroll()) ImGui.setScrollX(0.0f);
+            ImGui.pushTextWrapPos(0.0f);
 
             activePanel.render(context);
 
