@@ -46,5 +46,7 @@ class TerrainToolProjectionTest {
                         "terrain.terrace",
                         "terrain.ramp"),
                 tool.toolIds());
+        assertThrows(UnsupportedOperationException.class,
+                () -> tool.toolIds().add("terrain.invalid"));
     }
 }
