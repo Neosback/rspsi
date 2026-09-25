@@ -12,7 +12,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Universal runtime context provided to first-party and third-party editor plugins.
+ * Universal runtime context provided to first-class editor extensions.
  *
  * <p>Implements {@link PluginContext} to expose neutral, stable service handles.</p>
  */
@@ -127,7 +127,7 @@ public record EditorPluginContext(
         return ContributionOwner.SYSTEM;
     }
 
-    /** Unified domain services for third-party and first-party plugins. */
+    /** Unified domain services shared by built-in and installed editor extensions. */
     public com.rspsi.editor.plugin.services.PluginServices services() {
         return com.rspsi.editor.plugin.services.PluginServices.resolve(session, assets, registry);
     }
