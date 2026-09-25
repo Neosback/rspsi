@@ -1,4 +1,4 @@
-package com.rspsi.plugins.server.openrune;
+package com.rspsi.server.openrune;
 
 import com.rspsi.editor.integration.semantic.ServerObjectSemanticIndex;
 import com.rspsi.editor.integration.semantic.ServerObjectSemanticOverlay;
