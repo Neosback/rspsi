@@ -137,8 +137,7 @@ class ProjectLoadingView {
     private fun phaseLabel(phase: ProjectLoadStatus.Phase): String =
         when (phase) {
             ProjectLoadStatus.Phase.READ_DESCRIPTOR,
-            ProjectLoadStatus.Phase.VALIDATE_PROJECT,
-            -> "Checking project"
+            ProjectLoadStatus.Phase.VALIDATE_PROJECT -> "Checking project"
 
             ProjectLoadStatus.Phase.INSPECT_INTEGRATION -> "Finding OpenRune files"
             ProjectLoadStatus.Phase.RESOLVE_CACHE_ROLES -> "Selecting project cache"
