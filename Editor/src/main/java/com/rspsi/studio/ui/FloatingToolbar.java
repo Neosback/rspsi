@@ -121,9 +121,9 @@ public final class FloatingToolbar {
         // on this surface (a tool may opt out of the floating toolbar via surfaces()/the
         // Plugin Manager's per-tool surface override).
         StudioPluginManager plugins = context != null ? context.studioPlugins() : null;
-        List<StudioToolPlugin> toolPlugins = plugins != null
-                ? plugins.toolPlugins().stream()
-                        .filter(t -> plugins.effectiveSurfaces(t).contains(StudioToolPlugin.ToolSurface.FLOATING_TOOLBAR))
+        List<StudioPluginManager.StudioToolView> toolPlugins = plugins != null
+                ? plugins.toolViews().stream()
+                        .filter(t -> t.surfaces().contains(StudioToolPlugin.ToolSurface.FLOATING_TOOLBAR))
                         .toList()
                 : null;
 
@@ -180,7 +180,7 @@ public final class FloatingToolbar {
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 2.0f, 2.0f);
 
         if (toolPlugins != null && !toolPlugins.isEmpty()) {
-            for (StudioToolPlugin tool : toolPlugins) {
+            for (StudioPluginManager.StudioToolView tool : toolPlugins) {
                 boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
 
                 curY = renderToolButton(startX + padding, curY, btnSize, tool.icon(),
