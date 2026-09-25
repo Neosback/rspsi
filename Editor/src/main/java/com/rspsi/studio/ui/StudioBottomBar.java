@@ -16,6 +16,7 @@ import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.flag.ImGuiSliderFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 
@@ -400,7 +401,8 @@ public final class StudioBottomBar {
             case DECIMAL -> {
                 float[] current = {value instanceof Number number ? number.floatValue() : 0.0f};
                 if (ImGui.sliderFloat("##value", current,
-                        (float) setting.minimum(), (float) setting.maximum(), "%.2f")) {
+                        (float) setting.minimum(), (float) setting.maximum(), "%.2f",
+                        ImGuiSliderFlags.None)) {
                     setting.setValue((double) current[0]);
                 }
             }
