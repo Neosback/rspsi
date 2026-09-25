@@ -36,6 +36,7 @@ import com.rspsi.studio.ui.LeftBrushRail;
 import com.rspsi.studio.ui.StudioMenuBar;
 import com.rspsi.studio.ui.StudioPanelContext;
 import com.rspsi.studio.ui.StudioPanelManager;
+import com.rspsi.studio.ui.StudioNavigation;
 import com.rspsi.studio.ui.WorkspaceTabBar;
 import com.rspsi.studio.ui.hud.ViewportHudManager;
 import com.rspsi.studio.ui.hud.DeclarativeOverlayRenderer;
@@ -70,6 +71,7 @@ import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.settings.EditorSettingKeys;
 import com.rspsi.editor.tool.CompositeTilePainterTool;
 import com.rspsi.studio.ui.panels.TilePainterPalette;
+import com.rspsi.studio.ui.panels.ObjectViewerPanel;
 import imgui.flag.ImGuiMouseButton;
 
 import java.util.Objects;
@@ -265,6 +267,24 @@ public final class MapEditorView {
                 layout.x(), layout.y(), layout.width());
 
         // 3. Studio Panel Context
+        StudioNavigation navigation = new StudioNavigation() {
+            @Override
+            public void inspectObject(WorldObject object) {
+                if (object == null) return;
+                panelManager.panel(ObjectViewerPanel.ID)
+                        .filter(ObjectViewerPanel.class::isInstance)
+                        .map(ObjectViewerPanel.class::cast)
+                        .ifPresent(viewer -> {
+                            viewer.inspectObject(object.id());
+                            panelManager.setActiveRightPanelId(ObjectViewerPanel.ID);
+                        });
+            }
+
+            @Override
+            public void editObject(WorldObject object) {
+                if (object != null) objectEditor.open(object);
+            }
+        };
         StudioPanelContext panelContext = new StudioPanelContext(
                 cache, settings, session(pluginLifecycle), pluginLifecycle,
                 viewport, simulation, symbols, references, spawns, integrations,
@@ -274,6 +294,7 @@ public final class MapEditorView {
                 studioPluginManager,
                 brushManager,
                 hudManager,
+                navigation,
                 definitionPublicationPersistence);
 
         // 4. Left Brush Rail (TOOL_RAIL slot: brush settings for Tile Painter/Height Sculptor) -
