@@ -31,16 +31,12 @@ public record SurfaceHit(
         if (objectId < 0 && (objectAnchor.isPresent() || object.isPresent())) {
             throw new IllegalArgumentException("Terrain hits cannot carry object data");
         }
-        objectAnchor.ifPresent(anchor -> {
-            if (anchor.plane() != tile.plane()) {
-                throw new IllegalArgumentException("Object anchor must be on the hit plane");
-            }
-        });
-        object.ifPresent(placement -> {
-            if (placement.id() != objectId) {
-                throw new IllegalArgumentException("Resolved object id must match hit object id");
-            }
-        });
+        if (objectAnchor.isPresent() && objectAnchor.orElseThrow().plane() != tile.plane()) {
+            throw new IllegalArgumentException("Object anchor must be on the hit plane");
+        }
+        if (object.isPresent() && object.orElseThrow().id() != objectId) {
+            throw new IllegalArgumentException("Resolved object id must match hit object id");
+        }
     }
 
     public static SurfaceHit terrain(WorldTile tile) {
