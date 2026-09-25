@@ -30,6 +30,7 @@ public final class RenderConfigCompiler {
                 settings.getOrDefault(RenderSettingKeys.FOG_DEPTH_TILES, 0),
                 settings.getOrDefault(RenderSettingKeys.FOG_COLOR, 0x101827),
                 settings.getOrDefault(RenderSettingKeys.INVISIBLE_OBJECTS_VISIBLE, false),
+                settings.getOrDefault(RenderSettingKeys.NATIVE_CULLING_MODE, BackfacePolicy.defaultMode()),
                 settings.getOrDefault(RenderSettingKeys.GPU_DEBUG_VIEW, GpuDebugView.NONE));
     }
 
