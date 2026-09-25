@@ -19,6 +19,7 @@ import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.theme.StudioFonts;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.studio.theme.SettingRows;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.ObjectPreviewRenderer;
@@ -182,15 +183,15 @@ public final class ObjectViewerPanel implements StudioPanel {
     private void renderSubTabButton(String label, int tabIndex, float width) {
         boolean active = activeSubTab == tabIndex;
         if (active) {
-            ImGui.pushStyleColor(ImGuiCol.Button, 0.23f, 0.51f, 0.96f, 1.0f);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0.29f, 0.56f, 0.98f, 1.0f);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0.18f, 0.44f, 0.87f, 1.0f);
-            ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 1.0f, 1.0f, 1.0f);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
         } else {
-            ImGui.pushStyleColor(ImGuiCol.Button, 0.12f, 0.16f, 0.21f, 1.0f);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0.16f, 0.21f, 0.28f, 1.0f);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0.12f, 0.16f, 0.21f, 1.0f);
-            ImGui.pushStyleColor(ImGuiCol.Text, 0.58f, 0.64f, 0.72f, 1.0f);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.PANEL_ELEVATED);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
         }
         if (ImGui.button(label + "##sub-" + tabIndex, width, ImGui.getFrameHeight() + ImGui.getStyle().getFramePaddingY())) {
             activeSubTab = tabIndex;
@@ -235,13 +236,13 @@ public final class ObjectViewerPanel implements StudioPanel {
         ImDrawList draw = ImGui.getWindowDrawList();
         // Square preview sized from the font, so it scales with DPI, capped by the panel width.
         float previewHeight = Math.min(panelW, ImGui.getFontSize() * 17.0f);
-        draw.addRectFilled(cx, cy, cx + panelW, cy + previewHeight, StudioDrawColors.abgr(0xFF1E2836), 4.0f);
-        draw.addRect(cx, cy, cx + panelW, cy + previewHeight, StudioDrawColors.abgr(0xFF33455C), 4.0f);
+        draw.addRectFilled(cx, cy, cx + panelW, cy + previewHeight, StudioPalette.draw(StudioPalette.PANEL_ELEVATED), 4.0f);
+        draw.addRect(cx, cy, cx + panelW, cy + previewHeight, StudioPalette.draw(StudioPalette.BORDER_STRONG), 4.0f);
 
         if (objId < 0 || cache == null) {
             String prompt = cache == null ? "No cache loaded." : "Select an object below to preview it.";
             draw.addText(StudioFonts.ui(), 13, cx + 12, cy + previewHeight * 0.5f - 8.0f,
-                    StudioDrawColors.abgr(0xFF64748B), prompt);
+                    StudioPalette.draw(StudioPalette.TEXT_DISABLED), prompt);
             ImGui.dummy(panelW, previewHeight + 8.0f);
         } else {
             int size = (int) previewHeight - 4;
@@ -260,7 +261,7 @@ public final class ObjectViewerPanel implements StudioPanel {
                         ? "Model data resolved, but the preview produced no renderable packet"
                         : resolution.diagnosticSummary();
                 draw.addText(StudioFonts.ui(), 12, cx + 12, cy + previewHeight * 0.5f - 16.0f,
-                        StudioDrawColors.abgr(0xFFF59E0B), "No renderable model for #" + objId);
+                        StudioPalette.WARNING, "No renderable model for #" + objId);
                 draw.addText(StudioFonts.mono(), 11, cx + 12, cy + previewHeight * 0.5f + 4.0f,
                         StudioDrawColors.abgr(0xFF94A3B8), compactPreviewDiagnostic(reason));
             }
@@ -309,7 +310,7 @@ public final class ObjectViewerPanel implements StudioPanel {
                         .map(definition -> objectLabel(definition.displayName(), objId))
                         .orElse(null);
         if (objId >= 0) {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), objName == null ? "Object #" + objId : objName);
+            ImGui.textColored(StudioPalette.ACCENT, objName == null ? "Object #" + objId : objName);
         }
 
         if (SettingRows.beginPlain("place-object")) {
@@ -704,7 +705,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             ImGui.textDisabled("Session output: " + publicationTarget);
         }
         if (targetMissing) {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF60A5FA),
+            ImGui.textColored(StudioPalette.INFO,
                     "The bound output cache is missing. Reload the source session before publishing elsewhere.");
         } else if (targetMismatch) {
             ImGui.textColored(StudioDrawColors.abgr(0xFF60A5FA),
