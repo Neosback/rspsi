@@ -25,6 +25,9 @@ import com.rspsi.editor.render.OsrsTerrainColorMath;
 import com.rspsi.editor.terrain.TerrainMeshBuilder;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioFonts;
+import com.rspsi.studio.theme.StudioPalette;
+import com.rspsi.studio.theme.StudioWidgets;
 import com.rspsi.studio.ui.OverlayTextureCache;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
@@ -76,6 +79,11 @@ public final class TileBrushPanel implements StudioPanel {
     }
 
     @Override
+    public float preferredRightSidebarWidth() {
+        return 420.0f;
+    }
+
+    @Override
     public void render(StudioPanelContext context) {
         LoadedOsrsCacheSession cache = context.cache();
         var session = context.session();
@@ -83,47 +91,67 @@ public final class TileBrushPanel implements StudioPanel {
                 ? session.selection().selectedCoordinates() : Set.of();
         WorldDocument world = session != null ? session.world() : null;
 
-        if (ImGui.collapsingHeader("Tile Inspector", ImGuiTreeNodeFlags.DefaultOpen)) {
-            if (world == null) {
-                ImGui.textDisabled("No active map loaded.");
-            } else if (selected.isEmpty()) {
-                ImGui.textDisabled("No tile selected.");
-                ImGui.textDisabled("Use Single Select or Multi Select on the floating tool rail to inspect tiles.");
-            } else {
-                ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), selected.size() + " tile(s) selected");
-                ImGui.sameLine(0.0f, 12.0f);
-                if (ImGui.smallButton("Clear Selection##tile-insp-clr")) {
-                    session.selection().clear();
-                }
-                ImGui.spacing();
+        // Tile Inspector owns nested scrolling so its visual preview never disappears.
+        ImGui.setScrollY(0.0f);
 
-                if (selected.size() == 1) {
-                    renderSingleTileDetail(context, cache, world, selected.iterator().next());
-                } else {
-                    ImGui.textDisabled(selected.size() + " tiles selected - see the region survey below for the distinct types in use.");
-                }
-            }
-        }
-
-        ImGui.spacing();
-        ImGui.separator();
-        ImGui.spacing();
-
-        if (ImGui.collapsingHeader("Tiles Used In This Region", ImGuiTreeNodeFlags.DefaultOpen)) {
-            if (world == null) {
-                ImGui.textDisabled("No active map loaded.");
-            } else {
-                renderRegionSurvey(cache, context, world);
-            }
-        }
-    }
-
-    private void renderSingleTileDetail(StudioPanelContext context, LoadedOsrsCacheSession cache,
-                                        WorldDocument world, TileCoordinate coord) {
-        if (coord.plane() < 0 || coord.plane() >= world.planes()) {
-            ImGui.textDisabled("Selected tile's plane is outside the loaded map.");
+        if (world == null) {
+            ImGui.textDisabled("No active map loaded.");
             return;
         }
+        if (selected.isEmpty()) {
+            StudioWidgets.section("Tile Inspector");
+            ImGui.textDisabled("No tile selected.");
+            ImGui.textWrapped("Use Single Select or Multi Select on the floating tool rail to inspect tiles.");
+            return;
+        }
+
+        ImGui.textColored(StudioPalette.ACCENT, selected.size() + " tile(s) selected");
+        float clearWidth = ImGui.calcTextSize("Clear").x + ImGui.getStyle().getFramePaddingX() * 2.0f;
+        float offset = ImGui.getContentRegionAvailX() - clearWidth;
+        if (offset > 0.0f) ImGui.sameLine(ImGui.getCursorPosX() + offset);
+        if (ImGui.smallButton("Clear##tile-insp-clr")) {
+            session.selection().clear();
+            return;
+        }
+        ImGui.dummy(1.0f, 4.0f);
+
+        if (selected.size() == 1) {
+            TileInspection inspection = resolveInspection(context, world, selected.iterator().next());
+            if (inspection == null) {
+                ImGui.textDisabled("Selected tile is outside the loaded map.");
+                return;
+            }
+            renderPinnedTileSummary(cache, world, inspection);
+
+            ImGui.separator();
+            float detailsHeight = Math.max(120.0f, ImGui.getContentRegionAvailY());
+            ImGui.beginChild("##tile-inspector-details", 0.0f, detailsHeight, false);
+            ImGui.setScrollX(0.0f);
+            renderSingleTileDetails(context, cache, inspection);
+
+            ImGui.dummy(1.0f, 8.0f);
+            if (ImGui.collapsingHeader("Region surfaces")) {
+                renderRegionSurvey(cache, context, world);
+            }
+            ImGui.endChild();
+            return;
+        }
+
+        ImGui.textDisabled(selected.size()
+                + " tiles selected. Region/selection summaries stay scrollable below.");
+        ImGui.separator();
+        ImGui.beginChild("##tile-inspector-multi", 0.0f,
+                Math.max(120.0f, ImGui.getContentRegionAvailY()), false);
+        renderRegionSurvey(cache, context, world);
+        ImGui.endChild();
+    }
+
+    private TileInspection resolveInspection(
+            StudioPanelContext context,
+            WorldDocument world,
+            TileCoordinate coord) {
+        if (coord.plane() < 0 || coord.plane() >= world.planes()) return null;
+
         int localX;
         int localY;
         if (world.contains(coord)) {
@@ -133,56 +161,100 @@ public final class TileBrushPanel implements StudioPanel {
             WorldTileAddress address = WorldTileAddress.of(coord.x(), coord.y(), coord.plane());
             localX = address.regionLocalX();
             localY = address.regionLocalY();
-            if (!world.contains(coord.plane(), localX, localY)) {
-                ImGui.textDisabled("Selected tile is outside the loaded map.");
-                return;
-            }
+            if (!world.contains(coord.plane(), localX, localY)) return null;
         }
+
         TileSnapshot snapshot = world.tile(coord.plane(), localX, localY).snapshot();
         int effectivePlane = world.effectivePlane(coord.plane(), localX, localY);
-        // GpuDrawCommand tiles carry absolute OSRS world coordinates, not this
-        // document's local ones, and reflect the bridge-adjusted render plane -
-        // both conversions are required or every lookup here silently misses.
-        WorldTile worldTile = context.session().coordinates().toWorld(new LocalTile(effectivePlane, localX, localY));
-        List<GpuDrawCommand> drawCommands = commandsForTile(context, worldTile.plane(), worldTile.x(), worldTile.y());
+        WorldTile worldTile = context.session().coordinates()
+                .toWorld(new LocalTile(effectivePlane, localX, localY));
+        List<GpuDrawCommand> drawCommands = commandsForTile(
+                context, worldTile.plane(), worldTile.x(), worldTile.y());
+        return new TileInspection(coord, localX, localY, effectivePlane, snapshot, drawCommands);
+    }
 
-        if (ImGui.smallButton("Copy Tile Info##tile-insp-copy")) {
-            ImGui.setClipboardText(tileInfoText(cache, coord, effectivePlane, snapshot, drawCommands));
+    private void renderPinnedTileSummary(
+            LoadedOsrsCacheSession cache,
+            WorldDocument world,
+            TileInspection inspection) {
+        TileSnapshot snapshot = inspection.snapshot();
+
+        if (StudioWidgets.beginPropertyTable("tile-summary")) {
+            StudioWidgets.propertyRow("Location",
+                    inspection.coordinate().x() + ", " + inspection.coordinate().y()
+                            + " · plane " + inspection.coordinate().plane());
+            if (inspection.effectivePlane() != inspection.coordinate().plane()) {
+                StudioWidgets.propertyRow("Scene plane",
+                        inspection.effectivePlane() + " · bridge-adjusted");
+            }
+            StudioWidgets.propertyRow("Shape / rotation",
+                    snapshot.overlayShape() + " · " + snapshot.overlayRotation()
+                            + " (" + snapshot.overlayRotation() * 90 + "°)");
+            StudioWidgets.propertyRow("Heights",
+                    snapshot.southWestHeight() + " / " + snapshot.southEastHeight()
+                            + " / " + snapshot.northEastHeight() + " / " + snapshot.northWestHeight());
+            StudioWidgets.propertyRow("Flags",
+                    "0x" + Integer.toHexString(snapshot.flags()).toUpperCase()
+                            + " · " + flagSummary(snapshot.flags()));
+            StudioWidgets.endPropertyTable();
         }
 
-        ImGui.text("Coordinate: " + coord.x() + ", " + coord.y() + "  (plane " + coord.plane() + ")");
-        if (effectivePlane != coord.plane()) {
-            ImGui.sameLine();
-            ImGui.textColored(StudioDrawColors.abgr(0xFFF59E0B), "  (renders as plane " + effectivePlane + " - bridge on plane 1)");
-        }
-        ImGui.text("Height (SW/SE/NE/NW): " + snapshot.southWestHeight() + " / " + snapshot.southEastHeight()
-                + " / " + snapshot.northEastHeight() + " / " + snapshot.northWestHeight());
-
-        int flags = snapshot.flags();
-        ImGui.text("Flags (raw): 0x" + Integer.toHexString(flags));
-        ImGui.sameLine(0.0f, 8.0f);
-        ImGui.textDisabled("[" + flagSummary(flags) + "]");
-
-        ImGui.spacing();
-        ImGui.checkbox("Underlay blending##tile-preview-blend", previewBlending);
+        ImGui.dummy(1.0f, 5.0f);
+        ImGui.checkbox("Blend neighboring underlays##tile-preview-blend", previewBlending);
         ImGui.sameLine();
-        ImGui.textDisabled("(off = this tile's own underlay colour)");
-        renderTilePreviewStack(cache, world, coord.plane(), localX, localY);
-        ImGui.spacing();
-        ImGui.beginGroup();
+        if (ImGui.smallButton("Copy##tile-insp-copy")) {
+            ImGui.setClipboardText(tileInfoText(
+                    cache,
+                    inspection.coordinate(),
+                    inspection.effectivePlane(),
+                    snapshot,
+                    inspection.drawCommands()));
+        }
+
+        ImGui.dummy(1.0f, 4.0f);
+        var packet = cache == null ? java.util.Optional.<TerrainRenderPacket>empty()
+                : tilePreviews.build(
+                        world,
+                        cache.bundle().definitions(),
+                        inspection.coordinate().plane(),
+                        inspection.localX(),
+                        inspection.localY(),
+                        previewBlending.get()
+                                ? TilePreviewBuilder.Mode.BLENDED
+                                : TilePreviewBuilder.Mode.UNBLENDED);
+        if (packet.isPresent()) {
+            float previewSize = Math.min(150.0f, Math.max(96.0f, ImGui.getContentRegionAvailX() * 0.42f));
+            drawTilePacket(cache, packet.orElseThrow(), previewSize);
+        } else {
+            ImGui.textDisabled("No rendered floor surface for this tile.");
+        }
+    }
+
+    private void renderSingleTileDetails(
+            StudioPanelContext context,
+            LoadedOsrsCacheSession cache,
+            TileInspection inspection) {
+        TileSnapshot snapshot = inspection.snapshot();
+
+        StudioWidgets.section("Floor definitions");
         renderFloorDefinitionDetail(cache, "Underlay", snapshot.underlayId(), true);
         ImGui.spacing();
         renderFloorDefinitionDetail(cache, "Overlay", snapshot.overlayId(), false);
-        ImGui.text("Shape: " + snapshot.overlayShape() + "  Rotation: " + snapshot.overlayRotation());
-        ImGui.endGroup();
 
-        ImGui.spacing();
-        renderDrawCommandsSection(drawCommands);
-
-        ImGui.spacing();
-        ImGui.separator();
-        ImGui.spacing();
+        ImGui.dummy(1.0f, 8.0f);
         renderObjectsOnTile(context, cache, snapshot.objects());
+
+        ImGui.dummy(1.0f, 8.0f);
+        renderDrawCommandsSection(inspection.drawCommands());
+    }
+
+    private record TileInspection(
+            TileCoordinate coordinate,
+            int localX,
+            int localY,
+            int effectivePlane,
+            TileSnapshot snapshot,
+            List<GpuDrawCommand> drawCommands) {
     }
 
     /**
@@ -353,31 +425,60 @@ public final class TileBrushPanel implements StudioPanel {
      * {@link ObjectReport} - definition, collision, and appearance data straight from
      * the cache, for tracking a misconfigured type/rule or a rendering bug back to its source.
      */
-    private void renderObjectsOnTile(StudioPanelContext context, LoadedOsrsCacheSession cache,
-                                    java.util.List<WorldObject> objects) {
-        if (!ImGui.collapsingHeader("Objects On Tile (" + objects.size() + ")",
-                objects.isEmpty() ? 0 : ImGuiTreeNodeFlags.DefaultOpen)) {
-            return;
-        }
+    private void renderObjectsOnTile(
+            StudioPanelContext context,
+            LoadedOsrsCacheSession cache,
+            java.util.List<WorldObject> objects) {
+        StudioWidgets.section("Objects on tile");
         if (objects.isEmpty()) {
             ImGui.textDisabled("No objects on this tile.");
             return;
         }
         if (cache == null) {
-            ImGui.textDisabled("No cache loaded - cannot resolve object definitions.");
-            return;
+            ImGui.textDisabled("No cache loaded. Object IDs are available but definitions cannot be resolved.");
         }
+
         int index = 0;
         for (WorldObject object : objects) {
-            ImGui.pushID(index);
-            ObjectReport report = ObjectReport.forPlacement(object, cache.bundle().definitions(),
-                    context.simulation() == null ? com.rspsi.cache.definition.ObjectVarState.freshAccount()
-                            : new SimulatedClient(context.simulation(), cache.bundle().definitions()));
-            String label = report.title() + "   [" + object.category().displayName() + "]";
-            if (ImGui.treeNode(label)) {
-                PropertyGrid.render("tile-obj-" + index, report);
-                ImGui.treePop();
+            ImGui.pushID("tile-object-" + index);
+            String objectName = cache == null
+                    ? "Object #" + object.id()
+                    : cache.bundle().definitions().object(object.id())
+                            .map(def -> {
+                                String name = def.displayName();
+                                return name == null || name.isBlank() || "null".equalsIgnoreCase(name)
+                                        ? "Object #" + object.id()
+                                        : name + " (#" + object.id() + ")";
+                            })
+                            .orElse("Object #" + object.id());
+
+            ImGui.textColored(StudioPalette.ACCENT, objectName);
+            ImGui.textDisabled(object.category().displayName()
+                    + " · shape " + object.type()
+                    + " · rotation " + object.rotation());
+
+            float gap = 6.0f;
+            float width = Math.max(110.0f, (ImGui.getContentRegionAvailX() - gap) * 0.5f);
+            if (StudioWidgets.buttonSecondary("Open in Object Viewer", width, 26.0f)) {
+                context.navigation().inspectObject(object);
             }
+            ImGui.sameLine(0.0f, gap);
+            if (StudioWidgets.buttonSecondary("Edit object...", width, 26.0f)) {
+                context.navigation().editObject(object);
+            }
+
+            if (cache != null && ImGui.collapsingHeader("Definition details##" + index)) {
+                ObjectReport report = ObjectReport.forPlacement(
+                        object,
+                        cache.bundle().definitions(),
+                        context.simulation() == null
+                                ? com.rspsi.cache.definition.ObjectVarState.freshAccount()
+                                : new SimulatedClient(
+                                        context.simulation(),
+                                        cache.bundle().definitions()));
+                PropertyGrid.render("tile-obj-" + index, report);
+            }
+            ImGui.separator();
             ImGui.popID();
             index++;
         }
@@ -446,8 +547,11 @@ public final class TileBrushPanel implements StudioPanel {
                         toDrawListColor(averageRgb(a.packedHsl(), b.packedHsl(), c.packedHsl())));
             }
         }
-        draw.addRect(x, y, x + size, y + size, toDrawListColor(0xFF64748B), 2.0f, 0, 1.5f);
-        draw.addText(x + size + 4.0f, y, toDrawListColor(0xFFE2E8F0), "N");
+        draw.addRect(x, y, x + size, y + size,
+                StudioPalette.draw(StudioPalette.BORDER_STRONG), 2.0f, 0, 1.5f);
+        draw.addText(StudioFonts.icon(), 18.0f,
+                x + size - 20.0f, y + 4.0f,
+                StudioPalette.draw(StudioPalette.TEXT), StudioIcons.EXPLORE);
         ImGui.dummy(size, size);
     }
 
