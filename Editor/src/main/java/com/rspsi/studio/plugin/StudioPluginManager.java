@@ -1,5 +1,9 @@
 package com.rspsi.studio.plugin;
 
+import com.rspsi.editor.plugin.EditorPluginRegistry;
+import com.rspsi.editor.plugin.EditorToolRegistration;
+import com.rspsi.editor.plugin.ToolUiDescriptor;
+import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
 import imgui.ImDrawList;
@@ -28,10 +32,21 @@ public final class StudioPluginManager {
     private final Map<String, Boolean> enabledStates = new LinkedHashMap<>();
     private final Map<String, Set<StudioToolPlugin.ToolSurface>> surfaceOverrides = new LinkedHashMap<>();
     private Consumer<StudioPanel> ownedPanelSink;
+    private EditorPluginRegistry editorPluginRegistry;
 
     public StudioPluginManager() {
         discoverPlugins();
     }
+
+    /**
+     * Binds the neutral editor registry whose map tools should be projected into
+     * native Studio chrome. Built-in native projections temporarily win on ID
+     * collisions while they migrate onto the shared SDK.
+     */
+    public synchronized void bindEditorPluginRegistry(EditorPluginRegistry registry) {
+        this.editorPluginRegistry = registry;
+    }
+
 
     /**
      * Called once, right after construction, by whoever owns the right-sidebar's
@@ -174,6 +189,43 @@ public final class StudioPluginManager {
         return Collections.unmodifiableList(tools);
     }
 
+
+    /**
+     * Unified tool view consumed by native Studio chrome.
+     *
+     * <p>Native built-ins and neutral extension tools are peers here. During
+     * migration, a native projection wins when it represents the same engine
+     * tool ID so buttons are not duplicated.</p>
+     */
+    public synchronized List<StudioToolView> toolViews() {
+        List<StudioToolView> views = new ArrayList<>();
+        java.util.Set<String> representedToolIds = new java.util.LinkedHashSet<>();
+
+        for (StudioToolPlugin tool : toolPlugins()) {
+            views.add(StudioToolView.fromNative(tool, effectiveSurfaces(tool)));
+            representedToolIds.addAll(tool.toolIds());
+            representedToolIds.add(tool.id());
+        }
+
+        if (editorPluginRegistry != null) {
+            for (EditorToolRegistration registration : editorPluginRegistry.toolRegistrations()) {
+                if (representedToolIds.contains(registration.id())) continue;
+                views.add(StudioToolView.fromNeutral(registration));
+            }
+        }
+
+        views.sort(java.util.Comparator.comparingInt(StudioToolView::railPriority)
+                .thenComparing(StudioToolView::id));
+        return Collections.unmodifiableList(views);
+    }
+
+    public synchronized Optional<StudioToolView> toolView(String toolId) {
+        if (toolId == null) return Optional.empty();
+        return toolViews().stream()
+                .filter(tool -> tool.toolIds().contains(toolId) || tool.id().equals(toolId))
+                .findFirst();
+    }
+
     /**
      * Resolves a tool plugin by its engine tool ID or plugin ID.
      */
@@ -190,8 +242,8 @@ public final class StudioPluginManager {
     }
 
     public synchronized StudioToolPlugin.BrushUiMode brushUiMode(String toolId) {
-        return toolPlugin(toolId)
-                .map(StudioToolPlugin::brushUiMode)
+        return toolView(toolId)
+                .map(StudioToolView::brushUiMode)
                 .orElse(StudioToolPlugin.BrushUiMode.NONE);
     }
 
@@ -239,6 +291,82 @@ public final class StudioPluginManager {
             } catch (Exception ex) {
                 log.error("Plugin {} floating error: {}", p.id(), ex.getMessage(), ex);
             }
+        }
+    }
+
+    /**
+     * Internal native projection of the shared tool descriptor.
+     * It contains presentation metadata only; engine behavior remains the
+     * neutral EditorTool registered in EditorPluginRegistry.
+     */
+    public record StudioToolView(
+            String id,
+            String toolId,
+            Set<String> toolIds,
+            String name,
+            String icon,
+            String shortcut,
+            int railPriority,
+            Set<StudioToolPlugin.ToolSurface> surfaces,
+            StudioToolPlugin.BrushUiMode brushUiMode,
+            boolean hasContextDrawerContent,
+            StudioToolPlugin nativePlugin) {
+
+        private static StudioToolView fromNative(
+                StudioToolPlugin tool,
+                Set<StudioToolPlugin.ToolSurface> surfaces) {
+            return new StudioToolView(
+                    tool.id(),
+                    tool.toolId(),
+                    Set.copyOf(tool.toolIds()),
+                    tool.name(),
+                    tool.icon(),
+                    tool.shortcut(),
+                    tool.railPriority(),
+                    Set.copyOf(surfaces),
+                    tool.brushUiMode(),
+                    tool.hasContextDrawerContent(),
+                    tool);
+        }
+
+        private static StudioToolView fromNeutral(EditorToolRegistration registration) {
+            ToolUiDescriptor ui = registration.ui();
+            java.util.EnumSet<StudioToolPlugin.ToolSurface> surfaces =
+                    java.util.EnumSet.noneOf(StudioToolPlugin.ToolSurface.class);
+            if (ui.appearsOn(ToolUiDescriptor.ToolSurface.BOTTOM_BAR)) {
+                surfaces.add(StudioToolPlugin.ToolSurface.BOTTOM_BAR);
+            }
+            if (ui.appearsOn(ToolUiDescriptor.ToolSurface.FLOATING_TOOLBAR)) {
+                surfaces.add(StudioToolPlugin.ToolSurface.FLOATING_TOOLBAR);
+            }
+
+            StudioToolPlugin.BrushUiMode brushUi = switch (ui.brushUiMode()) {
+                case NONE -> StudioToolPlugin.BrushUiMode.NONE;
+                case SHARED_SETTINGS -> StudioToolPlugin.BrushUiMode.SHARED_SETTINGS;
+                case TOOL_OWNED -> StudioToolPlugin.BrushUiMode.TOOL_OWNED;
+            };
+
+            String icon = registration.icon() == null || registration.icon().isBlank()
+                    ? StudioIcons.OBJECT
+                    : registration.icon();
+            String shortcut = registration.shortcut() == null ? "" : registration.shortcut();
+
+            return new StudioToolView(
+                    registration.id(),
+                    registration.id(),
+                    Set.of(registration.id()),
+                    registration.label(),
+                    icon,
+                    shortcut,
+                    registration.order(),
+                    Set.copyOf(surfaces),
+                    brushUi,
+                    false,
+                    null);
+        }
+
+        public boolean isNativeProjection() {
+            return nativePlugin != null;
         }
     }
 }
