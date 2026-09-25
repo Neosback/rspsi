@@ -1,6 +1,6 @@
 package com.rspsi.studio.plugin.builtin;
 
-import com.rspsi.studio.theme.StudioDrawColors;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.inspector.ObjectResolutionSummary;
 import com.rspsi.editor.model.WorldObject;
@@ -90,14 +90,13 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append(StudioIcons.EXPLORE);
 
         if (showCoordinates.get()) {
-            sb.append(String.format("  Tile: (%d, %d)", coord.x(), coord.y()));
+            sb.append(String.format("Tile (%d, %d)", coord.x(), coord.y()));
         }
 
         if (showPlane.get()) {
-            if (sb.length() > 2) sb.append("  |  ");
+            if (!sb.isEmpty()) sb.append("  ·  ");
             sb.append("Plane ").append(hit.plane());
         }
 
@@ -134,11 +133,11 @@ public final class TileInfoHudPlugin implements StudioPlugin {
                 }
             }
             if (sb.length() > 2) sb.append("  |  ");
-            sb.append(StudioIcons.OBJECT).append(" ").append(objName);
+            sb.append(objName);
         }
 
         String text = sb.toString();
-        if (text.isBlank() || text.equals(StudioIcons.EXPLORE)) return;
+        if (text.isBlank()) return;
 
         float padX = 10.0f;
         float padY = 4.0f;
@@ -161,15 +160,15 @@ public final class TileInfoHudPlugin implements StudioPlugin {
 
         ImDrawList dl = ImGui.getWindowDrawList();
         int alphaByte = (int) (Math.max(0.1f, Math.min(1.0f, bgAlpha.get())) * 255.0f);
-        int bgColor = (alphaByte << 24) | 0x0F172A;
-        int borderColor = (alphaByte << 24) | 0x334155;
+        int bgColor = StudioPalette.draw((alphaByte << 24) | (StudioPalette.CHROME_BG & 0x00FFFFFF));
+        int borderColor = StudioPalette.draw((alphaByte << 24) | (StudioPalette.BORDER_STRONG & 0x00FFFFFF));
 
         // Semi-transparent rounded pill
         dl.addRectFilled(hudX, hudY, hudX + badgeW, hudY + badgeH, bgColor, 6.0f);
         dl.addRect(hudX, hudY, hudX + badgeW, hudY + badgeH, borderColor, 6.0f, 0, 1.0f);
 
         // Text
-        dl.addText(hudX + padX, hudY + padY, 0xFFE2E8F0, text);
+        dl.addText(hudX + padX, hudY + padY, StudioPalette.draw(StudioPalette.TEXT), text);
     }
 
     private static String labelWithId(String displayName, int id) {
@@ -179,14 +178,14 @@ public final class TileInfoHudPlugin implements StudioPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.TUNE + "  HUD Display Elements");
+        ImGui.textColored(StudioPalette.ACCENT, "Display");
         ImGui.checkbox("Show Tile Coordinates##hud-coords", showCoordinates);
         ImGui.checkbox("Show Plane##hud-plane", showPlane);
         ImGui.checkbox("Show Elevation / Height##hud-height", showHeight);
         ImGui.checkbox("Show Hovered Object##hud-obj", showObject);
 
         ImGui.separator();
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.SETTINGS + "  Layout & Style");
+        ImGui.textColored(StudioPalette.ACCENT, "Layout & Style");
         ImGui.combo("Anchor Position##hud-anchor", anchorCorner, ANCHOR_NAMES);
         ImGui.sliderFloat("Background Opacity##hud-alpha", bgAlpha.getData(), 0.1f, 1.0f, "%.2f");
 
