@@ -23,6 +23,7 @@ import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.studio.theme.SettingRows;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioWidgets;
+import com.rspsi.studio.plugin.builtin.TileInfoHudPlugin;
 import com.rspsi.studio.ui.ObjectPreviewRenderer;
 import com.rspsi.studio.ui.ObjectPropertyTree;
 import com.rspsi.studio.ui.StudioPanel;
@@ -248,6 +249,15 @@ public final class ObjectViewerPanel implements StudioPanel {
 
         if (inspectedPlacement != null && inspectedPlacement.id() == objId) {
             renderPlacementContext(context, cache, inspectedPlacement);
+        }
+
+        if (ImGui.collapsingHeader("Inspection HUD")) {
+            context.studioPlugins().plugin(TileInfoHudPlugin.ID)
+                    .filter(TileInfoHudPlugin.class::isInstance)
+                    .map(TileInfoHudPlugin.class::cast)
+                    .ifPresentOrElse(
+                            hud -> hud.renderSettings(context),
+                            () -> ImGui.textDisabled("Inspection HUD plugin is unavailable."));
         }
 
         ImGui.dummy(1.0f, 6.0f);
