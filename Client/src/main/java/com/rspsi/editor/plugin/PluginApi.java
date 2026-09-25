@@ -235,12 +235,12 @@ public final class PluginApi {
     // --- Fluent Tool Registration ---
 
     public ToolBuilder tool(String id) {
-        return new ToolBuilder(this, id);
+        return new ToolBuilder(this, id, false);
     }
 
-    /** First-class map-tool alias; built-ins and installed extensions share this contract. */
+    /** First-class map tool; built-ins and installed extensions share this contract. */
     public ToolBuilder mapTool(String id) {
-        return tool(id);
+        return new ToolBuilder(this, id, true);
     }
 
     public void tool(String id, Supplier<? extends EditorTool> factory) {
@@ -257,18 +257,21 @@ public final class PluginApi {
         private String shortcut;
         private int order;
         private final EnumSet<ToolUiDescriptor.ToolSurface> surfaces =
-                EnumSet.of(ToolUiDescriptor.ToolSurface.BOTTOM_BAR,
-                        ToolUiDescriptor.ToolSurface.FLOATING_TOOLBAR);
+                EnumSet.noneOf(ToolUiDescriptor.ToolSurface.class);
         private final EnumSet<ToolUiDescriptor.ToolCapability> capabilities =
                 EnumSet.noneOf(ToolUiDescriptor.ToolCapability.class);
         private ToolUiDescriptor.BrushUiMode brushUiMode = ToolUiDescriptor.BrushUiMode.NONE;
         private boolean hasContextDrawerContent;
         private Supplier<? extends EditorTool> factory;
 
-        ToolBuilder(PluginApi api, String id) {
+        ToolBuilder(PluginApi api, String id, boolean firstClassMapTool) {
             this.api = api;
             this.id = id;
             this.label = id;
+            if (firstClassMapTool) {
+                surfaces.add(ToolUiDescriptor.ToolSurface.BOTTOM_BAR);
+                surfaces.add(ToolUiDescriptor.ToolSurface.FLOATING_TOOLBAR);
+            }
         }
 
         public ToolBuilder label(String label) {
