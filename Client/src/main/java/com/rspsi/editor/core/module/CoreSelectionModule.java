@@ -3,7 +3,7 @@ package com.rspsi.editor.core.module;
 import com.rspsi.editor.core.CoreEditorModule;
 import com.rspsi.editor.plugin.EditorPluginContext;
 import com.rspsi.editor.plugin.EditorToolContextRegistration;
-import com.rspsi.editor.plugin.builtin.SelectionToolSettings;
+import com.rspsi.editor.core.settings.SelectionToolSettings;
 import com.rspsi.editor.tool.AttributeSelectionTool;
 import com.rspsi.editor.tool.BoxSelectTool;
 import com.rspsi.editor.tool.DuplicateSelectionTool;
