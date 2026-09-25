@@ -588,8 +588,8 @@ public final class TileBrushPanel implements StudioPanel {
 
         Map<Integer, Integer> underlayCounts = new LinkedHashMap<>();
         Map<Integer, Integer> overlayCounts = new LinkedHashMap<>();
-        for (int x = 0; x < Math.min(64, world.width()); x += 2) {
-            for (int y = 0; y < Math.min(64, world.length()); y += 2) {
+        for (int x = 0; x < Math.min(64, world.width()); x++) {
+            for (int y = 0; y < Math.min(64, world.length()); y++) {
                 TileSnapshot snapshot = world.tile(plane, x, y).snapshot();
                 if (snapshot.underlayId() > 0) {
                     underlayCounts.merge(snapshot.underlayId(), 1, Integer::sum);
@@ -600,37 +600,43 @@ public final class TileBrushPanel implements StudioPanel {
             }
         }
 
-        ImGui.textDisabled("Underlays in use (" + underlayCounts.size() + "):");
-        renderSwatchGrid(cache, underlayCounts, true);
+        ImGui.textDisabled("Underlays in use · " + underlayCounts.size() + " distinct");
+        renderSurfaceUsageList(cache, underlayCounts, true);
 
         ImGui.spacing();
-        ImGui.textDisabled("Overlays in use (" + overlayCounts.size() + "):");
-        renderSwatchGrid(cache, overlayCounts, false);
+        ImGui.textDisabled("Overlays in use · " + overlayCounts.size() + " distinct");
+        renderSurfaceUsageList(cache, overlayCounts, false);
     }
 
-    private void renderSwatchGrid(LoadedOsrsCacheSession cache, Map<Integer, Integer> counts, boolean underlay) {
+    private void renderSurfaceUsageList(
+            LoadedOsrsCacheSession cache,
+            Map<Integer, Integer> counts,
+            boolean underlay) {
         if (counts.isEmpty()) {
-            ImGui.textDisabled("  (none)");
+            ImGui.textDisabled("(none)");
             return;
         }
 
-        float swatchSize = 28.0f;
-        float availWidth = ImGui.getContentRegionAvailX();
-        int perRow = Math.max(1, (int) (availWidth / (swatchSize + 4.0f)));
-
+        float swatchSize = 30.0f;
         int shown = 0;
         for (var entry : counts.entrySet()) {
-            int id = entry.getKey();
-            String tooltip = "#" + FloorId.definitionId(id) + "  -  " + entry.getValue() + " tile(s)";
-            drawSwatch(cache, id, underlay, swatchSize, tooltip);
+            int encodedId = entry.getKey();
+            int definitionId = FloorId.definitionId(encodedId);
+            drawSwatch(
+                    cache,
+                    encodedId,
+                    underlay,
+                    swatchSize,
+                    (underlay ? "Underlay #" : "Overlay #")
+                            + definitionId + " · " + entry.getValue() + " tile(s)");
+            ImGui.sameLine(0.0f, 10.0f);
+            ImGui.beginGroup();
+            ImGui.text((underlay ? "Underlay #" : "Overlay #") + definitionId);
+            ImGui.textDisabled(entry.getValue() + " tile" + (entry.getValue() == 1 ? "" : "s"));
+            ImGui.endGroup();
 
             shown++;
-            if (shown % perRow != 0) {
-                ImGui.sameLine();
-            }
-        }
-        if (shown % perRow != 0) {
-            ImGui.newLine();
+            if (shown < counts.size()) ImGui.separator();
         }
     }
 
