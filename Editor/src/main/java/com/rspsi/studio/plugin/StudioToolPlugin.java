@@ -27,6 +27,19 @@ public interface StudioToolPlugin extends StudioPlugin {
     }
 
     /**
+     * Declares where brush controls live for this tool. This is semantic capability,
+     * not button placement: moving a tool button never changes which brush UI it owns.
+     */
+    enum BrushUiMode {
+        /** Tool does not use the shared brush system. */
+        NONE,
+        /** Studio shows the shared Brush Settings rail/panel while this tool is active. */
+        SHARED_SETTINGS,
+        /** Tool is brush-aware but renders all brush controls in its own context UI. */
+        TOOL_OWNED
+    }
+
+    /**
      * Unique identifier for the engine or studio tool (e.g. "terrain.tile-painter").
      */
     String toolId();
@@ -83,6 +96,14 @@ public interface StudioToolPlugin extends StudioPlugin {
      */
     default boolean isBrushTool() {
         return false;
+    }
+
+    /**
+     * Explicit brush-UI ownership. Existing brush tools default to the shared
+     * Studio brush panel; non-brush tools default to none.
+     */
+    default BrushUiMode brushUiMode() {
+        return isBrushTool() ? BrushUiMode.SHARED_SETTINGS : BrushUiMode.NONE;
     }
 
     /**
