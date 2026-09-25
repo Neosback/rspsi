@@ -15,6 +15,8 @@ class BrushSettingsHudTest {
         assertEquals("Brush Settings HUD", hud.name());
         assertEquals(StudioIcons.BRUSH, hud.icon());
         assertTrue(hud.isConfigurable());
+        assertTrue(hud.isVisible());
+        assertTrue(hud.isDocked());
         assertFalse(hud.isMinimized());
         assertFalse(hud.isPinned());
     }
