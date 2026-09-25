@@ -69,6 +69,14 @@ public final class EditorPluginHost implements AutoCloseable {
         return initialize(List.of(), plugins, session, assets, Optional.empty());
     }
 
+    public static EditorPluginHost initializeWithCoreModules(
+            Iterable<? extends CoreEditorModule> coreModules,
+            Iterable<? extends EditorPlugin> plugins,
+            EditorSession session,
+            AssetRepository assets) {
+        return initialize(coreModules, plugins, session, assets, Optional.empty());
+    }
+
     public static EditorPluginHost initialize(
             Iterable<? extends EditorPlugin> plugins,
             EditorSession session,
