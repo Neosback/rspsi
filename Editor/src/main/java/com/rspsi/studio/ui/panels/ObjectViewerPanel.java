@@ -90,7 +90,7 @@ public final class ObjectViewerPanel implements StudioPanel {
     // manually (e.g. clicking a different row in the grid below).
     private WorldObject inspectedPlacement;
     private WorldObject lastSyncedPickedObject;
-    private final ArrayDeque<Integer> recentObjectIds = new ArrayDeque<>(20);
+    private final ArrayDeque<RecentObject> recentObjects = new ArrayDeque<>(20);
 
     // Filter cache state
     private List<Integer> allObjectIds = null;
@@ -196,7 +196,7 @@ public final class ObjectViewerPanel implements StudioPanel {
         selectedObjectId.set(id);
         inspectedPlacement = null;
         activeSubTab = 0;
-        rememberObject(id);
+        rememberObject(new RecentObject(id, null));
     }
 
     /** Opens a placed world object and retains its tile/shape/rotation context. */
@@ -207,13 +207,16 @@ public final class ObjectViewerPanel implements StudioPanel {
         objectRotation.set(object.rotation());
         inspectedPlacement = object;
         activeSubTab = 0;
-        rememberObject(object.id());
+        rememberObject(new RecentObject(object.id(), object));
     }
 
-    private void rememberObject(int id) {
-        recentObjectIds.remove(id);
-        recentObjectIds.addFirst(id);
-        while (recentObjectIds.size() > 20) recentObjectIds.removeLast();
+    private void rememberObject(RecentObject recent) {
+        recentObjects.removeIf(existing -> existing.id() == recent.id());
+        recentObjects.addFirst(recent);
+        while (recentObjects.size() > 20) recentObjects.removeLast();
+    }
+
+    private record RecentObject(int id, WorldObject placement) {
     }
 
     private void renderSubTabButton(String label, int tabIndex, float width) {
@@ -405,22 +408,28 @@ public final class ObjectViewerPanel implements StudioPanel {
     }
 
     private void renderRecentObjects(LoadedOsrsCacheSession cache, SettingsStore settings) {
-        if (recentObjectIds.isEmpty()) {
+        if (recentObjects.isEmpty()) {
             ImGui.textDisabled("Objects you inspect from the viewport, Tile Inspector, or search will appear here.");
             return;
         }
 
         int row = 0;
-        for (int id : recentObjectIds) {
+        for (RecentObject recent : recentObjects) {
+            int id = recent.id();
             String label = cache == null
                     ? "Object #" + id
                     : cache.bundle().definitions().object(id)
                             .map(def -> objectLabel(def.displayName(), id))
                             .orElse("Object #" + id);
-            boolean current = selectedObjectId.get() == id;
-            ImGui.pushID("recent-" + id);
+            if (recent.placement() != null) {
+                label += "  ·  " + recent.placement().x() + ", " + recent.placement().y();
+            }
+            boolean current = selectedObjectId.get() == id
+                    && java.util.Objects.equals(inspectedPlacement, recent.placement());
+            ImGui.pushID("recent-" + row + "-" + id);
             if (ImGui.selectable(label, current, 0, 0.0f, 28.0f)) {
-                inspectObject(id);
+                if (recent.placement() != null) inspectObject(recent.placement());
+                else inspectObject(id);
                 settings.set(EditorSettingKeys.OBJECT_ID, id);
             }
             ImGui.popID();
