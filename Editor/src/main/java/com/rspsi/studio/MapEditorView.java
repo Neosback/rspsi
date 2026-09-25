@@ -230,7 +230,8 @@ public final class MapEditorView {
 
         boolean brushRailVisible = showLeftToolRail
                 || LeftBrushRail.isBrushToolActive(studioPluginManager, activeToolId);
-        Layout layout = Layout.compute(bottomBar, brushRailVisible);
+        Layout layout = Layout.compute(
+                bottomBar, brushRailVisible, rightSidebar.preferredWidth(panelManager));
 
         // 1. Program-owned Menu Bar (File, Edit, View, Cache, Plugins, Server, Help)
         menuBar.render(cache, pluginLifecycle, integrations, showServerSpawns,
@@ -917,7 +918,10 @@ public final class MapEditorView {
                           float bottomY, float bottomWidth, float bottomHeight,
                           float drawerHeight) {
 
-        private static Layout compute(StudioBottomBar bottomBar, boolean brushRailVisible) {
+        private static Layout compute(
+                StudioBottomBar bottomBar,
+                boolean brushRailVisible,
+                float requestedRightWidth) {
             imgui.ImGuiViewport main = ImGui.getMainViewport();
             float menuBarH = ImGui.getFrameHeight();
             float wsBarH = WorkspaceTabBar.HEIGHT;
@@ -931,9 +935,12 @@ public final class MapEditorView {
             float height = Math.max(1.0f, main.getSizeY() - menuBarH - menuBarGap);
 
             float leftRailW = brushRailVisible ? LeftBrushRail.RAIL_WIDTH : 0.0f;
-            float rightWidth = Math.min(330.0f, Math.max(260.0f, width * 0.28f));
+            float responsiveBase = Math.max(340.0f, width * 0.34f);
+            float requested = Math.max(responsiveBase, requestedRightWidth);
+            float maxRight = Math.max(340.0f, width - leftRailW - 500.0f);
+            float rightWidth = Math.min(Math.min(460.0f, requested), maxRight);
             float viewportX = x + leftRailW;
-            float viewportWidth = Math.max(160.0f, width - leftRailW - rightWidth);
+            float viewportWidth = Math.max(500.0f, width - leftRailW - rightWidth);
             float rightX = viewportX + viewportWidth;
 
             float availContentH = Math.max(100.0f, height - wsBarH - statusBarH);
