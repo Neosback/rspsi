@@ -4,9 +4,12 @@ import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.assets.AssetDescriptor;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.input.EditorKeyEvent;
+import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.WorldModel;
 import com.rspsi.editor.render.OverlayDraw;
+import com.rspsi.editor.tool.EditorTool;
+import com.rspsi.editor.tool.ToolContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -233,6 +236,102 @@ class PluginApiTest {
         assertEquals("Val 1", inspectorFields.get(0).value());
 
         host.close();
+    }
+
+
+    @Test
+    void testMapToolBuilderCarriesFirstClassStudioMetadata() {
+        EditorSession session = new EditorSession(new WorldModel(1, 1, 1));
+
+        EditorPlugin testPlugin = new EditorPlugin() {
+            @Override
+            public String id() {
+                return "test.map-tool.plugin";
+            }
+
+            @Override
+            public void initialize(EditorPluginContext context) {
+                context.api(this)
+                        .mapTool("test.biome-painter")
+                        .label("Biome Painter")
+                        .category("Terrain")
+                        .group("terrain")
+                        .icon("forest")
+                        .shortcut("B")
+                        .order(40)
+                        .surfaces(ToolUiDescriptor.ToolSurface.BOTTOM_BAR)
+                        .brushUi(ToolUiDescriptor.BrushUiMode.SHARED_SETTINGS)
+                        .capabilities(
+                                ToolUiDescriptor.ToolCapability.TILE_TARGET,
+                                ToolUiDescriptor.ToolCapability.WORLD_READ,
+                                ToolUiDescriptor.ToolCapability.WORLD_EDIT,
+                                ToolUiDescriptor.ToolCapability.PREVIEW)
+                        .contextDrawer(true)
+                        .factory(() -> new NoOpTool("test.biome-painter"))
+                        .register();
+            }
+        };
+
+        EditorPluginHost host = EditorPluginHost.initialize(
+                List.of(testPlugin), session, new EmptyAssets());
+
+        EditorToolRegistration registration = host.registry().toolRegistrations().stream()
+                .filter(tool -> "test.biome-painter".equals(tool.id()))
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals("Biome Painter", registration.label());
+        assertEquals("Terrain", registration.category());
+        assertEquals("terrain", registration.toolGroup());
+        assertEquals("forest", registration.icon());
+        assertEquals("B", registration.shortcut());
+        assertEquals(40, registration.order());
+
+        ToolUiDescriptor ui = registration.ui();
+        assertEquals(ToolUiDescriptor.BrushUiMode.SHARED_SETTINGS, ui.brushUiMode());
+        assertTrue(ui.appearsOn(ToolUiDescriptor.ToolSurface.BOTTOM_BAR));
+        assertFalse(ui.appearsOn(ToolUiDescriptor.ToolSurface.FLOATING_TOOLBAR));
+        assertTrue(ui.has(ToolUiDescriptor.ToolCapability.BRUSH_FOOTPRINT));
+        assertTrue(ui.has(ToolUiDescriptor.ToolCapability.TILE_TARGET));
+        assertTrue(ui.has(ToolUiDescriptor.ToolCapability.WORLD_EDIT));
+        assertTrue(ui.has(ToolUiDescriptor.ToolCapability.CONTEXT_DRAWER));
+        assertTrue(ui.hasContextDrawerContent());
+
+        assertEquals("test.biome-painter", host.registry().createTool(registration.id()).id());
+        host.close();
+    }
+
+    private static final class NoOpTool implements EditorTool {
+        private final String id;
+
+        private NoOpTool(String id) {
+            this.id = id;
+        }
+
+        @Override
+        public String id() {
+            return id;
+        }
+
+        @Override
+        public void activate(ToolContext context) {
+        }
+
+        @Override
+        public void deactivate() {
+        }
+
+        @Override
+        public void pointerDown(PointerEvent event) {
+        }
+
+        @Override
+        public void pointerDrag(PointerEvent event) {
+        }
+
+        @Override
+        public void pointerUp(PointerEvent event) {
+        }
     }
 
     private static final class EmptyAssets implements AssetRepository {
