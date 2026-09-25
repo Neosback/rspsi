@@ -268,9 +268,14 @@ tasks.register('verifyOsrsInstance') {
     }
 }
 
-def nativeStudioSources = fileTree(project(':Editor').file('src/main/java/com/rspsi/studio')) {
-    include '**/*.java'
-}
+def nativeStudioSources = files(
+        fileTree(project(':Editor').file('src/main/java/com/rspsi/studio')) {
+            include '**/*.java'
+        },
+        fileTree(project(':Editor').file('src/main/kotlin/com/rspsi/studio')) {
+            include '**/*.kt'
+        }
+)
 
 def renderingParityManifestFile = file('docs/RENDERING_PARITY_MANIFEST.json')
 def renderingParityReportDirectory = layout.buildDirectory.dir('reports/rendering')
