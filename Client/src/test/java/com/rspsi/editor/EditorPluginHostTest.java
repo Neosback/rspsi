@@ -8,8 +8,8 @@ import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.editor.plugin.EditorShortcutRegistration;
 import com.rspsi.editor.plugin.EditorToolRegistration;
 import com.rspsi.editor.plugin.EditorInspectorField;
-import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
-import com.rspsi.editor.plugin.builtin.TerrainToolsPlugin;
+import com.rspsi.editor.core.CoreEditorModules;
+import com.rspsi.editor.core.module.CoreTerrainModule;
 import com.rspsi.editor.tool.ChangeHeightTool;
 import com.rspsi.editor.tool.MoveObjectTool;
 import com.rspsi.editor.tool.PlaceObjectTool;
@@ -79,13 +79,12 @@ class EditorPluginHostTest {
     @Test
     void coreToolsAreRegisteredAsNeutralContributions() {
         EditorSession session = new EditorSession(new com.rspsi.editor.model.WorldModel(1, 1, 1));
-        EditorPluginHost host = EditorPluginHost.initialize(
-                CoreToolsPlugin.builtIns(), session, new EmptyAssets());
+        EditorPluginHost host = EditorPluginHost.initializeWithCoreModules(
+                CoreEditorModules.all(), List.of(), session, new EmptyAssets());
 
-        assertEquals(List.of("rspsi.tools.terrain", "rspsi.tools.objects", "rspsi.tools.selection",
-                        "rspsi.tools.renderer-debug", "rspsi.ui.core-surfaces"),
-                host.plugins().stream().map(EditorPlugin::id).toList());
-        assertEquals(22, host.registry().toolRegistrations().size());
+        assertTrue(host.plugins().isEmpty());
+        assertEquals(CoreEditorModules.ids(), host.coreModuleIds());
+        assertEquals(24, host.registry().toolRegistrations().size());
         EditorToolRegistration registration = host.registry().toolRegistrations().get(0);
         assertEquals("terrain.paint-underlay", registration.id());
         assertEquals("Terrain", registration.category());
@@ -95,8 +94,8 @@ class EditorPluginHostTest {
     @Test
     void terrainSettingsBelongToThePluginAndConfigureNewToolInstances() {
         EditorSession session = new EditorSession(new com.rspsi.editor.model.WorldModel(1, 1, 1));
-        EditorPluginHost host = EditorPluginHost.initialize(
-                List.of(new TerrainToolsPlugin()), session, new EmptyAssets());
+        EditorPluginHost host = EditorPluginHost.initializeWithCoreModules(
+                List.of(new CoreTerrainModule()), List.of(), session, new EmptyAssets());
 
         var settings = host.registry().settingsForTool(host.context(), "terrain.raise");
         var radius = settings.stream().filter(value -> value.id().equals("terrain.height-radius"))
@@ -112,8 +111,8 @@ class EditorPluginHostTest {
     @Test
     void objectAndSelectionSettingsAlsoConfigurePluginTools() {
         EditorSession session = new EditorSession(new com.rspsi.editor.model.WorldModel(1, 1, 1));
-        EditorPluginHost host = EditorPluginHost.initialize(
-                CoreToolsPlugin.builtIns(), session, new EmptyAssets());
+        EditorPluginHost host = EditorPluginHost.initializeWithCoreModules(
+                CoreEditorModules.all(), List.of(), session, new EmptyAssets());
 
         var objectSettings = host.registry().settingsForTool(host.context(), "object.place");
         objectSettings.stream().filter(value -> value.id().equals("objects.id"))
