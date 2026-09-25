@@ -55,7 +55,7 @@ public record ToolContext(
     }
 
     public Optional<WorldTile> worldTileAt(float x, float y) {
-        return hitAt(x, y).map(SurfaceHit::targetTile);
+        return viewport.tileAt(x, y);
     }
 
     public Optional<LocalTile> localTileAt(float x, float y) {
