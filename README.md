@@ -2,7 +2,8 @@
 
 OpenRune Studio (repository `RSPSiSuite`, root Gradle project `RSPSi`) is a from-scratch Java
 OSRS map editor and content-authoring studio. It has its own per-triangle software renderer,
-a native OpenGL renderer, a Dear ImGui/GLFW desktop shell, and a plugin/settings architecture.
+a native OpenGL renderer, a Dear ImGui/GLFW desktop shell, a modular core runtime, typed settings,
+and an external extension architecture.
 It is not a RuneLite plugin and does not embed RuneLite's client.
 
 ## Modules
@@ -60,14 +61,17 @@ Start with [AGENTS.md](AGENTS.md) for repository orientation and conventions. Wh
 disagree, the order of authority is:
 
 1. current production code plus passing tests
-2. [RENDERING_PARITY_MANIFEST.json](docs/RENDERING_PARITY_MANIFEST.json) - live rendering-correctness backlog
-3. [ROADMAP.md](docs/ROADMAP.md) - product order and near-term PR sequence
-4. [STUDIO_SEMANTIC_API.md](docs/STUDIO_SEMANTIC_API.md) - authored-world / resolved-scene API contract
-5. [PROJECT_LAUNCHER_AND_DASHBOARD.md](docs/PROJECT_LAUNCHER_AND_DASHBOARD.md) - startup and project lifecycle
-6. [UI_WORKSPACE_CONTRACT.md](docs/UI_WORKSPACE_CONTRACT.md) - in-project editor shell and plugin UI placement
-7. [CONTENT_STUDIO_FOUNDATION.md](docs/CONTENT_STUDIO_FOUNDATION.md) - advanced-authoring prerequisites
-8. [OPENRUNE_ECOSYSTEM_INTEGRATION.md](docs/OPENRUNE_ECOSYSTEM_INTEGRATION.md) - OpenRune Server/cache guardrails
-9. [OPENRUNE_MAVEN_CATALOG.md](docs/OPENRUNE_MAVEN_CATALOG.md) - OpenRune dependency inventory
+2. [AI_ARCHITECTURE_OVERVIEW.md](docs/AI_ARCHITECTURE_OVERVIEW.md) - system mental model and canonical ownership
+3. [AI_CHANGE_PLAYBOOK.md](docs/AI_CHANGE_PLAYBOOK.md) - deterministic implementation routes for common changes
+4. [EDITOR_DEVELOPMENT_ARCHITECTURE.md](docs/EDITOR_DEVELOPMENT_ARCHITECTURE.md) - internal modular-monolith code placement
+5. [RENDERING_PARITY_MANIFEST.json](docs/RENDERING_PARITY_MANIFEST.json) - live rendering-correctness backlog
+6. [ROADMAP.md](docs/ROADMAP.md) - product order and near-term PR sequence
+7. [STUDIO_SEMANTIC_API.md](docs/STUDIO_SEMANTIC_API.md) - authored-world / resolved-scene API contract
+8. [UI_WORKSPACE_CONTRACT.md](docs/UI_WORKSPACE_CONTRACT.md) - in-project editor shell and extension UI placement
+9. [CACHE_RENDERING_WORKSPACE_OWNERSHIP.md](docs/CACHE_RENDERING_WORKSPACE_OWNERSHIP.md) - cache, rendering, server, and shell ownership
+10. [PROJECT_LAUNCHER_AND_DASHBOARD.md](docs/PROJECT_LAUNCHER_AND_DASHBOARD.md) - startup and project lifecycle
+11. [OPENRUNE_ECOSYSTEM_INTEGRATION.md](docs/OPENRUNE_ECOSYSTEM_INTEGRATION.md) - OpenRune Server/cache guardrails
+12. [OPENRUNE_MAVEN_CATALOG.md](docs/OPENRUNE_MAVEN_CATALOG.md) - OpenRune dependency inventory
 
 Reference material:
 
