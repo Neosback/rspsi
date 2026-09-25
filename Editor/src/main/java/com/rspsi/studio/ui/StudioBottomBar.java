@@ -90,8 +90,8 @@ public final class StudioBottomBar {
                        String activeToolId) {
 
         boolean activeToolHasDrawer = context == null || context.studioPlugins() == null
-                || context.studioPlugins().toolPlugin(activeToolId)
-                        .map(StudioToolPlugin::hasContextDrawerContent)
+                || context.studioPlugins().toolView(activeToolId)
+                        .map(StudioPluginManager.StudioToolView::hasContextDrawerContent)
                         .orElse(true);
         if (panelManager != null && activeToolId != null) {
             activeToolHasDrawer = activeToolHasDrawer
@@ -140,15 +140,16 @@ public final class StudioBottomBar {
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 2.0f, 2.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
 
-        List<StudioToolPlugin> toolPlugins = (context != null && context.studioPlugins() != null)
-                ? context.studioPlugins().toolPlugins()
-                : Collections.emptyList();
+        List<StudioPluginManager.StudioToolView> toolPlugins =
+                (context != null && context.studioPlugins() != null)
+                        ? context.studioPlugins().toolViews()
+                        : Collections.emptyList();
 
         float btnW = 32.0f;
         float btnH = 26.0f;
 
         if (!toolPlugins.isEmpty()) {
-            for (StudioToolPlugin tool : toolPlugins) {
+            for (StudioPluginManager.StudioToolView tool : toolPlugins) {
                 java.util.Optional<DockRegion> managedRegion =
                         panelManager != null ? panelManager.managedRegionForTool(tool.toolId())
                                 : java.util.Optional.empty();
@@ -156,8 +157,7 @@ public final class StudioBottomBar {
                     continue;
                 }
                 if (managedRegion.isEmpty()
-                        && !context.studioPlugins().effectiveSurfaces(tool)
-                                .contains(StudioToolPlugin.ToolSurface.BOTTOM_BAR)) {
+                        && !tool.surfaces().contains(StudioToolPlugin.ToolSurface.BOTTOM_BAR)) {
                     continue;
                 }
                 boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
@@ -293,10 +293,10 @@ public final class StudioBottomBar {
                                        StudioPanelContext context,
                                        String activeToolId) {
         if (context != null && context.studioPlugins() != null) {
-            var toolPluginOpt = context.studioPlugins().toolPlugin(activeToolId);
-            if (toolPluginOpt.isPresent()) {
+            var toolView = context.studioPlugins().toolView(activeToolId).orElse(null);
+            if (toolView != null && toolView.nativePlugin() != null) {
                 try {
-                    toolPluginOpt.get().renderContextDrawer(context);
+                    toolView.nativePlugin().renderContextDrawer(context);
                 } catch (Throwable t) {
                     ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.DANGER);
                     ImGui.text(StudioIcons.BUG_REPORT + " Tool Drawer Error: " + t.getMessage());
