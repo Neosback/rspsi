@@ -1,207 +1,228 @@
 # Editor Development Architecture
 
-> **Purpose:** the shortest authoritative guide for deciding where new editor code belongs.
->
-> Product direction lives in `ROADMAP.md`. Public extension behavior lives in
-> `PLUGIN_EXTENSION_SDK.md`. This document is about **internal code organization** and
-> preventing parallel implementations.
+> **Status:** authoritative internal code-placement and composition guide.
 
-## 1. Architecture: modular monolith
+## 1. Design goal
 
-OpenRune Studio is a modular monolith.
+OpenRune Studio is a modular monolith with explicit internal boundaries.
 
-There is one application runtime, one editor session, one extension registry, one command/history
-system, and one native Studio shell. Core features are compile-time modules. External plugins are
-optional extensions loaded after the core into the same neutral registry/services.
+The goal is not to maximize abstraction count. The goal is to keep one obvious implementation route for each concern so humans and coding agents do not accidentally create parallel systems.
 
-```
-StudioApplication                         composition root
-        |
-        v
-EditorPluginHost                         one runtime host
-        |
-        +-- CoreEditorModules             always installed, compile time
-        |     +-- terrain
-        |     +-- tile painter
-        |     +-- path
-        |     +-- objects
-        |     +-- selection
-        |     +-- diagnostics
-        |     +-- core UI declarations
-        |
-        +-- external EditorPlugins        optional JAR extensions
-        |
-        v
-EditorPluginRegistry + PluginServices    one registration/service boundary
-        |
-        v
-EditorSession / commands / selection     canonical authored state
-```
+## 2. Module boundary
 
-The names `EditorPluginHost`, `EditorPluginRegistry`, `EditorPluginContext`, and
-`PluginServices` are legacy naming. Their runtime is shared by core modules and external
-extensions. Do not create a second host/registry/service graph to avoid those names. Rename them
-in a dedicated migration if/when the compatibility surface warrants it.
+### Client
 
-## 2. The rule that prevents most architecture drift
+Put code in Client when it can be expressed without a native window or OpenGL context.
 
-**A core OpenRune feature is not a plugin.**
+Examples:
 
-If functionality ships as part of Studio, add it to an existing `CoreEditorModule` or create
-one new domain module and list it exactly once in `CoreEditorModules`.
+- world/document semantics;
+- editor commands and history;
+- selection;
+- cache adapters;
+- map codecs;
+- definitions/assets;
+- project integration contracts;
+- semantic scene resolution;
+- render-neutral compilation;
+- query/generation/change planning;
+- autosave/edit persistence;
+- core feature modules.
 
-Use `EditorPlugin` only for code that can genuinely be installed/uninstalled as an external
-extension artifact.
+### Editor
 
-Core and extension code still use the same neutral registry and domain services. This is not a
-capability distinction. It is a composition/lifecycle distinction.
+Put code in Editor when it directly owns native presentation.
 
-## 3. Canonical paths
+Examples:
 
-Before adding a manager, registry, service, model, or tool, check this table.
+- Dear ImGui rendering;
+- GLFW lifecycle/input adaptation;
+- OpenGL resource ownership;
+- project launcher widgets;
+- native workspace layout;
+- viewport framebuffer/presentation;
+- native texture previews.
 
-| Need | Canonical implementation |
+Do not move a business rule to Editor merely because its first caller is a panel.
+
+## 3. Built-in composition
+
+Built-in features are compile-time core modules.
+
+Canonical entry points:
+
+- com.rspsi.editor.core.CoreEditorModule
+- com.rspsi.editor.core.CoreEditorModules
+
+Feature modules register or compose existing neutral services. They should remain thin.
+
+When adding a feature:
+
+    core module
+      -> domain service
+      -> command/change plan
+      -> canonical state
+
+Do not create one lifecycle wrapper per tool.
+
+## 4. Package ownership
+
+| Package/area | Responsibility |
 | --- | --- |
-| Application composition | `Editor/src/main/java/com/rspsi/studio/StudioApplication.java` |
-| Core feature manifest | `Client/.../editor/core/CoreEditorModules.java` |
-| Core domain registration | `Client/.../editor/core/module/Core*Module.java` |
-| External extension lifecycle | `Client/.../editor/plugin/EditorPluginLifecycleManager.java` |
-| Shared registrations | `Client/.../editor/plugin/EditorPluginRegistry.java` |
-| Shared domain services | `Client/.../editor/plugin/services/PluginServices.java` |
-| Authored world state | `EditorSession` + `WorldDocument` |
-| Undoable mutation | `EditorCommand` / command classes |
-| Selection | `SelectionModel` and `editor.selection` |
-| Tool behavior | `editor.tool` |
-| Tool pointer hit | `ToolContext.hitAt(...)` / `SurfaceHit` |
-| Brush behavior | `editor.brush` + `StudioBrushManager` projection |
-| Semantic OSRS API | `com.rspsi.api` |
-| Render-neutral scene build | `editor.render` |
-| Native OpenGL renderer | `Editor` module renderer classes only |
-| Studio layout | `UI_WORKSPACE_CONTRACT.md` |
-| Studio panels / rails / HUD rendering | `Editor/src/main/java/com/rspsi/studio/ui` |
-| Settings | `SettingsStore`, `SettingsService`, setting keys |
-| Project/open lifecycle | `CONTENT_STUDIO_ARCHITECTURE.md` |
+| com.rspsi.editor.model | authored world data |
+| com.rspsi.editor | commands, session, history, selection |
+| com.rspsi.editor.change | validated multi-step changes |
+| com.rspsi.editor.brush | shared brush semantics |
+| com.rspsi.editor.tool | neutral tool behavior |
+| com.rspsi.editor.core | built-in composition |
+| com.rspsi.cache.store | cache backend adapters |
+| com.rspsi.cache.map | region decode/encode/map persistence |
+| com.rspsi.cache.definition | neutral definition views/edit contracts |
+| com.rspsi.editor.render | semantic/render-neutral scene contracts |
+| com.rspsi.editor.render.compiler | incremental scene compilation/invalidation |
+| com.rspsi.editor.integration | neutral server/project integration |
+| com.rspsi.server.openrune | first-party OpenRune implementation |
+| com.rspsi.project | Studio project identity/layout |
+| com.rspsi.editor.io | Studio-owned recovery/edit persistence |
+| Editor com.rspsi.renderer.opengl | native OpenGL implementation |
+| Editor com.rspsi.studio | native application/workspace composition |
 
-If the thing you want already has a row, extend that system. Do not make a parallel one.
+If a class does two unrelated rows, split responsibilities before adding more behavior.
 
-## 4. Adding a core tool
+## 5. State ownership
 
-A core tool normally requires only:
+Avoid mirrored mutable state.
 
-1. behavior in `editor.tool`;
-2. undoable commands/services if it mutates the document;
-3. one registration in the correct `Core*Module`;
-4. neutral UI metadata/content where possible;
-5. native presentation only when the neutral UI contract cannot yet represent it;
-6. tests for behavior plus the core inventory/contract tests.
+Canonical state examples:
 
-Do **not** create:
+- WorldDocument owns authored map state.
+- SelectionModel owns editor selection.
+- CommandHistory owns undo/redo position.
+- project descriptor owns project identity/configuration.
+- project edit store owns unpublished durable Studio edits.
+- renderer owns only native resource state derived from scene/upload plans.
 
-- a one-tool `EditorPlugin`;
-- another tool registry;
-- another selection model;
-- another brush engine;
-- a special append in `StudioApplication`;
-- a renderer fork for ordinary map edits.
+UI fields may cache presentation values but must not become authoritative copies.
 
-## 5. Adding an external extension
+## 6. Service design
 
-External extensions implement `EditorPlugin` and register through `PluginApi` or the shared
-neutral registry/services. They can use the same supported editor capabilities as core features.
+Prefer small capability-oriented services over broad grab-bag managers.
 
-Plugin lifecycle machinery exists for:
+A service should have:
 
-- artifact discovery;
-- version/dependency checks;
-- enable/disable;
-- unload/reload;
-- resource cleanup.
+- one responsibility;
+- explicit dependencies;
+- deterministic lifecycle;
+- neutral inputs/outputs where practical;
+- focused tests.
 
-It should not be used as the internal dependency injection system for Studio itself.
+Before adding a service, search for an existing owner by data type and behavior.
 
-## 6. Native Studio boundary
+## 7. Method design and duplication control
 
-`Client` owns semantics. `Editor` owns native presentation.
+Prefer:
 
-Core editing behavior must not depend on:
+- one method parameterized by explicit strategy/value;
+- a shared private primitive used by public operations;
+- one result type with enough information for all callers;
+- one validation path.
 
-- Dear ImGui;
-- GLFW;
-- OpenGL;
-- native window state.
+Avoid:
 
-Native Studio may project a neutral tool, HUD, panel, or overlay into ImGui/OpenGL. It must not
-create a second authored-world model or mutation path.
+- FooForMapStudio and FooForObjectStudio when both perform the same domain operation;
+- duplicate decoder methods with tiny format differences that belong in a revision profile;
+- UI-specific save methods;
+- renderer-specific copies of plane/bridge calculations;
+- another project path resolver inside a feature.
 
-`StudioPlugin` / `StudioToolPlugin` are transitional native projection APIs. Do not add new
-business logic there. New tool semantics belong in Client/core/neutral descriptors. These native
-interfaces should shrink as the neutral UI contract becomes capable enough.
+If two methods differ only in where the caller came from, they probably should be one method.
 
-## 7. AI-friendly coding rules
+## 8. Commands and ChangePlan
 
-These are repository rules, not suggestions.
+Simple deterministic edits use EditorCommand.
 
-### Search before create
+Complex edits that need preview, conflict detection, boundary checks, or multi-resource validation should move toward ChangePlan:
 
-Before adding any class ending in:
+    calculate
+      -> validate
+      -> preview
+      -> commit atomically
+      -> undo as one logical action
 
-- `Manager`
-- `Registry`
-- `Service`
-- `Controller`
-- `Context`
-- `Store`
-- `Tool`
-- `Selection`
+Generators and procedural tools produce proposed changes. They do not write directly to WorldDocument or cache files.
 
-search for the same domain concept first. Prefer extending an existing canonical type.
+## 9. Cache boundaries
 
-### One ID, one registration
+Backend classes stay near com.rspsi.cache.store.
 
-Tool/panel/HUD/command IDs must have one production registration source. Tests may use fixtures,
-but production code must not describe the same ID in multiple core modules/plugins.
+Above the adapter boundary, prefer Studio-owned neutral views.
 
-### No compatibility aliases without an exit plan
+Modern OSRS code should not branch between unrelated cache libraries at random call sites.
 
-If a migration needs an alias/wrapper, document:
+Map wire encoding stays centralized in OsrsRegionEncoder and decoding in OsrsRegionDecoder.
 
-- canonical replacement;
-- compatibility reason;
-- removal condition.
+## 10. Rendering boundary
 
-Do not leave two equally-valid APIs indefinitely.
+Do not place cache lookup or editor mutation inside native drawing code.
 
-### Composition belongs at the edge
+The renderer consumes immutable or stable render plans.
 
-Feature construction/registration belongs in `CoreEditorModules`, module installers, or external
-plugin loading. Domain classes should not discover global implementations with ServiceLoader,
-reflection, or static registries unless that mechanism is itself the documented extension point.
+Scene semantics should be correct before OpenGL receives them.
 
-### Prefer data over branching
+Native OpenGL owns resource allocation, upload, draw state, and teardown only.
 
-Tool/UI placement should be descriptor/capability driven. Do not add growing chains of
-`if (toolId.equals(...))` when the property can live in the tool descriptor.
+## 11. OpenRune boundary
 
-### Tests are architecture memory
+Generic project/editor code talks to neutral integration contracts.
 
-When a bug happened because a feature was registered in the wrong place, add a boundary or
-inventory test so the repository remembers the rule even when the next agent has no conversation
-history.
+OpenRune-specific layout, source semantics, and build discovery live in the first-party OpenRune implementation.
 
-## 8. Current migration boundary
+Do not hardcode stock OpenRune paths into unrelated tools.
 
-Completed in the modular-core migration:
+## 12. UI boundary
 
-- core tools no longer need to be optional plugin candidates;
-- one `CoreEditorModules` manifest owns core composition;
-- Tile Painter and Spline Path are no longer hidden `StudioApplication` append cases;
-- duplicate one-tool core plugin wrappers are retired;
-- external extension dependencies keep the legacy core host IDs.
+The workspace shell decides where a UI surface belongs.
 
-Still transitional:
+A feature supplies behavior/state. The shell projects it into the correct rail, drawer, inspector, or HUD.
 
-- legacy `EditorPlugin*` names on the shared registry/runtime types;
-- native `StudioPlugin` / `StudioToolPlugin` presentation path;
-- some native drawers/settings that have not yet moved to declarative neutral UI.
+Do not infer tool behavior from where a widget happened to be placed.
 
-These are migration targets, not reasons to introduce another system.
+## 13. Migration debt
+
+Some older source names still reflect abandoned architecture experiments.
+
+Rules for migration debt:
+
+- keep it working until intentionally replaced;
+- do not cite it as the model for new code;
+- do not add new dependencies on it;
+- migrate callers toward core modules/shared services when touching the area;
+- remove it once no production consumer remains.
+
+## 14. Tests by layer
+
+| Change | Minimum evidence |
+| --- | --- |
+| command/world mutation | focused unit test + undo/redo |
+| codec | deterministic round trip + real-cache fixture where relevant |
+| plane/scene semantic | semantic fixture |
+| compiler/invalidation | dirty-zone/reuse test |
+| native renderer | headless GL or renderer acceptance test |
+| project persistence | atomic write/reopen/version test |
+| OpenRune integration | project fixture + authority/build-role assertions |
+| UI placement | workspace state/ownership test |
+
+## 15. Review questions
+
+Before accepting architecture-affecting code:
+
+1. Is there already a class that owns this?
+2. Did the change create a second source of truth?
+3. Did it duplicate a method with slightly different naming?
+4. Can the business rule be tested without native UI?
+5. Did a tool or panel gain cache/native responsibilities?
+6. Did Save and Publish become conflated?
+7. Does a connected OpenRune path bypass source authority?
+8. Does renderer code compensate for an upstream semantic bug?
+9. Is future behavior clearly marked as future?
+10. Can an unfamiliar coding agent find the intended owner from the docs?

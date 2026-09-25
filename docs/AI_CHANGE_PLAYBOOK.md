@@ -1,332 +1,294 @@
 # AI Change Playbook
 
-> **Purpose:** deterministic implementation routes for common OpenRune Studio changes.
+> **Purpose:** deterministic implementation routes for common changes.
 >
-> Read `AI_ARCHITECTURE_OVERVIEW.md` first. This file answers: **where do I change this without
-> creating a second system?**
+> Use this document to answer: where should this change go, what existing path should it reuse, and what must not be duplicated?
 
-# 1. Before editing anything
+## 1. Before changing code
 
-Always do this first:
+For every non-trivial change:
 
-1. identify the responsibility, not just the filename named in the task;
-2. search for the stable ID, setting key, tool ID, panel ID, service interface, or command involved;
-3. read the relevant canonical owner from `AI_ARCHITECTURE_OVERVIEW.md`;
-4. search for tests that already encode the behavior;
+1. identify the responsibility;
+2. read its owner in AI_ARCHITECTURE_OVERVIEW.md;
+3. search the repository for the existing service/class/method;
+4. inspect tests for the current contract;
 5. change the canonical owner;
-6. remove obsolete parallel paths instead of leaving both;
-7. add/update architecture memory tests when the bug was caused by ambiguity.
+6. add or update focused tests;
+7. update the authoritative document only if the contract changed.
 
-If two different production systems appear to own the same responsibility, stop expanding either
-one and resolve the ownership first.
+Do not start by creating a new manager, registry, wrapper, or helper.
 
-# 2. Add or change a core map tool
+## 2. Add or change a built-in map tool
 
-Use this route:
+Route:
 
-```
-editor.tool behavior
-      |
-commands/services
-      |
-Core*Module registration
-      |
-neutral ToolUiDescriptor / ToolUiContent
-      |
-native Studio projection
-```
+    CoreEditorModule
+      -> existing tool/controller
+      -> shared domain service
+      -> command or ChangePlan
+      -> WorldDocument
 
-Checklist:
+Use existing brush, selection, query, object, terrain, and command services.
 
-- behavior is headless/testable in Client;
-- tool ID is unique;
-- edits are undoable;
-- pointer queries use `ToolContext.hitAt(...)`;
-- brush behavior is declared, not inferred from UI placement;
-- tool is registered once in the appropriate core module;
-- Context Drawer/Quick Palette/Inspector/HUD are described through neutral APIs where supported;
-- no one-tool `EditorPlugin`;
-- no hardcoded fallback button in Studio UI.
+A tool-specific UI may adapt state, but it must not create its own edit history, cache writer, scene resolver, or selection truth.
 
-# 3. Add or change a brush tool
+## 3. Add or change a brush operation
 
 Use:
 
-- `EditorBrush`;
-- `BrushEngine`;
-- `BrushCapability`;
-- `StudioBrushManager` only as native projection/state for the shared brush UX.
+- EditorBrush / BrushEngine;
+- BrushCapability and BrushAwareTool;
+- existing brush masks/sampling;
+- commands or ChangePlan for committed edits.
 
-Declare one of:
+Shared brush geometry belongs in the brush subsystem. Do not embed another circle/square/falloff implementation inside a tool.
 
-- `NONE`;
-- `SHARED_SETTINGS`;
-- `TOOL_OWNED`.
+## 4. Add or change selection or picking
 
-Do not decide Brush Rail visibility by checking tool IDs.
+Use the canonical semantic hit/selection path.
 
-# 4. Add a right-side inspector/settings surface
+Start with:
 
-Use a `StudioPanel` or neutral inspector contribution that resolves to `DockRegion.RIGHT`.
+- SurfaceHit for scene-semantic hit information;
+- DdaScenePicker / PickingSpatialIndex for authoritative editor picking;
+- SelectionModel for selected authored state.
 
-Right-side content should be one of:
+Do not reconstruct picking from raw GPU buffers or make a panel-specific selection copy.
 
-- inspection;
-- exact property editing;
-- region/world intelligence;
-- simulation/player context;
-- map/render settings;
-- theme/context intelligence.
+## 5. Add a property editor or inspector
 
-If the user should later place the inspected asset, provide an explicit action that hands a
-semantic asset/preset to a bottom authoring tool.
+Read from immutable semantic/authored snapshots.
 
-Do not make the inspector itself a hidden placement system.
+Writes route through commands/change plans.
 
-# 5. Add a bottom authoring workflow
+The inspector does not own the domain object and should be disposable without losing edits.
 
-The bottom area is one Primary Tool Rail plus one active Context Drawer.
+## 6. Change terrain/location decode or encode
 
-The tool should own the drawer through its descriptor/projection.
+There is one Studio-owned map wire pair:
 
-Examples:
+- OsrsRegionDecoder
+- OsrsRegionEncoder
 
-- material/tile catalog;
-- object catalog;
-- generator settings;
-- path rules;
-- biome parameters.
+Extend those semantics and their fixtures.
 
-Do not add generic History/Tasks/Notifications/Diagnostics drawer modes.
+Do not create a second map codec for a specific workspace.
 
-# 6. Add a floating picker
+## 7. Add modern cache access
 
-Use the floating tool rail / Quick Palette only for:
+Start with OpenRune FileStore through OpenRuneCacheStore.
 
-- selection/picking;
-- compact contextual choices;
-- quick switching related to the active operation.
+Expose backend-neutral data above the cache boundary.
 
-Do not create a second copy of the primary authoring rail.
+Before adding a new decoder or writer:
 
-# 7. Add a renderer setting
+1. inspect existing OpenRune definitions/tools;
+2. inspect current Studio adapters;
+3. confirm the capability is genuinely absent;
+4. add the smallest adapter exception;
+5. add real-cache or deterministic fixture coverage.
 
-Do all steps in one change:
+LegacyDispleeCacheStore is not a fallback modern backend.
 
-1. define typed key in `RenderSettingKeys`;
-2. register it in the settings registry;
-3. give it a consumer in `SettingConsumerCatalog`;
-4. compile it in `RenderConfigCompiler`;
-5. store it in immutable `RenderConfig` when renderer-facing;
-6. consume the compiled value in the viewport/renderer;
-7. expose UI through the same key;
-8. add a compiler/contract test.
+## 8. Save editor work without packing a cache
 
-Do not read the same renderer preference directly from `SettingsStore` in several native classes.
+Use Studio-owned project persistence.
 
-If a setting is not supported by the current renderer, show it disabled with an explanation instead
-of wiring a no-op checkbox.
+The expected path is:
 
-# 8. Change rendering behavior
+    WorldDocument + project resource identity
+      -> durable edit snapshot/journal
+      -> atomic Studio-owned file
+      -> reopen/recovery
+
+SessionAutosaveStore is the existing proof of concept and recovery implementation.
+
+Do not call OsrsRegionSaveCoordinator merely because the user chose Save Project. That coordinator encodes/writes cache region payloads and belongs to explicit cache publication.
+
+## 9. Publish a standalone cache
+
+Expected path:
+
+    read-only source cache
+      -> staging/output cache
+      -> encode validated dirty resources
+      -> write through canonical writable adapter
+      -> flush reference tables
+      -> close
+      -> reopen read-only
+      -> semantic/byte validation
+      -> publish/advance baseline
+
+Never write through the ordinary source-cache session.
+
+For map regions, OsrsRegionSaveCoordinator already enforces encode-before-write and mark-saved-after-flush behavior. Use it only inside an explicit output-cache transaction with correct project publication semantics.
+
+## 10. Publish to a connected OpenRune project
+
+First determine the source authority for the resource in OPENRUNE_SERVER_INTEGRATION_MODEL.md.
+
+If there is a lossless supported source representation:
+
+    Studio edit state
+      -> stale-source check
+      -> transactional source write
+      -> imported project's detected build command
+      -> OpenRune incremental LIVE build
+      -> OpenRune SERVER build/finalization
+      -> reopen/verify
+
+If there is no supported source representation, stop at Studio project state. Do not patch LIVE or SERVER.
+
+## 11. Change project startup/loading
+
+Route through:
+
+- persistent Studio project descriptor;
+- recent-project registry;
+- ProjectOpenCoordinator;
+- project loading state;
+- cache/project capability validation;
+- shell activation after required gates pass.
+
+Project open should not recursively analyze every source tree or eagerly decode every content domain.
+
+Optional domains activate when their workspace needs them.
+
+## 12. Change OpenRune project detection
+
+Extend the one structural inspection graph.
+
+Do not add a second path resolver in a workspace or UI panel.
+
+Structural detection, cache-role discovery, task discovery, source roots, and overrides belong to the neutral inspected-project model.
+
+## 13. Change rendering semantics
 
 First classify the bug.
 
-## Semantic/scene problem
+### Authored/cache semantic problem
 
 Examples:
 
-- wrong tile color;
-- wrong object/model;
-- wrong bridge/render plane;
-- missing object;
-- wrong texture/definition.
+- wrong terrain opcode interpretation;
+- missing object placement;
+- wrong transform;
+- wrong bridge/effective plane.
 
-Fix scene/cache semantics before native OpenGL.
+Fix decode/authored/semantic resolution first.
 
-## Packet/compiler problem
+### Scene compiler problem
 
-Fix the render-neutral compiler/packet builder.
+Examples:
 
-## Native renderer problem
+- correct authored data but incorrect resolved packets;
+- wrong zone invalidation;
+- stale derived scene after edits.
 
-Only then change OpenGL/native renderer state.
+Fix resolver/compiler/invalidation.
 
-Use `RENDERING_PARITY_MANIFEST.json` as the rendering backlog and record semantic evidence before
-claiming pixel parity.
+### Native renderer problem
 
-Do not compensate for bad semantic data with renderer-specific magic constants.
+Examples:
 
-# 9. Add a modern OSRS cache capability
+- correct packet but wrong OpenGL output;
+- draw ordering;
+- texture state;
+- depth state;
+- buffer upload/submission.
 
-Start with OpenRune FileStore.
+Fix the native renderer.
 
-Allowed architecture:
+Do not compensate for an upstream semantic bug in a shader.
 
-```
-OpenRune backend type
-      |
-one adapter in cache/store
-      |
-Studio neutral interface/value
-      |
-rest of application
-```
+## 14. Change renderer performance
 
-If FileStore already exposes the capability, use it.
+Measure first.
 
-If FileStore lacks it:
+Use existing telemetry and add missing counters at the owner closest to the cost.
 
-1. prove the missing capability;
-2. add the narrowest adapter-boundary exception;
-3. document why;
-4. add a real-cache or deterministic regression test;
-5. state the condition under which the exception can be removed.
+Check:
 
-Do not introduce Displee as a modern OSRS fallback.
+- CPU scene compile time;
+- packet/upload-plan build time;
+- dirty and reused zone counts;
+- bytes uploaded this frame;
+- total resident native geometry bytes;
+- draw call/batch count;
+- submission CPU time;
+- GPU time;
+- JVM used/committed heap;
+- direct/native buffer usage;
+- stationary FPS;
+- camera-movement FPS;
+- active-edit FPS.
 
-# 10. Change terrain/location decoding
+A camera move that triggers geometry upload is a regression unless a documented renderer contract changed.
 
-There is one canonical pair:
+Optimization priority is:
 
-- `OsrsRegionDecoder`;
-- `OsrsRegionEncoder`.
+1. eliminate unnecessary work;
+2. reduce retained duplicate data;
+3. improve residency/update strategy;
+4. improve submission/batching;
+5. compact representation only after parity proves it safe.
 
-Extend and test those.
+## 15. Add HD rendering work
 
-Do not add another region codec in a tool, project loader, renderer, or server integration.
+Do not create a second authored scene.
 
-# 11. Change definitions/assets
+HD work consumes the same semantic scene, geometry identity, zone invalidation, picking identity, and animation state as the current renderer.
 
-Preferred path:
+Performance and vanilla parity gates come first. Then add renderer-neutral material/shader/pass infrastructure.
 
-```
-FileStore definitions
-      |
-OpenRuneDefinitionProvider
-      |
-Studio DefinitionProvider / AssetRepository
-      |
-tools / inspectors / render compiler
-```
+See RENDERING_SYSTEM.md.
 
-Backend-specific types should be reduced to Studio-owned neutral types near the cache boundary.
+## 16. Add a manager/service/registry
 
-# 12. Add an OpenRune Server feature
+Before doing so, answer all four:
 
-OpenRune Server is core integration.
+1. What responsibility cannot the existing owner represent?
+2. Why is this not a method on the existing service?
+3. Which callers need this abstraction?
+4. How does its lifecycle differ from the existing owner?
 
-Use:
+If the answer is only naming convenience, do not add it.
 
-- `ServerIntegrationService`;
-- `OpenRuneServerProvider`;
-- `OpenRuneServerAdapter`;
-- symbols/references/spawns/source semantic providers.
+## 17. Common failure patterns
 
-Do not implement it as `EditorPlugin`.
+### Could not find the method, so added one
 
-Do not add another project-path/cache-role/build-task discovery graph.
+Search by behavior and data type, not only guessed method name.
 
-For connected publishing, preserve source ownership: write supported source artifacts, invoke the
-canonical OpenRune build, then reopen/verify generated cache roles.
+### UI needed data, so it decoded it
 
-# 13. Add an external extension feature
+Move decoding/query behavior to the canonical domain service.
 
-Only use `EditorPlugin` when the feature is genuinely installable/removable as an external
-artifact.
+### Tool needed save, so it wrote cache bytes
 
-Use the published neutral SDK.
+Tools change authored state. Publication owns cache writes.
 
-Do not import:
+### Renderer needed one field, so it queried cache
 
-- Dear ImGui;
-- GLFW;
-- OpenGL internals;
-- FileStore backend classes;
-- native Studio implementation classes.
+Renderer consumes prepared semantic/render data. Cache access belongs upstream.
 
-If an external extension cannot implement an ordinary editing feature without an internal import,
-improve the shared SDK rather than documenting an internal dependency.
+### OpenRune data was nearby, so LIVE was patched
 
-# 14. Change project startup/loading
+LIVE/SERVER are generated project outputs. Use source-first publication or remain unpublished.
 
-Use the project/application lifecycle described in:
+### Performance was slow, so quality was disabled
 
-- `PROJECT_LAUNCHER_AND_DASHBOARD.md`;
-- `CONTENT_STUDIO_ARCHITECTURE.md`.
+Profile and fix work/residency first. Keep a deliberate user-facing quality setting separate from performance correctness.
 
-Do not load all definitions/source indexes eagerly at application startup.
+## 18. Definition of a clean change
 
-Project opening establishes identity and required cache/project capability. Heavy domains are
-workspace-demanded/lazy.
+A clean change:
 
-# 15. Add a manager/service/registry
-
-Assume the answer is **no** until proven otherwise.
-
-Search:
-
-- `PluginServices`;
-- `EditorPluginRegistry`;
-- `EditorSession`;
-- existing domain services;
-- Studio panel/HUD managers;
-- project/session services.
-
-A new service is appropriate only when it owns a cohesive lifecycle/state boundary not already
-owned elsewhere.
-
-Never create `NewThingManager` only because the correct existing type has a legacy name.
-
-# 16. Verification matrix
-
-| Change | Minimum verification |
-| --- | --- |
-| Client/domain logic | Client tests + Editor compile/tests |
-| tool behavior | headless tool test + undo/selection assertions |
-| renderer setting | compiler test + consumer/boundary test |
-| native UI placement | workspace ownership test + live Studio launch |
-| OpenGL/rendering | foundationGate + live visual validation + parity evidence |
-| cache decoder/write | deterministic fixture + opt-in real-cache test where applicable |
-| FileStore adapter | backend boundary test + neutral consumer test |
-| OpenRune project integration | project fixture/provider tests + source/cache-role assertions |
-| external extension contract | lifecycle/unload/permission + neutral API test |
-| architecture change | boundary/inventory test that fails if old path returns |
-
-# 17. Common failure patterns
-
-## "I could not find the method, so I added one"
-
-Search by concept and caller first. The API may live on a service/descriptor rather than the class
-you expected.
-
-## "This panel needed a control, so I read settings directly"
-
-If it changes renderer behavior, route it through a typed setting key and compiled config.
-
-## "This tool needed a button, so I added it to a toolbar"
-
-Register the tool descriptor. The host decides where the button belongs.
-
-## "This decoder did not expose exactly what I wanted, so I wrote another decoder"
-
-Extend the one canonical decoder or add a narrow backend adapter exception with tests.
-
-## "The plugin API name sounded right for a core feature"
-
-Core product code is a `CoreEditorModule`, not an `EditorPlugin`.
-
-## "The UI allowed moving a panel, so I allowed every region"
-
-Workspace regions express workflow. Use the strict ownership contract.
-
-# 18. Definition of a clean change
-
-A clean change should make the repository **more obvious** afterward:
-
-- fewer valid places to implement the same responsibility;
-- stable IDs defined once;
-- comments explain non-obvious constraints, not line-by-line syntax;
-- public/core contracts are explicit;
-- obsolete paths are removed;
-- tests remember architectural decisions;
-- an agent starting from this repository can find the correct path without prior chat context.
+- has one obvious owner;
+- reuses existing semantics;
+- introduces no parallel state;
+- is testable at the lowest practical layer;
+- keeps UI/cache/native boundaries intact;
+- preserves save/publish separation;
+- updates documentation when a contract changes;
+- leaves the next contributor with fewer ambiguous choices.

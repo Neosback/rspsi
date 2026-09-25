@@ -1,630 +1,380 @@
 # OpenRune Server Integration Model
 
-> **Scope:** authoritative integration notes for how OpenRune Studio should interoperate with an
-> imported OpenRune Server checkout. This document describes ownership, cache/toolchain/version
-> boundaries, GameVals/RSCM, raw-cache map data, server semantics, fork compatibility, and runtime
-> integration. Product sequencing still belongs in `ROADMAP.md`.
+> **Status:** authoritative connected-project integration blueprint.
+>
+> OpenRune Studio may understand an imported OpenRune project deeply, but it does not become a competing cache-build authority.
 
-## 1. Verified upstream baseline
+## 1. Integration goal
 
-The vendored `OpenRune-Server-main/` tree was compared by Git blob SHA with
-`OpenRune/OpenRune-Server` main on 2026-09-24. All 4,081 vendored functional files matched
-upstream exactly. The twelve files present only upstream were repository metadata such as
-`.github/**`, `.gitignore`, `.editorconfig`, and `.idea/icon.png`.
+A connected project should feel native:
 
-At that point upstream main was:
+    Studio project
+      -> imported OpenRune checkout
+      -> structural/source inspection
+      -> read-only generated cache roles
+      -> Studio authored edits
+      -> supported source publication
+      -> imported project's own build
+      -> verified generated outputs
 
-- commit `d5c3542156f1a162a67807e09eb6827ec40c37cb`;
-- OR2 `3.0.3`;
-- Kotlin `2.2.0`;
-- coroutines `1.10.2`;
-- rsprot `1.0.0-ALPHA-20260912`;
-- protocol artifacts `net.rsprot:osrs-240-api` and `net.rsprot:osrs-240-shared`.
+There is one project identity and one detected project model.
 
-Studio's OpenRune cache adapter also identifies its embedded FileStore boundary as
-`OpenRune FileStore 3.0.3`. That exact match is useful, but Studio must never assume an imported
-server will always pin the same OR2 version.
+Workspaces do not reconnect or rediscover the checkout independently.
 
-## 2. OpenRune import identity
+## 2. Import identity
 
-A connected project should derive lightweight import metadata from the project itself before
-opening expensive cache or source domains.
+Structural detection should establish:
 
-Preferred inputs, in order:
+- checkout root;
+- project/build files;
+- revision/environment metadata when available;
+- LIVE/SERVER cache-role paths;
+- source/resource roots;
+- known GameVal/RSCM roots;
+- build task availability;
+- compatibility diagnostics.
 
-1. `game.yml`, falling back to `game.example.yml`;
-2. `gradle/libs.versions.toml`;
-3. `openRune-intelliJ-tools.toml`;
-4. detected LIVE/SERVER/cache/source paths;
-5. evaluated Gradle model only after an explicit trusted workflow requests it.
+Project identity must not permanently depend on one absolute external path. Relocation should update the descriptor without creating a new logical Studio project.
 
-The import preview should show at least:
+## 3. Compatibility is multi-dimensional
 
-- configured game/server name;
-- revision and optional subrevision;
-- environment;
-- world where present;
-- detected LIVE path/status;
-- detected SERVER path/status;
-- server OR2 version;
-- Studio OR2/FileStore version;
-- rsprot protocol target when detectable;
-- selected Studio access policy.
+Do not reduce compatibility to one revision integer.
 
-The configured server name is a better default project name than the directory name when it is
-non-generic. A user must still be free to rename the Studio project independently.
+Track separately:
 
-Never edit `game.yml` merely to make Studio metadata agree with the project.
-
-## 3. Revision support is a compatibility matrix
-
-OpenRune's cache tooling is revision-parameterized. `CacheTools.readRevision()` accepts
-`major` or `major.minor` revision values from `game.yml`; Fresh Install passes revision,
-subrevision, and environment into the OR2 Builder; cache packers and decoders receive the
-configured revision.
-
-That does **not** mean the complete server becomes arbitrary-revision by changing one YAML value.
-
-For an imported project Studio must track four independent compatibility dimensions:
-
-| Dimension | Meaning |
+| Dimension | Question |
 | --- | --- |
-| FileStore format | Can the selected OR2/FileStore implementation open the cache containers? |
-| Definition codecs | Can the required object/NPC/item/interface/map/etc. codecs correctly decode this revision? |
-| Studio scene/editor | Has Studio verified its rendering/map semantics for this revision? |
-| Server protocol | Does the checkout use a matching rsprot/client protocol implementation? |
+| cache format | can Studio's FileStore boundary read the cache? |
+| game revision | do the selected codecs/semantics match this cache revision? |
+| protocol/runtime | does the imported server target a compatible protocol revision? |
+| source/tooling | can Studio understand the project's source/build conventions? |
+| publication | does Studio have a lossless source representation for this resource? |
 
-The current upstream checkout is protocol-pinned to revision 240 through
-`net.rsprot:osrs-240-*`. A different cache revision may remain FileStore-readable while the
-server protocol is still incompatible.
+A project may be structurally valid even when one capability is unsupported.
 
-Therefore UI wording must distinguish:
+Use diagnostics rather than disabling all integration because one dimension differs.
 
-- **revision detected**;
-- **cache readable**;
-- **Studio verified**;
-- **server protocol matches**.
+## 4. Embedded versus imported toolchain
 
-Never collapse those into a single green "revision supported" indicator.
+Studio has its own pinned OpenRune FileStore dependency for its cache adapter.
 
-## 4. OR2/FileStore dependency policy
+The imported project has its own declared build/tool dependencies.
 
-The server currently consumes OR2 through Maven artifacts including:
+Do not silently change Studio dependencies at runtime to match the checkout.
 
-- `dev.or2:filesystem`;
-- `dev.or2:filestore`;
-- `dev.or2:definition`;
-- `dev.or2:all`;
-- `dev.or2:tools`.
+Connected publication should run through the imported project's own detected build entry point so its build uses its own dependency graph.
 
-The OpenRune hosting Maven repository reports `3.0.3` as the current release for the core
-FileStore/filesystem/definition artifacts as of 2026-09-24.
+A future isolated tooling bridge may be useful for version-specific operations, but it should not become a second in-process dependency universe.
 
-### Studio must not runtime-auto-upgrade its embedded OR2
+## 5. Generated cache roles
 
-Do not dynamically replace Studio's classpath because an imported project pins a newer OR2.
-That would make a tested desktop build mutate underneath itself and risks ABI/classloader conflicts.
+Canonical stock paths are:
 
-Use this policy instead:
+- .data/cache/LIVE
+- .data/cache/SERVER
 
-1. Studio ships a tested OR2/FileStore version.
-2. Import reads the server's OR2 pin from its version catalog when available.
-3. Studio records `exact-match`, `known-compatible`, or `unknown-mismatch`.
-4. Pure FileStore reads may remain enabled when compatibility is verified.
-5. Any build or source-to-cache publication is executed through the imported project's own
-   Gradle wrapper/tooling, so it uses **that server's** OR2 version.
-6. Studio's dependency is updated through normal development/CI dependency updates and the full
-   compatibility test suite, not at application runtime.
+Studio policy:
 
-A CI task may query OpenRune Maven metadata and report that a newer OR2 release exists. It may
-open a dependency-update PR. It must not silently advance the production dependency.
+### LIVE
 
-### Future version-matched tool bridge
+- read-only generated client-facing cache;
+- primary input for map/scene/client-definition semantics;
+- never a fallback direct-write target.
 
-For operations that require server-native classes rather than neutral Studio models, prefer an
-out-of-process helper launched from the imported project. It can run with the project's own Gradle
-runtime classpath and communicate with Studio over a small versioned protocol.
+### SERVER
 
-This is safer than loading arbitrary server jars into Studio's JVM and naturally solves OR2
-version skew.
+- read-only generated server-oriented cache;
+- contains/minimizes data according to OpenRune's server build;
+- may contain server-enriched definitions and server map files;
+- never substituted for LIVE rendering semantics.
 
-OpenRune already demonstrates this isolation pattern with `:tools:osrs-mcp`: a stdio process
-using the server's own dependencies that can reload/search GameVals and decoded LIVE/SERVER
-caches without being part of the game-server runtime.
+The two roles are intentionally different.
 
-## 5. Cache lifecycle and generated-output ownership
+## 6. Verified OpenRune cache lifecycle
 
-OpenRune's canonical cache paths are:
+Current OpenRune Server source implements a normal build that:
 
-- `.data/cache/LIVE`;
-- `.data/cache/SERVER`.
+1. loads GameVals/source inputs;
+2. discovers content packs and ordered cache tasks;
+3. builds/updates LIVE incrementally;
+4. seeds/builds SERVER from LIVE for its separate pass;
+5. runs server-only pack work;
+6. finalizes generated GameVals/DB/enums/code as required.
 
-`CacheTools.kt` owns their lifecycle.
+Current OpenRune tooling also keeps separate incremental state for the two cache roles.
 
-### Fresh Install
+The LIVE path uses fingerprint-oriented verification. The SERVER path uses output-oriented verification.
 
-`FRESH_INSTALL`:
+Therefore Studio must not patch either generated cache independently and then assume OpenRune's incremental state remains trustworthy.
 
-1. reads revision/subrevision/environment;
-2. invokes the OR2 Builder;
-3. creates/refreshes LIVE and SERVER;
-4. clears incremental build state;
-5. dumps base GameVals from the fresh cache.
+## 7. Fresh install
 
-Fresh Install is a bootstrap/reset operation. Studio must never invoke it as project-open behavior.
+Fresh install/bootstrap is not normal project open.
 
-### Normal Build
+It may:
 
-`BUILD`:
+- acquire a baseline cache;
+- construct/refresh generated cache directories;
+- reset incremental state;
+- regenerate base mapping data.
 
-1. loads GameVals/RSCM;
-2. discovers plugin packs;
-3. resolves CS2 overrides and pack tasks;
-4. incrementally builds LIVE;
-5. runs a separate SERVER-cache build;
-6. finalizes server GameVals/DB tables/enums/codegen.
+Studio must never invoke it automatically against an existing imported project.
 
-OpenRune maintains separate incremental state:
+A user-requested reset/bootstrap action must be explicit and clearly destructive.
 
-- `.data/cache/incremental_live`;
-- `.data/cache/incremental_server`.
+## 8. Source-of-truth matrix
 
-LIVE uses fingerprint verification. SERVER uses output-CRC verification.
+Studio writes the source OpenRune itself consumes.
 
-**Studio must not bypass this pipeline and then expect OpenRune's incremental state to remain
-authoritative.**
-
-## 6. Source-of-truth matrix
-
-The most important integration rule is that Studio edits the same authority OpenRune itself
-consumes.
-
-| Resource | Authoritative project source | Generated/derived output | Studio write policy |
+| Resource | Authoritative source | Generated output | Studio policy |
 | --- | --- | --- | --- |
-| Client terrain/loc map archives | currently no general stock OpenRune text source identified | LIVE map files 0/1, then inherited into server use | inspect/edit in Studio transaction; connected-project publish remains disabled until an explicit OpenRune-consumed map source/build hook exists |
-| NPC map spawns | `.data/raw-cache/map/npcs/*.toml` | SERVER map file 5 | safe candidate for structured source editor + normal OpenRune build |
-| ground-object map spawns | `.data/raw-cache/map/objs/*.toml` | SERVER map file 6 | safe candidate for structured source editor + normal OpenRune build |
-| map areas | `.data/raw-cache/map/area/*.toml` | SERVER map file 7 | safe candidate for polygon editor + normal OpenRune build |
-| server object/NPC/item/etc. overlays | `.data/raw-cache/server/**/*.toml` plus plugin-pack config dirs | SERVER config archives | safe only through schema-aware source editor + OpenRune build |
-| loc/NPC examines | `.data/raw-cache/examines/*.csv` | SERVER definitions | source edit only |
-| plugin custom GameVals | module `gamevals.toml` | merged RSCM/generated mappings | edit originating TOML, then merge/build |
-| cache-derived base GameVals | official GameVal cache data dumped by OpenRune | `.data/gamevals-binary/gamevals.dat` | inspect; never hand-edit as ordinary content |
-| merged/generated mappings | `.data/gamevals/**` and generated dat outputs | mapping provider inputs | source-aware inspection; write only when OpenRune identifies that file as the entry's source |
-| interfaces/components | cache definitions + server Kotlin content + GameVal mappings | LIVE/SERVER structures | do not assume "interfaces are TOML"; author according to the actual source domain |
-| teleports | usually Kotlin source and/or cache params; sometimes runtime-derived | runtime behavior | semantic inspection/navigation first; only edit through supported source representation |
+| client terrain/location map archives | no general stock text source confirmed | LIVE map files 0/1 | save in Studio; connected publish disabled until supported source/build hook exists |
+| NPC map spawns | .data/raw-cache/map/npcs/*.toml | SERVER map file 5 | structured source edit + normal build |
+| ground-object map spawns | .data/raw-cache/map/objs/*.toml | SERVER map file 6 | structured source edit + normal build |
+| map areas | .data/raw-cache/map/area/*.toml | SERVER map file 7 | source polygon edit + normal build |
+| server definition overlays | .data/raw-cache/server/**/*.toml and module config sources | SERVER definitions | schema-aware source edit + normal build |
+| loc/NPC examines | .data/raw-cache/examines/*.csv | SERVER data | edit source |
+| module custom GameVals | originating module gamevals.toml | merged mappings | edit origin + merge/build |
+| cache-derived base GameVals | generated/dumped base data | mapping providers | inspect, do not hand-edit as ordinary authored source |
+| merged/generated mappings | .data/gamevals and generated outputs | provider inputs | write only when provenance says the file is authoritative |
+| interfaces/components | cache + source + mappings depending on resource | LIVE/SERVER/runtime | use actual source authority, do not assume one text format |
+| teleports/content behavior | often Kotlin source and/or params | runtime behavior | semantic inspection first, edit only through supported source form |
 
-Generated LIVE/SERVER cache files are never the fallback write target for an unsupported connected
-resource.
+Generated outputs are never fallback source.
 
-## 7. RSCM and GameVals are a source-aware symbol system
+## 9. GameVal/RSCM provenance
 
-RSCM is more than a convenient name-to-ID text file.
+Treat symbols as source-aware entries, not a flat name-to-ID map.
 
-OpenRune's `RSCMType` defines namespaces including areas, content groups, interfaces/components,
-locs, NPCs, objs, params, DB tables/rows/columns, sequences, queues, stats, synths, varbits,
-varps, and others.
+Conceptual entry:
 
-`GameValProvider` merges several sources:
+    GameValEntry
+      namespace
+      name
+      id
+      sourceFile
+      sourceKind
+      generated
+      generation
 
-- `.data/gamevals-binary/gamevals.dat`;
-- generated GameVal data;
-- module-local `content/**/gamevals.toml`;
-- `api/**/gamevals.toml`;
-- `.data/gamevals/*.rscm`.
+OpenRune merges several mapping sources and may know which file supplied an entry.
 
-It also tracks which file supplied a mapping.
+Studio should preserve that provenance so edits target the origin rather than blindly modifying a merged output.
 
-That provenance is critical. Studio's symbol model should therefore be:
+## 10. Project metadata hints
 
-```
-GameValEntry(
-    namespace,
-    name,
-    id,
-    sourceFile,
-    sourceKind,
-    generated,
-    generation
-)
-```
+When the project provides tooling metadata describing mapping/source roots, use it as a discovery hint.
 
-rather than merely `Map<String, Int>`.
+Do not hardcode only one stock directory shape if the inspected project supplies explicit configuration.
 
-### Why source provenance matters
+Stock conventions remain defaults, not proof that every fork is identical.
 
-`PluginGamevalMerger` scans module `gamevals.toml` files and merges new values into central
-RSCM tables. Editing the merged RSCM blindly can create a second source of truth.
+## 11. Map Studio integration
 
-Studio should use the originating module TOML when that is the authored source.
+Map Studio can present one coherent world while preserving multiple source authorities.
 
-### IntelliJ tooling metadata
+Potential overlays:
 
-`openRune-intelliJ-tools.toml` currently declares RSCM mapping roots:
-
-- `.data/gamevals`;
-- `.data/gamevals-binary`;
-- `content/`;
-- `api/`.
-
-It also enables file-provider and alter-constant-provider behavior.
-
-Studio should consume this file as a discovery hint where present instead of hardcoding only the
-stock mapping directories. This is also an important compatibility hook for forks.
-
-## 8. Map packing and Map Studio integration
-
-OpenRune SERVER map groups extend normal map data with server-only files.
-
-`GameMapDecoder` reads:
-
-- file 0: terrain/map data;
-- file 1: loc data;
-- file 5: NPC spawns;
-- file 6: ground-object spawns;
-- file 7: server area data.
-
-The server builds collision/loc-zone state from terrain and locs, applies bridge/LINK_BELOW plane
-resolution, loads area indexes, and emits NPC/ground-object spawns.
-
-`MapPackers` creates files 5/6/7 from raw TOML.
-
-### Map Studio should render one world but preserve ownership
-
-Map Studio can overlay:
-
-- client terrain and locs;
+- LIVE terrain and locations;
 - OpenRune NPC spawns;
 - OpenRune ground-object spawns;
 - OpenRune area polygons;
-- semantic content markers;
-- extracted teleports;
-- future dynamic/runtime observations.
+- source-derived content relationships;
+- later runtime observations.
 
-Every selectable overlay entity must retain a source badge such as:
+Each selectable entity must retain provenance.
 
-- `LIVE map`;
-- `raw-cache NPC source`;
-- `raw-cache area source`;
-- `Kotlin semantic fact`;
-- `runtime observation`.
+Example:
 
-"Save" must route to the entity's authority, not to whichever cache happens to be open.
+    NPC spawn
+      -> semantic identity
+      -> source file/span
+      -> related definition/content
+      -> edit source
+      -> validate
+      -> build
+      -> reload SERVER
 
-A useful right-click flow is:
+The visible world can be unified without pretending every entity saves to the same place.
 
-```
-NPC spawn
-  -> Inspect npc.npc_name
-  -> Open raw-cache source
-  -> Show references
-  -> Show related scripts
-  -> Open SERVER definition
-```
+## 12. Terrain/location publication gap
 
-For areas:
+This is intentionally explicit.
 
-```
-area polygon
-  -> edit vertices in Map Studio
-  -> validate OpenRune area limits
-  -> write source TOML transactionally
-  -> optional project build
-  -> reload SERVER map file 7
-```
+Studio has a canonical terrain/location decoder and encoder and can save arbitrary map edits into its own project state.
 
-## 9. PackServerConfig and server-enriched definitions
+What is not yet established is a general stock OpenRune source form for arbitrary client terrain/location archives that the standard build consumes as authored source.
 
-`PackServerConfigOSRS.kt` is a central integration point. It merges client definitions with
-server-specific TOML/config data and packs SERVER definitions.
+Until that exists or Studio integrates an explicit supported build hook:
 
-Current packed domains include object, NPC, item, varp, inventory, sequence, health bar,
-mesanim, walktrigger, varn/varnbit, varcon/varconbit, varobj, hunt, stat, projectile, bas, and
-related server-only semantics.
+- connected map edits remain saveable inside Studio;
+- preview/rendering uses the Studio authored state;
+- standalone output-cache publication can be offered;
+- direct connected LIVE patching is prohibited.
 
-For merged types the packer fingerprints the corresponding base client archive, so a change to
-the LIVE base definition can force the dependent SERVER type to repack.
+Do not solve this gap by bypassing OpenRune's build ownership.
 
-Examples of useful server-only semantics include:
+## 13. Server-enriched definitions
 
-- `ObjectServerType.contentGroup`;
-- routing/collision flags;
-- server params;
-- server actions;
-- object transforms/category/description;
-- item content groups, equipment/trade metadata and params;
-- server sequence timing metadata.
+OpenRune's SERVER build combines client definitions with server-specific source data for multiple domains.
 
-Studio should inspect these types and their authored TOML sources. It should **not** copy
-`PackServerConfig` into Studio or independently reproduce its merge/pack ordering.
+Studio may inspect the result and show authored provenance.
 
-## 10. Interfaces and teleports
+It should not copy the server's pack ordering/merge implementation into Studio.
 
-### Interfaces
+Generated SERVER decoding is valuable as verification:
 
-Do not model OpenRune interfaces as "TOML interfaces".
+    source edit
+      -> OpenRune build
+      -> decode SERVER result
+      -> compare expected semantic effect
 
-There are several layers:
+The generated result verifies source publication, it does not replace source authority.
 
-- actual client interface/component definitions in the cache;
-- symbolic interface/component GameVals;
-- Kotlin server scripts that open, update and react to interfaces;
-- optional pack inputs/tooling such as OR2 `PackIfType`.
+## 14. Source semantics
 
-A future Interface Studio should join these layers but preserve their provenance.
+Studio can extract neutral facts from Kotlin/config source for navigation and low-code workflows.
 
-### Teleports
+Keep source-parser/compiler implementation details private to the OpenRune integration layer.
 
-There is no single canonical teleport TOML registry in the current checkout.
+Neutral consumers receive facts such as:
 
-For example, standard spell teleports are implemented in Kotlin. Destinations may be:
-
-- explicit `CoordGrid` values in source;
-- alternate source-code destinations;
-- derived from cache/server params such as `spell_telecoord`;
-- calculated dynamically at runtime;
-- gated by quests, areas or runtime state.
+- declaration identity;
+- symbolic reference;
+- handler/content relationship;
+- source span;
+- evidence kind;
+- confidence/diagnostic state.
 
-Therefore a Map Studio **Teleports** overlay should be a semantic projection, not a generic TOML
-editor.
+Do not expose parser AST/PSI nodes as general Studio domain types.
 
-Each teleport marker should report confidence/provenance:
+## 15. Structural project model
 
-```
-Varrock alternate teleport
-Destination: 3164,3487,0
-Source: SpellTeleportScript.kt
-Kind: static source coordinate
-Confidence: exact
-```
+One inspected-project model should own:
 
-For a dynamic target:
+- project directories;
+- build files;
+- source sets/resources;
+- task paths;
+- cache-role paths;
+- explicit overrides;
+- source roots;
+- compatibility diagnostics.
 
-```
-Destination: runtime/computed
-Source: <exact code span>
-Open source
-```
+Do not create separate stock-layout and UI-specific project graphs that can disagree.
 
-Studio must not claim a complete destination when the code computes it dynamically.
+Expensive build-model evaluation belongs to an explicit trusted workflow after structural project open, not the launcher list.
 
-## 11. How much RSMod/OpenRune API Studio should understand
+## 16. Stale-source protection
 
-Studio should understand **semantic contracts**, not become a second game server.
+Before publishing source changes:
 
-The Mining implementation shows the useful boundary well.
+1. capture baseline source identity/fingerprint during inspection/load;
+2. compare again immediately before write;
+3. if changed externally, abort;
+4. present reconcile/reload options;
+5. never silently overwrite external edits.
 
-### High-value concepts to recognize
-
-- RSCM/GameVal symbols and reverse mappings;
-- `ObjectServerType`, `ItemServerType`, `SequenceServerType` and other enriched definitions;
-- content groups such as `content.rock`;
-- script registration APIs such as `onOpContentLoc1/2/3/U`;
-- DB table/row relationships such as `MiningRocksRow`;
-- params and typed param references;
-- `CoordGrid` locations;
-- `LocRepository.add/del/change` world mutation;
-- map-cycle/timer/queue relationships;
-- `anim`, `spotanim`, `soundSynth`, `telejump` and similar observable effects;
-- skilling products/rewards;
-- drop tables;
-- quest requirements;
-- area checks;
-- interface/button event registration.
+After a successful source write/build, update baselines only after verification.
 
-These become neutral graph facts such as:
+## 17. Build invocation
 
-```
-Handler(content.rock, op=1)
-UsesDbTable(dbtable.mining_rocks)
-RockRow(loc.ironrock1 -> obj.iron_ore, level=15, ...)
-MayChangeLoc(emptyRock, respawnCycles)
-AwardsSkill(stat.mining)
-PlaysAnimation(seq...)
-```
+Use the imported project's detected wrapper/task path.
 
-### Concepts that remain server-owned
+Do not hardcode one module name when project inspection has discovered the actual task.
 
-Studio should not embed or reproduce:
+Studio should capture:
 
-- `Player` runtime implementation;
-- `ProtectedAccess`;
-- dependency injection/runtime object graph;
-- live repository mutation internals;
-- script scheduler execution;
-- inventory transaction engine;
-- quest runtime state;
-- server networking/protocol state.
+- command/task;
+- start/end status;
+- exit result;
+- relevant log;
+- generated cache identity before/after;
+- verification result.
 
-Those may be **observed** through a bridge or modeled by a bounded Studio simulator, but OpenRune
-remains the runtime authority.
+Build failure is not publication success.
 
-## 12. OpenRune semantic knowledge packs
+## 18. Synchronization model
 
-Avoid hardcoding dozens of API method names throughout Studio.
+Watch separate generations for:
 
-Introduce a versioned OpenRune semantic adapter/knowledge pack describing recognizable concepts:
+- source tree/resources;
+- GameVal/mapping data;
+- LIVE;
+- SERVER.
 
-```
-openrune-semantic-profile
-  script registrations
-  symbolic namespaces
-  world mutation APIs
-  coordinate constructors
-  table DSLs
-  interface APIs
-  teleport APIs
-  skilling/reward APIs
-  timers/queues
-  observable client effects
-```
+A LIVE change may stale cache-backed Map/Object workspaces.
 
-The PSI/source index produces neutral facts using that profile.
+A SERVER change may stale server-semantic views without requiring the map renderer to discard correct LIVE state.
 
-The profile should be selected by detected OpenRune/RSMod API shape, not merely by folder name.
-Unknown APIs degrade to generic source navigation rather than unsafe guessed semantics.
+If Studio has unsaved edits, external generated-cache changes require explicit reconcile behavior.
 
-## 13. Running-server integration
+## 19. Running-server bridge
 
-Do **not** make JVM attach/reflection against the running game server the normal integration path.
+A runtime bridge is later work.
 
-Direct attach has poor properties:
+If implemented, it should expose intentionally bounded development information such as:
 
-- exact classloader/version coupling;
-- intrusive JVM permissions;
-- race conditions against mutable game state;
-- hard local-process assumptions;
-- weak remote-server support;
-- risk of destabilizing the server.
+- server state;
+- tick/time;
+- loaded semantic entities;
+- selected runtime observations;
+- controlled reload/build operations where safe.
 
-Prefer an explicit, versioned **Studio Bridge**.
+Do not make the editor depend on an always-running server for ordinary map authoring.
 
-A bridge can run in one of two places:
+## 20. Fork compatibility
 
-1. a small OpenRune plugin/module in the server process exposing intentionally selected runtime
-   snapshots/events; or
-2. an out-of-process helper launched through the imported checkout's Gradle/runtime classpath.
+Support capabilities, not brand-name guesses.
 
-Start read-only. Useful runtime facts include:
+A fork may vary:
 
-- server build/revision/project fingerprint;
-- current map clock/tick;
-- loaded content/plugins;
-- registered handlers;
-- dynamic loc changes;
-- NPC/object runtime spawns;
-- selected var/state snapshots;
-- active areas;
-- simulation events useful to RSProx/cutscene/content tooling.
+- module names;
+- task paths;
+- source roots;
+- cache paths via explicit overrides;
+- available source formats;
+- build dependency versions.
 
-Every connection should verify that the bridge project fingerprint matches the Studio project.
+When Studio cannot prove a capability, report it as unavailable rather than guessing paths.
 
-The existing `tools:osrs-mcp` module is useful evidence for the process-isolation model. It is not
-itself a complete Studio runtime bridge, but it already supports reloadable GameVal and
-LIVE/SERVER cache inspection from the server's own classpath.
+Fork-specific knowledge belongs in bounded profiles/adapters, not accumulated path heuristics throughout the application.
 
-## 14. Fork compatibility
+## 21. Publication flow
 
-OpenRune support should be capability-based, not a single yes/no test.
+Supported connected resource:
 
-### Compatibility tiers
+    Studio authored state
+      -> source authority lookup
+      -> stale check
+      -> validate
+      -> atomic source write
+      -> imported project build
+      -> generated LIVE/SERVER changes
+      -> reopen
+      -> semantic verification
+      -> publication baseline
 
-**Tier 0: Generic OSRS cache**
+Unsupported resource:
 
-- cache editor/rendering only;
-- no OpenRune project semantics.
+    Studio authored state
+      -> Save Project
+      -> preview
+      -> remain unpublished
+      -> optional standalone output route
 
-**Tier 1: Structural OpenRune project**
+## 22. Acceptance
 
-- recognizable project/config/build markers;
-- revision/config metadata;
-- LIVE/SERVER path roles;
-- declared build task discovery.
+Connected OpenRune support is trustworthy when:
 
-**Tier 2: Symbol-compatible**
-
-- recognized RSCM/GameVal providers or mapping metadata;
-- symbolic inspection/references.
-
-**Tier 3: Raw-cache schema compatible**
-
-- recognized NPC/object spawn/area/server-config source schemas;
-- structured source inspection;
-- writes only for schemas Studio can round-trip losslessly.
-
-**Tier 4: Semantic-source compatible**
-
-- evaluated production source sets;
-- Kotlin PSI resolves enough known OpenRune/RSMod API shapes to build content facts/graphs;
-- teleports, handlers and skill flows become available.
-
-**Tier 5: Validated toolchain integration**
-
-- compatible build tasks and known publication contracts;
-- Studio may publish supported source resources then invoke the project build and verify outputs.
-
-A fork can support one tier without supporting the next.
-
-### What variations should be tolerated
-
-Tolerate through capability discovery:
-
-- moved modules;
-- renamed Gradle project paths;
-- additional source sets;
-- alternate cache/source paths through explicit overrides;
-- additive custom content;
-- mapping roots declared by tooling metadata;
-- known build tasks discovered from evaluated Gradle model.
-
-### When Studio must stop guessing
-
-Fall back to read-only/generic behavior when:
-
-- source schema is unknown;
-- a custom packer changes ownership semantics Studio cannot prove;
-- GameVal provenance cannot be established;
-- build task semantics are ambiguous;
-- an OR2/API mismatch is unverified;
-- protocol revision does not match;
-- a fork replaces stable APIs with unrecognized equivalents.
-
-The correct extension point is then a fork-specific adapter/profile/plugin, not another layer of
-path heuristics in the stock OpenRune provider.
-
-## 15. Synchronization model
-
-Studio needs domain generations rather than one "project dirty" bit.
-
-Suggested domains:
-
-```
-PROJECT_LAYOUT
-GAME_CONFIG
-TOOLCHAIN
-LIVE_CACHE
-SERVER_CACHE
-GAMEVALS
-RAW_MAP_SPAWNS
-RAW_MAP_AREAS
-SERVER_CONFIG_SOURCE
-SOURCE_MODEL
-SEMANTIC_GRAPH
-RUNTIME_BRIDGE
-```
-
-When an external OpenRune build runs, Studio should detect changed LIVE/SERVER identities and mark
-dependent domains stale.
-
-When Studio writes supported source:
-
-1. compare source baseline/fingerprint;
-2. stage and atomically write the source;
-3. mark dependent generated domains stale;
-4. optionally invoke the project's declared build task if policy allows;
-5. reopen/verify outputs;
-6. advance baselines only after verification succeeds.
-
-If a user edits server source externally while Studio is open, Studio refreshes the affected
-source/index domains. It never silently overwrites the external change with an older editor model.
-
-## 16. Concrete next integration work
-
-1. Add a lightweight `OpenRuneGameConfig` model for name/revision/subrevision/environment/world.
-2. Parse `gradle/libs.versions.toml` for OR2 and rsprot protocol target during import.
-3. Show those values in the OpenRune import preview before access selection.
-4. Add a compatibility status separating FileStore, definition, Studio-scene and protocol support.
-5. Implement project-domain generation/change tracking.
-6. Replace flat GameVal maps with source-aware entries and refresh generations.
-7. Consume `openRune-intelliJ-tools.toml` mapping roots when present.
-8. Add Map Studio overlays for raw NPC spawns, ground-object spawns and area polygons.
-9. Implement source-safe editors for raw map spawns/areas before allowing writes.
-10. Add teleport semantic extraction and a Map Studio teleport overlay.
-11. Add server-config overlay inspection using PackServerConfig source semantics.
-12. Version the OpenRune semantic knowledge profile and expand Mining as the first full skill-flow acceptance fixture.
-13. Prototype a read-only version-matched Studio Bridge rather than JVM attach/reflection.
-14. Add CI/tooling that detects newer OR2 releases and opens/flags dependency updates without runtime auto-upgrade.
-
-The governing invariant is:
-
-> Studio may understand OpenRune deeply, but it must never become a competing authority for
-> OpenRune-owned source/build/runtime state.
+1. import identifies cache roles without modifying them;
+2. project open never runs fresh install implicitly;
+3. LIVE is used for client scene semantics;
+4. SERVER is used only for server-oriented semantics;
+5. source provenance is retained;
+6. stale external source blocks overwrite;
+7. arbitrary terrain/location changes do not patch LIVE as fallback;
+8. supported source edits invoke the detected project build;
+9. failed build does not advance publication baseline;
+10. successful build reopens/verifies generated output;
+11. custom layouts use the same inspected-project model with explicit diagnostics.

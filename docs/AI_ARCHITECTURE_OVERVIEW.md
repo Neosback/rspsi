@@ -1,550 +1,297 @@
 # AI Architecture Overview
 
-> **Audience:** coding agents and contributors who need a reliable mental model before changing OpenRune Studio.
+> **Status:** authoritative whole-system mental model.
 >
-> **Read order:** this document first, then `AI_CHANGE_PLAYBOOK.md` for implementation steps,
-> `EDITOR_DEVELOPMENT_ARCHITECTURE.md` for internal code-placement rules,
-> `UI_WORKSPACE_CONTRACT.md` for shell/layout rules, and the domain-specific docs linked below.
-
-# 1. What OpenRune Studio is
-
-OpenRune Studio is a Java/Kotlin modular-monolith desktop application for OSRS map and content authoring.
-
-It has:
-
-- a headless/core `Client` module;
-- a native Dear ImGui + GLFW + OpenGL `Editor` module;
-- a Studio-owned authored world model;
-- undoable command-based editing;
-- OpenRune FileStore as the modern OSRS cache backend;
-- built-in OpenRune Server project/content integration;
-- renderer-neutral scene compilation plus a native OpenGL renderer;
-- a public external extension API.
-
-It is **not**:
-
-- a RuneLite plugin;
-- an OpenRune Server plugin;
-- a collection of internal plugins;
-- a multi-backend modern-OSRS cache editor;
-- a UI where every panel can live everywhere.
-
-# 2. The top-level mental model
-
-```
-                    OpenRune Studio
-                           |
-               +-----------+-----------+
-               |                       |
-             Client                  Editor
-       semantics / authoring     native presentation
-               |                       |
-               +-----------+-----------+
-                           |
-                     Studio runtime
-                           |
-         +-----------------+-----------------+
-         |                                   |
- CoreEditorModules                    external EditorPlugins
- always installed                    optional extensions
-         |                                   |
-         +-----------------+-----------------+
-                           |
-            one registry + one service graph
-                           |
-                    EditorSession
-                           |
-             WorldDocument / Selection
-                           |
-              undoable EditorCommands
-```
-
-The most important architectural rule is:
-
-**There should be one canonical production path for each responsibility.**
-
-Do not create another manager, registry, decoder, selection model, render-settings object, tool
-registration path, or project-integration graph because the existing name feels plugin-specific or
-because a caller is inconvenient.
-
-# 3. Modules and ownership
-
-## Client
-
-`Client` owns behavior and semantics that must be testable without a window or OpenGL context.
-
-It owns:
-
-- cache adapters and OSRS cache semantics;
-- definitions and neutral assets;
-- the authored world model;
-- region decode/encode;
-- commands and undo/redo;
-- selections;
-- tools;
-- brushes;
-- generator/change-plan foundations;
-- semantic scene/query APIs;
-- render-neutral packets/compiler inputs;
-- settings keys/registry/compiler contracts;
-- core editor modules;
-- external extension runtime;
-- server/project semantic integrations.
-
-`Client` must not depend on Dear ImGui, GLFW, or native OpenGL UI state.
-
-## Editor
-
-`Editor` owns native presentation.
-
-It owns:
-
-- Studio application lifecycle;
-- GLFW/ImGui windows;
-- native OpenGL scene rendering;
-- viewport camera/input projection;
-- right sidebar;
-- bottom tool rail and Context Drawer;
-- left Brush Rail;
-- floating picker rail / Quick Palette;
-- HUD projection;
-- native compatibility projections for neutral tool/UI descriptors.
+> Read docs/README.md first for document ownership.
 
-Business rules should move toward Client-neutral contracts rather than being implemented only here.
+## 1. Product model
 
-# 4. Application composition
+OpenRune Studio is a project-first desktop authoring environment for OSRS maps and related content.
 
-OpenRune Studio is a modular monolith.
+It is a modular monolith:
 
-## Core features
+    Project
+      -> authored state
+      -> semantic resolution
+      -> rendering / inspection
+      -> explicit publication
 
-Core features are `CoreEditorModule`s listed exactly once in `CoreEditorModules`.
+There is one production path for each responsibility. The architecture is intentionally biased toward discoverability and AI-generated code safety: a contributor should be able to find the existing owner before inventing another abstraction.
 
-Current core modules cover:
+## 2. Top-level modules
 
-- terrain;
-- Tile Painter;
-- paths;
-- objects;
-- selection/transforms;
-- diagnostics;
-- core UI declarations.
+### Client
 
-Core modules are:
+Client owns logic that must be testable without a native window or OpenGL context:
 
-- compile-time;
-- always installed;
-- recreated for each runtime host;
-- not shown as enable/disable plugins;
-- registered into the same neutral registry/services external extensions use.
+- modern OSRS cache adapters;
+- cache definitions and neutral asset views;
+- WorldDocument and authored world models;
+- commands, history, transactions, selection, and ChangePlan;
+- map decode/encode services;
+- scene resolution and semantic views;
+- render-neutral packets and incremental compilation;
+- project and server integration contracts;
+- OpenRune source/content analysis;
+- autosave and project-edit persistence primitives;
+- core feature modules.
 
-## External extensions
+Client must not require Dear ImGui, GLFW, or OpenGL for domain behavior.
 
-External installable JARs use `EditorPlugin`.
+### Editor
 
-The plugin lifecycle exists for:
+Editor owns native presentation:
 
-- discovery;
-- dependency/version checks;
-- enable/disable;
-- reload/unload;
-- cleanup;
-- externally supplied behavior.
+- Project Launcher;
+- project loading UI;
+- Dashboard/project home;
+- Map Studio and other native workspaces;
+- Dear ImGui workspace shell;
+- GLFW window/input integration;
+- OpenGL renderer and native GPU resources;
+- frontend projection of neutral tool/inspection state.
 
-Do not use `EditorPlugin` as dependency injection for features that ship with Studio.
+Business rules should move toward Client-owned neutral contracts rather than being implemented only in widgets.
 
-# 5. Authored-world flow
+## 3. Core feature composition
 
-The authoritative authoring flow is:
+Built-in features use CoreEditorModule and CoreEditorModules.
 
-```
-input/tool
-   |
-ToolContext / SurfaceHit / Selection
-   |
-edit service or EditorCommand
-   |
-EditorSession.execute(...)
-   |
-WorldDocument
-   |
-history + change notification
-   |
-scene recompilation / dirty region
-   |
-render packet
-   |
-native renderer
-```
+Current core modules include terrain, tile painting, object work, path work, selection, diagnostics, and shared UI registrations.
 
-Rules:
+A built-in feature should normally be:
 
-- tools do not mutate native renderer state to edit the map;
-- map changes are represented in the authored model;
-- logical user actions should become one undoable transaction;
-- rendering is a projection of authored/resolved state;
-- selection is canonical state, not a widget-local copy.
+    core module
+      -> shared domain service
+      -> command / ChangePlan
+      -> canonical authored state
 
-# 6. Coordinates
+Do not create a separate lifecycle or registration system for one feature. Existing legacy extension-oriented names are migration debt only.
 
-There are two important coordinate spaces.
+## 4. Canonical authored-world flow
 
-## Local/document space
+The authoritative editing flow is:
 
-Used by:
+    user input
+      -> active tool/controller
+      -> command or validated ChangePlan
+      -> WorldDocument
+      -> history + dirty resource state
+      -> scene invalidation
+      -> incremental scene compile
+      -> semantic/render snapshots
 
-- `WorldDocument`;
-- local tiles;
-- many render packet/model builders.
+WorldDocument is the authored map truth while the project is open.
 
-## Absolute world-tile space
+Render packets, native buffers, inspectors, HUDs, and previews are derived state. They do not become alternate sources of truth.
 
-Used by:
+## 5. Read versus write semantics
 
-- viewport camera;
-- world picking;
-- `WorldTile`;
-- cross-region semantics;
-- external/editor-facing map identity.
+Read APIs should expose immutable snapshots or stable views.
 
-Never assume local and world coordinates are interchangeable. Convert through the canonical
-document-coordinate APIs.
+Writes should flow through:
 
-# 7. Cache architecture
+- EditorCommand for direct atomic operations;
+- CommandTransaction for grouped atomic operations;
+- ChangePlan for operations that require calculation, validation, preview, and one final commit.
 
-## Modern OSRS
+Do not make a UI callback mutate tiles, objects, cache files, or native renderer state directly.
 
-**OpenRune FileStore is the single production backend.**
+## 6. Coordinates and planes
 
-```
-OSRS cache/project
-      |
-OpenRune FileStore
-      |
-OpenRuneCacheStore
-      |
-Studio neutral CacheStore / DefinitionProvider / AssetRepository
-      |
-World/session/tooling
-```
+Keep these concepts distinct:
 
-FileStore owns:
+- document-local coordinates;
+- absolute OSRS world-tile coordinates;
+- authored plane;
+- effective/client plane;
+- render plane;
+- viewport/screen coordinates.
 
-- filesystem/archive access;
-- modern OSRS cache structures;
-- OpenRune definition codecs/types;
-- writable standalone output through `CacheDelegate`;
-- FreshCache/reference-cache acquisition;
-- OpenRune ecosystem cache semantics.
+Use the existing coordinate and ScenePlaneSemantics contracts. Do not duplicate bridge or LINK_BELOW logic in tools, inspectors, picking, or rendering.
 
-## Studio-owned map codec
+## 7. Cache architecture
 
-`OsrsRegionDecoder` and `OsrsRegionEncoder` are the one Studio semantic terrain/location
-round-trip codec.
+### Modern OSRS
 
-They translate FileStore-provided bytes into the mutable Studio world model and back.
+OpenRune FileStore is the production backend.
 
-Do not add another map decoder/encoder.
+Canonical boundary:
 
-## Texture exception
+    cache directory
+      -> OpenRuneCacheStore
+      -> neutral cache/definition/map services
+      -> authored/semantic Studio state
 
-`OpenRuneTextureDefinitionDecoder` is an explicit adapter-boundary exception for the current
-pinned FileStore behavior where modern compact texture records are skipped by the generic
-definition decoder.
+Studio-owned terrain/location wire semantics remain centralized in OsrsRegionDecoder and OsrsRegionEncoder.
 
-It is not a second cache stack.
+### Legacy compatibility
 
-## Displee
+LegacyDispleeCacheStore exists only for explicit old/custom compatibility paths. It is not a second modern OSRS backend.
 
-Displee is legacy/custom-cache compatibility only.
+### Source caches are immutable inputs
 
-Do not use it for:
+A source cache opened for authoring is not the file Studio casually edits in place.
 
-- modern OSRS projects;
-- modern OSRS output;
-- OpenRune Server projects;
-- fallback decoding because FileStore integration is inconvenient.
+Standalone publication uses a separate explicit output cache.
 
-## OpenRS2
+Connected OpenRune projects treat LIVE and SERVER as generated, read-only products of the OpenRune build.
 
-OpenRS2 is reference/acquisition/research infrastructure, not a Studio production backend.
+See CACHE_EDITING_AND_PUBLISHING.md.
 
-Use it indirectly where appropriate for:
+## 8. Project persistence model
 
-- historical cache acquisition;
-- historical XTEAs;
-- revision/reference research;
-- independent verification.
+Studio has three separate state transitions:
 
-Do not create an OpenRS2 Studio cache backend unless the architecture is deliberately revised.
+### Edit / preview
 
-# 8. OpenRune Server integration
+Changes WorldDocument and derived scene state. No cache pack is required.
 
-OpenRune Server support is built-in product integration.
+### Save Project
 
-```
-StudioApplication
-      |
-ServerIntegrationService
-      |
-OpenRuneServerProvider
-      |
-OpenRuneServerAdapter
-      |
-project inspection / cache roles / build tasks / source semantics
-      |
-symbols + references + spawns + overlays + Kotlin semantic index
-```
+Persists Studio-owned edit state atomically so work can be closed and reopened without touching the source cache.
 
-Implementation namespace:
+SessionAutosaveStore already demonstrates a cache-independent complete WorldDocument snapshot. The durable project-edit model should evolve from this idea, with explicit resource manifests, source identity, dirty state, and schema versioning.
 
-`com.rspsi.server.openrune`
+### Publish / build
 
-It is not an `EditorPlugin`.
+Creates deployable cache or project output. This is explicit and validated.
 
-Connected project rules:
+These actions must remain separate in UI language and code.
 
-- project source is authoritative for publishable authored resources;
-- LIVE and SERVER caches are generated/read products, not generic writable targets;
-- Studio should invoke the project's canonical build path rather than patching generated caches;
-- resources without a lossless source mapping stay read-only in connected-project mode.
+## 9. Connected OpenRune model
 
-# 9. Rendering architecture
+An imported OpenRune project owns its generated cache lifecycle.
 
-Rendering has an explicit boundary.
+Normal flow:
 
-```
-WorldDocument / definitions
-      |
-scene resolution
-      |
-render-neutral packets
-      |
-RenderConfig + presentation
-      |
-native renderer
-      |
-OpenGL
-```
+    OpenRune source/config
+      -> OpenRune project's detected cache build
+      -> .data/cache/LIVE
+      -> .data/cache/SERVER
+      -> Studio reopens and verifies generated outputs
 
-The renderer does not own authored truth.
+Studio may edit only a supported authoritative source representation.
 
-## Renderer settings
+If no lossless OpenRune-consumed source representation exists, Studio keeps the resource editable in its own project state but does not silently patch generated OpenRune caches.
 
-One renderer setting flow exists:
+FreshCache is bootstrap/reset tooling, not normal project-open behavior.
 
-```
-UI
- |
-typed RenderSettingKeys
- |
-SettingsStore
- |
-RenderConfigCompiler
- |
-immutable RenderConfig
- |
-viewport / renderer
-```
+See OPENRUNE_SERVER_INTEGRATION_MODEL.md.
 
-Do not add ad-hoc renderer booleans beside this path.
+## 10. Scene semantics
 
-A real renderer setting requires:
+Studio separates:
 
-- a typed key;
-- registration/metadata;
-- a declared consumer;
-- compiler wiring;
-- native/semantic consumption;
-- a test proving the destination changes.
+    authored world
+      -> OSRS resolution rules
+      -> resolved scene semantics
+      -> renderer-neutral packets
+      -> native rendering
 
-Disabled/unavailable settings should explain why. Do not leave clickable controls that do nothing.
+Authored and resolved identity are both retained. An authored object that fails to become visible should remain diagnosable instead of disappearing from the API.
 
-# 10. Workspace design
+The semantic layer owns concepts such as:
 
-The layout expresses workflow, not arbitrary docking preference.
+- tile paint versus shaped tile model;
+- authored/effective/render plane;
+- object definition and transformed/display definition;
+- model/type resolution;
+- collision and visibility diagnostics;
+- canonical SurfaceHit.
 
-## Right rail: inspect / understand / edit exact data
+See SCENE_SEMANTICS_REFERENCE.md.
 
-Right-side surfaces include:
+## 11. Rendering architecture
 
-- Tile Inspector;
-- WorldMap;
-- Object Viewer / Properties;
-- Outliner;
-- World Knowledge;
-- Player State;
-- Map Settings;
-- future theme/context intelligence.
+Rendering is a derived consumer of authored and resolved state.
 
-The right side can edit the exact inspected semantic object/data.
+Current high-level path:
 
-A future action may send an inspected asset/preset into an authoring tool, but the right rail does
-not become a second placement toolbar.
+    WorldDocument
+      -> scene resolver/compiler
+      -> IncrementalSceneCompiler
+      -> RenderScene / RenderWindowScene
+      -> GpuScenePacketBuilder
+      -> GPU upload plan
+      -> incremental zoned upload plan
+      -> ZoneVboManager
+      -> SharedGpuArena
+      -> OpenGlSceneRenderer
+      -> NativeSceneViewport
 
-## Left rail: shared brush mechanics
+The canonical invalidation unit is an 8x8 world zone where applicable.
 
-The left rail is the contextual Brush Rail.
+Camera movement is presentation state. It must not force static world geometry to be rebuilt or re-uploaded.
 
-It is normally visible only when the active tool declares shared brush settings.
+The current renderer appears visually close to OSRS in tested scenes and no z-fighting has been observed in current manual testing. Neither observation is a proof of parity. Keep real-cache fixtures and renderer telemetry active.
 
-It may be forced visible by the user.
+See RENDERING_SYSTEM.md.
 
-Use it for common brush mechanics such as:
+## 12. Workspace architecture
 
-- footprint/shape;
-- radius;
-- falloff;
-- strength;
-- shared brush selection.
+After project load, the main editing shell is a strict contextual multi-rail workspace.
 
-If a tool declares `TOOL_OWNED` brush UI, the shared rail/settings stay hidden.
+Core concepts:
 
-## Bottom: authoring
+- Primary Tool Rail: choose editing mode;
+- Context Drawer: tool-specific workflow and content choices;
+- Brush Shelf: shared brush mechanics only when the active tool needs them;
+- Viewport Quick Palette: compact near-cursor switching;
+- Right Inspector: exact selection/property/settings work;
+- HUD Layer: glanceable scene/tool diagnostics.
 
-The bottom contains:
+Visibility is derived from active tool capabilities and selection/context state, not from arbitrary panel placement.
 
-- Primary Tool Rail;
-- one active Context Drawer.
+See UI_WORKSPACE_CONTRACT.md.
 
-Examples:
+## 13. Project lifecycle
 
-- Tile Painter;
-- Height Sculptor;
-- Path/road/shoreline generation;
-- Object placement/spawn;
-- future building/fragment/biome/generator tools.
+Application lifecycle:
 
-The bottom is not a generic console. History, notifications, diagnostics, and arbitrary utility
-panels do not get bottom drawer modes.
+    Application start
+      -> Project Launcher
+      -> project descriptor selection/import
+      -> Project Loading
+      -> Project Shell
+      -> Dashboard
+      -> workspace
 
-## Floating rail / Quick Palette: pick and switch quickly
+A raw cache path is project configuration, not application identity.
 
-Use the floating rail for:
+Project opening should establish identity and required cache/project capability without eagerly decoding every optional domain.
 
-- single select;
-- multi select;
-- picker/inspection modes;
-- compact near-cursor choices.
+See PROJECT_LAUNCHER_AND_DASHBOARD.md.
 
-Do not duplicate the whole bottom authoring catalog here.
-
-## HUDs
-
-HUDs are glanceable viewport information and are independent of the drawer.
-
-# 11. Tool architecture
-
-A tool has two separate concerns:
-
-## Behavior
-
-Neutral behavior lives in Client:
-
-- `EditorTool`;
-- `ToolContext`;
-- `SurfaceHit`;
-- selection;
-- brushes;
-- commands/change plans.
-
-## Presentation
-
-A tool descriptor says how Studio should project it:
-
-- label/category/group;
-- icon/shortcut/order;
-- tool capabilities;
-- brush UI ownership;
-- Context Drawer;
-- Quick Palette;
-- Inspector;
-- HUD/overlay.
-
-Built-ins and external extensions should converge on the same neutral descriptor semantics.
-
-`StudioPlugin` / `StudioToolPlugin` are transitional native compatibility projections, not a
-second business-logic architecture.
-
-# 12. Inspection-to-authoring flow
-
-The intended user flow is:
-
-```
-inspect map/object/tile on right
-        |
-understand/edit exact semantic data
-        |
-optional "use/place/send to tool" action
-        |
-bottom authoring tool receives asset/preset
-        |
-brush/tool preview in viewport
-        |
-commit undoable map change
-```
-
-This is the preferred way to connect inspection and placement. Do not make right-side inspectors
-silently mutate placement-tool state through hidden globals.
-
-# 13. Source of truth by concern
+## 14. Source of truth by concern
 
 | Concern | Source of truth |
 | --- | --- |
-| core composition | `CoreEditorModules` |
-| runtime registry/services | `EditorPluginHost` + `EditorPluginRegistry` + `PluginServices` |
-| authored state | `EditorSession` / `WorldDocument` |
-| mutation | `EditorCommand` / command services / future ChangePlan |
-| selection | `SelectionModel` |
-| pointer targeting | `SurfaceHit` |
-| brush semantics | `editor.brush` |
-| modern OSRS cache | OpenRune FileStore via `OpenRuneCacheStore` |
-| terrain/location roundtrip | `OsrsRegionDecoder/Encoder` |
-| OpenRune project semantics | `OpenRuneServerAdapter` + core provider/services |
-| renderer settings | `RenderSettingKeys -> RenderConfigCompiler -> RenderConfig` |
-| render parity backlog | `RENDERING_PARITY_MANIFEST.json` |
-| native shell placement | `UI_WORKSPACE_CONTRACT.md` |
-| internal code placement | `EDITOR_DEVELOPMENT_ARCHITECTURE.md` |
-| external extension contract | `PLUGIN_EXTENSION_SDK.md` |
+| current implemented behavior | production code + tests |
+| authored map | WorldDocument / active project edit state |
+| edit history | command history / transaction state |
+| modern OSRS cache | OpenRune FileStore through OpenRuneCacheStore |
+| map wire format | OsrsRegionDecoder / OsrsRegionEncoder |
+| OpenRune project layout/build | OpenRuneServerAdapter + inspected project model |
+| connected OpenRune generated client cache | LIVE, read-only |
+| connected OpenRune generated server cache | SERVER, read-only |
+| semantic scene | Studio semantic/resolution layer |
+| renderer correctness backlog | RENDERING_PARITY_MANIFEST.json |
+| native rendering | OpenGlSceneRenderer + zone/shared-arena path |
+| UI placement | UI_WORKSPACE_CONTRACT.md |
+| product order | ROADMAP.md |
 
-# 14. Things an AI must not create casually
+## 15. Architecture invariants
 
-Before creating any of these, search for the existing canonical concept first:
-
-- Manager
-- Registry
-- Service
-- Controller
-- Context
-- Store
-- Cache backend
-- Decoder/encoder
-- Render settings object
-- Selection model
-- Tool registry
-- Brush registry
-- Plugin host
-- Project inspection model
-
-A new abstraction is justified only when the existing canonical responsibility genuinely cannot own
-the behavior.
-
-# 15. Architecture invariants
-
-The repository should continue adding automated tests for these invariants:
-
-- one production registration per stable ID;
-- no built-in plugin namespace;
-- no modern OSRS Displee path;
-- no plugin-named OpenRune Server path;
-- right inspection panels stay right-only;
-- authoring palettes stay bottom-only;
-- bottom drawer has no generic console modes;
-- floating rail has no fallback duplicate tool registry;
-- renderer settings have registered consumers;
-- renderer settings compile into `RenderConfig`;
-- native UI does not enter Client;
-- raw FileStore/Displee types remain inside adapter boundaries.
-
-When an architecture bug is fixed, prefer adding a boundary/inventory test so the repository
-remembers the decision without relying on conversation history.
+1. One canonical owner per responsibility.
+2. Built-in functionality uses core modules and shared services.
+3. Source caches are never implicit mutable working files.
+4. Save Project and Publish Cache are different operations.
+5. Connected OpenRune LIVE/SERVER are generated outputs, not fallback write targets.
+6. WorldDocument remains authored truth while editing.
+7. Scene semantics are derived once and reused.
+8. Rendering never becomes authored state.
+9. A UI surface does not own business rules merely because it displays them.
+10. A new abstraction must remove ambiguity, not create another way to do the same thing.
+11. Planned behavior is labeled planned.
+12. Correctness and performance claims require measurement or fixtures.

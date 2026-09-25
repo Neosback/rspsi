@@ -293,7 +293,7 @@ Studio still owns for standalone/reference-cache workflows:
 - verification/acceptance policy;
 - read-only source versus explicit Studio-managed output policy.
 
-A connected OpenRune Server project is different: its `.data/cache/LIVE` and `.data/cache/SERVER` locations and their synchronization are owned by the OpenRune project/build. Studio discovers those paths and reads them, but does not replace them with its standalone writable-output model. See `OPENRUNE_ECOSYSTEM_INTEGRATION.md`.
+A connected OpenRune Server project is different: its `.data/cache/LIVE` and `.data/cache/SERVER` locations and their synchronization are owned by the OpenRune project/build. Studio discovers those paths and reads them, but does not replace them with its standalone writable-output model. See `CACHE_EDITING_AND_PUBLISHING.md` and `OPENRUNE_SERVER_INTEGRATION_MODEL.md`.
 
 ---
 
@@ -353,11 +353,11 @@ Use this matrix before adding new infrastructure.
 | explicit writable output | tools / CacheDelegate | active |
 | acquire reference cache by revision | tools / FreshCache + OpenRS2 | **available, should be adopted** |
 | acquire XTEAs for old cache | tools / OpenRS2/FreshCache | available; only relevant below 237 |
-| map packing | tools / PackMaps | available; future authored-world persistence |
+| map packing | tools / PackMaps | available to OpenRune builds/reference; Studio standalone map publication uses its canonical region encoder/output transaction |
 | model packing | tools | available; future |
 | sprite packing | tools | available; future |
 | sound/MIDI packing | tools | available; future |
-| incremental builds | tools | available; future project build registry |
+| incremental builds | tools | owned by connected OpenRune project builds; do not duplicate their state in Studio |
 | GameVals/symbols | tools/FileStore + existing Studio provider | partially active |
 | RsConfig/TOML | toml-rsconfig + tools | available; future source mode |
 | CS2 compilation/packing | tools + Filby compiler artifacts | intentionally deferred |
@@ -373,7 +373,7 @@ Use this matrix before adding new infrastructure.
 
 1. Prefer the smallest explicit OpenRune module set needed by production code.
 2. Do not switch to `dev.or2:all` merely to make dependency discovery easier.
-3. Do not expose `dev.openrune.*` types from neutral editor/plugin APIs.
+3. Do not expose `dev.openrune.*` types from neutral Studio domain APIs.
 4. A transitive dependency is not automatically an approved public Studio dependency.
 5. If Studio starts using a transitive artifact directly, consider declaring it explicitly so the dependency is intentional and version policy is clear.
 6. Before implementing a cache/content/compiler/server utility, search OpenRune FileStore, OpenRune Server, and this Maven catalog.
