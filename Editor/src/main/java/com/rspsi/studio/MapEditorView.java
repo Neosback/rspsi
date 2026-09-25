@@ -4,6 +4,8 @@ import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.brush.BrushAwareTool;
+import com.rspsi.editor.brush.BrushCapability;
 import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.input.EditorInputRouter;
 import com.rspsi.editor.integration.ServerIntegrationService;
@@ -477,6 +479,18 @@ public final class MapEditorView {
         if (registration == null) return;
 
         var tool = registration.factory().get();
+
+        if (studioPluginManager.usesSharedBrushSettings(registrationId)
+                && tool instanceof BrushAwareTool brushTool) {
+            EditorBrush activeBrush = brushManager.activeBrush(
+                    registrationId,
+                    Set.of(BrushCapability.SPATIAL_FOOTPRINT));
+            if (activeBrush != null) {
+                brushTool.setBrush(activeBrush);
+            }
+            brushTool.setBrushRadius(brushManager.brushRadius());
+        }
+
         if (tool instanceof BoxSelectTool boxSelectTool) {
             boolean single = "selection.single".equals(registrationId)
                     || "selection.object.single".equals(registrationId);
