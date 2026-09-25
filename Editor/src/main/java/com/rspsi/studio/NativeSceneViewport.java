@@ -15,6 +15,7 @@ import com.rspsi.editor.render.SceneCameraProjection;
 import com.rspsi.editor.render.ViewportController;
 import com.rspsi.editor.render.NavigationService;
 import com.rspsi.editor.tool.EditorToolController;
+import com.rspsi.editor.viewport.SurfaceHit;
 import com.rspsi.editor.viewport.Viewport;
 import com.rspsi.renderer.opengl.OpenGlSceneRenderer;
 import imgui.ImGui;
@@ -136,7 +137,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
 
     @Override
     public java.util.Optional<com.rspsi.editor.model.WorldTile> tileAt(float x, float y) {
-        return pickAt(x, y).map(hit -> hit.objectHit() && hit.objectTile() != null ? hit.objectTile() : hit.tile());
+        return hitAt(x, y).map(SurfaceHit::targetTile);
     }
 
     /**
@@ -168,11 +169,27 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
      */
     @Override
     public java.util.Optional<com.rspsi.editor.model.WorldObject> objectAt(float x, float y) {
-        if (objectResolver == null) return java.util.Optional.empty();
-        return pickAt(x, y)
-                .filter(PickResult::objectHit)
-                .flatMap(hit -> objectResolver.resolve(
-                        hit.objectTile() != null ? hit.objectTile() : hit.tile(), hit.objectId()));
+        return hitAt(x, y).flatMap(SurfaceHit::object);
+    }
+
+    /**
+     * Projects the renderer's rich PickResult into the stable semantic editor
+     * hit contract. Submission priority, depth bias, texture ids and other
+     * renderer bookkeeping intentionally stop at this boundary.
+     */
+    @Override
+    public java.util.Optional<SurfaceHit> hitAt(float x, float y) {
+        return pickAt(x, y).map(hit -> {
+            if (!hit.objectHit()) {
+                return SurfaceHit.terrain(hit.tile());
+            }
+
+            WorldTile anchor = hit.objectTile() != null ? hit.objectTile() : hit.tile();
+            com.rspsi.editor.model.WorldObject placement = objectResolver == null
+                    ? null
+                    : objectResolver.resolve(anchor, hit.objectId()).orElse(null);
+            return SurfaceHit.object(hit.tile(), hit.objectId(), anchor, placement);
+        });
     }
 
     private Integer pickPlaneRestriction;
