@@ -352,7 +352,7 @@ public final class StudioPluginManager {
 
             String icon = registration.icon() == null || registration.icon().isBlank()
                     ? StudioIcons.OBJECT
-                    : registration.icon();
+                    : StudioIcons.byName(registration.icon(), registration.icon());
             String shortcut = registration.shortcut() == null ? "" : registration.shortcut();
 
             return new StudioToolView(
