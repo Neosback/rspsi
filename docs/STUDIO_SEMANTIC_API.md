@@ -3,6 +3,8 @@
 > **Status:** architectural contract and implementation guide.
 >
 > `docs/ROADMAP.md` remains authoritative for execution order. This document defines the stable semantic boundary that the roadmap grows incrementally from Phase 0 correctness work.
+>
+> System-wide API layering, stability, lifecycle, permissions, and package boundaries are defined in `STUDIO_API_SYSTEM.md`. Public plugin/tool consumption of this semantic API is defined in `PLUGIN_EXTENSION_SDK.md`.
 
 ## 1. Purpose
 

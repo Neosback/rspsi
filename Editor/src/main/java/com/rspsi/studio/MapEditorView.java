@@ -218,6 +218,7 @@ public final class MapEditorView {
         routeSessionShortcuts(pluginLifecycle, settings);
 
         if (pluginLifecycle != null && pluginLifecycle.host() != null) {
+            studioPluginManager.bindEditorPluginRegistry(pluginLifecycle.host().registry());
             panelManager.syncPluginContributions(pluginLifecycle.host().registry().panelRegistrations());
             panelManager.syncUiSurfaces(pluginLifecycle.host().registry().uiSurfaceContributions());
             if (!defaultToolActivated) {
@@ -452,8 +453,8 @@ public final class MapEditorView {
         activeToolId = registrationId;
         // Tools that own drawer content may bring it forward. Picker/inspection tools
         // with no drawer content leave the user's existing drawer exactly as it was.
-        studioPluginManager.toolPlugin(registrationId)
-                .filter(StudioToolPlugin::hasContextDrawerContent)
+        studioPluginManager.toolView(registrationId)
+                .filter(StudioPluginManager.StudioToolView::hasContextDrawerContent)
                 .ifPresent(tool -> {
                     bottomBar.setDrawerMode(StudioBottomBar.DrawerMode.AUTO_TOOL);
                     bottomBar.setDrawerOpen(true);

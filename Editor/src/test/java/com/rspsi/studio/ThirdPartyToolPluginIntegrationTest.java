@@ -1,5 +1,11 @@
 package com.rspsi.studio;
 
+import com.rspsi.editor.plugin.EditorPluginRegistry;
+import com.rspsi.editor.plugin.EditorToolRegistration;
+import com.rspsi.editor.plugin.ToolUiDescriptor;
+import com.rspsi.editor.input.PointerEvent;
+import com.rspsi.editor.tool.EditorTool;
+import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.StudioToolPlugin;
 import com.rspsi.studio.theme.StudioIcons;
@@ -78,6 +84,64 @@ class ThirdPartyToolPluginIntegrationTest {
         public void renderContextDrawer(StudioPanelContext context) {
             drawerRendered.set(true);
         }
+    }
+
+
+    @Test
+    void neutralExtensionToolProjectsIntoTheSameStudioToolCatalog() {
+        StudioPluginManager manager = new StudioPluginManager();
+        EditorPluginRegistry registry = new EditorPluginRegistry();
+
+        ToolUiDescriptor ui = new ToolUiDescriptor(
+                java.util.Set.of(
+                        ToolUiDescriptor.ToolSurface.BOTTOM_BAR,
+                        ToolUiDescriptor.ToolSurface.FLOATING_TOOLBAR),
+                ToolUiDescriptor.BrushUiMode.SHARED_SETTINGS,
+                java.util.Set.of(
+                        ToolUiDescriptor.ToolCapability.TILE_TARGET,
+                        ToolUiDescriptor.ToolCapability.BRUSH_FOOTPRINT,
+                        ToolUiDescriptor.ToolCapability.WORLD_EDIT),
+                false);
+
+        registry.registerTool(new EditorToolRegistration(
+                "community.biome-painter",
+                "Biome Painter",
+                "Terrain",
+                "terrain",
+                "forest",
+                "B",
+                35,
+                ui,
+                () -> new NoOpEditorTool("community.biome-painter")));
+
+        manager.bindEditorPluginRegistry(registry);
+
+        var projected = manager.toolView("community.biome-painter").orElseThrow();
+        assertEquals("Biome Painter", projected.name());
+        assertEquals("community.biome-painter", projected.toolId());
+        assertEquals("forest", projected.icon());
+        assertEquals("B", projected.shortcut());
+        assertEquals(35, projected.railPriority());
+        assertTrue(projected.surfaces().contains(StudioToolPlugin.ToolSurface.BOTTOM_BAR));
+        assertTrue(projected.surfaces().contains(StudioToolPlugin.ToolSurface.FLOATING_TOOLBAR));
+        assertEquals(StudioToolPlugin.BrushUiMode.SHARED_SETTINGS, projected.brushUiMode());
+        assertTrue(manager.usesSharedBrushSettings("community.biome-painter"));
+        assertFalse(projected.isNativeProjection());
+    }
+
+    private static final class NoOpEditorTool implements EditorTool {
+        private final String id;
+
+        private NoOpEditorTool(String id) {
+            this.id = id;
+        }
+
+        @Override public String id() { return id; }
+        @Override public void activate(ToolContext context) { }
+        @Override public void deactivate() { }
+        @Override public void pointerDown(PointerEvent event) { }
+        @Override public void pointerDrag(PointerEvent event) { }
+        @Override public void pointerUp(PointerEvent event) { }
     }
 
     @Test

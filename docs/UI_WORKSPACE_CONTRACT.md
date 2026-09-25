@@ -565,6 +565,8 @@ This decision model is the baseline for reviewing every new panel or plugin cont
 
 ## 12. Plugin UI contract
 
+The full public extension model is defined in `PLUGIN_EXTENSION_SDK.md`; system-wide API layering and stability are defined in `STUDIO_API_SYSTEM.md`. This section remains authoritative for where contributed UI belongs in the workspace.
+
 Public plugins should contribute declaratively into host-owned surfaces.
 
 A plugin may contribute:
@@ -701,8 +703,11 @@ Target:
 ### StudioToolPlugin / UiSurfaceContribution
 
 Target:
-- migrate from permissive surface placement toward an explicit ToolUiDescriptor/capability model
-- retain compatibility adapters while first-party tools migrate
+- introduce the neutral map-tool contribution / `ToolUiDescriptor` model defined in `PLUGIN_EXTENSION_SDK.md`;
+- move brush ownership, tool capabilities, context-drawer content, quick palettes, inspector sections, HUDs, icons, shortcuts and ordering into that neutral descriptor;
+- make native Studio project those declarations into the existing rails/drawer/inspector/HUD system;
+- retain `StudioToolPlugin` only as an internal compatibility adapter while first-party tools migrate;
+- do not expose Dear ImGui as the ordinary third-party extension boundary.
 
 ## 16. UI correctness acceptance gates
 

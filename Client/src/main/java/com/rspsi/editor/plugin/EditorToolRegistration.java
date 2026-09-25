@@ -18,6 +18,7 @@ public record EditorToolRegistration(
         String icon,
         String shortcut,
         int order,
+        ToolUiDescriptor ui,
         Supplier<? extends EditorTool> factory) {
 
     public EditorToolRegistration {
@@ -25,7 +26,22 @@ public record EditorToolRegistration(
         label = requireText(label, "tool label");
         category = requireText(category, "tool category");
         toolGroup = toolGroup != null && !toolGroup.isBlank() ? toolGroup.trim() : category;
+        ui = ui == null ? ToolUiDescriptor.defaults() : ui;
         Objects.requireNonNull(factory, "tool factory");
+    }
+
+    /** Compatibility constructor retaining the pre-tool-descriptor registration shape. */
+    public EditorToolRegistration(
+            String id,
+            String label,
+            String category,
+            String toolGroup,
+            String icon,
+            String shortcut,
+            int order,
+            Supplier<? extends EditorTool> factory) {
+        this(id, label, category, toolGroup, icon, shortcut, order,
+                ToolUiDescriptor.defaults(), factory);
     }
 
     public EditorToolRegistration(
@@ -33,7 +49,8 @@ public record EditorToolRegistration(
             String label,
             String category,
             Supplier<? extends EditorTool> factory) {
-        this(id, label, category, category, null, null, 0, factory);
+        this(id, label, category, category, null, null, 0,
+                ToolUiDescriptor.defaults(), factory);
     }
 
     private static String requireText(String value, String name) {

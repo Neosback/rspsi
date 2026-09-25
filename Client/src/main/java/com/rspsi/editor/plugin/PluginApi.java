@@ -26,9 +26,11 @@ import com.rspsi.editor.tool.EditorTool;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -233,7 +235,12 @@ public final class PluginApi {
     // --- Fluent Tool Registration ---
 
     public ToolBuilder tool(String id) {
-        return new ToolBuilder(this, id);
+        return new ToolBuilder(this, id, false);
+    }
+
+    /** First-class map tool; built-ins and installed extensions share this contract. */
+    public ToolBuilder mapTool(String id) {
+        return new ToolBuilder(this, id, true);
     }
 
     public void tool(String id, Supplier<? extends EditorTool> factory) {
@@ -245,12 +252,26 @@ public final class PluginApi {
         private final String id;
         private String label;
         private String category = "Plugin";
+        private String toolGroup;
+        private String icon;
+        private String shortcut;
+        private int order;
+        private final EnumSet<ToolUiDescriptor.ToolSurface> surfaces =
+                EnumSet.noneOf(ToolUiDescriptor.ToolSurface.class);
+        private final EnumSet<ToolUiDescriptor.ToolCapability> capabilities =
+                EnumSet.noneOf(ToolUiDescriptor.ToolCapability.class);
+        private ToolUiDescriptor.BrushUiMode brushUiMode = ToolUiDescriptor.BrushUiMode.NONE;
+        private boolean hasContextDrawerContent;
         private Supplier<? extends EditorTool> factory;
 
-        ToolBuilder(PluginApi api, String id) {
+        ToolBuilder(PluginApi api, String id, boolean firstClassMapTool) {
             this.api = api;
             this.id = id;
             this.label = id;
+            if (firstClassMapTool) {
+                surfaces.add(ToolUiDescriptor.ToolSurface.BOTTOM_BAR);
+                surfaces.add(ToolUiDescriptor.ToolSurface.FLOATING_TOOLBAR);
+            }
         }
 
         public ToolBuilder label(String label) {
@@ -263,6 +284,68 @@ public final class PluginApi {
             return this;
         }
 
+        public ToolBuilder group(String toolGroup) {
+            this.toolGroup = toolGroup;
+            return this;
+        }
+
+        public ToolBuilder icon(String icon) {
+            this.icon = icon;
+            return this;
+        }
+
+        public ToolBuilder shortcut(String shortcut) {
+            this.shortcut = shortcut;
+            return this;
+        }
+
+        public ToolBuilder order(int order) {
+            this.order = order;
+            return this;
+        }
+
+        public ToolBuilder surfaces(ToolUiDescriptor.ToolSurface... values) {
+            surfaces.clear();
+            if (values != null) {
+                for (ToolUiDescriptor.ToolSurface value : values) {
+                    surfaces.add(Objects.requireNonNull(value, "tool surface"));
+                }
+            }
+            return this;
+        }
+
+        public ToolBuilder capability(ToolUiDescriptor.ToolCapability capability) {
+            capabilities.add(Objects.requireNonNull(capability, "tool capability"));
+            return this;
+        }
+
+        public ToolBuilder capabilities(ToolUiDescriptor.ToolCapability... values) {
+            if (values != null) {
+                for (ToolUiDescriptor.ToolCapability value : values) {
+                    capability(value);
+                }
+            }
+            return this;
+        }
+
+        public ToolBuilder brushUi(ToolUiDescriptor.BrushUiMode mode) {
+            this.brushUiMode = Objects.requireNonNull(mode, "brush UI mode");
+            if (mode == ToolUiDescriptor.BrushUiMode.SHARED_SETTINGS) {
+                capabilities.add(ToolUiDescriptor.ToolCapability.BRUSH_FOOTPRINT);
+            }
+            return this;
+        }
+
+        public ToolBuilder contextDrawer(boolean enabled) {
+            this.hasContextDrawerContent = enabled;
+            if (enabled) {
+                capabilities.add(ToolUiDescriptor.ToolCapability.CONTEXT_DRAWER);
+            } else {
+                capabilities.remove(ToolUiDescriptor.ToolCapability.CONTEXT_DRAWER);
+            }
+            return this;
+        }
+
         public ToolBuilder factory(Supplier<? extends EditorTool> factory) {
             this.factory = factory;
             return this;
@@ -270,7 +353,21 @@ public final class PluginApi {
 
         public void register() {
             Objects.requireNonNull(factory, "tool factory");
-            api.context.registry().registerTool(id, label, category, factory);
+            ToolUiDescriptor ui = new ToolUiDescriptor(
+                    Set.copyOf(surfaces),
+                    brushUiMode,
+                    Set.copyOf(capabilities),
+                    hasContextDrawerContent);
+            api.context.registry().registerTool(new EditorToolRegistration(
+                    id,
+                    label,
+                    category,
+                    toolGroup,
+                    icon,
+                    shortcut,
+                    order,
+                    ui,
+                    factory));
         }
     }
 
