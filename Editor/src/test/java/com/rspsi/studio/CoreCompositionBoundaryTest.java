@@ -13,14 +13,22 @@ import static org.junit.jupiter.api.Assertions.fail;
 class CoreCompositionBoundaryTest {
 
     @Test
-    void studioApplicationUsesOnlyTheCanonicalCoreManifest() throws Exception {
-        Path sourcePath = Path.of("src/main/java/com/rspsi/studio/StudioApplication.java");
+    void allApplicationCompositionRootsUseTheCanonicalCoreManifest() throws Exception {
+        assertCanonicalComposition(
+                Path.of("src/main/java/com/rspsi/studio/StudioApplication.java"),
+                "StudioApplication");
+        assertCanonicalComposition(
+                Path.of("src/main/java/com/rspsi/ui/workspace/ControlledWorkspaceBridge.java"),
+                "ControlledWorkspaceBridge");
+    }
+
+    private static void assertCanonicalComposition(Path sourcePath, String owner) throws Exception {
         String source = Files.readString(sourcePath);
 
         assertTrue(source.contains("CoreEditorModules.all()"),
-                "StudioApplication must mount the canonical core manifest");
+                owner + " must mount the canonical core manifest");
         assertTrue(source.contains("initializeWithCoreModules"),
-                "StudioApplication must use the shared core-aware runtime host");
+                owner + " must use the shared core-aware runtime host");
 
         for (String forbidden : List.of(
                 "CoreToolsPlugin",
@@ -28,7 +36,7 @@ class CoreCompositionBoundaryTest {
                 "SplinePathToolPlugin",
                 "plugin.builtin.tool")) {
             if (source.contains(forbidden)) {
-                fail("StudioApplication contains retired core composition path: " + forbidden);
+                fail(owner + " contains retired core composition path: " + forbidden);
             }
         }
     }
