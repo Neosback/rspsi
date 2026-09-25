@@ -218,11 +218,22 @@ public final class ServerIntegrationService {
     }
 
     private IntegrationSession bind(IntegrationSession session) {
-        this.activeSession = Objects.requireNonNull(session, "session");
-        session.symbolProvider().ifPresent(symbolService::registerProvider);
-        session.referenceProvider().ifPresent(referenceService::registerProvider);
-        session.npcSpawnProvider().ifPresent(npcSpawnService::registerProvider);
-        return session;
+        IntegrationSession candidate = Objects.requireNonNull(session, "session");
+        String symbolId = candidate.symbolProvider().map(provider -> provider.id()).orElse(null);
+        String referenceId = candidate.referenceProvider().map(provider -> provider.id()).orElse(null);
+        String spawnId = candidate.npcSpawnProvider().map(provider -> provider.id()).orElse(null);
+        try {
+            candidate.symbolProvider().ifPresent(symbolService::registerProvider);
+            candidate.referenceProvider().ifPresent(referenceService::registerProvider);
+            candidate.npcSpawnProvider().ifPresent(npcSpawnService::registerProvider);
+            this.activeSession = candidate;
+            return candidate;
+        } catch (RuntimeException failure) {
+            if (symbolId != null) symbolService.unregisterProvider(symbolId);
+            if (referenceId != null) referenceService.unregisterProvider(referenceId);
+            if (spawnId != null) npcSpawnService.unregisterProvider(spawnId);
+            throw failure;
+        }
     }
 
     /**
