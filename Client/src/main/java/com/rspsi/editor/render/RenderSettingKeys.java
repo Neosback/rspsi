@@ -136,8 +136,7 @@ public final class RenderSettingKeys {
                 GROUND_DECORATIONS_VISIBLE, ROOFS_VISIBLE, BRIDGE_TILES_VISIBLE,
                 HIDDEN_TILES_VISIBLE, INVISIBLE_OBJECTS_VISIBLE, COLLISION_VISIBLE, WIREFRAME, ACTIVE_PLANE,
                 PLANE_SELECTION, BRIGHTNESS, EXPOSURE, MSAA_SAMPLES, FOG_DEPTH_TILES,
-                FOG_COLOR, GPU_DEBUG_VIEW);
-        consumers.register("native-viewport-validation", NATIVE_CULLING_MODE);
+                FOG_COLOR, NATIVE_CULLING_MODE, GPU_DEBUG_VIEW);
         consumers.register("map-studio-viewport-hud", HUD_TILE_INSPECTOR_VISIBLE, HUD_TOOL_CONTROLS_VISIBLE);
         return consumers;
     }
