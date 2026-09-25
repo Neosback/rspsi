@@ -12,7 +12,11 @@
 
 ## 1. Core decision
 
-OpenRune Studio should keep the **plugin** concept as the packaging, lifecycle, dependency, and distribution unit.
+OpenRune Studio should keep the **plugin/extension** concept as the packaging, lifecycle, dependency, and distribution unit.
+
+**Installed extensions are first-class editor modules, not second-class contributors.** The host must not reserve a richer map-editing API for built-ins. A third-party extension may request and use the same supported semantic, editing, selection, preview, UI, project, automation, and renderer-neutral capabilities as a first-party tool.
+
+The only boundaries are architectural and trust-related: extensions use supported host APIs rather than private implementation objects, and capabilities with security or destructive impact may require explicit declaration/authorization. These boundaries apply to first-party code too as it migrates onto the SDK.
 
 A plugin is not synonymous with a panel.
 
@@ -37,7 +41,7 @@ A plugin may contribute any number of capabilities:
 - project/source integrations;
 - semantic extension points.
 
-The public API should therefore be an **extension SDK**, with plugins as the container.
+The public API should therefore be an **extension SDK**, with plugins as the container. In product terms, an enabled extension is a peer module of the editor. The word *contribution* in this document refers only to a registration object such as a tool, panel, HUD, or command, never to a lesser permission tier.
 
 The target relationship is:
 
@@ -100,9 +104,9 @@ The solution is to move the useful semantics of `StudioToolPlugin` into a fronte
 
 ---
 
-## 3. Public map-tool contribution
+## 3. First-class map-tool extension
 
-A map tool should be registered as one coherent contribution rather than separate unrelated registrations.
+A map tool should be registered as one coherent extension descriptor rather than a collection of unrelated registrations. Built-in tools should be describable by this same descriptor.
 
 Conceptual target:
 
@@ -138,7 +142,7 @@ The exact Java API may change, but these semantics should remain.
 
 ### Required descriptor fields
 
-A public map-tool contribution should define:
+A map-tool extension should define:
 
 - globally stable contribution ID;
 - label;
@@ -739,11 +743,16 @@ The same rule should apply to:
 
 ---
 
-## 17. Permissions and trust
+## 17. Capabilities, permissions, and trust
 
-The current `PluginPermission` vocabulary is useful, but it must be treated correctly.
+The current `PluginPermission` vocabulary is useful, but it must be treated correctly. It must **not** become an artificial feature tier where built-ins are powerful and external extensions are intentionally weaker.
+
+An extension may request the complete supported capability set. The host may require explicit user authorization for sensitive capabilities, but once authorized the extension receives the same service contract a first-party module would receive for that capability.
 
 ### Studio capability enforcement
+
+Capabilities exist to make authority explicit, auditable, and safe to unload. They are not a "community plugin mode."
+
 
 The host should enforce declared capabilities when a plugin asks for Studio services.
 
@@ -949,7 +958,7 @@ If that plugin can be built outside the Studio repository without importing inte
 
 ## 23. Migration from `StudioToolPlugin`
 
-`StudioToolPlugin` should remain an internal compatibility projection while the public descriptor is built.
+`StudioToolPlugin` should remain an internal compatibility projection only while the shared descriptor is built. The migration is complete only when first-party tools no longer require a privileged native-only tool contract for ordinary editing features.
 
 Migration sequence:
 
@@ -963,7 +972,7 @@ Migration sequence:
 8. remove behavior from `StudioToolPlugin` until it becomes a thin compatibility shim;
 9. eventually retire it if no longer needed.
 
-The public SDK should be powerful enough that first-party map tools do not require a secret second API.
+The SDK is the editor tool API. First-party and third-party map tools should not have separate capability ceilings.
 
 ---
 
@@ -1034,6 +1043,8 @@ The public extension SDK is successful when a developer outside the repository c
 11. receives automatic scene refresh/persistence behavior;
 12. unloads without leaked tools, UI, tasks, subscriptions, or state;
 13. survives a compatible Studio upgrade without recompilation where binary compatibility permits;
-14. never imports Dear ImGui, GLFW, OpenGL, FileStore internals, or native Studio classes.
+14. never needs Dear ImGui, GLFW, OpenGL, FileStore internals, or native Studio classes for ordinary map editing;
+15. can request every supported map-editor capability that an equivalent first-party tool can request;
+16. can replace, augment, or provide an alternative implementation for a built-in workflow through explicit host-supported contracts rather than monkey-patching internals.
 
-That is the bar for "powerful plugin system" in Map Studio.
+That is the bar for a first-class extension system in Map Studio.
