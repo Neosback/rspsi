@@ -8,7 +8,6 @@ import com.rspsi.studio.theme.StudioWidgets
 import imgui.ImGui
 import imgui.flag.ImGuiCol
 import imgui.flag.ImGuiWindowFlags
-import java.util.Objects
 import kotlin.math.max
 import kotlin.math.min
 
@@ -20,8 +19,8 @@ class ProjectLoadingView {
         retry: Runnable?,
         backToLauncher: Runnable?,
     ) {
-        val safeProject = Objects.requireNonNull(project, "project")
-        val safeStatus = Objects.requireNonNull(status, "status")
+        val safeProject = project ?: throw NullPointerException("project")
+        val safeStatus = status ?: throw NullPointerException("status")
 
         val viewport = ImGui.getMainViewport()
         ImGui.setNextWindowPos(viewport.posX, viewport.posY)
