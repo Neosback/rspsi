@@ -3,7 +3,7 @@ package com.rspsi.editor.core.module;
 import com.rspsi.editor.core.CoreEditorModule;
 import com.rspsi.editor.plugin.EditorPluginContext;
 import com.rspsi.editor.plugin.EditorToolContextRegistration;
-import com.rspsi.editor.plugin.builtin.TerrainToolSettings;
+import com.rspsi.editor.core.settings.TerrainToolSettings;
 import com.rspsi.editor.tool.BlendTerrainTool;
 import com.rspsi.editor.tool.ChangeHeightTool;
 import com.rspsi.editor.tool.FlattenTerrainTool;
