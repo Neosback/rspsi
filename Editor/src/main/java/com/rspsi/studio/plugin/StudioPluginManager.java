@@ -91,7 +91,7 @@ public final class StudioPluginManager {
     }
 
     /**
-     * Registers internal Studio projections only. Third-party discovery lives
+     * Registers internal Studio projections only. Installed-extension discovery lives
      * exclusively on the neutral EditorPlugin boundary in Client.
      */
     public void discoverPlugins() {
@@ -352,7 +352,7 @@ public final class StudioPluginManager {
 
             String icon = registration.icon() == null || registration.icon().isBlank()
                     ? StudioIcons.OBJECT
-                    : registration.icon();
+                    : StudioIcons.byName(registration.icon(), registration.icon());
             String shortcut = registration.shortcut() == null ? "" : registration.shortcut();
 
             return new StudioToolView(

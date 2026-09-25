@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -30,18 +31,25 @@ public final class StudioBrushManager {
     private final Map<String, EditorBrush> brushes = new LinkedHashMap<>();
     private final Map<String, Boolean> enabled = new LinkedHashMap<>();
     private final Map<String, String> activeByTool = new LinkedHashMap<>();
+    private final Set<String> builtInBrushIds = new LinkedHashSet<>();
+    private final Set<String> hostBrushIds = new LinkedHashSet<>();
     private int brushRadius = 0;
 
     public StudioBrushManager() {
-        register(new SquareBrush());
-        register(new CircleBrush());
-        register(new DiamondBrush());
-        register(new CheckerBrush());
-        register(new GaussianBrush());
-        register(new SlopeBrush());
-        register(new TerraceBrush());
+        registerBuiltIn(new SquareBrush());
+        registerBuiltIn(new CircleBrush());
+        registerBuiltIn(new DiamondBrush());
+        registerBuiltIn(new CheckerBrush());
+        registerBuiltIn(new GaussianBrush());
+        registerBuiltIn(new SlopeBrush());
+        registerBuiltIn(new TerraceBrush());
 
-        ServiceLoader.load(EditorBrush.class).forEach(this::register);
+        ServiceLoader.load(EditorBrush.class).forEach(this::registerBuiltIn);
+    }
+
+    private void registerBuiltIn(EditorBrush brush) {
+        register(brush);
+        builtInBrushIds.add(brush.id());
     }
 
     public synchronized void register(EditorBrush brush) {
@@ -51,6 +59,35 @@ public final class StudioBrushManager {
         }
         brushes.put(brush.id(), brush);
         enabled.putIfAbsent(brush.id(), true);
+    }
+
+    /**
+     * Mirrors brushes from the active neutral plugin host into Studio's shared
+     * Brush Settings. Built-in IDs remain reserved and extension-owned brushes
+     * disappear automatically when the rebuilt host no longer exposes them.
+     */
+    public synchronized void syncHostBrushes(List<? extends EditorBrush> hostBrushes) {
+        Set<String> nextIds = new LinkedHashSet<>();
+        if (hostBrushes != null) {
+            for (EditorBrush brush : hostBrushes) {
+                if (brush == null || brush.id() == null || brush.id().isBlank()) continue;
+                if (builtInBrushIds.contains(brush.id())) continue;
+                nextIds.add(brush.id());
+                brushes.put(brush.id(), brush);
+                enabled.putIfAbsent(brush.id(), true);
+            }
+        }
+
+        Set<String> removed = new LinkedHashSet<>(hostBrushIds);
+        removed.removeAll(nextIds);
+        for (String id : removed) {
+            brushes.remove(id);
+            enabled.remove(id);
+            activeByTool.entrySet().removeIf(entry -> id.equals(entry.getValue()));
+        }
+
+        hostBrushIds.clear();
+        hostBrushIds.addAll(nextIds);
     }
 
     public synchronized List<EditorBrush> allBrushes() {

@@ -3,6 +3,8 @@ package com.rspsi.editor.plugin;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.assets.AssetDescriptor;
 import com.rspsi.editor.assets.AssetRepository;
+import com.rspsi.editor.brush.BrushCapability;
+import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.input.EditorKeyEvent;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.WorldTile;
@@ -241,6 +243,36 @@ class PluginApiTest {
 
 
     @Test
+    void testPluginCanRegisterSharedBrush() {
+        EditorSession session = new EditorSession(new WorldModel(1, 1, 1));
+
+        EditorPlugin plugin = new EditorPlugin() {
+            @Override public String id() { return "test.brush.plugin"; }
+
+            @Override
+            public void initialize(EditorPluginContext context) {
+                context.api(this).brush(new EditorBrush() {
+                    @Override public String id() { return "test.star"; }
+                    @Override public String name() { return "Star"; }
+                    @Override public java.util.Set<BrushCapability> capabilities() {
+                        return java.util.Set.of(BrushCapability.SPATIAL_FOOTPRINT);
+                    }
+                    @Override public double weight(int dx, int dy, int radius) {
+                        return dx == 0 || dy == 0 ? 1.0 : 0.0;
+                    }
+                });
+            }
+        };
+
+        EditorPluginHost host = EditorPluginHost.initialize(
+                List.of(plugin), session, new EmptyAssets());
+
+        assertTrue(host.context().services().brushes().brushes().stream()
+                .anyMatch(brush -> "test.star".equals(brush.id())));
+        host.close();
+    }
+
+    @Test
     void testMapToolBuilderCarriesFirstClassStudioMetadata() {
         EditorSession session = new EditorSession(new WorldModel(1, 1, 1));
 
@@ -271,6 +303,12 @@ class PluginApiTest {
                                 "Biome",
                                 EditorUiNode.text("Paint semantic biome data"),
                                 EditorUiNode.button("Apply", () -> { })))
+                        .quickPalette(() -> EditorUiNode.row(
+                                EditorUiNode.button("Forest", () -> { }),
+                                EditorUiNode.button("Swamp", () -> { })))
+                        .inspectorUi(() -> EditorUiNode.section(
+                                "Selection",
+                                EditorUiNode.text("Selected biome facts")))
                         .factory(() -> new NoOpTool("test.biome-painter"))
                         .register();
             }
@@ -301,7 +339,15 @@ class PluginApiTest {
         assertTrue(ui.has(ToolUiDescriptor.ToolCapability.CONTEXT_DRAWER));
         assertTrue(ui.hasContextDrawerContent());
         assertTrue(ui.content().hasContextDrawer());
+        assertTrue(ui.content().hasQuickPalette());
+        assertTrue(ui.content().hasInspector());
+        assertTrue(ui.has(ToolUiDescriptor.ToolCapability.QUICK_PALETTE));
+        assertTrue(ui.has(ToolUiDescriptor.ToolCapability.SELECTION_INSPECTOR));
         assertTrue(ui.content().contextDrawerNode().orElseThrow()
+                instanceof EditorUiNode.Section);
+        assertTrue(ui.content().quickPaletteNode().orElseThrow()
+                instanceof EditorUiNode.Row);
+        assertTrue(ui.content().inspectorNode().orElseThrow()
                 instanceof EditorUiNode.Section);
 
         assertEquals("test.biome-painter", host.registry().createTool(registration.id()).id());

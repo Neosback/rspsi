@@ -20,9 +20,9 @@ import java.util.function.Supplier;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Neutral contribution registry for first-party editor plugins.
+ * Neutral extension registry shared by built-in and installed editor modules.
  *
- * <p>The registry stores behavior and layout metadata only. A frontend
+ * <p>The registry stores extension behavior and layout metadata only. A frontend
  * decides how a tool or panel is rendered; a plugin never receives a
  * JavaFX/ImGui object or owns editor state.</p>
  */

@@ -30,6 +30,7 @@ public final class StudioRightSidebar {
             | ImGuiWindowFlags.NoSavedSettings;
 
     private String pinnedTopPanelId = null;
+    private final DeclarativeToolUiRenderer declarativeToolUi = new DeclarativeToolUiRenderer();
 
     public String pinnedTopPanelId() {
         return pinnedTopPanelId;
@@ -195,6 +196,7 @@ public final class StudioRightSidebar {
             ImGui.separator();
             ImGui.pushTextWrapPos(0.0f);
             activePanel.render(context);
+            renderActiveToolInspectorSection(context);
             ImGui.popTextWrapPos();
             ImGui.endChild();
 
@@ -215,6 +217,7 @@ public final class StudioRightSidebar {
             ImGui.pushTextWrapPos(0.0f);
 
             activePanel.render(context);
+            renderActiveToolInspectorSection(context);
 
             ImGui.popTextWrapPos();
             ImGui.endChild();
@@ -222,5 +225,26 @@ public final class StudioRightSidebar {
 
         ImGui.end();
         ImGui.popStyleVar();
+    }
+
+    /**
+     * Renders the active tool's declarative inspector content inside the
+     * existing right-sidebar inspection surface. This is deliberately a
+     * section, not a new competing rail or plugin-owned native window.
+     */
+    private void renderActiveToolInspectorSection(StudioPanelContext context) {
+        if (context == null || context.studioPlugins() == null || context.activeToolId() == null) {
+            return;
+        }
+        var tool = context.studioPlugins().toolView(context.activeToolId()).orElse(null);
+        if (tool == null) return;
+        var inspector = tool.inspectorNode().orElse(null);
+        if (inspector == null) return;
+
+        ImGui.dummy(1.0f, 8.0f);
+        ImGui.separator();
+        ImGui.textColored(StudioPalette.ACCENT, tool.name() + " Inspector");
+        ImGui.separator();
+        declarativeToolUi.render(inspector);
     }
 }
