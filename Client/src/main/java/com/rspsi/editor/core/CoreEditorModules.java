@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Single composition manifest for all always-on editor features.
@@ -25,25 +26,32 @@ import java.util.Objects;
  * modules into the same registry.</p>
  */
 public final class CoreEditorModules {
-    private static final List<CoreEditorModule> MODULES = List.of(
-            new CoreTerrainModule(),
-            new CoreTilePainterModule(),
-            new CorePathModule(),
-            new CoreObjectModule(),
-            new CoreSelectionModule(),
-            new CoreDiagnosticsModule(),
-            new CoreUiModule()
+    private static final List<Supplier<? extends CoreEditorModule>> MODULE_FACTORIES = List.of(
+            CoreTerrainModule::new,
+            CoreTilePainterModule::new,
+            CorePathModule::new,
+            CoreObjectModule::new,
+            CoreSelectionModule::new,
+            CoreDiagnosticsModule::new,
+            CoreUiModule::new
     );
 
     private CoreEditorModules() {
     }
 
+    /**
+     * Returns fresh module instances for one runtime host. Core modules must
+     * never become cross-session singletons accidentally.
+     */
     public static List<CoreEditorModule> all() {
-        return MODULES;
+        return MODULE_FACTORIES.stream()
+                .map(Supplier::get)
+                .map(CoreEditorModule.class::cast)
+                .toList();
     }
 
     public static List<String> ids() {
-        return MODULES.stream()
+        return all().stream()
                 .sorted(Comparator.comparingInt(CoreEditorModule::order)
                         .thenComparing(CoreEditorModule::id))
                 .map(CoreEditorModule::id)
@@ -53,7 +61,7 @@ public final class CoreEditorModules {
     /** Legacy host identities retained so existing external dependency manifests keep working. */
     public static Map<String, String> hostVersions() {
         Map<String, String> versions = new LinkedHashMap<>();
-        for (CoreEditorModule module : MODULES) {
+        for (CoreEditorModule module : all()) {
             if (versions.putIfAbsent(module.id(), module.version()) != null) {
                 throw new IllegalStateException("Duplicate core editor module id: " + module.id());
             }
@@ -62,7 +70,7 @@ public final class CoreEditorModules {
     }
 
     public static void installAll(EditorPluginContext context) {
-        install(MODULES, context);
+        install(all(), context);
     }
 
     public static void install(
