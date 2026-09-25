@@ -22,7 +22,7 @@ import com.rspsi.editor.plugin.EditorNotificationService;
 import com.rspsi.editor.plugin.EditorSceneAccess;
 import com.rspsi.editor.plugin.EditorSceneSnapshot;
 import com.rspsi.editor.plugin.EditorTaskService;
-import com.rspsi.editor.plugin.builtin.CoreToolsPlugin;
+import com.rspsi.editor.core.CoreEditorModules;
 import com.rspsi.editor.plugin.runtime.ExternalPluginRuntimeSnapshot;
 import com.rspsi.editor.plugin.runtime.PluginEcosystemService;
 import com.rspsi.editor.plugin.runtime.SemanticVersion;
@@ -57,8 +57,6 @@ import com.rspsi.api.runtime.SimulatedClient;
 import com.rspsi.api.worldmap.NavigatorWorldMap;
 import com.rspsi.editor.symbols.CacheGamevalProvider;
 import com.rspsi.editor.symbols.SymbolService;
-import com.rspsi.editor.plugin.builtin.tool.TilePainterToolPlugin;
-import com.rspsi.editor.plugin.builtin.tool.SplinePathToolPlugin;
 import com.rspsi.plugins.server.openrune.OpenRuneServerProvider;
 import com.rspsi.project.StudioProjectDescriptor;
 import com.rspsi.project.StudioProjectRegistry;
@@ -934,22 +932,20 @@ public final class StudioApplication implements AutoCloseable {
     }
 
     private void initializePlugins(LoadedMapScene scene) {
-        List<EditorPlugin> candidates = new ArrayList<>(CoreToolsPlugin.builtIns());
-        // Not covered by any of the "vertical" builtIns() groups above — this is the
-        // only place "terrain.tile-painter" (the composite multi-channel brush the
-        // Tile Painter palette and rail/bottom-bar tool both target) gets registered.
-        // Without it, selecting the tool highlights fine but painting silently no-ops.
-        candidates.add(new TilePainterToolPlugin());
-        candidates.add(new SplinePathToolPlugin());
+        // Core editor behavior is composed explicitly and is not part of the
+        // optional plugin lifecycle. Only external extensions become candidates
+        // that the Plugin Manager can enable, disable, reload, or rescan.
+        List<EditorPlugin> candidates = new ArrayList<>();
+
         Map<String, SemanticVersion> hostPluginVersions = new java.util.LinkedHashMap<>();
-        for (EditorPlugin candidate : candidates) {
+        CoreEditorModules.hostVersions().forEach((id, version) -> {
             try {
-                hostPluginVersions.put(candidate.id(),
-                        SemanticVersion.parse(candidate.descriptor().version()));
+                hostPluginVersions.put(id, SemanticVersion.parse(version));
             } catch (RuntimeException ignored) {
-                hostPluginVersions.put(candidate.id(), new SemanticVersion(0, 0, 0, ""));
+                hostPluginVersions.put(id, new SemanticVersion(0, 0, 0, ""));
             }
-        }
+        });
+
         ExternalPluginRuntimeSnapshot discovery = pluginEcosystem.scan(
                 Thread.currentThread().getContextClassLoader(), hostPluginVersions);
         candidates.addAll(discovery.plugins());
@@ -975,7 +971,8 @@ public final class StudioApplication implements AutoCloseable {
                 assets,
                 sceneAccess,
                 enabled -> {
-                    EditorPluginHost host = EditorPluginHost.initialize(enabled, session,
+                    EditorPluginHost host = EditorPluginHost.initializeWithCoreModules(
+                            CoreEditorModules.all(), enabled, session,
                             assets, sceneAccess, renderSettings, tasks, notifications,
                             null, null, symbols, references, spawns, simulation, integrations);
                     host.context().services().decodedData().mergeSummary(decodedSummary);
