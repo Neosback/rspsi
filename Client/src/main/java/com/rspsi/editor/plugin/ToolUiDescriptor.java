@@ -1,5 +1,7 @@
 package com.rspsi.editor.plugin;
 
+import com.rspsi.editor.plugin.ui.ToolUiContent;
+
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Set;
@@ -15,7 +17,8 @@ public record ToolUiDescriptor(
         Set<ToolSurface> surfaces,
         BrushUiMode brushUiMode,
         Set<ToolCapability> capabilities,
-        boolean hasContextDrawerContent) {
+        boolean hasContextDrawerContent,
+        ToolUiContent content) {
 
     /** Host-owned activation surfaces on which a tool may appear. */
     public enum ToolSurface {
@@ -74,20 +77,45 @@ public record ToolUiDescriptor(
                 ? Set.of()
                 : Set.copyOf(EnumSet.copyOf(surfaces));
         brushUiMode = Objects.requireNonNullElse(brushUiMode, BrushUiMode.NONE);
-        capabilities = capabilities == null || capabilities.isEmpty()
+        content = content == null ? ToolUiContent.empty() : content;
+
+        EnumSet<ToolCapability> normalizedCapabilities =
+                capabilities == null || capabilities.isEmpty()
+                        ? EnumSet.noneOf(ToolCapability.class)
+                        : EnumSet.copyOf(capabilities);
+
+        if (content.hasContextDrawer()) {
+            hasContextDrawerContent = true;
+            normalizedCapabilities.add(ToolCapability.CONTEXT_DRAWER);
+        }
+        if (content.hasQuickPalette()) {
+            normalizedCapabilities.add(ToolCapability.QUICK_PALETTE);
+        }
+        if (content.hasInspector()) {
+            normalizedCapabilities.add(ToolCapability.SELECTION_INSPECTOR);
+        }
+        if (hasContextDrawerContent) {
+            normalizedCapabilities.add(ToolCapability.CONTEXT_DRAWER);
+        }
+
+        capabilities = normalizedCapabilities.isEmpty()
                 ? Set.of()
-                : Set.copyOf(capabilities);
+                : Set.copyOf(normalizedCapabilities);
 
         if (brushUiMode == BrushUiMode.SHARED_SETTINGS
                 && !capabilities.contains(ToolCapability.BRUSH_FOOTPRINT)) {
             throw new IllegalArgumentException(
                     "Shared brush settings require BRUSH_FOOTPRINT capability");
         }
-        if (hasContextDrawerContent
-                && !capabilities.contains(ToolCapability.CONTEXT_DRAWER)) {
-            throw new IllegalArgumentException(
-                    "Context drawer content requires CONTEXT_DRAWER capability");
-        }
+    }
+
+    /** Compatibility constructor retaining the original metadata-only descriptor shape. */
+    public ToolUiDescriptor(
+            Set<ToolSurface> surfaces,
+            BrushUiMode brushUiMode,
+            Set<ToolCapability> capabilities,
+            boolean hasContextDrawerContent) {
+        this(surfaces, brushUiMode, capabilities, hasContextDrawerContent, ToolUiContent.empty());
     }
 
     /**
@@ -98,7 +126,8 @@ public record ToolUiDescriptor(
      * appearing in Studio chrome during migration.</p>
      */
     public static ToolUiDescriptor defaults() {
-        return new ToolUiDescriptor(Set.of(), BrushUiMode.NONE, Set.of(), false);
+        return new ToolUiDescriptor(
+                Set.of(), BrushUiMode.NONE, Set.of(), false, ToolUiContent.empty());
     }
 
     public boolean appearsOn(ToolSurface surface) {
