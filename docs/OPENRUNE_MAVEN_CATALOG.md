@@ -353,11 +353,11 @@ Use this matrix before adding new infrastructure.
 | explicit writable output | tools / CacheDelegate | active |
 | acquire reference cache by revision | tools / FreshCache + OpenRS2 | **available, should be adopted** |
 | acquire XTEAs for old cache | tools / OpenRS2/FreshCache | available; only relevant below 237 |
-| map packing | tools / PackMaps | available; future authored-world persistence |
+| map packing | tools / PackMaps | available to OpenRune builds/reference; Studio standalone map publication uses its canonical region encoder/output transaction |
 | model packing | tools | available; future |
 | sprite packing | tools | available; future |
 | sound/MIDI packing | tools | available; future |
-| incremental builds | tools | available; future project build registry |
+| incremental builds | tools | owned by connected OpenRune project builds; do not duplicate their state in Studio |
 | GameVals/symbols | tools/FileStore + existing Studio provider | partially active |
 | RsConfig/TOML | toml-rsconfig + tools | available; future source mode |
 | CS2 compilation/packing | tools + Filby compiler artifacts | intentionally deferred |
