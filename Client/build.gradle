@@ -1,6 +1,14 @@
 description = 'Client'
 
 apply plugin: 'java-library'
+apply plugin: 'org.jetbrains.kotlin.jvm'
+
+kotlin {
+    jvmToolchain(21)
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
+    }
+}
 
 dependencies {
     implementation "org.tomlj:tomlj:1.1.1"
@@ -51,14 +59,22 @@ dependencies {
     api group: 'org.apache.commons', name: 'commons-compress', version: '1.27.1'
 }
 
+// Architecture guards must follow the code across the Java -> Kotlin migration.
 def neutralCoreSources = files(
         fileTree('src/main/java/com/rspsi/editor') { include '**/*.java' },
+        fileTree('src/main/kotlin/com/rspsi/editor') { include '**/*.kt' },
         fileTree('src/main/java/com/rspsi/osrs') { include '**/*.java' },
+        fileTree('src/main/kotlin/com/rspsi/osrs') { include '**/*.kt' },
         fileTree('src/main/java/com/rspsi/cache') {
             include '**/*.java'
             exclude 'store/**', 'workspace/**', 'verify/**'
         },
-        fileTree('src/main/java/com/rspsi/project') { include '**/*.java' }
+        fileTree('src/main/kotlin/com/rspsi/cache') {
+            include '**/*.kt'
+            exclude 'store/**', 'workspace/**', 'verify/**'
+        },
+        fileTree('src/main/java/com/rspsi/project') { include '**/*.java' },
+        fileTree('src/main/kotlin/com/rspsi/project') { include '**/*.kt' }
 )
 
 tasks.register('verifyUiNeutralCore') {
@@ -86,20 +102,35 @@ tasks.register('verifyUiNeutralCore') {
     }
 }
 
-def cacheBackendSources = fileTree('src/main/java') {
-    include '**/*.java'
+def cacheBackendSources = files(
+        fileTree('src/main/java') { include '**/*.java' },
+        fileTree('src/main/kotlin') { include '**/*.kt' }
+)
+
+// Adapter allowlists are language-neutral too: moving an approved boundary class
+// from Java to Kotlin must not weaken or accidentally invalidate the boundary.
+def boundarySourcePaths = { javaRelativePaths ->
+    javaRelativePaths.collectMany { relative ->
+        def stem = relative.endsWith('.java')
+                ? relative.substring(0, relative.length() - '.java'.length())
+                : relative
+        [
+                file("src/main/java/${relative}").canonicalPath,
+                file("src/main/kotlin/${stem}.kt").canonicalPath
+        ]
+    }
 }
 
-def legacyDispleeBoundaryFiles = [
+def legacyDispleeBoundaryFiles = boundarySourcePaths([
         'com/jagex/Cache.java',
         'com/jagex/cache/def/TextureDef.java',
         'com/jagex/cache/graphics/IndexedImage.java',
         'com/jagex/cache/graphics/Sprite.java',
         'com/rspsi/cache/store/LegacyDispleeCacheStore.java',
         'org/displee/util/GZIPUtils.java'
-].collect { file("src/main/java/${it}").canonicalPath }
+])
 
-def openRuneBoundaryFiles = [
+def openRuneBoundaryFiles = boundarySourcePaths([
         'com/rspsi/cache/store/CacheStoreFactory.java',
         'com/rspsi/cache/store/OpenRuneCacheStore.java',
         'com/rspsi/cache/store/OpenRuneTextureDefinitionDecoder.java',
@@ -108,7 +139,7 @@ def openRuneBoundaryFiles = [
         'com/rspsi/cache/store/OpenRuneCacheInspector.java',
         'com/rspsi/cache/store/OpenRuneReferenceCacheBootstrap.java',
         'com/rspsi/cache/store/OpenRuneSymbolicNameProvider.java'
-].collect { file("src/main/java/${it}").canonicalPath }
+])
 
 tasks.register('verifyCacheBackendBoundary') {
     description = 'Enforces separate legacy-Displee and modern-OpenRune cache adapter boundaries.'
@@ -132,9 +163,13 @@ tasks.register('verifyCacheBackendBoundary') {
 
 def modernOsrsSources = files(
         fileTree('src/main/java/com/rspsi/cache/map') { include '**/*.java' },
+        fileTree('src/main/kotlin/com/rspsi/cache/map') { include '**/*.kt' },
         fileTree('src/main/java/com/rspsi/cache/workspace') { include '**/*.java' },
+        fileTree('src/main/kotlin/com/rspsi/cache/workspace') { include '**/*.kt' },
         fileTree('src/main/java/com/rspsi/project') { include '**/*.java' },
-        fileTree('src/main/java/com/rspsi/server') { include '**/*.java' }
+        fileTree('src/main/kotlin/com/rspsi/project') { include '**/*.kt' },
+        fileTree('src/main/java/com/rspsi/server') { include '**/*.java' },
+        fileTree('src/main/kotlin/com/rspsi/server') { include '**/*.kt' }
 )
 
 tasks.register('verifyModernOsrsBackend') {
