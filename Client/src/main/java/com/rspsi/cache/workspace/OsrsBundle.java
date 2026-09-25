@@ -81,14 +81,6 @@ public final class OsrsBundle implements AutoCloseable {
                 com.rspsi.cache.store.OpenRuneCacheStore.detectRevision(cachePath));
     }
 
-    /** Opens a staged Displee output while keeping the OSRS bundle boundary. */
-    public static OsrsBundle openWithDispleeOutput(Path basePath, Path outputPath,
-                                                    ProjectMetadata metadata) {
-        OsrsStudioProject project = OsrsStudioProject.openWithDispleeOutput(
-                basePath, outputPath, metadata);
-        return fromProject(project, metadata);
-    }
-
     /** Opens an explicit writable OpenRune output while keeping the OSRS bundle boundary. */
     public static OsrsBundle openWithOpenRuneOutput(Path basePath, Path outputPath,
                                                      ProjectMetadata metadata) {

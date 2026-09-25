@@ -458,7 +458,7 @@ The project-first lifecycle does **not** mean every existing server abstraction 
 ### Keep / converge
 
 - `OpenRuneServerAdapter`: authoritative OpenRune layout detection, cache-role resolution and declared build capabilities.
-- `OpenRuneServerProvider`: provider-neutral binding from an imported project into optional Studio domains.
+- built-in `OpenRuneServerProvider`: provider-neutral binding from an imported project into Studio source/symbol/content domains; it is core integration, not Plugin Manager content.
 - `ServerProjectInspection`: useful immutable project snapshot.
 - `ServerIntegrationService`: keep as the active project-domain binder, but evolve it toward lazy refreshable domains rather than ad-hoc connection UI.
 - `ServerBuildTask` / `ServerBuildRunner`: useful declared-command execution boundary.

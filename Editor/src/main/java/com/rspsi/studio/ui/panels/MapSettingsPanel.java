@@ -41,7 +41,7 @@ public final class MapSettingsPanel implements StudioPanel {
     @Override public String title() { return "Map Settings"; }
     @Override public String icon() { return StudioIcons.TUNE; }
     @Override public DockRegion preferredRegion() { return DockRegion.RIGHT; }
-    @Override public Set<DockRegion> allowedRegions() { return EnumSet.of(DockRegion.RIGHT, DockRegion.BOTTOM); }
+    @Override public Set<DockRegion> allowedRegions() { return EnumSet.of(DockRegion.RIGHT); }
     @Override public int order() { return 40; }
 
     @Override

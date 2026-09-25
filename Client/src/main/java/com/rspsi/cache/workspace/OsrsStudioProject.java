@@ -144,33 +144,6 @@ public final class OsrsStudioProject implements AutoCloseable {
     }
 
     /**
-     * Opens an OpenRune source cache and a distinct Displee output cache.
-     * OpenRune remains the source/definition reader until a writable OpenRune
-     * packer has passed the parity gate.
-     */
-    public static OsrsStudioProject openWithDispleeOutput(Path basePath, Path outputPath,
-                                                           ProjectMetadata project) {
-        Objects.requireNonNull(basePath, "basePath");
-        Objects.requireNonNull(outputPath, "outputPath");
-        Objects.requireNonNull(project, "project");
-        OpenRuneCacheStore definitionsBase = CacheStoreFactory.openOsrs(basePath);
-        CacheStore outputStore = null;
-        try {
-            outputStore = CacheStoreFactory.openRuneWithDispleeOutput(basePath, outputPath);
-            DefinitionProvider definitions = definitionsBase.definitionProvider(project.cacheRevision());
-            AssetRepository assets = new DefinitionAssetRepository(definitions,
-                    definitionsBase.symbolicNameProvider());
-            return new OsrsStudioProject(outputStore, definitionsBase, definitionsBase,
-                    new OsrsMapService(outputStore, project.cacheRevision()),
-                    definitions, assets, project);
-        } catch (RuntimeException exception) {
-            closeQuietly(outputStore);
-            definitionsBase.close();
-            throw exception;
-        }
-    }
-
-    /**
      * Opens an OpenRune source cache with an explicit writable OpenRune output
      * cache. The two paths must differ; this method never turns the selected
      * source cache into an implicit edit target.
@@ -198,14 +171,6 @@ public final class OsrsStudioProject implements AutoCloseable {
             definitionsBase.close();
             throw exception;
         }
-    }
-
-    /** Opens a persisted OSRS project with the explicit staged output cache. */
-    public static OsrsStudioProject openWithDispleeOutput(ProjectLayout layout,
-                                                           Path basePath, Path outputPath)
-            throws IOException {
-        Objects.requireNonNull(layout, "layout");
-        return openWithDispleeOutput(basePath, outputPath, layout.readMetadata());
     }
 
     /** Opens persisted project metadata with the explicit OpenRune output path. */

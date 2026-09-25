@@ -53,7 +53,7 @@ public final class OutlinerPanel implements StudioPanel {
 
     @Override
     public Set<DockRegion> allowedRegions() {
-        return EnumSet.of(DockRegion.RIGHT, DockRegion.BOTTOM);
+        return EnumSet.of(DockRegion.RIGHT);
     }
 
     @Override

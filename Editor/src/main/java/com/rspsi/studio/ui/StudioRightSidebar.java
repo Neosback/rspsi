@@ -130,7 +130,8 @@ public final class StudioRightSidebar {
                         pinnedTopPanelId = p.id();
                     }
                 }
-                if (ImGui.menuItem("Move to Bottom Drawer")) {
+                if (p.allowedRegions().contains(DockRegion.BOTTOM)
+                        && ImGui.menuItem("Move to Bottom Drawer")) {
                     if (isPinned) pinnedTopPanelId = null;
                     panelManager.setRegionOverride(p.id(), DockRegion.BOTTOM);
                 }

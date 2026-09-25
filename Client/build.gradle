@@ -7,14 +7,17 @@ dependencies {
     // OpenRune currently targets Kotlin 2.2.0. PSI is kept behind the server semantic adapter so
     // compiler-internal types never enter Studio's neutral APIs.
     implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:${openruneKotlinSemanticVersion}"
-    // Raw cache-library types are confined to legacy adapters/renderers and
-    // must not become part of the editor module's transitive API.
+    // Displee is retained only for legacy/custom-cache compatibility. Modern OSRS
+    // projects, definitions, reference-cache acquisition and writable outputs use
+    // OpenRune FileStore. Boundary tasks below prevent this dependency from
+    // becoming a second modern-OSRS backend.
     implementation 'com.displee:rs-cache-library:7.3.0'
     implementation 'com.displee:disio:2.3'
 
-    // Isolated compatibility spike; OpenRune types must not leak into editor APIs.
-    // The version is pinned in the root gradle.properties; overriding it is a
-    // integration boundary documented in docs/OPENRUNE_ECOSYSTEM_INTEGRATION.md.
+    // Canonical modern-OSRS cache/definition backend. OpenRune types are reduced
+    // immediately to Studio-owned neutral interfaces at the cache boundary.
+    // The version is pinned in gradle.properties and catalogued in
+    // docs/OPENRUNE_MAVEN_CATALOG.md.
     implementation "dev.or2:filesystem:${openruneFileStoreVersion}"
     implementation "dev.or2:filestore:${openruneFileStoreVersion}"
     implementation "dev.or2:osrs-fs:${openruneFileStoreVersion}"
@@ -87,36 +90,69 @@ def cacheBackendSources = fileTree('src/main/java') {
     include '**/*.java'
 }
 
-def cacheBackendCompatibilityFiles = [
+def legacyDispleeBoundaryFiles = [
         'com/jagex/Cache.java',
         'com/jagex/cache/def/TextureDef.java',
         'com/jagex/cache/graphics/IndexedImage.java',
         'com/jagex/cache/graphics/Sprite.java',
-        'com/rspsi/cache/store/CacheStoreFactory.java',
         'com/rspsi/cache/store/LegacyDispleeCacheStore.java',
+        'org/displee/util/GZIPUtils.java'
+].collect { file("src/main/java/${it}").canonicalPath }
+
+def openRuneBoundaryFiles = [
+        'com/rspsi/cache/store/CacheStoreFactory.java',
         'com/rspsi/cache/store/OpenRuneCacheStore.java',
         'com/rspsi/cache/store/OpenRuneTextureDefinitionDecoder.java',
         'com/rspsi/cache/store/OpenRuneDefinitionProvider.java',
         'com/rspsi/cache/store/OpenRuneObjectDefinitionEditTransaction.java',
         'com/rspsi/cache/store/OpenRuneCacheInspector.java',
         'com/rspsi/cache/store/OpenRuneReferenceCacheBootstrap.java',
-        'com/rspsi/cache/store/OpenRuneSymbolicNameProvider.java',
-        'org/displee/util/GZIPUtils.java'
+        'com/rspsi/cache/store/OpenRuneSymbolicNameProvider.java'
 ].collect { file("src/main/java/${it}").canonicalPath }
 
 tasks.register('verifyCacheBackendBoundary') {
-    description = 'Rejects cache-library imports outside explicit compatibility and adapter boundaries.'
+    description = 'Enforces separate legacy-Displee and modern-OpenRune cache adapter boundaries.'
     group = 'verification'
     inputs.files(cacheBackendSources)
     doLast {
-        def forbidden = ['com.displee.', 'org.displee.', 'dev.openrune.']
         cacheBackendSources.files.each { source ->
-            if (cacheBackendCompatibilityFiles.contains(source.canonicalPath)) {
-                return
+            source.eachLine { line, number ->
+                if ((line.contains('com.displee.') || line.contains('org.displee.'))
+                        && !legacyDispleeBoundaryFiles.contains(source.canonicalPath)) {
+                    throw new GradleException("Displee escaped the legacy-cache boundary at ${source}:${number}: ${line.trim()}")
+                }
+                if (line.contains('dev.openrune.')
+                        && !openRuneBoundaryFiles.contains(source.canonicalPath)) {
+                    throw new GradleException("OpenRune FileStore type escaped its adapter boundary at ${source}:${number}: ${line.trim()}")
+                }
             }
+        }
+    }
+}
+
+def modernOsrsSources = files(
+        fileTree('src/main/java/com/rspsi/cache/map') { include '**/*.java' },
+        fileTree('src/main/java/com/rspsi/cache/workspace') { include '**/*.java' },
+        fileTree('src/main/java/com/rspsi/project') { include '**/*.java' },
+        fileTree('src/main/java/com/rspsi/server') { include '**/*.java' }
+)
+
+tasks.register('verifyModernOsrsBackend') {
+    description = 'Prevents modern OSRS project/cache code from regaining a Displee backend or plugin-named OpenRune integration.'
+    group = 'verification'
+    inputs.files(modernOsrsSources)
+    doLast {
+        def forbidden = [
+                'LegacyDispleeCacheStore',
+                'CacheStoreFactory.legacy(',
+                'openWithDisplee',
+                'openRuneWithDisplee',
+                'com.rspsi.plugins.server.openrune'
+        ]
+        modernOsrsSources.files.each { source ->
             source.eachLine { line, number ->
                 if (forbidden.any { token -> line.contains(token) }) {
-                    throw new GradleException("Cache backend import escaped its compatibility boundary at ${source}:${number}: ${line.trim()}")
+                    throw new GradleException("Modern OSRS ownership violation at ${source}:${number}: ${line.trim()}")
                 }
             }
         }
@@ -171,6 +207,7 @@ tasks.named('check') {
     dependsOn(tasks.named('verifyUiNeutralCore'))
     dependsOn(tasks.named('verifyCacheBackendBoundary'))
     dependsOn(tasks.named('verifyRetiredLoaderBoundary'))
+    dependsOn(tasks.named('verifyModernOsrsBackend'))
     dependsOn(tasks.named('verifyCanonicalSettingsBoundary'))
     dependsOn(tasks.named('verifySettingsContract'))
 }

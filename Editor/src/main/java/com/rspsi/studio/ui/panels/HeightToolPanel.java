@@ -88,7 +88,7 @@ public final class HeightToolPanel implements StudioPanel {
 
     @Override
     public Set<DockRegion> allowedRegions() {
-        return EnumSet.of(DockRegion.BOTTOM, DockRegion.RIGHT);
+        return EnumSet.of(DockRegion.BOTTOM);
     }
 
     @Override

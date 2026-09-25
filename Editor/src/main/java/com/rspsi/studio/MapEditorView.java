@@ -357,20 +357,24 @@ public final class MapEditorView {
         if (plan == null) {
             ImGui.text(sceneStatus == null ? "Preparing scene..." : sceneStatus);
         } else {
+            // Compile the complete renderer-facing settings snapshot once. Native
+            // viewport state must be derived from RenderConfig rather than cherry-picking
+            // individual SettingKeys in multiple places.
+            var renderConfig = new RenderConfigCompiler().compile(settings.snapshot());
+
             // When all planes are visible, allow clicks on any plane's rendered geometry;
             // otherwise restrict picks to the active editing plane.
-            var planeSelection = settings.snapshot().get(RenderSettingKeys.PLANE_SELECTION);
-            if (planeSelection == SceneVisibilityPolicy.PlaneSelection.ALL) {
+            if (renderConfig.planeSelection() == SceneVisibilityPolicy.PlaneSelection.ALL) {
                 viewport.setPickPlaneRestriction(null);
             } else {
-                viewport.setPickPlaneRestriction(settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE));
+                viewport.setPickPlaneRestriction(renderConfig.activePlane());
             }
 
-            viewport.setCullMode(settings.snapshot().get(RenderSettingKeys.NATIVE_CULLING_MODE));
+            viewport.setCullMode(renderConfig.nativeCullingMode());
             viewport.render(plan, ImGui.getContentRegionAvailX(),
                     Math.max(160.0f, ImGui.getContentRegionAvailY()),
-                    settings.snapshot().get(RenderSettingKeys.MSAA_SAMPLES),
-                    new RenderConfigCompiler().compile(settings.snapshot()).presentation());
+                    renderConfig.msaaSamples(),
+                    renderConfig.presentation());
             if (pluginLifecycle != null && pluginLifecycle.host() != null) {
                 pluginLifecycle.host().context().events().publish(
                         new com.rspsi.editor.plugin.event.SceneRenderedEvent(
@@ -468,7 +472,6 @@ public final class MapEditorView {
         studioPluginManager.toolView(registrationId)
                 .filter(StudioPluginManager.StudioToolView::hasContextDrawerContent)
                 .ifPresent(tool -> {
-                    bottomBar.setDrawerMode(StudioBottomBar.DrawerMode.AUTO_TOOL);
                     bottomBar.setDrawerOpen(true);
                 });
         if (inputRouter == null || pluginLifecycle == null || pluginLifecycle.host() == null) return;

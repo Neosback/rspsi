@@ -57,7 +57,7 @@ import com.rspsi.api.runtime.SimulatedClient;
 import com.rspsi.api.worldmap.NavigatorWorldMap;
 import com.rspsi.editor.symbols.CacheGamevalProvider;
 import com.rspsi.editor.symbols.SymbolService;
-import com.rspsi.plugins.server.openrune.OpenRuneServerProvider;
+import com.rspsi.server.openrune.OpenRuneServerProvider;
 import com.rspsi.project.StudioProjectDescriptor;
 import com.rspsi.project.StudioProjectRegistry;
 import com.rspsi.project.StudioProjectService;

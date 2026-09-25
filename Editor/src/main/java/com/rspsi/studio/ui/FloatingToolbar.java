@@ -127,7 +127,7 @@ public final class FloatingToolbar {
                         .toList()
                 : null;
 
-        int toolCount = (toolPlugins != null && !toolPlugins.isEmpty()) ? toolPlugins.size() : 5;
+        int toolCount = toolPlugins != null ? toolPlugins.size() : 0;
         // Extra height for grip
         float extraHeight = 18.0f;
         float totalHeight = extraHeight + (toolCount * (btnSize + 4.0f)) + (padding * 2.0f);
@@ -179,26 +179,12 @@ public final class FloatingToolbar {
         ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 4.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 2.0f, 2.0f);
 
-        if (toolPlugins != null && !toolPlugins.isEmpty()) {
+        if (toolPlugins != null) {
             for (StudioPluginManager.StudioToolView tool : toolPlugins) {
                 boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
 
                 curY = renderToolButton(startX + padding, curY, btnSize, tool.icon(),
                         tool.toolId(), tool.name(), tool.shortcut(), isActive, activateTool);
-            }
-        } else {
-            // Built-in fallback tool set
-            String[][] fallback = {
-                    {"selection.box", StudioIcons.SELECT, "Tile Selection", "1"},
-                    {"terrain.tile-painter", StudioIcons.BRUSH, "Tile Painter", "2"},
-                    {"terrain.raise", StudioIcons.HEIGHT, "Height Sculptor", "3"},
-                    {"terrain.smooth", StudioIcons.PATH, "Path Builder", "4"},
-                    {"object.place", StudioIcons.OBJECT, "Object Spawner", "5"}
-            };
-            for (String[] t : fallback) {
-                boolean isActive = t[0].equals(activeToolId);
-                curY = renderToolButton(startX + padding, curY, btnSize, t[1],
-                        t[0], t[2], t[3], isActive, activateTool);
             }
         }
 

@@ -6,6 +6,9 @@ This document is the single prioritized product roadmap for OpenRune Studio.
 
 Detailed supporting contracts:
 
+- AI_ARCHITECTURE_OVERVIEW.md - primary system mental model for agents/contributors
+- AI_CHANGE_PLAYBOOK.md - canonical implementation routes for common changes
+- CACHE_RENDERING_WORKSPACE_OWNERSHIP.md - cache, renderer, OpenRune Server, and workspace ownership map
 - CONTENT_STUDIO_FOUNDATION.md - advanced authoring foundation and future Theme/Context Engine direction
 - UI_WORKSPACE_CONTRACT.md - strict Contextual Multi-Rail Workspace layout and plugin UI rules
 - PROJECT_LAUNCHER_AND_DASHBOARD.md - project-first startup, recent-project launcher, loading gate, project wizard, and in-project Dashboard contract
@@ -27,18 +30,21 @@ The roadmap deliberately does not duplicate every entry in the rendering parity 
 When project documents disagree, use this order:
 
 1. current production code plus passing tests for what the repository actually does
-2. RENDERING_PARITY_MANIFEST.json for rendering-status claims
-3. ROADMAP.md for project execution order and architectural sequencing
+2. AI_ARCHITECTURE_OVERVIEW.md for the canonical whole-system mental model and ownership map
+3. AI_CHANGE_PLAYBOOK.md for the canonical implementation route for common changes
 4. EDITOR_DEVELOPMENT_ARCHITECTURE.md for internal composition, canonical code locations, and anti-duplication rules
-5. STUDIO_API_SYSTEM.md for system-wide API layering, stability, lifecycle, permissions, and package boundaries
-6. STUDIO_SEMANTIC_API.md for the stable authored-world/resolved-scene boundary
-7. PLUGIN_EXTENSION_SDK.md for public plugin/map-tool capability and extension rules
-8. PROJECT_LAUNCHER_AND_DASHBOARD.md for application startup/project lifecycle and Dashboard behavior
-9. UI_WORKSPACE_CONTRACT.md for in-project editor-shell and plugin UI placement
-10. CONTENT_STUDIO_FOUNDATION.md for advanced-authoring prerequisite detail
-11. OPENRUNE_ECOSYSTEM_INTEGRATION.md for OpenRune subsystem integration detail
-12. OPENRUNE_MAVEN_CATALOG.md for published OpenRune dependency/capability inventory
-13. explicitly historical acceptance/reference documents for background only
+5. CACHE_RENDERING_WORKSPACE_OWNERSHIP.md for FileStore/Displee, rendering-settings, OpenRune Server, and shell ownership
+6. RENDERING_PARITY_MANIFEST.json for rendering-status claims
+7. ROADMAP.md for project execution order and architectural sequencing
+8. STUDIO_API_SYSTEM.md for system-wide API layering, stability, lifecycle, permissions, threading, and package boundaries
+9. STUDIO_SEMANTIC_API.md for the stable authored-world/resolved-scene boundary
+10. UI_WORKSPACE_CONTRACT.md for in-project editor-shell and extension UI placement
+11. PLUGIN_EXTENSION_SDK.md for external extension/map-tool capability rules
+12. PROJECT_LAUNCHER_AND_DASHBOARD.md for application startup/project lifecycle and Dashboard behavior
+13. OPENRUNE_ECOSYSTEM_INTEGRATION.md for OpenRune subsystem integration detail
+14. OPENRUNE_MAVEN_CATALOG.md for published OpenRune dependency/capability inventory
+15. CONTENT_STUDIO_FOUNDATION.md for advanced-authoring prerequisite detail
+16. explicitly historical acceptance/reference documents for background only
 
 A lower item must not silently override a higher item. When work makes a lower document stale, update it in the same PR when practical.
 

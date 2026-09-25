@@ -40,7 +40,7 @@ public final class KnowledgePanel implements StudioPanel {
     @Override public String icon() { return com.rspsi.studio.theme.StudioIcons.INFO; }
     @Override public DockRegion preferredRegion() { return DockRegion.RIGHT; }
     @Override public Set<DockRegion> allowedRegions() {
-        return EnumSet.of(DockRegion.RIGHT, DockRegion.BOTTOM);
+        return EnumSet.of(DockRegion.RIGHT);
     }
     @Override public int order() { return 35; }
 

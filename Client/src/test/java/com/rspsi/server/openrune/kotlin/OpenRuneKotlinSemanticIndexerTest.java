@@ -1,4 +1,4 @@
-package com.rspsi.plugins.server.openrune.kotlin;
+package com.rspsi.server.openrune.kotlin;
 
 import com.rspsi.editor.integration.semantic.SemanticFactKind;
 import com.rspsi.server.gradle.GradleProjectModel;

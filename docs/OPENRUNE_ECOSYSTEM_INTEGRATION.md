@@ -183,7 +183,7 @@ connection model:
 - `OpenRuneServerAdapter` plus `ServerConnection`, `ServerProjectInspection`,
   `ServerPathKey`, and `ServerBuildTask` own structural detection, cache roles, overrides,
   fingerprints, and declared project actions;
-- `OpenRuneServerProvider` binds optional source/symbol/content domains from that inspected project;
+- built-in `OpenRuneServerProvider` binds source/symbol/content domains from that inspected project; it is a core provider behind `ServerIntegrationService`, not an installable Studio plugin;
 - `ServerIntegrationService` coordinates the active project session.
 
 The provider must reuse the neutral project inspection/connection model for:

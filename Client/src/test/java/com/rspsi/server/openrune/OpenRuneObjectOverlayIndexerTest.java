@@ -1,4 +1,4 @@
-package com.rspsi.plugins.server.openrune;
+package com.rspsi.server.openrune;
 
 import org.junit.jupiter.api.Test;
 

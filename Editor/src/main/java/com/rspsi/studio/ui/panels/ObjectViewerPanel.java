@@ -127,7 +127,7 @@ public final class ObjectViewerPanel implements StudioPanel {
 
     @Override
     public Set<DockRegion> allowedRegions() {
-        return EnumSet.of(DockRegion.RIGHT, DockRegion.BOTTOM);
+        return EnumSet.of(DockRegion.RIGHT);
     }
 
     @Override

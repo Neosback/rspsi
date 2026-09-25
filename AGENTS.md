@@ -1,22 +1,23 @@
 # AGENTS.md
 
 Guidance for AI coding agents (and human contributors skimming for orientation) working in
-this repository. See [docs/ROADMAP.md](docs/ROADMAP.md) for current direction and priorities -
-this file is about how the repo is put together and how to work in it, not what to build next.
+this repository. Start with [docs/AI_ARCHITECTURE_OVERVIEW.md](docs/AI_ARCHITECTURE_OVERVIEW.md) for the system mental model and [docs/AI_CHANGE_PLAYBOOK.md](docs/AI_CHANGE_PLAYBOOK.md) for the canonical implementation route for common changes. See [docs/ROADMAP.md](docs/ROADMAP.md) for current direction and priorities. This file is repository working guidance, not a substitute for those architecture sources.
 
 ## What this project is
 
 **OpenRune Studio** (repo name `RSPSiSuite`, root project `RSPSi`) is a from-scratch Java OSRS
-map editor: a real per-triangle software renderer plus a native OpenGL renderer, a Dear ImGui
-desktop shell, and its own plugin/settings architecture. It is not a RuneLite plugin and does
+map editor: a real per-triangle software renderer plus a native OpenGL renderer, a Dear ImGui desktop shell, a modular core runtime, typed settings,
+and an external extension architecture. It is not a RuneLite plugin and does
 not embed RuneLite's client - RuneLite is present in this repo purely as **reference source**
 for correctness (see below), the same way a spec document would be.
 
 ## Start here before adding architecture
 
-Read [docs/EDITOR_DEVELOPMENT_ARCHITECTURE.md](docs/EDITOR_DEVELOPMENT_ARCHITECTURE.md)
-before creating a new manager, registry, service, plugin, tool-registration path, or native
-projection. OpenRune Studio is a **modular monolith**:
+Read [docs/AI_ARCHITECTURE_OVERVIEW.md](docs/AI_ARCHITECTURE_OVERVIEW.md),
+[docs/AI_CHANGE_PLAYBOOK.md](docs/AI_CHANGE_PLAYBOOK.md), and
+[docs/EDITOR_DEVELOPMENT_ARCHITECTURE.md](docs/EDITOR_DEVELOPMENT_ARCHITECTURE.md)
+before creating a new manager, registry, service, plugin, decoder, render setting, tool-registration
+path, or native projection. OpenRune Studio is a **modular monolith**:
 
 - core Studio features are compile-time `CoreEditorModule`s listed once in `CoreEditorModules`;
 - external JARs use `EditorPlugin`;
