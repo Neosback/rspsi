@@ -281,7 +281,7 @@ class PathToolPlugin : StudioToolPlugin {
         ImGui.sameLine()
 
         val currentStyle = tool?.style() ?: defaultStyle
-        SplineBrushStyle.entries.forEach { style ->
+        SplineBrushStyle.values().forEach { style ->
             val active = currentStyle == style
             if (active) {
                 ImGui.pushStyleColor(ImGuiCol.Button, STYLE_BUTTON)
@@ -342,7 +342,7 @@ class PathToolPlugin : StudioToolPlugin {
             ) &&
             canBuild
         ) {
-            tool.buildPath()
+            tool?.buildPath()
         }
         ImGui.popStyleColor(3)
 
