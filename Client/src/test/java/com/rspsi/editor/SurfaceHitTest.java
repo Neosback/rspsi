@@ -3,6 +3,7 @@ package com.rspsi.editor;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.viewport.SurfaceHit;
+import com.rspsi.editor.viewport.Viewport;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -52,6 +53,30 @@ class SurfaceHitTest {
         assertEquals(99, hit.objectId());
         assertEquals(tile, hit.targetTile());
         assertTrue(hit.object().isEmpty());
+    }
+
+    @Test
+    void legacyViewportHitAdapterPreservesPreciseObjectAtResult() {
+        WorldTile tile = new WorldTile(0, 3200, 3200);
+        WorldObject placement = new WorldObject(55, 10, 1, 0, 3, 4);
+        Viewport viewport = new Viewport() {
+            @Override
+            public Optional<WorldTile> tileAt(float x, float y) {
+                return Optional.of(tile);
+            }
+
+            @Override
+            public Optional<WorldObject> objectAt(float x, float y) {
+                return Optional.of(placement);
+            }
+        };
+
+        SurfaceHit hit = viewport.hitAt(10.0f, 20.0f).orElseThrow();
+
+        assertTrue(hit.objectHit());
+        assertEquals(placement.id(), hit.objectId());
+        assertEquals(placement, hit.object().orElseThrow());
+        assertEquals(tile, hit.targetTile());
     }
 
     @Test
