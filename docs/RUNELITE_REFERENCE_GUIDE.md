@@ -20,7 +20,7 @@ Use the sources for different questions:
 | How can we inspect/decode/cache-tool it cleanly? | OpenRune FileStore and, secondarily, RuneLite `cache` module |
 | What proves Studio is correct? | Real fixture + semantic comparison + renderer comparison where needed |
 
-Do **not** start renderer debugging in the GPU plugin if the problem may already exist in cache decode, object resolution, scene construction, plane handling, or tile semantics.
+Do **not** start renderer debugging in RuneLite's GPU implementation if the problem may already exist in cache decode, object resolution, scene construction, plane handling, or tile semantics.
 
 A useful mental model:
 
@@ -429,7 +429,7 @@ For model silhouette/reference click geometry:
 - `RSModelMixin.java`
 - RuneLite API model helpers
 
-Studio should normally expose the result as its own canonical `SurfaceHit` rather than forcing plugins to recreate RuneLite projection/clickbox calculations.
+Studio should normally expose the result as its own canonical `SurfaceHit` rather than forcing editor consumers to recreate RuneLite projection/clickbox calculations.
 
 Use RuneLite to answer:
 
@@ -490,7 +490,7 @@ The deob client remains the behavioral authority for the live scene path.
 
 ---
 
-### Scene API / plugin API design question
+### Scene API design question
 
 Start in:
 
@@ -511,7 +511,7 @@ High-value concepts:
 - `Model`
 - `Perspective`
 
-Then read `docs/STUDIO_SEMANTIC_API.md`.
+Then read `docs/SCENE_SEMANTICS_REFERENCE.md`.
 
 Rule:
 
@@ -521,7 +521,7 @@ Do not expose RuneLite's GPU buffer offsets, live-client mutation model, ticks, 
 
 ---
 
-### Plugin settings / configuration UI pattern
+### Declarative settings / configuration UI pattern
 
 Useful design reference:
 
@@ -530,7 +530,7 @@ Useful design reference:
 
 Use this for declarative configuration ideas only.
 
-Studio's UI surfaces and permission model remain defined by `UI_WORKSPACE_CONTRACT.md`.
+Studio's UI surfaces remain defined by `UI_WORKSPACE_CONTRACT.md`.
 
 ---
 
