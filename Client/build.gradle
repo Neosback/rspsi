@@ -180,10 +180,12 @@ tasks.register('verifyCanonicalSettingsBoundary') {
     group = 'verification'
     inputs.files(neutralCoreSources)
     doLast {
+        // Match the actual legacy settings types, not every identifier ending in
+        // "Options". The broad "Options." token incorrectly rejects legitimate
+        // neutral types such as IntegrationOptions.
         def forbidden = [
                 'com.rspsi.options.Options',
-                'LegacyRenderSettingsAdapter',
-                'Options.'
+                'LegacyRenderSettingsAdapter'
         ]
         neutralCoreSources.files.each { source ->
             source.eachLine { line, number ->
