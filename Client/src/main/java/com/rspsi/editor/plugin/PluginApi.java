@@ -262,6 +262,7 @@ public final class PluginApi {
                 EnumSet.noneOf(ToolUiDescriptor.ToolCapability.class);
         private ToolUiDescriptor.BrushUiMode brushUiMode = ToolUiDescriptor.BrushUiMode.NONE;
         private boolean hasContextDrawerContent;
+        private Function<EditorPluginContext, List<EditorSetting>> contextSettings;
         private Supplier<? extends EditorTool> factory;
 
         ToolBuilder(PluginApi api, String id, boolean firstClassMapTool) {
@@ -342,8 +343,23 @@ public final class PluginApi {
                 capabilities.add(ToolUiDescriptor.ToolCapability.CONTEXT_DRAWER);
             } else {
                 capabilities.remove(ToolUiDescriptor.ToolCapability.CONTEXT_DRAWER);
+                contextSettings = null;
             }
             return this;
+        }
+
+        /**
+         * Supplies frontend-neutral controls for this tool's Context Drawer.
+         *
+         * <p>This is the first interactive bridge for shared SDK tools. It uses
+         * the existing typed EditorSetting contract and requires no native UI
+         * dependency. Richer declarative UiNode content can extend this later
+         * without changing the tool identity or placement contract.</p>
+         */
+        public ToolBuilder contextDrawer(
+                Function<EditorPluginContext, List<EditorSetting>> settings) {
+            this.contextSettings = Objects.requireNonNull(settings, "context drawer settings");
+            return contextDrawer(true);
         }
 
         public ToolBuilder factory(Supplier<? extends EditorTool> factory) {
@@ -368,6 +384,17 @@ public final class PluginApi {
                     order,
                     ui,
                     factory));
+            if (contextSettings != null) {
+                api.context.registry().registerToolContext(new EditorToolContextRegistration(
+                        id + ".context",
+                        label,
+                        List.of(id),
+                        order,
+                        () -> context -> {
+                            List<EditorSetting> settings = contextSettings.apply(context);
+                            return settings == null ? List.of() : List.copyOf(settings);
+                        }));
+            }
         }
     }
 
