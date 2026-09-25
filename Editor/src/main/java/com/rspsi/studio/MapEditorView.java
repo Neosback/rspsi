@@ -294,7 +294,7 @@ public final class MapEditorView {
         renderCommandPalette(pluginLifecycle);
         preferencesWindow.render(settings, pluginLifecycle != null && pluginLifecycle.host() != null
                 ? pluginLifecycle.host().context().settingsService() : null);
-        pluginManagerWindow.render(pluginLifecycle);
+        pluginManagerWindow.render(pluginLifecycle, studioPluginManager, panelContext);
         objectEditor.render(cache, session(pluginLifecycle));
     }
 
