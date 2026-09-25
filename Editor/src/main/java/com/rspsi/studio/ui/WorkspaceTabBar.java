@@ -55,7 +55,7 @@ public final class WorkspaceTabBar {
                 boolean isActive = workspaces.active() == ws;
 
                 String title = switch (ws) {
-                    case DASHBOARD -> StudioIcons.HOME + " Dashboard";
+                    case DASHBOARD -> "Content Studio";
                     case MAP_EDITOR -> StudioIcons.MAP + " Map Studio";
                     case INTERFACE_STUDIO -> StudioIcons.VIEWPORT + " Interface Studio";
                     case OBJECT_STUDIO -> StudioIcons.OBJECT + " Object Studio";
