@@ -1,15 +1,11 @@
 package com.rspsi.studio.ui;
 
-import com.rspsi.studio.theme.StudioDrawColors;
-import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.StudioToolPlugin;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioPalette;
-import com.rspsi.studio.ui.panels.HeightToolPanel;
-import com.rspsi.studio.ui.panels.TilePainterPalette;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
@@ -21,8 +17,11 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Modernized Studio bottom chrome bar with an integrated tool rail (Paint, Height, Path,
- * Select, Object) and a collapsible, context-sensitive tool console drawer.
+ * Primary bottom authoring rail plus the single active tool Context Drawer.
+ *
+ * <p>The bottom area is intentionally not a generic console/panel host. Tool-specific
+ * libraries and controls (Tile Painter, Path Builder, Object Placement, generators, etc.)
+ * are projected here from the active tool descriptor/native compatibility projection.</p>
  */
 public final class StudioBottomBar {
 
@@ -36,17 +35,7 @@ public final class StudioBottomBar {
             | ImGuiWindowFlags.NoCollapse
             | ImGuiWindowFlags.NoSavedSettings;
 
-    public enum DrawerMode {
-        AUTO_TOOL,
-        HISTORY,
-        TASKS,
-        NOTIFICATIONS,
-        DIAGNOSTICS,
-        CUSTOM_PANEL
-    }
-
     private boolean drawerOpen = true;
-    private DrawerMode drawerMode = DrawerMode.AUTO_TOOL;
     private String lastDrawerToolId;
     private final DeclarativeToolUiRenderer declarativeToolUi = new DeclarativeToolUiRenderer();
 
@@ -60,24 +49,6 @@ public final class StudioBottomBar {
 
     public void toggleDrawer() {
         this.drawerOpen = !this.drawerOpen;
-    }
-
-    public DrawerMode drawerMode() {
-        return drawerMode;
-    }
-
-    public void setDrawerMode(DrawerMode mode) {
-        this.drawerMode = mode;
-        this.drawerOpen = true;
-    }
-
-    public void toggleDrawerMode(DrawerMode mode) {
-        if (this.drawerOpen && this.drawerMode == mode) {
-            this.drawerOpen = false;
-        } else {
-            this.drawerMode = mode;
-            this.drawerOpen = true;
-        }
     }
 
     public float currentHeight() {
@@ -105,9 +76,10 @@ public final class StudioBottomBar {
         }
 
         // Picker/inspection tools with no drawer never destroy the user's existing
-        // drawer state. AUTO_TOOL simply keeps showing the last tool that owned UI.
+        // authoring drawer. The last real tool shelf stays available while a picker
+        // is active over the viewport.
         String drawerToolId = activeToolHasDrawer ? activeToolId : lastDrawerToolId;
-        boolean drawerHasContent = drawerMode != DrawerMode.AUTO_TOOL || drawerToolId != null;
+        boolean drawerHasContent = drawerToolId != null;
 
         float curH = currentHeight();
 
@@ -182,7 +154,6 @@ public final class StudioBottomBar {
                     } else {
                         if (activateTool != null) activateTool.accept(tool.toolId());
                         drawerOpen = true;
-                        drawerMode = DrawerMode.AUTO_TOOL;
                     }
                 }
                 ImGui.popFont();
@@ -196,8 +167,6 @@ public final class StudioBottomBar {
 
                 ImGui.sameLine(0.0f, 4.0f);
             }
-        } else {
-            renderFallbackToolButtons(activateTool, activeToolId, btnW, btnH);
         }
 
         // Selection count badge if any tiles selected
@@ -233,65 +202,18 @@ public final class StudioBottomBar {
         }
     }
 
-    private void renderFallbackToolButtons(Consumer<String> activateTool, String activeToolId, float btnW, float btnH) {
-        String[][] tools = {
-                {"selection.box", StudioIcons.SELECT, "Tile Selection"},
-                {"terrain.tile-painter", StudioIcons.BRUSH, "Tile Painter"},
-                {"terrain.raise", StudioIcons.HEIGHT, "Height Sculptor"},
-                {"terrain.smooth", StudioIcons.PATH, "Path Builder"},
-                {"object.place", StudioIcons.OBJECT, "Object Placement"}
-        };
-        for (String[] t : tools) {
-            String tid = t[0];
-            String icon = t[1];
-            String name = t[2];
-            boolean isActive = tid.equals(activeToolId);
-
-            if (isActive) {
-                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
-                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
-            } else {
-                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.PANEL_ELEVATED);
-                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
-            }
-
-            ImGui.pushFont(StudioFonts.icon(), 0.0f);
-            if (ImGui.button(icon + "##btm-fb-" + tid, btnW, btnH)) {
-                if (isActive) {
-                    drawerOpen = !drawerOpen;
-                } else {
-                    if (activateTool != null) activateTool.accept(tid);
-                    drawerOpen = true;
-                    drawerMode = DrawerMode.AUTO_TOOL;
-                }
-            }
-            ImGui.popFont();
-            ImGui.popStyleColor(2);
-            if (ImGui.isItemHovered()) ImGui.setTooltip(name);
-            ImGui.sameLine(0.0f, 4.0f);
-        }
-    }
-
     private void renderDrawerBody(StudioPanelManager panelManager,
                                   StudioPanelContext context,
                                   String activeToolId,
                                   float availH) {
         ImGui.beginChild("studio-bottom-drawer-content", 0.0f, availH, false);
 
-        switch (drawerMode) {
-            case AUTO_TOOL -> renderActiveToolShelf(panelManager, context, activeToolId);
-            case HISTORY -> renderHistoryDrawer(context);
-            case TASKS -> renderTasksDrawer(context);
-            case NOTIFICATIONS -> renderNotificationsDrawer(context);
-            case DIAGNOSTICS -> renderDiagnosticsDrawer(context);
-            case CUSTOM_PANEL -> renderCustomPanelDrawer(panelManager, context);
-        }
+        renderActiveToolShelf(context, activeToolId);
 
         ImGui.endChild();
     }
 
-    private void renderActiveToolShelf(StudioPanelManager panelManager,
-                                       StudioPanelContext context,
+    private void renderActiveToolShelf(StudioPanelContext context,
                                        String activeToolId) {
         if (context != null && context.studioPlugins() != null) {
             var toolView = context.studioPlugins().toolView(activeToolId).orElse(null);
@@ -316,136 +238,12 @@ public final class StudioBottomBar {
         }
 
         if (activeToolId == null) {
-            ImGui.textDisabled("Select a tool from the Left Tool Rail to configure its parameters.");
+            ImGui.textDisabled("Select an authoring tool from the bottom tool rail.");
             return;
         }
 
-        if (activeToolId.equals("terrain.tile-painter")) {
-            panelManager.panel(TilePainterPalette.ID).ifPresent(p -> p.render(context));
-            return;
-        }
-
-        if (activeToolId.startsWith("terrain.raise") || activeToolId.startsWith("terrain.lower")) {
-            panelManager.panel(HeightToolPanel.ID).ifPresent(p -> p.render(context));
-            return;
-        }
-
-        if (activeToolId.startsWith("terrain.smooth") || activeToolId.startsWith("terrain.ramp")) {
-            renderSplineRampShelf(context);
-            return;
-        }
-
-        if (activeToolId.equals("selection.box")) {
-            renderSelectionShelf(context);
-            return;
-        }
-
-        if (activeToolId.startsWith("object.")) {
-            renderObjectToolShelf(context);
-            return;
-        }
-
-        ImGui.textDisabled("Tool '" + activeToolId + "' does not require drawer parameters.");
+        ImGui.textDisabled("Tool '" + activeToolId
+                + "' does not expose Context Drawer content.");
     }
 
-    private void renderSplineRampShelf(StudioPanelContext context) {
-        ImGui.textColored(StudioPalette.ACCENT, "Spline Path & Incline Ramp Builder");
-        ImGui.sameLine();
-        ImGui.textDisabled("Click tiles sequentially to plot points. Double-click or press Enter to generate terrain gradient.");
-        ImGui.separator();
-
-        if (ImGui.button("Build Flat Road##b-road", 120.0f, 24.0f)) {
-            // Future spline road interpolation
-        }
-        ImGui.sameLine();
-        if (ImGui.button("Build Incline Ramp##b-ramp", 130.0f, 24.0f)) {
-            // Future ramp interpolation
-        }
-        ImGui.sameLine();
-        if (ImGui.button("Clear Plotted Points##b-clear", 130.0f, 24.0f)) {
-            // Clear path
-        }
-    }
-
-    private void renderSelectionShelf(StudioPanelContext context) {
-        int selCount = context.session() != null ? context.session().selection().selectedCoordinates().size() : 0;
-        ImGui.textColored(StudioPalette.ACCENT, "Selection Inspector: " + selCount + " tiles selected.");
-        ImGui.sameLine();
-        if (ImGui.button("Clear Selection##clr-sel-btn")) {
-            if (context.session() != null) context.session().selection().clear();
-        }
-        ImGui.sameLine();
-        if (ImGui.button("Fill Overlay on Selection##fill-ovr")) {
-            // Fill overlay on selected tiles
-        }
-        ImGui.sameLine();
-        if (ImGui.button("Fill Underlay on Selection##fill-und")) {
-            // Fill underlay on selected tiles
-        }
-    }
-
-    private void renderObjectToolShelf(StudioPanelContext context) {
-        ImGui.textColored(StudioPalette.ACCENT, "Object Placement Controls");
-        ImGui.sameLine();
-        ImGui.textDisabled("Click viewport to spawn or manipulate objects. Use Outliner or Object Viewer for full definitions.");
-    }
-
-    private void renderHistoryDrawer(StudioPanelContext context) {
-        var session = context.session();
-        if (session == null) {
-            ImGui.textDisabled("No active session.");
-            return;
-        }
-
-        boolean canUndo = session.history().canUndo();
-        boolean canRedo = session.history().canRedo();
-        int undoCount = session.history().cursor();
-        int redoCount = session.history().size() - undoCount;
-
-        if (ImGui.button("Undo##hist-undo", 80.0f, 22.0f) && canUndo) session.undo();
-        ImGui.sameLine();
-        if (ImGui.button("Redo##hist-redo", 80.0f, 22.0f) && canRedo) session.redo();
-        ImGui.sameLine();
-        ImGui.textDisabled("History: " + undoCount + " undoable | " + redoCount + " redoable");
-    }
-
-    private void renderTasksDrawer(StudioPanelContext context) {
-        ImGui.textColored(StudioPalette.ACCENT, "Background Tasks & Scene Cache Operations");
-        ImGui.separator();
-        ImGui.textDisabled("All background scene and asset threads are currently idle.");
-    }
-
-    private void renderNotificationsDrawer(StudioPanelContext context) {
-        ImGui.textColored(StudioPalette.ACCENT, "System Notifications & Warnings");
-        ImGui.separator();
-        ImGui.text("Scene loaded successfully from local OSRS cache.");
-    }
-
-    private void renderDiagnosticsDrawer(StudioPanelContext context) {
-        ImGui.textColored(StudioPalette.ACCENT, "OpenGL & Frame Timing Diagnostics");
-        ImGui.separator();
-        ImGui.text("Native Scene Renderer: Direct FBO Color Attachment");
-        ImGui.text("FPS: " + String.format("%.1f", ImGui.getIO().getFramerate()) + " | Frame Time: " + String.format("%.2f ms", 1000.0f / Math.max(1.0f, ImGui.getIO().getFramerate())));
-    }
-
-    private void renderCustomPanelDrawer(StudioPanelManager panelManager, StudioPanelContext context) {
-        List<StudioPanel> bottomPanels = panelManager.panelsForRegion(DockRegion.BOTTOM);
-        if (bottomPanels.isEmpty()) {
-            ImGui.textDisabled("No custom panels docked in the bottom drawer.");
-            return;
-        }
-
-        String activeBottomId = panelManager.activeBottomPanelId();
-        for (StudioPanel p : bottomPanels) {
-            boolean isSel = p.id().equals(activeBottomId);
-            if (ImGui.radioButton(p.title() + "##rad-bot-" + p.id(), isSel)) {
-                panelManager.setActiveBottomPanelId(p.id());
-            }
-            ImGui.sameLine();
-        }
-        ImGui.newLine();
-        ImGui.separator();
-
-        panelManager.panel(activeBottomId).ifPresent(p -> p.render(context));
-    }
 }
