@@ -316,6 +316,7 @@ public final class PluginApi {
         private boolean movable = true;
         private boolean enabledByDefault = true;
         private float preferredWidth = 240.0f;
+        private float defaultOpacity = 0.86f;
         private Supplier<? extends OverlayComponent> content;
 
         HudBuilder(PluginApi api, String id) {
@@ -359,6 +360,12 @@ public final class PluginApi {
             return this;
         }
 
+        /** Initial HUD opacity. Users may override it in Studio without changing the plugin. */
+        public HudBuilder opacity(float opacity) {
+            this.defaultOpacity = opacity;
+            return this;
+        }
+
         public HudBuilder content(OverlayComponent component) {
             Objects.requireNonNull(component, "component");
             this.content = () -> component;
@@ -374,7 +381,7 @@ public final class PluginApi {
             Objects.requireNonNull(content, "HUD content");
             AutoCloseable handle = api.context.services().overlays().register(
                     new OverlayContribution(id, label, position, layer, priority,
-                            movable, enabledByDefault, preferredWidth, content));
+                            movable, enabledByDefault, preferredWidth, defaultOpacity, content));
             api.track(handle);
         }
     }
