@@ -123,7 +123,6 @@ public final class MapEditorView {
     {
         minimapHudOverlay.setOnWorldMapClick(() -> panelManager.setActiveRightPanelId(MinimapPanel.ID));
         studioPluginManager.register(new TileInfoHudPlugin());
-        studioPluginManager.register(new BrushSettingsHud());
         studioPluginManager.register(new TerrainDiagnosticsOverlay());
     }
 
@@ -228,10 +227,23 @@ public final class MapEditorView {
             }
         }
 
-        boolean brushRailVisible = showLeftToolRail
-                || LeftBrushRail.isBrushToolActive(studioPluginManager, activeToolId);
+        BrushSettingsHud brushSettings = studioPluginManager.plugin(BrushSettingsHud.ID)
+                .filter(BrushSettingsHud.class::isInstance)
+                .map(BrushSettingsHud.class::cast)
+                .orElse(null);
+        boolean sharedBrushSettings = studioPluginManager.usesSharedBrushSettings(activeToolId);
+        boolean brushRailVisible = showLeftToolRail || sharedBrushSettings;
+        float brushDockWidth = sharedBrushSettings
+                && brushSettings != null
+                && brushSettings.isVisible()
+                && brushSettings.isDocked()
+                ? BrushSettingsHud.DOCKED_WIDTH
+                : 0.0f;
         Layout layout = Layout.compute(
-                bottomBar, brushRailVisible, rightSidebar.preferredWidth(panelManager));
+                bottomBar,
+                brushRailVisible,
+                brushDockWidth,
+                rightSidebar.preferredWidth(panelManager));
 
         // 1. Program-owned Menu Bar (File, Edit, View, Cache, Plugins, Server, Help)
         menuBar.render(cache, pluginLifecycle, integrations, showServerSpawns,
@@ -921,6 +933,7 @@ public final class MapEditorView {
         private static Layout compute(
                 StudioBottomBar bottomBar,
                 boolean brushRailVisible,
+                float brushDockWidth,
                 float requestedRightWidth) {
             imgui.ImGuiViewport main = ImGui.getMainViewport();
             float menuBarH = ImGui.getFrameHeight();
@@ -935,13 +948,14 @@ public final class MapEditorView {
             float height = Math.max(1.0f, main.getSizeY() - menuBarH - menuBarGap);
 
             float leftRailW = brushRailVisible ? LeftBrushRail.RAIL_WIDTH : 0.0f;
-            float usableWidth = Math.max(1.0f, width - leftRailW);
+            float leftChromeW = leftRailW + Math.max(0.0f, brushDockWidth);
+            float usableWidth = Math.max(1.0f, width - leftChromeW);
             float minViewport = Math.min(500.0f, Math.max(260.0f, usableWidth * 0.48f));
             float responsiveBase = Math.min(390.0f, Math.max(320.0f, usableWidth * 0.34f));
             float requested = Math.max(responsiveBase, requestedRightWidth);
             float maxRight = Math.max(260.0f, usableWidth - minViewport);
             float rightWidth = Math.min(Math.min(460.0f, requested), maxRight);
-            float viewportX = x + leftRailW;
+            float viewportX = x + leftChromeW;
             float viewportWidth = Math.max(minViewport, usableWidth - rightWidth);
             float rightX = viewportX + viewportWidth;
 
