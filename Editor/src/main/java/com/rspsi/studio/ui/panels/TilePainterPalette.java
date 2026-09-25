@@ -183,7 +183,7 @@ public final class TilePainterPalette implements StudioPanel {
 
         draw.addRect(x, y, x + box, y + box, StudioPalette.draw(StudioPalette.BORDER_STRONG),
                 3.0f, 0, 1.5f);
-        float compassSize = 18.0f;
+        int compassSize = 18;
         var compassText = ImGui.calcTextSize(StudioIcons.EXPLORE);
         draw.addText(StudioFonts.icon(), compassSize,
                 x + (box - compassText.x) * 0.5f, y - 19.0f,
@@ -399,7 +399,7 @@ public final class TilePainterPalette implements StudioPanel {
                 StudioPalette.draw(StudioPalette.BORDER_STRONG), 2.0f);
 
         String caption = shape + " · " + SHAPE_NAMES[shape];
-        float captionSize = 12.0f;
+        int captionSize = 12;
         draw.addText(StudioFonts.ui(), captionSize, x + 6.0f, y + 64.0f,
                 StudioPalette.draw(StudioPalette.TEXT), caption);
     }
