@@ -122,7 +122,7 @@ class WorkspaceTabBar {
     companion object {
         const val HEIGHT = 28.0f
 
-        private const val BAR_FLAGS =
+        private val BAR_FLAGS =
             ImGuiWindowFlags.NoTitleBar or
                 ImGuiWindowFlags.NoResize or
                 ImGuiWindowFlags.NoMove or
