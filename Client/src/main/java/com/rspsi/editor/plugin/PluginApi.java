@@ -16,6 +16,8 @@ import com.rspsi.editor.overlay.OverlayLayer;
 import com.rspsi.editor.overlay.OverlayPosition;
 import com.rspsi.editor.corpus.RegionFeatureExtractor;
 import com.rspsi.editor.plugin.extension.ExtensionPoint;
+import com.rspsi.editor.plugin.ui.EditorUiNode;
+import com.rspsi.editor.plugin.ui.ToolUiContent;
 import com.rspsi.editor.settings.SettingHandle;
 import com.rspsi.editor.settings.SettingKey;
 import com.rspsi.editor.settings.SettingScope;
@@ -262,6 +264,9 @@ public final class PluginApi {
                 EnumSet.noneOf(ToolUiDescriptor.ToolCapability.class);
         private ToolUiDescriptor.BrushUiMode brushUiMode = ToolUiDescriptor.BrushUiMode.NONE;
         private boolean hasContextDrawerContent;
+        private Supplier<? extends EditorUiNode> contextDrawer;
+        private Supplier<? extends EditorUiNode> quickPalette;
+        private Supplier<? extends EditorUiNode> inspectorUi;
         private Supplier<? extends EditorTool> factory;
 
         ToolBuilder(PluginApi api, String id, boolean firstClassMapTool) {
@@ -346,6 +351,38 @@ public final class PluginApi {
             return this;
         }
 
+        public ToolBuilder drawer(Supplier<? extends EditorUiNode> content) {
+            this.contextDrawer = Objects.requireNonNull(content, "context drawer content");
+            return contextDrawer(true);
+        }
+
+        public ToolBuilder drawer(EditorUiNode content) {
+            Objects.requireNonNull(content, "context drawer content");
+            return drawer(() -> content);
+        }
+
+        public ToolBuilder quickPalette(Supplier<? extends EditorUiNode> content) {
+            this.quickPalette = Objects.requireNonNull(content, "quick palette content");
+            capabilities.add(ToolUiDescriptor.ToolCapability.QUICK_PALETTE);
+            return this;
+        }
+
+        public ToolBuilder quickPalette(EditorUiNode content) {
+            Objects.requireNonNull(content, "quick palette content");
+            return quickPalette(() -> content);
+        }
+
+        public ToolBuilder inspectorUi(Supplier<? extends EditorUiNode> content) {
+            this.inspectorUi = Objects.requireNonNull(content, "inspector content");
+            capabilities.add(ToolUiDescriptor.ToolCapability.SELECTION_INSPECTOR);
+            return this;
+        }
+
+        public ToolBuilder inspectorUi(EditorUiNode content) {
+            Objects.requireNonNull(content, "inspector content");
+            return inspectorUi(() -> content);
+        }
+
         public ToolBuilder factory(Supplier<? extends EditorTool> factory) {
             this.factory = factory;
             return this;
@@ -353,11 +390,16 @@ public final class PluginApi {
 
         public void register() {
             Objects.requireNonNull(factory, "tool factory");
+            ToolUiContent content = new ToolUiContent(
+                    contextDrawer,
+                    quickPalette,
+                    inspectorUi);
             ToolUiDescriptor ui = new ToolUiDescriptor(
                     Set.copyOf(surfaces),
                     brushUiMode,
                     Set.copyOf(capabilities),
-                    hasContextDrawerContent);
+                    hasContextDrawerContent,
+                    content);
             api.context.registry().registerTool(new EditorToolRegistration(
                     id,
                     label,
