@@ -1,178 +1,175 @@
 # AGENTS.md
 
-Guidance for AI coding agents (and human contributors skimming for orientation) working in
-this repository. Start with [docs/AI_ARCHITECTURE_OVERVIEW.md](docs/AI_ARCHITECTURE_OVERVIEW.md) for the system mental model and [docs/AI_CHANGE_PLAYBOOK.md](docs/AI_CHANGE_PLAYBOOK.md) for the canonical implementation route for common changes. See [docs/ROADMAP.md](docs/ROADMAP.md) for current direction and priorities. This file is repository working guidance, not a substitute for those architecture sources.
+This file is the required operating guide for coding agents and contributors working in OpenRune Studio.
 
-## What this project is
+## Read this first
 
-**OpenRune Studio** (repo name `RSPSiSuite`, root project `RSPSi`) is a from-scratch Java OSRS
-map editor: a real per-triangle software renderer plus a native OpenGL renderer, a Dear ImGui desktop shell, a modular core runtime, typed settings,
-and an external extension architecture. It is not a RuneLite plugin and does
-not embed RuneLite's client - RuneLite is present in this repo purely as **reference source**
-for correctness (see below), the same way a spec document would be.
+Before making architecture-affecting changes, read in this order:
 
-## Start here before adding architecture
+1. docs/README.md
+2. docs/AI_ARCHITECTURE_OVERVIEW.md
+3. docs/AI_CHANGE_PLAYBOOK.md
+4. the concern-specific authoritative document named in docs/README.md
+5. docs/ROADMAP.md only when sequencing or future work matters
 
-Read [docs/AI_ARCHITECTURE_OVERVIEW.md](docs/AI_ARCHITECTURE_OVERVIEW.md),
-[docs/AI_CHANGE_PLAYBOOK.md](docs/AI_CHANGE_PLAYBOOK.md), and
-[docs/EDITOR_DEVELOPMENT_ARCHITECTURE.md](docs/EDITOR_DEVELOPMENT_ARCHITECTURE.md)
-before creating a new manager, registry, service, plugin, decoder, render setting, tool-registration
-path, or native projection. OpenRune Studio is a **modular monolith**:
+Production code plus passing tests describe what exists today. Documentation describes ownership and intended flow. A roadmap item is not proof that a feature already exists.
 
-- core Studio features are compile-time `CoreEditorModule`s listed once in `CoreEditorModules`;
-- external JARs use `EditorPlugin`;
-- both paths share one registry/service graph;
-- do not add one-tool core plugins or special registrations in `StudioApplication`;
-- search the canonical-path table before creating a parallel abstraction.
+## One responsibility, one canonical path
 
-If a feature ships with Studio, it is core, not a plugin.
+Before creating a manager, registry, service, decoder, encoder, cache adapter, render setting, scene compiler, selection model, save path, project connection, or UI registration path:
 
-## Module layout
+1. search for the existing responsibility;
+2. identify its canonical owner;
+3. extend that owner when the responsibility fits;
+4. add a new abstraction only when the existing owner genuinely cannot represent the new responsibility;
+5. add tests that prove why the new abstraction is distinct.
 
-Two Gradle modules, declared in `settings.gradle`:
+Do not create a second method that is almost the same as an existing method merely because its caller is different. Prefer one neutral operation with explicit inputs over parallel convenience implementations that drift.
 
-- **`Client`** - cache/definition loading, the world document model, the rendering pipeline
-  (both software and OpenGL-neutral packet builders), editor tools, selection, always-on
-  `CoreEditorModule`s, and the public neutral `EditorPlugin` extension point. No ImGui/GLFW
-  UI code lives here. Buildable and testable headless.
-- **`Editor`** - the Dear ImGui/GLFW native desktop shell ("Studio"), including internal
-  Studio projection code, all panels/HUDs/toolbars, and the OpenGL scene renderer that actually
-  draws to a window.
+## Core composition
 
-**Extension boundary**: externally installable features use `EditorPlugin` and neutral services.
-Built-in Studio features use `CoreEditorModule` and the same registry/services; they are not
-plugin lifecycle candidates. `EditorPluginContext` intentionally does not expose a raw
-`DefinitionProvider`, but it does expose neutral cache-facing access through
-`AssetRepository`, `PluginApi.data()`, and `DecodedDataCatalog`. Direct cache backend types,
-Dear ImGui, GLFW, and OpenGL remain internal Studio implementation details. `StudioPlugin`
-is a transitional/internal presentation API, not the public plugin model to teach new plugin
-authors. See `docs/UI_WORKSPACE_CONTRACT.md` for where plugin UI contributions belong.
+OpenRune Studio is a modular monolith.
 
-**RuneLite-shaped scene API**: `Client/src/main/java/com/rspsi/api` mirrors `net.runelite.api`
-names and getters (`WorldView`, `Scene`, `Tile`, `SceneTilePaint`, `SceneTileModel`, `TileObject`
-layers, `WorldPoint`/`LocalPoint`, `Perspective`), implemented by `com.rspsi.api.scene.SceneView`
-over a resolved `GpuScenePacket`. It is Studio-owned, not a RuneLite dependency. Any RuneLite-style
-setters must record undoable editor commands. Cite the `runescape-client`/`runelite-mixins` source
-behind every value you add. See `docs/STUDIO_SEMANTIC_API.md` section 6.
+Built-in feature composition uses:
 
-## Build, test, run
+- Client/src/main/java/com/rspsi/editor/core/CoreEditorModule.java
+- Client/src/main/java/com/rspsi/editor/core/CoreEditorModules.java
+- the existing CoreTerrainModule, CoreObjectModule, CorePathModule, CoreSelectionModule, CoreTilePainterModule, CoreDiagnosticsModule, and CoreUiModule
 
-```bash
-./gradlew :Client:compileJava :Editor:compileJava   # compile both modules
-./gradlew :Client:test :Editor:test                  # full test suite
-./gradlew foundationGate                             # the repo's own CI gate (test + check + native-boundary + rendering-audit)
-./gradlew :Editor:run                                 # launch the Studio desktop app
-```
+Legacy extension-oriented names may still exist in source during migration. They are compatibility debt, not the model for new code. New built-in behavior belongs in the core module/service architecture.
 
-Java 21 toolchain (Gradle pins this - a newer system JDK won't get used accidentally). Always
-compile **and** run the test suite for both modules after a change, even a Client-only one -
-Editor consumes Client's public API surface and breaks silently otherwise.
+## Canonical ownership
 
-`docs/RENDERING_PARITY_MANIFEST.json` is a live-maintained, schema-versioned list of rendering
-correctness gaps against real OSRS behavior (covered/partial/deferred, with a `nextAction` per
-entry). `./gradlew renderingAuditGate` validates its shape; treat it as the actual rendering
-backlog, not something to re-derive from scratch. `docs/ROADMAP.md` defines product order,
-`docs/PROJECT_LAUNCHER_AND_DASHBOARD.md` defines application startup/project lifecycle,
-`docs/CONTENT_STUDIO_ARCHITECTURE.md` defines the project-owned Content Studio, lazy-domain,
-refresh, cross-tool navigation, RSProx, and future Kotlin/JS boundaries,
-`docs/OPENRUNE_SERVER_INTEGRATION_MODEL.md` defines OpenRune source/cache ownership, OR2/revision
-compatibility, GameVals/RSCM, raw-map packing, semantic API knowledge, fork tiers, and runtime bridge policy,
-`docs/CONTENT_STUDIO_FOUNDATION.md` defines advanced-authoring prerequisites, and
-`docs/UI_WORKSPACE_CONTRACT.md` defines the strict in-project editor-shell/UI contribution contract.
+| Concern | Canonical owner |
+| --- | --- |
+| authored map state | WorldDocument and editor session/window state |
+| undoable edits | EditorCommand, CommandHistory, CommandTransaction, ChangePlan as it matures |
+| selection | SelectionModel and canonical semantic hit/selection state |
+| modern OSRS cache access | OpenRuneCacheStore / OpenRune FileStore |
+| terrain/location encoding | OsrsRegionEncoder |
+| terrain/location decoding | OsrsRegionDecoder |
+| map archive access | MapService / OsrsMapService |
+| standalone cache publication | explicit writable output cache only |
+| project edit recovery | SessionAutosaveStore and project-owned edit state |
+| OpenRune project inspection | OpenRuneServerAdapter / ServerProjectInspection path |
+| OpenRune source/content integration | first-party OpenRune provider/services behind neutral integration contracts |
+| scene semantics | authored world -> resolver/compiler -> semantic scene views |
+| render compilation | com.rspsi.editor.render and compiler package |
+| native OpenGL rendering | Editor com.rspsi.renderer.opengl |
+| project startup | project descriptor -> launcher -> loading gate -> shell |
+| workspace placement | UI_WORKSPACE_CONTRACT.md |
+| priorities | ROADMAP.md |
 
-## Kotlin / coroutine direction
+If the table and a lower-level document disagree, stop and reconcile the documentation with production code rather than inventing a third interpretation.
 
-New application/project orchestration may be Kotlin when it materially improves structured
-concurrency, cancellation, immutable state, or lazy-domain composition. Do not translate stable
-Java renderer/cache code merely for language consistency.
+## Editing flow
 
-Project open must remain below the content-decoding boundary. Content Studio may validate FileStore
-and project identity at startup, but cache definitions, RSCM/GameVals, Gradle/PSI, spawn indexes and
-semantic graphs are workspace-demanded services. See `docs/CONTENT_STUDIO_ARCHITECTURE.md`.
+The normal editing path is:
 
-## Reference source trees (not part of the build)
+    input
+      -> active core tool
+      -> command or validated ChangePlan
+      -> WorldDocument
+      -> dirty-region / revision tracking
+      -> incremental scene compile
+      -> render-neutral GPU plan
+      -> native renderer
 
-Two external codebases are vendored into this repo purely as **read-only reference material**
-for verifying OSRS-accurate behavior and mining design ideas. Neither is a build dependency -
-don't add them to any `settings.gradle` include or `build.gradle` sourceSet.
+UI callbacks do not directly mutate cache files or renderer buffers.
 
-### `RuneLite-melxin/` - real OSRS client reference
+## Save, autosave, publish
 
-A full RuneLite fork (based on OpenOSRS, **BSD 2-Clause licensed** - see its own
-`RuneLite-melxin/README.md`), added at the repo root. This is genuine, correctly-licensed
-open-source client code and is safe to read, quote, and reimplement techniques from freely.
+Keep these meanings separate:
 
-Use it to verify or port real client behavior. Start with `docs/RUNELITE_REFERENCE_GUIDE.md`
-for the problem-to-source lookup table so the same deob/API/GPU paths are not rediscovered on
-every PR. Some concretely useful starting points found this cycle (see `docs/ROADMAP.md` and
-the parity manifest for current priority):
+**Edit/preview**
+- changes canonical authored state;
+- records undo/redo;
+- marks project resources dirty;
+- updates derived scene state.
 
-- Terrain underlay color blending: `runelite-client/cache/.../MapImageDumper.java`
-  (un-obfuscated re-implementation; the real client's is `runescape-client/.../class470.java`,
-  method `method9712`).
-- Tile shape/triangulation tables: `runelite-api/.../scene/SceneTileModel.java`.
-- Object silhouette highlighting: `Model.getConvexHull()` (`runelite-mixins/.../RSModelMixin.java`)
-  + `Jarvis.convexHull()` (`runelite-api/.../model/Jarvis.java`) - already ported into this
-  project as `Client/src/main/java/com/rspsi/editor/render/ConvexHull2D.java`.
-- Plugin config-from-interface pattern: `runelite-client/.../config/ConfigItem.java` +
-  `ConfigManager` - useful reference for neutral/declarative plugin settings UI.
-- Zone-based incremental GPU rebuild (8x8 zones, dirty-flag invalidation): `runelite-client/.../plugins/gpu/Zone.java`,
-  `GpuPlugin.invalidateZone`/`rebuild` - the validation reference for wiring in
-  `Client/src/main/java/com/rspsi/editor/render/compiler/IncrementalSceneCompiler.java`
-  (see the performance phase in `docs/ROADMAP.md`).
+**Save Project**
+- writes Studio-owned project/edit state atomically;
+- must be reopenable without publishing a cache;
+- must not modify the source cache;
+- must not mark an unpublished cache change as published.
 
-When citing something from here in a commit, comment, or design doc, name the exact file/method
-(as above) rather than "RuneLite does X somewhere" - future readers (agents included) need to
-be able to re-verify the claim without re-searching a 2000+ file tree.
+SessionAutosaveStore already proves the cache-independent snapshot model. Extend that model into the durable project-edit store rather than making autosave files the only long-lived representation.
 
-### Terraini - reference notes only, no vendored source
+**Publish Cache**
+- is explicit;
+- encodes validated changed resources;
+- writes an explicit output/staging cache;
+- flushes reference-table changes;
+- reopens and verifies output;
+- only then advances the publication baseline.
 
-Terraini is a sibling OSRS map editor built on the same cache/world-model lineage as this
-project, but only available to us as **decompiled bytecode** (not source the original authors
-published or licensed to us). Its license status is unknown. Unlike RuneLite-melxin, its
-source is **not** vendored into this repo - copying decompiled third-party code, even for
-internal reference, is a real copyright concern distinct from vendoring genuine open source.
+Do not redefine Save Project to mean Publish Cache.
 
-Instead, `docs/TERRAINI_REFERENCE.md` holds detailed, original-wording technical notes on its
-algorithms (road/path generation, procedural island noise, tile-coverage rasterization, stamp/
-layer systems) - written from analysis, not copied from its decompiled output. Treat that
-document as the reference; if you need to double-check a specific detail against the actual
-decompiled classes, they exist locally outside this repo at
-`/Users/tylercovalt/Desktop/RSPS/tools/map-and-terrain/terraini` on this machine (not committed
-here) - go re-read them for verification, but bring back a written description, not a copied
-file.
+## Connected OpenRune projects
 
-## Conventions worth knowing before you hit them
+Treat .data/cache/LIVE and .data/cache/SERVER as generated outputs owned by the imported OpenRune project.
 
-- **Connected OpenRune Server caches are generated artifacts, not generic Studio output directories.** In standalone mode a user may select any supported cache and publish to a separate explicit output cache. In connected OpenRune mode, `.data/cache/LIVE` is the read-only client/scene cache and `.data/cache/SERVER` is the separate read-only server cache. Do not directly patch either one and do not auto-run `FreshCache` on project open. Publish only through a supported OpenRune source representation, invoke the project's canonical `:or-cache:buildCache`, then reopen and verify both outputs. If no lossless source mapping exists for a resource, leave connected-project publishing disabled for that resource. See `docs/OPENRUNE_ECOSYSTEM_INTEGRATION.md` and `docs/OPENRUNE_SERVER_INTEGRATION_MODEL.md`.
-- **Local document space vs. absolute OSRS world-tile space are different coordinate systems
-  and the compiler will not catch mixing them up.** `WorldTile`/`ToolContext` speak absolute
-  world tiles (what the camera and picker use); `LocalTile`/`WorldDocument` speak
-  document-relative tiles. `ModelPacketBuilder`'s output (`ModelRenderPacket.anchor()` and its
-  vertices) is in **local** space even though it's built from a real placed object - converting
-  it for anything camera/screen-facing requires `DocumentCoordinates.toWorld(...)` first. This
-  exact gap silently broke the selection-overlay feature for an entire debugging session (every
-  projected vertex landed ~400,000 units from the camera) before being traced down - see
-  `Editor/src/main/java/com/rspsi/studio/ui/SelectionOverlayPlugin.java`'s
-  `computeWorldVertices` javadoc for the fix and the full explanation.
-- **Dear ImGui native color packing is ABGR (0xAABBGGRR), not the RGBA (0xRRGGBBAA) `OverlayDraw`'s
-  own vocabulary uses.** Route through `StudioDrawColors`/`ViewportOverlayDraw.toImGuiColor(...)`
-  rather than hand-packing a color for a native ImGui draw-list call.
-- **Backface culling is deliberately disabled for models** in the native renderer
-  (`BackfacePolicy` javadoc) because cache models aren't reliably wound. Don't "fix" this
-  without winding-order fixtures passing first - it was tried before and broke walls/roofs/
-  bridges. A renderer that *does* cull (e.g. a new software preview path) needs to emit
-  double-sided geometry to match, not the other way around.
-- **The current `StudioToolPlugin.surfaces()` model is transitional.** Existing code still
-  supports bottom-bar/floating/left-rail placement, but new UI work must follow
-  `docs/UI_WORKSPACE_CONTRACT.md`: the bottom rail activates tools, the Bottom Context Drawer
-  owns deep tool content, the Left Brush Shelf owns brush/stamp dynamics, the Viewport Quick
-  Palette owns near-cursor quick picks, the Right Inspector owns selected-item editing, and
-  HUDs remain independently pinnable/glanceable. Do not infer tool capability from arbitrary
-  surface placement.
-- **Tightly-coupled small plugins should be nested inside the plugin they serve**, not given
-  their own top-level file, when their only reason to exist is feeding another plugin (see
-  `SelectionOverlayPlugin`'s nested `SingleObjectSelectToolPlugin`/`MultiObjectSelectToolPlugin`).
-- Verify UI/rendering changes by actually launching `./gradlew :Editor:run` and looking, not
-  just by compiling - this is a native GLFW/ImGui app with no UI test harness, and multiple
-  "looks right in code" changes this project's history have turned out visually broken.
+Never:
+
+- patch LIVE or SERVER directly as a normal Studio write path;
+- run FreshCache automatically on project open;
+- duplicate OpenRune's incremental build database or pack ordering;
+- assume LIVE and SERVER are interchangeable.
+
+For a supported resource, edit the authoritative OpenRune source representation, perform stale-source checks, then invoke the detected project build entry point and verify generated outputs.
+
+For arbitrary terrain/location map edits, connected-project publication remains disabled until there is an explicit lossless OpenRune-consumed source/build hook. Studio may still save the edit in its own project state and preview it without touching generated caches.
+
+## Rendering rules
+
+Rendering has one path. Do not build a second scene system for diagnostics, HD work, previews, or tools.
+
+Current high-level flow:
+
+    WorldDocument
+      -> scene resolution
+      -> incremental 8x8-zone compile
+      -> GpuScenePacket / upload plan
+      -> zoned upload plan
+      -> ZoneVboManager
+      -> SharedGpuArena
+      -> OpenGlSceneRenderer
+      -> NativeSceneViewport
+
+Camera movement alone must not rebuild or upload static scene geometry.
+
+Dirty edits should invalidate the smallest correct dependency set. Full rebuild remains a correctness fallback for topology, cache, revision, or renderer-contract changes.
+
+The renderer is not considered performance-complete. Preserve or improve telemetry for CPU compile time, upload bytes, native geometry bytes, draw submission time, GPU time, heap/direct memory, dirty/reused zone counts, and frame rate under both stationary and active-edit workloads.
+
+Do not trade OSRS semantics or editor correctness for a benchmark shortcut.
+
+## Reference discipline
+
+Use the right source for the question:
+
+1. real OSRS cache fixtures for data and scene acceptance;
+2. vendored RuneLite client source for OSRS scene behavior;
+3. RuneLite API naming only as a vocabulary reference;
+4. RuneLite GPU/client rendering source when investigating renderer behavior;
+5. OpenRune FileStore for modern cache encoding, writing, reference tables, and cache tooling;
+6. OpenRune Server for connected-project source/build/cache ownership;
+7. Terraini and TSPS only as secondary implementation references;
+8. legacy RSPSi behavior only when locked by current tests or independently validated.
+
+Do not copy a reference project's architecture simply because one useful algorithm lives there.
+
+## Change checklist
+
+Before opening a PR:
+
+1. identify the canonical owner;
+2. search for an existing equivalent method/service;
+3. update the smallest correct layer;
+4. keep backend/UI/native types behind their boundaries;
+5. add focused tests;
+6. update the authoritative document if ownership or flow changed;
+7. update ROADMAP.md only if priority/status changed;
+8. verify no obsolete architecture document now contradicts the change.
+
+A clean change leaves fewer possible ways to do the same thing, not more.
