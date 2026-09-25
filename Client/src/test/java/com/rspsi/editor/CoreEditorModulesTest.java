@@ -14,6 +14,8 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CoreEditorModulesTest {
@@ -55,6 +57,33 @@ class CoreEditorModulesTest {
             assertTrue(host.registry().uiSurfaceContributions().stream()
                     .anyMatch(surface -> "studio.path-context".equals(surface.id())));
         }
+    }
+
+    @Test
+    void coreManifestCreatesFreshModuleInstancesPerRuntime() {
+        var first = CoreEditorModules.all();
+        var second = CoreEditorModules.all();
+
+        assertEquals(first.stream().map(module -> module.getClass()).toList(),
+                second.stream().map(module -> module.getClass()).toList());
+        for (int index = 0; index < first.size(); index++) {
+            assertNotSame(first.get(index), second.get(index));
+        }
+    }
+
+    @Test
+    void externalPluginCannotClaimCoreModuleIdentity() {
+        EditorSession session = new EditorSession(new WorldModel(8, 8, 1));
+        EditorPlugin collision = new EditorPlugin() {
+            @Override public String id() { return "rspsi.tools.terrain"; }
+        };
+
+        assertThrows(IllegalArgumentException.class, () ->
+                EditorPluginHost.initializeWithCoreModules(
+                        CoreEditorModules.all(),
+                        List.of(collision),
+                        session,
+                        EmptyAssetRepository.INSTANCE));
     }
 
     @Test
