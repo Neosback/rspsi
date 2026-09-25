@@ -1,678 +1,315 @@
-# OpenRune Studio Project Launcher and Content Studio Contract
+# Project Launcher and Dashboard
 
-> **Scope:** this document defines the application startup lifecycle, persistent Studio project model, project creation/opening flow, pre-Content Studio loading gate, and the in-project Content Studio.
->
-> `docs/ROADMAP.md` remains authoritative for implementation order. `docs/OPENRUNE_ECOSYSTEM_INTEGRATION.md` remains authoritative for OpenRune cache/source ownership and publishing safety. `docs/UI_WORKSPACE_CONTRACT.md` remains authoritative after a project has entered the Studio workspace shell.
+> **Status:** authoritative startup/project lifecycle contract.
 
 ## 1. Product direction
 
-OpenRune Studio should start like a professional IDE, not like a cache utility.
+OpenRune Studio starts like an IDE, not like a cache utility.
 
-The application has three top-level states:
+Top-level lifecycle:
 
-```
-APPLICATION START
-      |
-      v
-PROJECT LAUNCHER
-      |
-      | user creates/opens project
-      v
-PROJECT LOADING
-      |
-      | required project/cache services verified
-      v
-PROJECT SHELL
-      |
-      v
-DASHBOARD
-      |
-      +--> Map Studio
-      +--> Interface Studio
-      +--> Object/Asset Studio
-      +--> later content/server workspaces
-```
+    APPLICATION START
+      -> PROJECT LAUNCHER
+      -> PROJECT OPEN / CREATE
+      -> PROJECT LOADING
+      -> PROJECT SHELL
+      -> DASHBOARD
+      -> MAP / OBJECT / INTERFACE / CONTENT WORKSPACES
 
-The Project Launcher exists **before** any Studio project is active.
+The launcher exists before a project is active.
 
-The Content Studio exists **inside** an already-loaded project.
+The Dashboard exists inside an active project.
 
-These are not the same screen and must not be implemented as the same class with conditional sections.
+A raw cache path is configuration, not application identity.
 
-## 2. Current behavior to retire
+## 2. Project Launcher
 
-The current application shell still behaves cache-first:
+The launcher should be fast and require no cache decode to display.
 
-- `StudioApplication` reads `RSPSI_OSRS_CACHE` or `StudioPreferences.recentCache()`;
-- a recent raw cache path may begin loading immediately during application construction;
-- `ContentStudioView` owns the editable cache-path field;
-- the Content Studio also owns the server-integration connection prompt;
-- cache decoder diagnostics consume a large part of the Content Studio;
-- workspace launch cards appear on the same screen used to select/repair the cache.
-
-That behavior is transitional.
-
-The target is project-first:
-
-```
-old:
-app -> recent cache -> Content Studio/cache form -> workspace
-
-new:
-app -> project launcher -> project selection -> loading gate -> Content Studio -> workspace
-```
-
-A raw cache path is project configuration, not application identity.
-
-## 3. Project Launcher
-
-The launcher is a dedicated pre-project full-window surface inspired by modern IDE launchers.
-
-### 3.1 Primary layout
-
-Recommended first-release structure:
-
-```
-+------------------------------------------------------------+
-|                    OpenRune Studio                         |
-|                                                            |
-| Projects                                                   |
-| +--------------------------------------------------------+ |
-| | My OpenRune Server          OpenRune-Server            | |
-| | /projects/my-server                                   | |
-| | Last opened ...                    [ Open ] [ Remove ] | |
-| |                                                        | |
-| | Local Cache                  Cache                    | |
-| | ~/.openrune-studio/...                               | |
-| +--------------------------------------------------------+ |
-|                                                            |
-| [               Import OpenRune-Server                  ] |
-| [               Continue without import                ] |
-+------------------------------------------------------------+
-```
-
-The first-release launcher supports:
+It shows:
 
 - recent projects;
-- project name derived from the imported source initially;
+- project name;
 - project type;
-- project root/source summary;
+- source/root summary;
 - last-opened time;
-- missing/moved project indication;
-- remove from recent list without deleting project data;
-- Import OpenRune-Server;
-- Continue without import using a native cache-directory chooser.
+- missing/moved state;
+- Open;
+- Remove from Recent;
+- Import OpenRune Server;
+- Create/continue with standalone OSRS cache.
 
-Pinning, arbitrary descriptor browsing, rename, application-level Settings/Plugins and advanced
-project repair can be added later without complicating the normal startup path.
+Future pin/rename/repair features may be added without changing the core lifecycle.
 
-The launcher should **not** decode a cache merely to render the recent-project list.
+## 3. Persistent project descriptor
 
-### 3.2 Startup behavior
+Use one neutral project descriptor.
 
-Default application startup opens the Project Launcher every time.
+Conceptual fields:
 
-A future preference may optionally reopen the last project, but project-first startup remains the architecture and no raw `recent-cache.txt` auto-load path should remain.
+    StudioProjectDescriptor
+      formatVersion
+      projectId
+      name
+      kind
+      createdAt
+      updatedAt
+      sourceConfiguration
+      revisionPolicy
+      integrationPolicy
+      projectDataLocation
 
-Environment/CLI overrides may open a project directly for automation/development, but they should resolve into the same project-open lifecycle rather than bypass it.
+Project kinds:
 
-## 4. Persistent project model
+- STANDALONE_OSRS_CACHE
+- OPENRUNE_SERVER
 
-The existing `ProjectMetadata` and `ProjectLayout` provide useful cache identity/autosave foundations, but they are not yet a complete Studio project descriptor.
+Provider-specific details belong behind source/integration configuration rather than being scattered across UI settings.
 
-Introduce a neutral descriptor concept such as:
+## 4. Studio-owned project data
 
-```
-StudioProjectDescriptor
-  formatVersion
-  projectId
-  name
-  kind
-  createdAt
+Studio needs a stable private location for:
 
-  source
-    standalone cache source
-      OR
-    connected server project
-
-  target game/revision policy
-  integration policy
-  project data location
-```
-
-Suggested project kinds:
-
-- `STANDALONE_OSRS_CACHE`
-- `OPENRUNE_SERVER`
-- later: other server/provider project kinds through the same provider model
-
-Do not encode OpenRune-only fields directly into the generic descriptor. Provider-specific connection settings belong behind a neutral connection configuration.
-
-### 4.1 Studio-owned project data
-
-Studio needs a stable place for:
-
-- autosaves;
-- edit journals;
+- descriptor;
+- saved edit state;
+- recovery/autosave;
 - publication provenance;
-- workspace state;
-- project-specific plugin/settings state;
+- workspace layout;
 - recent regions/assets;
-- recovery information.
+- diagnostics/recovery metadata.
 
-For a standalone Studio-owned project, this may live in the selected project directory.
+For linked external projects, default to Studio-owned metadata outside the server checkout, keyed by stable project ID.
 
-For a linked external OpenRune Server checkout, merely connecting the project should not force arbitrary Studio files into the server repository. Prefer a Studio-owned data directory keyed by stable project ID, for example:
-
-```
-~/.openrune-studio/projects/<project-id>/
-    project.json
-    autosave/
-    edits/
-    provenance/
-    workspace.json
-```
-
-The descriptor then references the external OpenRune root.
-
-An explicit future opt-in may allow project-local Studio metadata for portability, but linked-project discovery must remain non-destructive by default.
+Connecting an external project should not scatter Studio files into it.
 
 ## 5. Recent project registry
 
-Replace `recent-cache.txt` with a versioned recent-project registry, conceptually:
+Keep a lightweight versioned recent-project registry.
 
-```
-~/.openrune-studio/recent-projects.json
-```
-
-Each registry entry should contain only lightweight launcher metadata:
+Each entry contains only launcher metadata:
 
 - project ID;
-- project name;
+- name;
 - descriptor location;
-- project kind;
+- kind;
 - display/source path;
-- last-opened timestamp;
-- pinned state.
+- last-opened time;
+- pinned state if later supported.
 
-Do not duplicate complete mutable project configuration into the recent-project registry. The project descriptor remains authoritative.
+The descriptor remains authoritative.
 
-Missing projects remain visible with a clear unavailable state until the user removes or relocates them.
+A missing project stays visible as unavailable until relocated or removed.
 
-## 6. First-release project creation/import flow
-
-The first-release launcher deliberately does **not** use a multi-step project wizard.
-
-Startup should ask for the minimum information required to establish a durable project:
-
-### 6.1 Import OpenRune-Server
+## 6. Import OpenRune Server
 
 Flow:
 
-1. user chooses **Import OpenRune-Server**;
-2. Studio opens the native OS folder chooser;
-3. user selects the OpenRune server checkout root;
-4. Studio detects the project and asks only for the amount of access Studio may have;
-5. Studio creates/reuses its private descriptor under `~/.openrune-studio/projects/`;
-6. the project is remembered in Recent Projects and opened through the normal loading gate.
+1. user chooses Import OpenRune Server;
+2. choose checkout root;
+3. Studio performs structural detection;
+4. show detected project identity, cache roles, revision/tool compatibility, and available access/build capabilities;
+5. user selects allowed integration/control level if required;
+6. Studio creates/reuses its descriptor;
+7. project enters the normal loading gate.
 
-The user does **not** enter:
+Do not run FreshCache.
 
-- a separate Studio project name;
-- a Studio metadata directory;
-- a LIVE-cache path;
-- a SERVER-cache path;
-- content/source roots;
-- GameVal paths;
-- Gradle module paths.
+Do not rebuild generated caches merely because the project was imported.
 
-The checkout directory name is the initial display name. Rename/settings support can be added later
-without making startup a form.
+Do not ask the user to manually browse to LIVE under a standard recognized project layout.
 
-User-facing access labels are permission descriptions, not developer-role names:
-
-- **Read only**
-- **Read + write**
-- **Read + write + build**
-- **Full project access**
-
-The persisted descriptor still stores granular `ProjectIntegrationCapability` values. "Full project
-access" does not silently grant destructive/reset operations. Fresh-cache/reset remains explicit.
-
-Import performs only bounded project/cache-role inspection. It must not recursively scan server
-content, evaluate the Gradle project model, build semantic graphs, or run repository-wide content
-indexing before the Content Studio is usable.
-
-### 6.2 Continue without import
+## 7. Standalone cache project
 
 Flow:
 
-1. user chooses **Continue without import**;
-2. Studio opens the native OS folder chooser;
-3. user selects an existing supported OSRS cache directory;
-4. Studio creates/reuses a private standalone descriptor automatically;
-5. the cache project appears in Recent Projects and opens through the same loading gate.
+1. user chooses standalone project;
+2. choose supported source cache directory;
+3. Studio records that cache as a read-only source;
+4. create project descriptor/private project data;
+5. loading gate validates required cache capabilities;
+6. editor opens.
 
-No project name is required for this flow.
-
-### 6.3 Deferred advanced setup
-
-The following belong in later project settings/content tooling, not first-run startup:
-
-- custom OpenRune path overrides;
-- source/content indexing;
-- Kotlin PSI / Gradle semantic models;
-- content graph configuration;
-- server runtime controls;
-- custom build-task overrides;
-- project rename and portable/project-local metadata;
-- bootstrap/clone/create-new-OpenRune workflows.
-
-This keeps first launch fast and makes the access granted to Studio understandable.
-
-## 7. Open Existing Project
-
-Opening a Studio project should resolve a descriptor, not ask the user to re-select its cache every session.
-
-For OpenRune projects:
-
-```
-descriptor
-   |
-   v
-saved OpenRune connection
-   |
-   v
-project inspection
-   |
-   +--> verify root exists
-   +--> verify/reconcile fingerprint
-   +--> resolve LIVE/SERVER
-   +--> verify revision/environment
-   +--> resolve source roots/build tasks
-```
-
-For standalone projects:
-
-```
-descriptor
-   |
-   v
-saved source-cache binding
-   |
-   +--> verify cache path
-   +--> verify cache identity/fingerprint
-   +--> restore output/provenance state
-```
-
-If a source moved, the user repairs the project binding once through a relocation flow. The Content Studio should not revert to being a cache path editor.
+Output cache destination is chosen/configured for explicit publication, not used as the project identity.
 
 ## 8. Project loading gate
 
-After a project is selected, the launcher disappears and a dedicated full-window loading view appears **before** the Content Studio.
+Project loading establishes the minimum state required for a usable project.
 
-The Content Studio is shown only when the minimum required project state is usable.
+Recommended stages:
 
-### 8.1 Loading stages
+1. descriptor;
+2. source/project structural inspection;
+3. revision/cache identity;
+4. open required read-only cache;
+5. restore/validate saved Studio edits;
+6. initialize required core services;
+7. enter project shell.
 
-Use an application/project loader above the current cache loader.
+Optional content domains load on demand.
 
-Conceptually:
+Project open should not recursively fingerprint every source tree, decode every definition family, or build every semantic index.
 
-```
-ProjectLoadService
-  READ_DESCRIPTOR
-  VALIDATE_PROJECT
-  INSPECT_INTEGRATION
-  RESOLVE_CACHE_ROLES
-  OPEN_CACHE_FILESYSTEM
-  VERIFY_CACHE_IDENTITY
-  PREPARE_DEFINITIONS
-  RESTORE_PROVENANCE
-  BIND_REQUIRED_PROJECT_SERVICES
-  READY
-```
+## 9. Loading UI
 
-For an OpenRune project, required service binding includes enough integration state to correctly establish LIVE/SERVER/source ownership before the user can edit.
+Show one clear loading surface with:
 
-Optional expensive services such as thumbnail generation, broad content search indexes, or corpus analysis should not block the Content Studio unless a workspace actually requires them. They can expose their own warming/indexing status after the project is usable.
-
-For OpenRune specifically, the startup inspection is bounded: it checks project markers, revision,
-cache-role paths and declared build availability without recursively fingerprinting LIVE/SERVER,
-raw-cache, content, GameVals, plugin, or source trees. Full stale-source/content fingerprints are
-computed only by workflows that require them.
-
-### 8.2 Loading UI
-
-The loading view should be deliberately simple and polished:
-
-```
-                 OpenRune Studio
-
-                 My OpenRune Project
-
-              Loading project...
-       [=====================-----]
-
-           Preparing definitions
-     Revision 240.2 / LIVE cache verified
-
-              Cancel / Back
-```
-
-Show:
-
-- project name;
-- project type/provider;
 - current stage;
-- real progress where measurable;
-- a progress bar based on actual stages/work where possible;
-- concise current detail;
-- actionable failure state;
-- Cancel/Back while safe.
+- progress when measurable;
+- diagnostic details on request;
+- failure action;
+- cancel/back when safe.
 
-Do not display the Content Studio behind the loading view.
+The Dashboard must not appear until the required loading gate succeeds.
 
-Do not display a fake fine-grained percentage when the loader lacks that information. Instrument the loader so determinate stages/counts can become real over time.
+## 10. Failure behavior
 
-### 8.3 Failure behavior
+A loading failure should preserve the project descriptor and explain:
 
-A failed project open returns a project-specific repair screen, not the old generic cache Content Studio.
+- failed stage;
+- affected source/path;
+- whether the issue is cache readability, project structure, revision compatibility, saved-edit conflict, or required capability;
+- safe repair/retry action.
 
-Examples:
+Do not silently replace project sources.
 
-- project directory moved;
-- LIVE missing;
-- cache identity mismatch;
-- OpenRune revision unsupported;
-- server project changed materially since saved baseline;
-- permissions/build task no longer available.
+## 11. Dashboard role
 
-Offer:
+The Dashboard is the project home, not a cache setup form.
 
-- Retry;
-- Locate project/cache;
-- Open Project Settings;
-- Back to Launcher;
-- open diagnostics/details.
+It should answer:
 
-Never silently run `FreshCache` as repair.
+- what project is open?
+- what type/revision/source is it?
+- is the source healthy?
+- are there saved/unpublished changes?
+- was the last publication/build successful?
+- what workspace should I open?
+- are external OpenRune changes stale relative to Studio?
+- what needs attention?
 
-## 9. In-project Content Studio overhaul
+Primary workspace cards:
 
-Once loading succeeds, the Content Studio becomes the **project home**, not project setup.
+- Map Studio;
+- Object/Asset Studio;
+- Interface Studio when available;
+- broader content/source workspaces as they mature.
 
-### 9.1 Content Studio goals
+## 12. What moves out of Dashboard
 
-At a glance the user should know:
+Put detailed diagnostics/configuration in dedicated settings or diagnostic surfaces rather than dominating project home:
 
-- what project is open;
-- what kind of project it is;
-- whether its cache/integration is healthy;
-- what access Studio has to an imported OpenRune project;
-- whether there are dirty/unpublished changes;
-- what they were working on recently;
-- what major workspace/action they can enter next.
+- raw decoder census;
+- every archive count;
+- every project source root;
+- all build task details;
+- deep GameVal/source analysis;
+- renderer diagnostics.
 
-The first-release Content Studio must not show zero-valued modules/scripts/quests/content-graph metrics
-simply because expensive content indexing was intentionally deferred. Broader OpenRune content data
-belongs to a future content workspace and is activated on demand.
+Dashboard summarizes status and links to details.
 
-### 9.2 Recommended layout
+## 13. Continue experience
 
-```
-+------------------------------------------------------------------------+
-| My Project                 OpenRune Server | Rev 240.2 | Healthy        |
-| /projects/openrune-server                                               |
-+------------------------------------------------------------------------+
-| Continue                                                            |
-| [ Continue Map Studio - Region 50,50 ]                                 |
-+------------------------------------------------------------------------+
-| Workspaces                                                             |
-| [ Map Studio ] [ Interface Studio ] [ Object/Asset Studio ]             |
-+------------------------------------------------------------------------+
-| Project Status                    | Recent                               |
-| LIVE cache    Ready               | Region 50,50                         |
-| SERVER cache  Ready               | Region 49,50                         |
-| Integration   Managed Build       | Object 1276                          |
-| Changes       3 unpublished       | ...                                  |
-| Build         Up to date          |                                      |
-+------------------------------------------------------------------------+
-| OpenRune / Project Actions                                              |
-| Build Project | Publish | Reload | Project Settings | Diagnostics       |
-+------------------------------------------------------------------------+
-```
+When reopening a project, offer a clear continuation point based on stored project state:
 
-### 9.3 What moves off the main Content Studio
+- last workspace;
+- recent regions/assets;
+- saved unpublished edits;
+- recovery snapshot if newer than explicit save.
 
-The current decoder census should not dominate the normal project home.
+Do not auto-publish or auto-build merely because the project reopened.
 
-Detailed counts for all cache indices, decoders, audio, graphics, definitions, and archives belong in a dedicated **Cache Diagnostics** / **Project Diagnostics** view.
+## 14. Project Settings
 
-The Content Studio may show one compact health card:
-
-```
-Cache: Ready
-Revision: 240
-18/18 required decoders healthy
-```
-
-with a `View Diagnostics` action.
-
-Likewise:
-
-- raw cache path editing belongs in Project Settings;
-- server connection setup belongs in project creation/settings;
-- path repair belongs in project repair/settings;
-- advanced integration capability toggles belong in Project Settings;
-- destructive cache reset tools belong in explicit advanced project actions.
-
-### 9.4 Continue experience
-
-Persist lightweight recent project context:
-
-- last active workspace;
-- last map region/world coordinate;
-- recent regions;
-- recent selected asset/object where useful;
-- open workspace tabs where restoration is safe.
-
-The Content Studio's primary action should be `Continue` when meaningful.
-
-Do not automatically build a large map scene during project load merely to support Continue. The cache/project can become READY first; workspace-specific scene loading begins when the workspace opens.
-
-## 10. Project Settings
-
-Project configuration needs a first-class view.
-
-Categories should include:
+Organize settings by ownership.
 
 ### General
 
-- project name;
-- Studio project-data location;
-- project kind (read-only display after creation unless migration exists).
+- name;
+- project data location where supported;
+- recent/continue behavior.
 
 ### Cache
 
-Standalone:
-- source cache path;
-- explicit output/publish target;
-- detected revision/fingerprint.
-
-OpenRune:
-- LIVE path, detected/read-only;
-- SERVER path, detected/read-only;
-- overrides where the project uses a non-standard layout;
-- revision/environment.
+- source cache identity/path;
+- revision information;
+- standalone output destination;
+- cache diagnostics.
 
 ### OpenRune Integration
 
-- integration preset;
-- granular capabilities;
-- source roots;
-- build task;
-- GameVal/symbol integration;
-- content indexing;
-- server runtime controls when available.
+- external checkout root;
+- detected cache roles;
+- allowed source/build access;
+- structural/revision/tool compatibility;
+- relocate external root.
 
 ### Build and Publish
 
-- publication status;
-- source baseline/fingerprint;
-- build task;
-- last successful build/verification;
-- advanced explicit reset/bootstrap actions.
+- publication target/status;
+- detected OpenRune build command;
+- last successful publication/build;
+- stale-source status;
+- diagnostics/logs.
 
-### Plugins / Workspace
+### Workspace
 
-- project-scoped plugin state;
-- workspace restore policy.
+- reset layout;
+- display/UI preferences;
+- project-specific workspace state.
 
-## 11. Application state model
+## 15. Application state model
 
-Do not overload `WorkspaceManager` with pre-project application lifecycle.
+Keep explicit states:
 
-Introduce a separate app/project lifecycle concept, for example:
+- NO_PROJECT;
+- OPENING_PROJECT;
+- PROJECT_READY;
+- PROJECT_ERROR;
+- CLOSING_PROJECT.
 
-```
-ApplicationState
-  LAUNCHER
-  PROJECT_LOADING
-  PROJECT_OPEN
-```
+Workspace availability derives from project state and capabilities.
 
-Then, only within `PROJECT_OPEN`:
+Do not hide lifecycle in scattered nullable services.
 
-```
-WorkspaceManager
-  DASHBOARD
-  MAP_EDITOR
-  INTERFACE_STUDIO
-  OBJECT_STUDIO
-  ...
-```
+## 16. Service boundaries
 
-This keeps the Content Studio as a project workspace while allowing the Project Launcher and loading screen to exist cleanly outside it.
+Project lifecycle should compose:
 
-## 12. Service boundaries
+- recent project registry;
+- descriptor store;
+- source/project inspector;
+- cache session service;
+- project edit store;
+- integration service;
+- workspace manager;
+- publication/build coordinator.
 
-Recommended neutral services:
+Each is one responsibility.
 
-```
-StudioProjectRegistry
-  recent()
-  pin()
-  removeRecent()
+A workspace must not establish its own second project connection.
 
-StudioProjectService
-  create(...)
-  open(...)
-  close()
-  current()
+## 17. Close behavior
 
-ProjectLoadService
-  status()
-  open(descriptor)
+On project/application close:
 
-ProjectIntegrationBinding
-  provider
-  inspection
-  cache roles
-  permissions
-  build actions
-```
+1. check unsaved Studio edits;
+2. check saved but unpublished state only for informative warning/policy, not data-loss warning;
+3. offer Save Project for unsaved edit state;
+4. do not force Publish Cache/Build Project;
+5. preserve recovery state if close cannot complete cleanly;
+6. close native/cache resources deterministically.
 
-`OsrsCacheSessionService` remains the cache-opening implementation component, but it should be orchestrated by the project loader rather than called directly from the launcher/Content Studio UI.
+## 18. Acceptance
 
-`ServerIntegrationService` remains the connected integration session coordinator.
+The lifecycle is correct when:
 
-The OpenRune provider should consume the converged neutral `ServerConnection` / `ServerProjectInspection` model described in `OPENRUNE_ECOSYSTEM_INTEGRATION.md`.
-
-## 13. Migration from existing project/cache state
-
-Do not throw away useful existing infrastructure.
-
-Reuse:
-
-- `ProjectMetadata` cache identity concepts;
-- `ProjectLayout` autosave/edit directories;
-- `ProjectMetadataStore` atomic JSON persistence pattern;
-- `OsrsCacheSessionService`;
-- `LoadedOsrsCacheSession`;
-- definition publication provenance;
-- `WorkspaceManager` once a project is open;
-- `OpenRuneServerAdapter` project inspection/build-task concepts;
-- `ServerIntegrationService` session bindings.
-
-Retire or migrate:
-
-- `StudioPreferences.recentCache()`;
-- automatic recent-cache loading in `StudioApplication`;
-- cache-path ownership in `ContentStudioView`;
-- server-project connection as an ad hoc Content Studio section;
-- the Content Studio as the primary cache diagnostics screen.
-
-Existing users with a remembered cache may be offered a one-time launcher action:
-
-`Create project from previously used cache`
-
-rather than silently opening it.
-
-## 14. Acceptance criteria
-
-### Launcher
-
-- app starts without opening/decoding a cache;
-- recent projects render from lightweight metadata;
-- New/Open/Link flows work without entering the Content Studio;
-- missing projects can be repaired or removed;
-- selecting a project enters PROJECT_LOADING.
-
-### Project creation
-
-- every project has a stable ID and name;
-- standalone projects persist their cache binding;
-- OpenRune projects persist their server-root binding and integration capabilities;
-- creation does not mutate/rebuild OpenRune caches;
-- invalid project/cache roots fail before descriptor commit.
-
-### Loading
-
-- Content Studio is never visible before required project/cache initialization succeeds;
-- loading state reports current project and stage;
-- failure is project-specific and recoverable;
-- successful loading produces one authoritative current project session;
-- OpenRune LIVE/SERVER roles are resolved before edit workspaces can open.
-
-### Content Studio
-
-- no raw cache selector on normal project home;
-- project identity/status is prominent;
-- Continue and workspace launch are prominent;
-- cache diagnostics are summarized, not dumped;
-- dirty/unpublished/build state is visible;
-- project settings and diagnostics are reachable;
-- OpenRune connected state is derived from project configuration, not a separate ad hoc connection button.
-
-## 15. Guiding rule
-
-The application opens **projects**.
-
-Projects own configuration.
-
-Loading establishes a trustworthy project runtime.
-
-The Content Studio summarizes an already-trustworthy project.
-
-Workspaces edit that project.
-
-That separation should remain true even as Studio expands from map editing into interfaces, assets, scripts, server content, simulation, and broader OpenRune tooling.
-
-
-## Startup visual contract
-
-The launcher/loading identity is text-first: **OPENRUNE CONTENT STUDIO** in the shared Studio blue
-display style. The old bitmap wordmark is not part of startup. The application version is shown
-quietly at the bottom. Startup uses the same `StudioPalette`, typography, control states and
-visible-scrollbar rules as the project shell.
+- startup does not auto-open a raw cache path outside the project lifecycle;
+- launcher is fast without cache decode;
+- project descriptor is stable;
+- moved external projects can be relocated;
+- OpenRune import is read-only until explicit source/build action;
+- loading restores saved Studio edits before normal authoring;
+- Dashboard appears only after required services are ready;
+- optional domains do not block initial open;
+- Save Project does not pack a cache;
+- project close cannot silently lose unsaved edits.
