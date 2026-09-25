@@ -5,9 +5,11 @@ import imgui.ImDrawList;
 import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.flag.ImGuiCol;
+import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiTableColumnFlags;
 import imgui.flag.ImGuiTableFlags;
+import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 
 import java.util.function.Consumer;
@@ -15,6 +17,28 @@ import java.util.function.Consumer;
 /** Small, consistent controls used by the native OpenRune Studio shell. */
 public final class StudioWidgets {
     private StudioWidgets() {
+    }
+
+    /**
+     * Draws an input-blocking, viewport-sized dim layer behind an auxiliary window.
+     * Call this immediately before rendering that window.
+     */
+    public static void windowBackdrop(String id) {
+        var viewport = ImGui.getMainViewport();
+        ImGui.setNextWindowPos(viewport.getPosX(), viewport.getPosY(), ImGuiCond.Always);
+        ImGui.setNextWindowSize(viewport.getSizeX(), viewport.getSizeY(), ImGuiCond.Always);
+        ImGui.setNextWindowViewport(viewport.getID());
+        ImGui.pushStyleColor(ImGuiCol.WindowBg, 0.025f, 0.04f, 0.065f, 0.68f);
+        int flags = ImGuiWindowFlags.NoDecoration
+                | ImGuiWindowFlags.NoMove
+                | ImGuiWindowFlags.NoSavedSettings
+                | ImGuiWindowFlags.NoDocking
+                | ImGuiWindowFlags.NoBringToFrontOnFocus
+                | ImGuiWindowFlags.NoScrollbar
+                | ImGuiWindowFlags.NoScrollWithMouse;
+        ImGui.begin("##studio-window-backdrop-" + id, flags);
+        ImGui.end();
+        ImGui.popStyleColor();
     }
 
     public static boolean iconButton(String id, String icon, String label, String shortcut) {
