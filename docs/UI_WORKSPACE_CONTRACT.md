@@ -109,7 +109,7 @@ Tile Painter:
 - overlay palette
 - tile shape palette
 - rotation
-- tile flags or material presets
+- tile flags
 - conditional replacement rules
 
 Object Placement:
@@ -199,7 +199,7 @@ Examples in Tile Painter:
 - armed overlay
 - armed shape
 - recent materials
-- favorite tile presets
+- favorite/recent tile materials
 
 Examples in Object Placement:
 
@@ -482,7 +482,56 @@ Recommended layout tokens should live in one theme/layout configuration rather t
 - spacing
 - animation duration
 
-## 10. Progressive disclosure rules
+## 10. Visual system, overflow, and auxiliary-window rules
+
+OpenRune Content Studio uses one host-owned visual system. Plugins do not invent a second theme.
+
+### Color semantics
+
+- the primary interaction/selection color is Studio blue (`StudioPalette.ACCENT`);
+- active tabs, selected entities, check marks, slider grabs, selection affordances and primary actions use that same blue family;
+- green is success, amber is warning/attention, red is error/destructive;
+- purple/cyan/red must not be used as arbitrary per-panel decoration;
+- inactive controls retain readable neutral/white text instead of fading into the background;
+- ImDrawList code converts ARGB theme tokens through `StudioPalette.draw(...)`; normal ImGui style/text APIs consume the ARGB token directly.
+
+### Typography
+
+- normal UI text uses the shared Studio UI face;
+- launch/product titles use the shared display face;
+- section headings use the shared heading face;
+- monospace is reserved for code, identifiers, raw values and data where fixed-width alignment adds information;
+- inspection panels use structured label/value rows instead of console-style walls of monospace text.
+
+### Layering
+
+- application/background, chrome, panel body, elevated panel/card and field/control surfaces use distinct shared tokens;
+- toolbar/chrome must remain visually separable from its corresponding content panel without high-contrast novelty borders;
+- scrollbars must remain visible against panel backgrounds;
+- auxiliary windows dim and input-block the owning workspace behind them so they read as a separate interaction layer;
+- ordinary auxiliary windows do not collapse/minimize into title bars.
+
+### Right Inspector overflow
+
+Right-side panels are **vertical-scroll-first**.
+
+- the shell targets an approximately 390 px inspector on a normal desktop window, with panel-specific width hints and a viewport-safe clamp;
+- horizontal scrolling is disabled by default;
+- a panel must reflow controls, wrap prose, or use responsive rows/tables before requesting horizontal scrolling;
+- horizontal scrolling is opt-in only for data whose horizontal axis carries real meaning, such as a timeline or wide matrix;
+- third-party panel contributions inherit the same default;
+- a panel may request more right-side width through the host contract, but it cannot force the viewport below the shell minimum.
+
+### Tabs and icons
+
+- workspace tabs do not expose a permanent close X;
+- right-clicking a closable workspace tab exposes **Close**;
+- text glyphs such as `>`, `<`, `[x]`, or ASCII arrows are not substitutes for controls/icons;
+- use Material icons for true icon-only actions, and always provide a tooltip;
+- do not decorate every heading, HUD value or button with an icon merely because an icon exists;
+- HUD content is information-first; icons are reserved for controls or meaning that is materially faster to recognize visually.
+
+## 11. Progressive disclosure rules
 
 A surface should appear only when it answers a current user question.
 
@@ -508,7 +557,7 @@ Examples:
 
 This decision model is the baseline for reviewing every new panel or plugin contribution.
 
-## 11. Plugin UI contract
+## 12. Plugin UI contract
 
 Public plugins should contribute declaratively into host-owned surfaces.
 
@@ -550,7 +599,7 @@ Studio projects these neutral components to ImGui.
 
 Direct ImGui/GLFW/OpenGL UI remains an internal Studio implementation boundary.
 
-## 12. State memory
+## 13. State memory
 
 Context changes must not reset authoring state unexpectedly.
 
@@ -577,7 +626,7 @@ Remember globally:
 
 A plugin unload must release its contributions without corrupting the remaining layout.
 
-## 13. Object and tile picking relationship
+## 14. Object and tile picking relationship
 
 Pickers and inspectors are different concerns.
 
@@ -595,7 +644,7 @@ The floating picker palette may change targeting mode without replacing the Insp
 
 Selection should carry stable semantic identity wherever possible so scene rebuilds do not invalidate the inspector unnecessarily.
 
-## 14. Current migration targets
+## 15. Current migration targets
 
 The existing code is useful but must converge on this contract.
 
@@ -643,7 +692,7 @@ Target:
 - migrate from permissive surface placement toward an explicit ToolUiDescriptor/capability model
 - retain compatibility adapters while first-party tools migrate
 
-## 15. UI correctness acceptance gates
+## 16. UI correctness acceptance gates
 
 A UI feature is not complete because the widgets render.
 
@@ -664,7 +713,7 @@ The workspace must verify:
 
 These rules should be unit-tested at the state/layout resolver level even though pixel-perfect ImGui rendering still needs live verification.
 
-## 16. Accessibility, focus, scaling, and performance
+## 17. Accessibility, focus, scaling, and performance
 
 The workspace must remain usable as the tool set and asset catalogs grow.
 
@@ -709,7 +758,7 @@ Rules:
 
 The target is a stable interactive viewport even while deep libraries contain tens of thousands of definitions.
 
-## 17. Workspace persistence and schema evolution
+## 18. Workspace persistence and schema evolution
 
 Workspace state is persistent user data and needs a migration strategy.
 
@@ -728,7 +777,7 @@ When surfaces are renamed or migrated, provide an explicit migration where reaso
 
 Plugin-owned persisted UI state is removed or quarantined cleanly when a plugin disappears, without corrupting host workspace state.
 
-## 18. Guiding principle
+## 19. Guiding principle
 
 The workspace is contextual, not modal-window-driven.
 
