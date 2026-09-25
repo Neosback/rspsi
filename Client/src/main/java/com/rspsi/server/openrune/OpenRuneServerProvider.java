@@ -1,4 +1,4 @@
-package com.rspsi.plugins.server.openrune;
+package com.rspsi.server.openrune;
 
 import com.rspsi.editor.integration.IntegrationCapability;
 import com.rspsi.editor.integration.IntegrationOptions;
@@ -19,7 +19,7 @@ import com.rspsi.server.ServerConnection;
 import com.rspsi.server.ServerContentKind;
 import com.rspsi.server.ServerPathKey;
 import com.rspsi.server.ServerProjectInspection;
-import com.rspsi.plugins.server.openrune.kotlin.OpenRuneKotlinSemanticIndexer;
+import com.rspsi.server.openrune.kotlin.OpenRuneKotlinSemanticIndexer;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
