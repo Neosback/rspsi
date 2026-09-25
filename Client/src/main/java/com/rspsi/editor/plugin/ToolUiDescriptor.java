@@ -71,9 +71,8 @@ public record ToolUiDescriptor(
 
     public ToolUiDescriptor {
         surfaces = surfaces == null || surfaces.isEmpty()
-                ? EnumSet.of(ToolSurface.BOTTOM_BAR, ToolSurface.FLOATING_TOOLBAR)
-                : EnumSet.copyOf(surfaces);
-        surfaces = Set.copyOf(surfaces);
+                ? Set.of()
+                : Set.copyOf(EnumSet.copyOf(surfaces));
         brushUiMode = Objects.requireNonNullElse(brushUiMode, BrushUiMode.NONE);
         capabilities = capabilities == null || capabilities.isEmpty()
                 ? Set.of()
@@ -91,13 +90,15 @@ public record ToolUiDescriptor(
         }
     }
 
-    /** Standard modal map-tool defaults used by compatibility registrations. */
+    /**
+     * Compatibility defaults for legacy engine-tool registrations.
+     *
+     * <p>Legacy tools remain behavior-only until explicitly promoted through
+     * PluginApi.mapTool(...), preventing internal sub-tools from unexpectedly
+     * appearing in Studio chrome during migration.</p>
+     */
     public static ToolUiDescriptor defaults() {
-        return new ToolUiDescriptor(
-                EnumSet.of(ToolSurface.BOTTOM_BAR, ToolSurface.FLOATING_TOOLBAR),
-                BrushUiMode.NONE,
-                Set.of(),
-                false);
+        return new ToolUiDescriptor(Set.of(), BrushUiMode.NONE, Set.of(), false);
     }
 
     public boolean appearsOn(ToolSurface surface) {
