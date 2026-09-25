@@ -6,6 +6,8 @@ import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiStyleVar;
+import imgui.flag.ImGuiTableColumnFlags;
+import imgui.flag.ImGuiTableFlags;
 import imgui.type.ImBoolean;
 
 import java.util.function.Consumer;
@@ -289,6 +291,39 @@ public final class StudioWidgets {
 
     public static void info(String text) {
         ImGui.textDisabled(StudioIcons.INFO + "  " + text);
+    }
+
+    /** Compact two-column inspection table for labels and values. */
+    public static boolean beginPropertyTable(String id) {
+        if (!ImGui.beginTable("##properties-" + id, 2,
+                ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg)) {
+            return false;
+        }
+        ImGui.tableSetupColumn("Property", ImGuiTableColumnFlags.WidthStretch, 0.40f);
+        ImGui.tableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch, 0.60f);
+        return true;
+    }
+
+    public static void propertyRow(String label, String value) {
+        ImGui.tableNextRow();
+        ImGui.tableNextColumn();
+        ImGui.textDisabled(label);
+        ImGui.tableNextColumn();
+        ImGui.textWrapped(value == null ? "" : value);
+    }
+
+    public static void propertyRowMono(String label, String value) {
+        ImGui.tableNextRow();
+        ImGui.tableNextColumn();
+        ImGui.textDisabled(label);
+        ImGui.tableNextColumn();
+        ImGui.pushFont(StudioFonts.mono(), 0.0f);
+        ImGui.textWrapped(value == null ? "" : value);
+        ImGui.popFont();
+    }
+
+    public static void endPropertyTable() {
+        ImGui.endTable();
     }
 
     /**
