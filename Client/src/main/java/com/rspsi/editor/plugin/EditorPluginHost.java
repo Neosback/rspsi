@@ -196,7 +196,10 @@ public final class EditorPluginHost implements AutoCloseable {
             for (EditorPlugin plugin : plugins) {
                 discoveredPlugins.add(Objects.requireNonNull(plugin, "plugin"));
             }
-            List<EditorPlugin> orderedPlugins = orderPlugins(discoveredPlugins);
+            Set<String> availableCoreIds = coreSnapshot.stream()
+                    .map(CoreEditorModule::id)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            List<EditorPlugin> orderedPlugins = orderPlugins(discoveredPlugins, availableCoreIds);
             for (EditorPlugin checked : orderedPlugins) {
                 String pluginId = requireId(checked.id());
                 if (!pluginIds.add(pluginId)) {
@@ -330,7 +333,12 @@ public final class EditorPluginHost implements AutoCloseable {
         return value;
     }
 
-    private static List<EditorPlugin> orderPlugins(List<EditorPlugin> plugins) {
+    private static List<EditorPlugin> orderPlugins(
+            List<EditorPlugin> plugins,
+            Set<String> satisfiedExternalDependencies) {
+        Set<String> satisfied = satisfiedExternalDependencies == null
+                ? Set.of()
+                : Set.copyOf(satisfiedExternalDependencies);
         Map<String, EditorPlugin> byId = new java.util.LinkedHashMap<>();
         Map<String, EditorPluginDescriptor> descriptors = new java.util.LinkedHashMap<>();
         for (EditorPlugin plugin : plugins) {
@@ -355,15 +363,20 @@ public final class EditorPluginHost implements AutoCloseable {
         Map<String, List<String>> dependents = new java.util.LinkedHashMap<>();
         for (Map.Entry<String, EditorPluginDescriptor> entry : descriptors.entrySet()) {
             List<String> dependencies = entry.getValue().dependencies();
-            remaining.put(entry.getKey(), dependencies.size());
+            int unresolvedCount = 0;
             for (String dependency : dependencies) {
+                if (satisfied.contains(dependency)) {
+                    continue;
+                }
                 if (!byId.containsKey(dependency)) {
                     throw new IllegalArgumentException("Plugin " + entry.getKey()
-                            + " depends on missing plugin: " + dependency);
+                            + " depends on missing plugin or core module: " + dependency);
                 }
+                unresolvedCount++;
                 dependents.computeIfAbsent(dependency, ignored -> new ArrayList<>())
                         .add(entry.getKey());
             }
+            remaining.put(entry.getKey(), unresolvedCount);
         }
 
         Comparator<EditorPlugin> stableOrder = Comparator.comparingInt(EditorPlugin::loadOrder)
