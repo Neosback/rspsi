@@ -496,9 +496,14 @@ The current `PluginServices.TerrainService`, `ObjectService`, and `CommandServic
 
 A map editor extension needs more than a tile-at-cursor helper.
 
-The stable query surface should include:
+**Implemented foundation:** `com.rspsi.editor.viewport.SurfaceHit` is now the
+renderer-independent pointer-hit contract exposed through `Viewport.hitAt(...)`
+and `ToolContext.hitAt(...)`. Native Studio converts renderer `PickResult` into
+this semantic value at one boundary, and built-in object selection consumes the
+same API.
 
-- canonical `SurfaceHit`;
+The stable query surface should continue growing from that foundation with:
+
 - hovered tile/object;
 - picked semantic object identity;
 - authored/effective/render plane;

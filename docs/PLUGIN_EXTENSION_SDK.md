@@ -433,7 +433,13 @@ The host should route input only to the active tool according to a declared inpu
 
 ### Canonical hit context
 
-Input events should be able to carry or cheaply query the canonical scene hit:
+**Current implementation:** `ToolContext.hitAt(x, y)` exposes the renderer-independent
+`SurfaceHit` contract. It preserves the exact world tile, semantic object id,
+object anchor and resolved authored placement when available. Native Studio converts
+its richer renderer `PickResult` at the viewport boundary, so tools never need draw
+priority, texture ids, depth bias, GPU picker ids or native renderer classes.
+
+The richer input model can therefore grow toward:
 
 ```
 ToolInput
@@ -444,13 +450,13 @@ ToolInput
   active plane
 ```
 
-Tools should not reimplement renderer picking.
+Tools should query `SurfaceHit` rather than reimplement renderer picking.
 
 ---
 
 ## 10. Map editing services
 
-Third-party tools need enough edit power to build features Studio does not ship.
+First-class extensions need enough edit power to build features Studio does not ship.
 
 They should be able to edit all canonical map state through stable services.
 
@@ -518,7 +524,7 @@ Usually, **no**.
 
 A plugin does not need a custom renderer implementation if it manipulates world properties Studio already understands.
 
-For example, a community developer can build a new:
+For example, an extension developer can build a new:
 
 - tile painter;
 - terrain sculptor;

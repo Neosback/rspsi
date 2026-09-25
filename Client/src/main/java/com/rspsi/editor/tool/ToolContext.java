@@ -6,6 +6,7 @@ import com.rspsi.editor.model.DocumentCoordinates;
 import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.WorldWindow;
+import com.rspsi.editor.viewport.SurfaceHit;
 import com.rspsi.editor.viewport.Viewport;
 
 import java.util.Objects;
@@ -46,6 +47,11 @@ public record ToolContext(
      */
     public ToolContext(EditorSession session, AssetRepository assets, Viewport viewport) {
         this(session, assets, viewport, session.coordinates());
+    }
+
+    /** Stable semantic hit for tile/object-aware tools. */
+    public Optional<SurfaceHit> hitAt(float x, float y) {
+        return viewport.hitAt(x, y);
     }
 
     public Optional<WorldTile> worldTileAt(float x, float y) {

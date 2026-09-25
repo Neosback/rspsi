@@ -82,7 +82,9 @@ public final class BoxSelectTool implements EditorTool {
             // missed every object), matching Viewport.objectAt's own documented
             // "legacy viewport" fallback contract.
             if (mode == Mode.SINGLE) {
-                context.viewport().objectAt(downX, downY).ifPresent(objects::add);
+                context.hitAt(downX, downY)
+                        .flatMap(com.rspsi.editor.viewport.SurfaceHit::object)
+                        .ifPresent(objects::add);
             }
             if (objects.isEmpty()) {
                 var world = context.session().world();

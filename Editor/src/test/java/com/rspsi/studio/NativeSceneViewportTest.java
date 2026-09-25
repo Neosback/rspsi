@@ -1,9 +1,11 @@
 package com.rspsi.studio;
 
+import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.CameraState;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.editor.render.SceneCameraProjection;
+import com.rspsi.editor.viewport.SurfaceHit;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -29,6 +31,31 @@ class NativeSceneViewportTest {
 
         viewport.clearSelection();
         assertFalse(viewport.selection().isPresent());
+    }
+
+    @Test
+    void convertsRendererPickIntoSemanticSurfaceHit() {
+        NativeSceneViewport viewport = new NativeSceneViewport();
+        WorldTile tile = new WorldTile(0, 3200, 3201);
+        WorldObject placement = new WorldObject(1050, 10, 2, 0, 4, 5);
+        viewport.setObjectResolver((anchor, objectId) ->
+                objectId == placement.id()
+                        ? java.util.Optional.of(placement)
+                        : java.util.Optional.empty());
+
+        SurfaceHit objectHit = viewport.semanticHit(
+                new PickResult(tile, 0, placement.id(), 12.0f));
+
+        assertTrue(objectHit.objectHit());
+        assertEquals(tile, objectHit.tile());
+        assertEquals(tile, objectHit.targetTile());
+        assertEquals(placement.id(), objectHit.objectId());
+        assertEquals(placement, objectHit.object().orElseThrow());
+
+        SurfaceHit terrainHit = viewport.semanticHit(new PickResult(tile, 0));
+        assertFalse(terrainHit.objectHit());
+        assertEquals(tile, terrainHit.targetTile());
+        assertTrue(terrainHit.object().isEmpty());
     }
 
     @Test
