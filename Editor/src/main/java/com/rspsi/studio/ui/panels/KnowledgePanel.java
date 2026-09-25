@@ -8,16 +8,16 @@ import com.rspsi.editor.knowledge.MetricKey;
 import com.rspsi.editor.knowledge.RegionProfile;
 import com.rspsi.editor.knowledge.SemanticTag;
 import com.rspsi.editor.knowledge.WorldKnowledgeService;
-import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.LocalTile;
-import com.rspsi.editor.model.WorldTile;
+import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.osrs.rules.RuleTrace;
 import com.rspsi.studio.theme.StudioFonts;
-import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.studio.theme.StudioWidgets;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
@@ -30,41 +30,23 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * World Knowledge, semantic classification, and rule-trace panel.
- */
+/** World Knowledge, semantic classification, and rule-trace panel. */
 public final class KnowledgePanel implements StudioPanel {
     public static final String ID = "studio.knowledge";
     private final ImString customTagInput = new ImString(32);
 
-    @Override
-    public String id() {
-        return ID;
-    }
-
-    @Override
-    public String title() {
-        return "World Knowledge";
-    }
-
-    @Override
-    public String icon() {
-        return StudioIcons.INFO;
-    }
-
-    @Override
-    public DockRegion preferredRegion() {
-        return DockRegion.RIGHT;
-    }
-
-    @Override
-    public Set<DockRegion> allowedRegions() {
+    @Override public String id() { return ID; }
+    @Override public String title() { return "World Knowledge"; }
+    @Override public String icon() { return com.rspsi.studio.theme.StudioIcons.INFO; }
+    @Override public DockRegion preferredRegion() { return DockRegion.RIGHT; }
+    @Override public Set<DockRegion> allowedRegions() {
         return EnumSet.of(DockRegion.RIGHT, DockRegion.BOTTOM);
     }
+    @Override public int order() { return 35; }
 
     @Override
-    public int order() {
-        return 35;
+    public float preferredRightSidebarWidth() {
+        return 420.0f;
     }
 
     @Override
@@ -82,157 +64,204 @@ public final class KnowledgePanel implements StudioPanel {
 
         KnowledgeSnapshot snapshot = knowledge.snapshot();
 
-        // 1. World & Region Profile Summary
         if (ImGui.collapsingHeader("Region & World Intelligence", ImGuiTreeNodeFlags.DefaultOpen)) {
-            RegionProfile worldProfile = snapshot.worldProfile();
-            ImGui.pushFont(StudioFonts.mono(), 0.0f);
-            ImGui.text("Total Tiles:     " + worldProfile.tileCount() + " (" + worldProfile.planes() + " planes)");
-            ImGui.text("Dominant Floor:  Underlay #" + worldProfile.dominantUnderlay().orElse(-1)
-                    + " | Overlay #" + worldProfile.dominantOverlay().orElse(-1));
-            ImGui.text("Elevation:       Min " + worldProfile.minHeight() + " | Max " + worldProfile.maxHeight()
-                    + " | Avg " + String.format("%.1f", worldProfile.averageHeight()));
-
-            worldProfile.metric(MetricKey.MAX_SLOPE).ifPresent(maxSlope ->
-                    ImGui.text("Steepest Slope:  " + String.format("%.1f", maxSlope) + "°"));
-            worldProfile.metric(MetricKey.WALKABLE_RATIO).ifPresent(walkable ->
-                    ImGui.text("Walkable Space:  " + String.format("%.1f%%", walkable * 100)));
-            ImGui.popFont();
+            renderRegionProfile(snapshot.worldProfile());
         }
 
-        // 2. Selection Semantics & Explain Classification
         Optional<PickResult> picked = context.viewport() != null
                 ? context.viewport().selection() : Optional.empty();
 
-        if (picked.isPresent()) {
-            PickResult hit = picked.get();
-            WorldTile worldCoord = hit.tile();
-            LocalTile local = context.session() == null ? null
-                    : context.session().coordinates().toLocal(worldCoord).orElse(null);
-            StudioWidgets.section("Selection Semantics");
-            ImGui.text("Selected Tile: (" + worldCoord.plane() + ", "
-                    + worldCoord.x() + ", " + worldCoord.y() + ")");
-            if (local == null) {
-                ImGui.textDisabled("Selected tile is outside the active document.");
-                return;
-            }
-            TileCoordinate coord = local.coordinate();
-
-            WorldDocument world = context.pluginLifecycle().host().context().world();
-            WorldObject pickedObject = null;
-            if (hit.objectHit() && world != null) {
-                WorldTile objTile = hit.objectTile() != null ? hit.objectTile() : worldCoord;
-                LocalTile objLocal = context.session().coordinates().toLocal(objTile).orElse(null);
-                TileCoordinate objCoord = objLocal != null ? objLocal.coordinate() : coord;
-                if (objCoord.plane() >= 0 && objCoord.plane() < world.planes() && world.contains(objCoord)) {
-                    for (WorldObject obj : world.tile(objCoord).snapshot().objects()) {
-                        if (obj.id() == hit.objectId()) {
-                            pickedObject = obj;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Derived Topology
-            snapshot.topologyAt(coord).ifPresent(topo -> {
-                ImGui.pushFont(StudioFonts.mono(), 0.0f);
-                ImGui.text("Topology: Slope " + String.format("%.1f", topo.slopeMagnitude())
-                        + " | Aspect " + topo.aspect() + " | Curvature " + topo.curvature());
-                if (topo.isCliff()) ImGui.textColored(0xFF6666FF, "[!] Terrain marked as CLIFF");
-                ImGui.popFont();
-            });
-
-            // Semantic Tags
-            Set<SemanticTag> tags = snapshot.tagsAt(coord);
-            if (tags.isEmpty()) {
-                ImGui.textDisabled("No semantic tags active on this tile.");
-            } else {
-                ImGui.text("Semantic Tags:");
-                for (SemanticTag tag : tags) {
-                    ImGui.bulletText(tag.qualifiedName());
-                }
-            }
-
-            // Explain Classification breakdown
-            if (ImGui.collapsingHeader("Explain Classification", ImGuiTreeNodeFlags.DefaultOpen)) {
-                List<KnowledgeFact<SemanticTag>> facts = snapshot.factsAt(coord);
-                boolean hasObjFacts = pickedObject != null && !knowledge.classifyObject(pickedObject).isEmpty();
-                if (facts.isEmpty() && !hasObjFacts) {
-                    ImGui.textDisabled("No inferred classifications active.");
-                } else {
-                    for (KnowledgeFact<SemanticTag> fact : facts) {
-                        String header = fact.value().qualifiedName() + String.format(" [%.0f%%]", fact.confidence() * 100)
-                                + " (" + fact.source() + ")";
-                        ImGui.text(header);
-                        if (!fact.evidence().isEmpty()) {
-                            ImGui.indent();
-                            ImGui.pushFont(StudioFonts.mono(), 0.0f);
-                            for (Evidence ev : fact.evidence()) {
-                                ImGui.text("- " + ev.description() + " (signal: " + String.format("%.2f", ev.weight()) + ")");
-                            }
-                            ImGui.popFont();
-                            ImGui.unindent();
-                        }
-                    }
-
-                    if (pickedObject != null) {
-                        List<KnowledgeFact<SemanticTag>> objFacts = knowledge.classifyObject(pickedObject);
-                        for (KnowledgeFact<SemanticTag> fact : objFacts) {
-                            String header = fact.value().qualifiedName() + String.format(" [%.0f%%]", fact.confidence() * 100)
-                                    + " (" + fact.source() + ")";
-                            ImGui.text(header);
-                            if (!fact.evidence().isEmpty()) {
-                                ImGui.indent();
-                                ImGui.pushFont(StudioFonts.mono(), 0.0f);
-                                for (Evidence ev : fact.evidence()) {
-                                    ImGui.text("- " + ev.description() + " (signal: " + String.format("%.2f", ev.weight()) + ")");
-                                }
-                                ImGui.popFont();
-                                ImGui.unindent();
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Explain Rendering (Rule Trace)
-            if (ImGui.collapsingHeader("Explain Rendering (Rule Trace)", ImGuiTreeNodeFlags.DefaultOpen)
-                    && world != null && coord.plane() >= 0 && coord.plane() < world.planes()) {
-                RuleTrace.TileRuleTrace tileTrace = RuleTrace.traceTile(world, coord);
-                ImGui.pushFont(StudioFonts.mono(), 0.0f);
-                ImGui.text("Tile Elevation:   " + tileTrace.elevation());
-                ImGui.text("Effective Plane:  " + tileTrace.effectivePlane());
-                ImGui.text("Tile Flags:       Blocked=" + tileTrace.flags().blocked()
-                        + " Bridge=" + tileTrace.flags().bridge() + " Roof=" + tileTrace.flags().underRoof());
-
-                if (pickedObject != null) {
-                    final WorldObject objRef = pickedObject;
-                    LoadedOsrsCacheSession cache = context.cache();
-                    RuleTrace.traceObject(pickedObject, context.pluginLifecycle().host().context().world(),
-                            cache != null ? cache.bundle().definitions() : null).ifPresent(trace -> {
-                        ImGui.separator();
-                        ImGui.text("Object Shape:     " + (trace.shapeDescriptor() != null ? trace.shapeDescriptor().name() : "Shape " + objRef.type()));
-                        ImGui.text("Loc Variants:     " + trace.variantCount() + " (Mirror: " + trace.mirrorApplied() + ")");
-                        ImGui.text("Displacement:     " + trace.displacementUsed());
-                        ImGui.text("Merge Normals:    " + (trace.mergeNormalsEligible() ? "Yes (Opcode 22)" : "No"));
-                        ImGui.text("Ground Contour:   " + (trace.contourGroundApplied() ? "Type " + trace.contourGroundType() : "Disabled"));
-                    });
-                }
-                ImGui.popFont();
-            }
-
-            // User Overrides
-            if (ImGui.collapsingHeader("User Metadata Overrides")) {
-                ImGui.inputTextWithHint("##custom-tag", "New tag (e.g. core:SPAWN)", customTagInput);
-                ImGui.sameLine();
-                if (ImGui.button("Add Tag##add-user-tag") && !customTagInput.get().isBlank()) {
-                    knowledge.userOverrides().addTileTag(coord, SemanticTag.of(customTagInput.get()));
-                    knowledge.invalidate();
-                    customTagInput.set("");
-                }
-            }
-        } else {
-            ImGui.textDisabled("Select or pick a tile in the viewport to inspect semantic knowledge and rule traces.");
+        if (picked.isEmpty()) {
+            ImGui.dummy(1.0f, 6.0f);
+            ImGui.textDisabled(
+                    "Select or pick a tile in the viewport to inspect semantic knowledge and rule traces.");
+            return;
         }
+
+        PickResult hit = picked.get();
+        WorldTile worldCoord = hit.tile();
+        LocalTile local = context.session() == null ? null
+                : context.session().coordinates().toLocal(worldCoord).orElse(null);
+
+        StudioWidgets.section("Selection Semantics");
+        if (StudioWidgets.beginPropertyTable("knowledge-selection")) {
+            StudioWidgets.propertyRowMono("Selected tile",
+                    worldCoord.plane() + " / " + worldCoord.x() + " / " + worldCoord.y());
+            StudioWidgets.endPropertyTable();
+        }
+
+        if (local == null) {
+            ImGui.textDisabled("Selected tile is outside the active document.");
+            return;
+        }
+        TileCoordinate coord = local.coordinate();
+        WorldDocument world = context.pluginLifecycle().host().context().world();
+        WorldObject pickedObject = resolvePickedObject(context, world, hit, worldCoord, coord);
+
+        snapshot.topologyAt(coord).ifPresent(topo -> {
+            if (StudioWidgets.beginPropertyTable("knowledge-topology")) {
+                StudioWidgets.propertyRow("Slope", String.format("%.1f°", topo.slopeMagnitude()));
+                StudioWidgets.propertyRow("Aspect", topo.aspect().toString());
+                StudioWidgets.propertyRow("Curvature", topo.curvature().toString());
+                StudioWidgets.propertyRow("Classification", topo.isCliff() ? "Cliff" : "Traversable");
+                StudioWidgets.endPropertyTable();
+            }
+        });
+
+        Set<SemanticTag> tags = snapshot.tagsAt(coord);
+        ImGui.dummy(1.0f, 6.0f);
+        ImGui.textDisabled("Semantic tags");
+        if (tags.isEmpty()) {
+            ImGui.textDisabled("No semantic tags active on this tile.");
+        } else {
+            for (SemanticTag tag : tags) {
+                StudioWidgets.pill(
+                        tag.qualifiedName(),
+                        0xFF183550,
+                        StudioPalette.ACCENT_HOVER);
+                ImGui.sameLine();
+            }
+            ImGui.newLine();
+        }
+
+        if (ImGui.collapsingHeader("Explain Classification", ImGuiTreeNodeFlags.DefaultOpen)) {
+            List<KnowledgeFact<SemanticTag>> facts = snapshot.factsAt(coord);
+            List<KnowledgeFact<SemanticTag>> objectFacts = pickedObject == null
+                    ? List.of() : knowledge.classifyObject(pickedObject);
+            if (facts.isEmpty() && objectFacts.isEmpty()) {
+                ImGui.textDisabled("No inferred classifications active.");
+            } else {
+                facts.forEach(KnowledgePanel::renderFact);
+                objectFacts.forEach(KnowledgePanel::renderFact);
+            }
+        }
+
+        if (ImGui.collapsingHeader("Explain Rendering", ImGuiTreeNodeFlags.DefaultOpen)
+                && world != null && coord.plane() >= 0 && coord.plane() < world.planes()) {
+            renderRuleTrace(world, coord, pickedObject, context.cache());
+        }
+
+        if (ImGui.collapsingHeader("User Metadata Overrides")) {
+            ImGui.setNextItemWidth(Math.max(140.0f, ImGui.getContentRegionAvailX() - 92.0f));
+            ImGui.inputTextWithHint("##custom-tag", "core:SPAWN", customTagInput);
+            ImGui.sameLine();
+            if (ImGui.button("Add##add-user-tag") && !customTagInput.get().isBlank()) {
+                knowledge.userOverrides().addTileTag(coord, SemanticTag.of(customTagInput.get()));
+                knowledge.invalidate();
+                customTagInput.set("");
+            }
+        }
+    }
+
+    private static void renderRegionProfile(RegionProfile profile) {
+        if (!StudioWidgets.beginPropertyTable("knowledge-region")) return;
+        StudioWidgets.propertyRow("Tiles",
+                profile.tileCount() + " across " + profile.planes() + " planes");
+        StudioWidgets.propertyRow("Dominant floor",
+                "Underlay #" + profile.dominantUnderlay().orElse(-1)
+                        + " · Overlay #" + profile.dominantOverlay().orElse(-1));
+        StudioWidgets.propertyRow("Elevation",
+                "Min " + profile.minHeight()
+                        + " · Max " + profile.maxHeight()
+                        + " · Avg " + String.format("%.1f", profile.averageHeight()));
+        profile.metric(MetricKey.MAX_SLOPE).ifPresent(value ->
+                StudioWidgets.propertyRow("Steepest slope", String.format("%.1f°", value)));
+        profile.metric(MetricKey.WALKABLE_RATIO).ifPresent(value ->
+                StudioWidgets.propertyRow("Walkable space", String.format("%.1f%%", value * 100)));
+        StudioWidgets.endPropertyTable();
+    }
+
+    private static WorldObject resolvePickedObject(
+            StudioPanelContext context,
+            WorldDocument world,
+            PickResult hit,
+            WorldTile worldCoord,
+            TileCoordinate fallback) {
+        if (!hit.objectHit() || world == null || context.session() == null) return null;
+        WorldTile objTile = hit.objectTile() != null ? hit.objectTile() : worldCoord;
+        LocalTile objLocal = context.session().coordinates().toLocal(objTile).orElse(null);
+        TileCoordinate objCoord = objLocal != null ? objLocal.coordinate() : fallback;
+        if (objCoord.plane() < 0 || objCoord.plane() >= world.planes() || !world.contains(objCoord)) {
+            return null;
+        }
+        return world.tile(objCoord).snapshot().objects().stream()
+                .filter(obj -> obj.id() == hit.objectId())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static void renderFact(KnowledgeFact<SemanticTag> fact) {
+        StudioWidgets.beginCard(
+                "knowledge-fact-" + fact.value().qualifiedName() + "-" + fact.source(),
+                -1.0f, 0.0f);
+        ImGui.textColored(StudioPalette.ACCENT, fact.value().qualifiedName());
+        ImGui.sameLine();
+        StudioWidgets.pill(
+                String.format("%.0f%%", fact.confidence() * 100),
+                0xFF1D344A,
+                StudioPalette.TEXT);
+        ImGui.sameLine();
+        ImGui.textDisabled(fact.source().toString());
+
+        if (!fact.evidence().isEmpty()) {
+            ImGui.dummy(1.0f, 4.0f);
+            for (Evidence evidence : fact.evidence()) {
+                if (StudioWidgets.beginPropertyTable(
+                        "evidence-" + fact.value().qualifiedName() + "-" + evidence.hashCode())) {
+                    StudioWidgets.propertyRow("Evidence", evidence.description());
+                    StudioWidgets.propertyRow("Signal", String.format("%.2f", evidence.weight()));
+                    StudioWidgets.endPropertyTable();
+                }
+            }
+        }
+        StudioWidgets.endCard();
+        ImGui.dummy(1.0f, 6.0f);
+    }
+
+    private static void renderRuleTrace(
+            WorldDocument world,
+            TileCoordinate coord,
+            WorldObject pickedObject,
+            LoadedOsrsCacheSession cache) {
+        RuleTrace.TileRuleTrace tileTrace = RuleTrace.traceTile(world, coord);
+        if (StudioWidgets.beginPropertyTable("knowledge-rule-trace")) {
+            StudioWidgets.propertyRowMono("Tile elevation", Integer.toString(tileTrace.elevation()));
+            StudioWidgets.propertyRowMono("Effective plane", Integer.toString(tileTrace.effectivePlane()));
+            StudioWidgets.propertyRow(
+                    "Tile flags",
+                    "Blocked " + tileTrace.flags().blocked()
+                            + " · Bridge " + tileTrace.flags().bridge()
+                            + " · Roof " + tileTrace.flags().underRoof());
+            StudioWidgets.endPropertyTable();
+        }
+
+        if (pickedObject == null) return;
+        final WorldObject objRef = pickedObject;
+        RuleTrace.traceObject(
+                pickedObject,
+                world,
+                cache != null ? cache.bundle().definitions() : null).ifPresent(trace -> {
+            ImGui.dummy(1.0f, 6.0f);
+            if (StudioWidgets.beginPropertyTable("knowledge-object-trace")) {
+                StudioWidgets.propertyRow(
+                        "Object shape",
+                        trace.shapeDescriptor() != null
+                                ? trace.shapeDescriptor().name()
+                                : "Shape " + objRef.type());
+                StudioWidgets.propertyRow("Loc variants",
+                        trace.variantCount() + " · mirror " + trace.mirrorApplied());
+                StudioWidgets.propertyRowMono(
+                        "Displacement", Integer.toString(trace.displacementUsed()));
+                StudioWidgets.propertyRow(
+                        "Merge normals",
+                        trace.mergeNormalsEligible() ? "Yes · opcode 22" : "No");
+                StudioWidgets.propertyRow(
+                        "Ground contour",
+                        trace.contourGroundApplied()
+                                ? "Type " + trace.contourGroundType()
+                                : "Disabled");
+                StudioWidgets.endPropertyTable();
+            }
+        });
     }
 }
