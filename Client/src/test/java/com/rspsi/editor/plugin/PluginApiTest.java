@@ -7,6 +7,7 @@ import com.rspsi.editor.input.EditorKeyEvent;
 import com.rspsi.editor.input.PointerEvent;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.WorldModel;
+import com.rspsi.editor.plugin.ui.EditorUiNode;
 import com.rspsi.editor.render.OverlayDraw;
 import com.rspsi.editor.tool.EditorTool;
 import com.rspsi.editor.tool.ToolContext;
@@ -266,7 +267,10 @@ class PluginApiTest {
                                 ToolUiDescriptor.ToolCapability.WORLD_READ,
                                 ToolUiDescriptor.ToolCapability.WORLD_EDIT,
                                 ToolUiDescriptor.ToolCapability.PREVIEW)
-                        .contextDrawer(true)
+                        .drawer(() -> EditorUiNode.section(
+                                "Biome",
+                                EditorUiNode.text("Paint semantic biome data"),
+                                EditorUiNode.button("Apply", () -> { })))
                         .factory(() -> new NoOpTool("test.biome-painter"))
                         .register();
             }
@@ -296,6 +300,9 @@ class PluginApiTest {
         assertTrue(ui.has(ToolUiDescriptor.ToolCapability.WORLD_EDIT));
         assertTrue(ui.has(ToolUiDescriptor.ToolCapability.CONTEXT_DRAWER));
         assertTrue(ui.hasContextDrawerContent());
+        assertTrue(ui.content().hasContextDrawer());
+        assertTrue(ui.content().contextDrawerNode().orElseThrow()
+                instanceof EditorUiNode.Section);
 
         assertEquals("test.biome-painter", host.registry().createTool(registration.id()).id());
         host.close();

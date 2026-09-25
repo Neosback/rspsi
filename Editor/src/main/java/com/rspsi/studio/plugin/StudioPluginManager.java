@@ -3,6 +3,8 @@ package com.rspsi.studio.plugin;
 import com.rspsi.editor.plugin.EditorPluginRegistry;
 import com.rspsi.editor.plugin.EditorToolRegistration;
 import com.rspsi.editor.plugin.ToolUiDescriptor;
+import com.rspsi.editor.plugin.ui.EditorUiNode;
+import com.rspsi.editor.plugin.ui.ToolUiContent;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.StudioPanel;
 import com.rspsi.studio.ui.StudioPanelContext;
@@ -310,6 +312,7 @@ public final class StudioPluginManager {
             Set<StudioToolPlugin.ToolSurface> surfaces,
             StudioToolPlugin.BrushUiMode brushUiMode,
             boolean hasContextDrawerContent,
+            ToolUiContent content,
             StudioToolPlugin nativePlugin) {
 
         private static StudioToolView fromNative(
@@ -326,6 +329,7 @@ public final class StudioPluginManager {
                     Set.copyOf(surfaces),
                     tool.brushUiMode(),
                     tool.hasContextDrawerContent(),
+                    ToolUiContent.empty(),
                     tool);
         }
 
@@ -361,12 +365,25 @@ public final class StudioPluginManager {
                     registration.order(),
                     Set.copyOf(surfaces),
                     brushUi,
-                    false,
+                    ui.content().hasContextDrawer(),
+                    ui.content(),
                     null);
         }
 
         public boolean isNativeProjection() {
             return nativePlugin != null;
+        }
+
+        public Optional<EditorUiNode> contextDrawerNode() {
+            return content.contextDrawerNode();
+        }
+
+        public Optional<EditorUiNode> quickPaletteNode() {
+            return content.quickPaletteNode();
+        }
+
+        public Optional<EditorUiNode> inspectorNode() {
+            return content.inspectorNode();
         }
     }
 }

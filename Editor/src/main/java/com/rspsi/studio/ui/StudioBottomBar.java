@@ -48,6 +48,7 @@ public final class StudioBottomBar {
     private boolean drawerOpen = true;
     private DrawerMode drawerMode = DrawerMode.AUTO_TOOL;
     private String lastDrawerToolId;
+    private final DeclarativeToolUiRenderer declarativeToolUi = new DeclarativeToolUiRenderer();
 
     public boolean isDrawerOpen() {
         return drawerOpen;
@@ -294,15 +295,23 @@ public final class StudioBottomBar {
                                        String activeToolId) {
         if (context != null && context.studioPlugins() != null) {
             var toolView = context.studioPlugins().toolView(activeToolId).orElse(null);
-            if (toolView != null && toolView.nativePlugin() != null) {
+            if (toolView != null) {
                 try {
-                    toolView.nativePlugin().renderContextDrawer(context);
+                    if (toolView.nativePlugin() != null) {
+                        toolView.nativePlugin().renderContextDrawer(context);
+                        return;
+                    }
+                    var drawer = toolView.contextDrawerNode();
+                    if (drawer.isPresent()) {
+                        declarativeToolUi.render(drawer.orElseThrow());
+                        return;
+                    }
                 } catch (Throwable t) {
                     ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.DANGER);
                     ImGui.text(StudioIcons.BUG_REPORT + " Tool Drawer Error: " + t.getMessage());
                     ImGui.popStyleColor();
+                    return;
                 }
-                return;
             }
         }
 
