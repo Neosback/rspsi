@@ -3,6 +3,7 @@ package com.rspsi.studio.ui;
 import com.rspsi.studio.WorkspaceManager;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioPalette;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
@@ -40,8 +41,7 @@ public final class WorkspaceTabBar {
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 8.0f, 2.0f);
-        // Same panel gray as the menu bar/other chrome, instead of a near-black that clashed.
-        ImGui.pushStyleColor(ImGuiCol.WindowBg, ImGui.getColorU32(0x26 / 255.0f, 0x28 / 255.0f, 0x2B / 255.0f, 1.0f));
+        ImGui.pushStyleColor(ImGuiCol.WindowBg, StudioPalette.CHROME_BG);
 
         ImGui.begin("StudioWorkspaceTabBar", BAR_FLAGS);
 
@@ -61,13 +61,13 @@ public final class WorkspaceTabBar {
                     case OBJECT_STUDIO -> StudioIcons.OBJECT + " Object Studio";
                 };
 
-                if (isActive) {
-                    ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.18f, 0.38f, 0.65f, 1.0f));
-                    ImGui.pushStyleColor(ImGuiCol.Text, ImGui.getColorU32(1.0f, 1.0f, 1.0f, 1.0f));
-                } else {
-                    ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.12f, 0.14f, 0.18f, 0.90f));
-                    ImGui.pushStyleColor(ImGuiCol.Text, ImGui.getColorU32(0.65f, 0.68f, 0.75f, 1.0f));
-                }
+                ImGui.pushStyleColor(ImGuiCol.Button,
+                        isActive ? StudioPalette.ACCENT : StudioPalette.CHROME_BG);
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered,
+                        isActive ? StudioPalette.ACCENT_HOVER : StudioPalette.FIELD_HOVER);
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive,
+                        isActive ? StudioPalette.ACCENT_ACTIVE : StudioPalette.ACCENT_SOFT);
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
 
                 if (ImGui.button(title + "##ws-tab-" + tabIdx)) {
                     workspaces.focus(ws);
@@ -78,22 +78,16 @@ public final class WorkspaceTabBar {
                         case OBJECT_STUDIO -> { if (openObjectStudio != null) openObjectStudio.run(); }
                     }
                 }
+                ImGui.popStyleColor(4);
 
-                // Close button for non-dashboard tabs
-                if (ws != WorkspaceManager.Workspace.DASHBOARD) {
-                    ImGui.sameLine(0.0f, 1.0f);
-                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.70f, 0.20f, 0.20f, 1.0f));
-                    if (ImGui.button(StudioIcons.CLOSE + "##ws-close-" + tabIdx)) {
-                        if (closeWorkspace != null) {
-                            closeWorkspace.accept(ws);
-                        } else {
-                            workspaces.close(ws);
-                        }
+                if (ws != WorkspaceManager.Workspace.DASHBOARD
+                        && ImGui.beginPopupContextItem("##ws-tab-context-" + tabIdx)) {
+                    if (ImGui.menuItem("Close")) {
+                        if (closeWorkspace != null) closeWorkspace.accept(ws);
+                        else workspaces.close(ws);
                     }
-                    ImGui.popStyleColor();
+                    ImGui.endPopup();
                 }
-
-                ImGui.popStyleColor(2);
                 tabIdx++;
             }
 
