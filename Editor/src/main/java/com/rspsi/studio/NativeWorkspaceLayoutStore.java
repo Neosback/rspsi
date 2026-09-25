@@ -14,7 +14,7 @@ import com.rspsi.studio.ui.hud.ViewportHudManager;
 final class NativeWorkspaceLayoutStore {
     // Bump whenever the dock contract changes so an old movable shell cannot
     // reintroduce unlocked rails or a titled viewport.
-    static final int CURRENT_VERSION = 8;
+    static final int CURRENT_VERSION = 9;
     private final Path file;
     private final ObjectMapper mapper = JsonUtil.getDefaultMapper();
 

@@ -53,6 +53,7 @@ public final class PreferencesWindow {
     public void render(SettingsStore store, SettingsService settingsService) {
         if (!open) return;
 
+        StudioWidgets.windowBackdrop("preferences");
         ImGui.setNextWindowSize(780.0f, 520.0f, ImGuiCond.Appearing);
         ImBoolean pOpen = new ImBoolean(open);
         if (!ImGui.begin(StudioIcons.SETTINGS + "  Preferences##studio-preferences", pOpen, ImGuiWindowFlags.NoCollapse)) {

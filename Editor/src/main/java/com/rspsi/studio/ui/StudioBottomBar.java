@@ -7,6 +7,7 @@ import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.StudioToolPlugin;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.studio.ui.panels.HeightToolPanel;
 import com.rspsi.studio.ui.panels.TilePainterPalette;
 import imgui.ImGui;
@@ -46,6 +47,7 @@ public final class StudioBottomBar {
 
     private boolean drawerOpen = true;
     private DrawerMode drawerMode = DrawerMode.AUTO_TOOL;
+    private String lastDrawerToolId;
 
     public boolean isDrawerOpen() {
         return drawerOpen;
@@ -87,22 +89,24 @@ public final class StudioBottomBar {
                        Consumer<String> activateTool,
                        String activeToolId) {
 
-        // Tools with nothing to show (e.g. Single/Multi Select, which report into the Tile
-        // Inspector panel instead) keep the drawer collapsed and un-openable - there is nothing
-        // for the user to expand into.
-        boolean toolHasDrawer = context == null || context.studioPlugins() == null
+        boolean activeToolHasDrawer = context == null || context.studioPlugins() == null
                 || context.studioPlugins().toolPlugin(activeToolId)
                         .map(StudioToolPlugin::hasContextDrawerContent)
                         .orElse(true);
         if (panelManager != null && activeToolId != null) {
-            toolHasDrawer = toolHasDrawer
+            activeToolHasDrawer = activeToolHasDrawer
                     && panelManager.managedRegionForTool(activeToolId)
                             .map(region -> region == DockRegion.BOTTOM)
                             .orElse(true);
         }
-        if (!toolHasDrawer) {
-            drawerOpen = false;
+        if (activeToolHasDrawer && activeToolId != null) {
+            lastDrawerToolId = activeToolId;
         }
+
+        // Picker/inspection tools with no drawer never destroy the user's existing
+        // drawer state. AUTO_TOOL simply keeps showing the last tool that owned UI.
+        String drawerToolId = activeToolHasDrawer ? activeToolId : lastDrawerToolId;
+        boolean drawerHasContent = drawerMode != DrawerMode.AUTO_TOOL || drawerToolId != null;
 
         float curH = currentHeight();
 
@@ -115,11 +119,12 @@ public final class StudioBottomBar {
         ImGui.begin("StudioBottomBar", BAR_FLAGS);
 
         // 1. Horizontal Activity Bar (Square tool buttons linked to the drawer below)
-        renderActivityBar(panelManager, context, activateTool, activeToolId, toolHasDrawer);
+        renderActivityBar(panelManager, context, activateTool, activeToolId, drawerHasContent);
 
-        // 2. Expandable Drawer Body
-        if (drawerOpen && toolHasDrawer) {
-            renderDrawerBody(panelManager, context, activeToolId, curH - COLLAPSED_HEIGHT - 6.0f);
+        // 2. Expandable Drawer Body. When the active picker has no shelf, retain
+        // the last real tool shelf instead of collapsing the whole bottom area.
+        if (drawerOpen && drawerHasContent) {
+            renderDrawerBody(panelManager, context, drawerToolId, curH - COLLAPSED_HEIGHT - 6.0f);
         }
 
         ImGui.end();
@@ -158,15 +163,15 @@ public final class StudioBottomBar {
                 boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
 
                 if (isActive) {
-                    ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF6366F1)); // Indigo 500
-                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF818CF8));
-                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF4F46E5));
+                    ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT); // Indigo 500
+                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
                     ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
                 } else {
-                    ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF181A22)); // Zinc dark surface
-                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF262A37));
-                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF1E212B));
-                    ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
+                    ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.CHROME_BG); // Zinc dark surface
+                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
+                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
+                    ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
                 }
 
                 ImGui.pushFont(StudioFonts.icon(), 0.0f);
@@ -199,7 +204,7 @@ public final class StudioBottomBar {
             var selected = context.session().selection().selectedCoordinates();
             if (!selected.isEmpty()) {
                 ImGui.sameLine(0.0f, 12.0f);
-                ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "(" + selected.size() + " selected)");
+                ImGui.textColored(StudioPalette.ACCENT, "(" + selected.size() + " selected)");
                 ImGui.sameLine(0.0f, 4.0f);
                 if (ImGui.smallButton("Clear##clr-sel-hdr")) {
                     context.session().selection().clear();
@@ -242,11 +247,11 @@ public final class StudioBottomBar {
             boolean isActive = tid.equals(activeToolId);
 
             if (isActive) {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
-                ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
             } else {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.18f, 0.22f, 0.28f, 1.0f));
-                ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF94A3B8));
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.PANEL_ELEVATED);
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
             }
 
             ImGui.pushFont(StudioFonts.icon(), 0.0f);
@@ -293,7 +298,7 @@ public final class StudioBottomBar {
                 try {
                     toolPluginOpt.get().renderContextDrawer(context);
                 } catch (Throwable t) {
-                    ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFFEF4444));
+                    ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.DANGER);
                     ImGui.text(StudioIcons.BUG_REPORT + " Tool Drawer Error: " + t.getMessage());
                     ImGui.popStyleColor();
                 }
@@ -335,7 +340,7 @@ public final class StudioBottomBar {
     }
 
     private void renderSplineRampShelf(StudioPanelContext context) {
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Spline Path & Incline Ramp Builder");
+        ImGui.textColored(StudioPalette.ACCENT, "Spline Path & Incline Ramp Builder");
         ImGui.sameLine();
         ImGui.textDisabled("Click tiles sequentially to plot points. Double-click or press Enter to generate terrain gradient.");
         ImGui.separator();
@@ -355,7 +360,7 @@ public final class StudioBottomBar {
 
     private void renderSelectionShelf(StudioPanelContext context) {
         int selCount = context.session() != null ? context.session().selection().selectedCoordinates().size() : 0;
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Selection Inspector: " + selCount + " tiles selected.");
+        ImGui.textColored(StudioPalette.ACCENT, "Selection Inspector: " + selCount + " tiles selected.");
         ImGui.sameLine();
         if (ImGui.button("Clear Selection##clr-sel-btn")) {
             if (context.session() != null) context.session().selection().clear();
@@ -371,7 +376,7 @@ public final class StudioBottomBar {
     }
 
     private void renderObjectToolShelf(StudioPanelContext context) {
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Object Placement Controls");
+        ImGui.textColored(StudioPalette.ACCENT, "Object Placement Controls");
         ImGui.sameLine();
         ImGui.textDisabled("Click viewport to spawn or manipulate objects. Use Outliner or Object Viewer for full definitions.");
     }
@@ -396,19 +401,19 @@ public final class StudioBottomBar {
     }
 
     private void renderTasksDrawer(StudioPanelContext context) {
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Background Tasks & Scene Cache Operations");
+        ImGui.textColored(StudioPalette.ACCENT, "Background Tasks & Scene Cache Operations");
         ImGui.separator();
         ImGui.textDisabled("All background scene and asset threads are currently idle.");
     }
 
     private void renderNotificationsDrawer(StudioPanelContext context) {
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "System Notifications & Warnings");
+        ImGui.textColored(StudioPalette.ACCENT, "System Notifications & Warnings");
         ImGui.separator();
         ImGui.text("Scene loaded successfully from local OSRS cache.");
     }
 
     private void renderDiagnosticsDrawer(StudioPanelContext context) {
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "OpenGL & Frame Timing Diagnostics");
+        ImGui.textColored(StudioPalette.ACCENT, "OpenGL & Frame Timing Diagnostics");
         ImGui.separator();
         ImGui.text("Native Scene Renderer: Direct FBO Color Attachment");
         ImGui.text("FPS: " + String.format("%.1f", ImGui.getIO().getFramerate()) + " | Frame Time: " + String.format("%.2f ms", 1000.0f / Math.max(1.0f, ImGui.getIO().getFramerate())));

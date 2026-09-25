@@ -1,15 +1,18 @@
 package com.rspsi.studio.plugin.builtin;
 
-import com.rspsi.studio.theme.StudioDrawColors;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.inspector.ObjectResolutionSummary;
 import com.rspsi.editor.model.WorldObject;
+import com.rspsi.editor.model.TileSnapshot;
+import com.rspsi.editor.terrain.TerrainMeshBuilder;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.studio.NativeSceneViewport;
 import com.rspsi.studio.plugin.StudioPlugin;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.StudioPanelContext;
+import com.rspsi.studio.ui.panels.TilePainterPalette;
 import com.rspsi.studio.ui.hud.ViewportHudManager;
 import imgui.ImDrawList;
 import imgui.ImGui;
@@ -27,10 +30,15 @@ public final class TileInfoHudPlugin implements StudioPlugin {
 
     public static final String ID = "studio.tile-info-hud";
 
+    private final ImBoolean showPreview = new ImBoolean(false);
     private final ImBoolean showCoordinates = new ImBoolean(true);
     private final ImBoolean showPlane = new ImBoolean(true);
     private final ImBoolean showHeight = new ImBoolean(true);
+    private final ImBoolean showShape = new ImBoolean(false);
+    private final ImBoolean showRotation = new ImBoolean(false);
     private final ImBoolean showObject = new ImBoolean(true);
+    private final ImBoolean showObjectTransform = new ImBoolean(true);
+    private final TerrainMeshBuilder meshBuilder = new TerrainMeshBuilder();
     private final ImInt anchorCorner = new ImInt(0); // 0=Bottom-Left, 1=Top-Left, 2=Bottom-Right, 3=Top-Right
     private final ImFloat bgAlpha = new ImFloat(0.75f);
 
@@ -82,28 +90,39 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         PickResult hit = lastPick.get();
         WorldTile coord = hit.tile();
         int height = 0;
+        TileSnapshot tileSnapshot = null;
         if (context.session() != null) {
             var local = context.session().coordinates().toLocal(coord).orElse(null);
             if (local != null) {
-                height = context.session().world().tile(local).snapshot().southWestHeight();
+                tileSnapshot = context.session().world().tile(local).snapshot();
+                height = tileSnapshot.southWestHeight();
             }
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append(StudioIcons.EXPLORE);
 
         if (showCoordinates.get()) {
-            sb.append(String.format("  Tile: (%d, %d)", coord.x(), coord.y()));
+            sb.append(String.format("Tile (%d, %d)", coord.x(), coord.y()));
         }
 
         if (showPlane.get()) {
-            if (sb.length() > 2) sb.append("  |  ");
+            if (!sb.isEmpty()) sb.append("  ·  ");
             sb.append("Plane ").append(hit.plane());
         }
 
         if (showHeight.get()) {
-            if (sb.length() > 2) sb.append("  |  ");
+            if (!sb.isEmpty()) sb.append("  ·  ");
             sb.append("Height ").append(height);
+        }
+
+        if (showShape.get() && tileSnapshot != null) {
+            if (!sb.isEmpty()) sb.append("  ·  ");
+            sb.append("Shape ").append(tileSnapshot.overlayShape());
+        }
+
+        if (showRotation.get() && tileSnapshot != null) {
+            if (!sb.isEmpty()) sb.append("  ·  ");
+            sb.append("Rotation ").append(tileSnapshot.overlayRotation() * 90).append('°');
         }
 
         if (showObject.get() && hit.objectHit()) {
@@ -133,18 +152,26 @@ public final class TileInfoHudPlugin implements StudioPlugin {
                     objName = labelWithId(placedLabel, hit.objectId());
                 }
             }
-            if (sb.length() > 2) sb.append("  |  ");
-            sb.append(StudioIcons.OBJECT).append(" ").append(objName);
+            if (!sb.isEmpty()) sb.append("  ·  ");
+            sb.append(objName);
+            if (showObjectTransform.get() && hit.hasSceneObjectIdentity()) {
+                var identity = hit.sceneObjectIdentity();
+                sb.append(" · obj shape ").append(identity.shape())
+                        .append(" · obj rot ").append(identity.rotation() * 90).append('°');
+            }
         }
 
         String text = sb.toString();
-        if (text.isBlank() || text.equals(StudioIcons.EXPLORE)) return;
+        boolean drawPreview = showPreview.get() && tileSnapshot != null;
+        if (text.isBlank() && !drawPreview) return;
 
         float padX = 10.0f;
-        float padY = 4.0f;
-        float textW = ImGui.calcTextSize(text).x;
-        float badgeW = textW + padX * 2.0f;
-        float badgeH = 22.0f;
+        float padY = 6.0f;
+        float previewSize = drawPreview ? 52.0f : 0.0f;
+        float previewGap = drawPreview && !text.isBlank() ? 10.0f : 0.0f;
+        float textW = text.isBlank() ? 0.0f : ImGui.calcTextSize(text).x;
+        float badgeW = padX * 2.0f + previewSize + previewGap + textW;
+        float badgeH = Math.max(26.0f, previewSize + padY * 2.0f);
 
         if (context.huds() == null) return;
         ViewportHudManager.Quadrant quadrant = switch (anchorCorner.get()) {
@@ -153,23 +180,80 @@ public final class TileInfoHudPlugin implements StudioPlugin {
             case 3 -> ViewportHudManager.Quadrant.TOP_RIGHT;
             default -> ViewportHudManager.Quadrant.BOTTOM_LEFT;
         };
-        context.huds().register(ID, quadrant, 20);
+        context.huds().register(ID, quadrant, 20, true, bgAlpha.get());
+        context.huds().setOpacity(ID, bgAlpha.get());
         var placement = context.huds().place(ID, badgeW, badgeH);
         if (placement == null) return;
         float hudX = placement.x();
         float hudY = placement.y();
 
         ImDrawList dl = ImGui.getWindowDrawList();
-        int alphaByte = (int) (Math.max(0.1f, Math.min(1.0f, bgAlpha.get())) * 255.0f);
-        int bgColor = (alphaByte << 24) | 0x0F172A;
-        int borderColor = (alphaByte << 24) | 0x334155;
+        int alphaByte = (int) (context.huds().opacity(ID) * 255.0f);
+        int bgColor = StudioPalette.draw((alphaByte << 24) | (StudioPalette.CHROME_BG & 0x00FFFFFF));
+        int borderColor = StudioPalette.draw((alphaByte << 24) | (StudioPalette.BORDER_STRONG & 0x00FFFFFF));
 
         // Semi-transparent rounded pill
         dl.addRectFilled(hudX, hudY, hudX + badgeW, hudY + badgeH, bgColor, 6.0f);
         dl.addRect(hudX, hudY, hudX + badgeW, hudY + badgeH, borderColor, 6.0f, 0, 1.0f);
 
-        // Text
-        dl.addText(hudX + padX, hudY + padY, 0xFFE2E8F0, text);
+        float contentX = hudX + padX;
+        if (drawPreview) {
+            drawTilePreview(context.cache(), tileSnapshot, dl, contentX, hudY + padY, previewSize);
+            contentX += previewSize + previewGap;
+        }
+        if (!text.isBlank()) {
+            float textY = hudY + Math.max(padY, (badgeH - ImGui.getTextLineHeight()) * 0.5f);
+            dl.addText(contentX, textY, StudioPalette.draw(StudioPalette.TEXT), text);
+        }
+
+        float restoreX = ImGui.getCursorScreenPosX();
+        float restoreY = ImGui.getCursorScreenPosY();
+        ImGui.setCursorScreenPos(hudX, hudY);
+        ImGui.invisibleButton("##tile-info-hud-drag", badgeW, badgeH);
+        if (ImGui.isItemActive() && ImGui.isMouseDragging(0)) {
+            context.huds().moveBy(ID, ImGui.getIO().getMouseDeltaX(), ImGui.getIO().getMouseDeltaY());
+        }
+        if (ImGui.isItemHovered()) {
+            ImGui.setTooltip("Tile Inspection HUD\nDrag to reposition");
+        }
+        ImGui.setCursorScreenPos(restoreX, restoreY);
+    }
+
+    private void drawTilePreview(
+            LoadedOsrsCacheSession cache,
+            TileSnapshot snapshot,
+            ImDrawList draw,
+            float x,
+            float y,
+            float size) {
+        int underlay = TilePainterPalette.floorColor(
+                cache, snapshot.underlayId(), true, 0xFF334155);
+        int overlay = TilePainterPalette.floorColor(
+                cache, snapshot.overlayId(), false, 0xFF9A6B32);
+        var mesh = meshBuilder.build(snapshot);
+
+        draw.addRectFilled(x, y, x + size, y + size, StudioPalette.draw(underlay), 3.0f);
+        for (var face : mesh.faces()) {
+            int color = face.material() == 1 ? overlay : underlay;
+            var a = mesh.vertices().get(face.a());
+            var b = mesh.vertices().get(face.b());
+            var cc = mesh.vertices().get(face.c());
+            draw.addTriangleFilled(
+                    tilePx(x, size, a.x()), tilePy(y, size, a.y()),
+                    tilePx(x, size, b.x()), tilePy(y, size, b.y()),
+                    tilePx(x, size, cc.x()), tilePy(y, size, cc.y()),
+                    StudioPalette.draw(color));
+        }
+        draw.addRect(x, y, x + size, y + size,
+                StudioPalette.draw(StudioPalette.BORDER_STRONG), 3.0f, 0, 1.0f);
+    }
+
+    private static float tilePx(float x, float size, int vertexX) {
+        return x + vertexX / 128.0f * size;
+    }
+
+    private static float tilePy(float y, float size, int vertexY) {
+        return y + size - vertexY / 128.0f * size;
     }
 
     private static String labelWithId(String displayName, int id) {
@@ -179,22 +263,32 @@ public final class TileInfoHudPlugin implements StudioPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.TUNE + "  HUD Display Elements");
+        ImGui.textColored(StudioPalette.ACCENT, "Display");
+        ImGui.checkbox("Show Tile Preview##hud-preview", showPreview);
         ImGui.checkbox("Show Tile Coordinates##hud-coords", showCoordinates);
         ImGui.checkbox("Show Plane##hud-plane", showPlane);
         ImGui.checkbox("Show Elevation / Height##hud-height", showHeight);
+        ImGui.checkbox("Show Tile Shape##hud-shape", showShape);
+        ImGui.checkbox("Show Tile Rotation##hud-rotation", showRotation);
         ImGui.checkbox("Show Hovered Object##hud-obj", showObject);
+        ImGui.beginDisabled(!showObject.get());
+        ImGui.checkbox("Show Object Shape / Rotation##hud-obj-transform", showObjectTransform);
+        ImGui.endDisabled();
 
         ImGui.separator();
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.SETTINGS + "  Layout & Style");
+        ImGui.textColored(StudioPalette.ACCENT, "Layout & Style");
         ImGui.combo("Anchor Position##hud-anchor", anchorCorner, ANCHOR_NAMES);
         ImGui.sliderFloat("Background Opacity##hud-alpha", bgAlpha.getData(), 0.1f, 1.0f, "%.2f");
 
         if (ImGui.button("Reset HUD Defaults##hud-reset")) {
+            showPreview.set(false);
             showCoordinates.set(true);
             showPlane.set(true);
             showHeight.set(true);
+            showShape.set(false);
+            showRotation.set(false);
             showObject.set(true);
+            showObjectTransform.set(true);
             anchorCorner.set(0);
             bgAlpha.set(0.75f);
         }

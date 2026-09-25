@@ -19,6 +19,34 @@ class ViewportHudManagerTest {
     }
 
     @Test
+    void opacityAndOffsetsRoundTripThroughWorkspaceState() {
+        ViewportHudManager manager = new ViewportHudManager();
+        manager.register("tile", ViewportHudManager.Quadrant.TOP_LEFT, 5, true, 0.72f);
+        manager.setUserOffset("tile", 34.0f, 18.0f);
+        manager.setOpacity("tile", 0.43f);
+
+        var snapshot = manager.snapshot();
+
+        ViewportHudManager restored = new ViewportHudManager();
+        restored.restore(snapshot);
+
+        assertEquals(0.43f, restored.opacity("tile"), 0.001f);
+        assertEquals(34.0f, snapshot.get("tile").offsetX(), 0.001f);
+        assertEquals(18.0f, snapshot.get("tile").offsetY(), 0.001f);
+    }
+
+    @Test
+    void immovableHudIgnoresDragDeltas() {
+        ViewportHudManager manager = new ViewportHudManager();
+        manager.register("locked", ViewportHudManager.Quadrant.TOP_LEFT, 5, false, 0.8f);
+        manager.moveBy("locked", 30.0f, 20.0f);
+
+        var state = manager.snapshot().get("locked");
+        assertEquals(0.0f, state.offsetX(), 0.001f);
+        assertEquals(0.0f, state.offsetY(), 0.001f);
+    }
+
+    @Test
     void opposingQuadrantsAnchorToViewportEdges() {
         ViewportHudManager manager = new ViewportHudManager();
         manager.beginFrame(10.0f, 20.0f, 500.0f, 300.0f);

@@ -36,12 +36,14 @@ import com.rspsi.studio.ui.LeftBrushRail;
 import com.rspsi.studio.ui.StudioMenuBar;
 import com.rspsi.studio.ui.StudioPanelContext;
 import com.rspsi.studio.ui.StudioPanelManager;
+import com.rspsi.studio.ui.StudioNavigation;
 import com.rspsi.studio.ui.WorkspaceTabBar;
 import com.rspsi.studio.ui.hud.ViewportHudManager;
 import com.rspsi.studio.ui.hud.DeclarativeOverlayRenderer;
 import com.rspsi.studio.ui.hud.BrushSettingsHud;
 import com.rspsi.studio.ui.diagnostics.TerrainDiagnosticsOverlay;
 import com.rspsi.studio.plugin.StudioPluginManager;
+import com.rspsi.studio.plugin.StudioToolPlugin;
 import com.rspsi.studio.plugin.builtin.TileInfoHudPlugin;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
@@ -70,6 +72,7 @@ import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.settings.EditorSettingKeys;
 import com.rspsi.editor.tool.CompositeTilePainterTool;
 import com.rspsi.studio.ui.panels.TilePainterPalette;
+import com.rspsi.studio.ui.panels.ObjectViewerPanel;
 import imgui.flag.ImGuiMouseButton;
 
 import java.util.Objects;
@@ -123,7 +126,6 @@ public final class MapEditorView {
     {
         minimapHudOverlay.setOnWorldMapClick(() -> panelManager.setActiveRightPanelId(MinimapPanel.ID));
         studioPluginManager.register(new TileInfoHudPlugin());
-        studioPluginManager.register(new BrushSettingsHud());
         studioPluginManager.register(new TerrainDiagnosticsOverlay());
     }
 
@@ -228,9 +230,23 @@ public final class MapEditorView {
             }
         }
 
-        boolean brushRailVisible = showLeftToolRail
-                || LeftBrushRail.isBrushToolActive(studioPluginManager, activeToolId);
-        Layout layout = Layout.compute(bottomBar, brushRailVisible);
+        BrushSettingsHud brushSettings = studioPluginManager.plugin(BrushSettingsHud.ID)
+                .filter(BrushSettingsHud.class::isInstance)
+                .map(BrushSettingsHud.class::cast)
+                .orElse(null);
+        boolean sharedBrushSettings = studioPluginManager.usesSharedBrushSettings(activeToolId);
+        boolean brushRailVisible = showLeftToolRail || sharedBrushSettings;
+        float brushDockWidth = sharedBrushSettings
+                && brushSettings != null
+                && brushSettings.isVisible()
+                && brushSettings.isDocked()
+                ? BrushSettingsHud.DOCKED_WIDTH
+                : 0.0f;
+        Layout layout = Layout.compute(
+                bottomBar,
+                brushRailVisible,
+                brushDockWidth,
+                rightSidebar.preferredWidth(panelManager));
 
         // 1. Program-owned Menu Bar (File, Edit, View, Cache, Plugins, Server, Help)
         menuBar.render(cache, pluginLifecycle, integrations, showServerSpawns,
@@ -252,6 +268,24 @@ public final class MapEditorView {
                 layout.x(), layout.y(), layout.width());
 
         // 3. Studio Panel Context
+        StudioNavigation navigation = new StudioNavigation() {
+            @Override
+            public void inspectObject(WorldObject object) {
+                if (object == null) return;
+                panelManager.panel(ObjectViewerPanel.ID)
+                        .filter(ObjectViewerPanel.class::isInstance)
+                        .map(ObjectViewerPanel.class::cast)
+                        .ifPresent(viewer -> {
+                            viewer.inspectObject(object);
+                            panelManager.setActiveRightPanelId(ObjectViewerPanel.ID);
+                        });
+            }
+
+            @Override
+            public void editObject(WorldObject object) {
+                if (object != null) objectEditor.open(object);
+            }
+        };
         StudioPanelContext panelContext = new StudioPanelContext(
                 cache, settings, session(pluginLifecycle), pluginLifecycle,
                 viewport, simulation, symbols, references, spawns, integrations,
@@ -261,6 +295,7 @@ public final class MapEditorView {
                 studioPluginManager,
                 brushManager,
                 hudManager,
+                navigation,
                 definitionPublicationPersistence);
 
         // 4. Left Brush Rail (TOOL_RAIL slot: brush settings for Tile Painter/Height Sculptor) -
@@ -293,7 +328,7 @@ public final class MapEditorView {
         renderCommandPalette(pluginLifecycle);
         preferencesWindow.render(settings, pluginLifecycle != null && pluginLifecycle.host() != null
                 ? pluginLifecycle.host().context().settingsService() : null);
-        pluginManagerWindow.render(pluginLifecycle);
+        pluginManagerWindow.render(pluginLifecycle, studioPluginManager, panelContext);
         objectEditor.render(cache, session(pluginLifecycle));
     }
 
@@ -415,10 +450,14 @@ public final class MapEditorView {
     private void activateTool(EditorPluginLifecycleManager pluginLifecycle, String registrationId) {
         String previousToolId = activeToolId;
         activeToolId = registrationId;
-        // Auto-open context drawer for tools with shelf content (Path Builder, Tile Painter),
-        // and collapse it for tools without shelf content (Single/Multi Select).
+        // Tools that own drawer content may bring it forward. Picker/inspection tools
+        // with no drawer content leave the user's existing drawer exactly as it was.
         studioPluginManager.toolPlugin(registrationId)
-                .ifPresent(tool -> bottomBar.setDrawerOpen(tool.hasContextDrawerContent()));
+                .filter(StudioToolPlugin::hasContextDrawerContent)
+                .ifPresent(tool -> {
+                    bottomBar.setDrawerMode(StudioBottomBar.DrawerMode.AUTO_TOOL);
+                    bottomBar.setDrawerOpen(true);
+                });
         if (inputRouter == null || pluginLifecycle == null || pluginLifecycle.host() == null) return;
 
         // Single/Multi (tile) Select and Single/Multi Select Objects are all Studio-level
@@ -917,7 +956,11 @@ public final class MapEditorView {
                           float bottomY, float bottomWidth, float bottomHeight,
                           float drawerHeight) {
 
-        private static Layout compute(StudioBottomBar bottomBar, boolean brushRailVisible) {
+        private static Layout compute(
+                StudioBottomBar bottomBar,
+                boolean brushRailVisible,
+                float brushDockWidth,
+                float requestedRightWidth) {
             imgui.ImGuiViewport main = ImGui.getMainViewport();
             float menuBarH = ImGui.getFrameHeight();
             float wsBarH = WorkspaceTabBar.HEIGHT;
@@ -931,9 +974,15 @@ public final class MapEditorView {
             float height = Math.max(1.0f, main.getSizeY() - menuBarH - menuBarGap);
 
             float leftRailW = brushRailVisible ? LeftBrushRail.RAIL_WIDTH : 0.0f;
-            float rightWidth = Math.min(330.0f, Math.max(260.0f, width * 0.28f));
-            float viewportX = x + leftRailW;
-            float viewportWidth = Math.max(160.0f, width - leftRailW - rightWidth);
+            float leftChromeW = leftRailW + Math.max(0.0f, brushDockWidth);
+            float usableWidth = Math.max(1.0f, width - leftChromeW);
+            float minViewport = Math.min(500.0f, Math.max(260.0f, usableWidth * 0.48f));
+            float responsiveBase = Math.min(390.0f, Math.max(320.0f, usableWidth * 0.34f));
+            float requested = Math.max(responsiveBase, requestedRightWidth);
+            float maxRight = Math.max(260.0f, usableWidth - minViewport);
+            float rightWidth = Math.min(Math.min(460.0f, requested), maxRight);
+            float viewportX = x + leftChromeW;
+            float viewportWidth = Math.max(minViewport, usableWidth - rightWidth);
             float rightX = viewportX + viewportWidth;
 
             float availContentH = Math.max(100.0f, height - wsBarH - statusBarH);

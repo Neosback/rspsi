@@ -39,8 +39,12 @@ public final class DeclarativeOverlayRenderer {
                 continue;
             }
 
-            context.huds().register(contribution.id(),
-                    quadrant(contribution.position()), contribution.priority());
+            context.huds().register(
+                    contribution.id(),
+                    quadrant(contribution.position()),
+                    contribution.priority(),
+                    contribution.movable(),
+                    contribution.defaultOpacity());
             float height = estimate(component) + PADDING * 2.0f;
             var placement = context.huds().place(
                     contribution.id(), contribution.preferredWidth(), height);
@@ -51,50 +55,76 @@ public final class DeclarativeOverlayRenderer {
             float y = placement.y();
             float width = placement.width();
             float bottom = y + placement.height();
-            draw.addRectFilled(x, y, x + width, bottom, 0xE8181C24, 7.0f);
-            draw.addRect(x, y, x + width, bottom, 0x704B5563, 7.0f, 0, 1.0f);
+            float opacity = context.huds().opacity(contribution.id());
+            draw.addRectFilled(x, y, x + width, bottom,
+                    com.rspsi.studio.theme.StudioPalette.draw(
+                            withOpacity(com.rspsi.studio.theme.StudioPalette.PANEL_BG, opacity)), 7.0f);
+            draw.addRect(x, y, x + width, bottom,
+                    com.rspsi.studio.theme.StudioPalette.draw(
+                            withOpacity(com.rspsi.studio.theme.StudioPalette.BORDER, opacity)), 7.0f, 0, 1.0f);
             drawComponent(draw, component, x + PADDING, y + PADDING,
                     width - PADDING * 2.0f);
+
+            if (contribution.movable()) {
+                float restoreX = ImGui.getCursorScreenPosX();
+                float restoreY = ImGui.getCursorScreenPosY();
+                ImGui.setCursorScreenPos(x, y);
+                ImGui.invisibleButton(
+                        "##hud-drag-" + contribution.id(),
+                        width,
+                        placement.height());
+                if (ImGui.isItemActive() && ImGui.isMouseDragging(0)) {
+                    context.huds().moveBy(
+                            contribution.id(),
+                            ImGui.getIO().getMouseDeltaX(),
+                            ImGui.getIO().getMouseDeltaY());
+                }
+                if (ImGui.isItemHovered()) {
+                    ImGui.setTooltip(contribution.label()
+                            + "\nDrag to move · opacity and visibility are workspace settings");
+                }
+                ImGui.setCursorScreenPos(restoreX, restoreY);
+            }
         }
     }
 
     private static float drawComponent(ImDrawList draw, OverlayComponent component,
                                        float x, float y, float width) {
         if (component instanceof OverlayComponent.Text text) {
-            draw.addText(x, y, text.muted() ? 0xFF94A3B8 : 0xFFE2E8F0, text.value());
+            draw.addText(x, y, text.muted() ? com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.TEXT_MUTED) : com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.TEXT), text.value());
             return y + LINE_HEIGHT;
         }
         if (component instanceof OverlayComponent.Line line) {
-            draw.addText(x, y, 0xFFE2E8F0, line.left());
+            draw.addText(x, y, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.TEXT), line.left());
             float rightWidth = ImGui.calcTextSize(line.right()).x;
-            draw.addText(Math.max(x, x + width - rightWidth), y, 0xFFCBD5E1, line.right());
+            draw.addText(Math.max(x, x + width - rightWidth), y, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.TEXT_MUTED), line.right());
             return y + LINE_HEIGHT;
         }
         if (component instanceof OverlayComponent.ProgressBar progress) {
             if (!progress.label().isBlank()) {
-                draw.addText(x, y, 0xFFE2E8F0, progress.label());
+                draw.addText(x, y, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.TEXT), progress.label());
                 y += LINE_HEIGHT;
             }
             float barHeight = 8.0f;
-            draw.addRectFilled(x, y, x + width, y + barHeight, 0xFF263241, 4.0f);
+            draw.addRectFilled(x, y, x + width, y + barHeight, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.BORDER), 4.0f);
             draw.addRectFilled(x, y, x + width * (float) progress.progress(),
-                    y + barHeight, 0xFF38BDF8, 4.0f);
+                    y + barHeight, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.ACCENT), 4.0f);
             return y + barHeight + GAP;
         }
         if (component instanceof OverlayComponent.ProgressPie progress) {
             String value = progress.label().isBlank()
                     ? Math.round(progress.progress() * 100.0) + "%"
                     : progress.label() + "  " + Math.round(progress.progress() * 100.0) + "%";
-            draw.addText(x, y, 0xFFE2E8F0, value);
+            draw.addText(x, y, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.TEXT), value);
             return y + LINE_HEIGHT;
         }
         if (component instanceof OverlayComponent.Table table) {
             if (!table.headers().isEmpty()) {
-                draw.addText(x, y, 0xFF94A3B8, String.join("   |   ", table.headers()));
+                draw.addText(x, y, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.TEXT_MUTED), String.join("   |   ", table.headers()));
                 y += LINE_HEIGHT;
             }
             for (List<String> row : table.rows()) {
-                draw.addText(x, y, 0xFFE2E8F0, String.join("   |   ", row));
+                draw.addText(x, y, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.TEXT), String.join("   |   ", row));
                 y += LINE_HEIGHT;
             }
             return y;
@@ -115,23 +145,23 @@ public final class DeclarativeOverlayRenderer {
         if (component instanceof OverlayComponent.InfoBox box) {
             float boxHeight = box.progress() >= 0.0 ? 42.0f : 32.0f;
             draw.addRectFilled(x, y, x + width, y + boxHeight,
-                    box.attention() ? 0xCC3F2E19 : 0xCC202A36, 5.0f);
-            draw.addText(x + 7.0f, y + 5.0f, 0xFF94A3B8, box.title());
+                    com.rspsi.studio.theme.StudioPalette.draw(box.attention() ? 0xCC4A3318 : 0xCC1B2736), 5.0f);
+            draw.addText(x + 7.0f, y + 5.0f, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.TEXT_MUTED), box.title());
             float valueWidth = ImGui.calcTextSize(box.value()).x;
             draw.addText(Math.max(x + 7.0f, x + width - valueWidth - 7.0f),
-                    y + 5.0f, 0xFFF8FAFC, box.value());
+                    y + 5.0f, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.TEXT), box.value());
             if (box.progress() >= 0.0) {
                 float barY = y + boxHeight - 8.0f;
                 draw.addRectFilled(x + 7.0f, barY, x + width - 7.0f,
-                        barY + 3.0f, 0xFF334155, 2.0f);
+                        barY + 3.0f, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.BORDER_STRONG), 2.0f);
                 draw.addRectFilled(x + 7.0f, barY,
                         x + 7.0f + (width - 14.0f) * (float) box.progress(),
-                        barY + 3.0f, 0xFF38BDF8, 2.0f);
+                        barY + 3.0f, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.ACCENT), 2.0f);
             }
             return y + boxHeight;
         }
         if (component instanceof OverlayComponent.Tooltip tooltip) {
-            draw.addText(x, y, 0xFFCBD5E1, tooltip.text());
+            draw.addText(x, y, com.rspsi.studio.theme.StudioPalette.draw(com.rspsi.studio.theme.StudioPalette.TEXT_MUTED), tooltip.text());
             return y + LINE_HEIGHT;
         }
         return y;
@@ -163,6 +193,12 @@ public final class DeclarativeOverlayRenderer {
             return box.progress() >= 0.0 ? 42.0f : 32.0f;
         }
         return LINE_HEIGHT;
+    }
+
+    private static int withOpacity(int argb, float opacity) {
+        int alpha = Math.max(0, Math.min(255,
+                Math.round(((argb >>> 24) & 0xFF) * Math.max(0.0f, Math.min(1.0f, opacity)))));
+        return (argb & 0x00FFFFFF) | (alpha << 24);
     }
 
     private static ViewportHudManager.Quadrant quadrant(OverlayPosition position) {

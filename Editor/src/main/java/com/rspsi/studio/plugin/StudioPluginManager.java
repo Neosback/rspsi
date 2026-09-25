@@ -59,7 +59,10 @@ public final class StudioPluginManager {
     }
 
     public synchronized void setSurfaceOverride(String toolPluginId, Set<StudioToolPlugin.ToolSurface> surfaces) {
-        surfaceOverrides.put(toolPluginId, EnumSet.copyOf(surfaces));
+        Set<StudioToolPlugin.ToolSurface> value = surfaces == null || surfaces.isEmpty()
+                ? EnumSet.noneOf(StudioToolPlugin.ToolSurface.class)
+                : EnumSet.copyOf(surfaces);
+        surfaceOverrides.put(toolPluginId, value);
     }
 
     public synchronized void resetSurfaceOverride(String toolPluginId) {
@@ -184,6 +187,16 @@ public final class StudioPluginManager {
             }
         }
         return Optional.empty();
+    }
+
+    public synchronized StudioToolPlugin.BrushUiMode brushUiMode(String toolId) {
+        return toolPlugin(toolId)
+                .map(StudioToolPlugin::brushUiMode)
+                .orElse(StudioToolPlugin.BrushUiMode.NONE);
+    }
+
+    public synchronized boolean usesSharedBrushSettings(String toolId) {
+        return brushUiMode(toolId) == StudioToolPlugin.BrushUiMode.SHARED_SETTINGS;
     }
 
     /**

@@ -22,8 +22,18 @@ kotlin {
 
 run {
     standardInput = System.in
+    systemProperty 'openrune.studio.version', rootProject.version.toString()
     if (org.gradle.internal.os.OperatingSystem.current().isMacOsX()) {
         jvmArgs '-XstartOnFirstThread'
+    }
+}
+
+tasks.withType(Jar).configureEach {
+    manifest {
+        attributes(
+                'Implementation-Title': 'OpenRune Content Studio',
+                'Implementation-Version': rootProject.version.toString()
+        )
     }
 }
 

@@ -7,7 +7,6 @@ import com.rspsi.studio.ui.FloatingToolbar;
 import com.rspsi.studio.ui.MinimapTextureService;
 import com.rspsi.studio.ui.StudioPanelManager;
 import com.rspsi.studio.ui.panels.MinimapPanel;
-import com.rspsi.studio.ui.panels.PluginManagerPanel;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,13 +44,10 @@ class StudioPluginsAndMinimapTest {
     }
 
     @Test
-    void testPluginManagerPanelRegistration() {
+    void pluginManagerIsNotRegisteredAsRightSidebarPanel() {
         StudioPanelManager panelManager = new StudioPanelManager();
-        assertTrue(panelManager.panel(PluginManagerPanel.ID).isPresent());
-        var panel = panelManager.panel(PluginManagerPanel.ID).get();
-        assertEquals(DockRegion.RIGHT, panel.preferredRegion());
-        assertEquals("Plugins", panel.title());
-        assertEquals(70, panel.order());
+        assertTrue(panelManager.allPanels().stream()
+                .noneMatch(panel -> "studio.plugins".equals(panel.id())));
     }
 
     @Test

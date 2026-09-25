@@ -115,6 +115,41 @@ class PluginApiTest {
     }
 
     @Test
+    void testFluentHudRegistrationCarriesMovementAndOpacityPolicy() {
+        EditorSession session = new EditorSession(new WorldModel(1, 1, 1));
+
+        EditorPlugin testPlugin = new EditorPlugin() {
+            @Override
+            public String id() {
+                return "test.hud.plugin";
+            }
+
+            @Override
+            public void initialize(EditorPluginContext context) {
+                context.api(this)
+                        .hud("test.hud")
+                        .label("Test HUD")
+                        .movable(true)
+                        .opacity(0.42f)
+                        .width(180.0f)
+                        .content(new com.rspsi.editor.overlay.OverlayComponent.Text("Hello"))
+                        .register();
+            }
+        };
+
+        EditorPluginHost host = EditorPluginHost.initialize(
+                List.of(testPlugin), session, new EmptyAssets());
+
+        var hud = host.context().services().overlays().contribution("test.hud");
+        assertNotNull(hud);
+        assertTrue(hud.movable());
+        assertEquals(0.42f, hud.defaultOpacity(), 0.001f);
+        assertEquals(180.0f, hud.preferredWidth(), 0.001f);
+
+        host.close();
+    }
+
+    @Test
     void testFluentMenuAndShortcutRegistration() {
         EditorSession session = new EditorSession(new WorldModel(1, 1, 1));
         AtomicBoolean actionRan = new AtomicBoolean();

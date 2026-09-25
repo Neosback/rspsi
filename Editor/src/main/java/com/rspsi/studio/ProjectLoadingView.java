@@ -3,6 +3,7 @@ package com.rspsi.studio;
 import com.rspsi.project.StudioProjectDescriptor;
 import com.rspsi.project.StudioProjectKind;
 import com.rspsi.studio.theme.StudioFonts;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
@@ -43,11 +44,12 @@ public final class ProjectLoadingView {
         ImGui.beginChild("##project-loading-card", width, 390.0f, true);
         ImGui.dummy(1.0f, 16.0f);
 
-        float logoWidth = Math.min(270.0f, ImGui.getContentRegionAvailX() * 0.58f);
-        ImGui.setCursorPosX(ImGui.getCursorPosX()
-                + Math.max(0.0f, (ImGui.getContentRegionAvailX() - logoWidth) * 0.5f));
-        StudioBranding.drawWordmark(logoWidth);
-        ImGui.dummy(1.0f, 18.0f);
+        ImGui.pushFont(StudioFonts.display(), 31.0f);
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.ACCENT);
+        centered("OPENRUNE CONTENT STUDIO");
+        ImGui.popStyleColor();
+        ImGui.popFont();
+        ImGui.dummy(1.0f, 22.0f);
 
         ImGui.pushFont(StudioFonts.heading(), 23.0f);
         ImGui.pushStyleColor(ImGuiCol.Text, 0.95f, 0.97f, 1.0f, 1.0f);
@@ -59,7 +61,7 @@ public final class ProjectLoadingView {
         ImGui.dummy(1.0f, 18.0f);
 
         if (status.failed()) {
-            ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 0.38f, 0.38f, 1.0f);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.DANGER);
             centered("Project could not be opened");
             ImGui.popStyleColor();
             ImGui.dummy(1.0f, 8.0f);
@@ -74,7 +76,7 @@ public final class ProjectLoadingView {
         } else {
             centered(status.message());
             ImGui.dummy(1.0f, 14.0f);
-            ImGui.pushStyleColor(ImGuiCol.PlotHistogram, 0.00f, 0.75f, 0.72f, 1.0f);
+            ImGui.pushStyleColor(ImGuiCol.PlotHistogram, StudioPalette.ACCENT);
             ImGui.progressBar((float) status.progress(), -1.0f, 12.0f);
             ImGui.popStyleColor();
             ImGui.dummy(1.0f, 10.0f);
@@ -89,6 +91,10 @@ public final class ProjectLoadingView {
                 backToLauncher.run();
             }
         }
+
+        float footerY = 390.0f - ImGui.getTextLineHeightWithSpacing() - 10.0f;
+        if (ImGui.getCursorPosY() < footerY) ImGui.setCursorPosY(footerY);
+        ImGui.textDisabled(StudioBuildInfo.displayVersion());
 
         ImGui.endChild();
         ImGui.end();

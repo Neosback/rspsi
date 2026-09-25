@@ -29,6 +29,7 @@ public final class StudioIcons {
     public static final String VIEWPORT = "\ue8f4";         // visibility (eye)
     public static final String VISIBILITY_OFF = "\ue8f5";   // visibility_off
     public static final String SETTINGS = "\ue8b8";         // settings (gear)
+    public static final String EXTENSION = "\ue87b";        // extension (plugin/puzzle)
     public static final String SLIDERS = "\ue429";          // tune
     public static final String TUNE = "\ue429";             // tune
     public static final String INFO = "\ue88e";             // info

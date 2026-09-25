@@ -10,7 +10,6 @@ import com.rspsi.studio.ui.panels.MapSettingsPanel;
 import com.rspsi.studio.ui.panels.MinimapPanel;
 import com.rspsi.studio.ui.panels.ObjectViewerPanel;
 import com.rspsi.studio.ui.panels.OutlinerPanel;
-import com.rspsi.studio.ui.panels.PluginManagerPanel;
 import com.rspsi.studio.ui.panels.TileBrushPanel;
 import com.rspsi.studio.ui.panels.TilePainterPalette;
 
@@ -44,7 +43,6 @@ public final class StudioPanelManager {
         register(new KnowledgePanel());
         register(new PlayerStatePanel());
         register(new MapSettingsPanel());
-        register(new PluginManagerPanel());
         register(new TilePainterPalette());
         register(new HeightToolPanel());
     }

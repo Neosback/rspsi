@@ -5,6 +5,7 @@ import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.StudioToolPlugin;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioPalette;
 import imgui.ImDrawList;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
@@ -100,8 +101,8 @@ public final class FloatingToolbar {
             this.boundMaxX = startX + railWidth;
             this.boundMaxY = startY + h;
 
-            dl.addRectFilled(boundMinX, boundMinY, boundMaxX, boundMaxY, 0xDD181B22, 6.0f);
-            dl.addRect(boundMinX, boundMinY, boundMaxX, boundMaxY, 0x6064748B, 6.0f, 0, 1.0f);
+            dl.addRectFilled(boundMinX, boundMinY, boundMaxX, boundMaxY, StudioPalette.draw(0xDD101722), 6.0f);
+            dl.addRect(boundMinX, boundMinY, boundMaxX, boundMaxY, StudioPalette.draw(0x603A4B60), 6.0f, 0, 1.0f);
 
             ImGui.setCursorScreenPos(startX + padding, startY + 2.0f);
             ImGui.pushFont(StudioFonts.icon(), 0.0f);
@@ -138,8 +139,8 @@ public final class FloatingToolbar {
 
         // 1. Sleek Frosted Glass Capsule Background & Shadow
         dl.addRectFilled(boundMinX + 2.0f, boundMinY + 2.0f, boundMaxX + 2.0f, boundMaxY + 2.0f, 0x60000000, 8.0f);
-        dl.addRectFilled(boundMinX, boundMinY, boundMaxX, boundMaxY, 0xDC181B22, 8.0f);
-        dl.addRect(boundMinX, boundMinY, boundMaxX, boundMaxY, 0x5064748B, 8.0f, 0, 1.0f);
+        dl.addRectFilled(boundMinX, boundMinY, boundMaxX, boundMaxY, StudioPalette.draw(0xDC101722), 8.0f);
+        dl.addRect(boundMinX, boundMinY, boundMaxX, boundMaxY, StudioPalette.draw(0x503A4B60), 8.0f, 0, 1.0f);
 
         float curY = startY + padding;
 
@@ -161,11 +162,11 @@ public final class FloatingToolbar {
         float gripH = 3.0f;
         float gripX = startX + (railWidth - gripW) * 0.5f;
         float gripY = curY + 5.0f;
-        dl.addRectFilled(gripX, gripY, gripX + gripW, gripY + gripH, 0x8094A3B8, 2.0f);
+        dl.addRectFilled(gripX, gripY, gripX + gripW, gripY + gripH, StudioPalette.draw(0x80A6B4C6), 2.0f);
 
         // Right-click context menu on grip
         if (ImGui.beginPopupContextItem("ftb_options_ctx")) {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), "Flying Tool Rail");
+            ImGui.textColored(StudioPalette.ACCENT, "Flying Tool Rail");
             ImGui.separator();
             if (ImGui.menuItem("Reset Position")) resetPosition();
             if (ImGui.menuItem("Minimize Toolbar")) collapsed = true;
@@ -220,15 +221,15 @@ public final class FloatingToolbar {
             // Also cover Hovered/Active so the button stays visibly "on" immediately on click
             // instead of only after the mouse moves away (ImGui's hover/press colors otherwise
             // paint over the plain Button color while the cursor sits on top of it).
-            ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.20f, 0.45f, 0.85f, 1.0f));
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.28f, 0.53f, 0.92f, 1.0f));
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.16f, 0.40f, 0.78f, 1.0f));
-            ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
         } else {
-            ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.15f, 0.18f, 0.24f, 0.85f));
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.22f, 0.26f, 0.34f, 0.9f));
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.12f, 0.15f, 0.20f, 0.9f));
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFFCBD5E1));
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.CHROME_BG);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
         }
 
         ImGui.pushFont(StudioFonts.icon(), 0.0f);

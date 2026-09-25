@@ -1,6 +1,6 @@
 package com.rspsi.studio.ui.hud;
 
-import com.rspsi.studio.theme.StudioDrawColors;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.editor.model.FloorId;
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.brush.BrushAwareTool;
@@ -39,6 +39,7 @@ import java.util.Set;
 public final class BrushSettingsHud implements StudioPlugin {
 
     public static final String ID = "studio.brush-settings-hud";
+    public static final float DOCKED_WIDTH = 236.0f;
 
     public enum Corner {
         TOP_LEFT("Top-Left"),
@@ -55,7 +56,9 @@ public final class BrushSettingsHud implements StudioPlugin {
     private final ImInt defaultCorner = new ImInt(3); // 3 = Bottom-Right
     private final ImBoolean autoHide = new ImBoolean(true);
     private final ImFloat bgAlpha = new ImFloat(0.90f);
-    private boolean minimized = false;
+    private boolean visible = true;
+    private boolean docked = true;
+    private boolean minimized = false; // retained for layout-state compatibility; no collapse UI
     private boolean pinned = false;
     private Corner snapRequest = null;
 
@@ -96,6 +99,22 @@ public final class BrushSettingsHud implements StudioPlugin {
         return true;
     }
 
+    public boolean isVisible() {
+        return visible;
+    }
+
+    public void setVisible(boolean visible) {
+        this.visible = visible;
+    }
+
+    public boolean isDocked() {
+        return docked;
+    }
+
+    public void setDocked(boolean docked) {
+        this.docked = docked;
+    }
+
     public boolean isMinimized() {
         return minimized;
     }
@@ -118,37 +137,37 @@ public final class BrushSettingsHud implements StudioPlugin {
 
     @Override
     public void renderFloating(StudioPanelContext context) {
-        if (!shouldDisplay(context)) return;
+        if (!visible || !shouldDisplay(context)) return;
 
-        // Apply corner snap if requested, or default position on first launch
         applyWindowPosition(context);
 
-        // Styling
         int alphaByte = (int) (Math.max(0.2f, Math.min(1.0f, bgAlpha.get())) * 255.0f);
-        int bgColor = (alphaByte << 24) | 0x0E1015;
-        int borderColor = (alphaByte << 24) | 0x272C38;
-
-        ImGui.pushStyleColor(ImGuiCol.WindowBg, bgColor);
-        ImGui.pushStyleColor(ImGuiCol.Border, borderColor);
-        ImGui.pushStyleColor(ImGuiCol.TitleBg, (alphaByte << 24) | 0x14161D);
-        ImGui.pushStyleColor(ImGuiCol.TitleBgActive, (alphaByte << 24) | 0x6366F1);
-        ImGui.pushStyleVar(ImGuiStyleVar.WindowRounding, 10.0f);
+        ImGui.pushStyleColor(ImGuiCol.WindowBg,
+                (alphaByte << 24) | (StudioPalette.PANEL_BG & 0x00FFFFFF));
+        ImGui.pushStyleColor(ImGuiCol.Border,
+                (alphaByte << 24) | (StudioPalette.BORDER & 0x00FFFFFF));
+        ImGui.pushStyleColor(ImGuiCol.TitleBg,
+                (alphaByte << 24) | (StudioPalette.CHROME_BG & 0x00FFFFFF));
+        ImGui.pushStyleColor(ImGuiCol.TitleBgActive,
+                (alphaByte << 24) | (StudioPalette.ACCENT_SOFT & 0x00FFFFFF));
+        ImGui.pushStyleVar(ImGuiStyleVar.WindowRounding, docked ? 0.0f : 8.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 10.0f, 8.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 6.0f, 6.0f);
 
-        int flags = ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoScrollbar;
+        int flags = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar;
+        if (docked) {
+            flags |= ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoSavedSettings;
+        } else {
+            flags |= ImGuiWindowFlags.AlwaysAutoResize;
+        }
 
-        String windowTitle = minimized
-                ? "Brush##hud_min"
-                : StudioIcons.BRUSH + "  Brush Settings##hud_main";
-
+        ImBoolean open = new ImBoolean(visible);
         try {
-            if (ImGui.begin(windowTitle, flags)) {
-                if (minimized) {
-                    renderMinimizedPill(context);
-                } else {
-                    renderExpandedContent(context);
-                }
+            if (ImGui.begin("Brush Settings##hud_main", open, flags)) {
+                visible = open.get();
+                renderExpandedContent(context);
+            } else {
+                visible = open.get();
             }
         } finally {
             ImGui.end();
@@ -158,27 +177,11 @@ public final class BrushSettingsHud implements StudioPlugin {
     }
 
     private boolean shouldDisplay(StudioPanelContext context) {
-        if (context == null) return false;
-        if (pinned) return true;
-        if (!autoHide.get()) return true;
-
-        String activeToolId = context.activeToolId();
-        if (activeToolId == null) return false;
-
-        if ("terrain.tile-painter".equals(activeToolId)
-                || SplinePathTool.ID.equals(activeToolId)
-                || activeToolId.startsWith("terrain.")
-                || activeToolId.startsWith("path.")) {
-            return true;
-        }
-
-        if (context.toolController() != null) {
-            var active = context.toolController().activeTool();
-            if (active instanceof BrushAwareTool || active instanceof SplinePathTool) {
-                return true;
-            }
-        }
-        return false;
+        if (context == null || context.studioPlugins() == null) return false;
+        // Tool metadata is authoritative. Path Builder and tools with their own
+        // drawer brush UI never inherit this window merely because their engine
+        // happens to be brush-aware.
+        return context.studioPlugins().usesSharedBrushSettings(context.activeToolId());
     }
 
     private void applyWindowPosition(StudioPanelContext context) {
@@ -186,34 +189,16 @@ public final class BrushSettingsHud implements StudioPlugin {
         float vpY = context.huds() != null ? context.huds().viewportY() : 0.0f;
         float vpW = context.huds() != null ? context.huds().viewportWidth() : ImGui.getMainViewport().getSizeX();
         float vpH = context.huds() != null ? context.huds().viewportHeight() : ImGui.getMainViewport().getSizeY();
-        float margin = 16.0f;
 
-        // Default initial placement in designated corner
-        Corner defCorner = Corner.values()[Math.max(0, Math.min(Corner.values().length - 1, defaultCorner.get()))];
-        float initX = switch (defCorner) {
-            case TOP_LEFT, BOTTOM_LEFT -> vpX + margin;
-            case TOP_RIGHT, BOTTOM_RIGHT -> vpX + vpW - 250.0f - margin;
-        };
-        float initY = switch (defCorner) {
-            case TOP_LEFT, TOP_RIGHT -> vpY + margin;
-            case BOTTOM_LEFT, BOTTOM_RIGHT -> vpY + vpH - 240.0f - margin;
-        };
-        ImGui.setNextWindowPos(initX, initY, ImGuiCond.FirstUseEver);
-
-        if (snapRequest != null) {
-            float winW = ImGui.getWindowSizeX() > 0.0f ? ImGui.getWindowSizeX() : 240.0f;
-            float winH = ImGui.getWindowSizeY() > 0.0f ? ImGui.getWindowSizeY() : 200.0f;
-            float targetX = switch (snapRequest) {
-                case TOP_LEFT, BOTTOM_LEFT -> vpX + margin;
-                case TOP_RIGHT, BOTTOM_RIGHT -> vpX + vpW - winW - margin;
-            };
-            float targetY = switch (snapRequest) {
-                case TOP_LEFT, TOP_RIGHT -> vpY + margin;
-                case BOTTOM_LEFT, BOTTOM_RIGHT -> vpY + vpH - winH - margin;
-            };
-            ImGui.setNextWindowPos(targetX, targetY, ImGuiCond.Always);
-            snapRequest = null;
+        if (docked) {
+            ImGui.setNextWindowPos(vpX - DOCKED_WIDTH, vpY, ImGuiCond.Always);
+            ImGui.setNextWindowSize(DOCKED_WIDTH, vpH, ImGuiCond.Always);
+            return;
         }
+
+        float margin = 16.0f;
+        ImGui.setNextWindowPos(vpX + margin, vpY + margin, ImGuiCond.FirstUseEver);
+        ImGui.setNextWindowSize(286.0f, 0.0f, ImGuiCond.FirstUseEver);
     }
 
     /**
@@ -228,7 +213,7 @@ public final class BrushSettingsHud implements StudioPlugin {
         String shapeName = resolveActiveBrushName(context, brushTool, brushes);
 
         ImGui.alignTextToFramePadding();
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.BRUSH + " " + shapeName + " R:" + radius);
+        ImGui.textColored(StudioPalette.ACCENT, shapeName + "  R:" + radius);
 
         ImGui.sameLine(0.0f, 6.0f);
         if (ImGui.button(StudioIcons.REMOVE + "##min-dec", 20.0f, 20.0f)) {
@@ -260,60 +245,34 @@ public final class BrushSettingsHud implements StudioPlugin {
         StudioBrushManager brushes = context.brushes();
         BrushAwareTool brushTool = (context.toolController() != null
                 && context.toolController().activeTool() instanceof BrushAwareTool bat) ? bat : null;
-        SplinePathTool pathTool = (context.toolController() != null
-                && context.toolController().activeTool() instanceof SplinePathTool spt) ? spt : null;
 
-        // Top Header Actions: Corner Snapping, Pin, Minimize
         renderHeaderControls();
         ImGui.separator();
-
-        // 1. Universal Brush Shape Selector
+        ImGui.textDisabled("Shape");
         renderShapeSelector(context, brushTool, brushes);
-
-        // 2. Universal Radius Controls
-        renderRadiusControls(brushTool, brushes, pathTool);
-
-        // 3. Contextual Section (adapts to active tool)
-        renderContextualSection(context, brushTool, pathTool);
+        ImGui.spacing();
+        ImGui.textDisabled("Radius");
+        renderRadiusControls(brushTool, brushes, null);
+        ImGui.spacing();
+        ImGui.textDisabled("Tool-specific paint/height settings stay in the bottom drawer.");
     }
 
     private void renderHeaderControls() {
         ImGui.alignTextToFramePadding();
-        ImGui.textDisabled("Snap:");
-        ImGui.sameLine(0.0f, 4.0f);
-
-        if (ImGui.smallButton("TL##snap-tl")) snapRequest = Corner.TOP_LEFT;
-        if (ImGui.isItemHovered()) ImGui.setTooltip("Snap to Top-Left corner");
-
-        ImGui.sameLine(0.0f, 2.0f);
-        if (ImGui.smallButton("TR##snap-tr")) snapRequest = Corner.TOP_RIGHT;
-        if (ImGui.isItemHovered()) ImGui.setTooltip("Snap to Top-Right corner");
-
-        ImGui.sameLine(0.0f, 2.0f);
-        if (ImGui.smallButton("BL##snap-bl")) snapRequest = Corner.BOTTOM_LEFT;
-        if (ImGui.isItemHovered()) ImGui.setTooltip("Snap to Bottom-Left corner");
-
-        ImGui.sameLine(0.0f, 2.0f);
-        if (ImGui.smallButton("BR##snap-br")) snapRequest = Corner.BOTTOM_RIGHT;
-        if (ImGui.isItemHovered()) ImGui.setTooltip("Snap to Bottom-Right corner");
-
-        ImGui.sameLine(0.0f, 10.0f);
-        if (pinned) {
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF38BDF8));
-        } else {
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioDrawColors.abgr(0xFF64748B));
+        ImGui.textDisabled(docked ? "Docked beside brush rail" : "Floating brush controls");
+        float buttonWidth = 86.0f;
+        float offset = ImGui.getContentRegionAvailX() - buttonWidth;
+        if (offset > 0.0f) ImGui.sameLine(ImGui.getCursorPosX() + offset);
+        String icon = docked ? StudioIcons.OPEN_IN_NEW : StudioIcons.PIN;
+        String label = docked ? " Float" : " Dock";
+        if (ImGui.smallButton(icon + label + "##brush-dock-toggle")) {
+            docked = !docked;
         }
-        if (ImGui.smallButton(StudioIcons.PIN + "##pin-btn")) {
-            pinned = !pinned;
+        if (ImGui.isItemHovered()) {
+            ImGui.setTooltip(docked
+                    ? "Detach Brush Settings into a movable floating window"
+                    : "Dock Brush Settings beside the left brush rail");
         }
-        ImGui.popStyleColor();
-        if (ImGui.isItemHovered()) ImGui.setTooltip(pinned ? "HUD pinned (click to unpin)" : "Pin HUD (keep visible on all tools)");
-
-        ImGui.sameLine(0.0f, 4.0f);
-        if (ImGui.smallButton(StudioIcons.EXPAND_MORE + "##min-btn")) {
-            minimized = true;
-        }
-        if (ImGui.isItemHovered()) ImGui.setTooltip("Minimize to compact pill");
     }
 
     private void renderShapeSelector(StudioPanelContext context, BrushAwareTool brushTool, StudioBrushManager brushes) {
@@ -339,7 +298,7 @@ public final class BrushSettingsHud implements StudioPlugin {
         if (ImGui.isItemHovered()) ImGui.setTooltip("More brushes (Checker, Slope, Terrace)");
 
         if (ImGui.beginPopup("hud_more_brushes_popup")) {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.BRUSH + "  Additional Brushes");
+            ImGui.textColored(StudioPalette.ACCENT, StudioIcons.BRUSH + "  Additional Brushes");
             ImGui.separator();
             if (brushes != null) {
                 for (EditorBrush brush : brushes.enabledBrushes()) {
@@ -358,9 +317,9 @@ public final class BrushSettingsHud implements StudioPlugin {
                                    String activeShapeId, String tooltip) {
         boolean active = brushId.equals(activeShapeId);
         if (active) {
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF0284C7));
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF0369A1));
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF075985));
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
         }
         if (ImGui.button(label + "##shp-" + brushId, 54.0f, 22.0f)) {
             applyBrush(context, brushTool, brushes, brushId);
@@ -488,14 +447,14 @@ public final class BrushSettingsHud implements StudioPlugin {
 
         // Palette popups
         if (ImGui.beginPopup("hud_underlay_palette")) {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.PALETTE + "  Select Underlay Material");
+            ImGui.textColored(StudioPalette.ACCENT, StudioIcons.PALETTE + "  Select Underlay Material");
             ImGui.separator();
             renderGridPopup(cache, painter, palette, true);
             ImGui.endPopup();
         }
 
         if (ImGui.beginPopup("hud_overlay_palette")) {
-            ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.PALETTE + "  Select Overlay Material");
+            ImGui.textColored(StudioPalette.ACCENT, StudioIcons.PALETTE + "  Select Overlay Material");
             ImGui.separator();
             renderGridPopup(cache, painter, palette, false);
             ImGui.endPopup();
@@ -543,8 +502,9 @@ public final class BrushSettingsHud implements StudioPlugin {
         float sx = ImGui.getCursorScreenPosX();
         float sy = ImGui.getCursorScreenPosY();
         ImDrawList draw = ImGui.getWindowDrawList();
-        draw.addRectFilled(sx, sy, sx + 22.0f, sy + 22.0f, color, 4.0f);
-        draw.addRect(sx, sy, sx + 22.0f, sy + 22.0f, 0xFF94A3B8, 4.0f, 0, 1.0f);
+        draw.addRectFilled(sx, sy, sx + 22.0f, sy + 22.0f, StudioPalette.draw(color), 4.0f);
+        draw.addRect(sx, sy, sx + 22.0f, sy + 22.0f,
+                StudioPalette.draw(StudioPalette.TEXT_MUTED), 4.0f, 0, 1.0f);
         if (ImGui.invisibleButton("##swatch-" + popupId, 22.0f, 22.0f)) {
             ImGui.openPopup(popupId);
         }
@@ -565,8 +525,9 @@ public final class BrushSettingsHud implements StudioPlugin {
             int color = TilePainterPalette.floorColor(cache, i, underlay, underlay ? 0xFF2A2A2A : 0xFF4A4A4A);
             float sx = ImGui.getCursorScreenPosX();
             float sy = ImGui.getCursorScreenPosY();
-            draw.addRectFilled(sx, sy, sx + size, sy + size, color, 2.0f);
-            draw.addRect(sx, sy, sx + size, sy + size, 0xFF334155, 2.0f, 0, 1.0f);
+            draw.addRectFilled(sx, sy, sx + size, sy + size, StudioPalette.draw(color), 2.0f);
+            draw.addRect(sx, sy, sx + size, sy + size,
+                    StudioPalette.draw(StudioPalette.BORDER_STRONG), 2.0f, 0, 1.0f);
 
             if (ImGui.invisibleButton("pop-sw-" + (underlay ? "u-" : "o-") + i, size, size)) {
                 if (underlay) {
@@ -651,9 +612,9 @@ public final class BrushSettingsHud implements StudioPlugin {
                                        String label, HeightToolPanel.HeightMode current) {
         boolean active = (mode == current);
         if (active) {
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF0284C7));
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF0369A1));
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF075985));
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
         }
         if (ImGui.button(label + "##hm-btn-" + mode.name())) {
             if (context.activateTool() != null) {
@@ -683,9 +644,9 @@ public final class BrushSettingsHud implements StudioPlugin {
         for (SplineBrushStyle styleOption : SplineBrushStyle.values()) {
             boolean active = (currentStyle == styleOption);
             if (active) {
-                ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF0284C7));
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF0369A1));
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioDrawColors.abgr(0xFF075985));
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
             }
             if (ImGui.button(styleOption.displayName() + "##hud-spl-" + styleOption.name())) {
                 if (pathTool != null) pathTool.setStyle(styleOption);
@@ -703,22 +664,22 @@ public final class BrushSettingsHud implements StudioPlugin {
 
         // Row 2: Node counter & Build / Clear actions
         ImGui.alignTextToFramePadding();
-        ImGui.textColored(nodeCount >= 2 ? 0xFF34D399 : 0xFF94A3B8, "Nodes: " + nodeCount);
+        ImGui.textColored(nodeCount >= 2 ? StudioPalette.SUCCESS : StudioPalette.TEXT_MUTED, "Nodes: " + nodeCount);
 
         ImGui.sameLine(0.0f, 10.0f);
         boolean canBuild = (pathTool != null && nodeCount >= 2);
         if (!canBuild) ImGui.pushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
-        ImGui.pushStyleColor(ImGuiCol.Button, StudioDrawColors.abgr(0xFF16A34A));
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioDrawColors.abgr(0xFF15803D));
+        ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.SUCCESS);
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.SUCCESS);
 
-        if (ImGui.button(StudioIcons.CHECK + " Build [Enter]##hud-build-path", 96.0f, 22.0f)) {
+        if (ImGui.button("Build [Enter]##hud-build-path", 96.0f, 22.0f)) {
             if (canBuild) pathTool.buildPath();
         }
         ImGui.popStyleColor(2);
         if (!canBuild) ImGui.popStyleVar();
 
         ImGui.sameLine(0.0f, 4.0f);
-        if (ImGui.button(StudioIcons.CLOSE + " Clear##hud-clr-path", 64.0f, 22.0f)) {
+        if (ImGui.button("Clear##hud-clr-path", 64.0f, 22.0f)) {
             if (pathTool != null) pathTool.clear();
         }
     }
@@ -749,19 +710,20 @@ public final class BrushSettingsHud implements StudioPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(StudioDrawColors.abgr(0xFF38BDF8), StudioIcons.TUNE + "  Brush Settings HUD Preferences");
+        ImGui.textColored(StudioPalette.ACCENT, StudioIcons.TUNE + "  Brush Settings HUD Preferences");
         ImGui.separator();
 
         String[] cornerNames = { "Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right" };
-        ImGui.combo("Default Corner Placement##hud-def-corner", defaultCorner, cornerNames);
-        ImGui.sliderFloat("HUD Background Opacity##hud-opacity", bgAlpha.getData(), 0.2f, 1.0f, "%.2f");
-        autoHide.set(StudioWidgets.toggleSwitch("hud-autohide", autoHide.get(), "Auto-Hide on Non-Brush Tools"));
+        ImGui.sliderFloat("Background Opacity##hud-opacity", bgAlpha.getData(), 0.2f, 1.0f, "%.2f");
+        docked = StudioWidgets.toggleSwitch("hud-docked", docked, "Dock beside brush rail by default");
 
         ImGui.spacing();
         if (ImGui.button(StudioIcons.REFRESH + "  Reset HUD Position & Defaults##hud-pos-reset")) {
             defaultCorner.set(3);
             bgAlpha.set(0.90f);
             autoHide.set(true);
+            visible = true;
+            docked = true;
             minimized = false;
             pinned = false;
             snapRequest = Corner.BOTTOM_RIGHT;

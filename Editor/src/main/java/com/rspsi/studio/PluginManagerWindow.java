@@ -10,6 +10,10 @@ import com.rspsi.editor.plugin.runtime.SemanticVersion;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioWidgets;
+import com.rspsi.studio.plugin.StudioPlugin;
+import com.rspsi.studio.plugin.StudioPluginManager;
+import com.rspsi.studio.plugin.StudioToolPlugin;
+import com.rspsi.studio.ui.StudioPanelContext;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
@@ -22,6 +26,8 @@ import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Native Dear ImGui Plugin Manager dialog.
@@ -38,6 +44,7 @@ public final class PluginManagerWindow {
     private PluginEcosystemService.RepositoryRefresh repositoryRefresh;
     private boolean showRepositories;
     private String repositoryStatus = "";
+    private String selectedStudioPluginId;
 
     public boolean isOpen() {
         return open;
@@ -56,13 +63,17 @@ public final class PluginManagerWindow {
         this.rescanPlugins = rescanPlugins;
     }
 
-    public void render(EditorPluginLifecycleManager pluginLifecycle) {
+    public void render(
+            EditorPluginLifecycleManager pluginLifecycle,
+            StudioPluginManager studioPlugins,
+            StudioPanelContext panelContext) {
         if (!open) return;
-        if (pluginLifecycle == null) return;
+        if (pluginLifecycle == null && studioPlugins == null) return;
 
-        ImGui.setNextWindowSize(720.0f, 480.0f, ImGuiCond.Appearing);
+        StudioWidgets.windowBackdrop("plugins");
+        ImGui.setNextWindowSize(880.0f, 600.0f, ImGuiCond.Appearing);
         ImBoolean pOpen = new ImBoolean(open);
-        if (!ImGui.begin(StudioIcons.OBJECT + "  Plugins##studio-plugins", pOpen, ImGuiWindowFlags.NoCollapse)) {
+        if (!ImGui.begin(StudioIcons.EXTENSION + "  Plugins##studio-plugins", pOpen, ImGuiWindowFlags.NoCollapse)) {
             open = pOpen.get();
             ImGui.end();
             return;
@@ -74,6 +85,7 @@ public final class PluginManagerWindow {
         ImGui.inputTextWithHint("##plugin-search", StudioIcons.SEARCH + "  Filter plugins...",
                 searchQuery, ImGuiInputTextFlags.None);
         ImGui.sameLine();
+        ImGui.beginDisabled(pluginLifecycle == null);
         if (ImGui.button("Enable All")) {
             pluginLifecycle.enableAll();
         }
@@ -81,6 +93,7 @@ public final class PluginManagerWindow {
         if (ImGui.button("Reload Active")) {
             pluginLifecycle.reload();
         }
+        ImGui.endDisabled();
         if (ecosystem != null) {
             ImGui.sameLine();
             if (ImGui.button(showRepositories ? "Hide Repositories" : "Repositories")) {
@@ -96,7 +109,7 @@ public final class PluginManagerWindow {
 
         ImGui.separator();
 
-        if (showRepositories && ecosystem != null) {
+        if (showRepositories && ecosystem != null && pluginLifecycle != null) {
             boolean installed = renderRepositories(pluginLifecycle);
             ImGui.separator();
             if (installed && rescanPlugins != null) {
@@ -106,10 +119,22 @@ public final class PluginManagerWindow {
             }
         }
 
+        if (selectedStudioPluginId != null && studioPlugins != null && panelContext != null) {
+            renderStudioPluginSettings(studioPlugins, panelContext);
+            ImGui.end();
+            return;
+        }
+
         String query = searchQuery.get().trim().toLowerCase();
-        List<EditorPlugin> candidates = pluginLifecycle.candidates();
+        List<EditorPlugin> candidates = pluginLifecycle == null ? List.of() : pluginLifecycle.candidates();
 
         ImGui.beginChild("plugin-list", 0.0f, -ImGui.getFrameHeightWithSpacing(), true);
+        if (studioPlugins != null) {
+            renderStudioPlugins(studioPlugins, query);
+            if (!studioPlugins.allPlugins().isEmpty() && !candidates.isEmpty()) {
+                ImGui.separatorText("Editor plugins");
+            }
+        }
         for (EditorPlugin plugin : candidates) {
             EditorPluginDescriptor descriptor = plugin.descriptor();
             String id = plugin.id();
@@ -282,6 +307,106 @@ public final class PluginManagerWindow {
             ImGui.popID();
         }
         return false;
+    }
+
+    private void renderStudioPlugins(StudioPluginManager plugins, String query) {
+        List<StudioPlugin> values = plugins.allPlugins();
+        if (values.isEmpty()) return;
+
+        ImGui.separatorText("Studio UI & tools");
+        for (StudioPlugin plugin : values) {
+            String haystack = (plugin.id() + " " + plugin.name() + " " + plugin.description())
+                    .toLowerCase();
+            if (!query.isBlank() && !haystack.contains(query)) continue;
+
+            ImGui.pushID("studio-" + plugin.id());
+            ImBoolean enabled = new ImBoolean(plugins.isEnabled(plugin.id()));
+            if (ImGui.checkbox("##enabled", enabled)) {
+                plugins.setEnabled(plugin.id(), enabled.get());
+            }
+            ImGui.sameLine();
+            ImGui.text(plugin.name());
+            ImGui.sameLine();
+            StudioWidgets.badge("v" + plugin.version(), 0.24f, 0.34f, 0.45f);
+            ImGui.sameLine();
+            ImGui.pushFont(StudioFonts.mono(), 0.0f);
+            ImGui.textDisabled(plugin.id());
+            ImGui.popFont();
+
+            if (plugin.isConfigurable()) {
+                ImGui.sameLine();
+                if (ImGui.smallButton("Configure")) {
+                    selectedStudioPluginId = plugin.id();
+                }
+            }
+            if (!plugin.description().isBlank()) {
+                ImGui.textWrapped(plugin.description());
+            }
+            ImGui.separator();
+            ImGui.popID();
+        }
+    }
+
+    private void renderStudioPluginSettings(
+            StudioPluginManager plugins,
+            StudioPanelContext context) {
+        StudioPlugin plugin = plugins.plugin(selectedStudioPluginId).orElse(null);
+        if (plugin == null) {
+            selectedStudioPluginId = null;
+            return;
+        }
+
+        if (StudioWidgets.buttonGhost("Back to Plugins", 120.0f, 28.0f)) {
+            selectedStudioPluginId = null;
+            return;
+        }
+        ImGui.dummy(1.0f, 8.0f);
+        StudioWidgets.heading(plugin.name(), plugin.id() + " · v" + plugin.version());
+        if (!plugin.description().isBlank()) {
+            ImGui.textWrapped(plugin.description());
+            ImGui.dummy(1.0f, 6.0f);
+        }
+
+        ImBoolean enabled = new ImBoolean(plugins.isEnabled(plugin.id()));
+        if (ImGui.checkbox("Enabled##studio-plugin-enabled", enabled)) {
+            plugins.setEnabled(plugin.id(), enabled.get());
+        }
+
+        if (plugin instanceof StudioToolPlugin tool) {
+            ImGui.separatorText("Tool placement");
+            Set<StudioToolPlugin.ToolSurface> active =
+                    new HashSet<>(plugins.effectiveSurfaces(tool));
+            boolean changed = false;
+            for (StudioToolPlugin.ToolSurface surface : StudioToolPlugin.ToolSurface.values()) {
+                if (surface == StudioToolPlugin.ToolSurface.TOOL_RAIL && !tool.isBrushTool()) {
+                    continue;
+                }
+                ImBoolean value = new ImBoolean(active.contains(surface));
+                if (ImGui.checkbox(surfaceLabel(surface) + "##surface-" + surface, value)) {
+                    if (value.get()) active.add(surface);
+                    else active.remove(surface);
+                    changed = true;
+                }
+            }
+            if (changed) plugins.setSurfaceOverride(plugin.id(), active);
+            if (plugins.hasSurfaceOverride(plugin.id())
+                    && StudioWidgets.buttonGhost("Reset placement", 120.0f, 26.0f)) {
+                plugins.resetSurfaceOverride(plugin.id());
+            }
+        }
+
+        if (plugin.isConfigurable()) {
+            ImGui.separatorText("Settings");
+            plugin.renderSettings(context);
+        }
+    }
+
+    private static String surfaceLabel(StudioToolPlugin.ToolSurface surface) {
+        return switch (surface) {
+            case BOTTOM_BAR -> "Primary Tool Rail";
+            case FLOATING_TOOLBAR -> "Viewport Quick Toolbar";
+            case TOOL_RAIL -> "Brush Shelf";
+        };
     }
 
     private static Map<String, SemanticVersion> installedVersions(

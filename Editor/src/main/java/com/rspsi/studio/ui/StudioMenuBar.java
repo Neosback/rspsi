@@ -95,7 +95,16 @@ public final class StudioMenuBar {
             ImGui.endMenu();
         }
 
-        // 5. Server Menu
+        // 5. Plugins Menu
+        if (ImGui.beginMenu("Plugins")) {
+            if (ImGui.menuItem(StudioIcons.PREFAB + "  Manage Plugins...", null,
+                    pluginManagerWindow != null && pluginManagerWindow.isOpen())) {
+                if (pluginManagerWindow != null) pluginManagerWindow.toggle();
+            }
+            ImGui.endMenu();
+        }
+
+        // 6. Server Menu
         if (ImGui.beginMenu("Server")) {
             if (openIntegrationCenter != null) {
                 if (ImGui.menuItem(StudioIcons.TERMINAL + "  Integration Center...")) openIntegrationCenter.run();
@@ -116,13 +125,9 @@ public final class StudioMenuBar {
             ImGui.endMenu();
         }
 
-        // 6. Help Menu
+        // 7. Help Menu
         if (ImGui.beginMenu("Help")) {
-            ImGui.menuItem(StudioIcons.INFO + "  OpenRune Studio", null, true, false);
-            ImGui.separator();
-            if (ImGui.menuItem(StudioIcons.PREFAB + "  Plugins...", null, pluginManagerWindow != null && pluginManagerWindow.isOpen())) {
-                if (pluginManagerWindow != null) pluginManagerWindow.toggle();
-            }
+            ImGui.menuItem(StudioIcons.INFO + "  OpenRune Content Studio", null, true, false);
             ImGui.endMenu();
         }
 

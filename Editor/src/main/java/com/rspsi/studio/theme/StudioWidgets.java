@@ -5,7 +5,11 @@ import imgui.ImDrawList;
 import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.flag.ImGuiCol;
+import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiStyleVar;
+import imgui.flag.ImGuiTableColumnFlags;
+import imgui.flag.ImGuiTableFlags;
+import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 
 import java.util.function.Consumer;
@@ -13,6 +17,28 @@ import java.util.function.Consumer;
 /** Small, consistent controls used by the native OpenRune Studio shell. */
 public final class StudioWidgets {
     private StudioWidgets() {
+    }
+
+    /**
+     * Draws an input-blocking, viewport-sized dim layer behind an auxiliary window.
+     * Call this immediately before rendering that window.
+     */
+    public static void windowBackdrop(String id) {
+        var viewport = ImGui.getMainViewport();
+        ImGui.setNextWindowPos(viewport.getPosX(), viewport.getPosY(), ImGuiCond.Always);
+        ImGui.setNextWindowSize(viewport.getSizeX(), viewport.getSizeY(), ImGuiCond.Always);
+        ImGui.setNextWindowViewport(viewport.getID());
+        ImGui.pushStyleColor(ImGuiCol.WindowBg, 0.025f, 0.04f, 0.065f, 0.68f);
+        int flags = ImGuiWindowFlags.NoDecoration
+                | ImGuiWindowFlags.NoMove
+                | ImGuiWindowFlags.NoSavedSettings
+                | ImGuiWindowFlags.NoDocking
+                | ImGuiWindowFlags.NoBringToFrontOnFocus
+                | ImGuiWindowFlags.NoScrollbar
+                | ImGuiWindowFlags.NoScrollWithMouse;
+        ImGui.begin("##studio-window-backdrop-" + id, flags);
+        ImGui.end();
+        ImGui.popStyleColor();
     }
 
     public static boolean iconButton(String id, String icon, String label, String shortcut) {
@@ -46,18 +72,16 @@ public final class StudioWidgets {
         ImDrawList drawList = ImGui.getWindowDrawList();
         if (selected) {
             drawList.addRectFilled(x, y, x + width, y + height,
-                    ImGui.getColorU32(0.16f, 0.32f, 0.52f, 1.0f), 4.0f);
+                    StudioPalette.draw(StudioPalette.ACCENT_MUTED), 4.0f);
             // A solid edge marker reads as "current" even at a glance.
             drawList.addRectFilled(x, y + 3.0f, x + 3.0f, y + height - 3.0f,
-                    ImGui.getColorU32(0.35f, 0.66f, 0.98f, 1.0f), 2.0f);
+                    StudioPalette.draw(StudioPalette.ACCENT), 2.0f);
         } else if (hovered) {
             drawList.addRectFilled(x, y, x + width, y + height,
-                    ImGui.getColorU32(0.17f, 0.19f, 0.23f, 1.0f), 4.0f);
+                    StudioPalette.draw(StudioPalette.FIELD_HOVER), 4.0f);
         }
 
-        int tint = selected
-                ? ImGui.getColorU32(1.0f, 1.0f, 1.0f, 1.0f)
-                : ImGui.getColorU32(0.72f, 0.76f, 0.83f, 1.0f);
+        int tint = StudioPalette.draw(selected ? StudioPalette.TEXT : StudioPalette.TEXT_MUTED);
 
         ImGui.pushFont(StudioFonts.icon(), (float) iconSize);
         ImVec2 glyph = ImGui.calcTextSize(icon);
@@ -93,7 +117,7 @@ public final class StudioWidgets {
      * it means the label can never be the thing that overflows.</p>
      */
     public static void fieldLabel(String label) {
-        ImGui.pushStyleColor(ImGuiCol.Text, 0.70f, 0.74f, 0.80f, 1.0f);
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
         ImGui.textWrapped(label);
         ImGui.popStyleColor();
         ImGui.setNextItemWidth(-Float.MIN_VALUE);
@@ -117,9 +141,11 @@ public final class StudioWidgets {
         float y = ImGui.getCursorScreenPosY();
         ImDrawList drawList = ImGui.getWindowDrawList();
         drawList.addRectFilled(x, y, x + width, y + height,
-                ImGui.getColorU32(0.23f, 0.32f, 0.42f, 1.0f), 2.0f);
-        drawList.addText(x + 8.0f, y + (height - ImGui.getTextLineHeight()) * 0.5f,
-                ImGui.getColorU32(0.90f, 0.93f, 0.97f, 1.0f), "> " + label);
+                StudioPalette.draw(StudioPalette.PANEL_ELEVATED), 3.0f);
+        drawList.addRectFilled(x, y, x + 3.0f, y + height,
+                StudioPalette.draw(StudioPalette.ACCENT), 2.0f);
+        drawList.addText(x + 10.0f, y + (height - ImGui.getTextLineHeight()) * 0.5f,
+                StudioPalette.draw(StudioPalette.TEXT), label);
         ImGui.dummy(width, height);
         ImGui.dummy(1.0f, 2.0f);
     }
@@ -161,8 +187,8 @@ public final class StudioWidgets {
      * Begins an elevated, rounded card container with 1px subtle border.
      */
     public static void beginCard(String id, float width, float height) {
-        ImGui.pushStyleColor(ImGuiCol.ChildBg, ImGui.getColorU32(0.10f, 0.11f, 0.15f, 0.95f));
-        ImGui.pushStyleColor(ImGuiCol.Border, ImGui.getColorU32(0.18f, 0.20f, 0.28f, 0.85f));
+        ImGui.pushStyleColor(ImGuiCol.ChildBg, StudioPalette.PANEL_BG);
+        ImGui.pushStyleColor(ImGuiCol.Border, StudioPalette.BORDER);
         ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 8.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.ChildBorderSize, 1.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 14.0f, 12.0f);
@@ -197,13 +223,13 @@ public final class StudioWidgets {
         float anim = lerp("switch-" + id, newState ? 1.0f : 0.0f, 16.0f);
 
         ImDrawList drawList = ImGui.getWindowDrawList();
-        int colOff = ImGui.getColorU32(0.15f, 0.17f, 0.23f, 1.0f);
-        int colOn = ImGui.getColorU32(0.39f, 0.40f, 0.95f, 1.0f);
+        int colOff = StudioPalette.draw(StudioPalette.BORDER);
+        int colOn = StudioPalette.draw(StudioPalette.ACCENT);
         int colBg = lerpColor(colOff, colOn, anim);
         drawList.addRectFilled(x, y, x + width, y + height, colBg, radius);
 
-        int borderColor = hovered ? ImGui.getColorU32(0.51f, 0.55f, 0.97f, 0.8f)
-                : ImGui.getColorU32(0.24f, 0.27f, 0.36f, 0.7f);
+        int borderColor = StudioPalette.draw(hovered
+                ? StudioPalette.ACCENT_HOVER : StudioPalette.BORDER_STRONG);
         drawList.addRect(x, y, x + width, y + height, borderColor, radius, 0, 1.0f);
 
         float knobPadding = 2.5f;
@@ -224,11 +250,11 @@ public final class StudioWidgets {
         return newState;
     }
 
-    /** Primary saturated brand CTA button (#6366F1). */
+    /** Primary brand CTA button using the Studio blue interaction token. */
     public static boolean buttonPrimary(String label, float width, float height) {
-        ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.39f, 0.40f, 0.95f, 1.0f));
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.51f, 0.55f, 0.97f, 1.0f));
-        ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.31f, 0.27f, 0.90f, 1.0f));
+        ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+        ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
         ImGui.pushStyleColor(ImGuiCol.Text, ImGui.getColorU32(1.0f, 1.0f, 1.0f, 1.0f));
         boolean clicked = ImGui.button(label, width, height);
         ImGui.popStyleColor(4);
@@ -237,10 +263,10 @@ public final class StudioWidgets {
 
     /** Secondary neutral surface button with subtle 1px border. */
     public static boolean buttonSecondary(String label, float width, float height) {
-        ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.14f, 0.16f, 0.22f, 1.0f));
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.20f, 0.22f, 0.30f, 1.0f));
-        ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.12f, 0.13f, 0.18f, 1.0f));
-        ImGui.pushStyleColor(ImGuiCol.Border, ImGui.getColorU32(0.24f, 0.27f, 0.36f, 0.8f));
+        ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.PANEL_ELEVATED);
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
+        ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
+        ImGui.pushStyleColor(ImGuiCol.Border, StudioPalette.BORDER);
         boolean clicked = ImGui.button(label, width, height);
         ImGui.popStyleColor(4);
         return clicked;
@@ -249,8 +275,8 @@ public final class StudioWidgets {
     /** Ghost button: transparent background until hovered. */
     public static boolean buttonGhost(String label, float width, float height) {
         ImGui.pushStyleColor(ImGuiCol.Button, 0x00000000);
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, ImGui.getColorU32(0.20f, 0.22f, 0.30f, 0.6f));
-        ImGui.pushStyleColor(ImGuiCol.ButtonActive, ImGui.getColorU32(0.15f, 0.17f, 0.24f, 0.8f));
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
+        ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
         boolean clicked = ImGui.button(label, width, height);
         ImGui.popStyleColor(3);
         return clicked;
@@ -291,6 +317,39 @@ public final class StudioWidgets {
         ImGui.textDisabled(StudioIcons.INFO + "  " + text);
     }
 
+    /** Compact two-column inspection table for labels and values. */
+    public static boolean beginPropertyTable(String id) {
+        if (!ImGui.beginTable("##properties-" + id, 2,
+                ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.RowBg)) {
+            return false;
+        }
+        ImGui.tableSetupColumn("Property", ImGuiTableColumnFlags.WidthStretch, 0.40f);
+        ImGui.tableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch, 0.60f);
+        return true;
+    }
+
+    public static void propertyRow(String label, String value) {
+        ImGui.tableNextRow();
+        ImGui.tableNextColumn();
+        ImGui.textDisabled(label);
+        ImGui.tableNextColumn();
+        ImGui.textWrapped(value == null ? "" : value);
+    }
+
+    public static void propertyRowMono(String label, String value) {
+        ImGui.tableNextRow();
+        ImGui.tableNextColumn();
+        ImGui.textDisabled(label);
+        ImGui.tableNextColumn();
+        ImGui.pushFont(StudioFonts.mono(), 0.0f);
+        ImGui.textWrapped(value == null ? "" : value);
+        ImGui.popFont();
+    }
+
+    public static void endPropertyTable() {
+        ImGui.endTable();
+    }
+
     /**
      * The persistent workspace tab strip shared by every workspace view (Content Studio,
      * Map Studio, Interface Studio, Object Studio).
@@ -314,23 +373,24 @@ public final class StudioWidgets {
             first = false;
 
             boolean isActive = workspace == active;
-            if (isActive) {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.18f, 0.38f, 0.65f, 1.0f));
-                ImGui.pushStyleColor(ImGuiCol.Text, ImGui.getColorU32(1.0f, 1.0f, 1.0f, 1.0f));
-            } else {
-                ImGui.pushStyleColor(ImGuiCol.Button, ImGui.getColorU32(0.13f, 0.15f, 0.18f, 0.85f));
-                ImGui.pushStyleColor(ImGuiCol.Text, ImGui.getColorU32(0.65f, 0.68f, 0.75f, 1.0f));
-            }
+            ImGui.pushStyleColor(ImGuiCol.Button,
+                    isActive ? StudioPalette.ACCENT : StudioPalette.CHROME_BG);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered,
+                    isActive ? StudioPalette.ACCENT_HOVER : StudioPalette.FIELD_HOVER);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive,
+                    isActive ? StudioPalette.ACCENT_ACTIVE : StudioPalette.ACCENT_SOFT);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
             if (ImGui.button(workspaceLabel(workspace) + "##ws-" + workspace)) {
                 runWorkspaceCallback(workspace, openDashboard, openMapEditor, openInterfaceStudio, openObjectStudio);
             }
-            ImGui.popStyleColor(2);
+            ImGui.popStyleColor(4);
 
-            if (workspace != WorkspaceManager.Workspace.DASHBOARD) {
-                ImGui.sameLine(0.0f, 2.0f);
-                if (ImGui.smallButton("x##ws-close-" + workspace) && closeWorkspace != null) {
+            if (workspace != WorkspaceManager.Workspace.DASHBOARD
+                    && ImGui.beginPopupContextItem("##ws-context-" + workspace)) {
+                if (ImGui.menuItem("Close") && closeWorkspace != null) {
                     closeWorkspace.accept(workspace);
                 }
+                ImGui.endPopup();
             }
         }
         ImGui.popStyleVar(2);

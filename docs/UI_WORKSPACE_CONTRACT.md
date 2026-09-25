@@ -20,7 +20,7 @@ The shell must remain predictable. Plugins contribute into known slots instead o
 
 The Project Launcher and project-loading screen are outside this hierarchy.
 
-Once a project reaches `PROJECT_OPEN`, the Dashboard is the home workspace and the editing workspaces use the shell below.
+Once a project reaches `PROJECT_OPEN`, **Content Studio** is the permanent home workspace and the editing workspaces use the shell below.
 
 The canonical editing layout is:
 
@@ -109,7 +109,7 @@ Tile Painter:
 - overlay palette
 - tile shape palette
 - rotation
-- tile flags or material presets
+- tile flags
 - conditional replacement rules
 
 Object Placement:
@@ -140,48 +140,42 @@ Rules:
 - the drawer must not duplicate brush size, brush shape, falloff, spacing, or stamp dynamics when those belong on the Left Brush Shelf
 - large asset libraries belong here, not in the floating quick palette
 
-### 3.3 Left Contextual Brush Shelf
+### 3.3 Left Brush Rail + Brush Settings
 
-Canonical name: **Brush Shelf**
+Canonical names:
+
+- **Brush Rail** for the thin contextual rail
+- **Brush Settings** for the narrow dockable/floating controls surface
 
 Role:
 
-- conditional vertical surface on the left edge of the viewport
-- normally hidden
-- appears only when the active tool declares brush, stamp, scatter, or repeated-placement dynamics
-- isolates execution behavior from content selection
+- both are conditional and appear only when the active tool declares shared brush controls;
+- Brush Settings docks immediately beside the Brush Rail by default;
+- Brush Settings may be detached and moved as a floating window;
+- content/palette choices remain in the tool's Context Drawer.
 
-Typical controls:
+Typical shared controls:
 
 - brush radius / size
-- brush footprint shape
-- hardness
-- falloff
-- strength
-- spacing
-- stamp spacing
-- jitter
-- density
-- scatter radius
-- rotation variation
-- scale variation where the asset supports it
-- noise enable / amount when it directly modifies brush execution
+- footprint shape
+- falloff/hardness where supported
+- strength/spacing/scatter controls when they are genuinely shared brush mechanics
 
-The Brush Shelf is not limited to built-in tools. Plugins may contribute controls to it when their active tool has a valid brush/stamp capability.
+Tool-specific controls remain in that tool's Context Drawer.
+
+Every tool declares one explicit brush UI mode:
+
+- `NONE`: no shared brush rail/settings;
+- `SHARED_SETTINGS`: show the shared Brush Rail + Brush Settings;
+- `TOOL_OWNED`: the tool is brush-aware but owns its controls inside its own drawer/panel.
 
 Rules:
 
-- the surface itself is context-gated
-- a plugin cannot force it permanently visible just because it has settings
-- controls must describe how the active operation is applied, not which content asset is selected
-- common brush controls should use shared components and shared state
-- tool-specific brush modifiers may append their own groups below the common controls
-- if a tool has no brush/stamp dynamics, the shelf collapses to zero width
-- user pinning may keep it visible for convenience, but the underlying contextual eligibility remains explicit
-
-Important migration note:
-
-The current LeftBrushRail behaves primarily as a small button that toggles the Brush Settings HUD. That is not the final contract. The rail should become the actual Brush Shelf described here. The HUD becomes an independent optional quick summary/control surface.
+- never infer brush UI from class names, tool ids, or incidental surface placement;
+- Path/selection tools do not receive Brush Settings unless they explicitly opt in;
+- a plugin cannot force shared brush chrome permanently visible merely because it has settings;
+- if a tool has no shared brush UI, the shell reserves zero width for it;
+- detaching Brush Settings must return that width to the viewport.
 
 ### 3.4 Floating Quick Palette
 
@@ -199,7 +193,7 @@ Examples in Tile Painter:
 - armed overlay
 - armed shape
 - recent materials
-- favorite tile presets
+- favorite/recent tile materials
 
 Examples in Object Placement:
 
@@ -482,7 +476,68 @@ Recommended layout tokens should live in one theme/layout configuration rather t
 - spacing
 - animation duration
 
-## 10. Progressive disclosure rules
+## 10. Visual system, overflow, and auxiliary-window rules
+
+OpenRune Content Studio uses one host-owned visual system. Plugins do not invent a second theme.
+
+### Color semantics
+
+- the primary interaction/selection color is Studio blue (`StudioPalette.ACCENT`);
+- active tabs, selected entities, check marks, slider grabs, selection affordances and primary actions use that same blue family;
+- green is success, amber is warning/attention, red is error/destructive;
+- purple/cyan/red must not be used as arbitrary per-panel decoration;
+- inactive controls retain readable neutral/white text instead of fading into the background;
+- ImDrawList code converts ARGB theme tokens through `StudioPalette.draw(...)`; normal ImGui style/text APIs consume the ARGB token directly.
+
+### Typography
+
+- normal UI text uses the shared Studio UI face;
+- launch/product titles use the shared display face;
+- section headings use the shared heading face;
+- monospace is reserved for code, identifiers, raw values and data where fixed-width alignment adds information;
+- inspection panels use structured label/value rows instead of console-style walls of monospace text.
+
+### Layering
+
+- application/background, chrome, panel body, elevated panel/card and field/control surfaces use distinct shared tokens;
+- toolbar/chrome must remain visually separable from its corresponding content panel without high-contrast novelty borders;
+- scrollbars must remain visible against panel backgrounds;
+- auxiliary windows dim and input-block the owning workspace behind them so they read as a separate interaction layer;
+- ordinary auxiliary windows do not collapse/minimize into title bars.
+
+### Right Inspector overflow
+
+Right-side panels are **vertical-scroll-first**.
+
+- the shell targets an approximately 390 px inspector on a normal desktop window, with panel-specific width hints and a viewport-safe clamp;
+- horizontal scrolling is disabled by default;
+- a panel must reflow controls, wrap prose, or use responsive rows/tables before requesting horizontal scrolling;
+- horizontal scrolling is opt-in only for data whose horizontal axis carries real meaning, such as a timeline or wide matrix;
+- third-party panel contributions inherit the same default;
+- a panel may request more right-side width through the host contract, but it cannot force the viewport below the shell minimum.
+
+### Tabs and icons
+
+- workspace tabs do not expose a permanent close X;
+- right-clicking a closable workspace tab exposes **Close**;
+- text glyphs such as `>`, `<`, `[x]`, or ASCII arrows are not substitutes for controls/icons;
+- use Material icons for true icon-only actions, and always provide a tooltip;
+- do not decorate every heading, HUD value or button with an icon merely because an icon exists;
+- HUD content is information-first; icons are reserved for controls or meaning that is materially faster to recognize visually.
+
+#### Plugin icon sources
+
+Plugins may use two icon sources:
+
+1. **Material icon by semantic name** for normal tools/actions. This is preferred because the host owns size, color, active state and DPI behavior.
+2. **Bundled PNG resource** for custom plugin identity or artwork that does not exist in the Material set.
+
+PNG icons are loaded by the Studio host from plugin-owned bytes/resources and cached as host-owned textures. Public plugins never receive or manage OpenGL texture ids. A PNG must degrade to a Material/default icon if loading fails.
+
+The same semantic action should use the same Material icon throughout Studio. Plugin authors should not choose different icons merely to make a built-in action look branded.
+
+
+## 11. Progressive disclosure rules
 
 A surface should appear only when it answers a current user question.
 
@@ -508,7 +563,7 @@ Examples:
 
 This decision model is the baseline for reviewing every new panel or plugin contribution.
 
-## 11. Plugin UI contract
+## 12. Plugin UI contract
 
 Public plugins should contribute declaratively into host-owned surfaces.
 
@@ -550,7 +605,7 @@ Studio projects these neutral components to ImGui.
 
 Direct ImGui/GLFW/OpenGL UI remains an internal Studio implementation boundary.
 
-## 12. State memory
+## 13. State memory
 
 Context changes must not reset authoring state unexpectedly.
 
@@ -571,13 +626,15 @@ Remember globally:
 
 - rail/panel sizes
 - HUD positions
+- HUD opacity
+- HUD visibility
 - pinned HUD state
 - user visibility preferences
 - workspace reset baseline
 
 A plugin unload must release its contributions without corrupting the remaining layout.
 
-## 13. Object and tile picking relationship
+## 14. Object and tile picking relationship
 
 Pickers and inspectors are different concerns.
 
@@ -595,7 +652,7 @@ The floating picker palette may change targeting mode without replacing the Insp
 
 Selection should carry stable semantic identity wherever possible so scene rebuilds do not invalidate the inspector unnecessarily.
 
-## 14. Current migration targets
+## 15. Current migration targets
 
 The existing code is useful but must converge on this contract.
 
@@ -631,11 +688,15 @@ Target split:
 - exact selected placed-object editing in Inspector Panel
 - quick armed object/rotation in Viewport Quick Palette
 
-### TileInfoHudPlugin
+### Inspection HUDs
 
 Target:
-- remains a HUD contribution
-- later consumes a canonical hover/pick snapshot instead of independently reconstructing height details
+- inspectors expose an in-panel **HUD** section for visibility, field selection, anchor/reset and opacity;
+- the same inspection snapshot drives both the detailed inspector and its HUD;
+- HUDs are movable by default and persist their user offset/opacity independently of plugin state;
+- tile inspection may expose preview, coordinate, plane, height, shape and rotation fields;
+- object inspection may expose object name/id, tile/plane, shape/type, rotation and selected definition/runtime facts;
+- public plugins use the frontend-neutral `PluginApi.hud(...)` path rather than ImGui.
 
 ### StudioToolPlugin / UiSurfaceContribution
 
@@ -643,7 +704,7 @@ Target:
 - migrate from permissive surface placement toward an explicit ToolUiDescriptor/capability model
 - retain compatibility adapters while first-party tools migrate
 
-## 15. UI correctness acceptance gates
+## 16. UI correctness acceptance gates
 
 A UI feature is not complete because the widgets render.
 
@@ -664,7 +725,7 @@ The workspace must verify:
 
 These rules should be unit-tested at the state/layout resolver level even though pixel-perfect ImGui rendering still needs live verification.
 
-## 16. Accessibility, focus, scaling, and performance
+## 17. Accessibility, focus, scaling, and performance
 
 The workspace must remain usable as the tool set and asset catalogs grow.
 
@@ -709,7 +770,7 @@ Rules:
 
 The target is a stable interactive viewport even while deep libraries contain tens of thousands of definitions.
 
-## 17. Workspace persistence and schema evolution
+## 18. Workspace persistence and schema evolution
 
 Workspace state is persistent user data and needs a migration strategy.
 
@@ -728,7 +789,7 @@ When surfaces are renamed or migrated, provide an explicit migration where reaso
 
 Plugin-owned persisted UI state is removed or quarantined cleanly when a plugin disappears, without corrupting host workspace state.
 
-## 18. Guiding principle
+## 19. Guiding principle
 
 The workspace is contextual, not modal-window-driven.
 

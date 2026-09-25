@@ -10,8 +10,8 @@ import com.rspsi.project.StudioProjectDescriptor;
 import com.rspsi.project.StudioProjectKind;
 import com.rspsi.server.ServerPathKey;
 import com.rspsi.server.ServerProjectInspection;
-import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.studio.theme.StudioWidgets;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
@@ -62,7 +62,9 @@ public final class ContentStudioView {
                 | ImGuiWindowFlags.NoMove
                 | ImGuiWindowFlags.NoSavedSettings
                 | ImGuiWindowFlags.NoBringToFrontOnFocus
-                | ImGuiWindowFlags.NoDocking;
+                | ImGuiWindowFlags.NoDocking
+                | ImGuiWindowFlags.NoScrollbar
+                | ImGuiWindowFlags.NoScrollWithMouse;
         if (!ImGui.begin("OpenRune Content Studio##openrune-studio", flags)) {
             ImGui.end();
             return;
@@ -79,8 +81,14 @@ public final class ContentStudioView {
             ImGui.separator();
         }
 
+        float outerWidth = ImGui.getContentRegionAvailX();
+        float bodyWidth = Math.min(1120.0f, Math.max(1.0f, outerWidth - 32.0f));
+        float bodyOffset = Math.max(0.0f, (outerWidth - bodyWidth) * 0.5f);
+        ImGui.setCursorPosX(ImGui.getCursorPosX() + bodyOffset);
+        ImGui.beginChild("##content-studio-body", bodyWidth, ImGui.getContentRegionAvailY(), false);
+        ImGui.setScrollX(0.0f);
+        ImGui.pushTextWrapPos(0.0f);
         ImGui.dummy(1.0f, 12.0f);
-        ImGui.indent(24.0f);
 
         renderProjectHeader(project, status, cacheHealth, closeProject);
         ImGui.dummy(1.0f, 10.0f);
@@ -100,8 +108,9 @@ public final class ContentStudioView {
         ImGui.dummy(1.0f, 10.0f);
         renderDiagnostics(status);
 
-        ImGui.dummy(1.0f, 22.0f);
-        ImGui.unindent(24.0f);
+        ImGui.dummy(1.0f, 18.0f);
+        ImGui.popTextWrapPos();
+        ImGui.endChild();
         ImGui.end();
     }
 
@@ -110,9 +119,9 @@ public final class ContentStudioView {
             CacheSessionStatus status,
             OsrsCacheHealth cacheHealth,
             Runnable closeProject) {
-        StudioWidgets.beginCard("project-header", -1.0f, 112.0f);
+        StudioWidgets.beginCard("project-header", -1.0f, 136.0f);
 
-        ImGui.pushStyleColor(ImGuiCol.Text, 0.91f, 0.94f, 1.0f, 1.0f);
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
         ImGui.text(project.name());
         ImGui.popStyleColor();
 
@@ -139,7 +148,9 @@ public final class ContentStudioView {
                     ImGui.getColorU32(0.29f, 0.87f, 0.50f, 1.0f));
         }
 
-        ImGui.textDisabled(project.sourcePathValue().toString());
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_DISABLED);
+        ImGui.textWrapped(project.sourcePathValue().toString());
+        ImGui.popStyleColor();
 
         LoadedOsrsCacheSession cache = status.currentSession().orElse(null);
         if (cache != null) {
@@ -154,8 +165,8 @@ public final class ContentStudioView {
 
         if (closeProject != null) {
             float buttonWidth = 110.0f;
-            ImGui.sameLine(Math.max(ImGui.getCursorPosX() + 12.0f,
-                    ImGui.getWindowContentRegionMaxX() - buttonWidth));
+            float offset = ImGui.getContentRegionAvailX() - buttonWidth;
+            if (offset > 0.0f) ImGui.setCursorPosX(ImGui.getCursorPosX() + offset);
             if (StudioWidgets.buttonGhost("Close Project", buttonWidth, 26.0f)) {
                 closeProject.run();
             }
@@ -171,7 +182,7 @@ public final class ContentStudioView {
             Runnable openMapEditor) {
         boolean loading = status.state() == CacheSessionState.LOADING;
         boolean ready = cacheHealth != null && !loading;
-        StudioWidgets.beginCard("project-continue", -1.0f, 112.0f);
+        StudioWidgets.beginCard("project-continue", -1.0f, 132.0f);
         ImGui.text(StudioIcons.MAP + "  Continue");
         ImGui.textDisabled(loading
                 ? "Preparing cache definitions for the requested workspace..."
@@ -191,7 +202,7 @@ public final class ContentStudioView {
         ImGui.endDisabled();
 
         if (project.kind() == StudioProjectKind.OPENRUNE_SERVER) {
-            ImGui.sameLine();
+            ImGui.dummy(1.0f, 4.0f);
             ImGui.textDisabled("The imported OpenRune project stays connected while you edit.");
         }
         StudioWidgets.endCard();
@@ -209,7 +220,7 @@ public final class ContentStudioView {
                 ? null : integrations.activeProjectInspection().orElse(null);
         LoadedOsrsCacheSession cache = status.currentSession().orElse(null);
 
-        StudioWidgets.beginCard("openrune-project-status", -1.0f, 190.0f);
+        StudioWidgets.beginCard("openrune-project-status", -1.0f, 226.0f);
         if (ImGui.beginTable("##openrune-project-health", 2,
                 ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp)) {
             statusRow("LIVE cache", cache != null
@@ -280,14 +291,14 @@ public final class ContentStudioView {
             ImGui.textDisabled(status.message());
         } else if (cache == null) {
             ImGui.textColored(
-                    StudioDrawColors.abgr(0xFF4ADE80),
+                    StudioPalette.SUCCESS,
                     StudioIcons.CHECK + "  FileStore ready");
             ImGui.text("Revision " + cacheHealth.revision()
                     + "  ·  " + fmt(cacheHealth.mapArchiveCount()) + " map groups");
             ImGui.textDisabled(cacheHealth.backendName() + "  ·  " + cacheHealth.path());
         } else {
             ImGui.textColored(
-                    StudioDrawColors.abgr(0xFF4ADE80),
+                    StudioPalette.SUCCESS,
                     StudioIcons.CHECK + "  Cache ready");
             ImGui.text("Revision " + cache.identity().revision()
                     + "  ·  " + fmt(cache.mapCount()) + " map groups");
@@ -305,8 +316,9 @@ public final class ContentStudioView {
         ImGui.separatorText("Workspaces");
         boolean ready = cacheHealth != null && status.state() != CacheSessionState.LOADING;
         float spacing = 12.0f;
-        float width = Math.max(230.0f,
-                (ImGui.getContentRegionAvailX() - spacing * 2.0f) / 3.0f);
+        float available = ImGui.getContentRegionAvailX();
+        int columns = available >= 820.0f ? 3 : available >= 520.0f ? 2 : 1;
+        float width = Math.max(1.0f, (available - spacing * (columns - 1)) / columns);
 
         workspaceCard(
                 "home-map",
@@ -316,7 +328,7 @@ public final class ContentStudioView {
                 ready,
                 openMapEditor,
                 width);
-        ImGui.sameLine(0.0f, spacing);
+        if (columns > 1) ImGui.sameLine(0.0f, spacing);
         workspaceCard(
                 "home-interface",
                 StudioIcons.PREFAB,
@@ -325,7 +337,8 @@ public final class ContentStudioView {
                 ready,
                 openInterfaceStudio,
                 width);
-        ImGui.sameLine(0.0f, spacing);
+        if (columns == 3) ImGui.sameLine(0.0f, spacing);
+        else if (columns == 2) ImGui.dummy(1.0f, spacing);
         workspaceCard(
                 "home-object",
                 StudioIcons.OBJECT,
@@ -367,7 +380,7 @@ public final class ContentStudioView {
         var summary = cache.decoderSummary();
         if (summary.allDecodersPassed()) {
             ImGui.textColored(
-                    StudioDrawColors.abgr(0xFF4ADE80),
+                    StudioPalette.SUCCESS,
                     StudioIcons.CHECK + "  Required decoders healthy");
         } else {
             ImGui.text("Decoder diagnostics: " + summary.failures().size());
@@ -386,7 +399,7 @@ public final class ContentStudioView {
         ImGui.tableNextColumn();
         ImGui.textDisabled(label);
         ImGui.tableNextColumn();
-        ImGui.text(value);
+        ImGui.textWrapped(value);
     }
 
     private static String pathLabel(
