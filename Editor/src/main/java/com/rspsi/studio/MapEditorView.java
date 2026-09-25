@@ -28,6 +28,7 @@ import com.rspsi.studio.brush.StudioBrushManager;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioWidgets;
 import com.rspsi.studio.ui.FloatingToolbar;
+import com.rspsi.studio.ui.ToolQuickPalette;
 import com.rspsi.studio.ui.MinimapHudOverlay;
 import com.rspsi.studio.ui.panels.MinimapPanel;
 import com.rspsi.studio.ui.StudioBottomBar;
@@ -111,6 +112,7 @@ public final class MapEditorView {
     private final WorkspaceTabBar workspaceTabBar = new WorkspaceTabBar();
     private final LeftBrushRail leftBrushRail = new LeftBrushRail();
     private final FloatingToolbar floatingToolbar = new FloatingToolbar();
+    private final ToolQuickPalette toolQuickPalette = new ToolQuickPalette();
     private final MinimapHudOverlay minimapHudOverlay = new MinimapHudOverlay();
     private final StudioRightSidebar rightSidebar = new StudioRightSidebar();
     private final StudioBottomBar bottomBar = new StudioBottomBar();
@@ -413,6 +415,9 @@ public final class MapEditorView {
             // brush rail and the bottom bar.
             floatingToolbar.render(panelContext, layout.viewportX(), layout.contentY(),
                     toolId -> activateTool(pluginLifecycle, toolId), activeToolId);
+            toolQuickPalette.render(panelContext,
+                    layout.viewportX(), layout.contentY(),
+                    layout.viewportWidth(), layout.viewportHeight());
         }
         ImGui.end();
         ImGui.popStyleVar();
