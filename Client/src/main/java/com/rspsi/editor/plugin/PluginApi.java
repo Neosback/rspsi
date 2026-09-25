@@ -2,6 +2,7 @@ package com.rspsi.editor.plugin;
 
 import com.rspsi.editor.EditorCommand;
 import com.rspsi.editor.EditorSession;
+import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.cache.data.DecodedDataCatalog;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.generation.GenerationSchema;
@@ -232,6 +233,16 @@ public final class PluginApi {
             api.track(handle);
             return new BoundSetting<>(api.settings(), spec, handle);
         }
+    }
+
+    // --- Shared Brush Registration ---
+
+    /**
+     * Registers a frontend-neutral brush with the shared editor brush system.
+     * Native Studio projects these brushes into Brush Settings automatically.
+     */
+    public void brush(EditorBrush brush) {
+        context.services().brushes().register(Objects.requireNonNull(brush, "brush"));
     }
 
     // --- Fluent Tool Registration ---
