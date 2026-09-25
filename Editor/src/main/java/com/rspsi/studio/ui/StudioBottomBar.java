@@ -46,6 +46,7 @@ public final class StudioBottomBar {
 
     private boolean drawerOpen = true;
     private DrawerMode drawerMode = DrawerMode.AUTO_TOOL;
+    private String lastDrawerToolId;
 
     public boolean isDrawerOpen() {
         return drawerOpen;
@@ -87,22 +88,24 @@ public final class StudioBottomBar {
                        Consumer<String> activateTool,
                        String activeToolId) {
 
-        // Tools with nothing to show (e.g. Single/Multi Select, which report into the Tile
-        // Inspector panel instead) keep the drawer collapsed and un-openable - there is nothing
-        // for the user to expand into.
-        boolean toolHasDrawer = context == null || context.studioPlugins() == null
+        boolean activeToolHasDrawer = context == null || context.studioPlugins() == null
                 || context.studioPlugins().toolPlugin(activeToolId)
                         .map(StudioToolPlugin::hasContextDrawerContent)
                         .orElse(true);
         if (panelManager != null && activeToolId != null) {
-            toolHasDrawer = toolHasDrawer
+            activeToolHasDrawer = activeToolHasDrawer
                     && panelManager.managedRegionForTool(activeToolId)
                             .map(region -> region == DockRegion.BOTTOM)
                             .orElse(true);
         }
-        if (!toolHasDrawer) {
-            drawerOpen = false;
+        if (activeToolHasDrawer && activeToolId != null) {
+            lastDrawerToolId = activeToolId;
         }
+
+        // Picker/inspection tools with no drawer never destroy the user's existing
+        // drawer state. AUTO_TOOL simply keeps showing the last tool that owned UI.
+        String drawerToolId = activeToolHasDrawer ? activeToolId : lastDrawerToolId;
+        boolean drawerHasContent = drawerMode != DrawerMode.AUTO_TOOL || drawerToolId != null;
 
         float curH = currentHeight();
 
@@ -115,11 +118,12 @@ public final class StudioBottomBar {
         ImGui.begin("StudioBottomBar", BAR_FLAGS);
 
         // 1. Horizontal Activity Bar (Square tool buttons linked to the drawer below)
-        renderActivityBar(panelManager, context, activateTool, activeToolId, toolHasDrawer);
+        renderActivityBar(panelManager, context, activateTool, activeToolId, drawerHasContent);
 
-        // 2. Expandable Drawer Body
-        if (drawerOpen && toolHasDrawer) {
-            renderDrawerBody(panelManager, context, activeToolId, curH - COLLAPSED_HEIGHT - 6.0f);
+        // 2. Expandable Drawer Body. When the active picker has no shelf, retain
+        // the last real tool shelf instead of collapsing the whole bottom area.
+        if (drawerOpen && drawerHasContent) {
+            renderDrawerBody(panelManager, context, drawerToolId, curH - COLLAPSED_HEIGHT - 6.0f);
         }
 
         ImGui.end();
