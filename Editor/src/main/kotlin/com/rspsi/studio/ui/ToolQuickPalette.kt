@@ -72,7 +72,7 @@ class ToolQuickPalette {
         private const val EDGE_MARGIN = 8.0f
         private const val MIN_BOTTOM_CLEARANCE = 80.0f
 
-        private const val FLAGS =
+        private val FLAGS =
             ImGuiWindowFlags.NoTitleBar or
                 ImGuiWindowFlags.NoResize or
                 ImGuiWindowFlags.NoCollapse or
