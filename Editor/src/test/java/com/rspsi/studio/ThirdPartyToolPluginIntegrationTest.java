@@ -131,7 +131,7 @@ class ThirdPartyToolPluginIntegrationTest {
         var projected = manager.toolView("community.biome-painter").orElseThrow();
         assertEquals("Biome Painter", projected.name());
         assertEquals("community.biome-painter", projected.toolId());
-        assertEquals("forest", projected.icon());
+        assertEquals(StudioIcons.byName("forest"), projected.icon());
         assertEquals("B", projected.shortcut());
         assertEquals(35, projected.railPriority());
         assertTrue(projected.surfaces().contains(StudioToolPlugin.ToolSurface.BOTTOM_BAR));
