@@ -108,8 +108,12 @@ class ThirdPartyToolPluginIntegrationTest {
                         () -> EditorUiNode.section(
                                 "Biome",
                                 EditorUiNode.text("Paint semantic biome data")),
-                        null,
-                        null));
+                        () -> EditorUiNode.row(
+                                EditorUiNode.button("Forest", () -> { }),
+                                EditorUiNode.button("Swamp", () -> { })),
+                        () -> EditorUiNode.section(
+                                "Selection",
+                                EditorUiNode.text("Selected biome facts"))));
 
         registry.registerTool(new EditorToolRegistration(
                 "community.biome-painter",
@@ -136,6 +140,10 @@ class ThirdPartyToolPluginIntegrationTest {
         assertTrue(manager.usesSharedBrushSettings("community.biome-painter"));
         assertTrue(projected.hasContextDrawerContent());
         assertTrue(projected.contextDrawerNode().orElseThrow()
+                instanceof EditorUiNode.Section);
+        assertTrue(projected.quickPaletteNode().orElseThrow()
+                instanceof EditorUiNode.Row);
+        assertTrue(projected.inspectorNode().orElseThrow()
                 instanceof EditorUiNode.Section);
         assertFalse(projected.isNativeProjection());
     }
