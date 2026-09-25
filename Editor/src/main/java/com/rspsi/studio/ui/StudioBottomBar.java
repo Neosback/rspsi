@@ -2,6 +2,7 @@ package com.rspsi.studio.ui;
 
 import com.rspsi.studio.theme.StudioDrawColors;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.plugin.EditorSetting;
 import com.rspsi.editor.ui.DockRegion;
 import com.rspsi.studio.plugin.StudioPluginManager;
 import com.rspsi.studio.plugin.StudioToolPlugin;
@@ -15,6 +16,8 @@ import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.type.ImBoolean;
+import imgui.type.ImInt;
 
 import java.util.Collections;
 import java.util.List;
@@ -304,6 +307,10 @@ public final class StudioBottomBar {
                 }
                 return;
             }
+            if (toolView != null && toolView.hasContextDrawerContent()) {
+                renderNeutralToolShelf(context, activeToolId, toolView.name());
+                return;
+            }
         }
 
         if (activeToolId == null) {
@@ -337,6 +344,78 @@ public final class StudioBottomBar {
         }
 
         ImGui.textDisabled("Tool '" + activeToolId + "' does not require drawer parameters.");
+    }
+
+    private void renderNeutralToolShelf(
+            StudioPanelContext context,
+            String activeToolId,
+            String toolName) {
+        if (context == null || context.pluginLifecycle() == null
+                || context.pluginLifecycle().host() == null) {
+            ImGui.textDisabled("Tool settings are unavailable.");
+            return;
+        }
+
+        var host = context.pluginLifecycle().host();
+        List<EditorSetting> settings =
+                host.registry().settingsForTool(host.context(), activeToolId);
+
+        ImGui.textColored(StudioPalette.ACCENT, toolName);
+        ImGui.sameLine();
+        ImGui.textDisabled(activeToolId);
+        ImGui.separator();
+
+        if (settings.isEmpty()) {
+            ImGui.textDisabled("This tool owns the Context Drawer but has no controls yet.");
+            return;
+        }
+
+        for (EditorSetting setting : settings) {
+            renderNeutralSetting(setting);
+        }
+    }
+
+    private void renderNeutralSetting(EditorSetting setting) {
+        ImGui.pushID("tool-setting-" + setting.id());
+        ImGui.alignTextToFramePadding();
+        ImGui.text(setting.label());
+        ImGui.sameLine(180.0f);
+        ImGui.setNextItemWidth(Math.max(140.0f, ImGui.getContentRegionAvailX() - 12.0f));
+
+        Object value = setting.value();
+        switch (setting.type()) {
+            case BOOLEAN -> {
+                ImBoolean current = new ImBoolean(Boolean.TRUE.equals(value));
+                if (ImGui.checkbox("##value", current)) {
+                    setting.setValue(current.get());
+                }
+            }
+            case INTEGER -> {
+                int[] current = {value instanceof Number number ? number.intValue() : 0};
+                if (ImGui.sliderInt("##value", current,
+                        (int) setting.minimum(), (int) setting.maximum())) {
+                    setting.setValue(current[0]);
+                }
+            }
+            case DECIMAL -> {
+                float[] current = {value instanceof Number number ? number.floatValue() : 0.0f};
+                if (ImGui.sliderFloat("##value", current,
+                        (float) setting.minimum(), (float) setting.maximum(), "%.2f")) {
+                    setting.setValue((double) current[0]);
+                }
+            }
+            case ENUM -> {
+                List<String> options = setting.options();
+                String selectedValue = String.valueOf(value);
+                int selectedIndex = Math.max(0, options.indexOf(selectedValue));
+                ImInt selected = new ImInt(selectedIndex);
+                if (ImGui.combo("##value", selected, options.toArray(String[]::new))) {
+                    setting.setValue(options.get(selected.get()));
+                }
+            }
+        }
+
+        ImGui.popID();
     }
 
     private void renderSplineRampShelf(StudioPanelContext context) {
