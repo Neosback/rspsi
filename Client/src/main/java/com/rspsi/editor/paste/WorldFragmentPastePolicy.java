@@ -1,16 +1,16 @@
 package com.rspsi.editor.paste;
 
-import com.rspsi.editor.model.TileBounds;
 import com.rspsi.editor.model.WorldFragment;
 
-import java.util.LinkedHashSet;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
 /**
- * Immutable policy for converting a {@link WorldFragment} into a world-space
- * paste proposal.
+ * Immutable policy for converting a {@link WorldFragment} into a world-space paste proposal.
+ *
+ * <p>This remains a minimal Java record shell because its compact constructor historically
+ * validates and defensively replaces record components before storage. Behavioral semantics are
+ * centralized in {@link WorldFragmentPastePolicySemantics}.</p>
  */
 public record WorldFragmentPastePolicy(
         TerrainMode terrainMode,
@@ -21,101 +21,55 @@ public record WorldFragmentPastePolicy(
         Set<Integer> objectTypes
 ) {
     public WorldFragmentPastePolicy {
-        terrainMode = Objects.requireNonNull(terrainMode, "terrainMode");
-        objectMode = Objects.requireNonNull(objectMode, "objectMode");
-        heightMode = Objects.requireNonNull(heightMode, "heightMode");
-        conflictMode = Objects.requireNonNull(conflictMode, "conflictMode");
-        heightAnchor = Objects.requireNonNull(heightAnchor, "heightAnchor");
-
-        LinkedHashSet<Integer> types = new LinkedHashSet<>(
-                Objects.requireNonNull(objectTypes, "objectTypes"));
-        for (int type : types) {
-            if (type < 0 || type > 22) {
-                throw new IllegalArgumentException(
-                        "OSRS location type filter must be between 0 and 22: " + type);
-            }
-        }
-        objectTypes = Set.copyOf(types);
+        terrainMode = WorldFragmentPastePolicySemantics.requireTerrainMode(terrainMode);
+        objectMode = WorldFragmentPastePolicySemantics.requireObjectMode(objectMode);
+        heightMode = WorldFragmentPastePolicySemantics.requireHeightMode(heightMode);
+        conflictMode = WorldFragmentPastePolicySemantics.requireConflictMode(conflictMode);
+        heightAnchor = WorldFragmentPastePolicySemantics.requireHeightAnchor(heightAnchor);
+        objectTypes = WorldFragmentPastePolicySemantics.copyObjectTypes(objectTypes);
     }
 
     public static WorldFragmentPastePolicy replaceAll() {
-        return new WorldFragmentPastePolicy(
-                TerrainMode.REPLACE,
-                ObjectMode.REPLACE,
-                HeightMode.SOURCE_ABSOLUTE,
-                ConflictMode.REPORT,
-                Optional.empty(),
-                Set.of());
+        return WorldFragmentPastePolicySemantics.replaceAll();
     }
 
     public static WorldFragmentPastePolicy terrainOnly() {
-        return new WorldFragmentPastePolicy(
-                TerrainMode.REPLACE,
-                ObjectMode.PRESERVE,
-                HeightMode.SOURCE_ABSOLUTE,
-                ConflictMode.REPORT,
-                Optional.empty(),
-                Set.of());
+        return WorldFragmentPastePolicySemantics.terrainOnly();
     }
 
     public static WorldFragmentPastePolicy objectsOnly() {
-        return new WorldFragmentPastePolicy(
-                TerrainMode.PRESERVE,
-                ObjectMode.REPLACE,
-                HeightMode.PRESERVE_DESTINATION,
-                ConflictMode.REPORT,
-                Optional.empty(),
-                Set.of());
+        return WorldFragmentPastePolicySemantics.objectsOnly();
     }
 
     public static WorldFragmentPastePolicy mergeObjects() {
-        return new WorldFragmentPastePolicy(
-                TerrainMode.PRESERVE,
-                ObjectMode.MERGE,
-                HeightMode.PRESERVE_DESTINATION,
-                ConflictMode.REPORT,
-                Optional.empty(),
-                Set.of());
+        return WorldFragmentPastePolicySemantics.mergeObjects();
     }
 
     public WorldFragmentPastePolicy withHeightMode(HeightMode mode) {
-        return new WorldFragmentPastePolicy(
-                terrainMode, objectMode, mode, conflictMode, heightAnchor, objectTypes);
+        return WorldFragmentPastePolicySemantics.withHeightMode(this, mode);
     }
 
     public WorldFragmentPastePolicy withConflictMode(ConflictMode mode) {
-        return new WorldFragmentPastePolicy(
-                terrainMode, objectMode, heightMode, mode, heightAnchor, objectTypes);
+        return WorldFragmentPastePolicySemantics.withConflictMode(this, mode);
     }
 
     public WorldFragmentPastePolicy withHeightAnchor(HeightAnchor anchor) {
-        return new WorldFragmentPastePolicy(
-                terrainMode, objectMode, heightMode, conflictMode,
-                Optional.of(Objects.requireNonNull(anchor, "anchor")), objectTypes);
+        return WorldFragmentPastePolicySemantics.withHeightAnchor(this, anchor);
     }
 
-    /**
-     * Restricts object replace/merge work to native OSRS location types.
-     * An empty set means all location types.
-     */
+    /** Restricts object replace/merge work to native OSRS location types. */
     public WorldFragmentPastePolicy withObjectTypes(Set<Integer> types) {
-        return new WorldFragmentPastePolicy(
-                terrainMode, objectMode, heightMode, conflictMode, heightAnchor, types);
+        return WorldFragmentPastePolicySemantics.withObjectTypes(this, types);
     }
 
+    /** An empty object-type filter means all native OSRS location types. */
     public boolean includesObjectType(int type) {
-        return objectTypes.isEmpty() || objectTypes.contains(type);
+        return WorldFragmentPastePolicySemantics.includesObjectType(this, type);
     }
 
+    /** Validates source-dependent policy constraints before planning begins. */
     public void validateFor(WorldFragment fragment) {
-        Objects.requireNonNull(fragment, "fragment");
-        if (heightAnchor.isPresent()) {
-            HeightAnchor anchor = heightAnchor.orElseThrow();
-            TileBounds bounds = fragment.bounds();
-            if (!bounds.contains(anchor.x(), anchor.y())) {
-                throw new IllegalArgumentException("Paste height anchor must be inside fragment bounds");
-            }
-        }
+        WorldFragmentPastePolicySemantics.validateFor(this, fragment);
     }
 
     public enum TerrainMode {
@@ -151,9 +105,7 @@ public record WorldFragmentPastePolicy(
     /** Source-fragment tile whose south-west height vertex is used for alignment. */
     public record HeightAnchor(int plane, int x, int y) {
         public HeightAnchor {
-            if (plane < 0 || x < 0 || y < 0) {
-                throw new IllegalArgumentException("Paste height anchor cannot be negative");
-            }
+            WorldFragmentPastePolicySemantics.validateHeightAnchor(plane, x, y);
         }
     }
 }

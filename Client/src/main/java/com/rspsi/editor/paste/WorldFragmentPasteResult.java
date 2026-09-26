@@ -5,50 +5,39 @@ import com.rspsi.editor.change.ChangePlan;
 import com.rspsi.editor.model.WorldTile;
 
 import java.util.List;
-import java.util.Objects;
 
-/** Non-mutating output of fragment paste planning. */
+/**
+ * Non-mutating output of fragment paste planning.
+ *
+ * <p>This remains a minimal Java record shell because its compact constructor historically stores
+ * a defensive immutable conflict list. Commit-policy semantics are centralized in
+ * {@link WorldFragmentPasteResultSemantics}.</p>
+ */
 public record WorldFragmentPasteResult(
         ChangePlan candidatePlan,
         List<Conflict> conflicts,
         WorldFragmentPastePolicy.ConflictMode conflictMode
 ) {
     public WorldFragmentPasteResult {
-        candidatePlan = Objects.requireNonNull(candidatePlan, "candidatePlan");
-        conflicts = List.copyOf(Objects.requireNonNull(conflicts, "conflicts"));
-        conflictMode = Objects.requireNonNull(conflictMode, "conflictMode");
+        candidatePlan = WorldFragmentPasteResultSemantics.requireCandidatePlan(candidatePlan);
+        conflicts = WorldFragmentPasteResultSemantics.copyConflicts(conflicts);
+        conflictMode = WorldFragmentPasteResultSemantics.requireConflictMode(conflictMode);
     }
 
-    /**
-     * True when handing {@link #candidatePlan()} to the world-window commit
-     * boundary is allowed by this paste policy.
-     */
     public boolean canCommit() {
-        return conflicts.isEmpty()
-                || conflictMode == WorldFragmentPastePolicy.ConflictMode.SKIP;
+        return WorldFragmentPasteResultSemantics.canCommit(this);
     }
 
     public boolean partial() {
-        return !conflicts.isEmpty()
-                && conflictMode == WorldFragmentPastePolicy.ConflictMode.SKIP;
+        return WorldFragmentPasteResultSemantics.partial(this);
     }
 
     public ChangePlan requireCommittablePlan() {
-        if (!canCommit()) {
-            throw new IllegalStateException(
-                    "Fragment paste has " + conflicts.size()
-                            + " unresolved planning conflict(s)");
-        }
-        return candidatePlan;
+        return WorldFragmentPasteResultSemantics.requireCommittablePlan(this);
     }
 
-    /**
-     * Safe commit convenience that enforces the planning conflict policy
-     * before entering the canonical multi-region transaction boundary.
-     */
     public boolean commit(WorldRegionSessionWindow window) {
-        return Objects.requireNonNull(window, "window")
-                .commit(requireCommittablePlan());
+        return WorldFragmentPasteResultSemantics.commit(this, window);
     }
 
     public enum ConflictCode {
@@ -65,12 +54,9 @@ public record WorldFragmentPasteResult(
             String message
     ) {
         public Conflict {
-            code = Objects.requireNonNull(code, "code");
-            tile = Objects.requireNonNull(tile, "tile");
-            message = Objects.requireNonNull(message, "message");
-            if (message.isBlank()) {
-                throw new IllegalArgumentException("Paste conflict message cannot be blank");
-            }
+            code = WorldFragmentPasteResultSemantics.requireConflictCode(code);
+            tile = WorldFragmentPasteResultSemantics.requireConflictTile(tile);
+            message = WorldFragmentPasteResultSemantics.requireConflictMessage(message);
         }
     }
 }
