@@ -45,7 +45,7 @@ fun interface ObjectFootprintResolver {
         fun fromAssets(assets: AssetRepository?): ObjectFootprintResolver {
             val safeAssets = assets ?: throw NullPointerException("assets")
             return ObjectFootprintResolver { objectPlacement ->
-                val objectId = objectPlacement!!.id()
+                val objectId = objectPlacement!!.id
                 safeAssets.`object`(objectId)
                     .map { definition ->
                         ObjectFootprint(definition.width(), definition.length())
