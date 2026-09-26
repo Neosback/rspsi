@@ -47,6 +47,44 @@ class EditorInputPrimitiveInteropTest {
     }
 
     @Test
+    void pointerEventPreservesRecordStyleSurfaceAndValueSemantics() {
+        PointerEvent left = new PointerEvent(
+                12.5f, 33.0f, PointerButton.SECONDARY, true, false, true);
+        PointerEvent right = new PointerEvent(
+                12.5f, 33.0f, PointerButton.SECONDARY, true, false, true);
+
+        assertEquals(12.5f, left.x());
+        assertEquals(33.0f, left.y());
+        assertEquals(PointerButton.SECONDARY, left.button());
+        assertTrue(left.shift());
+        assertFalse(left.ctrl());
+        assertTrue(left.alt());
+        assertEquals(left, right);
+        assertEquals(left.hashCode(), right.hashCode());
+        assertTrue(left.toString().startsWith("PointerEvent["));
+    }
+
+    @Test
+    void pointerEventRejectsInvalidCoordinatesAndNullButton() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new PointerEvent(Float.NaN, 1.0f, PointerButton.PRIMARY, false, false, false));
+        assertThrows(IllegalArgumentException.class,
+                () -> new PointerEvent(1.0f, Float.POSITIVE_INFINITY, PointerButton.PRIMARY, false, false, false));
+        assertThrows(NullPointerException.class,
+                () -> new PointerEvent(1.0f, 2.0f, null, false, false, false));
+    }
+
+    @Test
+    void pointerEventKeepsJavaRecordFloatEqualitySemantics() {
+        PointerEvent positiveZero = new PointerEvent(
+                0.0f, 1.0f, PointerButton.NONE, false, false, false);
+        PointerEvent negativeZero = new PointerEvent(
+                -0.0f, 1.0f, PointerButton.NONE, false, false, false);
+
+        assertNotEquals(positiveZero, negativeZero);
+    }
+
+    @Test
     void pointerButtonEnumKeepsExistingJavaConstants() {
         assertArrayEquals(
                 new PointerButton[]{
