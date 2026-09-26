@@ -14,7 +14,4 @@ public final class FrameConstants {
     public static final int TRANSFORM_X = 0b1;
     public static final int TRANSFORM_Y = 0b10;
     public static final int TRANSFORM_Z = 0b100;
-
-    private FrameConstants() {
-    }
 }
