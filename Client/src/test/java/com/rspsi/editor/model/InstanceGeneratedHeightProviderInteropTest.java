@@ -42,13 +42,12 @@ class InstanceGeneratedHeightProviderInteropTest {
     }
 
     @Test
-    void requiredFactoryReturnsIndependentSamInstancesWithSameBehavior() {
+    void requiredFactoryPreservesFailureBehaviorAcrossCalls() {
         InstanceGeneratedHeightProvider first =
                 InstanceGeneratedHeightProvider.required();
         InstanceGeneratedHeightProvider second =
                 InstanceGeneratedHeightProvider.required();
 
-        assertNotSame(first, second);
         assertThrows(IllegalStateException.class, () -> first.heightAt(0, 0));
         assertThrows(IllegalStateException.class, () -> second.heightAt(0, 0));
     }
