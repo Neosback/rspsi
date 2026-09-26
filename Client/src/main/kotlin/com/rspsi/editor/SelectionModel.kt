@@ -24,7 +24,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * validating the new value, and every public mutation notifies listeners exactly once.
  */
 class SelectionModel {
-    private val selectedTiles = LinkedHashSet<TileCoordinate>()
+    private val selectedTiles = LinkedHashSet<TileCoordinate?>()
     private val listeners = CopyOnWriteArrayList<SelectionChangeListener>()
     private var currentSelection: Selection? = null
 
@@ -41,14 +41,15 @@ class SelectionModel {
     }
 
     fun deselect(coordinate: TileCoordinate?) {
-        if (coordinate != null) {
-            selectedTiles.remove(coordinate)
-        }
+        selectedTiles.remove(coordinate)
         currentSelection =
             when (selectedTiles.size) {
                 0 -> null
                 1 -> TileSelection(selectedTiles.iterator().next())
-                else -> TileSetSelection(selectedTiles)
+                else -> {
+                    @Suppress("UNCHECKED_CAST")
+                    TileSetSelection(selectedTiles as Set<TileCoordinate>)
+                }
             }
         notifyChanged()
     }
@@ -64,15 +65,16 @@ class SelectionModel {
     }
 
     fun contains(coordinate: TileCoordinate?): Boolean =
-        coordinate != null && selectedTiles.contains(coordinate)
+        selectedTiles.contains(coordinate)
 
     /**
      * Returns the historical live, read-only view rather than a snapshot copy.
      *
      * Existing callers can retain this view and observe later tile-selection mutations.
      */
+    @Suppress("UNCHECKED_CAST")
     fun tiles(): Set<TileCoordinate> =
-        Collections.unmodifiableSet(selectedTiles)
+        Collections.unmodifiableSet(selectedTiles) as Set<TileCoordinate>
 
     /**
      * Resolves all currently selected tile coordinates across single, set, and area selections.
@@ -95,7 +97,8 @@ class SelectionModel {
             }
             return Collections.unmodifiableSet(areaTiles)
         }
-        return Collections.unmodifiableSet(selectedTiles)
+        @Suppress("UNCHECKED_CAST")
+        return Collections.unmodifiableSet(selectedTiles) as Set<TileCoordinate>
     }
 
     fun current(): Selection? =
@@ -126,12 +129,7 @@ class SelectionModel {
     ) {
         clearInternal()
         if (coordinates != null) {
-            for (coordinate in coordinates) {
-                // Java's LinkedHashSet accepted null here. The legacy model only encounters the
-                // resulting null later when it tries to materialize a concrete selection value.
-                @Suppress("UNCHECKED_CAST")
-                (selectedTiles as java.util.Set<TileCoordinate?>).add(coordinate)
-            }
+            selectedTiles.addAll(coordinates)
         }
 
         currentSelection =
