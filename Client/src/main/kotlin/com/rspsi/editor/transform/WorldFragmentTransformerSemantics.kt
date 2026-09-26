@@ -93,7 +93,7 @@ object WorldFragmentTransformerSemantics {
         val terrainCoordinates = LinkedHashSet<Long>()
 
         for (patch in fragment.terrain()) {
-            if (patch.snapshot().objects().isNotEmpty()) {
+            if (patch.snapshot.objects().isNotEmpty()) {
                 throw IllegalArgumentException(
                     "WorldFragment terrain snapshots must not embed objects; use fragment.objects()",
                 )
@@ -120,7 +120,7 @@ object WorldFragmentTransformerSemantics {
                     patch.plane,
                     worldX,
                     worldY,
-                    transformSnapshot(patch.snapshot(), transform),
+                    transformSnapshot(patch.snapshot, transform),
                 ),
             )
         }
