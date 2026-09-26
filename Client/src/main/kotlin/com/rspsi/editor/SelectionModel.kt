@@ -35,7 +35,8 @@ class SelectionModel {
             if (selectedTiles.size == 1) {
                 TileSelection(safeCoordinate)
             } else {
-                TileSetSelection(selectedTiles)
+                @Suppress("UNCHECKED_CAST")
+                TileSetSelection(selectedTiles as Set<TileCoordinate>)
             }
         notifyChanged()
     }
@@ -136,7 +137,10 @@ class SelectionModel {
             when (selectedTiles.size) {
                 0 -> null
                 1 -> TileSelection(selectedTiles.iterator().next())
-                else -> TileSetSelection(selectedTiles)
+                else -> {
+                    @Suppress("UNCHECKED_CAST")
+                    TileSetSelection(selectedTiles as Set<TileCoordinate>)
+                }
             }
         notifyChanged()
     }
