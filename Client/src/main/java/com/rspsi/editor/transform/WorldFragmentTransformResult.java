@@ -3,16 +3,22 @@ package com.rspsi.editor.transform;
 import com.rspsi.editor.model.WorldFragment;
 
 import java.util.List;
-import java.util.Objects;
 
-/** Result of an exact/native-or-best-representable fragment transform. */
+/**
+ * Result of an exact/native-or-best-representable fragment transform.
+ *
+ * <p>This remains a minimal Java record shell because its compact constructor historically
+ * replaces the diagnostics component with a defensive immutable copy before storing record
+ * components. Behavioral validation is centralized in
+ * {@link WorldFragmentTransformResultSemantics}.</p>
+ */
 public record WorldFragmentTransformResult(
         WorldFragment fragment,
         List<Diagnostic> diagnostics
 ) {
     public WorldFragmentTransformResult {
-        fragment = Objects.requireNonNull(fragment, "fragment");
-        diagnostics = List.copyOf(Objects.requireNonNull(diagnostics, "diagnostics"));
+        fragment = WorldFragmentTransformResultSemantics.requireFragment(fragment);
+        diagnostics = WorldFragmentTransformResultSemantics.copyDiagnostics(diagnostics);
     }
 
     public enum DiagnosticCode {
@@ -36,11 +42,8 @@ public record WorldFragmentTransformResult(
             String message
     ) {
         public Diagnostic {
-            code = Objects.requireNonNull(code, "code");
-            message = Objects.requireNonNull(message, "message");
-            if (message.isBlank()) {
-                throw new IllegalArgumentException("Transform diagnostic cannot be blank");
-            }
+            code = WorldFragmentTransformResultSemantics.requireDiagnosticCode(code);
+            message = WorldFragmentTransformResultSemantics.requireDiagnosticMessage(message);
         }
     }
 }
