@@ -13,9 +13,9 @@ data class BridgeLink(
 ) {
     init {
         if (
-            upper.x() != lower.x() ||
-            upper.y() != lower.y() ||
-            upper.plane() != lower.plane() + 1
+            upper.x != lower.x ||
+            upper.y != lower.y ||
+            upper.plane != lower.plane + 1
         ) {
             throw IllegalArgumentException(
                 "Bridge links must connect adjacent planes at one tile",
