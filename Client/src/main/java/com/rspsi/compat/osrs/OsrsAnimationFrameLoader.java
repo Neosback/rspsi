@@ -1,6 +1,6 @@
 package com.rspsi.compat.osrs;
 
-import org.major.cache.anim.FrameConstants;
+import com.rspsi.cache.definition.FrameConstants;
 
 import com.jagex.Client;
 import com.jagex.cache.anim.Frame;
