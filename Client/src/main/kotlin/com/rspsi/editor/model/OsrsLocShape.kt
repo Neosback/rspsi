@@ -1,16 +1,19 @@
-package com.rspsi.editor.model;
+package com.rspsi.editor.model
 
-import java.util.Arrays;
-import java.util.Optional;
+import java.util.Optional
 
 /**
- * Canonical OSRS location shapes used by map data and the editor inspector.
+ * Canonical OSRS location shapes used by map data and editor inspection.
  *
- * <p>The category mapping follows OpenRune-Server's neutral routefinder
- * constants. In particular, roof and centrepiece shapes are ground-layer
- * locations; the shape, not a renderer-specific class, determines the layer.</p>
+ * The category mapping follows OpenRune-Server's neutral routefinder constants. Roof and
+ * centrepiece shapes are ground-layer locations; semantic shape ownership lives here rather
+ * than in a renderer-specific object class.
  */
-public enum OsrsLocShape {
+enum class OsrsLocShape(
+    private val idValue: Int,
+    private val categoryValue: ObjectCategory,
+    private val displayNameValue: String,
+) {
     WALL_STRAIGHT(0, ObjectCategory.WALL, "Straight wall"),
     WALL_DIAGONAL_CORNER(1, ObjectCategory.WALL, "Diagonal wall corner"),
     WALL_L(2, ObjectCategory.WALL, "L-shaped wall"),
@@ -35,29 +38,32 @@ public enum OsrsLocShape {
     ROOF_EDGE_SQUARE_CORNER(21, ObjectCategory.GROUND, "Square roof-edge corner"),
     GROUND_DECOR(22, ObjectCategory.GROUND_DECOR, "Ground decor");
 
-    private final int id;
-    private final ObjectCategory category;
-    private final String displayName;
+    fun id(): Int = idValue
 
-    OsrsLocShape(int id, ObjectCategory category, String displayName) {
-        this.id = id;
-        this.category = category;
-        this.displayName = displayName;
-    }
+    fun category(): ObjectCategory = categoryValue
 
-    public int id() {
-        return id;
-    }
+    fun displayName(): String = displayNameValue
 
-    public ObjectCategory category() {
-        return category;
-    }
+    companion object {
+        private const val MAX_ID = 22
 
-    public String displayName() {
-        return displayName;
-    }
+        /**
+         * Shape IDs are the fixed contiguous OSRS range 0..22. Indexing this immutable table
+         * avoids allocating/streaming across every enum constant for hot inspector lookups.
+         */
+        private val BY_ID: Array<OsrsLocShape?> =
+            arrayOfNulls<OsrsLocShape>(MAX_ID + 1).also { table ->
+                values().forEach { shape ->
+                    table[shape.idValue] = shape
+                }
+            }
 
-    public static Optional<OsrsLocShape> fromId(int id) {
-        return Arrays.stream(values()).filter(shape -> shape.id == id).findFirst();
+        @JvmStatic
+        fun fromId(id: Int): Optional<OsrsLocShape> =
+            if (id in BY_ID.indices) {
+                Optional.ofNullable(BY_ID[id])
+            } else {
+                Optional.empty()
+            }
     }
 }
