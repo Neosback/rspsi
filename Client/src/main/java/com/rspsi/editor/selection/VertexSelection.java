@@ -1,5 +1,7 @@
 package com.rspsi.editor.selection;
 
+import java.util.Objects;
+
 /** A terrain corner/vertex selection; corner is 0=SW, 1=SE, 2=NE, 3=NW. */
 public record VertexSelection(int plane, int x, int y, int corner) implements Selection {
     public VertexSelection {
