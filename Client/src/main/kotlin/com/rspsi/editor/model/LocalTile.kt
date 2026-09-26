@@ -30,9 +30,9 @@ data class LocalTile(
         fun from(coordinate: TileCoordinate?): LocalTile {
             val safeCoordinate = coordinate ?: throw NullPointerException("coordinate")
             return LocalTile(
-                safeCoordinate.plane(),
-                safeCoordinate.x(),
-                safeCoordinate.y(),
+                safeCoordinate.plane,
+                safeCoordinate.x,
+                safeCoordinate.y,
             )
         }
     }
