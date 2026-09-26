@@ -1,6 +1,6 @@
 package com.jagex.map.tile;
 
-import org.major.map.Orientation;
+import com.rspsi.osrs.rules.tile.Orientation;
 
 public class TileUtils {
 

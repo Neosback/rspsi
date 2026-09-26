@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.major.map.RenderFlags;
+import com.rspsi.osrs.rules.tile.RenderFlags;
 
 import com.jagex.Client;
 import com.jagex.Client.LoadState;

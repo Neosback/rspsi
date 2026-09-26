@@ -14,7 +14,7 @@ import com.rspsi.options.Options;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.major.cache.anim.FrameConstants;
+import com.rspsi.cache.definition.FrameConstants;
 
 import java.util.Arrays;
 import java.util.Objects;

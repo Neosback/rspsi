@@ -30,7 +30,7 @@ import com.rspsi.cache.store.CacheCompression;
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
-import org.major.map.RenderFlags;
+import com.rspsi.osrs.rules.tile.RenderFlags;
 
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;

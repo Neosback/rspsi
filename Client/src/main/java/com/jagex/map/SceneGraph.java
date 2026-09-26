@@ -18,8 +18,8 @@ import com.rspsi.options.*;
 import javafx.scene.input.KeyCode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.math3.geometry.euclidean.twod.Vector2D;
-import org.major.map.RenderFlags;
-import org.major.map.TileAttributes;
+import com.rspsi.osrs.rules.tile.RenderFlags;
+import com.rspsi.osrs.rules.render.TileAttributes;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

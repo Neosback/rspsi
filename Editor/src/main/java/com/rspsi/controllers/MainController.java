@@ -6,7 +6,7 @@ import java.util.stream.IntStream;
 import com.jfoenix.controls.JFXButton;
 import com.rspsi.util.Settings;
 import javafx.scene.control.*;
-import org.major.map.RenderFlags;
+import com.rspsi.osrs.rules.tile.RenderFlags;
 
 import com.google.common.primitives.Doubles;
 import com.jagex.Client;
