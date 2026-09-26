@@ -2,20 +2,51 @@ package com.rspsi.editor.model;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class OsrsLocShapeTest {
+
     @Test
     void coversEveryCanonicalOsrsLocationShape() {
+        OsrsLocShape[] shapes = OsrsLocShape.values();
+
+        assertEquals(23, shapes.length);
         for (int type = 0; type <= 22; type++) {
-            assertTrue(OsrsLocShape.fromId(type).isPresent(), "missing shape " + type);
+            OsrsLocShape shape = OsrsLocShape.fromId(type).orElseThrow();
+
+            assertSame(shapes[type], shape, "shape enum order/id drifted for " + type);
+            assertEquals(type, shape.id());
             assertTrue(ObjectCategory.fromType(type).isKnown(), "missing category " + type);
         }
-        assertFalse(OsrsLocShape.fromId(-1).isPresent());
-        assertFalse(OsrsLocShape.fromId(23).isPresent());
+
+        assertTrue(OsrsLocShape.fromId(-1).isEmpty());
+        assertTrue(OsrsLocShape.fromId(23).isEmpty());
+        assertTrue(OsrsLocShape.fromId(Integer.MAX_VALUE).isEmpty());
         assertEquals(ObjectCategory.UNKNOWN, ObjectCategory.fromType(23));
+    }
+
+    @Test
+    void preservesObjectCategoryMetadataAndOrdering() {
+        assertArrayEquals(
+                new ObjectCategory[]{
+                        ObjectCategory.WALL,
+                        ObjectCategory.WALL_DECOR,
+                        ObjectCategory.GROUND,
+                        ObjectCategory.GROUND_DECOR,
+                        ObjectCategory.UNKNOWN
+                },
+                ObjectCategory.values());
+
+        assertEquals(0, ObjectCategory.WALL.layerId());
+        assertEquals(1, ObjectCategory.WALL_DECOR.layerId());
+        assertEquals(2, ObjectCategory.GROUND.layerId());
+        assertEquals(3, ObjectCategory.GROUND_DECOR.layerId());
+        assertEquals(-1, ObjectCategory.UNKNOWN.layerId());
+
+        assertEquals("Wall", ObjectCategory.WALL.displayName());
+        assertEquals("Ground decor", ObjectCategory.GROUND_DECOR.displayName());
+        assertTrue(ObjectCategory.WALL.isKnown());
+        assertFalse(ObjectCategory.UNKNOWN.isKnown());
     }
 
     @Test
@@ -25,6 +56,18 @@ class OsrsLocShapeTest {
         assertEquals(ObjectCategory.GROUND, ObjectCategory.fromType(10));
         assertEquals(ObjectCategory.GROUND, ObjectCategory.fromType(21));
         assertEquals(ObjectCategory.GROUND_DECOR, ObjectCategory.fromType(22));
+    }
+
+    @Test
+    void preservesRepresentativeShapeMetadata() {
+        assertEquals("Straight wall", OsrsLocShape.WALL_STRAIGHT.displayName());
+        assertEquals(ObjectCategory.WALL, OsrsLocShape.WALL_STRAIGHT.category());
+
+        assertEquals("Straight game object", OsrsLocShape.CENTREPIECE_STRAIGHT.displayName());
+        assertEquals(ObjectCategory.GROUND, OsrsLocShape.CENTREPIECE_STRAIGHT.category());
+
+        assertEquals("Ground decor", OsrsLocShape.GROUND_DECOR.displayName());
+        assertEquals(ObjectCategory.GROUND_DECOR, OsrsLocShape.GROUND_DECOR.category());
     }
 
     @Test
