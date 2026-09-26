@@ -24,26 +24,26 @@ data class WorldWindow(
 
     fun contains(coordinate: LocalTile?): Boolean {
         val safeCoordinate = coordinate ?: throw NullPointerException("coordinate")
-        return safeCoordinate.x() >= 0 &&
-            safeCoordinate.x() < width &&
-            safeCoordinate.y() >= 0 &&
-            safeCoordinate.y() < length
+        return safeCoordinate.x >= 0 &&
+            safeCoordinate.x < width &&
+            safeCoordinate.y >= 0 &&
+            safeCoordinate.y < length
     }
 
     fun contains(coordinate: WorldTile?): Boolean {
         val safeCoordinate = coordinate ?: throw NullPointerException("coordinate")
-        return safeCoordinate.x() >= originX &&
-            safeCoordinate.x() < originX + width &&
-            safeCoordinate.y() >= originY &&
-            safeCoordinate.y() < originY + length
+        return safeCoordinate.x >= originX &&
+            safeCoordinate.x < originX + width &&
+            safeCoordinate.y >= originY &&
+            safeCoordinate.y < originY + length
     }
 
     fun toWorld(coordinate: LocalTile?): WorldTile {
         val safeCoordinate = requireContains(coordinate)
         return WorldTile(
-            safeCoordinate.plane(),
-            originX + safeCoordinate.x(),
-            originY + safeCoordinate.y(),
+            safeCoordinate.plane,
+            originX + safeCoordinate.x,
+            originY + safeCoordinate.y,
         )
     }
 
@@ -54,9 +54,9 @@ data class WorldWindow(
         }
         return Optional.of(
             LocalTile(
-                safeCoordinate.plane(),
-                safeCoordinate.x() - originX,
-                safeCoordinate.y() - originY,
+                safeCoordinate.plane,
+                safeCoordinate.x - originX,
+                safeCoordinate.y - originY,
             ),
         )
     }
@@ -68,12 +68,12 @@ data class WorldWindow(
 
     fun worldX(coordinate: LocalTile?): Int {
         val safeCoordinate = requireContains(coordinate)
-        return originX + safeCoordinate.x()
+        return originX + safeCoordinate.x
     }
 
     fun worldY(coordinate: LocalTile?): Int {
         val safeCoordinate = requireContains(coordinate)
-        return originY + safeCoordinate.y()
+        return originY + safeCoordinate.y
     }
 
     /**
