@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 
-import org.major.map.RenderFlags;
+import com.rspsi.osrs.rules.tile.RenderFlags;
 
 /**
  * Represents a character entity's update flags.
