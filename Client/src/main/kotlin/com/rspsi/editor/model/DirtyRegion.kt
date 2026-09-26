@@ -78,9 +78,9 @@ data class DirtyRegion(
         fun forTile(coordinate: TileCoordinate?): DirtyRegion {
             val safeCoordinate = coordinate ?: throw NullPointerException("coordinate")
             return DirtyRegion(
-                safeCoordinate.plane(),
-                safeCoordinate.x() / 8,
-                safeCoordinate.y() / 8,
+                safeCoordinate.plane,
+                safeCoordinate.x / 8,
+                safeCoordinate.y / 8,
                 true,
                 true,
                 true,
