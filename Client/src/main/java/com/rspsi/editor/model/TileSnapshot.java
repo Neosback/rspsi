@@ -1,9 +1,15 @@
 package com.rspsi.editor.model;
 
 import java.util.List;
-import java.util.Objects;
 
-/** Complete editable state for one tile, independent of rendering objects. */
+/**
+ * Complete editable state for one tile, independent of rendering objects.
+ *
+ * <p>This remains a Java record compatibility shell because its canonical constructor historically
+ * accepts nullable object/provenance inputs and normalizes them before storing the record
+ * components. Kotlin JVM records cannot currently preserve that compact-constructor behavior
+ * exactly. Behavioral semantics are centralized in {@link TileSnapshotSemantics}.</p>
+ */
 public record TileSnapshot(
         int southWestHeight,
         int southEastHeight,
@@ -18,11 +24,9 @@ public record TileSnapshot(
         TerrainHeightSource heightSource
 ) {
     public TileSnapshot {
-        if (overlayShape < 0 || overlayShape > 11 || overlayRotation < 0 || overlayRotation > 3) {
-            throw new IllegalArgumentException("Overlay shape must be 0..11 and rotation 0..3");
-        }
-        objects = List.copyOf(objects == null ? List.of() : objects);
-        heightSource = heightSource == null ? TerrainHeightSource.unknown() : heightSource;
+        TileSnapshotSemantics.validateOverlay(overlayShape, overlayRotation);
+        objects = TileSnapshotSemantics.normalizeObjects(objects);
+        heightSource = TileSnapshotSemantics.normalizeHeightSource(heightSource);
     }
 
     /** Source-compatible constructor for callers that do not yet carry provenance explicitly. */
@@ -48,29 +52,18 @@ public record TileSnapshot(
     }
 
     /**
-     * Provenance is metadata, not an authored-value channel. Equality remains
-     * compatible with historical snapshot comparisons while the source is
-     * still available for save/replay decisions.
+     * Provenance is metadata, not an authored-value channel. Equality remains compatible with
+     * historical snapshot comparisons while the source stays available for save/replay decisions.
      */
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
-        if (!(other instanceof TileSnapshot that)) return false;
-        return southWestHeight == that.southWestHeight
-                && southEastHeight == that.southEastHeight
-                && northEastHeight == that.northEastHeight
-                && northWestHeight == that.northWestHeight
-                && underlayId == that.underlayId
-                && overlayId == that.overlayId
-                && overlayShape == that.overlayShape
-                && overlayRotation == that.overlayRotation
-                && flags == that.flags
-                && objects.equals(that.objects);
+        return other instanceof TileSnapshot that
+                && TileSnapshotSemantics.authoredEquals(this, that);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(southWestHeight, southEastHeight, northEastHeight, northWestHeight,
-                underlayId, overlayId, overlayShape, overlayRotation, flags, objects);
+        return TileSnapshotSemantics.authoredHash(this);
     }
 }
