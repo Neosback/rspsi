@@ -5,9 +5,10 @@ package com.rspsi.editor.model
  *
  * New document-facing code should use [LocalTile]. Absolute OSRS coordinates must use
  * [WorldTile]. This type remains while command/history/selection contracts finish migrating,
- * so its Java record ABI and validation behavior are intentionally preserved.
+ * so its Java record ABI, deprecation metadata, and validation behavior are intentionally preserved.
  */
-@Deprecated("Use LocalTile for document coordinates or WorldTile for absolute coordinates")
+@kotlin.Deprecated("Use LocalTile for document coordinates or WorldTile for absolute coordinates")
+@java.lang.Deprecated
 @JvmRecord
 data class TileCoordinate(
     val plane: Int,
