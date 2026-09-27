@@ -114,7 +114,7 @@ class SplinePathTool : EditorTool {
             val z = p.y * 128f + 64f
             val y = sampleTileHeight(p.plane, p.x, p.y) - 6f
             val selected = i == selectedPointIndex
-            draw.circle(x, y, z, 40f, if (selected) 0xFBBF24FF.toInt().toInt() else 0x38BDF8FF.toInt(), if (selected) 3.5f else 2.5f)
+            draw.circle(x, y, z, 40f, if (selected) 0xFBBF24FF.toInt() else 0x38BDF8FF.toInt(), if (selected) 3.5f else 2.5f)
             draw.worldLabel("P" + (i + 1), x, y, z, -1, if (selected) 0xD97706EE.toInt() else 0x0284C7EE)
         }
         val hovered = hoveredTile
@@ -147,7 +147,7 @@ class SplinePathTool : EditorTool {
             val y1 = sampleTileHeight(plane, curve[i * 2].roundToInt(), curve[i * 2 + 1].roundToInt()) - 4f
             val x2 = curve[(i + 1) * 2] * 128f + 64f; val z2 = curve[(i + 1) * 2 + 1] * 128f + 64f
             val y2 = sampleTileHeight(plane, curve[(i + 1) * 2].roundToInt(), curve[(i + 1) * 2 + 1].roundToInt()) - 4f
-            draw.line(x1, y1, z1, x2, y2, z2, 0xFBBF24FF.toInt().toInt(), 3.5f)
+            draw.line(x1, y1, z1, x2, y2, z2, 0xFBBF24FF.toInt(), 3.5f)
         }
         drawFootprint(draw, path.rasterize(0.4f), plane, 0x34D39955, 0x34D399CC, 0x38BDF855, 0x38BDF8AA)
     }
