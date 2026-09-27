@@ -44,8 +44,8 @@ class MoveObjectTool : EditorTool {
             objectToMove = ctx.viewport().objectAt(event.x(), event.y()).orElseGet {
                 ctx.session().world().tile(local).snapshot().objects().stream().findFirst().orElse(null)
             }
-            objectToMove?.let { object ->
-                target = ctx.world(LocalTile(object.plane, object.x, object.y))
+            objectToMove?.let { selectedObject ->
+                target = ctx.world(LocalTile(selectedObject.plane, selectedObject.x, selectedObject.y))
             }
         }
     }
@@ -59,15 +59,15 @@ class MoveObjectTool : EditorTool {
 
     override fun pointerUp(event: PointerEvent) {
         val ctx = context
-        val object = objectToMove
+        val selectedObject = objectToMove
         val targetLocal = if (ctx != null) target?.let { ctx.local(it).orElse(null) } else null
 
-        if (ctx != null && object != null && targetLocal != null &&
-            targetLocal.plane == object.plane &&
-            (targetLocal.x != object.x || targetLocal.y != object.y) &&
+        if (ctx != null && selectedObject != null && targetLocal != null &&
+            targetLocal.plane == selectedObject.plane &&
+            (targetLocal.x != selectedObject.x || targetLocal.y != selectedObject.y) &&
             ctx.session().canEdit()
         ) {
-            ctx.session().execute(MoveObjectCommand(object, targetLocal.x, targetLocal.y))
+            ctx.session().execute(MoveObjectCommand(selectedObject, targetLocal.x, targetLocal.y))
         }
         clear()
     }
