@@ -28,7 +28,7 @@ class PlaceObjectTool(id: Int, type: Int, rotation: Int) : EditorTool {
         ctx.localTileAt(event.x(), event.y()).ifPresent { local ->
             if (ctx.session().canEdit()) {
                 ctx.session().execute(PlaceObjectCommand(
-                    WorldObject(objectId, objectType, objectRotation, local.plane(), local.x(), local.y())
+                    WorldObject(objectId, objectType, objectRotation, local.plane, local.x, local.y)
                 ))
             }
         }

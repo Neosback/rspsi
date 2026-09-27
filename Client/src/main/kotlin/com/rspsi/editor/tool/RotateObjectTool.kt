@@ -37,7 +37,7 @@ class RotateObjectTool : EditorTool {
     private fun rotate(obj: WorldObject) {
         val ctx = context ?: return
         if (quarterTurns != 0 && ctx.session().canEdit()) {
-            ctx.session().execute(RotateObjectCommand(obj, (obj.rotation() + quarterTurns) and 3))
+            ctx.session().execute(RotateObjectCommand(obj, (obj.rotation + quarterTurns) and 3))
         }
     }
 }
