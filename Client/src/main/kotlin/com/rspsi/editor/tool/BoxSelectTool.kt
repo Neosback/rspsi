@@ -50,7 +50,7 @@ class BoxSelectTool : EditorTool {
             if(mode==Mode.SINGLE) ctx.hitAt(downX,downY).flatMap { it.`object`() }.ifPresent(objects::add)
             if(objects.isEmpty()){
                 val world=ctx.session().world()
-                for(x in localBounds.minX()..localBounds.maxX()) for(y in localBounds.minY()..localBounds.maxY())
+                for(x in localBounds.minX..localBounds.maxX) for(y in localBounds.minY..localBounds.maxY)
                     world.tile(LocalTile(localStart.plane,x,y)).snapshot().objects().forEach(objects::add)
             }
             ctx.session().selection().selectObjects(objects)
@@ -64,9 +64,9 @@ class BoxSelectTool : EditorTool {
         val last=current
         if(mode==Mode.SINGLE || last==null){draw.tileFilled(first);draw.tileOutline(first);return}
         val b=bounds(first,last); val plane=first.plane
-        for(x in b.minX()..b.maxX()) for(y in b.minY()..b.maxY()) draw.tileFilled(WorldTile(plane,x,y))
-        for(x in b.minX()..b.maxX()){draw.tileOutline(WorldTile(plane,x,b.minY()));if(b.maxY()!=b.minY())draw.tileOutline(WorldTile(plane,x,b.maxY()))}
-        for(y in b.minY()+1 until b.maxY()){draw.tileOutline(WorldTile(plane,b.minX(),y));if(b.maxX()!=b.minX())draw.tileOutline(WorldTile(plane,b.maxX(),y))}
+        for(x in b.minX..b.maxX) for(y in b.minY..b.maxY) draw.tileFilled(WorldTile(plane,x,y))
+        for(x in b.minX..b.maxX){draw.tileOutline(WorldTile(plane,x,b.minY));if(b.maxY!=b.minY)draw.tileOutline(WorldTile(plane,x,b.maxY))}
+        for(y in b.minY+1 until b.maxY){draw.tileOutline(WorldTile(plane,b.minX,y));if(b.maxX!=b.minX)draw.tileOutline(WorldTile(plane,b.maxX,y))}
     }
     private fun bounds(a:WorldTile,b:WorldTile)=TileBounds(minOf(a.x,b.x),minOf(a.y,b.y),maxOf(a.x,b.x),maxOf(a.y,b.y))
     private fun bounds(a:LocalTile,b:LocalTile)=TileBounds(minOf(a.x,b.x),minOf(a.y,b.y),maxOf(a.x,b.x),maxOf(a.y,b.y))
