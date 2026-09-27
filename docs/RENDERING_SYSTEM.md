@@ -50,6 +50,10 @@ High-level flow:
       -> native draw submission
       -> viewport presentation
 
+### Window and focus
+
+The Map Studio viewport builds a WorldRegionWindow of the active region and its loaded neighbours (3x3). The whole window stitches shared edges and feeds underlay blending, lighting, contouring and collision, exactly as the client's multi-region scene does. Only a SceneFocus is compiled and emitted: the active region plus one 8-tile zone of each neighbour (`SceneFocus.aroundRegion(..., CONTEXT_RING_TILES)`). Tiles inside the focus equal a full-window build; geometry outside the editable region is dimmed in the fragment shader via the `frameEditBounds` frame uniform and is read-only.
+
 ## 3. Authored state
 
 WorldDocument is the map truth.

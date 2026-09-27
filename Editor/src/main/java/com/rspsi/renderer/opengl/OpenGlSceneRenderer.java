@@ -574,6 +574,14 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
      * terrain. The default is client-front {@link #CULL_FRONT_CCW}; the
      * opposite winding and two-sided modes remain diagnostics.</p>
      */
+    /**
+     * World-unit bounds (x/z, 128 per tile) of the editable region, or null. Scene
+     * geometry outside them is loaded neighbour context and draws dimmed.
+     */
+    public void setEditBounds(SceneFog.Bounds bounds) {
+        frameUniformBuffer.setEditBounds(bounds);
+    }
+
     public void setCullMode(int mode) {
         cullMode = mode < CULL_OFF || mode > CULL_FRONT_CW ? CULL_OFF : mode;
     }

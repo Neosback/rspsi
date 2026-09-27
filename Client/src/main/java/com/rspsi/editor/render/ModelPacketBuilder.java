@@ -74,11 +74,25 @@ public final class ModelPacketBuilder {
     /** Builds animated model packets at an explicit client-cycle position. */
     public List<ModelRenderPacket> build(WorldDocument document, int clientCycle) {
         Objects.requireNonNull(document, "document");
+        return build(document, clientCycle, 0, 0, document.width() - 1, document.length() - 1);
+    }
+
+    /**
+     * Builds packets for locations anchored inside the inclusive document rectangle,
+     * clamped to the document, with scene normal merging across that set.
+     */
+    public List<ModelRenderPacket> build(WorldDocument document, int clientCycle,
+                                         int minX, int minY, int maxX, int maxY) {
+        Objects.requireNonNull(document, "document");
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
+        int fromX = Math.max(0, minX);
+        int fromY = Math.max(0, minY);
+        int toX = Math.min(document.width() - 1, maxX);
+        int toY = Math.min(document.length() - 1, maxY);
         List<ModelRenderPacket> packets = new ArrayList<>();
         for (int plane = 0; plane < document.planes(); plane++) {
-            for (int x = 0; x < document.width(); x++) {
-                for (int y = 0; y < document.length(); y++) {
+            for (int x = fromX; x <= toX; x++) {
+                for (int y = fromY; y <= toY; y++) {
                     List<WorldObject> objects = document.tile(plane, x, y).objects();
                     if (objects.isEmpty()) continue;
                     if (objects.size() == 1) {

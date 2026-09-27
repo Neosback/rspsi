@@ -10,6 +10,7 @@ in vec3 vNormal;
 in float vViewDepth;
 flat in uint vFaceWord0;
 flat in uint vFaceWord1;
+in vec2 vWorldXZ;
 uniform sampler2DArray uTexture;
 uniform sampler2D uPalette;
 uniform samplerBuffer uTextureState;
@@ -79,6 +80,12 @@ void main() {
     }
 
     color = clamp(color * uBrightness * exp2(uExposure), 0.0, 1.0);
+    // Neighbouring regions loaded as read-only context draw darker than the editable one.
+    if (frameEditBounds.x <= frameEditBounds.y
+            && (vWorldXZ.x < frameEditBounds.x || vWorldXZ.x > frameEditBounds.y
+                || vWorldXZ.y < frameEditBounds.z || vWorldXZ.y > frameEditBounds.w)) {
+        color *= 0.55;
+    }
     color = mix(color, uFogColor, vFogAmount);
     outColor = vec4(color, alpha);
 }

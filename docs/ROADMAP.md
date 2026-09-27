@@ -58,6 +58,14 @@ Code follow-up:
 - remove dead registries/lifecycle paths once production callers are gone;
 - keep core-module behavior unchanged during naming cleanup.
 
+Studio is built for the team, not as an open plugin platform (decided 2026-09-26). Concretely remove:
+
+- external plugin jar scanning (`pluginEcosystem.scan` in StudioApplication) and its lifecycle/state store;
+- `StudioPluginManager` registration of built-in features;
+- the `*ToolPlugin` adapter shells in `Editor/src/main/kotlin/com/rspsi/studio/plugin/builtin/tool/`, folding each into its core module.
+
+Kotlin migration continues leaf-first under the AGENTS.md policy; new code is Kotlin.
+
 Completion gate:
 
 - a new contributor can trace any major responsibility from docs/README.md to one code owner.
@@ -97,6 +105,22 @@ Required metrics:
 - stationary, camera-movement, and active-edit FPS.
 
 ### 4.3 Remove unnecessary work
+
+Done 2026-09-26 (Lumbridge 50,50: animation refresh 1.5-3.3 s -> ~0.2 s, live heap ~1.8 GB -> ~0.45 GB, idle CPU ~390% -> ~190%):
+
+- animated locations and multilocs no longer join the scene normal merge (FriendSystem.addObjects / Scene.method5585), so animation refresh rebuilds only animated tiles;
+- packet fingerprint hashes tile records instead of stringifying every vertex; per-tile lookups indexed;
+- packet/plan reuse tiles by identity inside dirty zones; RenderConfig keeps unchanged tile instances;
+- render plans rebuild only when the compiled RenderConfig changes, not for tool/HUD settings;
+- Studio's semantic RenderScene carries no model packets; plugin scene snapshot memoized.
+
+Still open, in order:
+
+- avoid re-materializing the padded window document on every animation refresh;
+- plane/roof/bridge visibility in the shader instead of rebuilding the plan on the render thread;
+- drop the CPU-derived RGB vertex stream in favour of the existing `uPalette` lookup (exact palette, ~27% fewer vertex bytes);
+- give animated locations their own small dynamic buffers so a frame change does not re-zone static geometry;
+- replace per-vertex/per-triangle Java records with primitive arrays in compile outputs.
 
 Then:
 
@@ -251,9 +275,15 @@ Completion gate:
 
 ## 10. Priority 7: multi-region authored world
 
-**Status: planned.**
+**Status: first milestone landed.**
 
 Region boundaries are persistence boundaries, not authoring boundaries.
+
+Milestones:
+
+1. **Context ring (done 2026-09-27).** Studio loads the 3x3 window around the active region, stitches shared edges and blends underlays across them, and builds only a SceneFocus of the active region plus one 8-tile zone of each neighbour. Neighbours draw dimmed and are read-only.
+2. **Cross-region edits.** Route tools through WorldRegionSessionWindow (one EditorSession per region, shared history, absolute coordinates) so a path or brush that crosses a border edits both regions, with dirty state per region.
+3. **Moving focus.** Switching region keeps loaded neighbours, re-centres the focus and camera without a full reload.
 
 Build:
 
@@ -318,6 +348,21 @@ Only after shared foundations:
 - WFC-assisted layout.
 
 Each tool remains thin over shared query/geometry/change services.
+
+Reference ideas worth building (describe techniques; do not copy unlicensed or decompiled code):
+
+| Idea | Seen in | OSRS 240 safe | Lands on |
+| --- | --- | --- | --- |
+| rotate/mirror paste (region stamp) incl. overlay shape rotation, wall types, object footprints | OpenRune-Editor-Neosback | yes | WorldFragment transforms |
+| overlay flood fill with a tile cap | Neosback | yes | Tile Painter over query engine |
+| move/rotate gizmo for all four object layers | Neosback | yes | selection transforms |
+| background minimap patch rendering | Neosback | yes | minimap service |
+| closed-room detection to suggest roof (0x4) flags | tsps-main | yes, as an authoring aid | StructureAnalyzer (exists) |
+| placement ghost preview | tsps-main | yes | object placement preview |
+| obstacle-aware routing and road coverage grammar | Terraini | yes | linear feature service |
+| object instancing for shared static models | Darkan tools | yes, keyed by id/type/rotation/recolour, not contoured or merged | renderer |
+| multi-draw indirect, SSBO instancing, compute culling | Darkan tools | yes, but needs GL 4.3+; unavailable on macOS GL 4.1 | capability-gated renderer path only |
+| sky/environment, procedural textures, blended terrain textures, particles | Darkan (rev 700) | no, RS2/HD-era | out of scope (HD work is Priority 11) |
 
 ## 13. Priority 10: broader Content Studio
 

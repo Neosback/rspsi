@@ -21,7 +21,7 @@ import static org.lwjgl.opengl.GL31.GL_UNIFORM_BUFFER;
 /**
  * OpenGL std140 backing store for state that is constant across one scene frame.
  *
- * <p>The layout mirrors {@code shaders/common/frame_uniforms.glsl}: six
+ * <p>The layout mirrors {@code shaders/common/frame_uniforms.glsl}: seven
  * explicit 16-byte slots. The staging buffer is reused every frame so moving
  * individual uniforms into the UBO does not replace driver calls with Java
  * allocation churn.</p>
@@ -29,8 +29,11 @@ import static org.lwjgl.opengl.GL31.GL_UNIFORM_BUFFER;
 final class FrameUniformBuffer implements AutoCloseable {
     static final int BINDING_POINT = 0;
     static final int SLOT_BYTES = 16;
-    static final int SLOT_COUNT = 6;
+    static final int SLOT_COUNT = 7;
     static final int BYTE_SIZE = SLOT_BYTES * SLOT_COUNT;
+
+    /** World-unit bounds of the editable region; geometry outside is dimmed context. */
+    private SceneFog.Bounds editBounds;
 
     private final ByteBuffer staging =
             BufferUtils.createByteBuffer(BYTE_SIZE).order(ByteOrder.nativeOrder());
@@ -58,11 +61,16 @@ final class FrameUniformBuffer implements AutoCloseable {
             throw new IllegalStateException("Frame uniform buffer is not initialized");
         }
         write(staging, camera, focal, aspect, depthA, depthB, depthBiasNudge,
-                presentation, fogBounds, clientCycle);
+                presentation, fogBounds, clientCycle, editBounds);
 
         glBindBuffer(GL_UNIFORM_BUFFER, buffer);
         glBufferSubData(GL_UNIFORM_BUFFER, 0L, staging);
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    }
+
+    /** Sets or clears ({@code null}) the editable region drawn at full brightness. */
+    void setEditBounds(SceneFog.Bounds bounds) {
+        editBounds = bounds;
     }
 
     static void write(ByteBuffer target,
@@ -75,6 +83,21 @@ final class FrameUniformBuffer implements AutoCloseable {
                       RenderPresentation presentation,
                       SceneFog.Bounds fogBounds,
                       int clientCycle) {
+        write(target, camera, focal, aspect, depthA, depthB, depthBiasNudge,
+                presentation, fogBounds, clientCycle, null);
+    }
+
+    static void write(ByteBuffer target,
+                      CameraState camera,
+                      float focal,
+                      float aspect,
+                      float depthA,
+                      float depthB,
+                      float depthBiasNudge,
+                      RenderPresentation presentation,
+                      SceneFog.Bounds fogBounds,
+                      int clientCycle,
+                      SceneFog.Bounds editBounds) {
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(camera, "camera");
         Objects.requireNonNull(presentation, "presentation");
@@ -119,6 +142,14 @@ final class FrameUniformBuffer implements AutoCloseable {
                 .putFloat(((fogColor >>> 8) & 0xFF) / 255.0f)
                 .putFloat((fogColor & 0xFF) / 255.0f)
                 .putFloat(presentation.fogDepthTiles() * 128.0f);
+
+        // slot 6: editable bounds west, east, south, north; min > max disables dimming
+        if (editBounds == null) {
+            target.putFloat(1.0f).putFloat(0.0f).putFloat(1.0f).putFloat(0.0f);
+        } else {
+            target.putFloat(editBounds.minX()).putFloat(editBounds.maxX())
+                    .putFloat(editBounds.minZ()).putFloat(editBounds.maxZ());
+        }
 
         if (target.position() != BYTE_SIZE) {
             throw new IllegalStateException(

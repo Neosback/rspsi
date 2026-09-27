@@ -18,7 +18,6 @@ import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
 import com.rspsi.editor.model.WorldTile;
-import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.OsrsTerrainColorMath;
@@ -159,10 +158,13 @@ public final class TileBrushPanel implements StudioPanel {
             localX = coord.x();
             localY = coord.y();
         } else {
-            WorldTileAddress address = WorldTileAddress.of(coord.x(), coord.y(), coord.plane());
-            localX = address.regionLocalX();
-            localY = address.regionLocalY();
-            if (!world.contains(coord.plane(), localX, localY)) return null;
+            // A world tile: only one inside this session's region maps to a local tile;
+            // loaded neighbour context outside it is not editable here.
+            var local = context.session().coordinates()
+                    .toLocal(new WorldTile(coord.plane(), coord.x(), coord.y())).orElse(null);
+            if (local == null || !world.contains(local.coordinate())) return null;
+            localX = local.x();
+            localY = local.y();
         }
 
         TileSnapshot snapshot = world.tile(coord.plane(), localX, localY).snapshot();

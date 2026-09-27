@@ -127,6 +127,22 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         zonedPlan = plan;
     }
 
+    /**
+     * Marks the editable region; neighbouring context tiles draw dimmed. Pass
+     * {@code null} to draw everything at full brightness.
+     */
+    public void setEditableRegion(com.rspsi.editor.model.WorldRegion region) {
+        if (region == null) {
+            renderer.setEditBounds(null);
+            return;
+        }
+        float minX = region.regionX() * com.rspsi.editor.model.WorldRegion.REGION_SIZE * 128f;
+        float minZ = region.regionY() * com.rspsi.editor.model.WorldRegion.REGION_SIZE * 128f;
+        float size = com.rspsi.editor.model.WorldRegion.REGION_SIZE * 128f;
+        renderer.setEditBounds(new com.rspsi.editor.render.SceneFog.Bounds(
+                minX, minX + size, minZ, minZ + size));
+    }
+
     public OpenGlSceneRenderer.Statistics statistics() {
         return renderer.statistics();
     }

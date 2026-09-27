@@ -294,7 +294,8 @@ public final class RenderSceneBuilder {
         return objects;
     }
 
-    private TerrainMaterial material(com.rspsi.editor.model.TileSnapshot tile) {
+    /** Package-visible so window builds resolve single tiles the same way. */
+    TerrainMaterial material(com.rspsi.editor.model.TileSnapshot tile) {
         FloorDefinitionView underlay = tile.underlayId() <= 0
                 ? null : definitions.underlay(tile.underlayId() - 1).orElse(null);
         FloorDefinitionView overlay = tile.overlayId() <= 0
@@ -323,7 +324,8 @@ public final class RenderSceneBuilder {
         return snapshots;
     }
 
-    private RenderObject resolve(WorldObject object) {
+    /** Package-visible so window builds resolve single objects the same way. */
+    RenderObject resolve(WorldObject object) {
         if (definitions == null) {
             return RenderObject.resolve(object, null, null, null);
         }

@@ -55,24 +55,32 @@ public final class RenderWindowSceneBuilder {
 
     /** Builds a world window while selecting model animation frames for clientCycle. */
     public RenderWindowScene build(WorldRegionWindow window, int clientCycle) {
+        return build(window, clientCycle, SceneFocus.of(window));
+    }
+
+    /**
+     * Builds only the tiles inside {@code focus}. Every loaded region of the window
+     * still stitches and feeds blending, lighting, contouring and collision, so tiles at
+     * the focus edge match a full build; tiles outside the focus are simply not emitted.
+     */
+    public RenderWindowScene build(WorldRegionWindow window, int clientCycle, SceneFocus focus) {
         Objects.requireNonNull(window, "window");
+        Objects.requireNonNull(focus, "focus");
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         WorldRegionWindow prepared = window.copy();
         prepared.stitchSharedEdges();
+        SceneFocus emitted = focus.clampTo(prepared);
         WorldDocument worldDocument = prepared.materializePaddedWorldDocument(TERRAIN_CONTEXT_BORDER);
-        var compiledWorld = definitions == null
+        int paddedOriginX = prepared.minRegionX() * WorldRegion.REGION_SIZE - TERRAIN_CONTEXT_BORDER;
+        int paddedOriginY = prepared.minRegionY() * WorldRegion.REGION_SIZE - TERRAIN_CONTEXT_BORDER;
+        var compiledWorld = definitions == null || emitted == null
                 ? java.util.Map.<TileCoordinate, CompiledTerrainTile>of()
-                : new TerrainSceneCompiler().compile(worldDocument, definitions);
-        var worldAppearances = definitions == null
-                ? java.util.Map.<TileCoordinate, TerrainAppearance>of()
-                : compiledWorld.entrySet().stream().collect(java.util.stream.Collectors.toMap(
-                        java.util.Map.Entry::getKey, entry -> entry.getValue().appearance(),
-                        (first, second) -> first, LinkedHashMap::new));
+                : new TerrainSceneCompiler().compileZones(worldDocument, definitions,
+                        LightingProfile.osrs(), focusZones(worldDocument, emitted,
+                                paddedOriginX, paddedOriginY));
         var worldLighting = definitions == null
                 ? TerrainLighting.build(worldDocument, LightingProfile.osrs(), null)
-                : compiledWorld.entrySet().stream().collect(java.util.stream.Collectors.toMap(
-                        java.util.Map.Entry::getKey, entry -> entry.getValue().lighting(),
-                        (first, second) -> first, LinkedHashMap::new));
+                : null;
         var meshes = new LinkedHashMap<WorldTileAddress, com.rspsi.editor.terrain.TerrainMesh>();
         var materials = new LinkedHashMap<WorldTileAddress, TerrainMaterial>();
         var appearances = new LinkedHashMap<WorldTileAddress, TerrainAppearance>();
@@ -81,6 +89,7 @@ public final class RenderWindowSceneBuilder {
         var modelPackets = new LinkedHashMap<WorldTileAddress, List<ModelRenderPacket>>();
         var tileFlags = new LinkedHashMap<WorldTileAddress, Integer>();
         TerrainPacketBuilder packetBuilder = new TerrainPacketBuilder();
+        com.rspsi.editor.terrain.TerrainMeshBuilder plainMeshes = new com.rspsi.editor.terrain.TerrainMeshBuilder();
         var collision = new LinkedHashMap<WorldTileAddress, CollisionTileSnapshot>();
         List<WorldRenderObject> objects = new ArrayList<>();
         List<WorldBridgeLink> bridges = new ArrayList<>();
@@ -91,57 +100,56 @@ public final class RenderWindowSceneBuilder {
         for (WorldRegion region : prepared.regions().values().stream()
                 .sorted(java.util.Comparator.comparingInt(WorldRegion::regionX)
                         .thenComparingInt(WorldRegion::regionY)).toList()) {
-            RenderScene scene = regions.build(region.document(), clientCycle);
+            if (emitted == null || !emitted.intersectsRegion(region.regionX(), region.regionY())) continue;
+            WorldDocument document = region.document();
             int originX = region.regionX() * WorldRegion.REGION_SIZE;
             int originY = region.regionY() * WorldRegion.REGION_SIZE;
-            scene.terrainMeshes().forEach((local, mesh) ->
-                    meshes.put(WorldTileAddress.of(originX + local.x(), originY + local.y(), local.plane()), mesh));
-            scene.terrainMaterials().forEach((local, material) ->
-                    materials.put(WorldTileAddress.of(originX + local.x(), originY + local.y(), local.plane()), material));
-            for (int plane = 0; plane < region.document().planes(); plane++) {
-                for (int x = 0; x < region.document().width(); x++) {
-                    for (int y = 0; y < region.document().length(); y++) {
-                        WorldTileAddress address = WorldTileAddress.of(originX + x, originY + y, plane);
-                        tileFlags.put(address, region.document().tile(plane, x, y).snapshot().flags());
-                        TileCoordinate worldCoordinate = new TileCoordinate(plane,
-                                TERRAIN_CONTEXT_BORDER
-                                        + (region.regionX() - prepared.minRegionX()) * WorldRegion.REGION_SIZE + x,
-                                TERRAIN_CONTEXT_BORDER
-                                        + (region.regionY() - prepared.minRegionY()) * WorldRegion.REGION_SIZE + y);
-                        if (definitions != null) {
-                            TerrainAppearance appearance = worldAppearances.get(worldCoordinate);
-                            appearances.put(address, appearance);
-                            packets.put(address, packetBuilder.build(
-                                    new TileCoordinate(plane, x, y),
-                                    scene.terrainMeshes().get(localCoordinate(plane, x, y)),
-                                    appearance, worldLighting.get(worldCoordinate)));
-                        }
-                        lighting.put(address, worldLighting.get(worldCoordinate));
-                    }
-                }
-            }
+            int fromX = Math.max(0, emitted.minX() - originX);
+            int toX = Math.min(document.width() - 1, emitted.maxX() - originX);
+            int fromY = Math.max(0, emitted.minY() - originY);
+            int toY = Math.min(document.length() - 1, emitted.maxY() - originY);
             int collisionOffsetX = (region.regionX() - prepared.minRegionX()) * WorldRegion.REGION_SIZE;
             int collisionOffsetY = (region.regionY() - prepared.minRegionY()) * WorldRegion.REGION_SIZE;
-            for (int plane = 0; plane < region.document().planes(); plane++) {
-                for (int x = 0; x < region.document().width(); x++) {
-                    for (int y = 0; y < region.document().length(); y++) {
-                        var local = new com.rspsi.editor.model.TileCoordinate(plane,
-                                collisionOffsetX + x, collisionOffsetY + y);
-                        collision.put(WorldTileAddress.of(originX + x, originY + y, plane),
-                                CollisionTileSnapshot.from(windowCollision, local));
+            for (int plane = 0; plane < document.planes(); plane++) {
+                for (int x = fromX; x <= toX; x++) {
+                    for (int y = fromY; y <= toY; y++) {
+                        WorldTileAddress address = WorldTileAddress.of(originX + x, originY + y, plane);
+                        com.rspsi.editor.model.TileSnapshot snapshot = document.tile(plane, x, y).snapshot();
+                        TileCoordinate worldCoordinate = new TileCoordinate(plane,
+                                originX + x - paddedOriginX, originY + y - paddedOriginY);
+                        tileFlags.put(address, snapshot.flags());
+                        if (definitions != null) {
+                            CompiledTerrainTile compiled = compiledWorld.get(worldCoordinate);
+                            meshes.put(address, compiled.mesh());
+                            materials.put(address, regions.material(snapshot));
+                            appearances.put(address, compiled.appearance());
+                            lighting.put(address, compiled.lighting());
+                            packets.put(address, packetBuilder.build(
+                                    new TileCoordinate(plane, x, y), compiled.mesh(),
+                                    compiled.appearance(), compiled.lighting()));
+                        } else {
+                            meshes.put(address, plainMeshes.build(snapshot));
+                            lighting.put(address, worldLighting.get(worldCoordinate));
+                        }
+                        collision.put(address, CollisionTileSnapshot.from(windowCollision,
+                                new com.rspsi.editor.model.TileCoordinate(plane,
+                                        collisionOffsetX + x, collisionOffsetY + y)));
+                        for (com.rspsi.editor.model.WorldObject object : snapshot.objects()) {
+                            objects.add(new WorldRenderObject(address, regions.resolve(object)));
+                        }
                     }
                 }
             }
-            for (RenderObject object : scene.renderObjects()) {
-                objects.add(new WorldRenderObject(WorldTileAddress.of(
-                        originX + object.object().x(), originY + object.object().y(), object.object().plane()), object));
-            }
-            for (BridgeLink bridge : scene.bridges()) {
-                bridges.add(new WorldBridgeLink(address(region, bridge.upper()), address(region, bridge.lower())));
+            for (BridgeLink bridge : document.bridgeLinks()) {
+                WorldTileAddress upper = address(region, bridge.upper());
+                if (emitted.contains(upper)) {
+                    bridges.add(new WorldBridgeLink(upper, address(region, bridge.lower())));
+                }
             }
         }
-        if (definitions != null) {
-            modelPackets.putAll(buildWorldModelPackets(prepared, worldDocument, clientCycle));
+        if (definitions != null && emitted != null) {
+            modelPackets.putAll(buildWorldModelPackets(prepared, worldDocument, clientCycle,
+                    emitted, paddedOriginX, paddedOriginY));
         }
         List<TerrainRenderPacket> textureTerrainPackets = packets.values().stream().toList();
         List<ModelRenderPacket> textureModelPackets = modelPackets.values().stream()
@@ -271,6 +279,25 @@ public final class RenderWindowSceneBuilder {
                         System.nanoTime() - totalStart));
     }
 
+    /** The padded-document zones, on every plane, that cover {@code focus}. */
+    private static Set<com.rspsi.editor.render.compiler.InvalidationGraph.ZoneCoordinate> focusZones(
+            WorldDocument padded, SceneFocus focus, int paddedOriginX, int paddedOriginY) {
+        int minZoneX = Math.max(0, focus.minX() - paddedOriginX) >> 3;
+        int minZoneY = Math.max(0, focus.minY() - paddedOriginY) >> 3;
+        int maxZoneX = Math.min(padded.width() - 1, focus.maxX() - paddedOriginX) >> 3;
+        int maxZoneY = Math.min(padded.length() - 1, focus.maxY() - paddedOriginY) >> 3;
+        Set<com.rspsi.editor.render.compiler.InvalidationGraph.ZoneCoordinate> zones = new LinkedHashSet<>();
+        for (int plane = 0; plane < padded.planes(); plane++) {
+            for (int zoneX = minZoneX; zoneX <= maxZoneX; zoneX++) {
+                for (int zoneY = minZoneY; zoneY <= maxZoneY; zoneY++) {
+                    zones.add(new com.rspsi.editor.render.compiler.InvalidationGraph.ZoneCoordinate(
+                            plane, zoneX, zoneY));
+                }
+            }
+        }
+        return zones;
+    }
+
     private static TileCoordinate paddedCoordinate(WorldRegionWindow prepared,
                                                    WorldTileAddress address) {
         return new TileCoordinate(
@@ -296,12 +323,18 @@ public final class RenderWindowSceneBuilder {
     }
 
     private Map<WorldTileAddress, List<ModelRenderPacket>> buildWorldModelPackets(
-            WorldRegionWindow prepared, WorldDocument worldDocument, int clientCycle) {
+            WorldRegionWindow prepared, WorldDocument worldDocument, int clientCycle,
+            SceneFocus focus, int paddedOriginX, int paddedOriginY) {
         var modelPackets = new LinkedHashMap<WorldTileAddress, List<ModelRenderPacket>>();
         ModelPacketBuilder worldModelBuilder = new ModelPacketBuilder(definitions, LightingProfile.osrs(), presentation);
-        for (ModelRenderPacket packet : worldModelBuilder.build(worldDocument, clientCycle)) {
+        // One extra tile on each side lets scene normal merging see locations that
+        // touch the focus edge; their own packets are dropped below.
+        for (ModelRenderPacket packet : worldModelBuilder.build(worldDocument, clientCycle,
+                focus.minX() - paddedOriginX - 1, focus.minY() - paddedOriginY - 1,
+                focus.maxX() - paddedOriginX + 1, focus.maxY() - paddedOriginY + 1)) {
             ModelRenderPacket worldPacket = toWorldPacket(prepared, packet);
-            if (worldPacket == null) continue;
+            if (worldPacket == null
+                    || !focus.contains(worldPacket.anchor().x(), worldPacket.anchor().y())) continue;
             modelPackets.computeIfAbsent(WorldTileAddress.of(
                     worldPacket.anchor().x(), worldPacket.anchor().y(),
                     worldPacket.anchor().plane()), ignored -> new ArrayList<>())

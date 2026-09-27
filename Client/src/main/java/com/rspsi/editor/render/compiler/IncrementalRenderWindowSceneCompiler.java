@@ -42,6 +42,8 @@ public final class IncrementalRenderWindowSceneCompiler {
 
     private final DefinitionProvider definitions;
     private final RenderWindowSceneBuilder fullBuilder;
+    /** Tiles the scene emits; null means every tile of the window. */
+    private final com.rspsi.editor.render.SceneFocus focus;
     private final TerrainSceneCompiler terrainCompiler = new TerrainSceneCompiler();
     private final TerrainPacketBuilder packetBuilder = new TerrainPacketBuilder();
 
@@ -52,8 +54,16 @@ public final class IncrementalRenderWindowSceneCompiler {
     /** Studio viewports pass their editor presentation so full rebuilds keep ghosts and var state. */
     public IncrementalRenderWindowSceneCompiler(DefinitionProvider definitions,
                                                 com.rspsi.editor.render.ScenePresentation presentation) {
+        this(definitions, presentation, null);
+    }
+
+    /** Compiles only tiles inside {@code focus}; neighbours outside it stay context. */
+    public IncrementalRenderWindowSceneCompiler(DefinitionProvider definitions,
+                                                com.rspsi.editor.render.ScenePresentation presentation,
+                                                com.rspsi.editor.render.SceneFocus focus) {
         this.definitions = Objects.requireNonNull(definitions, "definitions");
         this.fullBuilder = new RenderWindowSceneBuilder(definitions, presentation);
+        this.focus = focus;
     }
 
     /**
@@ -144,7 +154,8 @@ public final class IncrementalRenderWindowSceneCompiler {
         Set<WorldZoneCoordinate> dirtyWorldZones = new LinkedHashSet<>();
         for (Map.Entry<TileCoordinate, CompiledTerrainTile> entry : compiled.entrySet()) {
             WorldTileAddress address = worldAddress(prepared, entry.getKey());
-            if (address == null || prepared.tile(address.plane(), address.worldX(), address.worldY()).isEmpty()) {
+            if (address == null || prepared.tile(address.plane(), address.worldX(), address.worldY()).isEmpty()
+                    || (focus != null && !focus.contains(address))) {
                 continue;
             }
             CompiledTerrainTile tile = entry.getValue();
@@ -194,7 +205,9 @@ public final class IncrementalRenderWindowSceneCompiler {
     }
 
     private UpdateResult full(WorldRegionWindow source, int clientCycle, String reason) {
-        RenderWindowScene scene = fullBuilder.build(source, clientCycle);
+        RenderWindowScene scene = focus == null
+                ? fullBuilder.build(source, clientCycle)
+                : fullBuilder.build(source, clientCycle, focus);
         return new UpdateResult(scene, true, scene.terrainPackets().size(), Set.of(), Set.of(), reason);
     }
 

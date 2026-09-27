@@ -294,6 +294,63 @@ class RenderWindowSceneBuilderTest {
 
 
     @Test
+    void focusedBuildEmitsOnlyTheFocusAndMatchesAFullBuildThere() {
+        WorldDocument westDocument = filledRegion(1);
+        WorldDocument eastDocument = filledRegion(2);
+        WorldRegion west = new WorldRegion(10, 20, westDocument);
+        WorldRegion east = new WorldRegion(11, 20, eastDocument);
+        WorldRegionWindow window = new WorldRegionWindow(10, 20, 2, 1,
+                Map.of(west.regionId(), west, east.regionId(), east));
+        RenderWindowSceneBuilder builder = new RenderWindowSceneBuilder(boundaryDefinitions());
+        SceneFocus focus = SceneFocus.aroundRegion(10, 20, SceneFocus.CONTEXT_RING_TILES);
+
+        RenderWindowScene full = builder.build(window);
+        RenderWindowScene focused = builder.build(window, 0, focus);
+
+        assertFalse(focused.terrainPackets().keySet().stream().anyMatch(address -> !focus.contains(address)),
+                "nothing outside the focus is emitted");
+        WorldTileAddress lastRing = WorldTileAddress.of(11 * 64 + 7, 20 * 64 + 10, 0);
+        WorldTileAddress beyondRing = WorldTileAddress.of(11 * 64 + 8, 20 * 64 + 10, 0);
+        assertTrue(focused.terrainPackets().containsKey(lastRing));
+        assertFalse(focused.terrainPackets().containsKey(beyondRing));
+        for (WorldTileAddress address : List.of(
+                WorldTileAddress.of(10 * 64 + 63, 20 * 64 + 10, 0),
+                WorldTileAddress.of(11 * 64, 20 * 64 + 10, 0),
+                lastRing)) {
+            assertEquals(full.terrainPackets().get(address), focused.terrainPackets().get(address), address.toString());
+            assertEquals(full.terrainAppearances().get(address), focused.terrainAppearances().get(address));
+            assertEquals(full.collision().get(address), focused.collision().get(address));
+        }
+    }
+
+    @Test
+    void focusedBuildKeepsWallNormalsMergedWithTheRing() {
+        WorldDocument westDocument = new WorldDocument(64, 64, 4);
+        WorldDocument eastDocument = new WorldDocument(64, 64, 4);
+        int y = 10;
+        westDocument.tile(0, 63, y).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0,
+                List.of(new WorldObject(42, 0, 0, 0, 63, y))));
+        eastDocument.tile(0, 0, y).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0,
+                List.of(new WorldObject(42, 0, 2, 0, 0, y))));
+        WorldRegion west = new WorldRegion(10, 20, westDocument);
+        WorldRegion east = new WorldRegion(11, 20, eastDocument);
+        WorldRegionWindow window = new WorldRegionWindow(10, 20, 2, 1,
+                Map.of(west.regionId(), west, east.regionId(), east));
+        RenderWindowSceneBuilder builder = new RenderWindowSceneBuilder(mergingWallDefinitions());
+
+        RenderWindowScene full = builder.build(window);
+        RenderWindowScene focused = builder.build(window, 0,
+                SceneFocus.aroundRegion(10, 20, SceneFocus.CONTEXT_RING_TILES));
+
+        WorldTileAddress westWall = WorldTileAddress.of(10 * 64 + 63, 20 * 64 + y, 0);
+        assertEquals(full.modelPackets().get(westWall), focused.modelPackets().get(westWall));
+        assertEquals(full.modelPackets().get(WorldTileAddress.of(11 * 64, 20 * 64 + y, 0)),
+                focused.modelPackets().get(WorldTileAddress.of(11 * 64, 20 * 64 + y, 0)));
+    }
+
+    @Test
     void mergesWallNormalsAcrossLoadedRegionBoundary() {
         WorldDocument westDocument = new WorldDocument(64, 64, 4);
         WorldDocument eastDocument = new WorldDocument(64, 64, 4);

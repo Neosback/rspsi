@@ -22,6 +22,7 @@ out float vViewDepth;
 flat out uint vFaceWord0;
 flat out uint vFaceWord1;
 flat out uint vPickerId;
+out vec2 vWorldXZ;
 
 #include "/common/fog.glsl"
 
@@ -59,6 +60,7 @@ void main() {
     vFaceWord0 = aFaceWord0;
     vFaceWord1 = aFaceWord1;
     vPickerId = aPickerId;
+    vWorldXZ = aPosition.xz;
     vFogAmount = sceneFogAmount(
         aPosition, uUseFog, uFogWest, uFogEast,
         uFogSouth, uFogNorth, uFogDepth

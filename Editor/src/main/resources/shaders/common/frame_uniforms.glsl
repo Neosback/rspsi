@@ -1,6 +1,6 @@
 // Shared OpenGL 3.3 std140 frame block.
 //
-// Six 16-byte slots keep the Java/native layout explicit and avoid relying on
+// Seven 16-byte slots keep the Java/native layout explicit and avoid relying on
 // scalar/vec3 padding rules. Per-draw material state intentionally stays out.
 layout(std140) uniform FrameUniforms {
     vec4 frameCameraPitch;              // camera.xyz, pitch
@@ -9,6 +9,7 @@ layout(std140) uniform FrameUniforms {
     ivec4 frameFlags;                   // smoothBanding, useFog, clientCycle, debugView
     vec4 frameFogBounds;                // west, east, south, north
     vec4 frameFogColorDepth;            // fogColor.rgb, fogDepth
+    vec4 frameEditBounds;               // west, east, south, north; west > east disables
 };
 
 #define uCamera frameCameraPitch.xyz

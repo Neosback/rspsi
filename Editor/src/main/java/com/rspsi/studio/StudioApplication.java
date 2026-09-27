@@ -558,12 +558,18 @@ public final class StudioApplication implements AutoCloseable {
         long totalStart = System.nanoTime();
         OsrsProjectSessionLoader.OpenedProject opened = cache.openRegion(regionX, regionY);
         WorldRegion region = opened.worldRegion();
-        WorldRegionWindow window = new WorldRegionWindow(regionX, regionY, 1, 1,
-                Map.of(region.regionId(), region));
+        // Neighbours are read-only context: they stitch the shared edges, feed underlay
+        // blending and contouring, and show a ring of tiles around the active region.
+        Map<Integer, WorldRegion> contextRegions = new java.util.HashMap<>(
+                cache.bundle().openWindowAround(regionX, regionY, 1).regions());
+        contextRegions.remove(region.regionId());
+        WorldRegionWindow window = contextWindow(region, contextRegions);
+        com.rspsi.editor.render.SceneFocus focus = com.rspsi.editor.render.SceneFocus.aroundRegion(
+                regionX, regionY, com.rspsi.editor.render.SceneFocus.CONTEXT_RING_TILES);
 
         long windowStart = System.nanoTime();
         RenderWindowScene scene = new RenderWindowSceneBuilder(
-                cache.bundle().definitions(), editorPresentation(cache)).build(window, clientCycle);
+                cache.bundle().definitions(), editorPresentation(cache)).build(window, clientCycle, focus);
         long windowNanos = System.nanoTime() - windowStart;
 
         SceneWindow sceneWindow = SceneWindow.from(window);
@@ -585,8 +591,8 @@ public final class StudioApplication implements AutoCloseable {
         GpuUploadPlan plan = initialPlan.plan();
         long planNanos = System.nanoTime() - planStart;
 
-        double centerX = sceneWindow.sceneBaseX() * 128.0 + window.worldWindow().width() * 64.0;
-        double centerZ = sceneWindow.sceneBaseY() * 128.0 + window.worldWindow().length() * 64.0;
+        double centerX = (regionX * WorldRegion.REGION_SIZE + WorldRegion.REGION_SIZE / 2) * 128.0;
+        double centerZ = (regionY * WorldRegion.REGION_SIZE + WorldRegion.REGION_SIZE / 2) * 128.0;
 
         long renderSceneStart = System.nanoTime();
         // Plugin scene access reads semantics only; the viewport draws models from the window scene.
@@ -612,7 +618,7 @@ public final class StudioApplication implements AutoCloseable {
                 new com.rspsi.editor.render.CameraState(
                 (float) centerX, -2400.0f, (float) centerZ - 4200.0f,
                 (float) -Math.toRadians(28.0), 0.0f), clientCycle,
-                nextAnimationRefreshCycle);
+                nextAnimationRefreshCycle, contextRegions, focus);
     }
 
     private void pollSceneLoad() {
@@ -621,6 +627,7 @@ public final class StudioApplication implements AutoCloseable {
             loadedScene = pendingScene.join();
             renderedVarState = simulation.state();
             sceneViewport.setCamera(loadedScene.camera());
+            sceneViewport.setEditableRegion(loadedScene.opened().worldRegion());
             currentPlan = loadedScene.plan();
             currentZonedPlan = loadedScene.zonedPlan();
             renderedSettingsRevision = loadedScene.settingsRevision();
@@ -763,7 +770,8 @@ public final class StudioApplication implements AutoCloseable {
         return new LoadedMapScene(
                 baseScene.opened(), baseScene.session(), scene, renderScene, packet, plan,
                 zonedPlan, incrementalPlanBuilder, settingsRevision,
-                baseScene.camera(), clientCycle, nextAnimationRefreshCycle);
+                baseScene.camera(), clientCycle, nextAnimationRefreshCycle,
+                baseScene.contextRegions(), baseScene.focus());
     }
 
     /** Editor presentation bound to the simulated player of this cache session. */
@@ -843,8 +851,7 @@ public final class StudioApplication implements AutoCloseable {
                                            Set<TileCoordinate> changedTiles, boolean varStateChanged) {
         long totalStart = System.nanoTime();
         WorldRegion region = baseScene.opened().worldRegion();
-        WorldRegionWindow window = new WorldRegionWindow(region.regionX(), region.regionY(), 1, 1,
-                Map.of(region.regionId(), region));
+        WorldRegionWindow window = contextWindow(region, baseScene.contextRegions());
         Set<WorldTileAddress> changedWorldTiles = changedTiles.stream()
                 .map(tile -> WorldTileAddress.of(
                         region.regionX() * WorldRegion.REGION_SIZE + tile.x(),
@@ -855,7 +862,7 @@ public final class StudioApplication implements AutoCloseable {
         long windowStart = System.nanoTime();
         IncrementalRenderWindowSceneCompiler windowCompiler =
                 new IncrementalRenderWindowSceneCompiler(cache.bundle().definitions(),
-                        editorPresentation(cache));
+                        editorPresentation(cache), baseScene.focus());
         IncrementalRenderWindowSceneCompiler.UpdateResult windowUpdate = varStateChanged
                 ? windowCompiler.compileFull(window, baseScene.animationCycle(), "simulated var state changed")
                 : windowCompiler.compile(baseScene.windowScene(), window, changedWorldTiles,
@@ -923,7 +930,24 @@ public final class StudioApplication implements AutoCloseable {
         return new LoadedMapScene(baseScene.opened(), baseScene.session(), scene, renderScene,
                 packet, plan, planUpdate.zonedPlan(), incrementalPlanBuilder,
                 settingsRevision, baseScene.camera(), baseScene.animationCycle(),
-                nextAnimationRefreshCycle);
+                nextAnimationRefreshCycle, baseScene.contextRegions(), baseScene.focus());
+    }
+
+    /** The live edited region inside the smallest window that also holds its loaded neighbours. */
+    private static WorldRegionWindow contextWindow(WorldRegion center, Map<Integer, WorldRegion> context) {
+        Map<Integer, WorldRegion> regions = new java.util.HashMap<>(context);
+        regions.put(center.regionId(), center);
+        int minX = center.regionX();
+        int minY = center.regionY();
+        int maxX = center.regionX();
+        int maxY = center.regionY();
+        for (WorldRegion region : regions.values()) {
+            minX = Math.min(minX, region.regionX());
+            minY = Math.min(minY, region.regionY());
+            maxX = Math.max(maxX, region.regionX());
+            maxY = Math.max(maxY, region.regionY());
+        }
+        return new WorldRegionWindow(minX, minY, maxX - minX + 1, maxY - minY + 1, regions);
     }
 
     private static int[] parseRegion(String value) {
@@ -1397,8 +1421,11 @@ public final class StudioApplication implements AutoCloseable {
                                   long settingsRevision,
                                   com.rspsi.editor.render.CameraState camera,
                                   int animationCycle,
-                                  int nextAnimationRefreshCycle) {
+                                  int nextAnimationRefreshCycle,
+                                  Map<Integer, WorldRegion> contextRegions,
+                                  com.rspsi.editor.render.SceneFocus focus) {
         private LoadedMapScene {
+            contextRegions = Map.copyOf(contextRegions);
             if (animationCycle < 0) {
                 throw new IllegalArgumentException("Animation cycle cannot be negative");
             }

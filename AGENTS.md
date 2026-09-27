@@ -38,6 +38,18 @@ Built-in feature composition uses:
 
 Legacy extension-oriented names may still exist in source during migration. They are compatibility debt, not the model for new code. New built-in behavior belongs in the core module/service architecture.
 
+Studio is not an open plugin platform. There is no third-party plugin SDK, external jar loading, or RuneLite-style plugin lifecycle to design for. Anyone extending Studio adds an in-tree core module: a CoreEditorModule that registers its tool, panel, settings, overlays and commands on top of a shared Client service. RuneLite names (Tile, Scene, overlays, Perspective helpers) are welcome as API vocabulary only.
+
+## Kotlin migration
+
+The codebase is moving from Java to Kotlin, leaf-first, one ownership boundary per PR.
+
+- New files are Kotlin. Edit existing Java in place; do not convert a file as a side effect of an unrelated change.
+- A migration PR changes language only: same behavior, same tests passing, no API redesign mixed in.
+- Records used from Java stay Java-shaped: annotate Kotlin data classes with @JvmRecord so callers keep x() accessors, and use @JvmStatic/@JvmOverloads where Java calls companions or defaults.
+- Keep hot render/compile paths free of boxing: IntArray/FloatArray and primitive loops, not List<Int> or lambdas per vertex.
+- Migrate a type only after its Java callers are few or migrate together; prefer moving whole packages (tools, core modules, then services, then render compile) over scattered files.
+
 ## Canonical ownership
 
 | Concern | Canonical owner |
