@@ -17,6 +17,26 @@ import static org.junit.jupiter.api.Assertions.*;
 class SplinePathToolTest {
 
     @Test
+    void keepsJavaFacingConfigurationContract() throws Exception {
+        assertEquals("path.spline", SplinePathTool.ID);
+        assertTrue(java.lang.reflect.Modifier.isPublic(SplinePathTool.class.getDeclaredConstructor().getModifiers()));
+        SplinePathTool tool = new SplinePathTool();
+        tool.setWidth(99);
+        assertEquals(16, tool.width());
+        tool.setWidth(0);
+        assertEquals(1, tool.width());
+        tool.setOverlayId(-4);
+        tool.setUnderlayId(-9);
+        assertEquals(0, tool.overlayId());
+        assertEquals(0, tool.underlayId());
+        tool.setPaintUnderlay(true);
+        assertTrue(tool.paintUnderlay());
+        tool.setStyle(SplineBrushStyle.WEDGE);
+        assertEquals(SplineBrushStyle.WEDGE, tool.style());
+        assertEquals("path.spline", tool.id());
+    }
+
+    @Test
     void interactiveNodePlacementAndDrag() {
         WorldDocument world = new WorldDocument(32, 32);
         EditorSession session = new EditorSession(world);
