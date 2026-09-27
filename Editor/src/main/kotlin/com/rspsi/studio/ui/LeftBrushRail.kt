@@ -1,6 +1,6 @@
 package com.rspsi.studio.ui
 
-import com.rspsi.studio.plugin.StudioPluginManager
+import com.rspsi.studio.feature.StudioFeatureRegistry
 import com.rspsi.studio.theme.StudioFonts
 import com.rspsi.studio.theme.StudioIcons
 import com.rspsi.studio.theme.StudioPalette
@@ -29,7 +29,7 @@ class LeftBrushRail {
         activeToolId: String?,
         forceVisible: Boolean,
     ) {
-        if (!forceVisible && !isBrushToolActive(context.studioPlugins(), activeToolId)) {
+        if (!forceVisible && !isBrushToolActive(context.features(), activeToolId)) {
             return
         }
 
@@ -47,8 +47,8 @@ class LeftBrushRail {
 
         val hud =
             context
-                .studioPlugins()
-                ?.plugin(BrushSettingsHud.ID)
+                .features()
+                ?.feature(BrushSettingsHud.ID)
                 ?.orElse(null) as? BrushSettingsHud
         val open = hud?.isVisible() == true
 
@@ -109,8 +109,8 @@ class LeftBrushRail {
 
         @JvmStatic
         fun isBrushToolActive(
-            plugins: StudioPluginManager?,
+            features: StudioFeatureRegistry?,
             activeToolId: String?,
-        ): Boolean = plugins?.usesSharedBrushSettings(activeToolId) == true
+        ): Boolean = features?.usesSharedBrushSettings(activeToolId) == true
     }
 }

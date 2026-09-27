@@ -102,8 +102,7 @@ class SettingsStoreTest {
     void jsonPersistenceRoundTripsTypedLayerValues() throws Exception {
         Path file = Files.createTempFile("openrune-settings", ".json");
         SettingsStore source = new SettingsStore(RenderSettingKeys.registry());
-        source.set(SettingScope.VIEWPORT, RenderSettingKeys.PLANE_SELECTION,
-                SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE);
+        source.set(SettingScope.VIEWPORT, RenderSettingKeys.ALL_HEIGHTS_VISIBLE, false);
         SettingsJsonStore.save(file, source);
 
         SettingsStore restored = new SettingsStore(RenderSettingKeys.registry());
@@ -112,8 +111,8 @@ class SettingsStoreTest {
         // (GlFramebuffer); it was 0 only while the setting was clamped
         // unavailable pending the FBO acceptance gate.
         assertEquals(4, restored.snapshot().get(RenderSettingKeys.MSAA_SAMPLES));
-        assertEquals(SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
-                restored.snapshot().get(RenderSettingKeys.PLANE_SELECTION));
+        assertEquals(false,
+                restored.snapshot().get(RenderSettingKeys.ALL_HEIGHTS_VISIBLE));
         Files.deleteIfExists(file);
     }
 }

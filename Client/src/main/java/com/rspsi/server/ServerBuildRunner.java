@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /** Executes only adapter-declared commands from their declared project root. */
+// TODO(migration): not wired yet; lands with connected OpenRune publication (ROADMAP 8).
 public final class ServerBuildRunner {
     public ServerBuildResult run(ServerBuildTask task, Duration timeout) throws IOException {
         return run(task, timeout, line -> { });

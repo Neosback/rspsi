@@ -5,6 +5,7 @@ package com.rspsi.editor.terrain.autotile;
  * shapes. A point on a tile border is inside if any tile touching it covers it
  * there, so an existing path's open edges are seen the same from both sides.
  */
+// TODO(migration): not wired to a tool yet; lands with the AutoTile service (ROADMAP 11).
 public final class OverlayTileRegion implements PathRegion {
     /** The existing path overlay at a tile, or {@code null} when the tile is not part of the path. */
     @FunctionalInterface

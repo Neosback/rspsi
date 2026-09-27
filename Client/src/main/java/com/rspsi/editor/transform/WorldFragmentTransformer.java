@@ -9,6 +9,7 @@ import com.rspsi.editor.model.WorldFragment;
  * the historical Java static API and package-private {@code transformCorners(...)} visibility
  * without widening the helper during the Kotlin migration.</p>
  */
+// TODO(migration): not wired to a tool yet; lands with WorldFragment transforms (ROADMAP 11).
 public final class WorldFragmentTransformer {
     private WorldFragmentTransformer() {
     }

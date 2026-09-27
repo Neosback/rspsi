@@ -645,12 +645,12 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     }
 
     public void renderOverlays(com.rspsi.editor.tool.EditorTool activeTool,
-                               com.rspsi.editor.plugin.EditorPluginLifecycleManager pluginLifecycle) {
+                               com.rspsi.editor.plugin.EditorPluginHost editorHost) {
         if (lastPlan == null || lastFrameCamera == null || lastFrameProjection == null
                 || lastWidth <= 0 || lastHeight <= 0) return;
         ViewportOverlayDraw.ViewportElevationSampler sampler = this.elevationSampler;
-        if (sampler == null && pluginLifecycle != null && pluginLifecycle.host() != null) {
-            var session = pluginLifecycle.host().context().session();
+        if (sampler == null && editorHost != null) {
+            var session = editorHost.context().session();
             if (session != null) {
                 sampler = (plane, x, y) -> {
                     var local = session.coordinates().toLocal(new WorldTile(plane, x, y)).orElse(null);
@@ -669,11 +669,11 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
             } catch (Exception ignored) {
             }
         }
-        if (pluginLifecycle != null && pluginLifecycle.host() != null) {
-            var context = pluginLifecycle.host().context();
+        if (editorHost != null) {
+            var context = editorHost.context();
             com.rspsi.editor.plugin.EditorSceneSnapshot sceneSnapshot = null;
             boolean snapshotResolved = false;
-            for (var reg : pluginLifecycle.host().registry().overlayRegistrations()) {
+            for (var reg : editorHost.registry().overlayRegistrations()) {
                 if (!isOverlayEnabled(reg.id(), reg.enabledByDefault())) continue;
                 if (!snapshotResolved) {
                     sceneSnapshot = context.scene()
@@ -681,7 +681,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
                     snapshotResolved = true;
                 }
                 try {
-                    var overlay = pluginLifecycle.host().registry().createOverlay(reg.id());
+                    var overlay = editorHost.registry().createOverlay(reg.id());
                     overlay.render(sceneSnapshot, draw);
                 } catch (Exception ignored) {
                 }

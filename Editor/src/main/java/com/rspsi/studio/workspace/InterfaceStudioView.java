@@ -1,7 +1,7 @@
 package com.rspsi.studio.workspace;
 
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
-import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
+import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.studio.WorkspaceManager;
 import com.rspsi.studio.theme.StudioFonts;
@@ -33,15 +33,17 @@ public final class InterfaceStudioView {
 
     public void render(LoadedOsrsCacheSession cache,
                        SettingsStore settings,
-                       EditorPluginLifecycleManager pluginLifecycle,
+                       EditorPluginHost editorHost,
                        Runnable openDashboard,
                        Runnable openMapEditor,
                        Runnable openObjectStudio,
+                       Runnable openWorldMap,
                        WorkspaceManager workspaces,
                        Consumer<WorkspaceManager.Workspace> closeWorkspace) {
         Objects.requireNonNull(openDashboard, "openDashboard");
         Objects.requireNonNull(openMapEditor, "openMapEditor");
         Objects.requireNonNull(openObjectStudio, "openObjectStudio");
+        Objects.requireNonNull(openWorldMap, "openWorldMap");
 
         imgui.ImGuiViewport mainViewport = ImGui.getMainViewport();
         ImGui.setNextWindowPos(mainViewport.getPosX(), mainViewport.getPosY());
@@ -54,7 +56,8 @@ public final class InterfaceStudioView {
             return;
         }
 
-        renderWorkspaceBar(cache, workspaces, openDashboard, openMapEditor, openObjectStudio, closeWorkspace);
+        renderWorkspaceBar(cache, workspaces, openDashboard, openMapEditor, openObjectStudio,
+                openWorldMap, closeWorkspace);
 
         // Three-column workspace layout
         float fullWidth = ImGui.getContentRegionAvailX();
@@ -79,7 +82,7 @@ public final class InterfaceStudioView {
 
         // Right Panel: Inspector & Runtime State
         ImGui.beginChild("##ui-inspector-panel", rightWidth, fullHeight, true);
-        renderPropertiesPanel(cache, pluginLifecycle);
+        renderPropertiesPanel(cache, editorHost);
         ImGui.endChild();
 
         ImGui.end();
@@ -87,11 +90,12 @@ public final class InterfaceStudioView {
 
     private void renderWorkspaceBar(LoadedOsrsCacheSession cache, WorkspaceManager workspaces,
                                      Runnable openDashboard, Runnable openMapEditor, Runnable openObjectStudio,
+                                     Runnable openWorldMap,
                                      Consumer<WorkspaceManager.Workspace> closeWorkspace) {
         if (ImGui.beginMenuBar()) {
             if (workspaces != null) {
                 StudioWidgets.workspaceTabs(workspaces, openDashboard, openMapEditor,
-                        null, openObjectStudio, closeWorkspace);
+                        null, openObjectStudio, openWorldMap, closeWorkspace);
             }
 
             ImGui.endMenuBar();
@@ -153,7 +157,7 @@ public final class InterfaceStudioView {
         draw.addText(StudioFonts.mono(), 13, posX + 30, posY + 30, 0xFFE2E8F0, "Bank of Gielinor");
     }
 
-    private void renderPropertiesPanel(LoadedOsrsCacheSession cache, EditorPluginLifecycleManager pluginLifecycle) {
+    private void renderPropertiesPanel(LoadedOsrsCacheSession cache, EditorPluginHost editorHost) {
         if (ImGui.beginTabBar("##ui-properties-tabs")) {
             if (ImGui.beginTabItem("Component")) {
                 StudioWidgets.section("Widget Attributes");

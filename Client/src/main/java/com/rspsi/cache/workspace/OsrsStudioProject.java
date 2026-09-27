@@ -185,6 +185,10 @@ public final class OsrsStudioProject implements AutoCloseable {
         return project;
     }
 
+    public CacheStore store() {
+        return store;
+    }
+
     public CacheStoreCapabilities capabilities() {
         return store.capabilities();
     }

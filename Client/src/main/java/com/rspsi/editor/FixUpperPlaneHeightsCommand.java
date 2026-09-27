@@ -17,6 +17,7 @@ import java.util.Set;
  * plane from the original plane-zero snapshot, so applying it does not depend
  * on command iteration order.</p>
  */
+// TODO(migration): not wired to a tool yet; expose through the terrain core module (ROADMAP 11, reusable authoring primitives).
 public final class FixUpperPlaneHeightsCommand implements EditorCommand {
     private static final int PLANE_HEIGHT_STEP = 240;
 

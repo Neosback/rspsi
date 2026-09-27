@@ -11,7 +11,7 @@ import com.rspsi.editor.tool.CompositeTilePainterTool;
 import com.rspsi.editor.tool.SplinePathTool;
 import com.rspsi.editor.tool.spline.SplineBrushStyle;
 import com.rspsi.studio.brush.StudioBrushManager;
-import com.rspsi.studio.plugin.StudioPlugin;
+import com.rspsi.studio.feature.StudioFeature;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioWidgets;
 import com.rspsi.studio.ui.StudioPanelContext;
@@ -36,7 +36,7 @@ import java.util.Set;
  * (shapes, radius, falloff) and contextual controls for whichever tool is currently active
  * (Tile Painter, Height Sculptor, Spline Path, and future brush-aware tools).
  */
-public final class BrushSettingsHud implements StudioPlugin {
+public final class BrushSettingsHud implements StudioFeature {
 
     public static final String ID = "studio.brush-settings-hud";
     public static final float DOCKED_WIDTH = 236.0f;
@@ -84,20 +84,12 @@ public final class BrushSettingsHud implements StudioPlugin {
         return "Brush Settings HUD";
     }
 
-    @Override
-    public String description() {
-        return "Compact draggable viewport HUD for brush shapes, radius, and contextual tool controls.";
-    }
 
     @Override
     public String icon() {
         return StudioIcons.BRUSH;
     }
 
-    @Override
-    public boolean isConfigurable() {
-        return true;
-    }
 
     public boolean isVisible() {
         return visible;
@@ -177,11 +169,11 @@ public final class BrushSettingsHud implements StudioPlugin {
     }
 
     private boolean shouldDisplay(StudioPanelContext context) {
-        if (context == null || context.studioPlugins() == null) return false;
+        if (context == null || context.features() == null) return false;
         // Tool metadata is authoritative. Path Builder and tools with their own
         // drawer brush UI never inherit this window merely because their engine
         // happens to be brush-aware.
-        return context.studioPlugins().usesSharedBrushSettings(context.activeToolId());
+        return context.features().usesSharedBrushSettings(context.activeToolId());
     }
 
     private void applyWindowPosition(StudioPanelContext context) {

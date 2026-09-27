@@ -99,6 +99,43 @@ class RsFaceOrderPlannerTest {
         assertIterableEquals(List.of(priorityTen, priorityEleven, priorityZero, priorityOne), ordered);
     }
 
+    @Test
+    void orderAlphaIndicesReusableMatchesCommandOrderAndReusesContainer() {
+        GpuDrawCommand priorityZero = command(0, 100);
+        GpuDrawCommand priorityOne = command(1, 101);
+        GpuDrawCommand priorityTen = command(10, 102);
+        GpuDrawCommand priorityEleven = command(11, 103);
+        List<GpuDrawCommand> commands = List.of(priorityZero, priorityOne, priorityTen, priorityEleven);
+        int[] candidates = new int[]{0, 1, 2, 3};
+
+        RsFaceOrderPlanner.Workspace workspace = new RsFaceOrderPlanner.Workspace();
+        List<Integer> orderedIndices = RsFaceOrderPlanner.orderAlphaIndicesReusable(
+                commands,
+                candidates,
+                candidates.length,
+                (idx, cmd) -> switch (cmd.priority()) {
+                    case 10 -> 20.0;
+                    case 11 -> 19.0;
+                    default -> 0.0;
+                },
+                (idx, cmd) -> 0,
+                workspace);
+
+        // Indices should match: 2 (p10), 3 (p11), 0 (p0), 1 (p1)
+        assertIterableEquals(List.of(2, 3, 0, 1), orderedIndices);
+
+        List<Integer> secondFrame = RsFaceOrderPlanner.orderAlphaIndicesReusable(
+                commands,
+                new int[]{1, 0},
+                2,
+                (idx, cmd) -> cmd.priority(),
+                (idx, cmd) -> 0,
+                workspace);
+
+        assertSame(orderedIndices, secondFrame, "Workspace resultIndices container should be reused across frames");
+        assertIterableEquals(List.of(0, 1), secondFrame);
+    }
+
     private static GpuDrawCommand command(int priority, int index) {
         return new GpuDrawCommand(WorldTileAddress.of(0, 0, 0), SceneLayer.Kind.GROUND_OBJECT,
                 GpuDrawCommand.SubmissionPass.ALPHA, index, 3, -1, priority, index);

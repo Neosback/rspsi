@@ -396,6 +396,7 @@ public final class StudioWidgets {
                                      Runnable openMapEditor,
                                      Runnable openInterfaceStudio,
                                      Runnable openObjectStudio,
+                                     Runnable openWorldMap,
                                      Consumer<WorkspaceManager.Workspace> closeWorkspace) {
         WorkspaceManager.Workspace active = workspaces.active();
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 4.0f, 0.0f);
@@ -414,7 +415,8 @@ public final class StudioWidgets {
                     isActive ? StudioPalette.ACCENT_ACTIVE : StudioPalette.ACCENT_SOFT);
             pushColor(ImGuiCol.Text, StudioPalette.TEXT);
             if (ImGui.button(workspaceLabel(workspace) + "##ws-" + workspace)) {
-                runWorkspaceCallback(workspace, openDashboard, openMapEditor, openInterfaceStudio, openObjectStudio);
+                runWorkspaceCallback(workspace, openDashboard, openMapEditor, openInterfaceStudio,
+                        openObjectStudio, openWorldMap);
             }
             ImGui.popStyleColor(4);
 
@@ -435,17 +437,20 @@ public final class StudioWidgets {
             case MAP_EDITOR -> "Map Studio";
             case INTERFACE_STUDIO -> "Interface Studio";
             case OBJECT_STUDIO -> "Object Studio";
+            case WORLD_MAP -> "World Map";
         };
     }
 
     private static void runWorkspaceCallback(WorkspaceManager.Workspace workspace,
                                              Runnable openDashboard, Runnable openMapEditor,
-                                             Runnable openInterfaceStudio, Runnable openObjectStudio) {
+                                             Runnable openInterfaceStudio, Runnable openObjectStudio,
+                                             Runnable openWorldMap) {
         switch (workspace) {
             case DASHBOARD -> { if (openDashboard != null) openDashboard.run(); }
             case MAP_EDITOR -> { if (openMapEditor != null) openMapEditor.run(); }
             case INTERFACE_STUDIO -> { if (openInterfaceStudio != null) openInterfaceStudio.run(); }
             case OBJECT_STUDIO -> { if (openObjectStudio != null) openObjectStudio.run(); }
+            case WORLD_MAP -> { if (openWorldMap != null) openWorldMap.run(); }
         }
     }
 }

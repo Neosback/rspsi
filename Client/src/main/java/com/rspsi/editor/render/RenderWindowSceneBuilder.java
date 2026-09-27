@@ -184,7 +184,7 @@ public final class RenderWindowSceneBuilder {
         Set<WorldTileAddress> activeAddresses = new LinkedHashSet<>();
         for (Map.Entry<WorldTileAddress, List<ModelRenderPacket>> entry : previous.modelPackets().entrySet()) {
             for (ModelRenderPacket packet : entry.getValue()) {
-                if (packet.animationState().active()) {
+                if (packet.animationState().active() || packet.supportsAnimation() || packet.animationId() >= 0) {
                     activeAddresses.add(entry.getKey());
                     break;
                 }

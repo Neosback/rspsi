@@ -4,8 +4,7 @@ import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.integration.IntegrationCapability;
 import com.rspsi.editor.integration.ServerIntegrationService;
-import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
-import com.rspsi.studio.PluginManagerWindow;
+import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.studio.PreferencesWindow;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioWidgets;
@@ -15,18 +14,17 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * Program-owned main menu bar (File, Edit, View, Cache, Plugins, Server, Help).
+ * Program-owned main menu bar (File, Edit, View, Cache, Server, Help).
  * Clean, decoupled from workspace tabs to eliminate UI collisions.
  */
 public final class StudioMenuBar {
 
     public void render(LoadedOsrsCacheSession cache,
-                       EditorPluginLifecycleManager pluginLifecycle,
+                       EditorPluginHost editorHost,
                        ServerIntegrationService integrations,
                        boolean showServerSpawns,
                        Consumer<Boolean> setShowServerSpawns,
                        PreferencesWindow preferencesWindow,
-                       PluginManagerWindow pluginManagerWindow,
                        Runnable openIntegrationCenter,
                        Runnable openCommandPalette,
                        Runnable resetLayout,
@@ -35,7 +33,9 @@ public final class StudioMenuBar {
                         boolean hudVisible,
                         Runnable toggleHud,
                         boolean leftRailVisible,
-                        Runnable toggleLeftRail) {
+                        Runnable toggleLeftRail,
+                        boolean worldMapOpen,
+                        Runnable toggleWorldMap) {
         if (!ImGui.beginMainMenuBar()) return;
 
         // 1. File Menu
@@ -52,8 +52,8 @@ public final class StudioMenuBar {
 
         // 2. Edit Menu
         if (ImGui.beginMenu("Edit")) {
-            EditorSession session = pluginLifecycle != null && pluginLifecycle.host() != null
-                    ? pluginLifecycle.host().context().session() : null;
+            EditorSession session = editorHost != null
+                    ? editorHost.context().session() : null;
             boolean canUndo = session != null && session.history().canUndo();
             boolean canRedo = session != null && session.history().canRedo();
             if (ImGui.menuItem(StudioIcons.UNDO + "  Undo", "Ctrl+Z", false, canUndo) && session != null) session.undo();
@@ -67,6 +67,10 @@ public final class StudioMenuBar {
 
         // 3. View Menu (Program-level window/view toggles)
         if (ImGui.beginMenu("View")) {
+            if (ImGui.menuItem(StudioIcons.MAP + "  World Map...", "Ctrl+M", worldMapOpen)) {
+                if (toggleWorldMap != null) toggleWorldMap.run();
+            }
+            ImGui.separator();
             if (ImGui.menuItem(StudioIcons.TUNE + "  Context Drawer", "Ctrl+Space", drawerVisible)) {
                 if (toggleDrawer != null) toggleDrawer.run();
             }
@@ -96,16 +100,7 @@ public final class StudioMenuBar {
             ImGui.endMenu();
         }
 
-        // 5. Plugins Menu
-        if (ImGui.beginMenu("Plugins")) {
-            if (ImGui.menuItem(StudioIcons.PREFAB + "  Manage Plugins...", null,
-                    pluginManagerWindow != null && pluginManagerWindow.isOpen())) {
-                if (pluginManagerWindow != null) pluginManagerWindow.toggle();
-            }
-            ImGui.endMenu();
-        }
-
-        // 6. Server Menu
+        // 5. Server Menu
         if (ImGui.beginMenu("Server")) {
             if (openIntegrationCenter != null) {
                 if (ImGui.menuItem(StudioIcons.TERMINAL + "  Integration Center...")) openIntegrationCenter.run();

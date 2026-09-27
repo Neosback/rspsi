@@ -78,7 +78,7 @@ class ExtendedSceneZoneTraversalTest {
                 RoofRemovalState.POSITION,
                 new RoofRemovalState.ScenePoint(0, 0),
                 null, null, null, 200);
-        GpuScenePacket roofFiltered = SceneVisibilityPolicy.clientTraversal(0)
+        GpuScenePacket roofFiltered = SceneVisibilityPolicy.atHeight(0)
                 .withRoofRemovalState(roofState)
                 .apply(source);
 

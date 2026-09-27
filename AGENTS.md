@@ -44,8 +44,10 @@ Studio is not an open plugin platform. There is no third-party plugin SDK, exter
 
 The codebase is moving from Java to Kotlin, leaf-first, one ownership boundary per PR.
 
+- Follow the phase order in ROADMAP.md section 3.1. Delete dead or duplicate code instead of converting it.
 - New files are Kotlin. Edit existing Java in place; do not convert a file as a side effect of an unrelated change.
-- A migration PR changes language only: same behavior, same tests passing, no API redesign mixed in.
+- A migration keeps behavior and tests passing. Improvements inside the migrated boundary (removing duplication, clearer ownership, fixing an obvious bug with a test) are welcome; anything wider gets a `TODO(migration):` comment naming the follow-up instead of being done in passing.
+- Document as you convert: every class gets a KDoc saying what it owns, and non-obvious logic cites its client/RuneLite source.
 - Records used from Java stay Java-shaped: annotate Kotlin data classes with @JvmRecord so callers keep x() accessors, and use @JvmStatic/@JvmOverloads where Java calls companions or defaults.
 - Keep hot render/compile paths free of boxing: IntArray/FloatArray and primitive loops, not List<Int> or lambdas per vertex.
 - Migrate a type only after its Java callers are few or migrate together; prefer moving whole packages (tools, core modules, then services, then render compile) over scattered files.

@@ -10,6 +10,7 @@ import java.util.Map;
  * round caps and round joins. Segments are bucketed per tile so a lookup only
  * tests the segments near the point.
  */
+// TODO(migration): not wired to a tool yet; lands with the AutoTile service (ROADMAP 11).
 public final class StrokeRegion implements PathRegion {
     /** Points exactly on the band edge count as outside, so an edge on a tile border stays clean. */
     private static final double EDGE_EPSILON = 1e-6;

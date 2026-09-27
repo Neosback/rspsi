@@ -6,6 +6,10 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.rspsi.cache.OsrsCacheMetadata;
 import com.rspsi.cache.definition.ObjectDefinitionRawView;
+import com.rspsi.cache.store.ObjectDefinitionOutputCacheBuilder;
+import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -31,6 +35,7 @@ import java.util.Optional;
 public final class StudioDefinitionPublicationStore {
     static final int CURRENT_SCHEMA = 1;
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Logger LOGGER = LoggerFactory.getLogger(StudioDefinitionPublicationStore.class);
 
     private final Path file;
 
@@ -53,6 +58,48 @@ public final class StudioDefinitionPublicationStore {
                     .findFirst();
         } catch (IOException | RuntimeException failure) {
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Restores the recorded publication provenance into a freshly loaded cache session,
+     * after re-verifying that the output cache still holds those snapshots. A stale record
+     * (output moved, rebuilt or edited elsewhere) is ignored and logged, never trusted.
+     */
+    public void restoreInto(LoadedOsrsCacheSession cache) {
+        Objects.requireNonNull(cache, "cache");
+        loadFor(cache.path(), cache.identity()).ifPresent(state -> {
+            try {
+                ObjectDefinitionOutputCacheBuilder.verifyExistingOutputSnapshots(
+                        cache.path(), state.outputCache(), cache.identity().revision(),
+                        state.publishedSnapshots());
+                cache.objectDefinitions().restorePublication(
+                        state.outputCache(), state.publishedSnapshots());
+                LOGGER.info("Restored definition publication provenance for {} -> {} ({} snapshots)",
+                        cache.path(), state.outputCache(), state.publishedSnapshots().size());
+            } catch (Exception failure) {
+                LOGGER.warn("Ignoring stale definition publication provenance for {} -> {}",
+                        cache.path(), state.outputCache(), failure);
+            }
+        });
+    }
+
+    /**
+     * Records the session's current verified publication, if any, so it survives a restart.
+     * The output cache is already written and verified; failing to record it only loses the
+     * provenance, so the failure is logged instead of thrown.
+     */
+    public void persistFrom(LoadedOsrsCacheSession cache) {
+        Objects.requireNonNull(cache, "cache");
+        var workspace = cache.objectDefinitions();
+        Path output = workspace.publicationTarget().orElse(null);
+        Map<Integer, ObjectDefinitionRawView> snapshots = workspace.publishedSnapshots();
+        if (output == null || snapshots.isEmpty()) return;
+        try {
+            save(new PublicationState(cache.path(), cache.identity(), output, snapshots));
+        } catch (RuntimeException failure) {
+            LOGGER.warn("Verified definition output was published, but Studio could not persist "
+                    + "its restart provenance for {}", output, failure);
         }
     }
 

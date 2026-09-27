@@ -10,6 +10,7 @@ import java.util.Objects;
  * previews. It deliberately returns data rather than drawing or mutating a
  * document, so JavaFX and a future ImGui frontend can share it.
  */
+// TODO(migration): not wired to a tool yet; lands with the linear feature service (ROADMAP 11).
 public final class RoutePreviewService {
     private RoutePreviewService() {
     }

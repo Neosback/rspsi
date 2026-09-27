@@ -235,10 +235,10 @@ public final class StudioRightSidebar {
      * section, not a new competing rail or plugin-owned native window.
      */
     private void renderActiveToolInspectorSection(StudioPanelContext context) {
-        if (context == null || context.studioPlugins() == null || context.activeToolId() == null) {
+        if (context == null || context.features() == null || context.activeToolId() == null) {
             return;
         }
-        var tool = context.studioPlugins().toolView(context.activeToolId()).orElse(null);
+        var tool = context.features().toolView(context.activeToolId()).orElse(null);
         if (tool == null) return;
         var inspector = tool.inspectorNode().orElse(null);
         if (inspector == null) return;

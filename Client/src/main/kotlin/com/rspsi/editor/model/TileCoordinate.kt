@@ -21,6 +21,9 @@ data class TileCoordinate(
         }
     }
 
+    /** Collision-free spread hash; see [TileHash]. */
+    override fun hashCode(): Int = TileHash.of(plane, x, y)
+
     override fun toString(): String =
         "TileCoordinate[plane=$plane, x=$x, y=$y]"
 }

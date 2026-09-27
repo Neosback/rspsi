@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /** Small dependency-free reader/writer for the Studio server connection TOML subset. */
+// TODO(migration): not wired yet; lands with connected OpenRune publication (ROADMAP 8).
 public final class ServerConnectionToml {
     private ServerConnectionToml() {
     }

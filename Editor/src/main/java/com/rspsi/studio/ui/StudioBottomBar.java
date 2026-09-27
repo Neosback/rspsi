@@ -1,8 +1,8 @@
 package com.rspsi.studio.ui;
 
 import com.rspsi.editor.ui.DockRegion;
-import com.rspsi.studio.plugin.StudioPluginManager;
-import com.rspsi.studio.plugin.StudioToolPlugin;
+import com.rspsi.studio.feature.StudioFeatureRegistry;
+import com.rspsi.studio.feature.StudioToolUi;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioPalette;
@@ -61,9 +61,9 @@ public final class StudioBottomBar {
                        Consumer<String> activateTool,
                        String activeToolId) {
 
-        boolean activeToolHasDrawer = context == null || context.studioPlugins() == null
-                || context.studioPlugins().toolView(activeToolId)
-                        .map(StudioPluginManager.StudioToolView::hasContextDrawerContent)
+        boolean activeToolHasDrawer = context == null || context.features() == null
+                || context.features().toolView(activeToolId)
+                        .map(StudioFeatureRegistry.StudioToolView::hasContextDrawerContent)
                         .orElse(true);
         if (panelManager != null && activeToolId != null) {
             activeToolHasDrawer = activeToolHasDrawer
@@ -113,16 +113,16 @@ public final class StudioBottomBar {
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 2.0f, 2.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f);
 
-        List<StudioPluginManager.StudioToolView> toolPlugins =
-                (context != null && context.studioPlugins() != null)
-                        ? context.studioPlugins().toolViews()
+        List<StudioFeatureRegistry.StudioToolView> toolUis =
+                (context != null && context.features() != null)
+                        ? context.features().toolViews()
                         : Collections.emptyList();
 
         float btnW = 32.0f;
         float btnH = 26.0f;
 
-        if (!toolPlugins.isEmpty()) {
-            for (StudioPluginManager.StudioToolView tool : toolPlugins) {
+        if (!toolUis.isEmpty()) {
+            for (StudioFeatureRegistry.StudioToolView tool : toolUis) {
                 java.util.Optional<DockRegion> managedRegion =
                         panelManager != null ? panelManager.managedRegionForTool(tool.toolId())
                                 : java.util.Optional.empty();
@@ -130,7 +130,7 @@ public final class StudioBottomBar {
                     continue;
                 }
                 if (managedRegion.isEmpty()
-                        && !tool.surfaces().contains(StudioToolPlugin.ToolSurface.BOTTOM_BAR)) {
+                        && !tool.surfaces().contains(StudioToolUi.ToolSurface.BOTTOM_BAR)) {
                     continue;
                 }
                 boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
@@ -215,12 +215,12 @@ public final class StudioBottomBar {
 
     private void renderActiveToolShelf(StudioPanelContext context,
                                        String activeToolId) {
-        if (context != null && context.studioPlugins() != null) {
-            var toolView = context.studioPlugins().toolView(activeToolId).orElse(null);
+        if (context != null && context.features() != null) {
+            var toolView = context.features().toolView(activeToolId).orElse(null);
             if (toolView != null) {
                 try {
-                    if (toolView.nativePlugin() != null) {
-                        toolView.nativePlugin().renderContextDrawer(context);
+                    if (toolView.nativeToolUi() != null) {
+                        toolView.nativeToolUi().renderContextDrawer(context);
                         return;
                     }
                     var drawer = toolView.contextDrawerNode();

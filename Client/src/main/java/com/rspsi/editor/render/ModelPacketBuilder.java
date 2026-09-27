@@ -269,7 +269,9 @@ public final class ModelPacketBuilder {
         // definition, so scale/recolor/retexture/contour come from the child
         // while animation state remains sourced from the placed definition.
         int animationId = placementAppearance.animationId();
-        ResolvedAnimation animation = resolveAnimation(animationId, clientCycle);
+        ResolvedAnimation animation = (presentation.objectAnimations() && clientCycle >= 0)
+                ? resolveAnimation(animationId, clientCycle)
+                : resolveDisabledAnimation();
         int decorDisplacement =
                 wallDecorationDisplacement(object, placementAppearance, document);
 
@@ -386,7 +388,7 @@ public final class ModelPacketBuilder {
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
                 object.category(), parts.vertices, parts.triangles, parts.textureTriangles,
                 resolved.animationId(), bounds[0], bounds[1], bounds[2],
-                bounds[3], bounds[4], bounds[5], resolved.animationState().active(), false,
+                bounds[3], bounds[4], bounds[5], resolved.animationId() >= 0, false,
                 placementHeight,
                 object.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false),
                 GpuDrawCommand.RenderMode.DEFAULT, presentation, sceneMetadata,
@@ -461,6 +463,11 @@ public final class ModelPacketBuilder {
         return new ResolvedAnimation(frame, Optional.empty(), skeleton,
                 ModelAnimationState.selected(animationId, selectedIndex, selectedFrameId,
                         clientCycle, value.animationHeightOffset(), false));
+    }
+
+    private ResolvedAnimation resolveDisabledAnimation() {
+        return new ResolvedAnimation(Optional.empty(), Optional.empty(), Optional.empty(),
+                ModelAnimationState.none());
     }
 
     /**

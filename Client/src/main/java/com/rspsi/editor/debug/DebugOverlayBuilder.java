@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /** Builds semantic overlay data for the current document and world window. */
+// TODO(migration): not wired yet; belongs to CoreDiagnosticsModule overlays.
 public final class DebugOverlayBuilder {
     private static final int REGION_SIZE = 64;
     private static final int CHUNK_SIZE = 8;

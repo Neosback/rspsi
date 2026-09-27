@@ -103,7 +103,7 @@ class CoreEditorModulesTest {
             public void initialize(EditorPluginContext context) {
                 context.registry().registerCommand(new com.rspsi.editor.plugin.EditorCommandRegistration(
                         "example.command", "Example", "Example",
-                        () -> new com.rspsi.editor.EditCommand() {
+                        () -> new com.rspsi.editor.EditorCommand() {
                             @Override public String description() { return "Example"; }
                             @Override public void apply(EditorSession ignored) { }
                             @Override public void undo(EditorSession ignored) { }

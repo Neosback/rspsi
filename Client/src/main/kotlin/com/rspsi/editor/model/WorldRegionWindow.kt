@@ -4,6 +4,7 @@ import java.util.ArrayList
 import java.util.LinkedHashMap
 import java.util.Optional
 import java.util.TreeSet
+import kotlin.math.max
 import kotlin.math.min
 
 /**
@@ -110,34 +111,51 @@ class WorldRegionWindow(
         if (border < 0) {
             throw IllegalArgumentException("World context border cannot be negative")
         }
+        val world = worldWindow()
+        return materializeArea(
+            world.originX - border,
+            world.originY - border,
+            world.width + border * 2,
+            world.length + border * 2,
+        )
+    }
 
+    /**
+     * Materializes any world-tile rectangle as a standalone document whose (0, 0) is
+     * ([originWorldX], [originWorldY]). Tiles of loaded regions inside the rectangle are
+     * copied with their objects and height provenance; everything else stays empty.
+     * Used to render one region plus a small context ring without copying whole neighbours.
+     */
+    fun materializeArea(originWorldX: Int, originWorldY: Int, width: Int, length: Int): WorldDocument {
+        if (width <= 0 || length <= 0) {
+            throw IllegalArgumentException("Materialized area must not be empty")
+        }
         val planes =
             regions.values.maxOfOrNull { it.document.planes() }
                 ?: WorldDocument.DEFAULT_PLANES
-        val world = worldWindow()
-        val materialized =
-            WorldDocument(
-                world.width + border * 2,
-                world.length + border * 2,
-                planes,
-            )
+        val materialized = WorldDocument(width, length, planes)
 
         for (region in regions.values) {
-            val offsetX =
-                border + (region.regionX - minRegionX) * WorldRegion.REGION_SIZE
-            val offsetY =
-                border + (region.regionY - minRegionY) * WorldRegion.REGION_SIZE
+            val regionOriginX = region.regionX * WorldRegion.REGION_SIZE
+            val regionOriginY = region.regionY * WorldRegion.REGION_SIZE
+            // Where this region's (0, 0) lands in the materialized document.
+            val offsetX = regionOriginX - originWorldX
+            val offsetY = regionOriginY - originWorldY
+            val fromX = max(0, -offsetX)
+            val toX = min(WorldRegion.REGION_SIZE, width - offsetX)
+            val fromY = max(0, -offsetY)
+            val toY = min(WorldRegion.REGION_SIZE, length - offsetY)
+            if (fromX >= toX || fromY >= toY) continue
             val copiedPlanes = min(planes, region.document.planes())
 
             for (plane in 0 until copiedPlanes) {
-                for (x in 0 until WorldRegion.REGION_SIZE) {
-                    for (y in 0 until WorldRegion.REGION_SIZE) {
+                for (x in fromX until toX) {
+                    for (y in fromY until toY) {
                         val source = region.document.tile(plane, x, y)
                         val destination =
                             materialized.tile(plane, offsetX + x, offsetY + y)
-                        val snapshot = source.snapshot()
                         destination.restore(
-                            shiftObjects(snapshot, plane, offsetX, offsetY),
+                            shiftObjects(source.snapshot(), plane, offsetX, offsetY),
                         )
                         destination.heightSource(source.heightSource())
                     }

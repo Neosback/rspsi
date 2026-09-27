@@ -58,13 +58,39 @@ Code follow-up:
 - remove dead registries/lifecycle paths once production callers are gone;
 - keep core-module behavior unchanged during naming cleanup.
 
-Studio is built for the team, not as an open plugin platform (decided 2026-09-26). Concretely remove:
+Studio is built for the team, not as an open plugin platform (decided 2026-09-26). Status of the removal:
 
-- external plugin jar scanning (`pluginEcosystem.scan` in StudioApplication) and its lifecycle/state store;
-- `StudioPluginManager` registration of built-in features;
-- the `*ToolPlugin` adapter shells in `Editor/src/main/kotlin/com/rspsi/studio/plugin/builtin/tool/`, folding each into its core module.
+- external plugin jar scanning, its lifecycle/state store and the Plugin Manager: removed 2026-09-27;
+- `StudioPluginManager` and the `*ToolPlugin` shells: replaced 2026-09-27 by the explicit Kotlin feature list in `com.rspsi.studio.feature` (Studio chrome only; tool behavior stays in core modules);
+- Client host API still carries plugin names: see migration Phase 1 below.
 
-Kotlin migration continues leaf-first under the AGENTS.md policy; new code is Kotlin.
+Kotlin migration continues under the AGENTS.md policy; new code is Kotlin.
+
+### 3.1 Kotlin migration order
+
+**Status: active (started 2026-09-27).** Baseline: 87k lines of main Java, 13k of Kotlin, 39k of Java tests.
+
+Delete before converting: code that is dead or duplicated is removed, not migrated. Each phase leaves the build and all tests green, and no phase is a language-only rewrite of a class that should not exist.
+
+1. **Phase 0: dead code and duplicate owners.**
+   - Delete classes no production path, build task or test uses.
+   - Delete test-only duplicates of a production owner: `GpuPlanPicker` (DdaScenePicker owns picking), `NormalMergeService`/`ContourService`/`NormalCalculator` (ModelPacketBuilder owns merge and contour), `SessionSceneController`, and the other unwired scene/frontend shells.
+   - Keep unwired roadmap features that have tests (routing preview, fragment paste, corpus) with a TODO naming their roadmap item.
+2. **Phase 1: retire the plugin platform** (decided 2026-09-26, section 3).
+   - Done 2026-09-27: external jar runtime, plugin lifecycle/state store and Plugin Manager window deleted; Studio composes the core modules directly; `StudioPluginManager`/`StudioPlugin`/`*ToolPlugin` became the Kotlin `com.rspsi.studio.feature` layer (`StudioFeatureRegistry`, `StudioFeature`, `StudioToolUi`, `*ToolUi`).
+   - Remaining: rename the Client host API off plugin vocabulary (`EditorPluginHost`, `EditorPluginRegistry`, `EditorPluginContext`, `PluginApi`, `PluginServices`, `EditorPlugin`) to editor/core-module names, and drop `PluginPermission`/descriptor versioning. Do this with Phase 3 so each file is renamed and converted once.
+3. **Phase 2: Editor module (Studio UI)**, top of the dependency graph and where map-editor responsibilities leak:
+   1. extract the map-scene lifecycle out of `StudioApplication` into `com.rspsi.studio.map` (load, edit rebuild, animation refresh, plan revisions, teleport);
+   2. `StudioApplication` becomes a thin shell (project lifecycle, workspaces, frame loop);
+   3. split `MapEditorView`: layout, shortcuts, command palette and dialogs; terrain edit commands move to a Client core tool;
+   4. panels, HUDs and workspace views;
+   5. `NativeSceneViewport` and `com.rspsi.renderer.opengl` last in this phase (hot paths: primitives, no per-frame allocation).
+4. **Phase 3: Client services**: settings, symbols, project, server/OpenRune, integration, then cache workspace/store/definition/map.
+5. **Phase 4: editor core**: commands, selection, tools, terrain, collision, inspector.
+6. **Phase 5: render compile** (`com.rspsi.editor.render`, 16.5k lines) package by package (picker, compiler, then builders), each with the load benchmark and parity tests before and after.
+7. **Phase 6: tests to Kotlin**, per package after its main code.
+
+Long-term direction (Kotlin/JS): keep model, rules and codecs free of JVM-only APIs as they are converted (no `java.nio`, AWT, LWJGL or threads in pure logic), so they can later move to a multiplatform `core` module. This is Planned, not current behavior.
 
 Completion gate:
 
@@ -105,6 +131,11 @@ Required metrics:
 - stationary, camera-movement, and active-edit FPS.
 
 ### 4.3 Remove unnecessary work
+
+Done 2026-09-27 (Lumbridge 50,50 region load, isolated benchmark: warm 3.3 s -> 1.2 s, cold 5.3 s -> 2.8 s):
+
+- tile coordinate types hash through one collision-free `TileHash`; the data-class default hash put ~160k window tiles on a few thousand values and `Map.copyOf` lookups spent 75% of the window-scene build probing;
+- the semantic scene builds alongside the window scene on region load; plane changes and "show all planes" filter per frame instead of re-planning.
 
 Done 2026-09-26 (Lumbridge 50,50: animation refresh 1.5-3.3 s -> ~0.2 s, live heap ~1.8 GB -> ~0.45 GB, idle CPU ~390% -> ~190%):
 
@@ -357,12 +388,15 @@ Reference ideas worth building (describe techniques; do not copy unlicensed or d
 | overlay flood fill with a tile cap | Neosback | yes | Tile Painter over query engine |
 | move/rotate gizmo for all four object layers | Neosback | yes | selection transforms |
 | background minimap patch rendering | Neosback | yes | minimap service |
-| closed-room detection to suggest roof (0x4) flags | tsps-main | yes, as an authoring aid | StructureAnalyzer (exists) |
+| closed-room detection to suggest roof (0x4) flags | tsps-main | yes, as an authoring aid | structure analysis over the query engine (an unwired StructureAnalyzer was deleted in migration Phase 0) |
 | placement ghost preview | tsps-main | yes | object placement preview |
 | obstacle-aware routing and road coverage grammar | Terraini | yes | linear feature service |
 | object instancing for shared static models | Darkan tools | yes, keyed by id/type/rotation/recolour, not contoured or merged | renderer |
 | multi-draw indirect, SSBO instancing, compute culling | Darkan tools | yes, but needs GL 4.3+; unavailable on macOS GL 4.1 | capability-gated renderer path only |
 | sky/environment, procedural textures, blended terrain textures, particles | Darkan (rev 700) | no, RS2/HD-era | out of scope (HD work is Priority 11) |
+| progressive region load: active region first, context ring streamed in after, nearest first | Darkan tools (AsyncRegionManager) | yes; blending only needs the 5-tile neighbour border, not neighbour scenes | map scene controller + incremental window compiler (migration Phase 5) |
+| deterministic chunked parallel compile: contiguous chunks merged in index order so output is identical to serial | Darkan tools (ParallelChunks) | yes, if the scene normal merge stays a serial pass after the parallel packet build | terrain zone compile and model packet build (migration Phase 5) |
+| GPU upload drained per frame under a time budget | Darkan tools (GpuUploadQueue) | yes | ZoneVboManager uploads |
 
 ## 13. Priority 10: broader Content Studio
 

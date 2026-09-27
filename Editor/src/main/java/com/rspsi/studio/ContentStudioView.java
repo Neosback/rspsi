@@ -46,6 +46,7 @@ public final class ContentStudioView {
             Runnable openMapEditor,
             Runnable openInterfaceStudio,
             Runnable openObjectStudio,
+            Runnable openWorldMap,
             Runnable openIntegrationCenter,
             Runnable closeProject,
             WorkspaceManager workspaces,
@@ -77,6 +78,7 @@ public final class ContentStudioView {
                     openMapEditor,
                     openInterfaceStudio,
                     openObjectStudio,
+                    openWorldMap,
                     closeWorkspace);
             ImGui.separator();
         }

@@ -11,6 +11,7 @@ import java.util.Objects;
  * Explainable similarity index. Each feature block is cosine-scored
  * independently and combined with caller-selected weights.
  */
+// TODO(migration): not wired to a tool yet; lands with WFC-assisted layout (ROADMAP 12).
 public final class RegionSimilarityIndex {
     private final Map<Integer, RegionFingerprint> fingerprints = new LinkedHashMap<>();
 

@@ -10,6 +10,7 @@ import com.rspsi.editor.model.WorldFragment;
 import java.util.Objects;
 
 /** Versioned JSON interchange for cache-neutral world fragments. */
+// TODO(migration): not wired to a tool yet; lands with WorldFragment transforms (ROADMAP 11).
 public final class WorldFragmentCodec {
     public static final int FORMAT_VERSION = 1;
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();

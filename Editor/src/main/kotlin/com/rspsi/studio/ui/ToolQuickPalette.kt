@@ -26,9 +26,9 @@ class ToolQuickPalette {
         viewportHeight: Float,
     ) {
         val safeContext = context ?: return
-        val plugins = safeContext.studioPlugins() ?: return
+        val features = safeContext.features() ?: return
         val activeToolId = safeContext.activeToolId() ?: return
-        val tool = plugins.toolView(activeToolId).orElse(null) ?: return
+        val tool = features.toolView(activeToolId).orElse(null) ?: return
         val node = tool.quickPaletteNode().orElse(null) ?: return
 
         val availableWidth = max(MIN_WIDTH, viewportWidth - OFFSET_X - RIGHT_MARGIN)
@@ -53,7 +53,7 @@ class ToolQuickPalette {
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 10.0f, 8.0f)
 
         if (ImGui.begin("##ActiveToolQuickPalette", FLAGS)) {
-            ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), tool.name())
+            ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), tool.name)
             ImGui.separator()
             renderer.render(node)
         }

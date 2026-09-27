@@ -15,13 +15,13 @@ import java.util.function.Consumer
  * Keeps workspace navigation separate from the program menu bar.
  */
 class WorkspaceTabBar {
-    @Suppress("UNUSED_PARAMETER")
     fun render(
         workspaces: WorkspaceManager?,
         openDashboard: Runnable?,
         openMapEditor: Runnable?,
         openInterfaceStudio: Runnable?,
         openObjectStudio: Runnable?,
+        openWorldMap: Runnable?,
         closeWorkspace: Consumer<WorkspaceManager.Workspace>?,
         openCommandPalette: Runnable?,
         x: Float,
@@ -57,6 +57,7 @@ class WorkspaceTabBar {
                         openMapEditor,
                         openInterfaceStudio,
                         openObjectStudio,
+                        openWorldMap,
                     )?.run()
                 }
 
@@ -103,6 +104,7 @@ class WorkspaceTabBar {
             WorkspaceManager.Workspace.MAP_EDITOR -> "${StudioIcons.MAP} Map Studio"
             WorkspaceManager.Workspace.INTERFACE_STUDIO -> "${StudioIcons.VIEWPORT} Interface Studio"
             WorkspaceManager.Workspace.OBJECT_STUDIO -> "${StudioIcons.OBJECT} Object Studio"
+            WorkspaceManager.Workspace.WORLD_MAP -> "${StudioIcons.MAP} World Map"
         }
 
     private fun openActionFor(
@@ -111,12 +113,14 @@ class WorkspaceTabBar {
         openMapEditor: Runnable?,
         openInterfaceStudio: Runnable?,
         openObjectStudio: Runnable?,
+        openWorldMap: Runnable?,
     ): Runnable? =
         when (workspace) {
             WorkspaceManager.Workspace.DASHBOARD -> openDashboard
             WorkspaceManager.Workspace.MAP_EDITOR -> openMapEditor
             WorkspaceManager.Workspace.INTERFACE_STUDIO -> openInterfaceStudio
             WorkspaceManager.Workspace.OBJECT_STUDIO -> openObjectStudio
+            WorkspaceManager.Workspace.WORLD_MAP -> openWorldMap
         }
 
     companion object {

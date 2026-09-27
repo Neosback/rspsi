@@ -5,6 +5,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import java.util.Objects;
 
 /** Persisted user annotation; it is not a diagnostic or scene mutation. */
+// TODO(migration): not wired yet; belongs to CoreDiagnosticsModule overlays.
 public record UserTileMarker(
         String id,
         TileCoordinate tile,

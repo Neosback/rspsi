@@ -8,6 +8,7 @@ import java.util.Objects;
  * Compiles a packed instance-template scene through the ordinary neutral
  * render pipeline after materialization.
  */
+// TODO(migration): not wired yet; instance-template preview has no Studio entry point.
 public final class InstanceRenderSceneBuilder {
     private final InstanceSceneMaterializer materializer;
     private final RenderSceneBuilder scenes;

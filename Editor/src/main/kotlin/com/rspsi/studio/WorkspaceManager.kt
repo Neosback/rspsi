@@ -17,6 +17,7 @@ class WorkspaceManager {
         MAP_EDITOR,
         INTERFACE_STUDIO,
         OBJECT_STUDIO,
+        WORLD_MAP,
     }
 
     private val openWorkspaces = LinkedHashSet<Workspace>().apply {
@@ -45,6 +46,14 @@ class WorkspaceManager {
 
     fun openObjectStudio(cacheState: CacheSessionState): Boolean =
         openWhenReady(cacheState, Workspace.OBJECT_STUDIO)
+
+    /**
+     * The world map is a full workspace rather than a floating window: it is a
+     * navigation surface, and per UI_WORKSPACE_CONTRACT the user should not hunt
+     * through arbitrary floating windows to reach it.
+     */
+    fun openWorldMap(cacheState: CacheSessionState): Boolean =
+        openWhenReady(cacheState, Workspace.WORLD_MAP)
 
     /** Resets project workspaces when switching or closing the active Studio project. */
     fun reset() {

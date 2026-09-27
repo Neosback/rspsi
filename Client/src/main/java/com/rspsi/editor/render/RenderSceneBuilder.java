@@ -161,7 +161,7 @@ public final class RenderSceneBuilder {
         if (definitions == null) return previous;
 
         Set<TileCoordinate> activeTiles = previous.modelPackets().stream()
-                .filter(packet -> packet.animationState().active())
+                .filter(packet -> packet.animationState().active() || packet.supportsAnimation() || packet.animationId() >= 0)
                 .map(ModelRenderPacket::anchor)
                 .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
         if (activeTiles.isEmpty()) return previous;

@@ -45,6 +45,8 @@ public final class LoadedOsrsCacheSession implements AutoCloseable {
 
     public OsrsBundle bundle() { return bundle; }
 
+    public com.rspsi.cache.store.CacheStore store() { return bundle.project().store(); }
+
     public OsrsCacheMetadata identity() { return identity; }
 
     public String backendName() { return backendName; }

@@ -3,7 +3,7 @@ package com.rspsi.studio.ui.hud;
 import com.rspsi.editor.overlay.OverlayComponent;
 import com.rspsi.editor.overlay.OverlayContribution;
 import com.rspsi.editor.overlay.OverlayPosition;
-import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
+import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.studio.ui.StudioPanelContext;
 import imgui.ImDrawList;
 import imgui.ImGui;
@@ -23,18 +23,18 @@ public final class DeclarativeOverlayRenderer {
     private static final float GAP = 4.0f;
 
     public void render(StudioPanelContext context,
-                       EditorPluginLifecycleManager lifecycle) {
+                       EditorPluginHost lifecycle) {
         if (context == null || context.huds() == null
-                || lifecycle == null || lifecycle.host() == null) return;
+                || lifecycle == null) return;
 
-        List<OverlayContribution> overlays = lifecycle.host().context()
+        List<OverlayContribution> overlays = lifecycle.context()
                 .services().overlays().contributions();
         for (OverlayContribution contribution : overlays) {
             OverlayComponent component;
             try {
                 component = contribution.snapshot();
             } catch (RuntimeException failure) {
-                lifecycle.host().context().notifications().error(
+                lifecycle.context().notifications().error(
                         "Overlay failed", contribution.label() + ": " + failure.getMessage());
                 continue;
             }

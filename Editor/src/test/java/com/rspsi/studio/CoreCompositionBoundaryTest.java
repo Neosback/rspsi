@@ -15,7 +15,7 @@ class CoreCompositionBoundaryTest {
     @Test
     void allApplicationCompositionRootsUseTheCanonicalCoreManifest() throws Exception {
         assertCanonicalComposition(
-                Path.of("src/main/java/com/rspsi/studio/StudioApplication.java"),
+                Path.of("src/main/kotlin/com/rspsi/studio/StudioApplication.kt"),
                 "StudioApplication");
     }
 
@@ -29,7 +29,7 @@ class CoreCompositionBoundaryTest {
 
         for (String forbidden : List.of(
                 "CoreToolsPlugin",
-                "TilePainterToolPlugin",
+                "TilePainterToolUi",
                 "SplinePathToolPlugin",
                 "plugin.builtin.tool")) {
             if (source.contains(forbidden)) {

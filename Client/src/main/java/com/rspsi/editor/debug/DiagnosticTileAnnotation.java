@@ -5,6 +5,7 @@ import com.rspsi.editor.model.TileCoordinate;
 import java.util.Objects;
 
 /** Ephemeral scene diagnostic generated from the current immutable snapshot. */
+// TODO(migration): not wired yet; belongs to CoreDiagnosticsModule overlays.
 public record DiagnosticTileAnnotation(
         TileCoordinate tile,
         String kind,

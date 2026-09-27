@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /** Applies a complete fragment as one undoable history entry. */
+// TODO(migration): not wired to a tool yet; lands with WorldFragment transforms (ROADMAP 11).
 public final class PasteFragmentCommand implements EditorCommand {
     private final WorldFragment fragment;
     private final int targetX;

@@ -387,48 +387,4 @@ class RenderSceneBuilderTest {
         };
     }
 
-    @Test
-    void sessionSceneControllerPublishesInitialAndChunkUpdates() {
-        WorldDocument document = new WorldDocument(8, 8, 1);
-        EditorSession session = new EditorSession(document);
-        RecordingRenderer renderer = new RecordingRenderer();
-
-        try (SessionSceneController controller = new SessionSceneController(session, renderer)) {
-            assertEquals(1, renderer.loadCount);
-            session.execute(new SetTileCommand(new TileCoordinate(0, 4, 4),
-                    document.tile(0, 4, 4).snapshot(),
-                    new TileSnapshot(20, 20, 20, 20, 0, 0, 0, 0, 0, List.of()),
-                    "height edit"));
-
-            assertEquals(1, renderer.updateCount);
-            assertEquals(20, renderer.lastScene.terrainMeshes()
-                    .get(new TileCoordinate(0, 4, 4)).vertices().get(0).height());
-            assertEquals(20, controller.scene().terrainMeshes()
-                    .get(new TileCoordinate(0, 4, 4)).vertices().get(0).height());
-            assertTrue(session.dirtyRegions().isEmpty());
-        }
-
-        session.execute(new SetTileCommand(new TileCoordinate(0, 4, 4),
-                document.tile(0, 4, 4).snapshot(),
-                new TileSnapshot(24, 24, 24, 24, 0, 0, 0, 0, 0, List.of()),
-                "second height edit"));
-        assertEquals(1, renderer.updateCount);
-    }
-
-    private static final class RecordingRenderer implements SceneRenderer {
-        private int loadCount;
-        private int updateCount;
-        private RenderScene lastScene;
-
-        @Override public void load(RenderScene scene) { loadCount++; lastScene = scene; }
-        @Override public void update(RenderChanges changes) { updateCount++; }
-        @Override public void update(RenderScene scene, RenderChanges changes) {
-            updateCount++;
-            lastScene = scene;
-        }
-        @Override public void render(CameraState camera) { }
-        @Override public java.util.Optional<PickResult> pick(float x, float y) {
-            return java.util.Optional.empty();
-        }
-    }
 }

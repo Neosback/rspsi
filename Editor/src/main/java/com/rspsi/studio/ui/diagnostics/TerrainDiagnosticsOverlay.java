@@ -6,7 +6,7 @@ import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.terrain.TerrainFace;
 import com.rspsi.editor.terrain.TerrainMeshBuilder;
 import com.rspsi.editor.terrain.TerrainSceneCompiler;
-import com.rspsi.studio.plugin.StudioPlugin;
+import com.rspsi.studio.feature.StudioFeature;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.ui.StudioPanelContext;
 import imgui.ImDrawList;
@@ -18,7 +18,7 @@ import imgui.type.ImBoolean;
  * for the hovered tile and distinguishes underlay, overlay, bridge and object
  * diagnostics without modifying renderer depth state.
  */
-public final class TerrainDiagnosticsOverlay implements StudioPlugin {
+public final class TerrainDiagnosticsOverlay implements StudioFeature {
     public static final String ID = "studio.terrain-diagnostics";
     private final ImBoolean visible = new ImBoolean(false);
     private final ImBoolean labels = new ImBoolean(true);
@@ -27,9 +27,6 @@ public final class TerrainDiagnosticsOverlay implements StudioPlugin {
 
     @Override public String id() { return ID; }
     @Override public String name() { return "Terrain Diagnostics"; }
-    @Override public String description() {
-        return "Face/material diagnostics for authored terrain, bridges and hovered objects.";
-    }
     @Override public String icon() { return StudioIcons.BUG_REPORT; }
 
     @Override

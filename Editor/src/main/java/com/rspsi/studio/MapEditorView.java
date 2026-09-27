@@ -13,9 +13,8 @@ import com.rspsi.editor.integration.npc.NpcSpawn;
 import com.rspsi.editor.integration.npc.NpcSpawnService;
 import com.rspsi.editor.integration.reference.ReferenceService;
 import com.rspsi.editor.plugin.EditorCommandRegistration;
-import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
+import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.editor.plugin.EditorToolRegistration;
-import com.rspsi.editor.plugin.runtime.PluginEcosystemService;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.RenderConfigCompiler;
 import com.rspsi.editor.render.RenderSettingKeys;
@@ -45,9 +44,9 @@ import com.rspsi.studio.ui.hud.ViewportHudManager;
 import com.rspsi.studio.ui.hud.DeclarativeOverlayRenderer;
 import com.rspsi.studio.ui.hud.BrushSettingsHud;
 import com.rspsi.studio.ui.diagnostics.TerrainDiagnosticsOverlay;
-import com.rspsi.studio.plugin.StudioPluginManager;
-import com.rspsi.studio.plugin.StudioToolPlugin;
-import com.rspsi.studio.plugin.builtin.TileInfoHudPlugin;
+import com.rspsi.studio.feature.StudioFeatureRegistry;
+import com.rspsi.studio.feature.StudioToolUi;
+import com.rspsi.studio.feature.TileInfoHud;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
@@ -87,7 +86,7 @@ import java.util.function.Consumer;
  * Modular native Map Editor view faithful to Displee's Map Editor UI layout.
  *
  * <p>Orchestrates dedicated UI components: {@link StudioMenuBar}, {@link WorkspaceTabBar},
- * {@link TileInfoHudPlugin}, {@link StudioRightSidebar}, {@link StudioBottomBar}, and
+ * {@link TileInfoHud}, {@link StudioRightSidebar}, {@link StudioBottomBar}, and
  * {@link StudioPanelManager}.</p>
  */
 public final class MapEditorView {
@@ -109,7 +108,7 @@ public final class MapEditorView {
 
     private final EditorToolController toolController = new EditorToolController();
     private EditorInputRouter inputRouter;
-    private EditorPluginLifecycleManager inputHost;
+    private EditorPluginHost inputHost;
 
     private final StudioMenuBar menuBar = new StudioMenuBar();
     private final WorkspaceTabBar workspaceTabBar = new WorkspaceTabBar();
@@ -120,22 +119,23 @@ public final class MapEditorView {
     private final StudioRightSidebar rightSidebar = new StudioRightSidebar();
     private final StudioBottomBar bottomBar = new StudioBottomBar();
     private final StudioPanelManager panelManager = new StudioPanelManager();
-    private final StudioPluginManager studioPluginManager = new StudioPluginManager();
+    private final StudioFeatureRegistry features = new StudioFeatureRegistry();
     private final StudioBrushManager brushManager = new StudioBrushManager();
     private final ViewportHudManager hudManager = new ViewportHudManager();
     private final DeclarativeOverlayRenderer declarativeOverlays = new DeclarativeOverlayRenderer();
     {
-        studioPluginManager.setOwnedPanelSink(panelManager::register);
+        features.setOwnedPanelSink(panelManager::register);
     }
 
     {
-        minimapHudOverlay.setOnWorldMapClick(() -> panelManager.setActiveRightPanelId(MinimapPanel.ID));
-        studioPluginManager.register(new TileInfoHudPlugin());
-        studioPluginManager.register(new TerrainDiagnosticsOverlay());
+        minimapHudOverlay.setOnWorldMapClick(this::openWorldMap);
+        features.register(new TileInfoHud());
+        features.register(new TerrainDiagnosticsOverlay());
     }
 
+    /** Opens the World Map workspace; the app owns the tab, not a floating window. */
+    private Runnable openWorldMapWorkspace;
     private final PreferencesWindow preferencesWindow = new PreferencesWindow();
-    private final PluginManagerWindow pluginManagerWindow = new PluginManagerWindow();
     private final com.rspsi.studio.ui.ObjectEditorWindow objectEditor = new com.rspsi.studio.ui.ObjectEditorWindow();
     private final NativeWorkspaceLayoutStore layoutStore = new NativeWorkspaceLayoutStore();
     private boolean layoutRestored;
@@ -172,15 +172,16 @@ public final class MapEditorView {
     private Consumer<LoadedOsrsCacheSession> definitionPublicationPersistence =
             ignored -> { };
 
-    public void setPluginEcosystem(PluginEcosystemService ecosystem, Runnable rescanPlugins) {
-        pluginManagerWindow.setEcosystem(ecosystem, rescanPlugins);
-    }
-
     public void setDefinitionPublicationPersistence(
             Consumer<LoadedOsrsCacheSession> persistence) {
         definitionPublicationPersistence = persistence == null
                 ? ignored -> { }
                 : persistence;
+    }
+
+    /** Receives requests to open the World Map workspace tab. */
+    public void setOpenWorldMapWorkspace(Runnable open) {
+        this.openWorldMapWorkspace = open;
     }
 
     /** Receives Go To requests; the application frames the tile or loads its region. */
@@ -191,7 +192,7 @@ public final class MapEditorView {
     public void render(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
                        NativeSceneViewport viewport, String sceneStatus,
                        Runnable openDashboard, SettingsStore settings,
-                       EditorPluginLifecycleManager pluginLifecycle,
+                       EditorPluginHost editorHost,
                        boolean dirty,
                        Runnable openInterfaceStudio,
                        Runnable openObjectStudio,
@@ -215,13 +216,13 @@ public final class MapEditorView {
         this.workspaces = workspaces;
         this.openMapEditor = openMapEditor;
         this.closeWorkspace = closeWorkspace;
-        render(cache, plan, viewport, sceneStatus, openDashboard, settings, pluginLifecycle, dirty);
+        render(cache, plan, viewport, sceneStatus, openDashboard, settings, editorHost, dirty);
     }
 
     public void render(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
                        NativeSceneViewport viewport, String sceneStatus,
                        Runnable openDashboard, SettingsStore settings,
-                       EditorPluginLifecycleManager pluginLifecycle,
+                       EditorPluginHost editorHost,
                        boolean dirty) {
         Objects.requireNonNull(cache, "cache");
         Objects.requireNonNull(viewport, "viewport");
@@ -230,35 +231,35 @@ public final class MapEditorView {
         this.viewport = viewport;
 
         restoreLayout();
-        bindInputRouter(pluginLifecycle);
+        bindInputRouter(editorHost);
         openCommandPaletteShortcut();
         handleGlobalShortcuts();
-        routeSessionShortcuts(pluginLifecycle, settings);
+        routeSessionShortcuts(editorHost, settings);
 
-        if (pluginLifecycle != null && pluginLifecycle.host() != null) {
-            studioPluginManager.bindEditorPluginRegistry(pluginLifecycle.host().registry());
+        if (editorHost != null) {
+            features.bindEditorRegistry(editorHost.registry());
             brushManager.syncHostBrushes(
-                    pluginLifecycle.host().context().services().brushes().brushes());
-            panelManager.syncPluginContributions(pluginLifecycle.host().registry().panelRegistrations());
-            panelManager.syncUiSurfaces(pluginLifecycle.host().registry().uiSurfaceContributions());
+                    editorHost.context().services().brushes().brushes());
+            panelManager.syncPluginContributions(editorHost.registry().panelRegistrations());
+            panelManager.syncUiSurfaces(editorHost.registry().uiSurfaceContributions());
             if (!defaultToolActivated) {
                 // The default tool's button shows as active from the field default alone, but
                 // nothing actually calls toolController.activate(...) until the user clicks it -
                 // so it visually looks "on" while doing nothing until re-clicked once. Activate
                 // it for real the first frame the engine host is ready.
                 defaultToolActivated = true;
-                activateTool(pluginLifecycle, activeToolId);
+                activateTool(editorHost, activeToolId);
             }
         } else {
-            studioPluginManager.bindEditorPluginRegistry(null);
+            features.bindEditorRegistry(null);
             brushManager.syncHostBrushes(java.util.List.of());
         }
 
-        BrushSettingsHud brushSettings = studioPluginManager.plugin(BrushSettingsHud.ID)
+        BrushSettingsHud brushSettings = features.feature(BrushSettingsHud.ID)
                 .filter(BrushSettingsHud.class::isInstance)
                 .map(BrushSettingsHud.class::cast)
                 .orElse(null);
-        boolean sharedBrushSettings = studioPluginManager.usesSharedBrushSettings(activeToolId);
+        boolean sharedBrushSettings = features.usesSharedBrushSettings(activeToolId);
         boolean brushRailVisible = showLeftToolRail || sharedBrushSettings;
         float brushDockWidth = sharedBrushSettings
                 && brushSettings != null
@@ -272,22 +273,24 @@ public final class MapEditorView {
                 brushDockWidth,
                 rightSidebar.preferredWidth(panelManager));
 
-        // 1. Program-owned Menu Bar (File, Edit, View, Cache, Plugins, Server, Help)
-        menuBar.render(cache, pluginLifecycle, integrations, showServerSpawns,
+        // 1. Program-owned Menu Bar (File, Edit, View, Cache, Server, Help)
+        menuBar.render(cache, editorHost, integrations, showServerSpawns,
                 val -> this.showServerSpawns = val,
-                preferencesWindow, pluginManagerWindow, openIntegrationCenter,
+                preferencesWindow, openIntegrationCenter,
                 () -> { commandPaletteOpen = true; commandQuery.clear(); },
                 this::resetLayout,
                 bottomBar.isDrawerOpen(),
                 bottomBar::toggleDrawer,
-                studioPluginManager.isEnabled(TileInfoHudPlugin.ID),
-                () -> studioPluginManager.setEnabled(TileInfoHudPlugin.ID, !studioPluginManager.isEnabled(TileInfoHudPlugin.ID)),
+                features.isEnabled(TileInfoHud.ID),
+                () -> features.setEnabled(TileInfoHud.ID, !features.isEnabled(TileInfoHud.ID)),
                 showLeftToolRail,
-                () -> this.showLeftToolRail = !this.showLeftToolRail);
+                () -> this.showLeftToolRail = !this.showLeftToolRail,
+                isWorldMapWorkspaceOpen(),
+                this::toggleWorldMap);
 
         // 2. Dedicated Workspace Tab Bar
         workspaceTabBar.render(workspaces, openDashboard, openMapEditor,
-                openInterfaceStudio, openObjectStudio, closeWorkspace,
+                openInterfaceStudio, openObjectStudio, openWorldMapWorkspace, closeWorkspace,
                 () -> { commandPaletteOpen = true; commandQuery.clear(); },
                 layout.x(), layout.y(), layout.width());
 
@@ -311,12 +314,12 @@ public final class MapEditorView {
             }
         };
         StudioPanelContext panelContext = new StudioPanelContext(
-                cache, settings, session(pluginLifecycle), pluginLifecycle,
+                cache, settings, session(editorHost), editorHost,
                 viewport, simulation, symbols, references, spawns, integrations,
-                toolId -> activateTool(pluginLifecycle, toolId),
+                toolId -> activateTool(editorHost, toolId),
                 activeToolId,
                 toolController,
-                studioPluginManager,
+                features,
                 brushManager,
                 hudManager,
                 navigation,
@@ -326,11 +329,11 @@ public final class MapEditorView {
         // renders itself only when a brush tool is active, or always when forced via the View menu.
         if (brushRailVisible) {
             leftBrushRail.render(panelContext, layout.x(), layout.contentY(), layout.contentHeight(),
-                    toolId -> activateTool(pluginLifecycle, toolId), activeToolId, showLeftToolRail);
+                    toolId -> activateTool(editorHost, toolId), activeToolId, showLeftToolRail);
         }
 
         // 5. Viewport (Displee 3D Canvas) with FloatingToolbar, Minimap HUD, and Tile HUD
-        renderViewport(cache, plan, viewport, sceneStatus, settings, pluginLifecycle, layout, panelContext);
+        renderViewport(cache, plan, viewport, sceneStatus, settings, editorHost, layout, panelContext);
 
         // 6. Right Sidebar (Vertical icon rail + active panel host) - spans the full content
         // height so it runs all the way down next to the bottom drawer instead of stopping short.
@@ -341,26 +344,25 @@ public final class MapEditorView {
         // instead of running underneath it.
         bottomBar.render(panelManager, panelContext,
                 layout.x(), layout.bottomY(), layout.bottomWidth(), layout.bottomHeight(),
-                toolId -> activateTool(pluginLifecycle, toolId),
+                toolId -> activateTool(editorHost, toolId),
                 activeToolId);
 
         // 7. Pinned Status Bar (Pinned to absolute bottom of window, never scrolls)
         renderAppStatusBar(panelContext, cache);
 
         // 8. Overlays & Windows
-        studioPluginManager.renderFloating(panelContext);
-        renderCommandPalette(pluginLifecycle);
+        features.renderFloating(panelContext);
+        renderCommandPalette(editorHost);
         renderGoToDialog();
-        preferencesWindow.render(settings, pluginLifecycle != null && pluginLifecycle.host() != null
-                ? pluginLifecycle.host().context().settingsService() : null);
-        pluginManagerWindow.render(pluginLifecycle, studioPluginManager, panelContext);
-        objectEditor.render(cache, session(pluginLifecycle));
+        preferencesWindow.render(settings, editorHost != null
+                ? editorHost.context().settingsService() : null);
+        objectEditor.render(cache, session(editorHost));
     }
 
     private void renderViewport(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
                                 NativeSceneViewport viewport, String sceneStatus,
                                 SettingsStore settings,
-                                EditorPluginLifecycleManager pluginLifecycle,
+                                EditorPluginHost editorHost,
                                 Layout layout,
                                 StudioPanelContext panelContext) {
         ImGui.setNextWindowPos(layout.viewportX(), layout.contentY(), ImGuiCond.Always);
@@ -387,14 +389,14 @@ public final class MapEditorView {
 
             viewport.setCullMode(renderConfig.nativeCullingMode());
             viewport.setPlaneFilter(renderConfig.planeFilter());
-            viewport.setHighlightSession(pluginLifecycle != null && pluginLifecycle.host() != null
-                    ? pluginLifecycle.host().context().session() : null);
+            viewport.setHighlightSession(editorHost != null
+                    ? editorHost.context().session() : null);
             viewport.render(plan, ImGui.getContentRegionAvailX(),
                     Math.max(160.0f, ImGui.getContentRegionAvailY()),
                     renderConfig.msaaSamples(),
                     renderConfig.presentation());
-            if (pluginLifecycle != null && pluginLifecycle.host() != null) {
-                pluginLifecycle.host().context().events().publish(
+            if (editorHost != null) {
+                editorHost.context().events().publish(
                         new com.rspsi.editor.plugin.event.SceneRenderedEvent(
                                 plan.fingerprint(), 0L));
             }
@@ -403,8 +405,8 @@ public final class MapEditorView {
             // wired here (not inside NativeSceneViewport) since only Studio holds the live
             // session/world document a tile+id pair needs to become an actual object.
             viewport.setObjectResolver((objectTile, objectId) -> {
-                if (pluginLifecycle == null || pluginLifecycle.host() == null) return java.util.Optional.empty();
-                var session = pluginLifecycle.host().context().session();
+                if (editorHost == null) return java.util.Optional.empty();
+                var session = editorHost.context().session();
                 if (session == null) return java.util.Optional.empty();
                 return session.coordinates().toLocal(objectTile)
                         .map(local -> session.world().tile(local).snapshot())
@@ -418,32 +420,32 @@ public final class MapEditorView {
             // isItemHovered() still refers to the scene image.
             viewport.dispatchToolInput(toolController);
 
-            viewport.renderOverlays(toolController.activeTool(), pluginLifecycle);
-            // SelectionOverlayPlugin (the object/tile selection hull highlight) is
-            // dispatched here now, alongside every other Studio plugin's overlay -
+            viewport.renderOverlays(toolController.activeTool(), editorHost);
+            // SelectionOverlay (the object/tile selection hull highlight) is
+            // dispatched here now, alongside every other Studio feature's overlay -
             // no more hardcoded field/call wiring it in specially.
-            studioPluginManager.renderOverlays(ImGui.getWindowDrawList(), panelContext);
+            features.renderOverlays(ImGui.getWindowDrawList(), panelContext);
 
             if (spawns != null && showServerSpawns) {
                 renderServerSpawnOverlays(viewport, settings);
             }
 
-            handleViewportDragDrop(viewport, settings, pluginLifecycle);
-            handleViewportContextMenu(cache, viewport, settings, pluginLifecycle);
+            handleViewportDragDrop(viewport, settings, editorHost);
+            handleViewportContextMenu(cache, viewport, settings, editorHost);
 
             // All viewport HUDs share one managed stack and cannot overlap.
             hudManager.beginFrame(layout.viewportX(), layout.contentY(),
                     layout.viewportWidth(), layout.viewportHeight());
             minimapHudOverlay.render(panelContext, layout.viewportX(), layout.contentY(),
                     layout.viewportWidth(), layout.viewportHeight());
-            declarativeOverlays.render(panelContext, pluginLifecycle);
-            studioPluginManager.renderHUDs(panelContext);
+            declarativeOverlays.render(panelContext, editorHost);
+            features.renderHUDs(panelContext);
 
             // Dedicated selection-mode switcher (Single/Multi Select) - the
             // one draggable frosted-glass rail, distinct from the docked
             // brush rail and the bottom bar.
             floatingToolbar.render(panelContext, layout.viewportX(), layout.contentY(),
-                    toolId -> activateTool(pluginLifecycle, toolId), activeToolId);
+                    toolId -> activateTool(editorHost, toolId), activeToolId);
             toolQuickPalette.render(panelContext,
                     layout.viewportX(), layout.contentY(),
                     layout.viewportWidth(), layout.viewportHeight());
@@ -470,29 +472,29 @@ public final class MapEditorView {
         }
     }
 
-    private void bindInputRouter(EditorPluginLifecycleManager pluginLifecycle) {
-        if (pluginLifecycle == null || pluginLifecycle.host() == null) {
+    private void bindInputRouter(EditorPluginHost editorHost) {
+        if (editorHost == null) {
             inputRouter = null;
             inputHost = null;
             return;
         }
-        if (inputHost != pluginLifecycle) {
-            inputHost = pluginLifecycle;
-            inputRouter = new EditorInputRouter(pluginLifecycle.host().context(), toolController);
+        if (inputHost != editorHost) {
+            inputHost = editorHost;
+            inputRouter = new EditorInputRouter(editorHost.context(), toolController);
         }
     }
 
-    private void activateTool(EditorPluginLifecycleManager pluginLifecycle, String registrationId) {
+    private void activateTool(EditorPluginHost editorHost, String registrationId) {
         String previousToolId = activeToolId;
         activeToolId = registrationId;
         // Tools that own drawer content may bring it forward. Picker/inspection tools
         // with no drawer content leave the user's existing drawer exactly as it was.
-        studioPluginManager.toolView(registrationId)
-                .filter(StudioPluginManager.StudioToolView::hasContextDrawerContent)
+        features.toolView(registrationId)
+                .filter(StudioFeatureRegistry.StudioToolView::hasContextDrawerContent)
                 .ifPresent(tool -> {
                     bottomBar.setDrawerOpen(true);
                 });
-        if (inputRouter == null || pluginLifecycle == null || pluginLifecycle.host() == null) return;
+        if (inputRouter == null || editorHost == null) return;
 
         // Single/Multi (tile) Select and Single/Multi Select Objects are all Studio-level
         // presentation ids; all four drive the one real "selection.box" engine tool,
@@ -503,7 +505,7 @@ public final class MapEditorView {
             default -> registrationId;
         };
 
-        var registration = pluginLifecycle.host().registry().toolRegistrations().stream()
+        var registration = editorHost.registry().toolRegistrations().stream()
                 .filter(tool -> engineId.equals(tool.id()))
                 .findFirst()
                 .orElse(null);
@@ -511,7 +513,7 @@ public final class MapEditorView {
 
         var tool = registration.factory().get();
 
-        if (studioPluginManager.usesSharedBrushSettings(registrationId)
+        if (features.usesSharedBrushSettings(registrationId)
                 && tool instanceof BrushAwareTool brushTool) {
             EditorBrush activeBrush = brushManager.activeBrush(
                     registrationId,
@@ -531,33 +533,33 @@ public final class MapEditorView {
             boxSelectTool.setTarget(objects ? BoxSelectTool.Target.OBJECTS : BoxSelectTool.Target.TILES);
         }
         toolController.activate(tool,
-                new ToolContext(pluginLifecycle.host().context().session(),
-                        pluginLifecycle.host().context().assets(), viewport));
-        pluginLifecycle.host().context().events().publish(
+                new ToolContext(editorHost.context().session(),
+                        editorHost.context().assets(), viewport));
+        editorHost.context().events().publish(
                 new com.rspsi.editor.plugin.event.ToolActivatedEvent(
                         previousToolId, registrationId));
     }
 
-    private static EditorSession session(EditorPluginLifecycleManager pluginLifecycle) {
-        return pluginLifecycle != null && pluginLifecycle.host() != null
-                ? pluginLifecycle.host().context().session() : null;
+    private static EditorSession session(EditorPluginHost editorHost) {
+        return editorHost != null
+                ? editorHost.context().session() : null;
     }
 
-    private void routeSessionShortcuts(EditorPluginLifecycleManager pluginLifecycle, SettingsStore settings) {
+    private void routeSessionShortcuts(EditorPluginHost editorHost, SettingsStore settings) {
         var io = ImGui.getIO();
         if (io.getWantTextInput()) return;
         boolean ctrl = io.getKeyCtrl() || io.getKeySuper();
         if (ctrl && ImGui.isKeyPressed(ImGuiKey.Z, false)) {
-            EditorSession s = session(pluginLifecycle);
+            EditorSession s = session(editorHost);
             if (s != null) {
                 if (io.getKeyShift()) s.redo();
                 else s.undo();
             }
         } else if (ctrl && ImGui.isKeyPressed(ImGuiKey.Y, false)) {
-            EditorSession s = session(pluginLifecycle);
+            EditorSession s = session(editorHost);
             if (s != null) s.redo();
         } else if (ctrl && ImGui.isKeyPressed(ImGuiKey.S, false)) {
-            EditorSession s = session(pluginLifecycle);
+            EditorSession s = session(editorHost);
             if (s != null && s.canSave()) s.save();
         } else if (!ctrl && !io.getKeyShift() && !io.getKeyAlt()) {
             // Plane cycling: PageUp / PageDown
@@ -570,17 +572,17 @@ public final class MapEditorView {
             }
             // Tool hotkeys:
             else if (ImGui.isKeyPressed(ImGuiKey.V, false)) {
-                activateTool(pluginLifecycle, "selection.single");
+                activateTool(editorHost, "selection.single");
             } else if (ImGui.isKeyPressed(ImGuiKey.B, false)) {
-                activateTool(pluginLifecycle, "terrain.tile-painter");
+                activateTool(editorHost, "terrain.tile-painter");
             } else if (ImGui.isKeyPressed(ImGuiKey.R, false) || ImGui.isKeyPressed(ImGuiKey.H, false)) {
-                activateTool(pluginLifecycle, "terrain.raise");
+                activateTool(editorHost, "terrain.raise");
             } else if (ImGui.isKeyPressed(ImGuiKey.O, false)) {
-                activateTool(pluginLifecycle, "object.place");
+                activateTool(editorHost, "object.place");
             } else if (ImGui.isKeyPressed(ImGuiKey.P, false)) {
-                activateTool(pluginLifecycle, "path.spline");
+                activateTool(editorHost, "path.spline");
             } else if (ImGui.isKeyPressed(ImGuiKey.X, false) || ImGui.isKeyPressed(ImGuiKey.Delete, false)) {
-                EditorSession s = session(pluginLifecycle);
+                EditorSession s = session(editorHost);
                 if (s != null) s.selection().clear();
             }
         }
@@ -600,7 +602,7 @@ public final class MapEditorView {
     }
 
     private void handleViewportDragDrop(NativeSceneViewport viewport, SettingsStore settings,
-                                        EditorPluginLifecycleManager pluginLifecycle) {
+                                        EditorPluginHost editorHost) {
         if (viewport == null) return;
 
         // Visual drag ghost highlight when dragging over viewport
@@ -623,7 +625,7 @@ public final class MapEditorView {
                 float localX = ImGui.getIO().getMousePosX() - viewport.imageOriginX();
                 float localY = ImGui.getIO().getMousePosY() - viewport.imageOriginY();
                 viewport.tileAt(localX, localY).ifPresent(coord -> {
-                    EditorSession s = session(pluginLifecycle);
+                    EditorSession s = session(editorHost);
                     if (s == null) return;
                     LocalTile local = s.coordinates().toLocal(coord).orElse(null);
                     if (local == null) return;
@@ -639,7 +641,7 @@ public final class MapEditorView {
     }
 
     private void handleViewportContextMenu(LoadedOsrsCacheSession cache, NativeSceneViewport viewport,
-                                           SettingsStore settings, EditorPluginLifecycleManager pluginLifecycle) {
+                                           SettingsStore settings, EditorPluginHost editorHost) {
         if (viewport == null) return;
 
         // Right-click release inside viewport (ignoring camera orbit drag)
@@ -654,15 +656,15 @@ public final class MapEditorView {
         }
 
         if (ImGui.beginPopup("viewport_tile_context")) {
-            renderTileContextMenu(cache, viewport, settings, pluginLifecycle);
+            renderTileContextMenu(cache, viewport, settings, editorHost);
             ImGui.endPopup();
         }
     }
 
     private void renderTileContextMenu(LoadedOsrsCacheSession cache, NativeSceneViewport viewport,
-                                       SettingsStore settings, EditorPluginLifecycleManager pluginLifecycle) {
+                                       SettingsStore settings, EditorPluginHost editorHost) {
         if (contextTile == null) return;
-        EditorSession s = session(pluginLifecycle);
+        EditorSession s = session(editorHost);
         if (s == null) {
             ImGui.textDisabled("No active session");
             return;
@@ -831,6 +833,30 @@ public final class MapEditorView {
                 && ImGui.isKeyPressed(ImGuiKey.G, false)) {
             openGoTo();
         }
+        if (!io.getWantTextInput() && (io.getKeyCtrl() || io.getKeySuper())
+                && ImGui.isKeyPressed(ImGuiKey.M, false)) {
+            toggleWorldMap();
+        }
+    }
+
+    /** True when the World Map workspace is the focused tab. */
+    public boolean isWorldMapWorkspaceOpen() {
+        return workspaces != null
+                && workspaces.active() == WorkspaceManager.Workspace.WORLD_MAP;
+    }
+
+    public void openWorldMap() {
+        if (openWorldMapWorkspace != null) openWorldMapWorkspace.run();
+    }
+
+    public void toggleWorldMap() {
+        if (isWorldMapWorkspaceOpen()) {
+            if (workspaces != null && closeWorkspace != null) {
+                closeWorkspace.accept(WorkspaceManager.Workspace.WORLD_MAP);
+            }
+            return;
+        }
+        openWorldMap();
     }
 
     private void openGoTo() {
@@ -934,7 +960,7 @@ public final class MapEditorView {
         }
     }
 
-    private void renderCommandPalette(EditorPluginLifecycleManager pluginLifecycle) {
+    private void renderCommandPalette(EditorPluginHost editorHost) {
         if (commandPaletteOpen) {
             ImGui.openPopup("CommandPaletteModal");
             commandPaletteOpen = false;
@@ -986,8 +1012,8 @@ public final class MapEditorView {
             }
             ImGui.popStyleVar();
         }
-        if (pluginLifecycle != null && pluginLifecycle.host() != null) {
-            var registry = pluginLifecycle.host().registry();
+        if (editorHost != null) {
+            var registry = editorHost.registry();
             boolean any = false;
 
             ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.SelectableTextAlign, 0.0f, 0.5f);
@@ -996,7 +1022,7 @@ public final class MapEditorView {
                         && !tool.id().toLowerCase().contains(query)) continue;
                 any = true;
                 if (ImGui.selectable(StudioIcons.BRUSH + "  " + tool.label() + "##tool-" + tool.id(), false, 0, 0.0f, 26.0f)) {
-                    activateTool(pluginLifecycle, tool.id());
+                    activateTool(editorHost, tool.id());
                     ImGui.closeCurrentPopup();
                 }
                 if (ImGui.isItemHovered()) ImGui.setItemTooltip(tool.id());
@@ -1008,9 +1034,9 @@ public final class MapEditorView {
                 if (ImGui.selectable(StudioIcons.TERMINAL + "  " + command.label() + "##command-" + command.id(), false, 0, 0.0f, 26.0f)) {
                     try {
                         EditorCommand cmd = registry.createCommand(command.id());
-                        pluginLifecycle.host().context().session().execute(cmd);
+                        editorHost.context().session().execute(cmd);
                     } catch (RuntimeException failure) {
-                        pluginLifecycle.host().context().notifications().error("Command failed", failure.getMessage());
+                        editorHost.context().notifications().error("Command failed", failure.getMessage());
                     }
                     ImGui.closeCurrentPopup();
                 }
@@ -1019,7 +1045,7 @@ public final class MapEditorView {
             ImGui.popStyleVar();
             if (!any && paletteLocation == null) ImGui.textDisabled("No matching tools or commands.");
         } else {
-            ImGui.textDisabled("Plugin host unavailable.");
+            ImGui.textDisabled("Editor host unavailable.");
         }
         ImGui.endChild();
 
@@ -1097,7 +1123,7 @@ public final class MapEditorView {
     private void resetLayout() {
         layoutStore.reset();
         bottomBar.setDrawerOpen(true);
-        studioPluginManager.setEnabled(TileInfoHudPlugin.ID, true);
+        features.setEnabled(TileInfoHud.ID, true);
         showLeftToolRail = false;
         floatingToolbar.resetPosition();
         hudManager.resetUserState();

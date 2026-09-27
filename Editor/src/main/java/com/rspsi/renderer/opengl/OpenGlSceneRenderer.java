@@ -233,11 +233,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private String orderedPlanFingerprint;
     private List<Integer> cachedOpaqueOrder = List.of();
     private final ArrayList<Integer> opaqueOrderWorkspace = new ArrayList<>();
-    private final ArrayList<GpuDrawCommand> alphaCommands = new ArrayList<>();
-    private final java.util.IdentityHashMap<GpuDrawCommand, Integer> alphaIndices =
-            new java.util.IdentityHashMap<>();
-    private List<GpuDrawCommand> indexedCommands = List.of();
-    private final ArrayList<Integer> alphaOrder = new ArrayList<>();
+    private int[] alphaCandidateIndices = new int[256];
     private final RsFaceOrderPlanner.Workspace alphaOrderWorkspace =
             new RsFaceOrderPlanner.Workspace();
     private GpuCommandGeometry cachedAlphaGeometry;
@@ -1301,14 +1297,16 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         }
         cachedAlphaPlaneFilter = planeFilter;
 
-        alphaCommands.clear();
-        alphaOrder.clear();
-        ensureCommandIndices(commands);
-        for (int index = 0; index < commands.size(); index++) {
+        int commandCount = commands.size();
+        if (alphaCandidateIndices.length < commandCount) {
+            alphaCandidateIndices = new int[Math.max(alphaCandidateIndices.length * 2, commandCount)];
+        }
+        int candidateCount = 0;
+        for (int index = 0; index < commandCount; index++) {
             GpuDrawCommand command = commands.get(index);
             if (command.pass() == GpuDrawCommand.SubmissionPass.ALPHA
                     && visibility.visible(index) && planeVisible(command)) {
-                alphaCommands.add(command);
+                alphaCandidateIndices[candidateCount++] = index;
             }
         }
 
@@ -1316,34 +1314,22 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         float sinYaw = (float) Math.sin(camera.yaw());
         float cosPitch = (float) Math.cos(camera.pitch());
         float sinPitch = (float) Math.sin(camera.pitch());
-        List<GpuDrawCommand> orderedAlpha = RsFaceOrderPlanner.orderAlphaReusable(
-                alphaCommands,
-                command -> averageDepth(geometry, alphaIndices.get(command), command, camera,
+        List<Integer> orderedAlpha = RsFaceOrderPlanner.orderAlphaIndicesReusable(
+                commands,
+                alphaCandidateIndices,
+                candidateCount,
+                (cmdIndex, cmd) -> averageDepth(geometry, cmdIndex, cmd, camera,
                         cosYaw, sinYaw, cosPitch, sinPitch),
-                command -> command.wallDecorationPresentation().cameraOrder(
-                        command.tile(), camera),
+                (cmdIndex, cmd) -> cmd.wallDecorationPresentation().cameraOrder(
+                        cmd.tile(), camera),
                 alphaOrderWorkspace);
-        for (GpuDrawCommand command : orderedAlpha) {
-            alphaOrder.add(alphaIndices.get(command));
-        }
 
         cachedAlphaGeometry = geometry;
         cachedAlphaCommandList = commands;
         cachedAlphaVisibility = visibility;
         cachedAlphaCamera = camera;
-        cachedAlphaOrder = List.copyOf(alphaOrder);
+        cachedAlphaOrder = List.copyOf(orderedAlpha);
         return cachedAlphaOrder;
-    }
-
-    private void ensureCommandIndices(List<GpuDrawCommand> commands) {
-        if (commands == indexedCommands) {
-            return;
-        }
-        alphaIndices.clear();
-        for (int index = 0; index < commands.size(); index++) {
-            alphaIndices.put(commands.get(index), index);
-        }
-        indexedCommands = commands;
     }
 
     private static long drawStateKey(GpuDrawCommand command, boolean alpha) {
@@ -1391,11 +1377,28 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // ASCENDING so higher-priority coplanar faces are drawn last and win the
         // GL_GEQUAL tie. Wall decorations separately beat their mounting wall via
         // submissionDepthBias in view-space depth.
-        result.sort(Comparator.comparingInt((Integer index) -> commands.get(index).priority())
-                .thenComparingInt(index -> commands.get(index).wallDecorationPresentation()
-                        .cameraOrder(commands.get(index).tile(), camera))
-                .thenComparingLong(index -> zoneManager.zoneKeyForCommand(index))
-                .thenComparingLong(index -> drawStateKey(commands.get(index), false)));
+        result.sort((indexA, indexB) -> {
+            int a = indexA;
+            int b = indexB;
+            GpuDrawCommand cmdA = commands.get(a);
+            GpuDrawCommand cmdB = commands.get(b);
+            int priorityA = cmdA.priority();
+            int priorityB = cmdB.priority();
+            if (priorityA != priorityB) {
+                return Integer.compare(priorityA, priorityB);
+            }
+            int camA = cmdA.wallDecorationPresentation().cameraOrder(cmdA.tile(), camera);
+            int camB = cmdB.wallDecorationPresentation().cameraOrder(cmdB.tile(), camera);
+            if (camA != camB) {
+                return Integer.compare(camA, camB);
+            }
+            long zoneA = zoneManager.zoneKeyForCommand(a);
+            long zoneB = zoneManager.zoneKeyForCommand(b);
+            if (zoneA != zoneB) {
+                return Long.compare(zoneA, zoneB);
+            }
+            return Long.compare(drawStateKey(cmdA, false), drawStateKey(cmdB, false));
+        });
         if (!cameraOrderedDecorations && !visibility.occlusionApplied()) {
             orderedPlanFingerprint = plan.fingerprint();
             orderedPlaneFilter = planeFilter;
@@ -1683,10 +1686,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         cachedOpaqueOrder = List.of();
         opaqueOrderWorkspace.clear();
         pickerOrderWorkspace.clear();
-        alphaCommands.clear();
-        alphaIndices.clear();
-        indexedCommands = List.of();
-        alphaOrder.clear();
         cachedAlphaGeometry = null;
         cachedAlphaVisibility = null;
         cachedAlphaCamera = null;

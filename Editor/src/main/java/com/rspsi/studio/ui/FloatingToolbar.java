@@ -1,8 +1,8 @@
 package com.rspsi.studio.ui;
 
 import com.rspsi.studio.theme.StudioDrawColors;
-import com.rspsi.studio.plugin.StudioPluginManager;
-import com.rspsi.studio.plugin.StudioToolPlugin;
+import com.rspsi.studio.feature.StudioFeatureRegistry;
+import com.rspsi.studio.feature.StudioToolUi;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.theme.StudioIcons;
 import com.rspsi.studio.theme.StudioPalette;
@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 /**
  * Modern floating frosted-glass vertical tool rail rendered directly over the 3D viewport canvas.
  * Powered by Google Material Icons, draggable via a sleek top grip, and dynamically driven
- * by registered {@link StudioToolPlugin}s.
+ * by registered {@link StudioToolUi}s.
  */
 public final class FloatingToolbar {
 
@@ -117,17 +117,16 @@ public final class FloatingToolbar {
             return;
         }
 
-        // Get tools list from StudioPluginManager if available, filtered to only those placed
-        // on this surface (a tool may opt out of the floating toolbar via surfaces()/the
-        // Plugin Manager's per-tool surface override).
-        StudioPluginManager plugins = context != null ? context.studioPlugins() : null;
-        List<StudioPluginManager.StudioToolView> toolPlugins = plugins != null
-                ? plugins.toolViews().stream()
-                        .filter(t -> t.surfaces().contains(StudioToolPlugin.ToolSurface.FLOATING_TOOLBAR))
+        // The tool catalog, filtered to tools placed on this surface (a tool opts out of the
+        // floating toolbar through StudioToolUi.surfaces()).
+        StudioFeatureRegistry features = context != null ? context.features() : null;
+        List<StudioFeatureRegistry.StudioToolView> toolUis = features != null
+                ? features.toolViews().stream()
+                        .filter(t -> t.surfaces().contains(StudioToolUi.ToolSurface.FLOATING_TOOLBAR))
                         .toList()
                 : null;
 
-        int toolCount = toolPlugins != null ? toolPlugins.size() : 0;
+        int toolCount = toolUis != null ? toolUis.size() : 0;
         // Extra height for grip
         float extraHeight = 18.0f;
         float totalHeight = extraHeight + (toolCount * (btnSize + 4.0f)) + (padding * 2.0f);
@@ -179,8 +178,8 @@ public final class FloatingToolbar {
         ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 4.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 2.0f, 2.0f);
 
-        if (toolPlugins != null) {
-            for (StudioPluginManager.StudioToolView tool : toolPlugins) {
+        if (toolUis != null) {
+            for (StudioFeatureRegistry.StudioToolView tool : toolUis) {
                 boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
 
                 curY = renderToolButton(startX + padding, curY, btnSize, tool.icon(),

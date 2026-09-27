@@ -5,7 +5,7 @@ import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.integration.ServerIntegrationService;
 import com.rspsi.editor.integration.npc.NpcSpawnService;
 import com.rspsi.editor.integration.reference.ReferenceService;
-import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
+import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.simulation.SimulationEngine;
 import com.rspsi.editor.symbols.SymbolService;
@@ -23,7 +23,7 @@ public record StudioPanelContext(
         LoadedOsrsCacheSession cache,
         SettingsStore settings,
         EditorSession session,
-        EditorPluginLifecycleManager pluginLifecycle,
+        EditorPluginHost editorHost,
         NativeSceneViewport viewport,
         SimulationEngine simulation,
         SymbolService symbols,
@@ -33,7 +33,7 @@ public record StudioPanelContext(
         Consumer<String> activateTool,
         String activeToolId,
         EditorToolController toolController,
-        com.rspsi.studio.plugin.StudioPluginManager studioPlugins,
+        com.rspsi.studio.feature.StudioFeatureRegistry features,
         StudioBrushManager brushes,
         ViewportHudManager huds,
         StudioNavigation navigation,
@@ -51,7 +51,7 @@ public record StudioPanelContext(
             LoadedOsrsCacheSession cache,
             SettingsStore settings,
             EditorSession session,
-            EditorPluginLifecycleManager pluginLifecycle,
+            EditorPluginHost editorHost,
             NativeSceneViewport viewport,
             SimulationEngine simulation,
             SymbolService symbols,
@@ -61,12 +61,12 @@ public record StudioPanelContext(
             Consumer<String> activateTool,
             String activeToolId,
             EditorToolController toolController,
-            com.rspsi.studio.plugin.StudioPluginManager studioPlugins,
+            com.rspsi.studio.feature.StudioFeatureRegistry features,
             StudioBrushManager brushes,
             ViewportHudManager huds) {
-        this(cache, settings, session, pluginLifecycle, viewport, simulation, symbols,
+        this(cache, settings, session, editorHost, viewport, simulation, symbols,
                 references, spawns, integrations, activateTool, activeToolId,
-                toolController, studioPlugins, brushes, huds, StudioNavigation.NONE,
+                toolController, features, brushes, huds, StudioNavigation.NONE,
                 ignored -> { });
     }
 
@@ -75,7 +75,7 @@ public record StudioPanelContext(
             LoadedOsrsCacheSession cache,
             SettingsStore settings,
             EditorSession session,
-            EditorPluginLifecycleManager pluginLifecycle,
+            EditorPluginHost editorHost,
             NativeSceneViewport viewport,
             SimulationEngine simulation,
             SymbolService symbols,
@@ -85,11 +85,11 @@ public record StudioPanelContext(
             Consumer<String> activateTool,
             String activeToolId,
             EditorToolController toolController,
-            com.rspsi.studio.plugin.StudioPluginManager studioPlugins,
+            com.rspsi.studio.feature.StudioFeatureRegistry features,
             StudioBrushManager brushes) {
-        this(cache, settings, session, pluginLifecycle, viewport, simulation, symbols,
+        this(cache, settings, session, editorHost, viewport, simulation, symbols,
                 references, spawns, integrations, activateTool, activeToolId,
-                toolController, studioPlugins, brushes, new ViewportHudManager(),
+                toolController, features, brushes, new ViewportHudManager(),
                 StudioNavigation.NONE, ignored -> { });
     }
 }

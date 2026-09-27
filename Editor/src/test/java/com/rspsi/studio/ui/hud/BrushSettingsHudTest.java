@@ -1,6 +1,6 @@
 package com.rspsi.studio.ui.hud;
 
-import com.rspsi.studio.plugin.StudioPluginManager;
+import com.rspsi.studio.feature.StudioFeatureRegistry;
 import com.rspsi.studio.theme.StudioIcons;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +14,6 @@ class BrushSettingsHudTest {
         assertEquals(BrushSettingsHud.ID, hud.id());
         assertEquals("Brush Settings HUD", hud.name());
         assertEquals(StudioIcons.BRUSH, hud.icon());
-        assertTrue(hud.isConfigurable());
         assertTrue(hud.isVisible());
         assertTrue(hud.isDocked());
         assertFalse(hud.isMinimized());
@@ -49,10 +48,9 @@ class BrushSettingsHudTest {
 
     @Test
     void registersInPluginManager() {
-        StudioPluginManager manager = new StudioPluginManager();
-        manager.discoverPlugins();
+        StudioFeatureRegistry manager = new StudioFeatureRegistry();
 
-        var pluginOpt = manager.plugin(BrushSettingsHud.ID);
+        var pluginOpt = manager.feature(BrushSettingsHud.ID);
         assertTrue(pluginOpt.isPresent());
         assertInstanceOf(BrushSettingsHud.class, pluginOpt.get());
         assertTrue(manager.isEnabled(BrushSettingsHud.ID));

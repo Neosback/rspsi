@@ -1,7 +1,7 @@
 package com.rspsi.studio.workspace;
 
 import com.rspsi.cache.workspace.LoadedOsrsCacheSession;
-import com.rspsi.editor.plugin.EditorPluginLifecycleManager;
+import com.rspsi.editor.plugin.EditorPluginHost;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.studio.WorkspaceManager;
 import com.rspsi.studio.theme.StudioFonts;
@@ -25,15 +25,17 @@ public final class ObjectStudioView {
 
     public void render(LoadedOsrsCacheSession cache,
                        SettingsStore settings,
-                       EditorPluginLifecycleManager pluginLifecycle,
+                       EditorPluginHost editorHost,
                        Runnable openDashboard,
                        Runnable openMapEditor,
                        Runnable openInterfaceStudio,
+                       Runnable openWorldMap,
                        WorkspaceManager workspaces,
                        Consumer<WorkspaceManager.Workspace> closeWorkspace) {
         Objects.requireNonNull(openDashboard, "openDashboard");
         Objects.requireNonNull(openMapEditor, "openMapEditor");
         Objects.requireNonNull(openInterfaceStudio, "openInterfaceStudio");
+        Objects.requireNonNull(openWorldMap, "openWorldMap");
 
         imgui.ImGuiViewport mainViewport = ImGui.getMainViewport();
         ImGui.setNextWindowPos(mainViewport.getPosX(), mainViewport.getPosY());
@@ -46,7 +48,8 @@ public final class ObjectStudioView {
             return;
         }
 
-        renderWorkspaceBar(cache, workspaces, openDashboard, openMapEditor, openInterfaceStudio, closeWorkspace);
+        renderWorkspaceBar(cache, workspaces, openDashboard, openMapEditor, openInterfaceStudio,
+                openWorldMap, closeWorkspace);
 
         float fullWidth = ImGui.getContentRegionAvailX();
         float fullHeight = ImGui.getContentRegionAvailY();
@@ -78,11 +81,12 @@ public final class ObjectStudioView {
 
     private void renderWorkspaceBar(LoadedOsrsCacheSession cache, WorkspaceManager workspaces,
                                      Runnable openDashboard, Runnable openMapEditor, Runnable openInterfaceStudio,
+                                     Runnable openWorldMap,
                                      Consumer<WorkspaceManager.Workspace> closeWorkspace) {
         if (ImGui.beginMenuBar()) {
             if (workspaces != null) {
                 StudioWidgets.workspaceTabs(workspaces, openDashboard, openMapEditor,
-                        openInterfaceStudio, null, closeWorkspace);
+                        openInterfaceStudio, null, openWorldMap, closeWorkspace);
             }
 
             ImGui.endMenuBar();

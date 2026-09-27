@@ -51,12 +51,12 @@ public final class KnowledgePanel implements StudioPanel {
 
     @Override
     public void render(StudioPanelContext context) {
-        if (context.pluginLifecycle() == null || context.pluginLifecycle().host() == null) {
-            ImGui.textDisabled("Plugin host unavailable.");
+        if (context.editorHost() == null) {
+            ImGui.textDisabled("Editor host unavailable.");
             return;
         }
 
-        WorldKnowledgeService knowledge = context.pluginLifecycle().host().context().knowledge();
+        WorldKnowledgeService knowledge = context.editorHost().context().knowledge();
         if (knowledge == null) {
             ImGui.textDisabled("Knowledge service uninitialized.");
             return;
@@ -95,7 +95,7 @@ public final class KnowledgePanel implements StudioPanel {
             return;
         }
         TileCoordinate coord = local.coordinate();
-        WorldDocument world = context.pluginLifecycle().host().context().world();
+        WorldDocument world = context.editorHost().context().world();
         WorldObject pickedObject = resolvePickedObject(context, world, hit, worldCoord, coord);
 
         snapshot.topologyAt(coord).ifPresent(topo -> {

@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -116,6 +117,14 @@ class ModelPacketBuilderTest {
         assertTrue(state.transformed());
         assertEquals(40, cycleTwo.placementHeight());
         assertEquals(34, cycleTwo.renderPlacementHeight());
+
+        ModelPacketBuilder disabledBuilder = new ModelPacketBuilder(definitions, LightingProfile.osrs(),
+                ScenePresentation.EDITOR.withObjectAnimations(false));
+        ModelRenderPacket disabledPacket = disabledBuilder.build(object, document, 2).orElseThrow();
+        assertEquals(77, disabledPacket.animationId());
+        assertTrue(disabledPacket.supportsAnimation());
+        assertFalse(disabledPacket.animationState().active());
+        assertEquals(ModelAnimationState.none(), disabledPacket.animationState());
     }
 
     @Test

@@ -131,7 +131,8 @@ def openRuneBoundaryFiles = boundarySourcePaths([
         'com/rspsi/cache/store/OpenRuneObjectDefinitionEditTransaction.java',
         'com/rspsi/cache/store/OpenRuneCacheInspector.java',
         'com/rspsi/cache/store/OpenRuneReferenceCacheBootstrap.java',
-        'com/rspsi/cache/store/OpenRuneSymbolicNameProvider.java'
+        'com/rspsi/cache/store/OpenRuneSymbolicNameProvider.java',
+        'com/rspsi/cache/store/OpenRuneWorldMapLoader.java'
 ])
 
 tasks.register('verifyCacheBackendBoundary') {

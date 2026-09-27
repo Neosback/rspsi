@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /** Trains radius-aware WFC adjacency statistics directly from real cache regions. */
+// TODO(migration): not wired to a tool yet; lands with WFC-assisted layout (ROADMAP 12).
 public final class WfcCorpusBuilder {
     public WfcTrainingCorpus build(List<WorldRegion> regions) {
         return build(regions, 5);

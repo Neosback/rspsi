@@ -22,6 +22,9 @@ data class LocalTile(
     /** Compatibility bridge while older command/selection contracts still use TileCoordinate. */
     fun coordinate(): TileCoordinate = TileCoordinate(plane, x, y)
 
+    /** Collision-free spread hash; see [TileHash]. */
+    override fun hashCode(): Int = TileHash.of(plane, x, y)
+
     override fun toString(): String =
         "LocalTile[plane=$plane, x=$x, y=$y]"
 

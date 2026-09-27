@@ -284,7 +284,7 @@
         "RuneLite-melxin/runescape-client/src/main/java/ScriptFrame.java#method749"
       ],
       "rspsi": [
-        "Client/src/main/java/com/rspsi/editor/model/InstanceChunkTemplate.java",
+        "Client/src/main/kotlin/com/rspsi/editor/model/InstanceChunkTemplate.kt",
         "Client/src/main/java/com/rspsi/editor/render/InstanceTemplateGrid.java",
         "Client/src/main/java/com/rspsi/editor/render/InstanceSceneMaterializer.java",
         "Client/src/main/java/com/rspsi/editor/render/InstanceRenderSceneBuilder.java",
@@ -315,7 +315,7 @@
         "net.runelite.api.WallObject#getOrientationB"
       ],
       "rspsi": [
-        "Client/src/main/java/com/rspsi/editor/model/WorldObject.java",
+        "Client/src/main/kotlin/com/rspsi/editor/model/WorldObject.kt",
         "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java"
       ],
       "tsps": [
@@ -342,7 +342,7 @@
       "rspsi": [
         "Client/src/main/java/com/rspsi/osrs/rules/loc/WallRules.java",
         "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
-        "Client/src/main/java/com/rspsi/editor/model/OsrsLocShape.java"
+        "Client/src/main/kotlin/com/rspsi/editor/model/OsrsLocShape.kt"
       ],
       "tsps": [
         "rs/config/loctype/LocModelLoader.ts",
@@ -351,7 +351,6 @@
       "evidence": [
         "Client/src/test/java/com/rspsi/osrs/rules/loc/WallRulesTest.java",
         "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
-        "Client/src/test/java/com/rspsi/legacy/WallRenderingParityTest.java",
         "docs/TSPS_SCENE_REFERENCE.md"
       ],
       "reason": "Wall and decoration variant decomposition now has one authoritative OSRS rule source. The fixture matrix covers wall shapes 0-3 and decoration shapes 4-8 across all four rotations, including L-wall dual variants, diagonal +4 rotations, opposite-facing decoration variants, and type-11 post-scale angle rotation. Packet-level fixtures cover the client isRotated XOR (rotation > 3) mirror rule, L-wall pair construction/normal merging, transform order, and real renderer-neutral placement.",
@@ -370,8 +369,7 @@
       "rspsi": [
         "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
         "Client/src/main/java/com/rspsi/editor/render/RenderWindowSceneBuilder.java",
-        "Client/src/main/java/com/rspsi/editor/model/WorldRegionWindow.java",
-        "Client/src/main/java/com/jagex/map/SceneGraph.java"
+        "Client/src/main/kotlin/com/rspsi/editor/model/WorldRegionWindow.kt"
       ],
       "tsps": [
         "rs/model/ModelData.ts",
@@ -399,7 +397,7 @@
         "Client/src/main/java/com/rspsi/osrs/rules/loc/WallDecorationRules.java",
         "Client/src/main/java/com/rspsi/editor/render/ModelPacketBuilder.java",
         "Client/src/main/java/com/rspsi/editor/render/WallDecorationPresentation.java",
-        "Client/src/main/java/com/rspsi/editor/model/WorldObject.java"
+        "Client/src/main/kotlin/com/rspsi/editor/model/WorldObject.kt"
       ],
       "tsps": [
         "rs/scene/SceneBuilder.ts",
@@ -480,7 +478,7 @@
         "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
         "Client/src/test/java/com/rspsi/editor/render/GpuScenePacketBuilderTest.java",
         "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
-        "Client/src/test/java/com/rspsi/editor/render/GpuPlanPickerTest.java"
+        "Client/src/test/java/com/rspsi/editor/render/picker/DdaScenePickerTest.java"
       ],
       "reason": "Game-object scene occupancy is now explicit and independent from renderable geometry bounds. Rotated definition footprints produce inclusive min/max occupied tiles and sizeX/sizeY; RuneLite-style object orientation is retained separately from model orientation, including shape 11's 256-JAU model orientation. Multilocs keep the placed definition's scene size even when a different fallback definition supplies the visible model. Metadata rebases with local-to-world scene projection, survives GPU command flattening and fingerprints, and is returned by picking alongside the exact ray-hit tile and object anchor.",
       "nextAction": "Keep rotation, scene-edge, multiloc, world-rebase, GPU propagation, and picker fixtures as regressions; orientation-aware model AABB/radius remains tracked separately under models.bounds and native.picking."
@@ -670,7 +668,7 @@
         "Client/src/test/java/com/rspsi/editor/render/ModelContourContractTest.java",
         "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
         "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
-        "Client/src/test/java/com/rspsi/editor/render/GpuPlanPickerTest.java"
+        "Client/src/test/java/com/rspsi/editor/render/picker/DdaScenePickerTest.java"
       ],
       "reason": "Static location contouring is now an explicit renderer/runtime contract. Raw contour type and parameter preserve cache/client clipType semantics; full, partial, extended and configured-but-skipped states are distinguishable; placement height and applied state are retained; warped packets preserve a 1:1 pre-contour Y stream that reconstructs RuneLite's HILLSKEW unskewed-model relationship; contour metadata propagates through GPU commands, fingerprints and PickResult. The builder preserves client ordering (animation/model transforms, pre-contour lighting, contour warp, then client bounds) and applies Scene wall-decoration displacement only after contour sampling.",
       "nextAction": "Keep clipType mapping/overflow, full/partial/skipped contour, unskewed reconstruction, sloped placement, client-bounds recalculation, wall-decoration displacement ordering, GPU fingerprint and picker metadata fixtures as regressions. DrawCallbacks HILLSKEW negotiation remains tracked separately by callbacks.modes."
@@ -707,7 +705,7 @@
         "Client/src/test/java/com/rspsi/editor/render/ClientModelBoundsTest.java",
         "Client/src/test/java/com/rspsi/editor/render/ModelPacketBuilderTest.java",
         "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
-        "Client/src/test/java/com/rspsi/editor/render/GpuPlanPickerTest.java"
+        "Client/src/test/java/com/rspsi/editor/render/picker/DdaScenePickerTest.java"
       ],
       "reason": "Client model bounds are now a first-class model-local contract: height, bottomY, xzRadius, radius, diameter, single-tile padding semantics, and orientation-specific AABB midpoint/half-extents reproduce the vendored client formulas. Bounds are calculated after model transforms and contouring but before scene footprint/decor placement translation, use the same draw orientation as client Scene traversal, remain unchanged by local-to-world anchor rebasing, retain one entry per client renderable for flattened multi-renderable shapes such as type-2 walls and compatibility shape-8 packets, propagate through GPU draw commands/fingerprints, and are exposed on PickResult without changing ray-selection behavior.",
       "nextAction": "Keep cylinder/AABB, transform, contour, placement-separation, multi-renderable, rebase, GPU propagation, and picker-metadata fixtures as regressions. Native picking/culling behavior remains tracked separately."
@@ -756,7 +754,6 @@
       ],
       "rspsi": [
         "Client/src/main/java/com/rspsi/editor/render/TextureAnimation.java",
-        "Client/src/main/java/com/rspsi/editor/render/TextureAnimationService.java",
         "Client/src/main/java/com/rspsi/editor/render/RenderTextureResource.java",
         "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java"
       ],
@@ -767,7 +764,6 @@
       "evidence": [
         "Client/src/test/java/com/rspsi/cache/store/OpenRuneTextureDefinitionDecoderTest.java",
         "Client/src/test/java/com/rspsi/editor/render/TextureAnimationTest.java",
-        "Client/src/test/java/com/rspsi/editor/render/TextureAnimationServiceTest.java",
         "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
         "Editor/src/test/java/com/rspsi/renderer/opengl/OpenGlTextureAnimationAcceptanceTest.java"
       ],
@@ -843,7 +839,7 @@
       ],
       "rspsi": [
         "Editor/src/main/java/com/rspsi/renderer/opengl/OpenGlSceneRenderer.java",
-        "Client/src/main/java/com/rspsi/editor/render/GpuSceneUploader.java"
+        "Editor/src/main/java/com/rspsi/renderer/opengl/ZoneVboManager.java"
       ],
       "tsps": [
         "render/render/frame/RenderFrame.ts",
@@ -932,7 +928,7 @@
         "Client/src/main/java/com/rspsi/editor/render/ClientRenderablePlacement.java",
         "Client/src/main/java/com/rspsi/editor/render/ModelRenderPacket.java",
         "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java",
-        "Client/src/main/java/com/rspsi/editor/render/GpuPlanPicker.java",
+        "Client/src/main/java/com/rspsi/editor/render/picker/DdaScenePicker.java",
         "Client/src/main/java/com/rspsi/editor/render/PickResult.java"
       ],
       "tsps": [
@@ -946,7 +942,7 @@
         "Client/src/test/java/com/rspsi/editor/render/GpuDrawCommandTest.java",
         "Client/src/test/java/com/rspsi/editor/render/GpuScenePacketBuilderTest.java",
         "Client/src/test/java/com/rspsi/editor/render/IncrementalGpuUploadPlanBuilderTest.java",
-        "Client/src/test/java/com/rspsi/editor/render/GpuPlanPickerTest.java"
+        "Client/src/test/java/com/rspsi/editor/render/picker/DdaScenePickerTest.java"
       ],
       "reason": "Object and tile picking now carries deterministic per-scene object-instance identity derived from authored placement plus a duplicate-occurrence ordinal, preserving identity across packet/GPU/incremental rebuild boundaries and distinguishing same-definition placements and exact duplicate cache entries. Client-local orientation-aware Model AABBs are used as a conservative broad phase before exact world-triangle intersection; per-renderable scene-placement offsets preserve displaced wall-decoration and multi-renderable transforms, and legacy local RenderScene geometry keeps a separate render-space anchor from its world semantic identity. Exact triangle hits, occlusion, plane restriction, priority tie-breaking, game-object footprint metadata, and client model bounds remain the authoritative final pick contract.",
       "nextAction": "Keep stable-instance, duplicate-placement, local/world rebase, multi-renderable, displaced-decoration, AABB rejection, overlapping-AABB exact-hit, terrain-merge, and incremental-rebuild fixtures as regressions. A future native ID framebuffer may optimize the backend without changing PickResult semantics."
@@ -1100,7 +1096,6 @@
         "RuneLite-melxin/runelite-api/src/main/java/net/runelite/api/hooks/DrawCallbacks.java#PASS_ALPHA"
       ],
       "rspsi": [
-        "Client/src/main/java/com/rspsi/editor/render/DrawCallbackContract.java",
         "Client/src/main/java/com/rspsi/editor/render/GpuDrawCommand.java",
         "Client/src/main/java/com/rspsi/editor/render/GpuSceneVertex.java",
         "Client/src/main/java/com/rspsi/editor/render/ModelContourContract.java",
@@ -1111,7 +1106,6 @@
         "render/SceneBuffer.ts"
       ],
       "evidence": [
-        "Client/src/test/java/com/rspsi/editor/render/DrawCallbackContractTest.java",
         "Client/src/test/java/com/rspsi/editor/render/GpuUploadPlanBuilderTest.java",
         "Client/src/test/java/com/rspsi/editor/render/ModelContourContractTest.java",
         "Editor/src/test/java/com/rspsi/renderer/opengl/OpenGlSceneRendererStateTest.java",

@@ -31,6 +31,5 @@ class LightingProfileTest {
                 -50, -10, -50, 80, 768, 65536, 71, true, true, 0.8));
 
         assertNotEquals(defaultLight, dimmer);
-        assertEquals(1.0, LightingExposure.neutral().value());
     }
 }

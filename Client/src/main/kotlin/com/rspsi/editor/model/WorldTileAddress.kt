@@ -38,6 +38,17 @@ data class WorldTileAddress(
         }
     }
 
+    /**
+     * Every other field is derived from these three and validated in `init`, so comparing
+     * them is equivalent to the generated twelve-field equality, and cheaper.
+     */
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (other is WorldTileAddress && worldX == other.worldX && worldY == other.worldY && plane == other.plane)
+
+    /** Collision-free spread hash; see [TileHash]. */
+    override fun hashCode(): Int = TileHash.of(plane, worldX, worldY)
+
     override fun toString(): String =
         "WorldTileAddress[" +
             "worldX=$worldX, " +
