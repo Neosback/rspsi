@@ -24,6 +24,9 @@ final class LazyGpuFlatGeometry {
     private volatile List<GpuSceneVertex> materializedVertices;
     private volatile List<Integer> materializedIndices;
     private volatile int materializationCount;
+    /** Last fragment hit; zone partitioning and picking walk the geometry in order. */
+    private int vertexSegmentHint;
+    private int indexSegmentHint;
 
     LazyGpuFlatGeometry(List<GpuUploadPlan> fragments) {
         this.fragments = List.copyOf(Objects.requireNonNull(fragments, "fragments"));
@@ -65,7 +68,11 @@ final class LazyGpuFlatGeometry {
         checkIndex(index, vertexCount(), "vertex");
         List<GpuSceneVertex> materialized = materializedVertices;
         if (materialized != null) return materialized.get(index);
-        int fragmentIndex = segment(vertexStarts, index);
+        int fragmentIndex = vertexSegmentHint;
+        if (index < vertexStarts[fragmentIndex] || index >= vertexStarts[fragmentIndex + 1]) {
+            fragmentIndex = segment(vertexStarts, index);
+            vertexSegmentHint = fragmentIndex;
+        }
         return fragments.get(fragmentIndex).directVertexAt(index - vertexStarts[fragmentIndex]);
     }
 
@@ -73,7 +80,11 @@ final class LazyGpuFlatGeometry {
         checkIndex(index, indexCount(), "index");
         List<Integer> materialized = materializedIndices;
         if (materialized != null) return materialized.get(index);
-        int fragmentIndex = segment(indexStarts, index);
+        int fragmentIndex = indexSegmentHint;
+        if (index < indexStarts[fragmentIndex] || index >= indexStarts[fragmentIndex + 1]) {
+            fragmentIndex = segment(indexStarts, index);
+            indexSegmentHint = fragmentIndex;
+        }
         GpuUploadPlan fragment = fragments.get(fragmentIndex);
         return vertexStarts[fragmentIndex]
                 + fragment.directIndexAt(index - indexStarts[fragmentIndex]);

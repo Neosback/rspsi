@@ -145,8 +145,13 @@ public record RenderConfig(
     public GpuScenePacket apply(GpuScenePacket packet, RoofRemovalState roofRemovalState) {
         Objects.requireNonNull(packet, "GPU packet");
         GpuScenePacket visible = visibilityPolicy(roofRemovalState).apply(packet);
+        // Unchanged tiles keep their instance: incremental GPU plans reuse a tile's
+        // fragment by identity, so a fresh copy would re-flatten it on every refresh.
         List<SceneTileSnapshot> tiles = visible.tiles().stream()
-                .map(this::filterTile)
+                .map(tile -> {
+                    SceneTileSnapshot filtered = filterTile(tile);
+                    return filtered.equals(tile) ? tile : filtered;
+                })
                 .toList();
         if (tiles.equals(visible.tiles())) return visible;
         return new GpuScenePacket(visible.window(), tiles, visible.lightingProfile(),

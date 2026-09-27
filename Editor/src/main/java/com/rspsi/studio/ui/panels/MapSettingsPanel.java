@@ -80,7 +80,7 @@ public final class MapSettingsPanel implements StudioPanel {
             toggle(settings, RenderSettingKeys.INVISIBLE_OBJECTS_VISIBLE, "Invisible objects (collision only)");
             SettingRows.notImplemented("Textures", "Object textures cannot be switched off yet.");
             SettingRows.notImplemented("Scenery shadows", "Object shadow modes are not implemented yet.");
-            SettingRows.notImplemented("Animate", "Animation always runs; a pause toggle is not wired yet.");
+            toggle(settings, RenderSettingKeys.OBJECT_ANIMATIONS, "Object animations");
             SettingRows.end();
         }
 

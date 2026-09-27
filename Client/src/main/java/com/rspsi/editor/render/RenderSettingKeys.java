@@ -28,6 +28,7 @@ public final class RenderSettingKeys {
     public static final SettingKey<Boolean> COLLISION_VISIBLE = bool("viewport.debug.collision.visible");
     public static final SettingKey<Boolean> INVISIBLE_OBJECTS_VISIBLE = bool("viewport.scene.invisible-objects.visible");
     public static final SettingKey<Boolean> WIREFRAME = bool("viewport.debug.wireframe");
+    public static final SettingKey<Boolean> OBJECT_ANIMATIONS = bool("viewport.scene.objects.animate");
     public static final SettingKey<BackfacePolicy.NativeCullingMode> NATIVE_CULLING_MODE =
             new SettingKey<>("viewport.debug.native-culling", BackfacePolicy.NativeCullingMode.class);
     public static final SettingKey<GpuDebugView> GPU_DEBUG_VIEW =
@@ -79,6 +80,9 @@ public final class RenderSettingKeys {
                         + "(invisible walls and floor blockers).", visibility));
         registry.register(SettingSpec.of(COLLISION_VISIBLE, false, SettingScope.VIEWPORT, "Collision",
                 "Show collision diagnostics.", Set.of(SettingInvalidation.REDRAW)));
+        registry.register(SettingSpec.of(OBJECT_ANIMATIONS, true, SettingScope.VIEWPORT, "Object animations",
+                "Play location animations (fires, water, flags). Off holds the current frame.",
+                Set.of(SettingInvalidation.REDRAW)));
         registry.register(SettingSpec.of(WIREFRAME, false, SettingScope.VIEWPORT, "Wireframe",
                 "Show renderer geometry edges.", Set.of(SettingInvalidation.REDRAW)));
         registry.register(SettingSpec.enumeration(GPU_DEBUG_VIEW,
@@ -138,6 +142,7 @@ public final class RenderSettingKeys {
                 PLANE_SELECTION, BRIGHTNESS, EXPOSURE, MSAA_SAMPLES, FOG_DEPTH_TILES,
                 FOG_COLOR, NATIVE_CULLING_MODE, GPU_DEBUG_VIEW);
         consumers.register("map-studio-viewport-hud", HUD_TILE_INSPECTOR_VISIBLE, HUD_TOOL_CONTROLS_VISIBLE);
+        consumers.register("map-studio-animation-refresh", OBJECT_ANIMATIONS);
         return consumers;
     }
 

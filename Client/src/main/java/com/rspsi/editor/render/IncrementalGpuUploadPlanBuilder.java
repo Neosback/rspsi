@@ -68,7 +68,11 @@ public final class IncrementalGpuUploadPlanBuilder {
             TileFragment fragment = cache.get(tile.worldAddress());
             WorldZoneCoordinate zone = WorldZoneCoordinate.from(tile.worldAddress());
             boolean dirty = dirtyZones.contains(zone);
-            if (fragment == null || dirty || !sameTile(fragment.source(), tile)) {
+            // A fragment depends only on its tile snapshot, so the very instance it was
+            // built from is reusable even inside a dirty zone; the zone still re-uploads.
+            boolean reusable = fragment != null && (fragment.source() == tile
+                    || (!dirty && sameTile(fragment.source(), tile)));
+            if (!reusable) {
                 rebuildTiles.put(tile.worldAddress(), tile);
                 rebuildByZone.computeIfAbsent(zone, ignored -> new ArrayList<>()).add(tile);
             } else {

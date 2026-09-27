@@ -375,7 +375,7 @@ public final class ModelPacketBuilder {
                 contourContract,
                 resolved.animationState().withTransformed(parts.animationTransformed),
                 sceneObjectIdentity);
-        return Optional.of(resolved.appearance().mergeNormals()
+        return Optional.of(sceneMergesNormals(object.id())
                 ? mergeWallVariantNormals(packet, parts.wallVariantRanges) : packet);
     }
 
@@ -482,6 +482,54 @@ public final class ModelPacketBuilder {
      * also reproduces the client's separate "8" diagonal default without a
      * second case.
      */
+    /**
+     * Whether the client's scene normal merge touches this location.
+     *
+     * <p>{@code FriendSystem.addObjects} builds a location through {@code getEntity}
+     * only when its placed definition has {@code animationId == -1} and no
+     * {@code transforms}; anything else becomes a {@code DynamicObject}.
+     * {@code Scene.method5585} merges only {@code ModelData} renderables, so animated
+     * locations and multilocs never merge, whatever their opcode-22 flag says.</p>
+     */
+    private boolean sceneMergesNormals(int placedObjectId) {
+        Optional<ObjectDefinitionView> placed =
+                definitionResolver.resolveEditorDisplay(placedObjectId).placedDefinition();
+        if (placed.isEmpty() || placed.get().hasTransforms()) return false;
+        ObjectAppearanceView appearance = definitions.objectAppearance(placed.get().id())
+                .orElseGet(ObjectAppearanceView::empty);
+        return appearance.animationId() == -1 && appearance.mergeNormals();
+    }
+
+    /**
+     * Refreshes one tile's packets for a new client cycle.
+     *
+     * <p>Only animated locations change with the cycle. They never take part in the
+     * scene normal merge ({@link #sceneMergesNormals}), so a rebuilt animated packet
+     * is complete without its neighbours. Static packets on the same tile are taken
+     * from {@code previous}, which still carries normals merged across tile borders.
+     * Both lists must be in the same coordinate space.</p>
+     */
+    public static List<ModelRenderPacket> keepStaticPackets(List<ModelRenderPacket> rebuilt,
+                                                            List<ModelRenderPacket> previous) {
+        if (previous == null || previous.isEmpty()) return rebuilt;
+        Map<SceneObjectIdentity, java.util.ArrayDeque<ModelRenderPacket>> staticByIdentity =
+                new java.util.HashMap<>();
+        for (ModelRenderPacket packet : previous) {
+            if (packet.animationState().active()) continue;
+            staticByIdentity.computeIfAbsent(packet.sceneObjectIdentity(),
+                    ignored -> new java.util.ArrayDeque<>()).add(packet);
+        }
+        if (staticByIdentity.isEmpty()) return rebuilt;
+        List<ModelRenderPacket> result = new ArrayList<>(rebuilt.size());
+        for (ModelRenderPacket packet : rebuilt) {
+            java.util.ArrayDeque<ModelRenderPacket> kept = packet.animationState().active()
+                    ? null : staticByIdentity.get(packet.sceneObjectIdentity());
+            ModelRenderPacket previousPacket = kept == null ? null : kept.poll();
+            result.add(previousPacket != null ? previousPacket : packet);
+        }
+        return List.copyOf(result);
+    }
+
     private ObjectAppearanceView resolvedAppearance(int placedObjectId) {
         ObjectDefinitionResolver.Resolution resolution =
                 definitionResolver.resolveEditorDisplay(placedObjectId);
@@ -663,7 +711,7 @@ public final class ModelPacketBuilder {
         boolean[] mergeEnabled = new boolean[packets.size()];
         for (int packetIndex = 0; packetIndex < packets.size(); packetIndex++) {
             ModelRenderPacket packet = packets.get(packetIndex);
-            mergeEnabled[packetIndex] = resolvedAppearance(packet.objectId()).mergeNormals();
+            mergeEnabled[packetIndex] = sceneMergesNormals(packet.objectId());
             for (int vertexIndex = 0; vertexIndex < packet.vertices().size(); vertexIndex++) {
                 ModelVertex vertex = packet.vertices().get(vertexIndex);
                 if (vertex.normalMagnitude() == 0) continue;

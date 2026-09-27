@@ -79,13 +79,20 @@ public final class GpuScenePacketBuilder {
                 .thenComparingInt(WorldTileAddress::worldY));
 
         MapByAddress localObjects = new MapByAddress(scene.renderObjects());
+        java.util.Map<TileCoordinate, List<ModelRenderPacket>> modelsByAnchor = new java.util.HashMap<>();
+        for (ModelRenderPacket packet : scene.modelPackets()) {
+            modelsByAnchor.computeIfAbsent(packet.anchor(), ignored -> new ArrayList<>()).add(packet);
+        }
+        java.util.Map<TileCoordinate, com.rspsi.editor.model.BridgeLink> bridgesByUpper = new java.util.HashMap<>();
+        for (com.rspsi.editor.model.BridgeLink bridgeLink : scene.bridges()) {
+            bridgesByUpper.putIfAbsent(bridgeLink.upper(), bridgeLink);
+        }
         List<SceneTileSnapshot> tiles = new ArrayList<>(ordered.size());
         for (WorldTileAddress address : ordered) {
             TileCoordinate local = new TileCoordinate(address.plane(),
                     address.worldX() - window.sceneBaseX(), address.worldY() - window.sceneBaseY());
             TerrainRenderPacket terrain = scene.terrainPackets().get(local);
-            List<ModelRenderPacket> models = scene.modelPackets().stream()
-                    .filter(value -> value.anchor().equals(local))
+            List<ModelRenderPacket> models = modelsByAnchor.getOrDefault(local, List.of()).stream()
                     .map(value -> {
                         if (rebaseModelAnchors) {
                             return value.withAnchor(new TileCoordinate(
@@ -109,9 +116,8 @@ public final class GpuScenePacketBuilder {
                         return projected;
                     })
                     .toList();
-            Optional<com.rspsi.editor.model.BridgeLink> bridge = scene.bridges().stream()
-                    .filter(value -> value.upper().equals(local))
-                    .findFirst();
+            Optional<com.rspsi.editor.model.BridgeLink> bridge =
+                    Optional.ofNullable(bridgesByUpper.get(local));
             int flags = scene.document().tile(local.plane(), local.x(), local.y()).snapshot().flags();
             ScenePlaneSemantics planes = ScenePlaneSemantics.resolve(
                     address.plane(), flags, bridge.isPresent());
@@ -138,7 +144,7 @@ public final class GpuScenePacketBuilder {
     }
 
     private GpuScenePacket buildUnfiltered(SceneWindow window, RenderWindowScene scene) {
-        return buildWindowPacket(null, window, scene, java.util.Set.of()).packet();
+        return buildWindowPacket(null, window, scene, java.util.Set.of(), null).packet();
     }
 
     /**
@@ -155,13 +161,32 @@ public final class GpuScenePacketBuilder {
             GpuScenePacket packet = buildUnfiltered(window, scene);
             return new IncrementalBuildResult(packet, packet.tiles().size(), 0, true);
         }
-        return buildWindowPacket(previous, window, scene, dirtyZones);
+        return buildWindowPacket(previous, window, scene, dirtyZones, null);
+    }
+
+    /**
+     * Rebuilds exactly {@code changedTiles}, retaining every other tile from the
+     * previous packet. For refreshes that know precisely which tiles changed, such
+     * as animation frames, where a zone-wide rebuild would redo unchanged tiles.
+     */
+    public IncrementalBuildResult buildChangedTiles(GpuScenePacket previous,
+                                                    SceneWindow window,
+                                                    RenderWindowScene scene,
+                                                    java.util.Set<WorldTileAddress> changedTiles) {
+        Objects.requireNonNull(previous, "previous");
+        Objects.requireNonNull(changedTiles, "changedTiles");
+        if (!sameWindow(previous.window(), window)) {
+            GpuScenePacket packet = buildUnfiltered(window, scene);
+            return new IncrementalBuildResult(packet, packet.tiles().size(), 0, true);
+        }
+        return buildWindowPacket(previous, window, scene, java.util.Set.of(), changedTiles);
     }
 
     private IncrementalBuildResult buildWindowPacket(GpuScenePacket previous,
                                                      SceneWindow window,
                                                      RenderWindowScene scene,
-                                                     java.util.Set<WorldZoneCoordinate> dirtyZones) {
+                                                     java.util.Set<WorldZoneCoordinate> dirtyZones,
+                                                     java.util.Set<WorldTileAddress> changedTiles) {
         Objects.requireNonNull(window, "window");
         Objects.requireNonNull(scene, "scene");
         java.util.Set<WorldTileAddress> addressSet = new java.util.LinkedHashSet<>(scene.terrainMeshes().keySet());
@@ -184,17 +209,22 @@ public final class GpuScenePacketBuilder {
             previous.tiles().forEach(tile -> previousTiles.put(tile.worldAddress(), tile));
         }
 
+        WindowTileIndex index = null;
         List<SceneTileSnapshot> tiles = new ArrayList<>(addresses.size());
         int rebuilt = 0;
         int reused = 0;
         for (WorldTileAddress address : addresses) {
             SceneTileSnapshot retained = previousTiles.get(address);
-            if (retained != null && !dirtyZones.contains(WorldZoneCoordinate.from(address))) {
+            boolean dirty = changedTiles != null
+                    ? changedTiles.contains(address)
+                    : dirtyZones.contains(WorldZoneCoordinate.from(address));
+            if (retained != null && !dirty) {
                 tiles.add(retained);
                 reused++;
                 continue;
             }
-            tiles.add(buildWindowTile(address, scene));
+            if (index == null) index = WindowTileIndex.of(scene);
+            tiles.add(buildWindowTile(address, scene, index));
             rebuilt++;
         }
         GpuScenePacket packet = new GpuScenePacket(window, tiles, scene.lightingProfile(),
@@ -202,11 +232,28 @@ public final class GpuScenePacketBuilder {
         return new IncrementalBuildResult(packet, rebuilt, reused, previous == null);
     }
 
+    /** Per-address lookups built once per packet build, not scanned once per tile. */
+    private record WindowTileIndex(java.util.Map<WorldTileAddress, WorldBridgeLink> bridges,
+                                   java.util.Map<WorldTileAddress, List<WorldRenderObject>> objects) {
+        private static WindowTileIndex of(RenderWindowScene scene) {
+            java.util.Map<WorldTileAddress, WorldBridgeLink> bridges = new java.util.HashMap<>();
+            for (WorldBridgeLink bridge : scene.bridges()) bridges.putIfAbsent(bridge.authored(), bridge);
+            java.util.Map<WorldTileAddress, List<WorldRenderObject>> objects = new java.util.HashMap<>();
+            for (WorldRenderObject object : scene.objects()) {
+                objects.computeIfAbsent(object.address(), ignored -> new ArrayList<>(2)).add(object);
+            }
+            return new WindowTileIndex(bridges, objects);
+        }
+
+        private List<WorldRenderObject> objectsAt(WorldTileAddress address) {
+            return objects.getOrDefault(address, List.of());
+        }
+    }
+
     private static SceneTileSnapshot buildWindowTile(WorldTileAddress address,
-                                                     RenderWindowScene scene) {
-        Optional<WorldBridgeLink> worldBridge = scene.bridges().stream()
-                .filter(value -> value.authored().equals(address))
-                .findFirst();
+                                                     RenderWindowScene scene,
+                                                     WindowTileIndex index) {
+        Optional<WorldBridgeLink> worldBridge = Optional.ofNullable(index.bridges().get(address));
         Optional<BridgeLink> bridge = worldBridge.map(value -> new BridgeLink(
                 new TileCoordinate(value.authored().plane(), value.authored().worldX(), value.authored().worldY()),
                 new TileCoordinate(value.effective().plane(), value.effective().worldX(), value.effective().worldY())));
@@ -217,9 +264,8 @@ public final class GpuScenePacketBuilder {
         ScenePlaneSemantics planes = ScenePlaneSemantics.resolve(
                 address.plane(), tileFlags, bridge.isPresent());
         List<SceneOccluder> occluders = occluders(
-                address, scene, models, planes.scenePlane());
-        boolean roofRelated = scene.objects().stream()
-                .filter(value -> value.address().equals(address))
+                address, scene, index.objectsAt(address), planes.scenePlane());
+        boolean roofRelated = index.objectsAt(address).stream()
                 .map(value -> value.object().shape().map(shape -> shape.id() >= 12 && shape.id() <= 21)
                         .orElse(false))
                 .anyMatch(Boolean::booleanValue);
@@ -261,19 +307,19 @@ public final class GpuScenePacketBuilder {
     }
 
     private static final class MapByAddress {
-        private final List<RenderObject> renderObjects;
+        private final java.util.Set<TileCoordinate> roofTiles = new java.util.HashSet<>();
 
         private MapByAddress(List<RenderObject> renderObjects) {
-            this.renderObjects = renderObjects;
+            for (RenderObject value : renderObjects) {
+                if (value.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21).orElse(false)) {
+                    roofTiles.add(new TileCoordinate(value.object().plane(),
+                            value.object().x(), value.object().y()));
+                }
+            }
         }
 
         private boolean roofRelated(TileCoordinate coordinate) {
-            return renderObjects.stream()
-                    .filter(value -> value.object().plane() == coordinate.plane()
-                            && value.object().x() == coordinate.x()
-                            && value.object().y() == coordinate.y())
-                    .anyMatch(value -> value.shape().map(shape -> shape.id() >= 12 && shape.id() <= 21)
-                            .orElse(false));
+            return roofTiles.contains(coordinate);
         }
     }
 
@@ -281,38 +327,46 @@ public final class GpuScenePacketBuilder {
         return new com.rspsi.editor.model.TileCoordinate(address.plane(), address.worldX(), address.worldY());
     }
 
+    /**
+     * In-memory change key for this packet. Tiles contribute their record
+     * {@code hashCode()}, which is deep over every packet, vertex and layer but,
+     * unlike the previous {@code toString()} digest, allocates nothing per vertex.
+     */
     private static String fingerprint(SceneWindow window, List<SceneTileSnapshot> tiles,
                                       java.util.Map<Integer, RenderTextureResource> textures) {
-        StringBuilder value = new StringBuilder();
-        value.append(window.sceneBaseX()).append(':').append(window.sceneBaseY()).append(':')
+        StringBuilder header = new StringBuilder();
+        header.append(window.sceneBaseX()).append(':').append(window.sceneBaseY()).append(':')
                 .append(window.planes()).append(':').append(window.border()).append(':')
                 .append(window.minimumRenderLevel()).append(':').append(window.worldViewId()).append(':')
                 .append(window.instance()).append('|');
         window.sourceRegionIds().stream().sorted()
-                .forEach(regionId -> value.append(regionId).append(','));
-        value.append(';');
-        for (SceneTileSnapshot tile : tiles) {
-            value.append(tile.coordinate()).append('|').append(tile.worldAddress()).append('|')
-                    .append(tile.tileFlags()).append('|')
-                    .append(tile.effectivePlane()).append('|')
-                    .append(tile.authoredPlane()).append('|')
-                    .append(tile.renderLevel()).append('|')
-                    .append(tile.planeCullLevel())
-                    .append('|').append(tile.terrain()).append('|').append(tile.models())
-                    .append('|').append(tile.layers()).append('|').append(tile.occluders())
-                    .append('|').append(tile.bridge()).append('|').append(tile.roofRelated())
-                    .append('|').append(tile.visibleBelow()).append(';');
-        }
+                .forEach(regionId -> header.append(regionId).append(','));
+        header.append(';');
         textures.values().stream().sorted(Comparator.comparingInt(RenderTextureResource::id))
-                .forEach(texture -> value.append("texture=").append(texture.id())
+                .forEach(texture -> header.append("texture=").append(texture.id())
                         .append(':').append(texture.pixelStatus())
                         .append(':').append(texture.width()).append('x').append(texture.height())
                         .append(':').append(texture.pixelHash()).append(';'));
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(value.toString().getBytes(StandardCharsets.UTF_8));
-            StringBuilder result = new StringBuilder(digest.length * 2);
-            for (byte valueByte : digest) result.append(String.format("%02x", valueByte & 0xFF));
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(header.toString().getBytes(StandardCharsets.UTF_8));
+            java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate(16 * 1024);
+            for (SceneTileSnapshot tile : tiles) {
+                if (buffer.remaining() < 16) {
+                    buffer.flip();
+                    digest.update(buffer);
+                    buffer.clear();
+                }
+                WorldTileAddress address = tile.worldAddress();
+                buffer.putInt(address.plane()).putInt(address.worldX()).putInt(address.worldY())
+                        .putInt(tile.hashCode());
+            }
+            buffer.flip();
+            digest.update(buffer);
+            byte[] bytes = digest.digest();
+            StringBuilder result = new StringBuilder(bytes.length * 2);
+            for (byte valueByte : bytes) result.append(Character.forDigit((valueByte >> 4) & 0xF, 16))
+                    .append(Character.forDigit(valueByte & 0xF, 16));
             return result.toString();
         } catch (NoSuchAlgorithmException exception) {
             throw new AssertionError(exception);
@@ -370,15 +424,10 @@ public final class GpuScenePacketBuilder {
 
     /** Emits only explicit definition-backed occluders; movement blocking alone is not visual occlusion. */
     private static List<SceneOccluder> occluders(WorldTileAddress address, RenderWindowScene scene,
-                                                 List<ModelRenderPacket> models, int scenePlane) {
+                                                 List<WorldRenderObject> tileObjects, int scenePlane) {
+        if (tileObjects.isEmpty()) return List.of();
         List<SceneOccluder> result = new ArrayList<>();
-        for (WorldRenderObject worldObject : scene.objects()) {
-            if (!worldObject.address().equals(address)) {
-                continue;
-            }
-            List<ModelRenderPacket> objectModels = models.stream()
-                    .filter(model -> model.objectId() == worldObject.object().object().id())
-                    .toList();
+        for (WorldRenderObject worldObject : tileObjects) {
             // An object's footprint is volume geometry, not a fixed type-1 or
             // type-2 occlusion plane. Emitting it as one of those planes makes
             // the resolver ignore one axis and can hide large areas of valid

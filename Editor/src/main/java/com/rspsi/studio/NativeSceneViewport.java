@@ -485,9 +485,15 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         }
         if (pluginLifecycle != null && pluginLifecycle.host() != null) {
             var context = pluginLifecycle.host().context();
-            var sceneSnapshot = context.scene().map(com.rspsi.editor.plugin.EditorSceneAccess::snapshot).orElse(null);
+            com.rspsi.editor.plugin.EditorSceneSnapshot sceneSnapshot = null;
+            boolean snapshotResolved = false;
             for (var reg : pluginLifecycle.host().registry().overlayRegistrations()) {
                 if (!isOverlayEnabled(reg.id(), reg.enabledByDefault())) continue;
+                if (!snapshotResolved) {
+                    sceneSnapshot = context.scene()
+                            .map(com.rspsi.editor.plugin.EditorSceneAccess::snapshot).orElse(null);
+                    snapshotResolved = true;
+                }
                 try {
                     var overlay = pluginLifecycle.host().registry().createOverlay(reg.id());
                     overlay.render(sceneSnapshot, draw);

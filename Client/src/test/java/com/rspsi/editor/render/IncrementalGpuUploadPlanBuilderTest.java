@@ -20,6 +20,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IncrementalGpuUploadPlanBuilderTest {
     @Test
+    void identicalTileInsideADirtyZoneKeepsItsFragment() {
+        // Tiles 1 and 2 share a zone; only tile 2 is a new snapshot.
+        SceneTileSnapshot first = terrainTile(1, 4, 100);
+        SceneTileSnapshot second = terrainTile(2, 4, 200);
+        IncrementalGpuUploadPlanBuilder incremental = new IncrementalGpuUploadPlanBuilder();
+        incremental.buildInitial(packet(List.of(first, second), "initial"));
+
+        GpuScenePacket changed = packet(List.of(first, terrainTile(2, 4, 300)), "changed");
+        var update = incremental.build(changed, Set.of(WorldZoneCoordinate.from(first.worldAddress())));
+
+        assertEquals(1, update.rebuiltTiles());
+        assertEquals(1, update.reusedTiles());
+        assertEquals(1, update.rebuiltZones(), "the dirty zone still re-uploads");
+        assertEquals(new GpuUploadPlanBuilder().build(changed).vertices(), update.plan().vertices());
+    }
+
+    @Test
     void reusesUnchangedTileFragmentsAndMatchesFullFlattening() {
         SceneTileSnapshot first = terrainTile(7, 4, 100);
         SceneTileSnapshot second = terrainTile(8, 4, 200);

@@ -45,6 +45,30 @@ class GpuScenePacketIncrementalTest {
         assertEquals(expected.fingerprint(), update.packet().fingerprint());
     }
 
+    @Test
+    void changedTileBuildRebuildsOnlyThoseTilesInsideADirtyZone() {
+        // Both tiles share one 8x8 zone; only the second one changes.
+        WorldTileAddress firstAddress = WorldTileAddress.of(1, 1, 0);
+        WorldTileAddress secondAddress = WorldTileAddress.of(2, 1, 0);
+        RenderWindowScene initialScene = scene(Map.of(
+                firstAddress, terrain(1, 1, 100),
+                secondAddress, terrain(2, 1, 200)));
+        SceneWindow window = SceneWindow.from(initialScene.window());
+        GpuScenePacketBuilder builder = new GpuScenePacketBuilder();
+        GpuScenePacket initial = builder.build(window, initialScene);
+
+        RenderWindowScene changedScene = scene(Map.of(
+                firstAddress, terrain(1, 1, 100),
+                secondAddress, terrain(2, 1, 300)));
+        var update = builder.buildChangedTiles(initial, window, changedScene, Set.of(secondAddress));
+        GpuScenePacket expected = builder.build(window, changedScene);
+
+        assertSame(tile(initial, firstAddress), tile(update.packet(), firstAddress));
+        assertEquals(1, update.rebuiltTiles());
+        assertEquals(expected.tiles(), update.packet().tiles());
+        assertEquals(expected.fingerprint(), update.packet().fingerprint());
+    }
+
     private static RenderWindowScene scene(Map<WorldTileAddress, TerrainRenderPacket> terrain) {
         WorldRegionWindow window = new WorldRegionWindow(0, 0, 1, 1, Map.of());
         return new RenderWindowScene(window, Map.of(), Map.of(), Map.of(), Map.of(),

@@ -176,7 +176,6 @@ class RenderWindowSceneBuilderTest {
                 builder.refreshAnimations(initial, 2);
 
         assertEquals(1, refresh.rebuiltModelTiles());
-        assertFalse(refresh.fullModelRebuild());
         assertEquals(1, refresh.changedTiles());
         assertEquals(java.util.Set.of(WorldZoneCoordinate.from(animatedAddress)),
                 refresh.dirtyZones());
@@ -186,32 +185,67 @@ class RenderWindowSceneBuilderTest {
         assertTrue(refresh.timings().totalNanos() >= refresh.timings().modelRebuildNanos());
         assertTrue(refresh.timings().totalNanos() >= refresh.timings().paddedWorldNanos());
         assertTrue(refresh.timings().activeScanNanos() >= 0L);
-        assertTrue(refresh.timings().normalMergeCheckNanos() >= 0L);
     }
 
     @Test
-    void animationRefreshFallsBackWhenActiveTileRequiresSceneWideNormalMerge() {
+    void animatedMergeNormalsLocationRefreshesItsOwnTileOnly() {
+        // FriendSystem.addObjects builds an animated loc as a DynamicObject, which
+        // Scene.method5585 never merges, so its opcode-22 flag needs no scene pass.
         WorldDocument document = new WorldDocument(64, 64, 1);
         WorldObject animated = new WorldObject(42, 10, 0, 0, 8, 8);
+        WorldObject stationary = new WorldObject(43, 10, 0, 0, 24, 24);
         document.tile(0, 8, 8).restore(new TileSnapshot(
                 0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(animated)));
+        document.tile(0, 24, 24).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(stationary)));
         WorldRegion loaded = new WorldRegion(10, 20, document);
         WorldRegionWindow window = new WorldRegionWindow(
                 10, 20, 1, 1, Map.of(loaded.regionId(), loaded));
         RenderWindowSceneBuilder builder =
-                new RenderWindowSceneBuilder(animatedDefinitions(true));
+                new RenderWindowSceneBuilder(animatedDefinitions(true, true));
 
         RenderWindowScene initial = builder.build(window, 0);
+        WorldTileAddress animatedAddress = WorldTileAddress.of(10 * 64 + 8, 20 * 64 + 8, 0);
+        WorldTileAddress staticAddress = WorldTileAddress.of(10 * 64 + 24, 20 * 64 + 24, 0);
         RenderWindowSceneBuilder.AnimationRefreshResult refresh =
                 builder.refreshAnimations(initial, 2);
 
-        assertTrue(refresh.fullModelRebuild(),
-                "mergeNormals animation tiles must preserve the scene-wide normal merge pass");
+        assertEquals(1, refresh.rebuiltModelTiles());
         assertEquals(1, refresh.changedTiles());
-        assertTrue(refresh.rebuiltModelTiles() >= 1);
-        assertTrue(refresh.timings().totalNanos() >= refresh.timings().modelRebuildNanos());
-        assertTrue(refresh.timings().totalNanos() >= refresh.timings().normalMergeCheckNanos());
-        assertTrue(refresh.timings().paddedWorldNanos() >= 0L);
+        assertEquals(java.util.Set.of(WorldZoneCoordinate.from(animatedAddress)),
+                refresh.dirtyZones());
+        assertSame(initial.modelPackets().get(staticAddress).get(0),
+                refresh.scene().modelPackets().get(staticAddress).get(0));
+    }
+
+    @Test
+    void staticPacketSharingAnAnimatedTileKeepsItsSceneMergedPacket() {
+        WorldDocument document = new WorldDocument(64, 64, 1);
+        WorldObject animated = new WorldObject(42, 10, 0, 0, 8, 8);
+        WorldObject stationary = new WorldObject(43, 10, 0, 0, 8, 8);
+        document.tile(0, 8, 8).restore(new TileSnapshot(
+                0, 0, 0, 0, 0, 0, 0, 0, 0, List.of(animated, stationary)));
+        WorldRegion loaded = new WorldRegion(10, 20, document);
+        WorldRegionWindow window = new WorldRegionWindow(
+                10, 20, 1, 1, Map.of(loaded.regionId(), loaded));
+        RenderWindowSceneBuilder builder =
+                new RenderWindowSceneBuilder(animatedDefinitions(false, true));
+
+        RenderWindowScene initial = builder.build(window, 0);
+        WorldTileAddress address = WorldTileAddress.of(10 * 64 + 8, 20 * 64 + 8, 0);
+        ModelRenderPacket staticBefore = initial.modelPackets().get(address).stream()
+                .filter(packet -> packet.objectId() == 43).findFirst().orElseThrow();
+
+        RenderWindowSceneBuilder.AnimationRefreshResult refresh =
+                builder.refreshAnimations(initial, 2);
+        List<ModelRenderPacket> after = refresh.scene().modelPackets().get(address);
+
+        assertEquals(1, refresh.changedTiles());
+        assertEquals(List.of(42, 43), after.stream().map(ModelRenderPacket::objectId).toList(),
+                "tile packet order must be preserved");
+        assertSame(staticBefore, after.get(1),
+                "the static packet keeps the one built by the scene-wide merge");
+        assertEquals(1, after.get(0).animationState().frameIndex());
     }
 
     @Test
@@ -296,6 +330,10 @@ class RenderWindowSceneBuilderTest {
     }
 
     private static DefinitionProvider animatedDefinitions(boolean mergeNormals) {
+        return animatedDefinitions(mergeNormals, false);
+    }
+
+    private static DefinitionProvider animatedDefinitions(boolean mergeNormals, boolean staticMergeNormals) {
         com.rspsi.cache.definition.ObjectAppearanceView appearance =
                 new com.rspsi.cache.definition.ObjectAppearanceView(
                         77, false, 128, 128, 128,
@@ -307,7 +345,7 @@ class RenderWindowSceneBuilderTest {
                 new com.rspsi.cache.definition.ObjectAppearanceView(
                         -1, false, 128, 128, 128,
                         0, 0, 0, Map.of(), Map.of(),
-                        true, false, false, false,
+                        true, false, staticMergeNormals, false,
                         0, 0, 16, -1, 0,
                         false, false, false, 0);
         com.rspsi.cache.definition.ModelGeometryView geometry =

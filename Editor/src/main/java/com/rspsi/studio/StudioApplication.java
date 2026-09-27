@@ -114,6 +114,17 @@ public final class StudioApplication implements AutoCloseable {
     private final ProjectOpenCoordinator projectOpenCoordinator;
     private final NativeSceneViewport sceneViewport = new NativeSceneViewport();
     private final SettingsStore renderSettings = new SettingsStore(EditorSettingKeys.registry());
+    /**
+     * Compiled render configuration and a revision that advances only when it
+     * actually changes. The settings store also holds tool and HUD values, and a
+     * brush-size change must not rebuild the scene's GPU plan.
+     */
+    private volatile RenderConfigState renderConfigState;
+
+    private record RenderConfigState(RenderConfig config, long revision) {
+    }
+
+    private volatile boolean objectAnimations = true;
     private final EditorTaskService tasks = new EditorTaskService();
     private final EditorNotificationService notifications = new EditorNotificationService();
     private final PluginEcosystemService pluginEcosystem = new PluginEcosystemService(
@@ -164,6 +175,20 @@ public final class StudioApplication implements AutoCloseable {
         integrations.registerProvider(new OpenRuneServerProvider());
         projectOpenCoordinator = new ProjectOpenCoordinator(projectService, integrations);
         SettingsJsonStore.load(settingsFile, renderSettings);
+        renderConfigState = new RenderConfigState(
+                new RenderConfigCompiler().compile(renderSettings.snapshot()), 0L);
+        objectAnimations = renderSettings.snapshot().get(RenderSettingKeys.OBJECT_ANIMATIONS);
+        renderSettings.addListener(change -> {
+            if (change.key().equals(RenderSettingKeys.OBJECT_ANIMATIONS)) {
+                objectAnimations = Boolean.TRUE.equals(change.newValue());
+                return;
+            }
+            RenderConfig next = new RenderConfigCompiler().compile(renderSettings.snapshot());
+            RenderConfigState current = renderConfigState;
+            if (!next.equals(current.config())) {
+                renderConfigState = new RenderConfigState(next, current.revision() + 1);
+            }
+        });
         imgui.initialize(window);
         sceneViewport.initialize();
         mapEditor.setPluginEcosystem(pluginEcosystem, this::rescanPlugins);
@@ -248,11 +273,12 @@ public final class StudioApplication implements AutoCloseable {
                 pollSceneLoad();
                 pollAnimationRefresh(cache);
                 pollSceneRebuild(cache);
-                if (loadedScene != null && renderedSettingsRevision != renderSettings.revision()) {
-                    RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
-                    currentPlan = new GpuUploadPlanBuilder().build(config.apply(loadedScene.packet()));
+                RenderConfigState renderState = renderConfigState;
+                if (loadedScene != null && renderedSettingsRevision != renderState.revision()) {
+                    currentPlan = new GpuUploadPlanBuilder().build(
+                            renderState.config().apply(loadedScene.packet()));
                     currentZonedPlan = new GpuZonedUploadPlanBuilder().build(currentPlan);
-                    renderedSettingsRevision = renderSettings.revision();
+                    renderedSettingsRevision = renderState.revision();
                 }
                 sceneViewport.setZonedPlan(currentZonedPlan);
                 mapEditor.render(cache, currentPlan, sceneViewport, sceneStatus,
@@ -548,8 +574,9 @@ public final class StudioApplication implements AutoCloseable {
         // Flattening a real region creates a large immutable GPU plan. Keep
         // this work on the loader thread so the native window remains
         // responsive while the scene is being prepared.
-        long settingsRevision = renderSettings.revision();
-        RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
+        RenderConfigState renderState = renderConfigState;
+        long settingsRevision = renderState.revision();
+        RenderConfig config = renderState.config();
         long planStart = System.nanoTime();
         IncrementalGpuUploadPlanBuilder incrementalPlanBuilder =
                 new IncrementalGpuUploadPlanBuilder();
@@ -562,8 +589,10 @@ public final class StudioApplication implements AutoCloseable {
         double centerZ = sceneWindow.sceneBaseY() * 128.0 + window.worldWindow().length() * 64.0;
 
         long renderSceneStart = System.nanoTime();
+        // Plugin scene access reads semantics only; the viewport draws models from the window scene.
         RenderScene renderScene = new RenderSceneBuilder(
-                cache.bundle().definitions(), editorPresentation(cache)).build(region.document(), clientCycle);
+                cache.bundle().definitions(), editorPresentation(cache))
+                .withoutModelPackets().build(region.document(), clientCycle);
         long renderSceneNanos = System.nanoTime() - renderSceneStart;
 
         EditorSession session = opened.region().session();
@@ -638,6 +667,8 @@ public final class StudioApplication implements AutoCloseable {
             return;
         }
 
+        // Paused: the scene keeps the frame it last showed until animation resumes.
+        if (!objectAnimations) return;
         int nextRefreshCycle = loadedScene.nextAnimationRefreshCycle();
         if (nextRefreshCycle < 0) return;
 
@@ -666,18 +697,19 @@ public final class StudioApplication implements AutoCloseable {
 
         long semanticStart = System.nanoTime();
         RenderScene renderScene = new RenderSceneBuilder(definitions, editorPresentation(cache))
-                .refreshAnimations(baseScene.renderScene(), clientCycle);
+                .withoutModelPackets().refreshAnimations(baseScene.renderScene(), clientCycle);
         long semanticSceneNanos = System.nanoTime() - semanticStart;
 
         GpuScenePacket packet = baseScene.packet();
         GpuScenePacketBuilder.IncrementalBuildResult packetUpdate = null;
         long packetStart = System.nanoTime();
-        long settingsRevision = renderSettings.revision();
+        RenderConfigState renderState = renderConfigState;
+        long settingsRevision = renderState.revision();
         boolean settingsChanged = settingsRevision != baseScene.settingsRevision();
         if (!animation.dirtyZones().isEmpty()) {
             SceneWindow sceneWindow = SceneWindow.from(scene.window());
-            packetUpdate = new GpuScenePacketBuilder().buildIncremental(
-                    baseScene.packet(), sceneWindow, scene, animation.dirtyZones());
+            packetUpdate = new GpuScenePacketBuilder().buildChangedTiles(
+                    baseScene.packet(), sceneWindow, scene, animation.changedAddresses());
             packet = packetUpdate.packet();
         }
         long packetNanos = System.nanoTime() - packetStart;
@@ -688,8 +720,7 @@ public final class StudioApplication implements AutoCloseable {
         IncrementalGpuUploadPlanBuilder.BuildResult planUpdate = null;
         long planStart = System.nanoTime();
         if (settingsChanged || !animation.dirtyZones().isEmpty()) {
-            RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
-            GpuScenePacket visiblePacket = config.apply(packet);
+            GpuScenePacket visiblePacket = renderState.config().apply(packet);
             incrementalPlanBuilder = baseScene.planBuilder().fork();
             if (settingsChanged) {
                 incrementalPlanBuilder.invalidateAll();
@@ -718,7 +749,6 @@ public final class StudioApplication implements AutoCloseable {
                 animation.dirtyZones().size(),
                 animation.changedTiles(),
                 animation.rebuiltModelTiles(),
-                animation.fullModelRebuild(),
                 packetUpdate != null,
                 packetUpdate == null ? 0 : packetUpdate.rebuiltTiles(),
                 packetUpdate == null ? 0 : packetUpdate.reusedTiles(),
@@ -848,8 +878,9 @@ public final class StudioApplication implements AutoCloseable {
         GpuScenePacket packet = packetUpdate.packet();
         long packetNanos = System.nanoTime() - packetStart;
 
-        long settingsRevision = renderSettings.revision();
-        RenderConfig config = new RenderConfigCompiler().compile(renderSettings.snapshot());
+        RenderConfigState renderState = renderConfigState;
+        long settingsRevision = renderState.revision();
+        RenderConfig config = renderState.config();
         GpuScenePacket visiblePacket = config.apply(packet);
         long planStart = System.nanoTime();
         IncrementalGpuUploadPlanBuilder incrementalPlanBuilder = baseScene.planBuilder().fork();
@@ -866,7 +897,7 @@ public final class StudioApplication implements AutoCloseable {
 
         long renderSceneStart = System.nanoTime();
         RenderSceneBuilder renderSceneBuilder = new RenderSceneBuilder(
-                cache.bundle().definitions(), editorPresentation(cache));
+                cache.bundle().definitions(), editorPresentation(cache)).withoutModelPackets();
         RenderScene renderScene = varStateChanged
                 ? renderSceneBuilder.build(region.document(), baseScene.animationCycle())
                 : renderSceneBuilder.update(baseScene.renderScene(), new RenderChanges(changedTiles),
@@ -958,9 +989,28 @@ public final class StudioApplication implements AutoCloseable {
                 .map(LoadedOsrsCacheSession::bundle)
                 .map(com.rspsi.cache.workspace.OsrsBundle::assets)
                 .orElse(EmptyAssetRepository.INSTANCE);
-        EditorSceneAccess sceneAccess = () -> EditorSceneSnapshot.from(
-                loadedScene != null ? loadedScene.renderScene() : scene.renderScene(),
-                scene.opened().worldRegion().window());
+        // Overlays ask for the snapshot every frame; copying the whole scene each time
+        // cost the render thread more than drawing it. Rebuild only when the semantic
+        // scene is replaced or the session reports an edit.
+        java.util.concurrent.atomic.AtomicLong sessionEdits = new java.util.concurrent.atomic.AtomicLong();
+        session.addChangeListener(changedTiles -> sessionEdits.incrementAndGet());
+        EditorSceneAccess sceneAccess = new EditorSceneAccess() {
+            private RenderScene cachedSource;
+            private long cachedEdits = -1L;
+            private EditorSceneSnapshot cached;
+
+            @Override
+            public synchronized EditorSceneSnapshot snapshot() {
+                RenderScene source = loadedScene != null ? loadedScene.renderScene() : scene.renderScene();
+                long edits = sessionEdits.get();
+                if (cached == null || source != cachedSource || edits != cachedEdits) {
+                    cached = EditorSceneSnapshot.from(source, scene.opened().worldRegion().window());
+                    cachedSource = source;
+                    cachedEdits = edits;
+                }
+                return cached;
+            }
+        };
         CacheDecoderSummary decodedSummary = cacheSessions.current()
                 .map(LoadedOsrsCacheSession::decoderSummary)
                 .orElse(CacheDecoderSummary.empty());
@@ -1145,7 +1195,6 @@ public final class StudioApplication implements AutoCloseable {
             int dirtyZones,
             int changedTiles,
             int rebuiltModelTiles,
-            boolean fullModelRebuild,
             boolean packetUpdated,
             int packetRebuiltTiles,
             int packetReusedTiles,
@@ -1181,7 +1230,6 @@ public final class StudioApplication implements AutoCloseable {
         private static final int REPORT_INTERVAL = 100;
 
         private int samples;
-        private int fullModelRebuilds;
         private long totalNanos;
         private long windowNanos;
         private long paddedWorldNanos;
@@ -1204,9 +1252,9 @@ public final class StudioApplication implements AutoCloseable {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
                         "Animation perf cycle={} total={}ms window={}ms "
-                                + "(scan={} padded={} normalMerge={} models={} detect={}) "
+                                + "(scan={} padded={} models={} detect={}) "
                                 + "semantic={}ms packet={}ms plan={}ms dirtyZones={} changedTiles={} "
-                                + "rebuiltModelTiles={} fullModelRebuild={} packetUpdated={} "
+                                + "rebuiltModelTiles={} packetUpdated={} "
                                 + "packetTiles={}/{} planUpdated={} planTiles={}/{} planZones={}/{} "
                                 + "heap={}MiB delta={}KiB",
                         metric.clientCycle(),
@@ -1214,7 +1262,6 @@ public final class StudioApplication implements AutoCloseable {
                         millis(metric.windowRefreshNanos()),
                         millis(inner.activeScanNanos()),
                         millis(inner.paddedWorldNanos()),
-                        millis(inner.normalMergeCheckNanos()),
                         millis(inner.modelRebuildNanos()),
                         millis(inner.changeDetectionNanos()),
                         millis(metric.semanticSceneNanos()),
@@ -1223,7 +1270,6 @@ public final class StudioApplication implements AutoCloseable {
                         metric.dirtyZones(),
                         metric.changedTiles(),
                         metric.rebuiltModelTiles(),
-                        metric.fullModelRebuild(),
                         metric.packetUpdated(),
                         metric.packetRebuiltTiles(),
                         metric.packetReusedTiles(),
@@ -1237,7 +1283,6 @@ public final class StudioApplication implements AutoCloseable {
             }
 
             samples++;
-            if (metric.fullModelRebuild()) fullModelRebuilds++;
             totalNanos += metric.totalNanos();
             windowNanos += metric.windowRefreshNanos();
             paddedWorldNanos += inner.paddedWorldNanos();
@@ -1257,7 +1302,7 @@ public final class StudioApplication implements AutoCloseable {
                 LOGGER.info(
                         "Animation perf {} refreshes: avg total={}ms window={}ms "
                                 + "(padded={} models={}) semantic={}ms packet={}ms plan={}ms, "
-                                + "max={}ms, fullModelRebuilds={}, avgChangedTiles={}, "
+                                + "max={}ms, avgChangedTiles={}, "
                                 + "avgRebuiltModelTiles={}, avgPacketRebuiltTiles={}, "
                                 + "avgPlanRebuiltTiles={}, avgPlanRebuiltZones={}, peakHeap={}MiB",
                         samples,
@@ -1269,7 +1314,6 @@ public final class StudioApplication implements AutoCloseable {
                         millis(packetNanos / samples),
                         millis(planNanos / samples),
                         millis(maxTotalNanos),
-                        fullModelRebuilds,
                         ratio(changedTiles, samples),
                         ratio(rebuiltModelTiles, samples),
                         ratio(packetRebuiltTiles, samples),
@@ -1282,7 +1326,6 @@ public final class StudioApplication implements AutoCloseable {
 
         private void reset() {
             samples = 0;
-            fullModelRebuilds = 0;
             totalNanos = 0L;
             windowNanos = 0L;
             paddedWorldNanos = 0L;

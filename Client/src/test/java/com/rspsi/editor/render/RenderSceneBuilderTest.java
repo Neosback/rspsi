@@ -220,7 +220,9 @@ class RenderSceneBuilderTest {
     }
 
     @Test
-    void animationRefreshUsesResolvedChildMergeNormalsForMultiloc() {
+    void animatedMultilocWithMergingChildLeavesStaticNeighboursResident() {
+        // FriendSystem.addObjects: transforms != null makes a DynamicObject, which
+        // Scene.method5585 never merges, whatever the display child's opcode 22 says.
         WorldDocument document = new WorldDocument(3, 1, 1);
         WorldObject animatedShell = new WorldObject(42, 10, 0, 0, 0, 0);
         WorldObject stationary = new WorldObject(43, 10, 0, 0, 2, 0);
@@ -294,8 +296,8 @@ class RenderSceneBuilderTest {
                 .filter(packet -> packet.objectId() == 43)
                 .findFirst().orElseThrow();
 
-        org.junit.jupiter.api.Assertions.assertNotSame(staticPacket, nextStatic,
-                "display-child mergeNormals requires a full model packet rebuild");
+        org.junit.jupiter.api.Assertions.assertSame(staticPacket, nextStatic,
+                "a multiloc never joins the normal merge, so static neighbours are not rebuilt");
     }
 
     private static DefinitionProvider animationDefinitions() {

@@ -167,23 +167,27 @@ public final class RenderWindowSceneBuilder {
         if (clientCycle < 0) throw new IllegalArgumentException("Client cycle cannot be negative");
         if (definitions == null) {
             return new AnimationRefreshResult(
-                    previous, Set.of(), 0, 0, false,
-                    new AnimationRefreshTimings(0L, 0L, 0L, 0L, 0L,
+                    previous, Set.of(), Set.of(), 0,
+                    new AnimationRefreshTimings(0L, 0L, 0L, 0L,
                             System.nanoTime() - totalStart));
         }
 
         long activeScanStart = System.nanoTime();
-        Set<WorldTileAddress> activeAddresses = previous.modelPackets().entrySet().stream()
-                .filter(entry -> entry.getValue().stream()
-                        .anyMatch(packet -> packet.animationState().active()))
-                .map(Map.Entry::getKey)
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Set<WorldTileAddress> activeAddresses = new LinkedHashSet<>();
+        for (Map.Entry<WorldTileAddress, List<ModelRenderPacket>> entry : previous.modelPackets().entrySet()) {
+            for (ModelRenderPacket packet : entry.getValue()) {
+                if (packet.animationState().active()) {
+                    activeAddresses.add(entry.getKey());
+                    break;
+                }
+            }
+        }
         long activeScanNanos = System.nanoTime() - activeScanStart;
         if (activeAddresses.isEmpty()) {
             return new AnimationRefreshResult(
-                    previous, Set.of(), 0, 0, false,
+                    previous, Set.of(), Set.of(), 0,
                     new AnimationRefreshTimings(
-                            activeScanNanos, 0L, 0L, 0L, 0L,
+                            activeScanNanos, 0L, 0L, 0L,
                             System.nanoTime() - totalStart));
         }
 
@@ -197,16 +201,8 @@ public final class RenderWindowSceneBuilder {
                 prepared.materializePaddedWorldDocument(TERRAIN_CONTEXT_BORDER);
         long paddedWorldNanos = System.nanoTime() - paddedWorldStart;
 
-        long normalMergeStart = System.nanoTime();
-        boolean sceneWideNormalMerge =
-                requiresSceneWideNormalMerge(prepared, worldDocument, activeAddresses);
-        long normalMergeCheckNanos = System.nanoTime() - normalMergeStart;
-        if (sceneWideNormalMerge) {
-            return refreshAnimationsFull(
-                    previous, prepared, worldDocument, clientCycle,
-                    activeScanNanos, paddedWorldNanos, normalMergeCheckNanos, totalStart);
-        }
-
+        // Animated locations never join the scene normal merge, so each active
+        // tile can be rebuilt alone; its static packets keep their merged normals.
         long modelRebuildStart = System.nanoTime();
         ModelPacketBuilder modelBuilder = new ModelPacketBuilder(definitions, LightingProfile.osrs(), presentation);
         Map<WorldTileAddress, List<ModelRenderPacket>> nextModels =
@@ -221,12 +217,13 @@ public final class RenderWindowSceneBuilder {
                 continue;
             }
 
-            List<ModelRenderPacket> localPackets =
-                    modelBuilder.buildTile(worldDocument, local, clientCycle);
-            List<ModelRenderPacket> worldPackets = localPackets.stream()
-                    .map(packet -> toWorldPacket(prepared, packet))
-                    .filter(Objects::nonNull)
-                    .toList();
+            List<ModelRenderPacket> worldPackets = new ArrayList<>();
+            for (ModelRenderPacket packet : modelBuilder.buildTile(worldDocument, local, clientCycle)) {
+                ModelRenderPacket worldPacket = toWorldPacket(prepared, packet);
+                if (worldPacket != null) worldPackets.add(worldPacket);
+            }
+            worldPackets = ModelPacketBuilder.keepStaticPackets(
+                    worldPackets, previous.modelPackets().get(address));
             if (worldPackets.isEmpty()) {
                 nextModels.remove(address);
             } else {
@@ -244,38 +241,13 @@ public final class RenderWindowSceneBuilder {
                 changedAddresses.add(address);
             }
         }
-        if (changedAddresses.isEmpty()) {
-            // Presentation is unchanged, but callers historically observe the
-            // refreshed ModelAnimationState.clientCycle as diagnostic timing
-            // state. Publish the rebuilt active-tile packets without marking
-            // any GPU zone dirty.
-            RenderWindowScene refreshed = new RenderWindowScene(
-                    previous.window(),
-                    previous.terrainMeshes(),
-                    previous.terrainMaterials(),
-                    previous.terrainAppearances(),
-                    previous.terrainLighting(),
-                    previous.terrainPackets(),
-                    nextModels,
-                    previous.tileFlags(),
-                    previous.lightingProfile(),
-                    previous.collision(),
-                    previous.objects(),
-                    previous.bridges(),
-                    previous.textures());
-            long changeDetectionNanos = System.nanoTime() - changeDetectionStart;
-            return new AnimationRefreshResult(
-                    refreshed, Set.of(), 0, rebuiltTiles, false,
-                    new AnimationRefreshTimings(
-                            activeScanNanos, paddedWorldNanos, normalMergeCheckNanos,
-                            modelRebuildNanos, changeDetectionNanos,
-                            System.nanoTime() - totalStart));
-        }
-
         Set<WorldZoneCoordinate> dirtyZones = changedAddresses.stream()
                 .map(WorldZoneCoordinate::from)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
+        // With no presentation change, callers still observe the refreshed
+        // ModelAnimationState.clientCycle as diagnostic timing state, so the
+        // rebuilt packets are published without marking any GPU zone dirty.
         RenderWindowScene refreshed = new RenderWindowScene(
                 previous.window(),
                 previous.terrainMeshes(),
@@ -292,86 +264,11 @@ public final class RenderWindowSceneBuilder {
                 previous.textures());
         long changeDetectionNanos = System.nanoTime() - changeDetectionStart;
         return new AnimationRefreshResult(
-                refreshed, dirtyZones, changedAddresses.size(), rebuiltTiles, false,
+                refreshed, dirtyZones, changedAddresses, rebuiltTiles,
                 new AnimationRefreshTimings(
-                        activeScanNanos, paddedWorldNanos, normalMergeCheckNanos,
+                        activeScanNanos, paddedWorldNanos,
                         modelRebuildNanos, changeDetectionNanos,
                         System.nanoTime() - totalStart));
-    }
-
-    private AnimationRefreshResult refreshAnimationsFull(RenderWindowScene previous,
-                                                         WorldRegionWindow prepared,
-                                                         WorldDocument worldDocument,
-                                                         int clientCycle,
-                                                         long activeScanNanos,
-                                                         long paddedWorldNanos,
-                                                         long normalMergeCheckNanos,
-                                                         long totalStart) {
-        long modelRebuildStart = System.nanoTime();
-        Map<WorldTileAddress, List<ModelRenderPacket>> nextModels =
-                buildWorldModelPackets(prepared, worldDocument, clientCycle);
-        long modelRebuildNanos = System.nanoTime() - modelRebuildStart;
-
-        long changeDetectionStart = System.nanoTime();
-        if (previous.modelPackets().equals(nextModels)) {
-            long changeDetectionNanos = System.nanoTime() - changeDetectionStart;
-            return new AnimationRefreshResult(
-                    previous, Set.of(), 0, nextModels.size(), true,
-                    new AnimationRefreshTimings(
-                            activeScanNanos, paddedWorldNanos, normalMergeCheckNanos,
-                            modelRebuildNanos, changeDetectionNanos,
-                            System.nanoTime() - totalStart));
-        }
-
-        Set<WorldTileAddress> changedAddresses = new LinkedHashSet<>();
-        changedAddresses.addAll(previous.modelPackets().keySet());
-        changedAddresses.addAll(nextModels.keySet());
-        changedAddresses.removeIf(address -> sameModelPresentation(
-                previous.modelPackets().get(address), nextModels.get(address)));
-
-        Set<WorldZoneCoordinate> dirtyZones = changedAddresses.stream()
-                .map(WorldZoneCoordinate::from)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
-
-        RenderWindowScene refreshed = new RenderWindowScene(
-                previous.window(),
-                previous.terrainMeshes(),
-                previous.terrainMaterials(),
-                previous.terrainAppearances(),
-                previous.terrainLighting(),
-                previous.terrainPackets(),
-                nextModels,
-                previous.tileFlags(),
-                previous.lightingProfile(),
-                previous.collision(),
-                previous.objects(),
-                previous.bridges(),
-                previous.textures());
-        long changeDetectionNanos = System.nanoTime() - changeDetectionStart;
-        return new AnimationRefreshResult(
-                refreshed, dirtyZones, changedAddresses.size(), nextModels.size(), true,
-                new AnimationRefreshTimings(
-                        activeScanNanos, paddedWorldNanos, normalMergeCheckNanos,
-                        modelRebuildNanos, changeDetectionNanos,
-                        System.nanoTime() - totalStart));
-    }
-
-    private boolean requiresSceneWideNormalMerge(WorldRegionWindow prepared,
-                                                 WorldDocument worldDocument,
-                                                 Set<WorldTileAddress> activeAddresses) {
-        for (WorldTileAddress address : activeAddresses) {
-            TileCoordinate local = paddedCoordinate(prepared, address);
-            if (!worldDocument.contains(local.plane(), local.x(), local.y())) continue;
-            for (com.rspsi.editor.model.WorldObject object :
-                    worldDocument.tile(local).objects()) {
-                if (definitions.objectAppearance(object.id())
-                        .map(com.rspsi.cache.definition.ObjectAppearanceView::mergeNormals)
-                        .orElse(false)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private static TileCoordinate paddedCoordinate(WorldRegionWindow prepared,
@@ -435,57 +332,43 @@ public final class RenderWindowSceneBuilder {
     public record AnimationRefreshTimings(
             long activeScanNanos,
             long paddedWorldNanos,
-            long normalMergeCheckNanos,
             long modelRebuildNanos,
             long changeDetectionNanos,
             long totalNanos
     ) {
         public AnimationRefreshTimings {
             if (activeScanNanos < 0L || paddedWorldNanos < 0L
-                    || normalMergeCheckNanos < 0L || modelRebuildNanos < 0L
+                    || modelRebuildNanos < 0L
                     || changeDetectionNanos < 0L || totalNanos < 0L) {
                 throw new IllegalArgumentException("Animation refresh timings cannot be negative");
             }
         }
 
         public static AnimationRefreshTimings empty() {
-            return new AnimationRefreshTimings(0L, 0L, 0L, 0L, 0L, 0L);
+            return new AnimationRefreshTimings(0L, 0L, 0L, 0L, 0L);
         }
     }
 
     public record AnimationRefreshResult(
             RenderWindowScene scene,
             Set<WorldZoneCoordinate> dirtyZones,
-            int changedTiles,
+            Set<WorldTileAddress> changedAddresses,
             int rebuiltModelTiles,
-            boolean fullModelRebuild,
             AnimationRefreshTimings timings
     ) {
-        /** Source-compatible constructor from before refresh-scope diagnostics. */
-        public AnimationRefreshResult(RenderWindowScene scene,
-                                      Set<WorldZoneCoordinate> dirtyZones,
-                                      int changedTiles) {
-            this(scene, dirtyZones, changedTiles, changedTiles, false,
-                    AnimationRefreshTimings.empty());
-        }
-
-        /** Source-compatible constructor for existing refresh-scope callers. */
-        public AnimationRefreshResult(RenderWindowScene scene,
-                                      Set<WorldZoneCoordinate> dirtyZones,
-                                      int changedTiles,
-                                      int rebuiltModelTiles,
-                                      boolean fullModelRebuild) {
-            this(scene, dirtyZones, changedTiles, rebuiltModelTiles, fullModelRebuild,
-                    AnimationRefreshTimings.empty());
-        }
-
         public AnimationRefreshResult {
             scene = Objects.requireNonNull(scene, "scene");
             dirtyZones = Set.copyOf(Objects.requireNonNull(dirtyZones, "dirtyZones"));
+            changedAddresses = Set.copyOf(Objects.requireNonNull(changedAddresses, "changedAddresses"));
             timings = Objects.requireNonNull(timings, "timings");
-            if (changedTiles < 0 || rebuiltModelTiles < 0) {
+            if (rebuiltModelTiles < 0) {
                 throw new IllegalArgumentException("Animation refresh counts cannot be negative");
             }
+        }
+
+        /** Tiles whose model presentation changed; their zones are {@link #dirtyZones()}. */
+        public int changedTiles() {
+            return changedAddresses.size();
         }
     }
 

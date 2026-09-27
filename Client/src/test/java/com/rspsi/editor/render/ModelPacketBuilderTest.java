@@ -659,6 +659,47 @@ class ModelPacketBuilderTest {
     }
 
     @Test
+    void animatedLocationsNeverJoinTheSceneNormalMerge() {
+        // FriendSystem.addObjects: animationId != -1 makes a DynamicObject, and
+        // Scene.method5585 only merges ModelData, even with opcode 22 set.
+        WorldDocument document = new WorldDocument(2, 1, 1);
+        document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 10, 0, 0, 0, 0))));
+        document.tile(0, 1, 0).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(43, 10, 0, 0, 1, 0))));
+        ModelGeometryView first = triangle(7, 100);
+        ModelGeometryView second = new ModelGeometryView(8,
+                new int[]{-128, 0, 0, -64, 0, 0, -128, 0, 64},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+        ObjectAppearanceView merging = new ObjectAppearanceView(
+                -1, false, 128, 128, 128, 0, 0, 0, Map.of(), Map.of(),
+                true, false, true, false, 0, 0, 16, -1, 0, false, false, false, 0);
+        ObjectAppearanceView animatedMerging = new ObjectAppearanceView(
+                77, false, 128, 128, 128, 0, 0, 0, Map.of(), Map.of(),
+                true, false, true, false, 0, 0, 16, -1, 0, false, false, false, 0);
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return Optional.of(new ObjectDefinitionView(id, "test", 1, 1,
+                        List.of(), new int[]{id == 42 ? 7 : 8}, new int[]{10}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(id == 42 ? merging : animatedMerging);
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(id == 7 ? first : second);
+            }
+        };
+
+        List<ModelRenderPacket> packets = new ModelPacketBuilder(definitions).build(document);
+
+        assertEquals(2, packets.size());
+        assertEquals(1, packets.get(0).vertices().get(0).normalMagnitude());
+        assertEquals(1, packets.get(1).vertices().get(0).normalMagnitude());
+    }
+
+    @Test
     void doesNotRelightAlreadyLitNeighborDuringNormalMerge() {
         WorldDocument document = new WorldDocument(2, 1, 1);
         document.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,

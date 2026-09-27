@@ -33,6 +33,7 @@ public final class RenderSceneBuilder {
     private final ObjectDefinitionResolver definitionResolver;
     private final LightingProfile lightingProfile;
     private final ScenePresentation presentation;
+    private final boolean modelPackets;
 
     public RenderSceneBuilder() {
         this(new TerrainMeshBuilder(), null, LightingProfile.osrs());
@@ -65,12 +66,29 @@ public final class RenderSceneBuilder {
 
     public RenderSceneBuilder(TerrainMeshBuilder terrainMeshes, DefinitionProvider definitions,
                               LightingProfile lightingProfile, ScenePresentation presentation) {
+        this(terrainMeshes, definitions, lightingProfile, presentation, true);
+    }
+
+    private RenderSceneBuilder(TerrainMeshBuilder terrainMeshes, DefinitionProvider definitions,
+                               LightingProfile lightingProfile, ScenePresentation presentation,
+                               boolean modelPackets) {
+        this.modelPackets = modelPackets;
         this.terrainMeshes = Objects.requireNonNull(terrainMeshes, "terrainMeshes");
         this.definitions = definitions;
         this.presentation = Objects.requireNonNull(presentation, "presentation");
         this.definitionResolver = definitions == null ? null
                 : new ObjectDefinitionResolver(definitions, presentation.varState());
         this.lightingProfile = Objects.requireNonNull(lightingProfile, "lightingProfile");
+    }
+
+    /**
+     * A builder whose scenes carry terrain, collision, objects and bridges but
+     * no lit model geometry ({@link RenderScene#modelPackets()} is empty).
+     * For consumers of scene semantics only; the Studio viewport draws models
+     * from its {@link RenderWindowScene}, so a second copy here is never read.
+     */
+    public RenderSceneBuilder withoutModelPackets() {
+        return new RenderSceneBuilder(terrainMeshes, definitions, lightingProfile, presentation, false);
     }
 
     /**
@@ -119,7 +137,7 @@ public final class RenderSceneBuilder {
                 : compiledTerrain.entrySet().stream().collect(java.util.stream.Collectors.toMap(
                         Map.Entry::getKey, entry -> entry.getValue().lighting(),
                         (first, second) -> first, LinkedHashMap::new));
-        List<ModelRenderPacket> modelPackets = definitions == null
+        List<ModelRenderPacket> modelPackets = definitions == null || !this.modelPackets
                 ? List.of() : new ModelPacketBuilder(definitions, lightingProfile, presentation).build(document, clientCycle);
         if (definitions != null) {
             compiledTerrain.forEach((coordinate, compiled) ->
@@ -148,58 +166,30 @@ public final class RenderSceneBuilder {
                 .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
         if (activeTiles.isEmpty()) return previous;
 
+        // Animated locations never join the scene normal merge, so each active
+        // tile can be rebuilt alone; its static packets keep their merged normals.
         WorldDocument document = previous.document();
-        for (TileCoordinate coordinate : activeTiles) {
-            for (WorldObject object : document.tile(coordinate).objects()) {
-                ObjectDefinitionResolver.Resolution resolution =
-                        definitionResolver.resolveEditorDisplay(object.id());
-                boolean mergeNormals = resolution.displayDefinition()
-                        .flatMap(definition -> definitions.objectAppearance(definition.id()))
-                        .map(ObjectAppearanceView::mergeNormals)
-                        .orElse(false);
-                if (mergeNormals) {
-                    return refreshAnimationsFull(previous, clientCycle);
-                }
-            }
-        }
-
         ModelPacketBuilder builder = new ModelPacketBuilder(definitions, lightingProfile, presentation);
         Map<TileCoordinate, List<ModelRenderPacket>> packetsByTile = new LinkedHashMap<>();
         for (ModelRenderPacket packet : previous.modelPackets()) {
             packetsByTile.computeIfAbsent(packet.anchor(), ignored -> new ArrayList<>())
                     .add(packet);
         }
+        boolean changed = false;
         for (TileCoordinate coordinate : activeTiles) {
-            packetsByTile.put(coordinate, builder.buildTile(document, coordinate, clientCycle));
+            List<ModelRenderPacket> before = packetsByTile.get(coordinate);
+            List<ModelRenderPacket> after = ModelPacketBuilder.keepStaticPackets(
+                    builder.buildTile(document, coordinate, clientCycle), before);
+            if (!after.equals(before)) {
+                packetsByTile.put(coordinate, after);
+                changed = true;
+            }
         }
+        if (!changed) return previous;
 
         List<ModelRenderPacket> modelPackets = packetsByTile.values().stream()
                 .flatMap(List::stream)
                 .toList();
-        if (modelPackets.equals(previous.modelPackets())) return previous;
-
-        return new RenderScene(
-                previous.document(),
-                previous.terrainMeshes(),
-                previous.terrainMaterials(),
-                previous.terrainAppearances(),
-                previous.terrainLighting(),
-                previous.terrainPackets(),
-                previous.lightingProfile(),
-                previous.collision(),
-                previous.objects(),
-                previous.renderObjects(),
-                modelPackets,
-                previous.bridges(),
-                previous.textures());
-    }
-
-    private RenderScene refreshAnimationsFull(RenderScene previous, int clientCycle) {
-        List<ModelRenderPacket> modelPackets =
-                new ModelPacketBuilder(definitions, lightingProfile, presentation)
-                        .build(previous.document(), clientCycle);
-        if (modelPackets.equals(previous.modelPackets())) return previous;
-
         return new RenderScene(
                 previous.document(),
                 previous.terrainMeshes(),
@@ -272,7 +262,7 @@ public final class RenderSceneBuilder {
         }
         List<WorldObject> objects = collectObjects(document);
         for (WorldObject object : objects) renderObjects.add(resolve(object));
-        List<ModelRenderPacket> modelPackets = definitions == null
+        List<ModelRenderPacket> modelPackets = definitions == null || !this.modelPackets
                 ? List.of() : new ModelPacketBuilder(definitions, lightingProfile, presentation).build(document, clientCycle);
         if (definitions != null) {
             compiledTerrain.forEach((coordinate, compiled) ->
