@@ -50,12 +50,12 @@ class SplinePathTool : EditorTool {
     override fun deactivate() { dragPointIndex = -1; hoveredTile = null }
 
     override fun pointerMove(event: PointerEvent) {
-        hoveredTile = context?.worldTileAt(event.x, event.y)?.orElse(null)
+        hoveredTile = context?.worldTileAt(event.x(), event.y())?.orElse(null)
     }
 
     override fun pointerDown(event: PointerEvent) {
         val ctx = context ?: return
-        val tile = ctx.worldTileAt(event.x, event.y).orElse(null) ?: return
+        val tile = ctx.worldTileAt(event.x(), event.y()).orElse(null) ?: return
         hoveredTile = tile
         val near = path.findPointNear(tile.x, tile.y, tile.plane, 1)
         if (event.button() == PointerButton.SECONDARY || event.button() == PointerButton.PRIMARY && event.alt()) {
@@ -80,7 +80,7 @@ class SplinePathTool : EditorTool {
     override fun pointerDrag(event: PointerEvent) {
         val ctx = context ?: return
         if (dragPointIndex !in 0 until path.size()) return
-        val tile = ctx.worldTileAt(event.x, event.y).orElse(null) ?: return
+        val tile = ctx.worldTileAt(event.x(), event.y()).orElse(null) ?: return
         hoveredTile = tile
         path.movePoint(dragPointIndex, tile.x, tile.y)
     }
