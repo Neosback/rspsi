@@ -166,9 +166,11 @@ public final class TileBrushPanel implements StudioPanel {
         }
 
         TileSnapshot snapshot = world.tile(coord.plane(), localX, localY).snapshot();
+        // -1 under a bridge (the client's linked-below tile). Draw commands are keyed by the
+        // authored tile, so the world lookup uses the authored plane.
         int effectivePlane = world.effectivePlane(coord.plane(), localX, localY);
         WorldTile worldTile = context.session().coordinates()
-                .toWorld(new LocalTile(effectivePlane, localX, localY));
+                .toWorld(new LocalTile(coord.plane(), localX, localY));
         List<GpuDrawCommand> drawCommands = commandsForTile(
                 context, worldTile.plane(), worldTile.x(), worldTile.y());
         return new TileInspection(coord, localX, localY, effectivePlane, snapshot, drawCommands);
