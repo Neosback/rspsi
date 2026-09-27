@@ -2,6 +2,7 @@ package com.rspsi.editor.core.module
 
 import com.rspsi.editor.core.CoreEditorModule
 import com.rspsi.editor.debug.DebugColor
+import com.rspsi.editor.model.ObjectCategory
 import com.rspsi.editor.plugin.EditorOverlayRegistration
 import com.rspsi.editor.plugin.EditorPluginContext
 import com.rspsi.editor.plugin.EditorSceneOverlay
@@ -40,8 +41,8 @@ class CoreDiagnosticsModule : CoreEditorModule {
                 val world = scene.worldTile(tile.coordinate())
                 draw.tileOutline(world)
 
-                val worldX = world.x() * TILE_SIZE + TILE_CENTER
-                val worldZ = world.y() * TILE_SIZE + TILE_CENTER
+                val worldX = world.x * TILE_SIZE + TILE_CENTER
+                val worldZ = world.y * TILE_SIZE + TILE_CENTER
 
                 if (tile.hasBridge()) {
                     draw.worldLabel(
@@ -59,7 +60,7 @@ class CoreDiagnosticsModule : CoreEditorModule {
                 // but UNKNOWN objects may still precede it. Select the first known
                 // scene-layer object instead of assuming list element zero is known.
                 val knownObject = tile.objectsBySceneLayer()
-                    .firstOrNull { it.category().displayName().isNotBlank() && it.category().name != "UNKNOWN" }
+                    .firstOrNull { it.category() != ObjectCategory.UNKNOWN }
                     ?: continue
                 draw.worldLabel(
                     knownObject.category().displayName(),
