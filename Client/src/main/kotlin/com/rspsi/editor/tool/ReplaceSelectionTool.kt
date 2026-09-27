@@ -40,8 +40,8 @@ class ReplaceSelectionTool(replacementId: Int) : EditorTool {
         val local = ctx.local(tile).orElse(null) ?: return false
         return objects.any { it.plane == local.plane && it.x == local.x && it.y == local.y }
     }
-    private fun selectedObjects(selection: Selection): Set<WorldObject>? = when (selection) {
-        is ObjectSelection -> setOf(selection.object())
+    private fun selectedObjects(selection: Selection?): Set<WorldObject>? = when (selection) {
+        is ObjectSelection -> setOf(selection.`object`)
         is ObjectSetSelection -> LinkedHashSet(selection.objects())
         else -> null
     }
