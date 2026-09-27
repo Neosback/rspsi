@@ -80,7 +80,7 @@ class CoreDiagnosticsModule : CoreEditorModule {
         private const val TILE_SIZE: Float = 128.0f
         private const val TILE_CENTER: Float = 64.0f
         private const val LABEL_TEXT_RGBA: Int = -1
-        private const val BRIDGE_LABEL_BACKGROUND_RGBA: Int = -860283364
+        private const val BRIDGE_LABEL_BACKGROUND_RGBA: Int = -860283876
         private const val OBJECT_LABEL_BACKGROUND_RGBA: Int = -870438597
 
         @JvmStatic
