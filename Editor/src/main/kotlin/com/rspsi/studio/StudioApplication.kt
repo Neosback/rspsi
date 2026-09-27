@@ -239,11 +239,10 @@ class StudioApplication : AutoCloseable {
         sceneViewport.setZonedPlan(mapScenes.zonedPlan())
         sceneViewport.setPickPlan(mapScenes.pickPlan(), mapScenes.pickZonedPlan())
         val scene = mapScenes.scene()
-        val dirty = scene != null &&
-            (scene.session.isDirty || (cache?.objectDefinitions()?.unpublishedCount() ?: 0) > 0)
+        if (cache == null) return
         mapEditor.render(
             cache, mapScenes.plan(), sceneViewport, mapScenes.status, { openDashboard() }, renderSettings,
-            editorHost, dirty, { openInterfaceStudio() }, { openObjectStudio() },
+            editorHost, { openInterfaceStudio() }, { openObjectStudio() },
             { integrationCenterOpen.set(true) }, simulation, symbols, references, spawns, integrations,
             workspaces, { openMapEditor() }, { requestCloseWorkspace(it) },
         )

@@ -61,8 +61,25 @@ class SmoothZoom(
         return ratio
     }
 
-    private companion object {
+    companion object {
         /** Within 0.2% of the target the zoom snaps, so it never creeps forever. */
-        const val SNAP_LOG = 0.002
+        private const val SNAP_LOG = 0.002
+
+        /**
+         * Proportional zoom factor for one frame of wheel input: `exp(delta * perWheelUnit)`.
+         * For views that apply zoom immediately; never flips sign on large trackpad deltas.
+         */
+        @JvmStatic
+        @JvmOverloads
+        fun wheelFactor(delta: Float, perWheelUnit: Double = 0.2): Double = exp(delta * perWheelUnit)
+
+        /**
+         * Child-window flags that keep the wheel inside a preview: ImGui forwards wheel input
+         * from a `NoScrollWithMouse` child to its parent unless `NoScrollbar` is also set, so
+         * zooming a model preview no longer scrolls the panel behind it.
+         */
+        @JvmField
+        val CAPTURE_WHEEL_CHILD_FLAGS: Int =
+            imgui.flag.ImGuiWindowFlags.NoScrollWithMouse or imgui.flag.ImGuiWindowFlags.NoScrollbar
     }
 }

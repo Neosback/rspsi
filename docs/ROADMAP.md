@@ -80,9 +80,9 @@ Delete before converting: code that is dead or duplicated is removed, not migrat
    - Done 2026-09-27: external jar runtime, plugin lifecycle/state store and Plugin Manager window deleted; Studio composes the core modules directly; `StudioPluginManager`/`StudioPlugin`/`*ToolPlugin` became the Kotlin `com.rspsi.studio.feature` layer (`StudioFeatureRegistry`, `StudioFeature`, `StudioToolUi`, `*ToolUi`).
    - Remaining: rename the Client host API off plugin vocabulary (`EditorPluginHost`, `EditorPluginRegistry`, `EditorPluginContext`, `PluginApi`, `PluginServices`, `EditorPlugin`) to editor/core-module names, and drop `PluginPermission`/descriptor versioning. Do this with Phase 3 so each file is renamed and converted once.
 3. **Phase 2: Editor module (Studio UI)**, top of the dependency graph and where map-editor responsibilities leak:
-   1. extract the map-scene lifecycle out of `StudioApplication` into `com.rspsi.studio.map` (load, edit rebuild, animation refresh, plan revisions, teleport);
-   2. `StudioApplication` becomes a thin shell (project lifecycle, workspaces, frame loop);
-   3. split `MapEditorView`: layout, shortcuts, command palette and dialogs; terrain edit commands move to a Client core tool;
+   1. done 2026-09-27: map-scene lifecycle in Kotlin `com.rspsi.studio.map` (`MapSceneController`, `MapScenePipeline`, `LoadedMapScene`, `RenderConfigState`);
+   2. done 2026-09-27: `StudioApplication` is a Kotlin shell; publication provenance lives in `StudioDefinitionPublicationStore`; `UnsavedMapChangesPrompt` owns the leave prompt;
+   3. done 2026-09-27: `MapEditorView` is Kotlin; `MapStudioLayout`, `CommandPalette`, `GoToLocationDialog` and `ViewportTileContextMenu` are their own classes; every terrain-height command is built by Client `TerrainHeightEdit` (was five copies). Open TODO(migration): selection tool-id mapping and object drop still live in the view;
    4. panels, HUDs and workspace views;
    5. `NativeSceneViewport` and `com.rspsi.renderer.opengl` last in this phase (hot paths: primitives, no per-frame allocation).
 4. **Phase 3: Client services**: settings, symbols, project, server/OpenRune, integration, then cache workspace/store/definition/map.

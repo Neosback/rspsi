@@ -2,7 +2,6 @@ package com.rspsi.editor.tool;
 
 import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.EditorCommand;
-import com.rspsi.editor.SetTerrainHeightCommand;
 import com.rspsi.editor.brush.BrushAwareTool;
 import com.rspsi.editor.brush.BrushEngine;
 import com.rspsi.editor.brush.BrushMask;
@@ -10,14 +9,11 @@ import com.rspsi.editor.brush.EditorBrush;
 import com.rspsi.editor.brush.builtin.SquareBrush;
 import com.rspsi.editor.input.PointerButton;
 import com.rspsi.editor.input.PointerEvent;
-import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.LocalTile;
 import com.rspsi.editor.model.WorldTile;
-import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.render.OverlayDraw;
-import com.rspsi.editor.terrain.TerrainVertexLattice;
+import com.rspsi.editor.terrain.TerrainHeightEdit;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -171,29 +167,12 @@ public final class ChangeHeightTool implements EditorTool, BrushAwareTool {
     }
 
     private List<EditorCommand> buildStroke() {
-        var original = context.session().world();
-        var predicted = original.copy();
-        TerrainVertexLattice source = new TerrainVertexLattice(original);
-        TerrainVertexLattice target = new TerrainVertexLattice(predicted);
-        Set<TileCoordinate> affected = new LinkedHashSet<>();
-
+        TerrainHeightEdit edit = new TerrainHeightEdit(context.session().world());
         for (var entry : vertexDeltas.entrySet()) {
             VertexKey vertex = entry.getKey();
-            int after = source.height(vertex.plane(), vertex.x(), vertex.y()) + entry.getValue();
-            affected.addAll(target.setHeight(vertex.plane(), vertex.x(), vertex.y(), after));
+            edit.raiseVertex(vertex.plane(), vertex.x(), vertex.y(), entry.getValue());
         }
-
-        List<EditorCommand> commands = new ArrayList<>();
-        for (TileCoordinate coordinate : affected) {
-            TileSnapshot before = original.tile(coordinate).snapshot();
-            TileSnapshot after = predicted.tile(coordinate).snapshot();
-            if (!before.equals(after)) {
-                commands.add(new SetTerrainHeightCommand(
-                        coordinate, before, after, before.heightSource(), after.heightSource(),
-                        "Change height at " + coordinate));
-            }
-        }
-        return List.copyOf(commands);
+        return List.copyOf(edit.commands(coordinate -> "Change height at " + coordinate));
     }
 
     private double falloffWeight(double normalizedDistance) {

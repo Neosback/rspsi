@@ -124,14 +124,15 @@ class WorldMapDetailTiles(private val maxTextures: Int = 64) {
             val minY = regions.values.minOf { it.regionY }
             val window = WorldRegionWindow(minX, minY, regions.values.maxOf { it.regionX } - minX + 1,
                 regions.values.maxOf { it.regionY } - minY + 1, regions)
-            // A one-tile empty frame keeps the centre region off the document's outer ring,
-            // which the renderer leaves blank, even where a neighbour region does not exist.
-            val padded = window.materializePaddedWorldDocument(1)
-            val image = builder.buildShaped(padded, plane, definitions)
-            // Crop the centre region out of the (up to 3x3) window image. Rows run north to south.
-            val offsetX = (1 + (regionX - minX) * WorldRegion.REGION_SIZE) * PIXELS_PER_TILE
-            val tilesAbove = 1 + (window.regionHeight() - 1 - (regionY - minY)) * WorldRegion.REGION_SIZE
-            val offsetY = tilesAbove * PIXELS_PER_TILE
+            // Only the region plus its context ring is rendered: a whole 3x3 window cost ~9x
+            // the work for the same 256x256 tile.
+            val size = WorldRegion.REGION_SIZE + BORDER * 2
+            val area = window.materializeArea(regionX * WorldRegion.REGION_SIZE - BORDER,
+                regionY * WorldRegion.REGION_SIZE - BORDER, size, size)
+            val image = builder.buildShaped(area, plane, definitions)
+            // The ring is symmetric, so the region starts BORDER tiles in on both axes.
+            val offsetX = BORDER * PIXELS_PER_TILE
+            val offsetY = BORDER * PIXELS_PER_TILE
             val argb = IntArray(TILE_PIXELS * TILE_PIXELS)
             val source = image.argb()
             for (row in 0 until TILE_PIXELS) {
@@ -161,6 +162,9 @@ class WorldMapDetailTiles(private val maxTextures: Int = 64) {
 
     private companion object {
         const val PIXELS_PER_TILE = 4
+
+        /** Context ring: the renderer's 5-tile underlay blend plus the outer ring it leaves blank. */
+        const val BORDER = 6
         const val TILE_PIXELS = WorldRegion.REGION_SIZE * PIXELS_PER_TILE
         const val MAX_UPLOADS_PER_FRAME = 4
 

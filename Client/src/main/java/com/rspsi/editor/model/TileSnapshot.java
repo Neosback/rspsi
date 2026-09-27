@@ -46,6 +46,12 @@ public record TileSnapshot(
                 TerrainHeightSource.unknown());
     }
 
+    /** The same tile with [flags] replaced; heights, materials, objects and provenance kept. */
+    public TileSnapshot withFlags(int flags) {
+        return new TileSnapshot(southWestHeight, southEastHeight, northEastHeight, northWestHeight,
+                underlayId, overlayId, overlayShape, overlayRotation, flags, objects, heightSource);
+    }
+
     public TileSnapshot withHeightSource(TerrainHeightSource source) {
         return new TileSnapshot(southWestHeight, southEastHeight, northEastHeight, northWestHeight,
                 underlayId, overlayId, overlayShape, overlayRotation, flags, objects, source);

@@ -46,6 +46,7 @@ class WorldMapGroundCache(private val maxCapacity: Int = 128) {
             val existing = glTextures[tile.regionKey]
             val tex = existing ?: WorldMapRasterTexture(GL11.GL_LINEAR)
             tex.upload(tile.pixels, 64, 64)
+            tex.releaseStaging()
             glTextures[tile.regionKey] = tex
         }
     }

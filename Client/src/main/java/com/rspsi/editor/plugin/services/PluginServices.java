@@ -10,7 +10,6 @@ import com.rspsi.editor.MoveObjectCommand;
 import com.rspsi.editor.PlaceObjectCommand;
 import com.rspsi.editor.RotateObjectCommand;
 import com.rspsi.editor.SelectionChangeListener;
-import com.rspsi.editor.SetTerrainHeightCommand;
 import com.rspsi.editor.SetTileMaterialCommand;
 import com.rspsi.editor.assets.AssetRepository;
 import com.rspsi.editor.brush.BrushEngine;
@@ -216,21 +215,10 @@ public final class PluginServices {
 
         @Override
         public void setVertexHeight(int plane, int vertexX, int vertexY, int height) {
-            var original = session.world();
-            var predicted = original.copy();
-            Set<TileCoordinate> affected =
-                    new TerrainVertexLattice(predicted).setHeight(plane, vertexX, vertexY, height);
-            List<EditorCommand> edits = new ArrayList<>();
-            for (TileCoordinate coordinate : affected) {
-                TileSnapshot before = original.tile(coordinate).snapshot();
-                TileSnapshot after = predicted.tile(coordinate).snapshot();
-                if (!before.equals(after)) {
-                    edits.add(new SetTerrainHeightCommand(coordinate, before, after,
-                            before.heightSource(), after.heightSource(),
-                            "Set terrain vertex height"));
-                }
-            }
-            executeAndPublish("Set terrain vertex height", edits);
+            com.rspsi.editor.terrain.TerrainHeightEdit edit =
+                    new com.rspsi.editor.terrain.TerrainHeightEdit(session.world());
+            edit.setVertex(plane, vertexX, vertexY, height);
+            executeAndPublish("Set terrain vertex height", edit.commands("Set terrain vertex height"));
         }
 
         @Override

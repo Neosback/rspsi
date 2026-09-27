@@ -2,20 +2,17 @@ package com.rspsi.editor.tool
 
 import com.rspsi.editor.CompositeEditCommand
 import com.rspsi.editor.EditorCommand
-import com.rspsi.editor.SetTerrainHeightCommand
 import com.rspsi.editor.SetTileMaterialCommand
 import com.rspsi.editor.input.PointerButton
 import com.rspsi.editor.input.PointerEvent
 import com.rspsi.editor.model.LocalTile
-import com.rspsi.editor.model.TileCoordinate
 import com.rspsi.editor.model.TileSnapshot
 import com.rspsi.editor.model.WorldDocument
 import com.rspsi.editor.model.WorldTile
 import com.rspsi.editor.render.OverlayDraw
-import com.rspsi.editor.terrain.TerrainVertexLattice
+import com.rspsi.editor.terrain.TerrainHeightEdit
 import com.rspsi.editor.tool.spline.SplineBrushStyle
 import com.rspsi.editor.tool.spline.SplinePath
-import java.util.LinkedHashSet
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
@@ -202,8 +199,7 @@ class SplinePathTool : EditorTool {
         val start = path.points().first(); val end = path.points().last()
         val startHeight = averageHeight(ctx, world, WorldTile(plane, start.x, start.y), 0)
         val endHeight = averageHeight(ctx, world, WorldTile(plane, end.x, end.y), startHeight + 128)
-        val lattice = TerrainVertexLattice(predicted)
-        val changed = LinkedHashSet<TileCoordinate>()
+        val edit = TerrainHeightEdit(world, predicted)
         val total = hypot((end.x - start.x).toDouble(), (end.y - start.y).toDouble()).toFloat().coerceAtLeast(1f)
         for (packed in footprint) {
             val wx = SplinePath.unpackX(packed); val wy = SplinePath.unpackY(packed)
@@ -211,16 +207,9 @@ class SplinePathTool : EditorTool {
             val distance = hypot((wx - start.x).toDouble(), (wy - start.y).toDouble()).toFloat()
             val progress = (distance / total).coerceIn(0f, 1f)
             val target = (startHeight + (endHeight - startHeight) * progress).roundToInt()
-            changed.addAll(lattice.setHeight(local.plane, local.x, local.y, target))
-            changed.addAll(lattice.setHeight(local.plane, local.x + 1, local.y, target))
-            changed.addAll(lattice.setHeight(local.plane, local.x + 1, local.y + 1, target))
-            changed.addAll(lattice.setHeight(local.plane, local.x, local.y + 1, target))
+            edit.setTile(local.coordinate(), target)
         }
-        for (coord in changed) {
-            val before = world.tile(coord).snapshot(); val after = predicted.tile(coord).snapshot()
-            if (before != after) commands.add(SetTerrainHeightCommand(
-                coord, before, after, before.heightSource(), after.heightSource(), "Ramp path height at " + coord))
-        }
+        commands += edit.commands { "Ramp path height at $it" }
     }
 
     private fun averageHeight(ctx: ToolContext, world: WorldDocument, tile: WorldTile, fallback: Int): Int {

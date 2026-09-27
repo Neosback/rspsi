@@ -6,7 +6,7 @@ import com.rspsi.editor.brush.builtin.SquareBrush
 import com.rspsi.editor.input.*
 import com.rspsi.editor.model.*
 import com.rspsi.editor.render.OverlayDraw
-import com.rspsi.editor.terrain.TerrainVertexLattice
+import com.rspsi.editor.terrain.TerrainHeightEdit
 import com.rspsi.editor.tool.state.TilePainterState
 import java.util.LinkedHashSet
 
@@ -107,14 +107,11 @@ class CompositeTilePainterTool @JvmOverloads constructor(
     }
     private fun buildCommands(session:EditorSession,targets:Collection<TileCoordinate>?):List<EditorCommand>{
         if(targets.isNullOrEmpty())return emptyList()
-        val commands=mutableListOf<EditorCommand>();val original=session.world();val predicted=original.copy();val affected=LinkedHashSet<TileCoordinate>()
+        val commands=mutableListOf<EditorCommand>();val original=session.world();val predicted=original.copy()
         if(state.applyHeight()){
-            val lattice=TerrainVertexLattice(predicted)
-            for(c in targets){val p=c.plane;val x=c.x;val y=c.y
-                affected.addAll(lattice.setHeight(p,x,y,state.height()));affected.addAll(lattice.setHeight(p,x+1,y,state.height()))
-                affected.addAll(lattice.setHeight(p,x+1,y+1,state.height()));affected.addAll(lattice.setHeight(p,x,y+1,state.height()))}
-            for(c in affected){val before=original.tile(c).snapshot();val after=predicted.tile(c).snapshot()
-                if(before!=after)commands.add(SetTerrainHeightCommand(c,before,after,before.heightSource(),after.heightSource(),"Paint terrain height at "+c))}
+            val edit=TerrainHeightEdit(original,predicted)
+            for(c in targets)edit.setTile(c,state.height())
+            commands.addAll(edit.commands{"Paint terrain height at $it"})
         }
         for(c in targets){
             var base=predicted.tile(c).snapshot();val material=materialSnapshot(base)

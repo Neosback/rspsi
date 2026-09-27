@@ -114,6 +114,9 @@ public final class ObjectEditorWindow {
         int texture = preview.render(cache.bundle().definitions(), objectId, placement.type(),
                 placement.rotation(), yaw, elevation, zoom, size, size);
         if (texture != 0) {
+            // The wheel zooms the model; the capture child keeps it from scrolling the window.
+            ImGui.beginChild("##object-editor-preview", size, size, false,
+                    com.rspsi.studio.ui.SmoothZoom.CAPTURE_WHEEL_CHILD_FLAGS);
             ImGui.image(texture, size, size);
             if (ImGui.isItemHovered()) {
                 if (ImGui.isMouseDragging(ImGuiMouseButton.Left)) {
@@ -122,13 +125,18 @@ public final class ObjectEditorWindow {
                             elevation + ImGui.getIO().getMouseDeltaY() * 0.01f));
                 }
                 float wheel = ImGui.getIO().getMouseWheel();
-                if (wheel != 0.0f) zoom = Math.max(0.35f, Math.min(4.0f, zoom * (wheel > 0 ? 0.9f : 1.1f)));
+                if (wheel != 0.0f) {
+                    // Proportional, so trackpads zoom as smoothly as mouse notches.
+                    zoom = (float) Math.max(0.35, Math.min(4.0,
+                            zoom / com.rspsi.studio.ui.SmoothZoom.wheelFactor(wheel, 0.1)));
+                }
                 if (ImGui.isMouseDoubleClicked(ImGuiMouseButton.Left)) {
                     yaw = ObjectPreviewScene.DEFAULT_ORBIT_YAW;
                     elevation = ObjectPreviewScene.DEFAULT_ELEVATION;
                     zoom = 1.0f;
                 }
             }
+            ImGui.endChild();
             ImGui.textDisabled("Drag to orbit, scroll to zoom, double-click to reset. Grid cells are one tile.");
         } else {
             ImGui.textWrapped("No renderable model for this object in its current state.");

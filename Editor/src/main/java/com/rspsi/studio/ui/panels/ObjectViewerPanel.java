@@ -318,6 +318,9 @@ public final class ObjectViewerPanel implements StudioPanel {
             // Drag-anywhere-on-the-preview to orbit; the invisible button
             // both hosts the drag gesture and doubles as the drop source.
             ImGui.setCursorScreenPos(cx + (panelW - size) * 0.5f, cy + 2.0f);
+            // The wheel zooms the model; the capture child keeps it from scrolling the panel.
+            ImGui.beginChild("##preview-wheel-" + objId, size, size, false,
+                    com.rspsi.studio.ui.SmoothZoom.CAPTURE_WHEEL_CHILD_FLAGS);
             ImGui.invisibleButton("##preview-3d-" + objId, size, size);
             boolean previewHovered = ImGui.isItemHovered();
             if (ImGui.isItemActive() && ImGui.isMouseDragging(0)) {
@@ -331,7 +334,8 @@ public final class ObjectViewerPanel implements StudioPanel {
                 if (wheel != 0.0f) {
                     // Scrolling "up" (positive wheel) should move the camera
                     // closer, so it shrinks the distance multiplier.
-                    previewZoom = clamp(previewZoom * (1.0f - wheel * 0.1f), 0.35f, 4.0f);
+                    previewZoom = clamp((float) (previewZoom
+                            / com.rspsi.studio.ui.SmoothZoom.wheelFactor(wheel, 0.1)), 0.35f, 4.0f);
                 }
                 if (ImGui.isMouseDoubleClicked(0)) {
                     previewYaw = ObjectPreviewScene.DEFAULT_ORBIT_YAW;
@@ -350,6 +354,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             } else if (previewHovered) {
                 ImGui.setTooltip("Drag to orbit, scroll to zoom, double-click to reset.\nDrag onto the 3D viewport to spawn. Grid cells are one game tile.");
             }
+            ImGui.endChild();
 
             ImGui.setCursorScreenPos(cx, cy + previewHeight + 4.0f);
         }

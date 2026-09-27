@@ -47,7 +47,13 @@ import kotlin.math.min
  */
 class WorldMapView {
 
-    private var scale: Double = 16.0
+    /** Eased zoom in screen pixels per region; see [SmoothZoom]. */
+    private val zoom = SmoothZoom(DEFAULT_SCALE, MIN_SCALE, MAX_SCALE)
+    private val scale: Double get() = zoom.current
+
+    /** Canvas-relative point (0..1) that stays fixed while an eased zoom settles. */
+    private var zoomAnchorX = 0.5
+    private var zoomAnchorY = 0.5
     private var centreRegionX: Double = 50.5
     private var centreRegionY: Double = 50.5
     private var selectedRegionX: Int = 50
@@ -60,6 +66,12 @@ class WorldMapView {
 
     /** Cache-wide terrain raster; see the class note on baking. */
     private val overview = WorldMapOverview()
+
+    /** Sharp per-region tiles for close zoom, bounded by an LRU. */
+    private val detail = WorldMapDetailTiles()
+
+    /** The cache session of the current frame, for detail tile requests. */
+    private var session: LoadedOsrsCacheSession? = null
 
     /** Cached snapshot of the cache's map index; see the class note on caching. */
     private var cachedRegions: List<MapIndexEntry> = emptyList()
@@ -83,6 +95,7 @@ class WorldMapView {
     /** Drops the cached index so the next frame re-reads it from the session. */
     fun invalidate() {
         overview.reset()
+        detail.clear()
         cachedFor = null
         cachedRegions = emptyList()
         cachedRegionKeys = emptySet()
@@ -128,8 +141,10 @@ class WorldMapView {
             ImGui.endMenuBar()
         }
 
+        session = cache
         ensureIndex(cache)
         overview.pumpUpload()
+        detail.pumpUpload()
         requestOverview(cache)
 
         renderToolbar(currentRegionX, currentRegionY, navigator)
@@ -370,11 +385,12 @@ class WorldMapView {
         if (isHovered) {
             val wheel = ImGui.getIO().mouseWheel
             if (wheel != 0.0f) {
-                val anchorX = (ImGui.getMousePosX() - canvasMinX).toDouble() / availW
-                val anchorY = (ImGui.getMousePosY() - canvasMinY).toDouble() / availH
-                zoomBy(if (wheel > 0f) 1.25 else 0.8, anchorX, anchorY)
+                zoomAnchorX = (ImGui.getMousePosX() - canvasMinX).toDouble() / availW
+                zoomAnchorY = (ImGui.getMousePosY() - canvasMinY).toDouble() / availH
+                zoom.wheel(wheel)
             }
         }
+        advanceZoom(availW.toDouble(), availH.toDouble())
 
         val halfWReg = (availW / scale) / 2.0
         val halfHReg = (availH / scale) / 2.0
@@ -430,6 +446,9 @@ class WorldMapView {
                 }
             }
         }
+
+        drawDetailTiles(dl, canvasMinX, canvasMaxY, originRx, originRy, currentPlane,
+            minVisibleRx..maxVisibleRx, minVisibleRy..maxVisibleRy)
 
         if (showGrid || showLabels) {
             val regionBorder = ImColor.rgba(51, 65, 85, 200)
@@ -630,25 +649,74 @@ class WorldMapView {
         }
     }
 
+    /** Eases the zoom by [factor], keeping canvas point ([anchorX], [anchorY]) fixed. */
     private fun zoomBy(factor: Double, anchorX: Double, anchorY: Double) {
-        val clamped = max(MIN_SCALE, min(MAX_SCALE, scale * factor))
-        if (clamped == scale) return
-        // Keep the region under the cursor fixed while the scale changes.
-        val halfWReg = (1000.0 / scale) / 2.0
-        val halfHReg = (1000.0 / scale) / 2.0
-        val anchorWorldX = centreRegionX + (anchorX - 0.5) * 2.0 * halfWReg
-        val anchorWorldY = centreRegionY + (0.5 - anchorY) * 2.0 * halfHReg
-        val newHalfW = (1000.0 / clamped) / 2.0
-        val newHalfH = (1000.0 / clamped) / 2.0
-        scale = clamped
-        centreRegionX = anchorWorldX - (anchorX - 0.5) * 2.0 * newHalfW
-        centreRegionY = anchorWorldY - (0.5 - anchorY) * 2.0 * newHalfH
+        zoomAnchorX = anchorX
+        zoomAnchorY = anchorY
+        zoom.multiply(factor)
+    }
+
+    /**
+     * Advances the eased zoom one frame and moves the centre so the world point under the
+     * zoom anchor stays under it. Uses the real canvas size, so the anchor never drifts.
+     */
+    private fun advanceZoom(canvasWidth: Double, canvasHeight: Double) {
+        val before = scale
+        val ratio = zoom.advance(ImGui.getIO().deltaTime)
+        if (ratio == 1.0) return
+        val after = scale
+        // Offset of the anchor from the canvas centre, in screen pixels (y up).
+        val offsetX = (zoomAnchorX - 0.5) * canvasWidth
+        val offsetY = (0.5 - zoomAnchorY) * canvasHeight
+        centreRegionX += offsetX / before - offsetX / after
+        centreRegionY += offsetY / before - offsetY / after
         clampCenter()
+    }
+
+    /**
+     * Draws sharp region tiles once a region is at least [DETAIL_MIN_SCALE] pixels wide,
+     * requesting only on-screen regions nearest the centre first.
+     */
+    private fun drawDetailTiles(
+        dl: ImDrawList,
+        canvasMinX: Float,
+        canvasMaxY: Float,
+        originRx: Double,
+        originRy: Double,
+        plane: Int,
+        visibleX: IntRange,
+        visibleY: IntRange,
+    ) {
+        if (scale < DETAIL_MIN_SCALE) return
+        val cache = session ?: return
+        val visible = ArrayList<Int>()
+        for (rx in visibleX) for (ry in visibleY) {
+            if ((rx shl 8) or ry in cachedRegionKeys) visible += (rx shl 8) or ry
+        }
+        visible.sortBy { key ->
+            val dx = (key shr 8) + 0.5 - centreRegionX
+            val dy = (key and 0xFF) + 0.5 - centreRegionY
+            dx * dx + dy * dy
+        }
+        try {
+            detail.request(cache.bundle(), cache.bundle().definitions(), plane, visible)
+        } catch (_: RuntimeException) {
+            return
+        }
+        for (key in visible) {
+            val rx = key shr 8
+            val ry = key and 0xFF
+            val texId = detail.textureId(plane, rx, ry)
+            if (texId == 0) continue
+            val x1 = canvasMinX + ((rx - originRx) * scale).toFloat()
+            val y2 = canvasMaxY - ((ry - originRy) * scale).toFloat()
+            dl.addImage(texId.toLong(), x1, y2 - scale.toFloat(), x1 + scale.toFloat(), y2, 0f, 0f, 1f, 1f)
+        }
     }
 
     private fun fitAllRegions() {
         if (cachedRegions.isEmpty()) {
-            scale = DEFAULT_SCALE
+            zoom.set(DEFAULT_SCALE)
             centreRegionX = 50.5
             centreRegionY = 50.5
             return
@@ -671,7 +739,7 @@ class WorldMapView {
         val spanY = max(1, maxRy - minRy + 2)
         centreRegionX = (minRx + maxRx) * 0.5 + 0.5
         centreRegionY = (minRy + maxRy) * 0.5 + 0.5
-        scale = max(MIN_SCALE, min(MAX_SCALE, 600.0 / max(spanX, spanY)))
+        zoom.set(600.0 / max(spanX, spanY))
         clampCenter()
     }
 
@@ -684,11 +752,13 @@ class WorldMapView {
         const val MIN_SCALE = 2.0
 
         /**
-         * One screen pixel per world tile. The overview raster is downsampled
-         * many tiles to a texel, so zooming further only magnifies it; past
-         * this point the honest view is Map Studio.
+         * Sixteen screen pixels per world tile. Past [DETAIL_MIN_SCALE] regions draw from
+         * sharp four-pixel-per-tile tiles, so close zoom stays legible.
          */
-        const val MAX_SCALE = 64.0
+        const val MAX_SCALE = 1024.0
+
+        /** A region this many pixels wide or more uses detail tiles (1.5 px per tile). */
+        const val DETAIL_MIN_SCALE = 96.0
         const val DEFAULT_SCALE = 16.0
         const val REGION_TILES = 64
     }
