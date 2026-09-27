@@ -371,6 +371,8 @@ public final class MapEditorView {
             }
 
             viewport.setCullMode(renderConfig.nativeCullingMode());
+            viewport.setHighlightSession(pluginLifecycle != null && pluginLifecycle.host() != null
+                    ? pluginLifecycle.host().context().session() : null);
             viewport.render(plan, ImGui.getContentRegionAvailX(),
                     Math.max(160.0f, ImGui.getContentRegionAvailY()),
                     renderConfig.msaaSamples(),

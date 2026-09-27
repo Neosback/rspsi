@@ -27,6 +27,14 @@ import java.util.Objects;
 /** Owns the native scene renderer and presents its resolved FBO texture to ImGui. */
 public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private final OpenGlSceneRenderer renderer = new OpenGlSceneRenderer();
+    private com.rspsi.editor.EditorSession highlightSession;
+    private boolean hoverHighlight = true;
+    private boolean imageHovered;
+    private com.rspsi.editor.render.GpuHighlightIndex highlightIndex;
+    private Object highlightSelectionKey;
+    private int[] selectedCommands = new int[0];
+    private com.rspsi.editor.render.SceneHighlight renderedHighlight =
+            com.rspsi.editor.render.SceneHighlight.NONE;
     private final GlFramebuffer framebuffer = new GlFramebuffer();
     private final DdaScenePicker picker = new DdaScenePicker();
     private GpuUploadPlan lastPlan;
@@ -123,6 +131,76 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
      * Supplies the native-ready 8x8 zone geometry corresponding to the flat
      * compatibility plan. A mismatched fingerprint is ignored by the renderer.
      */
+    /** Session whose selection is outlined; null outlines nothing. */
+    public void setHighlightSession(com.rspsi.editor.EditorSession session) {
+        highlightSession = session;
+    }
+
+    /** Whether the tile or object under the pointer is outlined. */
+    public void setHoverHighlight(boolean enabled) {
+        hoverHighlight = enabled;
+    }
+
+    private com.rspsi.editor.render.SceneHighlight resolveHighlight(GpuUploadPlan plan) {
+        if (plan == null) return com.rspsi.editor.render.SceneHighlight.NONE;
+        if (highlightIndex == null || highlightIndex.getPlan() != plan) {
+            highlightIndex = new com.rspsi.editor.render.GpuHighlightIndex(plan);
+            highlightSelectionKey = null;
+        }
+        int[] hovered = hoveredCommands();
+        int[] selected = selectedCommands();
+        if (hovered.length == 0 && selected.length == 0) return com.rspsi.editor.render.SceneHighlight.NONE;
+        return new com.rspsi.editor.render.SceneHighlight(hovered, selected);
+    }
+
+    private int[] hoveredCommands() {
+        if (!hoverHighlight || !imageHovered || ImGui.isMouseDragging(0, 1.0f)) return new int[0];
+        float x = ImGui.getIO().getMousePosX() - imageOriginX;
+        float y = ImGui.getIO().getMousePosY() - imageOriginY;
+        return pickAt(x, y).map(hit -> {
+            if (hit.objectTile() != null && hit.sceneObjectIdentity().present()) {
+                return highlightIndex.location(com.rspsi.editor.model.WorldTileAddress.of(
+                        hit.objectTile().x(), hit.objectTile().y(), hit.objectTile().plane()),
+                        hit.sceneObjectIdentity());
+            }
+            return highlightIndex.terrain(com.rspsi.editor.model.WorldTileAddress.of(
+                    hit.tile().x(), hit.tile().y(), hit.tile().plane()));
+        }).orElse(new int[0]);
+    }
+
+    private int[] selectedCommands() {
+        var session = highlightSession;
+        if (session == null) return new int[0];
+        var model = session.selection();
+        var current = model.current();
+        java.util.Set<com.rspsi.editor.model.TileCoordinate> tiles = model.selectedCoordinates();
+        Object key = java.util.List.of(java.util.Objects.requireNonNullElse(current, ""), tiles);
+        if (key.equals(highlightSelectionKey)) return selectedCommands;
+        java.util.List<int[]> parts = new java.util.ArrayList<>();
+        java.util.Set<com.rspsi.editor.model.WorldObject> objects = switch (current) {
+            case com.rspsi.editor.selection.ObjectSelection single -> java.util.Set.of(single.object());
+            case com.rspsi.editor.selection.ObjectSetSelection set -> set.objects();
+            case null, default -> java.util.Set.of();
+        };
+        for (var object : objects) {
+            var world = session.coordinates().toWorld(new com.rspsi.editor.model.LocalTile(
+                    object.plane(), object.x(), object.y()));
+            parts.add(highlightIndex.location(com.rspsi.editor.model.WorldTileAddress.of(
+                    world.x(), world.y(), world.plane()), object.id(), object.type(), object.rotation()));
+        }
+        if (objects.isEmpty()) {
+            for (var tile : tiles) {
+                var world = session.coordinates().toWorld(new com.rspsi.editor.model.LocalTile(
+                        tile.plane(), tile.x(), tile.y()));
+                parts.add(highlightIndex.terrain(com.rspsi.editor.model.WorldTileAddress.of(
+                        world.x(), world.y(), world.plane())));
+            }
+        }
+        selectedCommands = parts.stream().flatMapToInt(java.util.Arrays::stream).toArray();
+        highlightSelectionKey = key;
+        return selectedCommands;
+    }
+
     public void setZonedPlan(GpuZonedUploadPlan plan) {
         zonedPlan = plan;
     }
@@ -360,7 +438,9 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         SceneCameraProjection frameProjection = SceneCameraProjection.editorDefault();
         int textureCycle = textureAnimationCycle();
         boolean animatedTextures = hasAnimatedTextures(plan);
-        boolean redrawScene = renderedPlan != plan
+        com.rspsi.editor.render.SceneHighlight highlight = resolveHighlight(plan);
+        boolean redrawScene = !renderedHighlight.equals(highlight)
+                || renderedPlan != plan
                 || renderedZonedPlan != zonedPlan
                 || !Objects.equals(renderedCamera, frameCamera)
                 || !Objects.equals(renderedPresentation, presentation)
@@ -371,7 +451,9 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
                 || (animatedTextures && renderedTextureCycle != textureCycle);
         if (redrawScene) {
             framebuffer.bindForScene();
+            renderer.setHighlight(highlight);
             renderer.draw(plan, zonedPlan, frameCamera, width, height, presentation);
+            renderedHighlight = highlight;
             framebuffer.resolve();
             renderedPlan = plan;
             renderedZonedPlan = zonedPlan;
@@ -387,6 +469,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         ImGui.image(framebuffer.texture(), width, height, 0.0f, 1.0f, 1.0f, 0.0f);
         imageOriginX = ImGui.getItemRectMinX();
         imageOriginY = ImGui.getItemRectMinY();
+        imageHovered = ImGui.isItemHovered();
         updateSelectionFromInput();
         updateCameraFromInput();
         updateCameraFromKeyboard();

@@ -95,15 +95,9 @@ public final class SelectionOverlayPlugin implements StudioPlugin {
                     o -> computeWorldVertices(definitions, o, context));
             if (worldVertices.size() < 3) continue;
 
-            ObjectCategory category = object.category();
-            int outline = style.outlineColor(category);
-            draw.modelHull(worldVertices, style.fillColor(category), true);
-            if (style.paintedEdge()) {
-                // A soft, wider under-stroke behind the crisp one reads as a
-                // "painted" edge rather than a thin wireframe line.
-                draw.modelHullOutline(worldVertices, (outline & 0xFFFFFF00) | 0x50, style.outlineThickness() * 2.2f);
-            }
-            draw.modelHullOutline(worldVertices, outline, style.outlineThickness());
+            // The silhouette outline itself is drawn by the renderer's highlight pass
+            // (HighlightOutlinePass); this overlay only adds the name label.
+            int outline = style.outlineColor(object.category());
 
             if (style.showObjectInfo()) {
                 renderObjectInfo(draw, definitions, object, worldVertices, outline);

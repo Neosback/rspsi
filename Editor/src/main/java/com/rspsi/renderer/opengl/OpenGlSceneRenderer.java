@@ -185,6 +185,8 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private int pickerTextureStateLocation;
 
     private final ZoneVboManager zoneManager = new ZoneVboManager();
+    private final HighlightOutlinePass highlightPass = new HighlightOutlinePass();
+    private com.rspsi.editor.render.SceneHighlight highlight = com.rspsi.editor.render.SceneHighlight.NONE;
     private final GpuPickerFramebuffer pickerFramebuffer = new GpuPickerFramebuffer();
     private final ArrayList<Integer> pickerOrderWorkspace = new ArrayList<>();
     private boolean gpuPickingEnabled;
@@ -263,6 +265,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         bindFrameUniformBlock(program, "Vanilla");
         bindFrameUniformBlock(pickerProgram, "Picker");
         frameUniformBuffer.initialize();
+        highlightPass.initialize(SHADER_SOURCES);
 
         textureLocation = glGetUniformLocation(program, "uTexture");
         textureStateLocation = glGetUniformLocation(program, "uTextureState");
@@ -538,6 +541,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
         glUseProgram(0);
+        highlightPass.draw(commands, zoneManager, highlight, width, height);
         captureGlError();
         finishPerformanceFrame();
         statistics = statisticsFor(plan, runtimeGeometry, visibility,
@@ -578,6 +582,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
      * World-unit bounds (x/z, 128 per tile) of the editable region, or null. Scene
      * geometry outside them is loaded neighbour context and draws dimmed.
      */
+    /** Hovered/selected commands of the plan passed to the next {@code draw}; outlined on top. */
+    public void setHighlight(com.rspsi.editor.render.SceneHighlight highlight) {
+        this.highlight = highlight == null ? com.rspsi.editor.render.SceneHighlight.NONE : highlight;
+    }
+
     public void setEditBounds(SceneFog.Bounds bounds) {
         frameUniformBuffer.setEditBounds(bounds);
     }
@@ -1613,6 +1622,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         textureArray = 0;
         textureStateBuffer.close();
         frameUniformBuffer.close();
+        highlightPass.close();
         gpuTimerQuery.close();
         indirectDrawBuffer.close();
         performanceMetrics.reset();
