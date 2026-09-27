@@ -17,9 +17,6 @@ class CoreCompositionBoundaryTest {
         assertCanonicalComposition(
                 Path.of("src/main/java/com/rspsi/studio/StudioApplication.java"),
                 "StudioApplication");
-        assertCanonicalComposition(
-                Path.of("src/main/java/com/rspsi/ui/workspace/ControlledWorkspaceBridge.java"),
-                "ControlledWorkspaceBridge");
     }
 
     private static void assertCanonicalComposition(Path sourcePath, String owner) throws Exception {

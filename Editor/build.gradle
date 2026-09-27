@@ -42,14 +42,9 @@ dependencies {
     api project(':Client')
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.11.0'
-    implementation 'io.github.mkpaz:atlantafx-base:2.1.0'
-    implementation 'org.kordamp.ikonli:ikonli-javafx:12.3.1'
-    implementation 'org.kordamp.ikonli:ikonli-materialdesign2-pack:12.3.1'
     // The native production viewport is a GLFW/OpenGL surface presented by
-    // Dear ImGui. The JavaFX/AWT viewport remains a transitional compatibility
-    // surface; GL handles and shader code stay isolated in Editor.
+    // Dear ImGui. GL handles and shader code stay isolated in Editor.
     def lwjglVersion = '3.4.3'
-    implementation "org.lwjglx:lwjgl3-awt:0.2.5"
     implementation "org.lwjgl:lwjgl:${lwjglVersion}"
     implementation "org.lwjgl:lwjgl-glfw:${lwjglVersion}"
     implementation "org.lwjgl:lwjgl-opengl:${lwjglVersion}"
@@ -90,30 +85,18 @@ dependencies {
     runtimeOnly "org.lwjgl:lwjgl-opengl:${lwjglVersion}:natives-windows-arm64"
     runtimeOnly "org.lwjgl:lwjgl-opengl:${lwjglVersion}:natives-linux"
     runtimeOnly "org.lwjgl:lwjgl-opengl:${lwjglVersion}:natives-linux-arm64"
-    api(group: 'org.controlsfx', name: 'controlsfx', version: '11.2.2') {
-        exclude group: 'org.openjfx'
-    }
-    api('com.jfoenix:jfoenix:9.0.10') {
-        exclude group: 'org.openjfx'
-    }
 }
 
 runtime {
     options = ['--strip-debug', '--compress', '2', '--no-header-files', '--no-man-pages']
     modules = [
-            'javafx.base',
             'java.desktop',
-            'javafx.graphics',
-            'javafx.controls',
-            'javafx.fxml',
-            'javafx.swing',
             'java.naming',
             'java.logging',
             'java.management',
             'java.xml',
             'jdk.unsupported',
             'java.sql',
-            'javafx.media',
             'java.scripting',
             'jdk.jfr',
             'jdk.unsupported.desktop',

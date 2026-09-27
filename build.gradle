@@ -6,8 +6,6 @@ plugins {
     id 'org.jetbrains.kotlin.jvm' version '2.4.20' apply false
 
     id 'org.beryx.runtime' version '1.13.1' apply false
-
-    id 'org.openjfx.javafxplugin' version '0.1.0'
 }
 
 wrapper {
@@ -63,12 +61,6 @@ subprojects {
 
     tasks.withType(Test).configureEach {
         useJUnitPlatform()
-    }
-
-    apply plugin: 'org.openjfx.javafxplugin'
-    javafx {
-        version = "21"
-        modules = ['javafx.base', 'javafx.fxml', 'javafx.graphics', 'javafx.controls', 'javafx.media', 'javafx.swing']
     }
 
 }
