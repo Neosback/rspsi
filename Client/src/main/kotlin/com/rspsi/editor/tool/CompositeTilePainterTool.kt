@@ -110,7 +110,7 @@ class CompositeTilePainterTool @JvmOverloads constructor(
         val commands=mutableListOf<EditorCommand>();val original=session.world();val predicted=original.copy();val affected=LinkedHashSet<TileCoordinate>()
         if(state.applyHeight()){
             val lattice=TerrainVertexLattice(predicted)
-            for(c in targets){val p=c.plane();val x=c.x();val y=c.y()
+            for(c in targets){val p=c.plane;val x=c.x;val y=c.y
                 affected.addAll(lattice.setHeight(p,x,y,state.height()));affected.addAll(lattice.setHeight(p,x+1,y,state.height()))
                 affected.addAll(lattice.setHeight(p,x+1,y+1,state.height()));affected.addAll(lattice.setHeight(p,x,y+1,state.height()))}
             for(c in affected){val before=original.tile(c).snapshot();val after=predicted.tile(c).snapshot()
