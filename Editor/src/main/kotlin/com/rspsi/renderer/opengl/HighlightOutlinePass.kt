@@ -12,9 +12,7 @@ import org.lwjgl.opengl.GL11.GL_FILL
 import org.lwjgl.opengl.GL11.GL_FRONT_AND_BACK
 import org.lwjgl.opengl.GL11.GL_NEAREST
 import org.lwjgl.opengl.GL11.GL_ONE
-import org.lwjgl.opengl.GL11.GL_ONE_MINUS_SRC_ALPHA
 import org.lwjgl.opengl.GL11.GL_RGBA
-import org.lwjgl.opengl.GL11.GL_SRC_ALPHA
 import org.lwjgl.opengl.GL11.GL_TEXTURE_2D
 import org.lwjgl.opengl.GL11.GL_TEXTURE_MAG_FILTER
 import org.lwjgl.opengl.GL11.GL_TEXTURE_MIN_FILTER
@@ -68,11 +66,12 @@ import org.lwjgl.opengl.GL31.glUniformBlockBinding
  * Hover and selection outlines drawn on the GPU, in the style of RuneLite's
  * `ModelOutlineRenderer` and `InteractHighlight` defaults.
  *
- * Only the highlighted draw commands are re-submitted, into a single-sample mask with no depth
+ * Only the highlighted index ranges are re-submitted, into a single-sample mask with no depth
  * test (red = hovered, green = selected), so a silhouette stays readable behind walls exactly as
- * RuneLite's outline does. A full-screen pass then dilates the mask into a feathered outline and
- * blends it into the scene target. Tiles use the same path through their terrain draws, so an
- * outline follows the tile's real overlay shape and slope.
+ * RuneLite's outline does. A full-screen pass dilates the mask into a feathered outline in a
+ * transparent overlay texture that the viewport layers over the cached scene image, so moving
+ * the pointer never redraws the scene. Tiles use their own terrain triangles, so an outline
+ * follows the tile's real overlay shape and slope.
  */
 internal class HighlightOutlinePass : AutoCloseable {
     private var maskProgram = 0
@@ -80,6 +79,8 @@ internal class HighlightOutlinePass : AutoCloseable {
     private var maskColorLocation = -1
     private var framebuffer = 0
     private var maskTexture = 0
+    private var overlayFramebuffer = 0
+    private var overlayTexture = 0
     private var emptyVao = 0
     private var width = 0
     private var height = 0
@@ -98,22 +99,22 @@ internal class HighlightOutlinePass : AutoCloseable {
     }
 
     /**
-     * Draws [highlight] over the scene already rendered into the currently bound draw framebuffer.
-     * The frame uniform block must still hold this frame's camera.
+     * Renders [highlight] into the overlay texture and returns it, or 0 when there is nothing
+     * to draw. The frame uniform block must hold the camera of the scene image it overlays.
      */
-    fun draw(
+    fun render(
         commands: List<GpuDrawCommand>,
         zones: ZoneVboManager,
         highlight: SceneHighlight,
         targetWidth: Int,
         targetHeight: Int,
-    ) {
-        if (maskProgram == 0 || highlight.isEmpty() || targetWidth <= 0 || targetHeight <= 0) return
+    ): Int {
+        if (maskProgram == 0 || highlight.isEmpty() || targetWidth <= 0 || targetHeight <= 0) return 0
         val previousFramebuffer = IntArray(1)
         glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, previousFramebuffer)
         val previousViewport = IntArray(4)
         glGetIntegerv(GL_VIEWPORT, previousViewport)
-        ensureTarget(targetWidth, targetHeight)
+        ensureTargets(targetWidth, targetHeight)
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer)
         glViewport(0, 0, width, height)
@@ -126,14 +127,14 @@ internal class HighlightOutlinePass : AutoCloseable {
         glBlendFunc(GL_ONE, GL_ONE)
         glUseProgram(maskProgram)
         glUniform4f(maskColorLocation, 1f, 0f, 0f, 1f)
-        drawCommands(commands, zones, highlight.hovered)
+        drawRanges(commands, zones, highlight.hovered)
         glUniform4f(maskColorLocation, 0f, 1f, 0f, 1f)
-        drawCommands(commands, zones, highlight.selected)
+        drawRanges(commands, zones, highlight.selected)
         glBindVertexArray(0)
+        glDisable(GL_BLEND)
 
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, previousFramebuffer[0])
-        glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3])
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        glBindFramebuffer(GL_FRAMEBUFFER, overlayFramebuffer)
+        glClear(GL_COLOR_BUFFER_BIT)
         glUseProgram(outlineProgram)
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_2D, maskTexture)
@@ -149,25 +150,32 @@ internal class HighlightOutlinePass : AutoCloseable {
         glBindVertexArray(0)
         glBindTexture(GL_TEXTURE_2D, 0)
         glUseProgram(0)
-        glDisable(GL_BLEND)
         glEnable(GL_DEPTH_TEST)
+
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, previousFramebuffer[0])
+        glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3])
+        return overlayTexture
     }
 
-    private fun drawCommands(commands: List<GpuDrawCommand>, zones: ZoneVboManager, indices: IntArray) {
+    private fun drawRanges(commands: List<GpuDrawCommand>, zones: ZoneVboManager, ranges: IntArray) {
         var boundVao = -1
-        for (index in indices) {
+        var i = 0
+        while (i + 2 < ranges.size) {
+            val index = ranges[i]
+            val offset = ranges[i + 1]
+            val count = ranges[i + 2]
+            i += 3
             if (index < 0 || index >= commands.size) continue
             val allocation = zones.allocationForCommand(index) ?: continue
             if (allocation.vao() != boundVao) {
                 glBindVertexArray(allocation.vao())
                 boundVao = allocation.vao()
             }
-            val command = commands[index]
             glDrawElements(
                 GL_TRIANGLES,
-                command.indexCount(),
+                count,
                 GL_UNSIGNED_INT,
-                zones.localFirstIndex(index).toLong() * Integer.BYTES,
+                (zones.localFirstIndex(index) + offset).toLong() * Integer.BYTES,
             )
         }
     }
@@ -182,21 +190,30 @@ internal class HighlightOutlinePass : AutoCloseable {
         )
     }
 
-    private fun ensureTarget(targetWidth: Int, targetHeight: Int) {
+    private fun ensureTargets(targetWidth: Int, targetHeight: Int) {
         if (framebuffer != 0 && width == targetWidth && height == targetHeight) return
-        if (maskTexture == 0) maskTexture = glGenTextures()
-        glBindTexture(GL_TEXTURE_2D, maskTexture)
+        maskTexture = allocateTexture(maskTexture, targetWidth, targetHeight)
+        overlayTexture = allocateTexture(overlayTexture, targetWidth, targetHeight)
+        if (framebuffer == 0) framebuffer = glGenFramebuffers()
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer)
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, maskTexture, 0)
+        if (overlayFramebuffer == 0) overlayFramebuffer = glGenFramebuffers()
+        glBindFramebuffer(GL_FRAMEBUFFER, overlayFramebuffer)
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, overlayTexture, 0)
+        width = targetWidth
+        height = targetHeight
+    }
+
+    private fun allocateTexture(existing: Int, targetWidth: Int, targetHeight: Int): Int {
+        val texture = if (existing == 0) glGenTextures() else existing
+        glBindTexture(GL_TEXTURE_2D, texture)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, targetWidth, targetHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0L)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
         glBindTexture(GL_TEXTURE_2D, 0)
-        if (framebuffer == 0) framebuffer = glGenFramebuffers()
-        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer)
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, maskTexture, 0)
-        width = targetWidth
-        height = targetHeight
+        return texture
     }
 
     override fun close() {
@@ -204,11 +221,15 @@ internal class HighlightOutlinePass : AutoCloseable {
         if (outlineProgram != 0) glDeleteProgram(outlineProgram)
         if (framebuffer != 0) glDeleteFramebuffers(framebuffer)
         if (maskTexture != 0) glDeleteTextures(maskTexture)
+        if (overlayFramebuffer != 0) glDeleteFramebuffers(overlayFramebuffer)
+        if (overlayTexture != 0) glDeleteTextures(overlayTexture)
         if (emptyVao != 0) glDeleteVertexArrays(emptyVao)
         maskProgram = 0
         outlineProgram = 0
         framebuffer = 0
         maskTexture = 0
+        overlayFramebuffer = 0
+        overlayTexture = 0
         emptyVao = 0
     }
 

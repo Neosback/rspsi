@@ -3,8 +3,9 @@ package com.rspsi.editor.render
 import com.rspsi.editor.model.WorldTileAddress
 
 /**
- * Draw-command indices of one [GpuUploadPlan] to outline: what the pointer is over and what
- * is selected. Renderer-neutral; a backend draws these commands into a mask and outlines it.
+ * Index ranges of one [GpuUploadPlan] to outline: what the pointer is over and what is
+ * selected. Each range is three ints, `command, indexOffset, indexCount`, so a tile inside a
+ * zone-merged terrain draw outlines only its own triangles. Renderer-neutral.
  */
 class SceneHighlight(
     hovered: IntArray,
@@ -12,6 +13,10 @@ class SceneHighlight(
 ) {
     val hovered: IntArray = hovered.copyOf()
     val selected: IntArray = selected.copyOf()
+
+    init {
+        require(hovered.size % 3 == 0 && selected.size % 3 == 0) { "Highlight ranges are triples" }
+    }
 
     fun isEmpty(): Boolean = hovered.isEmpty() && selected.isEmpty()
 
@@ -29,54 +34,106 @@ class SceneHighlight(
 }
 
 /**
- * Finds the draw commands that belong to a tile or a placed object in one plan.
+ * Finds the draw ranges that belong to a tile or a placed object in one plan.
  *
- * Commands are grouped by their authored tile once per plan; every lookup then scans only the
- * handful of commands on one tile. A location's commands live on its anchor tile.
+ * Model draws never span tiles, so a location is every matching command on its anchor tile.
+ * Terrain draws merge across an 8x8 zone, so a tile is found by scanning the zone's terrain
+ * commands for the triangles whose vertices carry that tile. Results are cached per tile.
  */
 class GpuHighlightIndex(val plan: GpuUploadPlan) {
-    private val byTile = HashMap<Long, IntArray>()
+    private val modelsByTile = HashMap<Long, IntArray>()
+    private val terrainByZone = HashMap<Long, IntArray>()
+    private val terrainCache = HashMap<Long, IntArray>()
 
     init {
-        val grouped = HashMap<Long, MutableList<Int>>()
+        val models = HashMap<Long, MutableList<Int>>()
+        val terrain = HashMap<Long, MutableList<Int>>()
         plan.commands().forEachIndexed { index, command ->
-            grouped.getOrPut(key(command.tile())) { ArrayList(4) }.add(index)
+            val tile = command.tile()
+            if (command.layer() == SceneLayer.Kind.TERRAIN) {
+                terrain.getOrPut(zoneKey(tile.plane, tile.worldX, tile.worldY)) { ArrayList(8) }.add(index)
+            } else {
+                models.getOrPut(tileKey(tile.plane, tile.worldX, tile.worldY)) { ArrayList(4) }.add(index)
+            }
         }
-        grouped.forEach { (tile, indices) -> byTile[tile] = indices.toIntArray() }
+        models.forEach { (key, indices) -> modelsByTile[key] = indices.toIntArray() }
+        terrain.forEach { (key, indices) -> terrainByZone[key] = indices.toIntArray() }
     }
 
-    /** Terrain draws of one tile: its underlay/overlay shape as the client paints it. */
-    fun terrain(tile: WorldTileAddress): IntArray =
-        filter(tile) { it.layer() == SceneLayer.Kind.TERRAIN }
+    /** Terrain triangles of one tile: its underlay/overlay shape as the client paints it. */
+    fun terrain(tile: WorldTileAddress): IntArray {
+        val key = tileKey(tile.plane, tile.worldX, tile.worldY)
+        return terrainCache.getOrPut(key) { scanTerrain(tile) }
+    }
 
     /** Every model draw of one placed location, matched by id, type and rotation on its anchor. */
     fun location(anchor: WorldTileAddress, objectId: Int, type: Int, rotation: Int): IntArray =
-        filter(anchor) {
-            it.layer() != SceneLayer.Kind.TERRAIN &&
-                it.objectId() == objectId &&
+        wholeCommands(anchor) {
+            it.objectId() == objectId &&
                 (!it.sceneObjectIdentity().present() ||
                     (it.sceneObjectIdentity().shape() == type && it.sceneObjectIdentity().rotation() == rotation))
         }
 
     /** Every model draw sharing a picked command's scene identity. */
     fun location(anchor: WorldTileAddress, identity: SceneObjectIdentity): IntArray =
-        filter(anchor) { it.layer() != SceneLayer.Kind.TERRAIN && it.sceneObjectIdentity() == identity }
+        wholeCommands(anchor) { it.sceneObjectIdentity() == identity }
 
-    private inline fun filter(tile: WorldTileAddress, predicate: (GpuDrawCommand) -> Boolean): IntArray {
-        val indices = byTile[key(tile)] ?: return EMPTY
+    private inline fun wholeCommands(tile: WorldTileAddress, predicate: (GpuDrawCommand) -> Boolean): IntArray {
+        val indices = modelsByTile[tileKey(tile.plane, tile.worldX, tile.worldY)] ?: return EMPTY
         val commands = plan.commands()
-        var count = 0
-        val result = IntArray(indices.size)
+        val ranges = IntRanges()
         for (index in indices) {
-            if (predicate(commands[index])) result[count++] = index
+            val command = commands[index]
+            if (predicate(command)) ranges.add(index, 0, command.indexCount())
         }
-        return if (count == result.size) result else result.copyOf(count)
+        return ranges.toIntArray()
+    }
+
+    private fun scanTerrain(tile: WorldTileAddress): IntArray {
+        val candidates = terrainByZone[zoneKey(tile.plane, tile.worldX, tile.worldY)] ?: return EMPTY
+        val commands = plan.commands()
+        val ranges = IntRanges()
+        for (index in candidates) {
+            val count = commands[index].indexCount()
+            var runStart = -1
+            var offset = 0
+            while (offset + 2 < count) {
+                val vertex = plan.indexedVertex(index, offset)
+                val inside = vertex.pickerPlane() == tile.plane &&
+                    vertex.pickerTileX() == tile.worldX && vertex.pickerTileY() == tile.worldY
+                if (inside && runStart < 0) runStart = offset
+                if (!inside && runStart >= 0) {
+                    ranges.add(index, runStart, offset - runStart)
+                    runStart = -1
+                }
+                offset += 3
+            }
+            if (runStart >= 0) ranges.add(index, runStart, offset - runStart)
+        }
+        return ranges.toIntArray()
+    }
+
+    private class IntRanges {
+        private var values = IntArray(12)
+        private var size = 0
+
+        fun add(command: Int, offset: Int, count: Int) {
+            if (count <= 0) return
+            if (size + 3 > values.size) values = values.copyOf(values.size * 2)
+            values[size++] = command
+            values[size++] = offset
+            values[size++] = count
+        }
+
+        fun toIntArray(): IntArray = values.copyOf(size)
     }
 
     private companion object {
         val EMPTY = IntArray(0)
 
-        fun key(tile: WorldTileAddress): Long =
-            (tile.plane.toLong() shl 40) or (tile.worldX.toLong() shl 20) or tile.worldY.toLong()
+        fun tileKey(plane: Int, x: Int, y: Int): Long =
+            (plane.toLong() shl 40) or (x.toLong() shl 20) or y.toLong()
+
+        fun zoneKey(plane: Int, x: Int, y: Int): Long = tileKey(plane, x shr 3, y shr 3)
     }
 }

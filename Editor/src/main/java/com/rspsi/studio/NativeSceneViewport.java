@@ -33,6 +33,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private com.rspsi.editor.render.GpuHighlightIndex highlightIndex;
     private Object highlightSelectionKey;
     private int[] selectedCommands = new int[0];
+    private int highlightTexture;
     private com.rspsi.editor.render.SceneHighlight renderedHighlight =
             com.rspsi.editor.render.SceneHighlight.NONE;
     private final GlFramebuffer framebuffer = new GlFramebuffer();
@@ -439,8 +440,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         int textureCycle = textureAnimationCycle();
         boolean animatedTextures = hasAnimatedTextures(plan);
         com.rspsi.editor.render.SceneHighlight highlight = resolveHighlight(plan);
-        boolean redrawScene = !renderedHighlight.equals(highlight)
-                || renderedPlan != plan
+        boolean redrawScene = renderedPlan != plan
                 || renderedZonedPlan != zonedPlan
                 || !Objects.equals(renderedCamera, frameCamera)
                 || !Objects.equals(renderedPresentation, presentation)
@@ -451,9 +451,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
                 || (animatedTextures && renderedTextureCycle != textureCycle);
         if (redrawScene) {
             framebuffer.bindForScene();
-            renderer.setHighlight(highlight);
             renderer.draw(plan, zonedPlan, frameCamera, width, height, presentation);
-            renderedHighlight = highlight;
             framebuffer.resolve();
             renderedPlan = plan;
             renderedZonedPlan = zonedPlan;
@@ -465,10 +463,20 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
             renderedCullMode = renderer.cullMode();
             renderedTextureCycle = textureCycle;
         }
+        // Outlines live in their own overlay texture: a hover change redraws a few triangles
+        // and one full-screen pass, never the scene.
+        if (redrawScene || !renderedHighlight.equals(highlight)) {
+            highlightTexture = renderer.drawHighlightOverlay(plan, highlight, width, height);
+            renderedHighlight = highlight;
+        }
         recordPresentedFrame(plan, frameCamera, frameProjection, width, height);
         ImGui.image(framebuffer.texture(), width, height, 0.0f, 1.0f, 1.0f, 0.0f);
         imageOriginX = ImGui.getItemRectMinX();
         imageOriginY = ImGui.getItemRectMinY();
+        if (highlightTexture != 0) {
+            ImGui.getWindowDrawList().addImage(highlightTexture, imageOriginX, imageOriginY,
+                    imageOriginX + width, imageOriginY + height, 0.0f, 1.0f, 1.0f, 0.0f);
+        }
         imageHovered = ImGui.isItemHovered();
         updateSelectionFromInput();
         updateCameraFromInput();

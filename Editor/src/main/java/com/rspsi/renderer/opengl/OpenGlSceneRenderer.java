@@ -186,7 +186,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
 
     private final ZoneVboManager zoneManager = new ZoneVboManager();
     private final HighlightOutlinePass highlightPass = new HighlightOutlinePass();
-    private com.rspsi.editor.render.SceneHighlight highlight = com.rspsi.editor.render.SceneHighlight.NONE;
     private final GpuPickerFramebuffer pickerFramebuffer = new GpuPickerFramebuffer();
     private final ArrayList<Integer> pickerOrderWorkspace = new ArrayList<>();
     private boolean gpuPickingEnabled;
@@ -541,7 +540,6 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
         glUseProgram(0);
-        highlightPass.draw(commands, zoneManager, highlight, width, height);
         captureGlError();
         finishPerformanceFrame();
         statistics = statisticsFor(plan, runtimeGeometry, visibility,
@@ -582,9 +580,18 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
      * World-unit bounds (x/z, 128 per tile) of the editable region, or null. Scene
      * geometry outside them is loaded neighbour context and draws dimmed.
      */
-    /** Hovered/selected commands of the plan passed to the next {@code draw}; outlined on top. */
-    public void setHighlight(com.rspsi.editor.render.SceneHighlight highlight) {
-        this.highlight = highlight == null ? com.rspsi.editor.render.SceneHighlight.NONE : highlight;
+    /**
+     * Renders hover/selection outlines for the plan last passed to {@code draw} into a
+     * transparent overlay texture and returns it (0 when empty). Uses that draw's camera, so
+     * call it after the scene image it overlays; the scene itself is not redrawn.
+     */
+    public int drawHighlightOverlay(GpuUploadPlan plan, com.rspsi.editor.render.SceneHighlight highlight,
+                                    int width, int height) {
+        if (plan == null || highlight == null || highlight.isEmpty()) return 0;
+        frameUniformBuffer.bind();
+        int texture = highlightPass.render(plan.commands(), zoneManager, highlight, width, height);
+        captureGlError();
+        return texture;
     }
 
     public void setEditBounds(SceneFog.Bounds bounds) {
