@@ -34,6 +34,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     private Object highlightSelectionKey;
     private int[] selectedCommands = new int[0];
     private int highlightTexture;
+    private com.rspsi.editor.render.ScenePlaneFilter renderedPlaneFilter;
     private com.rspsi.editor.render.SceneHighlight renderedHighlight =
             com.rspsi.editor.render.SceneHighlight.NONE;
     private final GlFramebuffer framebuffer = new GlFramebuffer();
@@ -102,6 +103,11 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         return navigationService;
     }
 
+    /** Planes drawn this frame; switching them never rebuilds or re-uploads geometry. */
+    public void setPlaneFilter(com.rspsi.editor.render.ScenePlaneFilter filter) {
+        renderer.setPlaneFilter(filter);
+    }
+
     /** Back-face culling mode for model geometry; see the renderer. */
     public void setCullMode(int mode) {
         renderer.setCullMode(mode);
@@ -132,6 +138,23 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
      * Supplies the native-ready 8x8 zone geometry corresponding to the flat
      * compatibility plan. A mismatched fingerprint is ignored by the renderer.
      */
+    private GpuUploadPlan pickPlan;
+    private GpuZonedUploadPlan pickZonedPlan;
+    private com.rspsi.editor.render.SceneHighlight positionsSource;
+    private float[] hoveredPositions = new float[0];
+    private float[] selectedPositions = new float[0];
+
+    /**
+     * The plan picks and outlines are resolved against. Studio updates it on loads, edits
+     * and render-setting changes but not on animation frames: static geometry does not move
+     * between frames, and re-indexing the picker for every animation plan cost 0.3-1.9 s per
+     * refresh while the pointer moved.
+     */
+    public void setPickPlan(GpuUploadPlan plan, GpuZonedUploadPlan zoned) {
+        pickPlan = plan;
+        pickZonedPlan = zoned;
+    }
+
     /** Session whose selection is outlined; null outlines nothing. */
     public void setHighlightSession(com.rspsi.editor.EditorSession session) {
         highlightSession = session;
@@ -143,9 +166,11 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
     }
 
     private com.rspsi.editor.render.SceneHighlight resolveHighlight(GpuUploadPlan plan) {
+        if (pickPlan != null) plan = pickPlan;
         if (plan == null) return com.rspsi.editor.render.SceneHighlight.NONE;
-        if (highlightIndex == null || highlightIndex.getPlan() != plan) {
-            highlightIndex = new com.rspsi.editor.render.GpuHighlightIndex(plan);
+        highlightPlan = plan;
+        if (highlightIndex != null && highlightIndex.getPlan() != plan) {
+            highlightIndex = null;
             highlightSelectionKey = null;
         }
         int[] hovered = hoveredCommands();
@@ -154,19 +179,64 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         return new com.rspsi.editor.render.SceneHighlight(hovered, selected);
     }
 
+    /** What the pointer is over: a tile's terrain, or one placed location on its anchor. */
+    private record HoverTarget(com.rspsi.editor.model.WorldTileAddress tile, boolean object,
+                               com.rspsi.editor.render.SceneObjectIdentity identity, int objectId) {
+    }
+
+    private HoverTarget hoverTarget;
+    private GpuUploadPlan highlightPlan;
+
+    /** Built on first use per plan: idle frames with nothing hovered or selected skip it. */
+    private com.rspsi.editor.render.GpuHighlightIndex highlightIndex() {
+        if (highlightIndex == null || highlightIndex.getPlan() != highlightPlan) {
+            highlightIndex = new com.rspsi.editor.render.GpuHighlightIndex(highlightPlan);
+        }
+        return highlightIndex;
+    }
+    private int hoverPickX = Integer.MIN_VALUE;
+    private int hoverPickY = Integer.MIN_VALUE;
+    private CameraState hoverPickCamera;
+    private Integer hoverPickPlane;
+
     private int[] hoveredCommands() {
-        if (!hoverHighlight || !imageHovered || ImGui.isMouseDragging(0, 1.0f)) return new int[0];
-        float x = ImGui.getIO().getMousePosX() - imageOriginX;
-        float y = ImGui.getIO().getMousePosY() - imageOriginY;
-        return pickAt(x, y).map(hit -> {
-            if (hit.objectTile() != null && hit.sceneObjectIdentity().present()) {
-                return highlightIndex.location(com.rspsi.editor.model.WorldTileAddress.of(
-                        hit.objectTile().x(), hit.objectTile().y(), hit.objectTile().plane()),
-                        hit.sceneObjectIdentity());
-            }
-            return highlightIndex.terrain(com.rspsi.editor.model.WorldTileAddress.of(
-                    hit.tile().x(), hit.tile().y(), hit.tile().plane()));
-        }).orElse(new int[0]);
+        if (!hoverHighlight || !imageHovered || ImGui.isMouseDragging(0, 1.0f)) {
+            hoverTarget = null;
+            hoverPickCamera = null;
+            return new int[0];
+        }
+        int x = (int) (ImGui.getIO().getMousePosX() - imageOriginX);
+        int y = (int) (ImGui.getIO().getMousePosY() - imageOriginY);
+        // Pick only when the pointer, camera or pick plane moves. Animation swaps the plan
+        // several times a second; re-picking then would rebuild the picker's spatial zones
+        // on the render thread while the mouse rests. The target is re-resolved instead.
+        CameraState camera = navigation.camera();
+        if (x != hoverPickX || y != hoverPickY || !Objects.equals(camera, hoverPickCamera)
+                || !Objects.equals(pickPlaneRestriction, hoverPickPlane)) {
+            hoverTarget = pickAt(x, y).map(NativeSceneViewport::hoverTargetOf).orElse(null);
+            hoverPickX = x;
+            hoverPickY = y;
+            hoverPickCamera = camera;
+            hoverPickPlane = pickPlaneRestriction;
+        }
+        HoverTarget target = hoverTarget;
+        if (target == null) return new int[0];
+        if (!target.object()) return highlightIndex().terrain(target.tile());
+        return target.identity().present()
+                ? highlightIndex().location(target.tile(), target.identity())
+                : highlightIndex().location(target.tile(), target.objectId());
+    }
+
+    private static HoverTarget hoverTargetOf(PickResult hit) {
+        if (hit.objectHit() && (hit.sceneObjectIdentity().present() || hit.objectId() >= 0)) {
+            WorldTile anchor = hit.objectTile() != null ? hit.objectTile() : hit.tile();
+            return new HoverTarget(com.rspsi.editor.model.WorldTileAddress.of(
+                    anchor.x(), anchor.y(), anchor.plane()), true,
+                    hit.sceneObjectIdentity(), hit.objectId());
+        }
+        return new HoverTarget(com.rspsi.editor.model.WorldTileAddress.of(
+                hit.tile().x(), hit.tile().y(), hit.tile().plane()), false,
+                com.rspsi.editor.render.SceneObjectIdentity.none(), -1);
     }
 
     private int[] selectedCommands() {
@@ -186,14 +256,14 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         for (var object : objects) {
             var world = session.coordinates().toWorld(new com.rspsi.editor.model.LocalTile(
                     object.plane(), object.x(), object.y()));
-            parts.add(highlightIndex.location(com.rspsi.editor.model.WorldTileAddress.of(
+            parts.add(highlightIndex().location(com.rspsi.editor.model.WorldTileAddress.of(
                     world.x(), world.y(), world.plane()), object.id(), object.type(), object.rotation()));
         }
         if (objects.isEmpty()) {
             for (var tile : tiles) {
                 var world = session.coordinates().toWorld(new com.rspsi.editor.model.LocalTile(
                         tile.plane(), tile.x(), tile.y()));
-                parts.add(highlightIndex.terrain(com.rspsi.editor.model.WorldTileAddress.of(
+                parts.add(highlightIndex().terrain(com.rspsi.editor.model.WorldTileAddress.of(
                         world.x(), world.y(), world.plane())));
             }
         }
@@ -313,7 +383,9 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
      * retained so a click resolves against exactly what the user saw.
      */
     public java.util.Optional<PickResult> pickAt(float x, float y) {
-        if (lastPlan == null || lastFrameCamera == null || lastFrameProjection == null
+        GpuUploadPlan plan = pickPlan != null ? pickPlan : lastPlan;
+        GpuZonedUploadPlan zoned = pickPlan != null ? pickZonedPlan : zonedPlan;
+        if (plan == null || lastFrameCamera == null || lastFrameProjection == null
                 || lastWidth <= 0 || lastHeight <= 0) {
             return java.util.Optional.empty();
         }
@@ -323,7 +395,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         }
 
         java.util.Optional<PickResult> result = java.util.Optional.empty();
-        if (gpuPickingEnabled) {
+        if (gpuPickingEnabled && plan == lastPlan) {
             int packedId = renderer.pickId(
                     lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight,
                     x, y, pickPlaneRestriction);
@@ -338,7 +410,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
             // The DDA path remains the authoritative fallback/reference. This also
             // protects selection if a driver rejects the optional integer pass or
             // a future shader/visibility change temporarily breaks GPU parity.
-            result = picker.pick(lastPlan, zonedPlan, lastFrameCamera, lastWidth, lastHeight, x, y,
+            result = picker.pick(plan, zoned, lastFrameCamera, lastWidth, lastHeight, x, y,
                     lastFrameProjection, pickPlaneRestriction);
         }
 
@@ -348,19 +420,19 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
 
     private boolean samePickQuery(float x, float y) {
         return cachedPickResult != null
-                && cachedPickPlan == lastPlan
+                && cachedPickPlan == (pickPlan != null ? pickPlan : lastPlan)
                 && cachedPickZonedPlan == zonedPlan
                 && Objects.equals(cachedPickCamera, lastFrameCamera)
                 && Objects.equals(cachedPickProjection, lastFrameProjection)
                 && Objects.equals(cachedPickPlaneRestriction, pickPlaneRestriction)
                 && cachedPickWidth == lastWidth
                 && cachedPickHeight == lastHeight
-                && Float.floatToIntBits(cachedPickX) == Float.floatToIntBits(x)
-                && Float.floatToIntBits(cachedPickY) == Float.floatToIntBits(y);
+                && (int) cachedPickX == (int) x
+                && (int) cachedPickY == (int) y;
     }
 
     private void cachePick(float x, float y, java.util.Optional<PickResult> result) {
-        cachedPickPlan = lastPlan;
+        cachedPickPlan = pickPlan != null ? pickPlan : lastPlan;
         cachedPickZonedPlan = zonedPlan;
         cachedPickCamera = lastFrameCamera;
         cachedPickProjection = lastFrameProjection;
@@ -448,6 +520,7 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
                 || renderedHeight != height
                 || renderedSamples != framebuffer.samples()
                 || renderedCullMode != renderer.cullMode()
+                || !renderer.planeFilter().equals(renderedPlaneFilter)
                 || (animatedTextures && renderedTextureCycle != textureCycle);
         if (redrawScene) {
             framebuffer.bindForScene();
@@ -461,12 +534,18 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
             renderedHeight = height;
             renderedSamples = framebuffer.samples();
             renderedCullMode = renderer.cullMode();
+            renderedPlaneFilter = renderer.planeFilter();
             renderedTextureCycle = textureCycle;
         }
         // Outlines live in their own overlay texture: a hover change redraws a few triangles
         // and one full-screen pass, never the scene.
         if (redrawScene || !renderedHighlight.equals(highlight)) {
-            highlightTexture = renderer.drawHighlightOverlay(plan, highlight, width, height);
+            if (!highlight.equals(positionsSource)) {
+                hoveredPositions = highlight.isEmpty() ? new float[0] : highlightIndex().positions(highlight.getHovered());
+                selectedPositions = highlight.isEmpty() ? new float[0] : highlightIndex().positions(highlight.getSelected());
+                positionsSource = highlight;
+            }
+            highlightTexture = renderer.drawHighlightOverlay(hoveredPositions, selectedPositions, width, height);
             renderedHighlight = highlight;
         }
         recordPresentedFrame(plan, frameCamera, frameProjection, width, height);
@@ -610,6 +689,8 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
         }
     }
 
+    private boolean toolInteracting = false;
+
     /**
      * Feeds real mouse input to the active {@link com.rspsi.editor.tool.EditorTool} (Single/
      * Multi Select, the Tile Painter brush, Height Sculptor, etc). Must be called right after
@@ -618,7 +699,23 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
      * anything built on them (selection, click-drag painting) silently does nothing.
      */
     public void dispatchToolInput(EditorToolController toolController) {
-        if (toolController == null || !ImGui.isItemHovered()) return;
+        if (toolController == null) return;
+        boolean hovered = ImGui.isItemHovered();
+
+        if (toolInteracting) {
+            if (!ImGui.isMouseDown(ImGuiMouseButton.Left)) {
+                toolInteracting = false;
+                float localX = ImGui.getIO().getMousePosX() - imageOriginX;
+                float localY = ImGui.getIO().getMousePosY() - imageOriginY;
+                var io = ImGui.getIO();
+                PointerEvent event = new PointerEvent(localX, localY, PointerButton.PRIMARY,
+                        io.getKeyShift(), io.getKeyCtrl(), io.getKeyAlt());
+                toolController.pointerUp(event);
+                return;
+            }
+        }
+
+        if (!hovered) return;
         // Middle/right-drag orbit/pan the camera; don't also feed those to the active tool.
         if (ImGui.isMouseDragging(ImGuiMouseButton.Middle, 1.0f)
                 || ImGui.isMouseDragging(ImGuiMouseButton.Right, 1.0f)) {
@@ -632,10 +729,12 @@ public final class NativeSceneViewport implements AutoCloseable, Viewport {
                 io.getKeyShift(), io.getKeyCtrl(), io.getKeyAlt());
 
         if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
+            toolInteracting = true;
             toolController.pointerDown(event);
         } else if (ImGui.isMouseDown(ImGuiMouseButton.Left) && ImGui.isMouseDragging(ImGuiMouseButton.Left, 1.0f)) {
             toolController.pointerDrag(event);
         } else if (ImGui.isMouseReleased(ImGuiMouseButton.Left)) {
+            toolInteracting = false;
             toolController.pointerUp(event);
         } else if (ImGui.isMouseClicked(ImGuiMouseButton.Right)) {
             PointerEvent rightEvent = new PointerEvent(localX, localY, PointerButton.SECONDARY,

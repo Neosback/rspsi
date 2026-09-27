@@ -165,7 +165,7 @@ public final class ObjectPropertyTree {
         }
 
         boolean dirty = isDirty(source, field.name());
-        label(info.label(), help(info, field), dirty);
+        label(info, help(info, field), dirty);
         ImGui.tableNextColumn();
         ImGui.beginDisabled(!source.canEdit());
         switch (field.type()) {
@@ -227,7 +227,7 @@ public final class ObjectPropertyTree {
     private void renderActions(Source source, ObjectFieldCatalog.FieldInfo info) {
         List<String> actions = actions(source);
         String summary = String.join(", ", actions.stream().filter(Objects::nonNull).toList());
-        boolean open = nodeRow(info.label(), info.help(), isDirty(source, "actions"),
+        boolean open = nodeRow(info, isDirty(source, "actions"),
                 summary.isEmpty() ? "none" : summary);
         if (!open) return;
         for (int index = 0; index < actions.size(); index++) {
@@ -265,7 +265,7 @@ public final class ObjectPropertyTree {
 
     private void renderList(Source source, ObjectFieldCatalog.FieldInfo info, String field) {
         List<Integer> values = intList(source, field);
-        boolean open = nodeRow(info.label(), info.help(), isDirty(source, field), values.size() + " entries");
+        boolean open = nodeRow(info, isDirty(source, field), values.size() + " entries");
         if (!open) return;
         boolean transforms = field.equals("transforms");
         for (int index = 0; index < values.size(); index++) {
@@ -315,7 +315,7 @@ public final class ObjectPropertyTree {
         boolean dirty = isDirty(source, firstField) || isDirty(source, secondField);
         String summary = first.size() + (kind == PairKind.MODEL ? " models" : " pairs")
                 + (typeless && !first.isEmpty() ? " (shape 10 only)" : "");
-        boolean open = nodeRow(info.label(), info.help(), dirty, summary);
+        boolean open = nodeRow(info, dirty, summary);
         if (!open) return;
         for (int index = 0; index < first.size(); index++) {
             ImGui.pushID(index);
@@ -489,23 +489,45 @@ public final class ObjectPropertyTree {
     // ---- shared helpers -----------------------------------------------------------------------
 
     /** A property row whose label is an expandable node with a summary value; call treePop when true. */
-    private static boolean nodeRow(String label, String help, boolean dirty, String summary) {
+    private static boolean nodeRow(ObjectFieldCatalog.FieldInfo info, boolean dirty, String summary) {
         ImGui.tableNextRow();
         ImGui.tableNextColumn();
+        ImGui.alignTextToFramePadding();
+        ObjectFieldCatalog.Usage usage = info.usage();
+        ImGui.pushStyleColor(imgui.flag.ImGuiCol.Text, StudioDrawColors.abgr(usage.color()));
+        ImGui.text("[" + usage.shortLabel() + "]");
+        ImGui.popStyleColor();
+        ImGui.sameLine();
         if (dirty) ImGui.pushStyleColor(imgui.flag.ImGuiCol.Text, StudioDrawColors.abgr(ACCENT));
-        boolean open = ImGui.treeNodeEx((dirty ? "* " : "") + label + "##node",
+        boolean open = ImGui.treeNodeEx((dirty ? "* " : "") + info.label() + "##node",
                 ImGuiTreeNodeFlags.SpanAvailWidth | ImGuiTreeNodeFlags.DrawLinesToNodes);
         if (dirty) ImGui.popStyleColor();
-        if (ImGui.isItemHovered() && !help.isBlank()) ImGui.setTooltip(help);
+        if (ImGui.isItemHovered() && !info.help().isBlank()) {
+            ImGui.setTooltip(info.help() + "\n\nEngine Usage: " + usage.label() + " - " + usage.description());
+        }
         ImGui.tableNextColumn();
         ImGui.textDisabled(summary);
         return open;
     }
 
+    private static void label(ObjectFieldCatalog.FieldInfo info, String help, boolean dirty) {
+        label(info.label(), help, dirty, info.usage());
+    }
+
     private static void label(String label, String help, boolean dirty) {
+        label(label, help, dirty, null);
+    }
+
+    private static void label(String label, String help, boolean dirty, ObjectFieldCatalog.Usage usage) {
         ImGui.tableNextRow();
         ImGui.tableNextColumn();
         ImGui.alignTextToFramePadding();
+        if (usage != null) {
+            ImGui.pushStyleColor(imgui.flag.ImGuiCol.Text, StudioDrawColors.abgr(usage.color()));
+            ImGui.text("[" + usage.shortLabel() + "]");
+            ImGui.popStyleColor();
+            ImGui.sameLine();
+        }
         if (dirty) {
             ImGui.pushStyleColor(imgui.flag.ImGuiCol.Text, StudioDrawColors.abgr(ACCENT));
             ImGui.textWrapped("* " + label);
@@ -517,7 +539,9 @@ public final class ObjectPropertyTree {
     }
 
     private static String help(ObjectFieldCatalog.FieldInfo info, ObjectDefinitionRawView.Field field) {
-        return info.help() + "\nField: " + field.name()
+        return info.help()
+                + "\n\nEngine Usage: " + info.usage().label() + " - " + info.usage().description()
+                + "\nField: " + field.name()
                 + (field.opcode().isBlank() ? "" : "   Opcode: " + field.opcode());
     }
 

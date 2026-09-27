@@ -105,7 +105,7 @@ public final class TileBrushPanel implements StudioPanel {
             return;
         }
 
-        ImGui.textColored(StudioPalette.ACCENT, selected.size() + " tile(s) selected");
+        ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), selected.size() + " tile(s) selected");
         float clearWidth = ImGui.calcTextSize("Clear").x + ImGui.getStyle().getFramePaddingX() * 2.0f;
         float offset = ImGui.getContentRegionAvailX() - clearWidth;
         if (offset > 0.0f) ImGui.sameLine(ImGui.getCursorPosX() + offset);
@@ -425,17 +425,20 @@ public final class TileBrushPanel implements StudioPanel {
             return;
         }
         FloorDefinitionView view = def.get();
-        ImGui.text(label + ": #" + definitionId + "   rgb=0x" + Integer.toHexString(view.rgb() & 0xFFFFFF)
-                + "  hue=" + view.hue() + " sat=" + view.saturation() + " lum=" + view.luminance());
-        if (!underlay) {
-            ImGui.sameLine();
-            ImGui.textDisabled("  texture=" + (view.texture() >= 0 ? String.valueOf(view.texture()) : "none"));
+        ImGui.beginGroup();
+        String header = label + " #" + definitionId;
+        if (!underlay && view.texture() >= 0) {
+            header += "  (texture #" + view.texture() + ")";
         }
+        ImGui.text(header);
+        String colorHex = String.format("#%06X", view.rgb() & 0xFFFFFF);
+        ImGui.textDisabled(colorHex + "  H:" + view.hue() + " S:" + view.saturation() + " L:" + view.luminance());
         if (view.secondaryRgb() >= 0) {
-            ImGui.textDisabled("  secondary rgb=0x" + Integer.toHexString(view.secondaryRgb() & 0xFFFFFF)
-                    + " hue=" + view.secondaryHue() + " sat=" + view.secondarySaturation()
-                    + " lum=" + view.secondaryLuminance());
+            String secHex = String.format("#%06X", view.secondaryRgb() & 0xFFFFFF);
+            ImGui.textDisabled("Secondary " + secHex + "  H:" + view.secondaryHue()
+                    + " S:" + view.secondarySaturation() + " L:" + view.secondaryLuminance());
         }
+        ImGui.endGroup();
     }
 
     /**
@@ -470,7 +473,7 @@ public final class TileBrushPanel implements StudioPanel {
                             })
                             .orElse("Object #" + object.id());
 
-            ImGui.textColored(StudioPalette.ACCENT, objectName);
+            ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), objectName);
             ImGui.textDisabled(object.category().displayName()
                     + " · shape " + object.type()
                     + " · rotation " + object.rotation());
@@ -567,9 +570,6 @@ public final class TileBrushPanel implements StudioPanel {
         }
         draw.addRect(x, y, x + size, y + size,
                 StudioPalette.draw(StudioPalette.BORDER_STRONG), 2.0f, 0, 1.5f);
-        draw.addText(StudioFonts.icon(), 18,
-                x + size - 20.0f, y + 4.0f,
-                StudioPalette.draw(StudioPalette.TEXT), StudioIcons.EXPLORE);
         ImGui.dummy(size, size);
     }
 
@@ -588,7 +588,7 @@ public final class TileBrushPanel implements StudioPanel {
 
     private void renderRegionSurvey(LoadedOsrsCacheSession cache, StudioPanelContext context, WorldDocument world) {
         int plane = context.settings() != null
-                ? context.settings().snapshot().get(com.rspsi.editor.render.RenderSettingKeys.ACTIVE_PLANE) : 0;
+                ? context.settings().snapshot().get(com.rspsi.editor.render.RenderSettingKeys.CURRENT_HEIGHT) : 0;
 
         Map<Integer, Integer> underlayCounts = new LinkedHashMap<>();
         Map<Integer, Integer> overlayCounts = new LinkedHashMap<>();

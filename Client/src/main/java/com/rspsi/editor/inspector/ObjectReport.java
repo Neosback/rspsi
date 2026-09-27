@@ -169,10 +169,10 @@ public record ObjectReport(String title, List<Section> sections) {
         List<Row> rows = new ArrayList<>();
         if (look.animationId() >= 0) rows.add(row("Animation", Integer.toString(look.animationId())));
         if (look.scaleX() != 128 || look.scaleY() != 128 || look.scaleZ() != 128) {
-            rows.add(row("Scale", look.scaleX() + " / " + look.scaleY() + " / " + look.scaleZ() + "  (128 = 1x)"));
+            rows.add(row("Scale (X/Y/Z)", look.scaleX() + " / " + look.scaleY() + " / " + look.scaleZ() + "  (128 = 1x; Y=height)"));
         }
         if (look.offsetX() != 0 || look.offsetY() != 0 || look.offsetZ() != 0) {
-            rows.add(row("Offset", look.offsetX() + " / " + look.offsetY() + " / " + look.offsetZ()));
+            rows.add(row("Offset (X/Y/Z)", look.offsetX() + " / " + look.offsetY() + " / " + look.offsetZ() + "  (Y=height, Z=depth)"));
         }
         if (!look.recolors().isEmpty()) rows.add(row("Recolours", look.recolors().toString()));
         if (!look.retextures().isEmpty()) rows.add(row("Retextures", look.retextures().toString()));

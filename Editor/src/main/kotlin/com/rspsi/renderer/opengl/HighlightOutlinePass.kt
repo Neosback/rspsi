@@ -1,10 +1,17 @@
 package com.rspsi.renderer.opengl
 
-import com.rspsi.editor.render.GpuDrawCommand
-import com.rspsi.editor.render.SceneHighlight
 import com.rspsi.renderer.opengl.shader.GlShaderProgram
 import com.rspsi.renderer.opengl.shader.ShaderSourceLoader
 import org.lwjgl.opengl.GL11.GL_BLEND
+import org.lwjgl.opengl.GL11.GL_FLOAT
+import org.lwjgl.opengl.GL15.GL_ARRAY_BUFFER
+import org.lwjgl.opengl.GL15.GL_STREAM_DRAW
+import org.lwjgl.opengl.GL15.glBindBuffer
+import org.lwjgl.opengl.GL15.glBufferData
+import org.lwjgl.opengl.GL15.glDeleteBuffers
+import org.lwjgl.opengl.GL15.glGenBuffers
+import org.lwjgl.opengl.GL20.glEnableVertexAttribArray
+import org.lwjgl.opengl.GL20.glVertexAttribPointer
 import org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT
 import org.lwjgl.opengl.GL11.GL_CULL_FACE
 import org.lwjgl.opengl.GL11.GL_DEPTH_TEST
@@ -20,7 +27,6 @@ import org.lwjgl.opengl.GL11.GL_TEXTURE_WRAP_S
 import org.lwjgl.opengl.GL11.GL_TEXTURE_WRAP_T
 import org.lwjgl.opengl.GL11.GL_TRIANGLES
 import org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE
-import org.lwjgl.opengl.GL11.GL_UNSIGNED_INT
 import org.lwjgl.opengl.GL11.GL_VIEWPORT
 import org.lwjgl.opengl.GL11.glBindTexture
 import org.lwjgl.opengl.GL11.glBlendFunc
@@ -29,7 +35,6 @@ import org.lwjgl.opengl.GL11.glClearColor
 import org.lwjgl.opengl.GL11.glDeleteTextures
 import org.lwjgl.opengl.GL11.glDisable
 import org.lwjgl.opengl.GL11.glDrawArrays
-import org.lwjgl.opengl.GL11.glDrawElements
 import org.lwjgl.opengl.GL11.glEnable
 import org.lwjgl.opengl.GL11.glGenTextures
 import org.lwjgl.opengl.GL11.glGetIntegerv
@@ -82,12 +87,14 @@ internal class HighlightOutlinePass : AutoCloseable {
     private var overlayFramebuffer = 0
     private var overlayTexture = 0
     private var emptyVao = 0
+    private var geometryVao = 0
+    private var geometryVbo = 0
     private var width = 0
     private var height = 0
 
     fun initialize(sources: ShaderSourceLoader) {
         if (maskProgram != 0) return
-        maskProgram = GlShaderProgram.link(sources.load("scene/vanilla.vert"), sources.load("highlight/mask.frag"))
+        maskProgram = GlShaderProgram.link(sources.load("highlight/mask.vert"), sources.load("highlight/mask.frag"))
         outlineProgram = GlShaderProgram.link(
             sources.load("highlight/fullscreen.vert"),
             sources.load("highlight/outline.frag"),
@@ -96,25 +103,39 @@ internal class HighlightOutlinePass : AutoCloseable {
         if (block != GL_INVALID_INDEX) glUniformBlockBinding(maskProgram, block, FrameUniformBuffer.BINDING_POINT)
         maskColorLocation = glGetUniformLocation(maskProgram, "uMaskColor")
         emptyVao = glGenVertexArrays()
+        geometryVao = glGenVertexArrays()
+        geometryVbo = glGenBuffers()
+        glBindVertexArray(geometryVao)
+        glBindBuffer(GL_ARRAY_BUFFER, geometryVbo)
+        glEnableVertexAttribArray(0)
+        glVertexAttribPointer(0, 3, GL_FLOAT, false, 12, 0L)
+        glBindVertexArray(0)
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
     }
 
     /**
-     * Renders [highlight] into the overlay texture and returns it, or 0 when there is nothing
-     * to draw. The frame uniform block must hold the camera of the scene image it overlays.
+     * Renders outlines of the given world-space triangles (x, y, z per vertex) into the
+     * overlay texture and returns it, or 0 when both are empty. The frame uniform block must
+     * hold the camera of the scene image it overlays. The triangles come from a stable pick
+     * plan, so animation swapping the scene plan never forces this geometry to be rebuilt.
      */
-    fun render(
-        commands: List<GpuDrawCommand>,
-        zones: ZoneVboManager,
-        highlight: SceneHighlight,
-        targetWidth: Int,
-        targetHeight: Int,
-    ): Int {
-        if (maskProgram == 0 || highlight.isEmpty() || targetWidth <= 0 || targetHeight <= 0) return 0
+    fun render(hovered: FloatArray, selected: FloatArray, targetWidth: Int, targetHeight: Int): Int {
+        if (maskProgram == 0 || (hovered.isEmpty() && selected.isEmpty()) || targetWidth <= 0 || targetHeight <= 0) {
+            return 0
+        }
         val previousFramebuffer = IntArray(1)
         glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, previousFramebuffer)
         val previousViewport = IntArray(4)
         glGetIntegerv(GL_VIEWPORT, previousViewport)
         ensureTargets(targetWidth, targetHeight)
+
+        // One upload: hovered vertices first, then selected.
+        val combined = FloatArray(hovered.size + selected.size)
+        System.arraycopy(hovered, 0, combined, 0, hovered.size)
+        System.arraycopy(selected, 0, combined, hovered.size, selected.size)
+        glBindBuffer(GL_ARRAY_BUFFER, geometryVbo)
+        glBufferData(GL_ARRAY_BUFFER, combined, GL_STREAM_DRAW)
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer)
         glViewport(0, 0, width, height)
@@ -126,10 +147,15 @@ internal class HighlightOutlinePass : AutoCloseable {
         glEnable(GL_BLEND)
         glBlendFunc(GL_ONE, GL_ONE)
         glUseProgram(maskProgram)
-        glUniform4f(maskColorLocation, 1f, 0f, 0f, 1f)
-        drawRanges(commands, zones, highlight.hovered)
-        glUniform4f(maskColorLocation, 0f, 1f, 0f, 1f)
-        drawRanges(commands, zones, highlight.selected)
+        glBindVertexArray(geometryVao)
+        if (hovered.isNotEmpty()) {
+            glUniform4f(maskColorLocation, 1f, 0f, 0f, 1f)
+            glDrawArrays(GL_TRIANGLES, 0, hovered.size / 3)
+        }
+        if (selected.isNotEmpty()) {
+            glUniform4f(maskColorLocation, 0f, 1f, 0f, 1f)
+            glDrawArrays(GL_TRIANGLES, hovered.size / 3, selected.size / 3)
+        }
         glBindVertexArray(0)
         glDisable(GL_BLEND)
 
@@ -155,29 +181,6 @@ internal class HighlightOutlinePass : AutoCloseable {
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, previousFramebuffer[0])
         glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3])
         return overlayTexture
-    }
-
-    private fun drawRanges(commands: List<GpuDrawCommand>, zones: ZoneVboManager, ranges: IntArray) {
-        var boundVao = -1
-        var i = 0
-        while (i + 2 < ranges.size) {
-            val index = ranges[i]
-            val offset = ranges[i + 1]
-            val count = ranges[i + 2]
-            i += 3
-            if (index < 0 || index >= commands.size) continue
-            val allocation = zones.allocationForCommand(index) ?: continue
-            if (allocation.vao() != boundVao) {
-                glBindVertexArray(allocation.vao())
-                boundVao = allocation.vao()
-            }
-            glDrawElements(
-                GL_TRIANGLES,
-                count,
-                GL_UNSIGNED_INT,
-                (zones.localFirstIndex(index) + offset).toLong() * Integer.BYTES,
-            )
-        }
     }
 
     private fun setColor(name: String, rgba: Int) {
@@ -224,6 +227,10 @@ internal class HighlightOutlinePass : AutoCloseable {
         if (overlayFramebuffer != 0) glDeleteFramebuffers(overlayFramebuffer)
         if (overlayTexture != 0) glDeleteTextures(overlayTexture)
         if (emptyVao != 0) glDeleteVertexArrays(emptyVao)
+        if (geometryVao != 0) glDeleteVertexArrays(geometryVao)
+        if (geometryVbo != 0) glDeleteBuffers(geometryVbo)
+        geometryVao = 0
+        geometryVbo = 0
         maskProgram = 0
         outlineProgram = 0
         framebuffer = 0

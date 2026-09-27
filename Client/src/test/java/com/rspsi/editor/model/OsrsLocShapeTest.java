@@ -53,6 +53,7 @@ class OsrsLocShapeTest {
     void mapsShapesToTheSameLayersAsOpenRune() {
         assertEquals(ObjectCategory.WALL, ObjectCategory.fromType(0));
         assertEquals(ObjectCategory.WALL_DECOR, ObjectCategory.fromType(4));
+        assertEquals(ObjectCategory.WALL, ObjectCategory.fromType(9));
         assertEquals(ObjectCategory.GROUND, ObjectCategory.fromType(10));
         assertEquals(ObjectCategory.GROUND, ObjectCategory.fromType(21));
         assertEquals(ObjectCategory.GROUND_DECOR, ObjectCategory.fromType(22));

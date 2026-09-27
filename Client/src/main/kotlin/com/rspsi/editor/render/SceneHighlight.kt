@@ -78,6 +78,40 @@ class GpuHighlightIndex(val plan: GpuUploadPlan) {
     fun location(anchor: WorldTileAddress, identity: SceneObjectIdentity): IntArray =
         wholeCommands(anchor) { it.sceneObjectIdentity() == identity }
 
+    /** Every model draw of one placed object id on its anchor. */
+    fun location(anchor: WorldTileAddress, objectId: Int): IntArray =
+        wholeCommands(anchor) { it.objectId() == objectId }
+
+    /**
+     * World-space triangle positions (x, y, z per vertex) of highlight [ranges]. A renderer
+     * draws these directly, so an outline never depends on how the current frame's plan
+     * happens to be zoned or numbered.
+     */
+    fun positions(ranges: IntArray): FloatArray {
+        var total = 0
+        var i = 0
+        while (i + 2 < ranges.size) {
+            total += ranges[i + 2]
+            i += 3
+        }
+        val out = FloatArray(total * 3)
+        var cursor = 0
+        i = 0
+        while (i + 2 < ranges.size) {
+            val command = ranges[i]
+            val offset = ranges[i + 1]
+            val count = ranges[i + 2]
+            for (k in 0 until count) {
+                val vertex = plan.indexedVertex(command, offset + k)
+                out[cursor++] = vertex.x()
+                out[cursor++] = vertex.y()
+                out[cursor++] = vertex.z()
+            }
+            i += 3
+        }
+        return out
+    }
+
     private inline fun wholeCommands(tile: WorldTileAddress, predicate: (GpuDrawCommand) -> Boolean): IntArray {
         val indices = modelsByTile[tileKey(tile.plane, tile.worldX, tile.worldY)] ?: return EMPTY
         val commands = plan.commands()

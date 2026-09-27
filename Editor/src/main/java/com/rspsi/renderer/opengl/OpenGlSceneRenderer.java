@@ -91,7 +91,6 @@ import static org.lwjgl.opengl.GL11.glViewport;
 import static org.lwjgl.opengl.GL11.glPolygonMode;
 import static org.lwjgl.opengl.GL11.GL_NO_ERROR;
 import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
-import static org.lwjgl.opengl.GL12.GL_TEXTURE_WRAP_R;
 import static org.lwjgl.opengl.GL12.glTexImage3D;
 import static org.lwjgl.opengl.GL12.glTexSubImage3D;
 import static org.lwjgl.opengl.GL14.glBlendFuncSeparate;
@@ -186,6 +185,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
 
     private final ZoneVboManager zoneManager = new ZoneVboManager();
     private final HighlightOutlinePass highlightPass = new HighlightOutlinePass();
+    /** Planes drawn this frame; the plan itself holds every plane (see ScenePlaneFilter). */
+    private com.rspsi.editor.render.ScenePlaneFilter planeFilter = com.rspsi.editor.render.ScenePlaneFilter.ALL;
+    private com.rspsi.editor.render.SceneContract planeContract;
+    private com.rspsi.editor.render.ScenePlaneFilter orderedPlaneFilter;
+    private com.rspsi.editor.render.ScenePlaneFilter cachedAlphaPlaneFilter;
     private final GpuPickerFramebuffer pickerFramebuffer = new GpuPickerFramebuffer();
     private final ArrayList<Integer> pickerOrderWorkspace = new ArrayList<>();
     private boolean gpuPickingEnabled;
@@ -214,6 +218,18 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
     private boolean diagnosticsLogged;
     private boolean lastFrameDepthWrites = true;
     private int lastFramePolygonMode = GL_FILL;
+    private IntBuffer multiDrawCounts = BufferUtils.createIntBuffer(1024);
+    private PointerBuffer multiDrawOffsets = BufferUtils.createPointerBuffer(1024);
+
+    private void ensureMultiDrawCapacity(int count) {
+        if (multiDrawCounts.capacity() < count) {
+            int newCap = Math.max(multiDrawCounts.capacity() * 2, count);
+            multiDrawCounts = BufferUtils.createIntBuffer(newCap);
+            multiDrawOffsets = BufferUtils.createPointerBuffer(newCap);
+        }
+        multiDrawCounts.clear();
+        multiDrawOffsets.clear();
+    }
     private String orderedPlanFingerprint;
     private List<Integer> cachedOpaqueOrder = List.of();
     private final ArrayList<Integer> opaqueOrderWorkspace = new ArrayList<>();
@@ -581,17 +597,30 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
      * geometry outside them is loaded neighbour context and draws dimmed.
      */
     /**
-     * Renders hover/selection outlines for the plan last passed to {@code draw} into a
-     * transparent overlay texture and returns it (0 when empty). Uses that draw's camera, so
-     * call it after the scene image it overlays; the scene itself is not redrawn.
+     * Renders hover/selection outlines for world-space triangles (x, y, z per vertex) into a
+     * transparent overlay texture and returns it (0 when both are empty). Uses the camera of
+     * the last {@code draw}, so call it after the scene image it overlays.
      */
-    public int drawHighlightOverlay(GpuUploadPlan plan, com.rspsi.editor.render.SceneHighlight highlight,
-                                    int width, int height) {
-        if (plan == null || highlight == null || highlight.isEmpty()) return 0;
+    public int drawHighlightOverlay(float[] hovered, float[] selected, int width, int height) {
+        if ((hovered == null || hovered.length == 0) && (selected == null || selected.length == 0)) return 0;
         frameUniformBuffer.bind();
-        int texture = highlightPass.render(plan.commands(), zoneManager, highlight, width, height);
+        int texture = highlightPass.render(hovered == null ? new float[0] : hovered,
+                selected == null ? new float[0] : selected, width, height);
         captureGlError();
         return texture;
+    }
+
+    /** Selects which planes are drawn without touching uploaded geometry. */
+    public void setPlaneFilter(com.rspsi.editor.render.ScenePlaneFilter filter) {
+        planeFilter = filter == null ? com.rspsi.editor.render.ScenePlaneFilter.ALL : filter;
+    }
+
+    public com.rspsi.editor.render.ScenePlaneFilter planeFilter() {
+        return planeFilter;
+    }
+
+    private boolean planeVisible(GpuDrawCommand command) {
+        return planeFilter.isAll() || planeFilter.includes(command, planeContract);
     }
 
     public void setEditBounds(SceneFog.Bounds bounds) {
@@ -1238,20 +1267,17 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                     if (mdi) {
                         indirectDrawBuffer.draw(batches.orderedStart(), batches.commandCount());
                     } else {
-                        try (MemoryStack stack = MemoryStack.stackPush()) {
-                            IntBuffer counts = stack.mallocInt(batches.commandCount());
-                            PointerBuffer offsets = stack.mallocPointer(batches.commandCount());
+                        ensureMultiDrawCapacity(batches.commandCount());
                             for (int offset = 0; offset < batches.commandCount(); offset++) {
                                 int commandIndex = batches.commandIndexAt(offset);
                                 GpuDrawCommand command = commands.get(commandIndex);
-                                counts.put(command.indexCount());
-                                offsets.put((long) zoneManager.localFirstIndex(commandIndex)
+                                multiDrawCounts.put(command.indexCount());
+                                multiDrawOffsets.put((long) zoneManager.localFirstIndex(commandIndex)
                                         * Integer.BYTES);
                             }
-                            counts.flip();
-                            offsets.flip();
-                            glMultiDrawElements(GL_TRIANGLES, counts, GL_UNSIGNED_INT, offsets);
-                        }
+                            multiDrawCounts.flip();
+                            multiDrawOffsets.flip();
+                            glMultiDrawElements(GL_TRIANGLES, multiDrawCounts, GL_UNSIGNED_INT, multiDrawOffsets);
                     }
                     frameMetrics.multiDrawCalls++;
                 }
@@ -1269,9 +1295,11 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         if (geometry == cachedAlphaGeometry
                 && commands == cachedAlphaCommandList
                 && visibility == cachedAlphaVisibility
+                && planeFilter.equals(cachedAlphaPlaneFilter)
                 && camera.equals(cachedAlphaCamera)) {
             return cachedAlphaOrder;
         }
+        cachedAlphaPlaneFilter = planeFilter;
 
         alphaCommands.clear();
         alphaOrder.clear();
@@ -1279,7 +1307,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         for (int index = 0; index < commands.size(); index++) {
             GpuDrawCommand command = commands.get(index);
             if (command.pass() == GpuDrawCommand.SubmissionPass.ALPHA
-                    && visibility.visible(index)) {
+                    && visibility.visible(index) && planeVisible(command)) {
                 alphaCommands.add(command);
             }
         }
@@ -1327,8 +1355,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // A cached opaque order is only stored when the plan has no
         // camera-ordered decorations and occlusion is inactive, so a matching
         // fingerprint can return before scanning every command again.
+        planeContract = plan.sceneWindow().map(com.rspsi.editor.render.SceneWindow::contract).orElse(null);
         if (!visibility.occlusionApplied()
-                && plan.fingerprint().equals(orderedPlanFingerprint)) {
+                && plan.fingerprint().equals(orderedPlanFingerprint)
+                && planeFilter.equals(orderedPlaneFilter)) {
             return cachedOpaqueOrder;
         }
         boolean cameraOrderedDecorations = false;
@@ -1342,7 +1372,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         List<Integer> result = opaqueOrderWorkspace;
         for (int index = 0; index < commands.size(); index++) {
             if (commands.get(index).pass() == GpuDrawCommand.SubmissionPass.OPAQUE
-                    && visibility.visible(index)) {
+                    && visibility.visible(index) && planeVisible(commands.get(index))) {
                 result.add(index);
             }
         }
@@ -1368,6 +1398,7 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
                 .thenComparingLong(index -> drawStateKey(commands.get(index), false)));
         if (!cameraOrderedDecorations && !visibility.occlusionApplied()) {
             orderedPlanFingerprint = plan.fingerprint();
+            orderedPlaneFilter = planeFilter;
             cachedOpaqueOrder = List.copyOf(result);
             return cachedOpaqueOrder;
         }
@@ -1558,9 +1589,10 @@ public final class OpenGlSceneRenderer implements AutoCloseable {
         // different source dimension.
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        // RuneLite GPU (TextureManager): U clamps, V keeps GL_REPEAT. Model texture V
+        // routinely runs past 1 (tree bark, 0..2.4); clamping it smeared the edge row.
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
         // Keep a real sampler2DArray bound even when the cache provider only
         // supplied texture metadata. macOS validates sampler targets at draw
         // time, so binding texture 0 here makes every textured command emit

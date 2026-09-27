@@ -143,13 +143,13 @@ public final class BrushSettingsHud implements StudioPlugin {
 
         int alphaByte = (int) (Math.max(0.2f, Math.min(1.0f, bgAlpha.get())) * 255.0f);
         ImGui.pushStyleColor(ImGuiCol.WindowBg,
-                (alphaByte << 24) | (StudioPalette.PANEL_BG & 0x00FFFFFF));
+                StudioPalette.u32((alphaByte << 24) | (StudioPalette.PANEL_BG & 0x00FFFFFF)));
         ImGui.pushStyleColor(ImGuiCol.Border,
-                (alphaByte << 24) | (StudioPalette.BORDER & 0x00FFFFFF));
+                StudioPalette.u32((alphaByte << 24) | (StudioPalette.BORDER & 0x00FFFFFF)));
         ImGui.pushStyleColor(ImGuiCol.TitleBg,
-                (alphaByte << 24) | (StudioPalette.CHROME_BG & 0x00FFFFFF));
+                StudioPalette.u32((alphaByte << 24) | (StudioPalette.CHROME_BG & 0x00FFFFFF)));
         ImGui.pushStyleColor(ImGuiCol.TitleBgActive,
-                (alphaByte << 24) | (StudioPalette.ACCENT_SOFT & 0x00FFFFFF));
+                StudioPalette.u32((alphaByte << 24) | (StudioPalette.ACCENT_SOFT & 0x00FFFFFF)));
         ImGui.pushStyleVar(ImGuiStyleVar.WindowRounding, docked ? 0.0f : 8.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 10.0f, 8.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 6.0f, 6.0f);
@@ -213,7 +213,7 @@ public final class BrushSettingsHud implements StudioPlugin {
         String shapeName = resolveActiveBrushName(context, brushTool, brushes);
 
         ImGui.alignTextToFramePadding();
-        ImGui.textColored(StudioPalette.ACCENT, shapeName + "  R:" + radius);
+        ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), shapeName + "  R:" + radius);
 
         ImGui.sameLine(0.0f, 6.0f);
         if (ImGui.button(StudioIcons.REMOVE + "##min-dec", 20.0f, 20.0f)) {
@@ -298,7 +298,7 @@ public final class BrushSettingsHud implements StudioPlugin {
         if (ImGui.isItemHovered()) ImGui.setTooltip("More brushes (Checker, Slope, Terrace)");
 
         if (ImGui.beginPopup("hud_more_brushes_popup")) {
-            ImGui.textColored(StudioPalette.ACCENT, StudioIcons.BRUSH + "  Additional Brushes");
+            ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), StudioIcons.BRUSH + "  Additional Brushes");
             ImGui.separator();
             if (brushes != null) {
                 for (EditorBrush brush : brushes.enabledBrushes()) {
@@ -317,9 +317,9 @@ public final class BrushSettingsHud implements StudioPlugin {
                                    String activeShapeId, String tooltip) {
         boolean active = brushId.equals(activeShapeId);
         if (active) {
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.u32(StudioPalette.ACCENT));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.u32(StudioPalette.ACCENT_HOVER));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.u32(StudioPalette.ACCENT_ACTIVE));
         }
         if (ImGui.button(label + "##shp-" + brushId, 54.0f, 22.0f)) {
             applyBrush(context, brushTool, brushes, brushId);
@@ -447,14 +447,14 @@ public final class BrushSettingsHud implements StudioPlugin {
 
         // Palette popups
         if (ImGui.beginPopup("hud_underlay_palette")) {
-            ImGui.textColored(StudioPalette.ACCENT, StudioIcons.PALETTE + "  Select Underlay Material");
+            ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), StudioIcons.PALETTE + "  Select Underlay Material");
             ImGui.separator();
             renderGridPopup(cache, painter, palette, true);
             ImGui.endPopup();
         }
 
         if (ImGui.beginPopup("hud_overlay_palette")) {
-            ImGui.textColored(StudioPalette.ACCENT, StudioIcons.PALETTE + "  Select Overlay Material");
+            ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), StudioIcons.PALETTE + "  Select Overlay Material");
             ImGui.separator();
             renderGridPopup(cache, painter, palette, false);
             ImGui.endPopup();
@@ -612,9 +612,9 @@ public final class BrushSettingsHud implements StudioPlugin {
                                        String label, HeightToolPanel.HeightMode current) {
         boolean active = (mode == current);
         if (active) {
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.u32(StudioPalette.ACCENT));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.u32(StudioPalette.ACCENT_HOVER));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.u32(StudioPalette.ACCENT_ACTIVE));
         }
         if (ImGui.button(label + "##hm-btn-" + mode.name())) {
             if (context.activateTool() != null) {
@@ -644,9 +644,9 @@ public final class BrushSettingsHud implements StudioPlugin {
         for (SplineBrushStyle styleOption : SplineBrushStyle.values()) {
             boolean active = (currentStyle == styleOption);
             if (active) {
-                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.u32(StudioPalette.ACCENT));
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.u32(StudioPalette.ACCENT_HOVER));
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.u32(StudioPalette.ACCENT_ACTIVE));
             }
             if (ImGui.button(styleOption.displayName() + "##hud-spl-" + styleOption.name())) {
                 if (pathTool != null) pathTool.setStyle(styleOption);
@@ -664,13 +664,13 @@ public final class BrushSettingsHud implements StudioPlugin {
 
         // Row 2: Node counter & Build / Clear actions
         ImGui.alignTextToFramePadding();
-        ImGui.textColored(nodeCount >= 2 ? StudioPalette.SUCCESS : StudioPalette.TEXT_MUTED, "Nodes: " + nodeCount);
+        ImGui.textColored(StudioPalette.u32(nodeCount >= 2 ? StudioPalette.SUCCESS : StudioPalette.TEXT_MUTED), "Nodes: " + nodeCount);
 
         ImGui.sameLine(0.0f, 10.0f);
         boolean canBuild = (pathTool != null && nodeCount >= 2);
         if (!canBuild) ImGui.pushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
-        ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.SUCCESS);
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.SUCCESS);
+        ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.u32(StudioPalette.SUCCESS));
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.u32(StudioPalette.SUCCESS));
 
         if (ImGui.button("Build [Enter]##hud-build-path", 96.0f, 22.0f)) {
             if (canBuild) pathTool.buildPath();
@@ -710,7 +710,7 @@ public final class BrushSettingsHud implements StudioPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(StudioPalette.ACCENT, StudioIcons.TUNE + "  Brush Settings HUD Preferences");
+        ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), StudioIcons.TUNE + "  Brush Settings HUD Preferences");
         ImGui.separator();
 
         String[] cornerNames = { "Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right" };

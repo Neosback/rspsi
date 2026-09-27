@@ -26,33 +26,39 @@ public final class GpuPriority {
     /** The client's per-face bias step, in world units of view-space depth. */
     public static final int FACE_BIAS_SCALE = 2;
 
+    /** World units of view-space depth per packed submission-bias step. */
+    public static final float SUBMISSION_BIAS_UNIT = 0.25f;
+
+    /** Packed steps per client face-bias unit: {@code 8 * 0.25 = FACE_BIAS_SCALE}. */
+    static final int FACE_BIAS_STEPS = 8;
+
     /**
-     * Applies the true client per-face depth bias. The real client subtracts
-     * {@code faceBias * 2} from the vertex's view-space depth, in world
-     * units, before converting it to a depth-buffer value
-     * ({@code Model.java}: {@code faceBias[face] * 2}, then
-     * {@code field3037[v] - bias} where {@code field3037} is the raw
-     * perspective divisor). The offset is therefore CONSTANT in world space
-     * at every distance.
+     * Packs one face's depth offset for submission: the model's own face bias, exactly
+     * as the client applies it ({@code faceBias * 2} world units), plus a quarter unit per
+     * face priority.
      *
-     * <p>This deliberately replaces an earlier clip-space
-     * {@code z += bias / 128} formulation copied from RuneLite's GPU shader.
-     * That form is distance-scaled: expressed as a world-space separation it
-     * shrinks in proportion to depth, so it collapses to nearly nothing when
-     * the camera is close to a surface - exactly where coplanar wall
-     * decorations need it most. RuneLite can afford it because its own
-     * projection differs; against this renderer's projection it produced a
-     * pull toward the camera roughly 16x weaker than the client's when
-     * zoomed in, leaving flush decals to z-fight with the wall behind them.
-     *
-     * <p>{@code priority} affects draw order only, never depth. The
-     * parameter is retained for call-site stability.</p>
+     * <p>The client's painter's algorithm draws a model's faces in priority order, so a
+     * higher-priority face always covers a coplanar lower one (sign artwork over its board,
+     * banner crests over the cloth). A depth buffer only sees equal depths there, and
+     * rounding between two different triangles decides the winner differently at every
+     * camera angle: z-fighting. A quarter-unit view-space step per priority reproduces the
+     * client's result at every angle and distance (the float depth target resolves it), yet
+     * is far too small to push a face through any real geometry.</p>
+     */
+    public static int submissionBias(int faceBias, int priority) {
+        int steps = Math.max(0, faceBias) * FACE_BIAS_STEPS + Math.max(0, Math.min(11, priority));
+        return Math.min(255, steps);
+    }
+
+    /**
+     * Applies a packed {@link #submissionBias} to a positive camera depth for the reference
+     * rasterizer, matching the native vertex shader.
      */
     public static float biasedDepth(float depth, float nearPlane, float farPlane,
-                                    int priority, int faceBias) {
-        int bias = Math.max(0, Math.min(255, faceBias));
+                                    int priority, int submissionBias) {
+        int bias = Math.max(0, Math.min(255, submissionBias));
         if (bias == 0) return depth;
-        float biased = depth - (float) bias * FACE_BIAS_SCALE;
+        float biased = depth - bias * SUBMISSION_BIAS_UNIT;
         return biased > nearPlane ? biased : depth;
     }
 }

@@ -30,6 +30,9 @@ public final class ImGuiHost implements AutoCloseable {
         // NativeWorkspaceLayoutStore owns the versioned layout payload under
         // ~/.rspsi/ui; never write ImGui state beside the Gradle project.
         ImGui.getIO().setIniFilename(null);
+        // Windows move only by their title bar, so dragging inside a window (rotating a
+        // model preview, painting a swatch) never drags the whole window instead.
+        ImGui.getIO().setConfigWindowsMoveFromTitleBarOnly(true);
         if (!glfw.initForOpenGL(window.handle(), true)) {
             ImGui.destroyContext();
             throw new IllegalStateException("Unable to initialize the Dear ImGui GLFW backend");

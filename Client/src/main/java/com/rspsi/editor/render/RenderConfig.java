@@ -20,13 +20,13 @@ public record RenderConfig(
         boolean wallDecorationsVisible,
         boolean groundObjectsVisible,
         boolean groundDecorationsVisible,
-        boolean roofsVisible,
         boolean bridgeTilesVisible,
         boolean hiddenTilesVisible,
+        boolean emptyTilesVisible,
         boolean collisionVisible,
         boolean wireframe,
-        int activePlane,
-        SceneVisibilityPolicy.PlaneSelection planeSelection,
+        int currentHeight,
+        boolean allHeightsVisible,
         double brightness,
         double exposure,
         int msaaSamples,
@@ -38,9 +38,10 @@ public record RenderConfig(
 ) {
     public RenderConfig {
         profile = Objects.requireNonNull(profile, "render profile");
-        planeSelection = Objects.requireNonNull(planeSelection, "plane selection");
-        if (activePlane < 0 || activePlane > 3) {
-            throw new IllegalArgumentException("Active plane must be between 0 and 3");
+        nativeCullingMode = Objects.requireNonNull(nativeCullingMode, "nativeCullingMode");
+        gpuDebugView = Objects.requireNonNull(gpuDebugView, "gpuDebugView");
+        if (currentHeight < 0 || currentHeight > 3) {
+            throw new IllegalArgumentException("currentHeight must be between 0 and 3");
         }
         if (!Double.isFinite(brightness) || brightness < 0.0) {
             throw new IllegalArgumentException("Brightness must be finite and non-negative");
@@ -50,67 +51,21 @@ public record RenderConfig(
         if (fogDepthTiles < 0 || fogColor < 0 || fogColor > 0xFFFFFF) {
             throw new IllegalArgumentException("Invalid fog configuration");
         }
-        nativeCullingMode = Objects.requireNonNull(nativeCullingMode, "nativeCullingMode");
-        gpuDebugView = Objects.requireNonNull(gpuDebugView, "gpuDebugView");
     }
 
-    /** Compatibility constructor from before native culling joined the compiled config. */
-    public RenderConfig(RenderProfile profile, boolean terrainVisible, boolean objectsVisible,
-                        boolean wallsVisible, boolean wallDecorationsVisible,
-                        boolean groundObjectsVisible, boolean groundDecorationsVisible,
-                        boolean roofsVisible, boolean bridgeTilesVisible, boolean hiddenTilesVisible,
-                        boolean collisionVisible, boolean wireframe, int activePlane,
-                        SceneVisibilityPolicy.PlaneSelection planeSelection, double brightness,
-                        double exposure, int msaaSamples, int fogDepthTiles, int fogColor,
-                        boolean invisibleObjectsVisible, GpuDebugView gpuDebugView) {
-        this(profile, terrainVisible, objectsVisible, wallsVisible, wallDecorationsVisible,
-                groundObjectsVisible, groundDecorationsVisible, roofsVisible, bridgeTilesVisible,
-                hiddenTilesVisible, collisionVisible, wireframe, activePlane, planeSelection,
-                brightness, exposure, msaaSamples, fogDepthTiles, fogColor,
-                invisibleObjectsVisible, BackfacePolicy.defaultMode(), gpuDebugView);
-    }
-
-    /** Compatibility constructor before GPU debug views were part of the frame config. */
-    public RenderConfig(RenderProfile profile, boolean terrainVisible, boolean objectsVisible,
-                        boolean wallsVisible, boolean wallDecorationsVisible,
-                        boolean groundObjectsVisible, boolean groundDecorationsVisible,
-                        boolean roofsVisible, boolean bridgeTilesVisible, boolean hiddenTilesVisible,
-                        boolean collisionVisible, boolean wireframe, int activePlane,
-                        SceneVisibilityPolicy.PlaneSelection planeSelection, double brightness,
-                        double exposure, int msaaSamples, int fogDepthTiles, int fogColor,
-                        boolean invisibleObjectsVisible) {
-        this(profile, terrainVisible, objectsVisible, wallsVisible, wallDecorationsVisible,
-                groundObjectsVisible, groundDecorationsVisible, roofsVisible, bridgeTilesVisible,
-                hiddenTilesVisible, collisionVisible, wireframe, activePlane, planeSelection,
-                brightness, exposure, msaaSamples, fogDepthTiles, fogColor,
-                invisibleObjectsVisible, BackfacePolicy.defaultMode(), GpuDebugView.NONE);
-    }
-
-    /** Compatibility constructor before fog settings were part of the frame config. */
-    public RenderConfig(RenderProfile profile, boolean terrainVisible, boolean objectsVisible,
-                        boolean wallsVisible, boolean wallDecorationsVisible,
-                        boolean groundObjectsVisible, boolean groundDecorationsVisible,
-                        boolean roofsVisible, boolean bridgeTilesVisible, boolean hiddenTilesVisible,
-                        boolean collisionVisible, boolean wireframe, int activePlane,
-                        SceneVisibilityPolicy.PlaneSelection planeSelection, double brightness,
-                        double exposure, int msaaSamples) {
-        this(profile, terrainVisible, objectsVisible, wallsVisible, wallDecorationsVisible,
-                groundObjectsVisible, groundDecorationsVisible, roofsVisible, bridgeTilesVisible,
-                hiddenTilesVisible, collisionVisible, wireframe, activePlane, planeSelection,
-                brightness, exposure, msaaSamples, 0, 0x101827, false,
-                BackfacePolicy.defaultMode(), GpuDebugView.NONE);
-    }
-
-    /** Converts the frame settings into the shared scene projection policy. */
+    /**
+     * Converts the frame settings into the shared scene projection policy.
+     *
+     * <p>Directly mirrors Terraini's {@code VisiblePlaneWindow.maxPlaneExclusive} contract:
+     * {@code allHeightsVisible=true} → show all planes; otherwise show only 0..{@code currentHeight}.</p>
+     */
     public SceneVisibilityPolicy visibilityPolicy() {
-        SceneVisibilityPolicy policy = switch (planeSelection) {
-            case ALL -> SceneVisibilityPolicy.editor();
-            case AUTHORED_PLANE -> SceneVisibilityPolicy.authoredPlane(activePlane);
-            case EFFECTIVE_PLANE -> SceneVisibilityPolicy.effectivePlane(activePlane);
-            case CLIENT_TRAVERSAL -> SceneVisibilityPolicy.clientTraversal(activePlane);
-        };
-        return policy.withBridgeUpperGeometry(!bridgeTilesVisible)
-                .withRoofGeometry(!roofsVisible);
+        return new SceneVisibilityPolicy(
+                currentHeight,
+                allHeightsVisible,
+                hiddenTilesVisible,
+                emptyTilesVisible,
+                RoofRemovalState.disabled());
     }
 
     /**
@@ -159,6 +114,31 @@ public record RenderConfig(
     }
 
     private SceneTileSnapshot filterTile(SceneTileSnapshot tile) {
+        // Bridge decks are drawn below their authored plane (effective < authored).
+        // When bridge tiles are off this matches ScenePlaneFilter.hideBridgeUpperGeometry:
+        // the deck draws nothing instead of leaking plane-1 geometry into a plane-0 view.
+        if (!bridgeTilesVisible && tile.effectivePlane() < tile.authoredPlane()) {
+            return new SceneTileSnapshot(tile.coordinate(), tile.worldAddress(), tile.tileFlags(),
+                    tile.effectivePlane(), tile.authoredPlane(), tile.renderLevel(),
+                    tile.planeCullLevel(), tile.bridge(), java.util.Optional.empty(), List.of(),
+                    List.of(), List.of(), tile.roofRelated(), tile.visibleBelow());
+        }
+        java.util.Optional<TerrainRenderPacket> terrain =
+                terrainVisible ? tile.terrain() : java.util.Optional.empty();
+        if (terrain.isPresent()) {
+            TerrainRenderPacket packet = terrain.get();
+            if (packet.isEmptyPlaceholder() && !emptyTilesVisible) {
+                terrain = java.util.Optional.of(withoutFaces(packet));
+            } else if (packet.isHiddenPlaceholder() && !hiddenTilesVisible) {
+                terrain = java.util.Optional.of(withoutFaces(packet));
+            } else if (hiddenTilesVisible && packet.overlayHidden()
+                    && packet.underlayHsl() >= 0 && !packet.faces().isEmpty()) {
+                // Hidden marker over real ground: retint the whole tile vivid
+                // magenta so flagged tiles read at a glance (Terraini software
+                // fuchsia parity). Unlit flat highlight stays visible in shadow.
+                terrain = java.util.Optional.of(tintedHighlight(packet));
+            }
+        }
         Map<Integer, Integer> remapped = new HashMap<>();
         List<ModelRenderPacket> models = new ArrayList<>();
         for (int index = 0; index < tile.models().size(); index++) {
@@ -181,15 +161,42 @@ public record RenderConfig(
         }
         return new SceneTileSnapshot(tile.coordinate(), tile.worldAddress(), tile.tileFlags(),
                 tile.effectivePlane(), tile.authoredPlane(), tile.renderLevel(),
-                tile.planeCullLevel(), tile.bridge(), terrainVisible ? tile.terrain()
-                        : java.util.Optional.empty(), models, layers,
+                tile.planeCullLevel(), tile.bridge(), terrain, models, layers,
                 objectsVisible ? tile.occluders() : List.of(), tile.roofRelated(), tile.visibleBelow());
+    }
+
+    /** Returns the packet with all faces removed; unreferenced vertices never upload. */
+    private static TerrainRenderPacket withoutFaces(TerrainRenderPacket packet) {
+        if (packet.faces().isEmpty()) return packet;
+        return new TerrainRenderPacket(packet.coordinate(), List.of(), List.of(),
+                packet.shape(), packet.rotation(), packet.textureId(),
+                packet.underlayHsl(), packet.overlayHsl(), packet.flat(),
+                packet.overlayHidden(), packet.overlayMinimapHsl());
+    }
+
+    /** Returns the packet with every vertex retinted vivid unlit magenta. */
+    private static TerrainRenderPacket tintedHighlight(TerrainRenderPacket packet) {
+        List<TerrainRenderVertex> vertices = new ArrayList<>(packet.vertices().size());
+        for (TerrainRenderVertex vertex : packet.vertices()) {
+            vertices.add(new TerrainRenderVertex(vertex.x(), vertex.y(), vertex.height(),
+                    OsrsTerrainColorMath.HIDDEN_HIGHLIGHT_HSL, vertex.u(), vertex.v(),
+                    vertex.normalX(), vertex.normalY(), vertex.normalZ(),
+                    vertex.normalMagnitude()));
+        }
+        return new TerrainRenderPacket(packet.coordinate(), vertices, packet.faces(),
+                packet.shape(), packet.rotation(), packet.textureId(),
+                packet.underlayHsl(), packet.overlayHsl(), packet.flat(),
+                packet.overlayHidden(), packet.overlayMinimapHsl());
     }
 
     private boolean modelVisible(ModelRenderPacket model) {
         if (!objectsVisible) return false;
         if (model.editorMarker() && !invisibleObjectsVisible) return false;
-        if (!roofsVisible && model.roofRelated()) return false;
+        // Shape 9 diagonal walls live in the client's game-object slot (scene layer), but
+        // to an editor they are walls: the Walls toggle hides them too.
+        if (model.sceneObjectIdentity().present() && model.sceneObjectIdentity().shape() == 9) {
+            return wallsVisible;
+        }
         return switch (model.category()) {
             case WALL -> wallsVisible;
             case WALL_DECOR -> wallDecorationsVisible;
@@ -229,10 +236,34 @@ public record RenderConfig(
         }
     }
 
+    /**
+     * The part of this config that shapes GPU plan geometry: which layers and objects are
+     * built, including the empty-tile placeholder quads and hidden-tile magenta
+     * retints. Planes and bridges are left in (drawn or skipped per frame by
+     * {@link #visibilityPolicy()}), and presentation fields (brightness, fog, MSAA, wireframe,
+     * culling, debug view) are normalized, so changing them never rebuilds a plan.
+     * Toggling the hidden/empty-tiles flags rebuilds the plan once; plane and
+     * bridge changes stay frame-time.
+     */
+    public RenderConfig forPlan() {
+        RenderConfig d = vanillaDefault();
+        return new RenderConfig(d.profile(), terrainVisible, objectsVisible, wallsVisible,
+                wallDecorationsVisible, groundObjectsVisible, groundDecorationsVisible,
+                true, hiddenTilesVisible, emptyTilesVisible, d.collisionVisible(),
+                d.wireframe(), 0, true, d.brightness(), d.exposure(), d.msaaSamples(),
+                d.fogDepthTiles(), d.fogColor(), invisibleObjectsVisible, d.nativeCullingMode(),
+                d.gpuDebugView());
+    }
+
+    /** Frame-time plane selection for a plan built from {@link #forPlan()}. */
+    public ScenePlaneFilter planeFilter() {
+        return new ScenePlaneFilter(currentHeight, allHeightsVisible, !bridgeTilesVisible);
+    }
+
     public static RenderConfig vanillaDefault() {
         return new RenderConfig(RenderProfile.VANILLA_COMPATIBILITY,
-                true, true, true, true, true, true, true, true, false,
-                false, false, 0, SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL,
+                true, true, true, true, true, true, true, false, false,
+                false, false, 0, true,
                 1.0, 0.0, 0, 0, 0x101827, false,
                 BackfacePolicy.defaultMode(), GpuDebugView.NONE);
     }

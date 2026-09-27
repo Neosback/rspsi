@@ -72,7 +72,7 @@ public final class OutlinerPanel implements StudioPanel {
         WorldDocument world = session.world();
         SettingsStore settings = context.settings();
         LoadedOsrsCacheSession cache = context.cache();
-        int activePlane = settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
+        int activePlane = settings.snapshot().get(RenderSettingKeys.CURRENT_HEIGHT);
 
         int regionId = 0;
         if (context.viewport() != null) {

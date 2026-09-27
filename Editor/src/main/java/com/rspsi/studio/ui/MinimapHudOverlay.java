@@ -111,7 +111,7 @@ public final class MinimapHudOverlay {
         }
 
         WorldDocument world = session.world();
-        int activePlane = context.settings().snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
+        int activePlane = context.settings().snapshot().get(RenderSettingKeys.CURRENT_HEIGHT);
         if (activePlane < 0 || activePlane >= world.planes()) activePlane = 0;
 
         int texId = 0;

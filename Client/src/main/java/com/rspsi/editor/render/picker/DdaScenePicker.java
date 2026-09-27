@@ -3,6 +3,7 @@ package com.rspsi.editor.render.picker;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.WorldTileAddress;
 import com.rspsi.editor.render.CameraState;
+import com.rspsi.editor.render.GameObjectSceneMetadata;
 import com.rspsi.editor.render.GpuDrawCommand;
 import com.rspsi.editor.render.GpuSceneVertex;
 import com.rspsi.editor.render.GpuUploadPlan;
@@ -10,8 +11,10 @@ import com.rspsi.editor.render.GpuZonedUploadPlan;
 import com.rspsi.editor.render.PickResult;
 import com.rspsi.editor.render.PickerId;
 import com.rspsi.editor.render.SceneCameraProjection;
+import com.rspsi.editor.render.SceneObjectIdentity;
 import com.rspsi.editor.render.SceneOcclusionResolver;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -277,7 +280,11 @@ public final class DdaScenePicker {
                 ? new WorldTile(address.plane(), address.worldX(), address.worldY())
                 : hitTile;
         return new PickResult(hitTile, objectTile, address.plane(), command.objectId(), distance,
-                command.layer(), command.priority(), command.depthBias(), command.textureId());
+                command.layer(), command.priority(), command.depthBias(), command.textureId(),
+                command.objectId() >= 0 ? command.gameObjectSceneMetadata() : GameObjectSceneMetadata.none(),
+                command.objectId() >= 0 ? command.clientRenderableBounds() : List.of(),
+                command.contourMetadata(),
+                command.objectId() >= 0 ? command.sceneObjectIdentity() : SceneObjectIdentity.none());
     }
 
     private static boolean intersectGridBounds(PickScratch ray,

@@ -136,7 +136,7 @@ public final class ObjectEditorWindow {
     }
 
     private void renderPlacement(LoadedOsrsCacheSession cache, EditorSession session) {
-        ImGui.textColored(StudioPalette.ACCENT, "Placed object");
+        ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), "Placed object");
         if (ImGui.beginTable("##oe-placement", 2, ImGuiTableFlags.SizingStretchProp)) {
             row("Position", placement.x() + ", " + placement.y() + "  plane " + placement.plane());
             row("Type", placement.type() + " - " + placement.shape().map(OsrsLocShape::displayName).orElse("?"));

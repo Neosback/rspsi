@@ -55,7 +55,7 @@ public final class LocShapeCatalog {
                 new LocShapeDescriptor(8, "Two-Sided Diagonal Wall Decor", ObjectCategory.WALL_DECOR, false, true, false, false, false, 2, true, false, false),
 
                 // Diagonal Wall (9) & Game Objects (10..11)
-                new LocShapeDescriptor(9, "Diagonal Game Object / Wall", ObjectCategory.GROUND, false, false, true, false, false, 1, false, false, true),
+                new LocShapeDescriptor(9, "Diagonal Wall", ObjectCategory.WALL, true, false, false, false, false, 1, false, false, true),
                 new LocShapeDescriptor(10, "Straight Game Object", ObjectCategory.GROUND, false, false, true, false, false, 1, false, false, true),
                 new LocShapeDescriptor(11, "Diagonal Game Object", ObjectCategory.GROUND, false, false, true, false, false, 1, false, false, true),
 

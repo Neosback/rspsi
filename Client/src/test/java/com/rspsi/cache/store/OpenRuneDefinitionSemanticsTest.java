@@ -116,4 +116,75 @@ class OpenRuneDefinitionSemanticsTest {
         assertTrue(definition.hasTransforms());
         assertArrayEquals(new int[]{701, 702, 703, -1, 999}, definition.transforms());
     }
+
+    @Test
+    void opcodes65to72ScaleAndOffsetAxesAreCorrectlyMapped() {
+        ObjectTypeBuilder builder = new ObjectTypeBuilder();
+        builder.setId(800);
+        builder.setModelSizeX(110); // Opcode 65: width X
+        builder.setModelSizeZ(140); // Opcode 66: height Y in OSRS
+        builder.setModelSizeY(160); // Opcode 67: depth Z in OSRS
+        builder.setOffsetX(5);      // Opcode 70: X offset
+        builder.setOffsetZ(15);     // Opcode 71: height Y offset in OSRS
+        builder.setOffsetY(25);     // Opcode 72: depth Z offset in OSRS
+        ObjectType type = builder.build();
+
+        ObjectAppearanceView appearance = OpenRuneDefinitionProvider.toAppearanceView(type);
+
+        assertEquals(110, appearance.scaleX(), "scaleX must map to modelSizeX (opcode 65)");
+        assertEquals(140, appearance.scaleY(), "scaleY must map to modelSizeZ (opcode 66: height)");
+        assertEquals(160, appearance.scaleZ(), "scaleZ must map to modelSizeY (opcode 67: depth)");
+        assertEquals(5, appearance.offsetX(), "offsetX must map to offsetX (opcode 70)");
+        assertEquals(15, appearance.offsetY(), "offsetY must map to offsetZ (opcode 71: height)");
+        assertEquals(25, appearance.offsetZ(), "offsetZ must map to offsetY (opcode 72: depth)");
+    }
+
+    @Test
+    void inspect1821Live() throws Exception {
+        java.nio.file.Path p = java.nio.file.Path.of("/Users/tylercovalt/Desktop/OpenRune Project/OpenRune-Server/.data/cache/LIVE");
+        if (!java.nio.file.Files.exists(p)) return;
+        OpenRuneCacheStore store = OpenRuneCacheStore.open(p);
+        OpenRuneDefinitionProvider provider = (OpenRuneDefinitionProvider) store.definitionProvider(240);
+        provider.object(1821).ifPresent(d -> {
+            System.out.println("Object 1821 def: name=" + d.displayName() + " models=" + java.util.Arrays.toString(d.modelIds()) + " types=" + java.util.Arrays.toString(d.modelTypes()));
+        });
+        provider.objectAppearance(1821).ifPresent(a -> {
+            System.out.println("Object 1821 app: decorDisplacement=" + a.decorDisplacement() + " offsetX=" + a.offsetX() + " offsetY=" + a.offsetY() + " offsetZ=" + a.offsetZ() + " scaleX=" + a.scaleX() + " scaleY=" + a.scaleY() + " scaleZ=" + a.scaleZ() + " rotated=" + a.rotated());
+        });
+        provider.modelGeometry(2032).ifPresent(m -> {
+            System.out.println("Model 2032: vertices=" + m.vertexCount() + " triangles=" + m.triangleCount());
+            int[] pos = m.vertexPositions();
+            int minX=Integer.MAX_VALUE, maxX=Integer.MIN_VALUE, minY=Integer.MAX_VALUE, maxY=Integer.MIN_VALUE, minZ=Integer.MAX_VALUE, maxZ=Integer.MIN_VALUE;
+            for (int i=0; i<m.vertexCount(); i++) {
+                minX = Math.min(minX, pos[i*3]); maxX = Math.max(maxX, pos[i*3]);
+                minY = Math.min(minY, pos[i*3+1]); maxY = Math.max(maxY, pos[i*3+1]);
+                minZ = Math.min(minZ, pos[i*3+2]); maxZ = Math.max(maxZ, pos[i*3+2]);
+            }
+            System.out.println("Model 2032 bounds: X=[" + minX + ", " + maxX + "] Y=[" + minY + ", " + maxY + "] Z=[" + minZ + ", " + maxZ + "]");
+        });
+        com.rspsi.cache.map.MapIndexTable mapTable = com.rspsi.cache.map.MapIndexTable.discover(store, 5);
+        for (com.rspsi.cache.map.MapIndexEntry entry : mapTable.entries()) {
+            if (entry.objectArchiveId() >= 0) {
+                byte[] data = store.read(5, entry.objectArchiveId(), 1);
+                if (data == null) data = store.read(5, entry.objectArchiveId(), 0);
+                if (data != null) {
+                    try {
+                        java.util.List<com.rspsi.editor.model.WorldObject> objs =
+                                com.rspsi.cache.map.OsrsRegionDecoder.decodeLocations(data);
+                        for (com.rspsi.editor.model.WorldObject obj : objs) {
+                            if (obj.id() == 1821) {
+                                System.out.println("FOUND 1821: Region (" + entry.regionX() + "," + entry.regionY() + ") obj: ID=" + obj.id()
+                                        + " plane=" + obj.plane() + " at (" + obj.x() + "," + obj.y() + ") shape=" + obj.type() + " rot=" + obj.rotation());
+                                for (com.rspsi.editor.model.WorldObject neighbor : objs) {
+                                    if (neighbor.plane() == obj.plane() && neighbor.x() == obj.x() && neighbor.y() == obj.y()) {
+                                        System.out.println("   Same tile object: ID=" + neighbor.id() + " shape=" + neighbor.type() + " rot=" + neighbor.rotation());
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+    }
 }

@@ -22,9 +22,9 @@ public final class RenderSettingKeys {
     public static final SettingKey<Boolean> WALL_DECORATIONS_VISIBLE = bool("viewport.scene.wall-decorations.visible");
     public static final SettingKey<Boolean> GROUND_OBJECTS_VISIBLE = bool("viewport.scene.ground-objects.visible");
     public static final SettingKey<Boolean> GROUND_DECORATIONS_VISIBLE = bool("viewport.scene.ground-decorations.visible");
-    public static final SettingKey<Boolean> ROOFS_VISIBLE = bool("viewport.scene.roofs.visible");
     public static final SettingKey<Boolean> BRIDGE_TILES_VISIBLE = bool("viewport.scene.bridges.visible");
     public static final SettingKey<Boolean> HIDDEN_TILES_VISIBLE = bool("viewport.scene.hidden-tiles.visible");
+    public static final SettingKey<Boolean> EMPTY_TILES_VISIBLE = bool("viewport.scene.empty-tiles.visible");
     public static final SettingKey<Boolean> COLLISION_VISIBLE = bool("viewport.debug.collision.visible");
     public static final SettingKey<Boolean> INVISIBLE_OBJECTS_VISIBLE = bool("viewport.scene.invisible-objects.visible");
     public static final SettingKey<Boolean> WIREFRAME = bool("viewport.debug.wireframe");
@@ -33,10 +33,15 @@ public final class RenderSettingKeys {
             new SettingKey<>("viewport.debug.native-culling", BackfacePolicy.NativeCullingMode.class);
     public static final SettingKey<GpuDebugView> GPU_DEBUG_VIEW =
             new SettingKey<>("viewport.debug.gpu-view", GpuDebugView.class);
-    public static final SettingKey<Integer> ACTIVE_PLANE =
-            new SettingKey<>("viewport.scene.active-plane", Integer.class);
-    public static final SettingKey<SceneVisibilityPolicy.PlaneSelection> PLANE_SELECTION =
-            new SettingKey<>("viewport.scene.plane-selection", SceneVisibilityPolicy.PlaneSelection.class);
+
+    // Terraini plane-visibility model:
+    //   currentHeight   = which plane the camera is on (0-3)
+    //   allHeightsVisible = show all planes vs. only 0..currentHeight
+    public static final SettingKey<Integer> CURRENT_HEIGHT =
+            new SettingKey<>("viewport.scene.current-height", Integer.class);
+    public static final SettingKey<Boolean> ALL_HEIGHTS_VISIBLE =
+            bool("viewport.scene.all-heights-visible");
+
     public static final SettingKey<Double> BRIGHTNESS =
             new SettingKey<>("renderer.brightness", Double.class);
     public static final SettingKey<Double> EXPOSURE =
@@ -69,12 +74,12 @@ public final class RenderSettingKeys {
                 "Render ground objects.", visibility));
         registry.register(SettingSpec.of(GROUND_DECORATIONS_VISIBLE, true, SettingScope.VIEWPORT, "Ground decorations",
                 "Render ground decorations.", visibility));
-        registry.register(SettingSpec.of(ROOFS_VISIBLE, true, SettingScope.VIEWPORT, "Roofs",
-                "Render roof-related geometry.", visibility));
         registry.register(SettingSpec.of(BRIDGE_TILES_VISIBLE, true, SettingScope.VIEWPORT, "Bridge tiles",
                 "Render geometry authored above bridge-effective planes.", visibility));
-        registry.register(SettingSpec.of(HIDDEN_TILES_VISIBLE, false, SettingScope.VIEWPORT, "Hidden tiles",
-                "Include tiles marked hidden by scene flags.", visibility));
+        registry.register(SettingSpec.of(HIDDEN_TILES_VISIBLE, false, SettingScope.VIEWPORT, "Show Hidden Tiles",
+                "Highlight tiles marked hidden by scene flags (colour 12345678) with a distinct tint.", visibility));
+        registry.register(SettingSpec.of(EMPTY_TILES_VISIBLE, false, SettingScope.VIEWPORT, "Show Empty Tiles",
+                "Draw a grey placeholder for tiles that have no underlay or overlay.", visibility));
         registry.register(SettingSpec.of(INVISIBLE_OBJECTS_VISIBLE, false, SettingScope.VIEWPORT, "Invisible objects",
                 "Show markers for collision-only locs the client draws nothing for "
                         + "(invisible walls and floor blockers).", visibility));
@@ -91,7 +96,6 @@ public final class RenderSettingKeys {
                 "Inspect native GPU scene inputs without changing authored data. "
                         + "Normals activates the optional normal stream only while selected.",
                 Set.of(SettingInvalidation.REDRAW)));
-
         registry.register(SettingSpec.enumeration(NATIVE_CULLING_MODE,
                 BackfacePolicy.defaultMode(),
                 List.of(BackfacePolicy.NativeCullingMode.values()), SettingScope.VIEWPORT,
@@ -100,13 +104,12 @@ public final class RenderSettingKeys {
                         + "Terrain stays two-sided; Two Sided and Reversed Debug remain explicit "
                         + "diagnostic modes for parity investigation.",
                 Set.of(SettingInvalidation.REDRAW)));
-        registry.register(SettingSpec.integer(ACTIVE_PLANE, 0, 0, 3, SettingScope.VIEWPORT,
-                "Active plane", "Plane used by authored, effective, or client traversal projections.", visibility));
-        registry.register(SettingSpec.enumeration(PLANE_SELECTION, SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL,
-                List.of(SceneVisibilityPolicy.PlaneSelection.values()), SettingScope.VIEWPORT,
-                "Plane selection",
-                "Choose client traversal, all planes, authored plane, or bridge-effective plane projection.",
-                visibility));
+        // Terraini plane model
+        registry.register(SettingSpec.integer(CURRENT_HEIGHT, 0, 0, 3, SettingScope.VIEWPORT,
+                "Height level", "Active camera height level (0=ground, 3=top). Controls which planes render when \"Show All Height Levels\" is off.", visibility));
+        registry.register(SettingSpec.of(ALL_HEIGHTS_VISIBLE, true, SettingScope.VIEWPORT,
+                "Show All Height Levels",
+                "When on, all planes are rendered. When off, only planes 0 through the height level are shown.", visibility));
         registry.register(SettingSpec.decimal(BRIGHTNESS, 1.0, 0.0, 4.0, SettingScope.VIEWPORT,
                 "Brightness", "Frontend exposure multiplier; does not alter authored colors.",
                 Set.of(SettingInvalidation.REDRAW)));
@@ -137,9 +140,10 @@ public final class RenderSettingKeys {
         SettingConsumerCatalog consumers = new SettingConsumerCatalog();
         consumers.register("render-config", PROFILE, TERRAIN_VISIBLE, OBJECTS_VISIBLE,
                 WALLS_VISIBLE, WALL_DECORATIONS_VISIBLE, GROUND_OBJECTS_VISIBLE,
-                GROUND_DECORATIONS_VISIBLE, ROOFS_VISIBLE, BRIDGE_TILES_VISIBLE,
-                HIDDEN_TILES_VISIBLE, INVISIBLE_OBJECTS_VISIBLE, COLLISION_VISIBLE, WIREFRAME, ACTIVE_PLANE,
-                PLANE_SELECTION, BRIGHTNESS, EXPOSURE, MSAA_SAMPLES, FOG_DEPTH_TILES,
+                GROUND_DECORATIONS_VISIBLE, BRIDGE_TILES_VISIBLE,
+                HIDDEN_TILES_VISIBLE, EMPTY_TILES_VISIBLE, INVISIBLE_OBJECTS_VISIBLE,
+                COLLISION_VISIBLE, WIREFRAME, CURRENT_HEIGHT, ALL_HEIGHTS_VISIBLE,
+                BRIGHTNESS, EXPOSURE, MSAA_SAMPLES, FOG_DEPTH_TILES,
                 FOG_COLOR, NATIVE_CULLING_MODE, GPU_DEBUG_VIEW);
         consumers.register("map-studio-viewport-hud", HUD_TILE_INSPECTOR_VISIBLE, HUD_TOOL_CONTROLS_VISIBLE);
         consumers.register("map-studio-animation-refresh", OBJECT_ANIMATIONS);

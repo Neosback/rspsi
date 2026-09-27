@@ -98,7 +98,7 @@ public final class ProjectLauncherView {
 
         if (!error.isBlank()) {
             ImGui.dummy(1.0f, 10.0f);
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.DANGER);
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.draw(StudioPalette.DANGER));
             ImGui.textWrapped(error);
             ImGui.popStyleColor();
         }
@@ -110,7 +110,7 @@ public final class ProjectLauncherView {
 
     private void renderHeader() {
         ImGui.pushFont(StudioFonts.display(), 31.0f);
-        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.ACCENT);
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.draw(StudioPalette.ACCENT));
         centered("OPENRUNE CONTENT STUDIO");
         ImGui.popStyleColor();
         ImGui.popFont();

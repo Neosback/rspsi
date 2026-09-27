@@ -60,7 +60,9 @@ public final class BackfacePolicy {
     public static boolean cullsLayer(SceneLayer.Kind layer, NativeCullingMode mode) {
         Objects.requireNonNull(layer, "scene layer");
         Objects.requireNonNull(mode, "native culling mode");
-        return layer != SceneLayer.Kind.TERRAIN && mode != NativeCullingMode.TWO_SIDED;
+        return layer != SceneLayer.Kind.TERRAIN
+                && layer != SceneLayer.Kind.WALL_DECORATION
+                && mode != NativeCullingMode.TWO_SIDED;
     }
 
     public enum NativeCullingMode {

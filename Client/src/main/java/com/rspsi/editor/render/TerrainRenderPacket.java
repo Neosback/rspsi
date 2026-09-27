@@ -45,4 +45,26 @@ public record TerrainRenderPacket(
             }
         }
     }
+
+    /**
+     * True when this packet carries the editor grey placeholder quad for a
+     * tile with no authored surface (no underlay, overlay, or texture).
+     * The {@code -1} appearance markers are preserved so visibility filtering
+     * can gate the placeholder on the empty-tiles flag without new fields.
+     */
+    public boolean isEmptyPlaceholder() {
+        return !faces.isEmpty() && underlayHsl < 0 && overlayHsl < 0
+                && !overlayHidden && textureId < 0;
+    }
+
+    /**
+     * True when this packet carries the editor magenta placeholder quad for
+     * a hidden marker with no underlay beneath it. Gated on the
+     * hidden-tiles flag; hidden markers over real underlay are real
+     * terrain faces retinted later, not placeholders.
+     */
+    public boolean isHiddenPlaceholder() {
+        return !faces.isEmpty() && underlayHsl < 0 && textureId < 0
+                && (overlayHidden || overlayHsl == -2);
+    }
 }

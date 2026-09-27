@@ -68,24 +68,22 @@ class SettingsStoreTest {
         SettingsStore store = new SettingsStore(RenderSettingKeys.registry());
 
         assertThrows(IllegalArgumentException.class,
-                () -> store.set(RenderSettingKeys.ACTIVE_PLANE, 4));
+                () -> store.set(RenderSettingKeys.CURRENT_HEIGHT, 4));
         assertThrows(IllegalArgumentException.class,
-                () -> store.set(SettingScope.VIEWPORT, RenderSettingKeys.PLANE_SELECTION, "plane-0"));
+                () -> store.set(SettingScope.VIEWPORT, RenderSettingKeys.ALL_HEIGHTS_VISIBLE, "yes"));
     }
 
     @Test
     void transientOverrideCanBeRemovedWithoutChangingProjectValue() {
         SettingsStore store = new SettingsStore(RenderSettingKeys.registry());
-        store.set(SettingScope.PROJECT, RenderSettingKeys.PLANE_SELECTION,
-                SceneVisibilityPolicy.PlaneSelection.AUTHORED_PLANE);
-        store.set(SettingScope.TRANSIENT, RenderSettingKeys.PLANE_SELECTION,
-                SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE);
+        // Project sets all-heights off (currentHeight=1)
+        store.set(SettingScope.PROJECT, RenderSettingKeys.ALL_HEIGHTS_VISIBLE, false);
+        // Transient overrides to all-heights on
+        store.set(SettingScope.TRANSIENT, RenderSettingKeys.ALL_HEIGHTS_VISIBLE, true);
 
-        assertEquals(SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
-                store.snapshot().get(RenderSettingKeys.PLANE_SELECTION));
-        store.clear(SettingScope.TRANSIENT, RenderSettingKeys.PLANE_SELECTION);
-        assertEquals(SceneVisibilityPolicy.PlaneSelection.AUTHORED_PLANE,
-                store.snapshot().get(RenderSettingKeys.PLANE_SELECTION));
+        assertEquals(true, store.snapshot().get(RenderSettingKeys.ALL_HEIGHTS_VISIBLE));
+        store.clear(SettingScope.TRANSIENT, RenderSettingKeys.ALL_HEIGHTS_VISIBLE);
+        assertEquals(false, store.snapshot().get(RenderSettingKeys.ALL_HEIGHTS_VISIBLE));
     }
 
     @Test

@@ -222,15 +222,15 @@ public final class ObjectViewerPanel implements StudioPanel {
     private void renderSubTabButton(String label, int tabIndex, float width) {
         boolean active = activeSubTab == tabIndex;
         if (active) {
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.u32(StudioPalette.ACCENT));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.u32(StudioPalette.ACCENT_HOVER));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.u32(StudioPalette.ACCENT_ACTIVE));
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(StudioPalette.TEXT));
         } else {
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.PANEL_ELEVATED);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.u32(StudioPalette.PANEL_ELEVATED));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.u32(StudioPalette.FIELD_HOVER));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.u32(StudioPalette.ACCENT_SOFT));
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(StudioPalette.TEXT));
         }
         if (ImGui.button(label + "##sub-" + tabIndex, width, ImGui.getFrameHeight() + ImGui.getStyle().getFramePaddingY())) {
             activeSubTab = tabIndex;
@@ -359,7 +359,7 @@ public final class ObjectViewerPanel implements StudioPanel {
                         .map(definition -> objectLabel(definition.displayName(), objId))
                         .orElse(null);
         if (objId >= 0) {
-            ImGui.textColored(StudioPalette.ACCENT, objName == null ? "Object #" + objId : objName);
+            ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), objName == null ? "Object #" + objId : objName);
         }
 
         if (SettingRows.beginPlain("place-object")) {
@@ -841,7 +841,7 @@ public final class ObjectViewerPanel implements StudioPanel {
             ImGui.textDisabled("Session output: " + publicationTarget);
         }
         if (targetMissing) {
-            ImGui.textColored(StudioPalette.INFO,
+            ImGui.textColored(StudioPalette.u32(StudioPalette.INFO),
                     "The bound output cache is missing. Reload the source session before publishing elsewhere.");
         } else if (targetMismatch) {
             ImGui.textColored(StudioDrawColors.abgr(0xFF60A5FA),

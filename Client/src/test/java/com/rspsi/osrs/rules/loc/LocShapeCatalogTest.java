@@ -29,18 +29,19 @@ class LocShapeCatalogTest {
 
     @Test
     void wallShapesClassification() {
-        for (int id = 0; id <= 3; id++) {
+        for (int id : new int[]{0, 1, 2, 3, 9}) {
             LocShapeCatalog.LocShapeDescriptor desc = LocShapeCatalog.get(id).orElseThrow();
-            assertEquals(ObjectCategory.WALL, desc.category());
-            assertTrue(desc.isWall());
-            assertFalse(desc.isWallDecor());
-            assertFalse(desc.isGround());
-            assertFalse(desc.isRoof());
+            assertEquals(ObjectCategory.WALL, desc.category(), "Shape " + id + " must be in WALL category");
+            assertTrue(desc.isWall(), "Shape " + id + " must have isWall=true");
+            assertFalse(desc.isWallDecor(), "Shape " + id + " must have isWallDecor=false");
+            assertFalse(desc.isGround(), "Shape " + id + " must have isGround=false");
+            assertFalse(desc.isRoof(), "Shape " + id + " must have isRoof=false");
         }
 
         // L-shaped wall (type 2) has 2 model variants (wall orientation A and B)
         assertEquals(2, LocShapeCatalog.get(2).orElseThrow().variantCount());
         assertEquals(1, LocShapeCatalog.get(0).orElseThrow().variantCount());
+        assertEquals(1, LocShapeCatalog.get(9).orElseThrow().variantCount());
     }
 
     @Test

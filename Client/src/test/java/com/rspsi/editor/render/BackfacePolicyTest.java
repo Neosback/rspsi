@@ -48,7 +48,7 @@ class BackfacePolicyTest {
                 SceneLayer.Kind.TERRAIN, BackfacePolicy.NativeCullingMode.CLIENT_FRONT));
         assertTrue(BackfacePolicy.cullsLayer(
                 SceneLayer.Kind.WALL, BackfacePolicy.NativeCullingMode.CLIENT_FRONT));
-        assertTrue(BackfacePolicy.cullsLayer(
+        assertFalse(BackfacePolicy.cullsLayer(
                 SceneLayer.Kind.WALL_DECORATION, BackfacePolicy.NativeCullingMode.CLIENT_FRONT));
         assertTrue(BackfacePolicy.cullsLayer(
                 SceneLayer.Kind.GROUND_OBJECT, BackfacePolicy.NativeCullingMode.CLIENT_FRONT));

@@ -20,7 +20,7 @@ import static org.lwjgl.opengl.GL11.glTexParameteri;
 import static org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER;
 import static org.lwjgl.opengl.GL30.GL_DRAW_FRAMEBUFFER;
 import static org.lwjgl.opengl.GL30.GL_COLOR_ATTACHMENT0;
-import static org.lwjgl.opengl.GL30.GL_DEPTH24_STENCIL8;
+import static org.lwjgl.opengl.GL30.GL_DEPTH32F_STENCIL8;
 import static org.lwjgl.opengl.GL30.GL_DEPTH_STENCIL_ATTACHMENT;
 import static org.lwjgl.opengl.GL30.GL_FRAMEBUFFER;
 import static org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_COMPLETE;
@@ -130,7 +130,7 @@ public final class GlFramebuffer implements AutoCloseable {
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, resolveTexture, 0);
         resolveDepth = glGenRenderbuffers();
         glBindRenderbuffer(GL_RENDERBUFFER, resolveDepth);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, width, height);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, resolveDepth);
         checkComplete("resolve framebuffer");
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -147,7 +147,7 @@ public final class GlFramebuffer implements AutoCloseable {
         multisampleDepth = glGenRenderbuffers();
         glBindRenderbuffer(GL_RENDERBUFFER, multisampleDepth);
         org.lwjgl.opengl.GL30.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples,
-                GL_DEPTH24_STENCIL8, width, height);
+                GL_DEPTH32F_STENCIL8, width, height);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER,
                 multisampleDepth);
         checkComplete("multisample framebuffer");

@@ -23,7 +23,7 @@ enum class OsrsLocShape(
     WALL_DECOR_DIAGONAL_OFFSET(6, ObjectCategory.WALL_DECOR, "Diagonal offset wall decor"),
     WALL_DECOR_DIAGONAL_NO_OFFSET(7, ObjectCategory.WALL_DECOR, "Diagonal wall decor"),
     WALL_DECOR_DIAGONAL_BOTH(8, ObjectCategory.WALL_DECOR, "Two-sided diagonal wall decor"),
-    WALL_DIAGONAL(9, ObjectCategory.GROUND, "Diagonal game object"),
+    WALL_DIAGONAL(9, ObjectCategory.WALL, "Diagonal wall"),
     CENTREPIECE_STRAIGHT(10, ObjectCategory.GROUND, "Straight game object"),
     CENTREPIECE_DIAGONAL(11, ObjectCategory.GROUND, "Diagonal game object"),
     ROOF_STRAIGHT(12, ObjectCategory.GROUND, "Straight roof"),

@@ -263,7 +263,7 @@ public final class TileInfoHudPlugin implements StudioPlugin {
 
     @Override
     public void renderSettings(StudioPanelContext context) {
-        ImGui.textColored(StudioPalette.ACCENT, "Display");
+        ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), "Display");
         ImGui.checkbox("Show Tile Preview##hud-preview", showPreview);
         ImGui.checkbox("Show Tile Coordinates##hud-coords", showCoordinates);
         ImGui.checkbox("Show Plane##hud-plane", showPlane);
@@ -276,7 +276,7 @@ public final class TileInfoHudPlugin implements StudioPlugin {
         ImGui.endDisabled();
 
         ImGui.separator();
-        ImGui.textColored(StudioPalette.ACCENT, "Layout & Style");
+        ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), "Layout & Style");
         ImGui.combo("Anchor Position##hud-anchor", anchorCorner, ANCHOR_NAMES);
         ImGui.sliderFloat("Background Opacity##hud-alpha", bgAlpha.getData(), 0.1f, 1.0f, "%.2f");
 

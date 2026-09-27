@@ -8,6 +8,7 @@ import com.rspsi.cache.workspace.OsrsCacheSessionService;
 import com.rspsi.cache.map.OsrsProjectSessionLoader;
 import com.rspsi.cache.store.ObjectDefinitionOutputCacheBuilder;
 import com.rspsi.editor.model.TileCoordinate;
+import com.rspsi.editor.model.WorldLocation;
 import com.rspsi.editor.model.WorldRegion;
 import com.rspsi.editor.model.WorldRegionWindow;
 import com.rspsi.editor.model.WorldTileAddress;
@@ -156,6 +157,9 @@ public final class StudioApplication implements AutoCloseable {
     private EditorPluginLifecycleManager pluginLifecycle;
     private GpuUploadPlan currentPlan;
     private GpuZonedUploadPlan currentZonedPlan;
+    /** Plan for picks and outlines: follows loads, edits and settings, not animation frames. */
+    private GpuUploadPlan pickPlan;
+    private GpuZonedUploadPlan pickZonedPlan;
     private long renderedSettingsRevision = -1L;
     private String sceneStatus = "Choose a region to build the scene.";
     private Path lastReadyCache;
@@ -167,6 +171,12 @@ public final class StudioApplication implements AutoCloseable {
     private volatile StudioProjectDescriptor activeProject;
     private CompletableFuture<?> pendingProjectOpen;
     private boolean closePrompt;
+    /** What the unsaved-changes prompt does once the map is saved or discarded. */
+    private Runnable leaveMapAction = this::closeMapEditorTab;
+    /** True when the prompt guards a region switch rather than closing Map Studio. */
+    private boolean leavingRegion;
+    /** Tile to frame once the loading region is ready; null keeps the default camera. */
+    private WorldLocation pendingFocus;
     private boolean closed;
 
     public StudioApplication() {
@@ -185,8 +195,12 @@ public final class StudioApplication implements AutoCloseable {
             }
             RenderConfig next = new RenderConfigCompiler().compile(renderSettings.snapshot());
             RenderConfigState current = renderConfigState;
-            if (!next.equals(current.config())) {
+            // Only settings that shape plan geometry rebuild it. Planes, bridges and
+            // presentation (brightness, fog, MSAA...) are applied per frame by the viewport.
+            if (!next.forPlan().equals(current.config().forPlan())) {
                 renderConfigState = new RenderConfigState(next, current.revision() + 1);
+            } else if (!next.equals(current.config())) {
+                renderConfigState = new RenderConfigState(next, current.revision());
             }
         });
         imgui.initialize(window);
@@ -194,6 +208,7 @@ public final class StudioApplication implements AutoCloseable {
         mapEditor.setPluginEcosystem(pluginEcosystem, this::rescanPlugins);
         mapEditor.setDefinitionPublicationPersistence(
                 this::persistDefinitionPublicationState);
+        mapEditor.setLocationNavigator(this::goToLocation);
 
         // Development/automation may open a Studio descriptor directly, but raw cache paths
         // never bypass the project lifecycle.
@@ -276,11 +291,14 @@ public final class StudioApplication implements AutoCloseable {
                 RenderConfigState renderState = renderConfigState;
                 if (loadedScene != null && renderedSettingsRevision != renderState.revision()) {
                     currentPlan = new GpuUploadPlanBuilder().build(
-                            renderState.config().apply(loadedScene.packet()));
+                            renderState.config().forPlan().apply(loadedScene.packet()));
                     currentZonedPlan = new GpuZonedUploadPlanBuilder().build(currentPlan);
+                    pickPlan = currentPlan;
+                    pickZonedPlan = currentZonedPlan;
                     renderedSettingsRevision = renderState.revision();
                 }
                 sceneViewport.setZonedPlan(currentZonedPlan);
+                sceneViewport.setPickPlan(pickPlan, pickZonedPlan);
                 mapEditor.render(cache, currentPlan, sceneViewport, sceneStatus,
                         this::openDashboard, renderSettings, pluginLifecycle,
                         loadedScene != null
@@ -399,6 +417,8 @@ public final class StudioApplication implements AutoCloseable {
         loadedScene = null;
         currentPlan = null;
         currentZonedPlan = null;
+        pickPlan = null;
+        pickZonedPlan = null;
         sceneViewport.setZonedPlan(null);
         lastReadyCache = null;
         activeCachePath = null;
@@ -531,26 +551,86 @@ public final class StudioApplication implements AutoCloseable {
         boolean alreadyOpen = workspaces.isOpen(WorkspaceManager.Workspace.MAP_EDITOR);
         if (!workspaces.openMapEditor(CacheSessionState.READY)) return;
         if (alreadyOpen) return;
-        closePluginLifecycle();
-        loadedScene = null;
-        currentPlan = null;
-        currentZonedPlan = null;
-        renderedSettingsRevision = -1L;
-        cancelPendingScene();
-        sceneStatus = "Loading terrain, objects, and GPU buffers...";
-        int[] region = parseRegion(contentStudio.regionText());
-        if (region == null) {
-            sceneStatus = "Enter a valid region as X,Y or a region ID.";
+        WorldLocation location = WorldLocation.parse(contentStudio.regionText());
+        if (location == null) {
+            unloadMapScene();
+            sceneStatus = "Enter a region X,Y, a region ID, or a world tile X,Y.";
             return;
         }
+        loadRegion(location);
+    }
+
+    /**
+     * Goes to [location] in Map Studio: frames it when it is in the loaded region, otherwise
+     * loads its region, asking first when the current map has unsaved changes.
+     */
+    private void goToLocation(WorldLocation location) {
+        if (location == null) return;
+        if (pendingScene != null) {
+            sceneStatus = "A region is still loading.";
+            return;
+        }
+        LoadedMapScene scene = loadedScene;
+        if (scene != null
+                && scene.opened().region().regionX() == location.regionX()
+                && scene.opened().region().regionY() == location.regionY()) {
+            frameLocation(location, true);
+            return;
+        }
+        // Definition edits belong to the cache session and survive a region switch; only
+        // the map's own unsaved edits would be lost.
+        if (scene != null && scene.session().isDirty()) {
+            leaveMapAction = () -> loadRegion(location);
+            leavingRegion = true;
+            closePrompt = true;
+            return;
+        }
+        loadRegion(location);
+    }
+
+    /** Replaces the loaded map scene with [location]'s region, framing it when it names a tile. */
+    private void loadRegion(WorldLocation location) {
+        unloadMapScene();
+        closePrompt = false;
+        leaveMapAction = this::closeMapEditorTab;
+        leavingRegion = false;
         LoadedOsrsCacheSession cache = cacheSessions.current().orElse(null);
         if (cache == null) {
             sceneStatus = "Cache session is no longer available.";
             return;
         }
+        sceneStatus = "Loading " + location.describe() + "...";
+        pendingFocus = location.isTile() || location.plane() >= 0 ? location : null;
+        int regionX = location.regionX();
+        int regionY = location.regionY();
         int clientCycle = currentClientCycle();
         pendingScene = CompletableFuture.supplyAsync(
-                () -> buildMapScene(cache, region[0], region[1], clientCycle), sceneExecutor);
+                () -> buildMapScene(cache, regionX, regionY, clientCycle), sceneExecutor);
+    }
+
+    private void unloadMapScene() {
+        closePluginLifecycle();
+        cancelPendingScene();
+        loadedScene = null;
+        currentPlan = null;
+        currentZonedPlan = null;
+        pickPlan = null;
+        pickZonedPlan = null;
+        pendingFocus = null;
+        renderedSettingsRevision = -1L;
+        sceneViewport.setZonedPlan(null);
+        sceneViewport.setEditableRegion(null);
+    }
+
+    /** Frames a location in the loaded region and switches to its plane when it names one. */
+    private void frameLocation(WorldLocation location, boolean recordHistory) {
+        int activePlane = renderSettings.snapshot().get(RenderSettingKeys.CURRENT_HEIGHT);
+        if (location.plane() >= 0 && location.plane() != activePlane) {
+            renderSettings.set(RenderSettingKeys.CURRENT_HEIGHT, location.plane());
+        }
+        if (recordHistory) sceneViewport.navigationService().synchronizeFromCamera(activePlane);
+        sceneViewport.navigationService().jumpTo(location.tile(activePlane), recordHistory);
+        sceneStatus = "At " + location.describe() + ".";
     }
 
     private LoadedMapScene buildMapScene(LoadedOsrsCacheSession cache, int regionX, int regionY,
@@ -587,7 +667,7 @@ public final class StudioApplication implements AutoCloseable {
         IncrementalGpuUploadPlanBuilder incrementalPlanBuilder =
                 new IncrementalGpuUploadPlanBuilder();
         IncrementalGpuUploadPlanBuilder.BuildResult initialPlan =
-                incrementalPlanBuilder.buildInitial(config.apply(packet));
+                incrementalPlanBuilder.buildInitial(config.forPlan().apply(packet));
         GpuUploadPlan plan = initialPlan.plan();
         long planNanos = System.nanoTime() - planStart;
 
@@ -630,6 +710,8 @@ public final class StudioApplication implements AutoCloseable {
             sceneViewport.setEditableRegion(loadedScene.opened().worldRegion());
             currentPlan = loadedScene.plan();
             currentZonedPlan = loadedScene.zonedPlan();
+            pickPlan = currentPlan;
+            pickZonedPlan = currentZonedPlan;
             renderedSettingsRevision = loadedScene.settingsRevision();
             initializePlugins(loadedScene);
             loadedScene.session().addChangeListener(changedTiles -> {
@@ -640,6 +722,9 @@ public final class StudioApplication implements AutoCloseable {
             });
             sceneStatus = "Region " + loadedScene.opened().region().regionX()
                     + "," + loadedScene.opened().region().regionY() + " ready.";
+            WorldLocation focus = pendingFocus;
+            pendingFocus = null;
+            if (focus != null) frameLocation(focus, false);
         } catch (RuntimeException failure) {
             // The status bar only has room for a short message; without this
             // the actual cause (and its stack trace) was silently dropped,
@@ -727,7 +812,7 @@ public final class StudioApplication implements AutoCloseable {
         IncrementalGpuUploadPlanBuilder.BuildResult planUpdate = null;
         long planStart = System.nanoTime();
         if (settingsChanged || !animation.dirtyZones().isEmpty()) {
-            GpuScenePacket visiblePacket = renderState.config().apply(packet);
+            GpuScenePacket visiblePacket = renderState.config().forPlan().apply(packet);
             incrementalPlanBuilder = baseScene.planBuilder().fork();
             if (settingsChanged) {
                 incrementalPlanBuilder.invalidateAll();
@@ -802,6 +887,8 @@ public final class StudioApplication implements AutoCloseable {
                 loadedScene = pendingSceneRebuild.join();
                 currentPlan = loadedScene.plan();
                 currentZonedPlan = loadedScene.zonedPlan();
+                pickPlan = currentPlan;
+                pickZonedPlan = currentZonedPlan;
                 renderedSettingsRevision = loadedScene.settingsRevision();
                 pendingRebuildChanges = Set.of();
             } catch (RuntimeException failure) {
@@ -888,7 +975,7 @@ public final class StudioApplication implements AutoCloseable {
         RenderConfigState renderState = renderConfigState;
         long settingsRevision = renderState.revision();
         RenderConfig config = renderState.config();
-        GpuScenePacket visiblePacket = config.apply(packet);
+        GpuScenePacket visiblePacket = config.forPlan().apply(packet);
         long planStart = System.nanoTime();
         IncrementalGpuUploadPlanBuilder incrementalPlanBuilder = baseScene.planBuilder().fork();
         IncrementalGpuUploadPlanBuilder.BuildResult planUpdate;
@@ -948,26 +1035,6 @@ public final class StudioApplication implements AutoCloseable {
             maxY = Math.max(maxY, region.regionY());
         }
         return new WorldRegionWindow(minX, minY, maxX - minX + 1, maxY - minY + 1, regions);
-    }
-
-    private static int[] parseRegion(String value) {
-        if (value == null || value.isBlank()) return null;
-        String normalized = value.replace(" ", "");
-        try {
-            if (normalized.contains(",")) {
-                String[] parts = normalized.split(",");
-                if (parts.length != 2) return null;
-                int x = Integer.parseInt(parts[0]);
-                int y = Integer.parseInt(parts[1]);
-                return x >= 0 && x <= 255 && y >= 0 && y <= 255 ? new int[]{x, y} : null;
-            }
-            int id = Integer.parseInt(normalized);
-            int x = (id >>> 8) & 0xFF;
-            int y = id & 0xFF;
-            return id >= 0 && id <= 0xFFFF ? new int[]{x, y} : null;
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
     }
 
     private static String rootMessage(Throwable failure) {
@@ -1078,6 +1145,8 @@ public final class StudioApplication implements AutoCloseable {
                     && cache.objectDefinitions().unpublishedCount() > 0;
             if (loadedScene != null
                     && (loadedScene.session().isDirty() || definitionDirty)) {
+                leaveMapAction = this::closeMapEditorTab;
+                leavingRegion = false;
                 closePrompt = true;
                 return;
             }
@@ -1089,12 +1158,7 @@ public final class StudioApplication implements AutoCloseable {
 
     /** Tears down the loaded scene and plugin lifecycle, then removes the Map Studio tab. */
     private void closeMapEditorTab() {
-        closePluginLifecycle();
-        cancelPendingScene();
-        loadedScene = null;
-        currentPlan = null;
-        currentZonedPlan = null;
-        sceneViewport.setZonedPlan(null);
+        unloadMapScene();
         closePrompt = false;
         workspaces.close(WorkspaceManager.Workspace.MAP_EDITOR);
     }
@@ -1107,9 +1171,11 @@ public final class StudioApplication implements AutoCloseable {
         LoadedOsrsCacheSession cache = cacheSessions.current().orElse(null);
         boolean definitionDirty = cache != null
                 && cache.objectDefinitions().unpublishedCount() > 0;
-        boolean externalDirty = definitionDirty
+        boolean externalDirty = (definitionDirty && !leavingRegion)
                 || (session != null && session.hasUnsavedExternalState());
-        if (externalDirty) {
+        if (leavingRegion && !externalDirty) {
+            ImGui.textWrapped("This map has unsaved changes. Save before leaving this region?");
+        } else if (externalDirty) {
             ImGui.textWrapped(
                     "This Studio session contains unpublished definition edits. "
                             + "Map Save does not write those definitions. "
@@ -1126,13 +1192,13 @@ public final class StudioApplication implements AutoCloseable {
         if (ImGui.button(externalDirty ? "Save Map" : "Save")) {
             try {
                 session.save();
-                boolean definitionsRemain = cache != null
+                boolean definitionsRemain = !leavingRegion && cache != null
                         && cache.objectDefinitions().unpublishedCount() > 0;
                 if (session.hasUnsavedExternalState() || definitionsRemain) {
                     sceneStatus = "Map changes saved. Definition edits still need an output-cache build.";
                 } else {
                     ImGui.closeCurrentPopup();
-                    closeMapEditorTab();
+                    leaveMapAction.run();
                 }
             } catch (RuntimeException failure) {
                 sceneStatus = "Save failed: " + rootMessage(failure);
@@ -1142,14 +1208,16 @@ public final class StudioApplication implements AutoCloseable {
         ImGui.endDisabled();
 
         ImGui.sameLine();
-        if (ImGui.button(externalDirty ? "Discard & Close" : "Discard")) {
+        if (ImGui.button(externalDirty ? (leavingRegion ? "Discard & Leave" : "Discard & Close") : "Discard")) {
             ImGui.closeCurrentPopup();
-            closeMapEditorTab();
+            leaveMapAction.run();
         }
         ImGui.sameLine();
         if (ImGui.button("Cancel")) {
             ImGui.closeCurrentPopup();
             closePrompt = false;
+            leaveMapAction = this::closeMapEditorTab;
+            leavingRegion = false;
         }
         ImGui.endPopup();
     }

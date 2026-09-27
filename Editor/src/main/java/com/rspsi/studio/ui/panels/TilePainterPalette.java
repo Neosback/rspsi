@@ -128,7 +128,9 @@ public final class TilePainterPalette implements StudioPanel {
         float availH = ImGui.getContentRegionAvailY();
         float previewW = Math.min(170.0f, Math.max(140.0f, availW * 0.18f));
 
-        ImGui.beginChild("tile-painter-preview-col", previewW, Math.max(100.0f, availH - 2.0f), false);
+        // The preview column is sized to its content; it never scrolls.
+        ImGui.beginChild("tile-painter-preview-col", previewW, Math.max(100.0f, availH - 2.0f), false,
+                imgui.flag.ImGuiWindowFlags.NoScrollbar | imgui.flag.ImGuiWindowFlags.NoScrollWithMouse);
         renderPreviewBlock(cache, session, context);
         ImGui.endChild();
 
@@ -155,7 +157,7 @@ public final class TilePainterPalette implements StudioPanel {
     private void renderPreviewBlock(LoadedOsrsCacheSession cache, EditorSession session, StudioPanelContext context) {
         ImGui.textDisabled("Preview");
 
-        float box = 96.0f;
+        float box = Math.max(48.0f, Math.min(96.0f, ImGui.getContentRegionAvailX() - 2.0f));
         float x = ImGui.getCursorScreenPos().x;
         float y = ImGui.getCursorScreenPos().y;
         imgui.ImDrawList draw = ImGui.getWindowDrawList();
@@ -183,22 +185,12 @@ public final class TilePainterPalette implements StudioPanel {
 
         draw.addRect(x, y, x + box, y + box, StudioPalette.draw(StudioPalette.BORDER_STRONG),
                 3.0f, 0, 1.5f);
-        int compassSize = 18;
-        var compassText = ImGui.calcTextSize(StudioIcons.EXPLORE);
-        draw.addText(StudioFonts.icon(), compassSize,
-                x + (box - compassText.x) * 0.5f, y - 19.0f,
-                StudioPalette.draw(StudioPalette.TEXT), StudioIcons.EXPLORE);
         ImGui.dummy(box, box);
 
-        ImGui.textDisabled("Shape " + state.shape() + "  |  Rotation " + state.rotation() * 90 + "°");
-
-        Set<TileCoordinate> selected = session != null ? session.selection().selectedCoordinates() : Set.of();
-        int count = selected.size();
-        if (count == 0) ImGui.beginDisabled();
-        if (ImGui.button("Apply (" + count + ")##tp-apply-btn", 140.0f, 26.0f)) {
-            applyCompositeToSelection(session, selected, context);
-        }
-        if (count == 0) ImGui.endDisabled();
+        // The painter is a brush: values are picked here and painted in the viewport.
+        ImGui.pushStyleColor(imgui.flag.ImGuiCol.Text, ImGui.getColorU32(imgui.flag.ImGuiCol.TextDisabled));
+        ImGui.textWrapped("Shape " + state.shape() + " · Rotation " + state.rotation() * 90 + "°");
+        ImGui.popStyleColor();
     }
 
     private static float px(float x, float size, int vertexX) {
@@ -271,12 +263,12 @@ public final class TilePainterPalette implements StudioPanel {
         float labelWidth = Math.max(44.0f, ImGui.getContentRegionAvailX() - checkWidth);
 
         ImGui.pushStyleColor(ImGuiCol.Button,
-                current ? StudioPalette.ACCENT : StudioPalette.PANEL_ELEVATED);
+                StudioPalette.u32(current ? StudioPalette.ACCENT : StudioPalette.PANEL_ELEVATED));
         ImGui.pushStyleColor(ImGuiCol.ButtonHovered,
-                current ? StudioPalette.ACCENT_HOVER : StudioPalette.FIELD_HOVER);
+                StudioPalette.u32(current ? StudioPalette.ACCENT_HOVER : StudioPalette.FIELD_HOVER));
         ImGui.pushStyleColor(ImGuiCol.ButtonActive,
-                current ? StudioPalette.ACCENT_ACTIVE : StudioPalette.ACCENT_SOFT);
-        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
+                StudioPalette.u32(current ? StudioPalette.ACCENT_ACTIVE : StudioPalette.ACCENT_SOFT));
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(StudioPalette.TEXT));
         if (ImGui.button(label + "##tp-tab-" + index, labelWidth, 0.0f)) {
             activeTab = index;
         }
@@ -292,17 +284,6 @@ public final class TilePainterPalette implements StudioPanel {
         }
     }
 
-    private void applyCompositeToSelection(EditorSession session, Set<TileCoordinate> selected,
-                                           StudioPanelContext context) {
-        if (session == null || selected.isEmpty()) return;
-        CompositeTilePainterTool helper = new CompositeTilePainterTool();
-        if (context != null && context.brushes() != null) {
-            EditorBrush active = activeBrush(context);
-            if (active != null) helper.setBrush(active);
-        }
-        helper.bindState(state);
-        helper.applyToCoordinates(selected, session);
-    }
 
     private void renderUnderlayTab(LoadedOsrsCacheSession cache) {
         StudioWidgets.heading("Underlay", "Selected " + definitionLabel(state.underlayId()));
@@ -412,8 +393,8 @@ public final class TilePainterPalette implements StudioPanel {
             if (i % 2 == 1) ImGui.sameLine(0.0f, gap);
             boolean current = state.rotation() == i;
             ImGui.pushStyleColor(ImGuiCol.Button,
-                    current ? StudioPalette.ACCENT : StudioPalette.PANEL_ELEVATED);
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
+                    StudioPalette.u32(current ? StudioPalette.ACCENT : StudioPalette.PANEL_ELEVATED));
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(StudioPalette.TEXT));
             if (ImGui.button(ROTATION_NAMES[i] + "##rot-" + i, width, 32.0f)) {
                 state.setRotation(i);
                 state.setApplyRotation(true);

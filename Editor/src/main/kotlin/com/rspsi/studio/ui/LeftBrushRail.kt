@@ -37,8 +37,8 @@ class LeftBrushRail {
         ImGui.setNextWindowSize(RAIL_WIDTH, height, ImGuiCond.Always)
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID())
 
-        ImGui.pushStyleColor(ImGuiCol.WindowBg, StudioPalette.CHROME_BG)
-        ImGui.pushStyleColor(ImGuiCol.Border, StudioPalette.BORDER)
+        ImGui.pushStyleColor(ImGuiCol.WindowBg, StudioPalette.u32(StudioPalette.CHROME_BG))
+        ImGui.pushStyleColor(ImGuiCol.Border, StudioPalette.u32(StudioPalette.BORDER))
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 4.0f, 8.0f)
         ImGui.pushStyleVar(ImGuiStyleVar.ItemSpacing, 0.0f, 6.0f)
         ImGui.pushStyleVar(ImGuiStyleVar.FrameRounding, 6.0f)
@@ -90,10 +90,10 @@ class LeftBrushRail {
         active: Int,
         text: Int,
     ) {
-        ImGui.pushStyleColor(ImGuiCol.Button, button)
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, hovered)
-        ImGui.pushStyleColor(ImGuiCol.ButtonActive, active)
-        ImGui.pushStyleColor(ImGuiCol.Text, text)
+        ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.u32(button))
+        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.u32(hovered))
+        ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.u32(active))
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(text))
     }
 
     companion object {

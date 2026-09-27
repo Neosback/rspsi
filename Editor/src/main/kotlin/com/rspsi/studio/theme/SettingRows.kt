@@ -126,22 +126,6 @@ object SettingRows {
         ImGui.textWrapped(value)
     }
 
-    /** Greyed placeholder for controls not wired to the renderer yet. */
-    @JvmStatic
-    fun notImplemented(
-        label: String,
-        reason: String,
-    ) {
-        ImGui.tableNextRow()
-        ImGui.tableNextColumn()
-        ImGui.textDisabled(label)
-        ImGui.tableNextColumn()
-        ImGui.textDisabled("not implemented")
-        if (ImGui.isItemHovered()) {
-            ImGui.setTooltip(reason)
-        }
-    }
-
     private fun beginTable(
         id: String,
         labelWeight: Float,

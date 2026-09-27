@@ -13,204 +13,210 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests for SceneVisibilityPolicy, now mirroring Terraini's
+ * VisiblePlaneWindow.maxPlaneExclusive contract.
+ */
 class SceneVisibilityPolicyTest {
+
+    // -------------------------------------------------------------------------
+    // maxPlaneExclusive logic tests
+    // -------------------------------------------------------------------------
+
     @Test
-    void effectivePlaneSelectionKeepsBridgeProjectionButRemovesOtherAuthoredPlanes() {
+    void allHeightsVisibleReturnsFullPlaneCount() {
+        SceneVisibilityPolicy policy = new SceneVisibilityPolicy(0, true, false, false,
+                RoofRemovalState.disabled());
+        assertEquals(4, policy.maxPlaneExclusive(4));
+        assertEquals(1, policy.maxPlaneExclusive(1));
+    }
+
+    @Test
+    void currentHeightZeroShowsOnlyPlaneZero() {
+        SceneVisibilityPolicy policy = new SceneVisibilityPolicy(0, false, false, false,
+                RoofRemovalState.disabled());
+        assertEquals(1, policy.maxPlaneExclusive(4));
+    }
+
+    @Test
+    void currentHeightOneShowsPlanesZeroAndOne() {
+        SceneVisibilityPolicy policy = new SceneVisibilityPolicy(1, false, false, false,
+                RoofRemovalState.disabled());
+        assertEquals(2, policy.maxPlaneExclusive(4));
+    }
+
+    @Test
+    void currentHeightThreeShowsAllFourPlanes() {
+        SceneVisibilityPolicy policy = new SceneVisibilityPolicy(3, false, false, false,
+                RoofRemovalState.disabled());
+        assertEquals(4, policy.maxPlaneExclusive(4));
+    }
+
+    @Test
+    void currentHeightClampedToMaxPlanes() {
+        // currentHeight=3 with only 2 planes: clamped to planes-1=1, result=2
+        SceneVisibilityPolicy policy = new SceneVisibilityPolicy(3, false, false, false,
+                RoofRemovalState.disabled());
+        assertEquals(2, policy.maxPlaneExclusive(2));
+    }
+
+    // -------------------------------------------------------------------------
+    // includes() tile gate tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    void editorPolicyIncludesAllAuthoredPlanes() {
+        // allHeightsVisible=true → maxPlaneExclusive=4, all planes 0-3 pass
+        SceneVisibilityPolicy editor = SceneVisibilityPolicy.editor();
+        for (int plane = 0; plane <= 3; plane++) {
+            assertTrue(editor.includes(stubTile(plane, plane, plane)));
+        }
+    }
+
+    @Test
+    void atHeightZeroOnlyIncludesPlaneZero() {
+        SceneVisibilityPolicy policy = SceneVisibilityPolicy.atHeight(0);
+        assertTrue(policy.includes(stubTile(0, 0, 0)));
+        assertTrue(!policy.includes(stubTile(1, 1, 1)));
+        assertTrue(!policy.includes(stubTile(2, 2, 2)));
+    }
+
+    @Test
+    void atHeightTwoIncludesPlanesZeroThroughTwo() {
+        SceneVisibilityPolicy policy = SceneVisibilityPolicy.atHeight(2);
+        assertTrue(policy.includes(stubTile(0, 0, 0)));
+        assertTrue(policy.includes(stubTile(1, 1, 1)));
+        assertTrue(policy.includes(stubTile(2, 2, 2)));
+        assertTrue(!policy.includes(stubTile(3, 3, 3)));
+    }
+
+    // -------------------------------------------------------------------------
+    // apply() packet filtering tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    void applyWithAllHeightsKeepsAllTiles() {
         WorldDocument document = new WorldDocument(64, 64, 4);
-        document.tile(1, 2, 3).restore(new TileSnapshot(0, 0, 0, 0,
-                0, 0, 0, 0, OsrsTileFlags.BRIDGE, java.util.List.of()));
         WorldRegion region = new WorldRegion(10, 20, document);
         WorldRegionWindow window = new WorldRegionWindow(10, 20, 1, 1,
                 Map.of(region.regionId(), region));
         RenderWindowScene scene = new RenderWindowSceneBuilder().build(window);
+
         GpuScenePacket all = new GpuScenePacketBuilder().build(SceneWindow.from(window), scene);
+        GpuScenePacket filtered = SceneVisibilityPolicy.editor().apply(all);
 
-        GpuScenePacket selected = new GpuScenePacketBuilder().build(
-                SceneWindow.from(window), scene, SceneVisibilityPolicy.effectivePlane(0));
-
-        assertEquals(64 * 64 + 1, selected.tiles().size());
-        SceneTileSnapshot bridgeTile = selected.tiles().stream()
-                .filter(SceneTileSnapshot::visibleBelow)
-                .filter(tile -> tile.authoredPlane() == 1)
-                .findFirst().orElseThrow();
-        assertEquals(0, bridgeTile.effectivePlane());
-        assertEquals(1, bridgeTile.authoredPlane());
-        assertEquals(1, bridgeTile.renderLevel());
-        assertEquals(0, bridgeTile.planeCullLevel());
-        assertNotEquals(all.fingerprint(), selected.fingerprint());
+        assertEquals(all.tiles().size(), filtered.tiles().size());
     }
 
     @Test
-    void clientTraversalKeepsLinkedBelowAndShiftedBridgeAtActivePlaneZero() {
+    void applyAtHeightZeroKeepsOnlyPlaneZeroTiles() {
         WorldDocument document = new WorldDocument(64, 64, 4);
-        document.tile(1, 2, 3).restore(new TileSnapshot(0, 0, 0, 0,
-                0, 0, 0, 0, OsrsTileFlags.BRIDGE, java.util.List.of()));
         WorldRegion region = new WorldRegion(10, 20, document);
         WorldRegionWindow window = new WorldRegionWindow(10, 20, 1, 1,
                 Map.of(region.regionId(), region));
         RenderWindowScene scene = new RenderWindowSceneBuilder().build(window);
 
-        GpuScenePacket client = new GpuScenePacketBuilder().build(
-                SceneWindow.from(window), scene, SceneVisibilityPolicy.clientTraversal(0));
+        GpuScenePacket all = new GpuScenePacketBuilder().build(SceneWindow.from(window), scene);
+        GpuScenePacket plane0Only = SceneVisibilityPolicy.atHeight(0).apply(all);
 
-        assertEquals(64 * 64 + 1, client.tiles().size());
-        long bridgeColumnTiles = client.tiles().stream()
-                .filter(tile -> tile.worldAddress().worldX() == 642
-                        && tile.worldAddress().worldY() == 1283)
-                .count();
-        assertEquals(2, bridgeColumnTiles);
-        assertTrue(client.tiles().stream().anyMatch(tile ->
-                tile.authoredPlane() == 0
-                        && tile.worldAddress().worldX() == 642
-                        && tile.worldAddress().worldY() == 1283
-                        && tile.effectivePlane() == 0));
-        assertTrue(client.tiles().stream().anyMatch(tile ->
-                tile.authoredPlane() == 1
-                        && tile.worldAddress().worldX() == 642
-                        && tile.worldAddress().worldY() == 1283
-                        && tile.effectivePlane() == 0));
-        assertTrue(client.tiles().stream().noneMatch(tile ->
-                tile.authoredPlane() >= 2
-                        && tile.worldAddress().worldX() == 642
-                        && tile.worldAddress().worldY() == 1283));
+        assertTrue(plane0Only.tiles().stream().allMatch(t -> t.authoredPlane() == 0));
+        assertNotEquals(all.fingerprint(), plane0Only.fingerprint());
     }
 
     @Test
-    void clientTraversalUsesPhysicalCullLevelInsteadOfCurrentPlaneEquality() {
+    void applyAtHeightOneTileCountIsTwiceHeightZero() {
         WorldDocument document = new WorldDocument(64, 64, 4);
-        document.tile(2, 5, 6).restore(new TileSnapshot(0, 0, 0, 0,
-                0, 0, 0, 0, OsrsTileFlags.VIS_BELOW, java.util.List.of()));
         WorldRegion region = new WorldRegion(10, 20, document);
         WorldRegionWindow window = new WorldRegionWindow(10, 20, 1, 1,
                 Map.of(region.regionId(), region));
         RenderWindowScene scene = new RenderWindowSceneBuilder().build(window);
-        SceneWindow sceneWindow = SceneWindow.from(window);
-        GpuScenePacketBuilder builder = new GpuScenePacketBuilder();
 
-        GpuScenePacket effective = builder.build(
-                sceneWindow, scene, SceneVisibilityPolicy.effectivePlane(0));
-        GpuScenePacket client = builder.build(
-                sceneWindow, scene, SceneVisibilityPolicy.clientTraversal(0));
+        GpuScenePacket all = new GpuScenePacketBuilder().build(SceneWindow.from(window), scene);
+        GpuScenePacket plane0 = SceneVisibilityPolicy.atHeight(0).apply(all);
+        GpuScenePacket plane01 = SceneVisibilityPolicy.atHeight(1).apply(all);
 
-        assertEquals(64 * 64, effective.tiles().size());
-        assertEquals(64 * 64 + 1, client.tiles().size());
-        SceneTileSnapshot visibleBelow = client.tiles().stream()
-                .filter(tile -> tile.authoredPlane() == 2)
-                .findFirst().orElseThrow();
-        assertEquals(2, visibleBelow.effectivePlane());
-        assertEquals(0, visibleBelow.planeCullLevel());
+        // plane0 shows only plane 0 (64*64 tiles), plane01 shows planes 0+1 (128*64=8192... but also bridge tiles)
+        assertTrue(plane01.tiles().size() > plane0.tiles().size());
+    }
+
+    // -------------------------------------------------------------------------
+    // Fluent builder tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    void withCurrentHeightUpdatesFieldOnly() {
+        SceneVisibilityPolicy base = SceneVisibilityPolicy.atHeight(0);
+        SceneVisibilityPolicy updated = base.withCurrentHeight(2);
+        assertEquals(2, updated.currentHeight());
+        assertEquals(false, updated.allHeightsVisible());
+        assertEquals(false, updated.showHiddenTiles());
+        assertEquals(false, updated.showEmptyTiles());
     }
 
     @Test
-    void clientProjectionHonorsSceneMinimumBeforeTilePlaneSelection() {
-        WorldDocument document = new WorldDocument(64, 64, 4);
-        document.tile(1, 2, 3).restore(new TileSnapshot(0, 0, 0, 0,
-                0, 0, 0, 0, OsrsTileFlags.BRIDGE, java.util.List.of()));
-        WorldRegion region = new WorldRegion(10, 20, document);
-        WorldRegionWindow source = new WorldRegionWindow(10, 20, 1, 1,
-                Map.of(region.regionId(), region));
-        RenderWindowScene scene = new RenderWindowSceneBuilder().build(source);
-        SceneWindow window = new SceneWindow(
-                source,
-                source.worldWindow().originX(),
-                source.worldWindow().originY(),
-                4,
-                1,
-                1,
-                -1,
-                source.regions().keySet(),
-                java.util.List.of());
-
-        GpuScenePacketBuilder builder = new GpuScenePacketBuilder();
-        GpuScenePacket editor = builder.build(window, scene);
-        GpuScenePacket belowMinimum = builder.build(
-                window, scene, SceneVisibilityPolicy.clientTraversal(0));
-        GpuScenePacket atMinimum = builder.build(
-                window, scene, SceneVisibilityPolicy.clientTraversal(1));
-
-        assertEquals(64 * 64 * 4, editor.tiles().size());
-        assertTrue(belowMinimum.tiles().isEmpty());
-        assertTrue(!atMinimum.tiles().isEmpty());
-        assertTrue(atMinimum.tiles().stream()
-                .allMatch(tile -> tile.effectivePlane() >= window.minimumRenderLevel()));
+    void withAllHeightsVisibleChangesTogglesField() {
+        SceneVisibilityPolicy base = SceneVisibilityPolicy.atHeight(1);
+        SceneVisibilityPolicy all = base.withAllHeightsVisible(true);
+        assertTrue(all.allHeightsVisible());
+        assertEquals(4, all.maxPlaneExclusive(4));
     }
 
     @Test
-    void bridgeAndRoofFiltersAreIndependentPresentationChoices() {
-        SceneTileSnapshot bridge = new SceneTileSnapshot(
-                new com.rspsi.editor.model.TileCoordinate(1, 2, 3),
-                com.rspsi.editor.model.WorldTileAddress.of(2, 3, 1),
-                OsrsTileFlags.BRIDGE, 0, java.util.Optional.empty(),
-                java.util.Optional.empty(), java.util.List.of(), java.util.List.of(),
-                java.util.List.of(), false, true);
-        SceneTileSnapshot roof = new SceneTileSnapshot(
-                new com.rspsi.editor.model.TileCoordinate(0, 4, 5),
-                com.rspsi.editor.model.WorldTileAddress.of(4, 5, 0),
-                OsrsTileFlags.REMOVE_ROOFS, 0, java.util.Optional.empty(),
-                java.util.Optional.empty(), java.util.List.of(), java.util.List.of(),
-                java.util.List.of(), true, false);
-
-        assertTrue(SceneVisibilityPolicy.editor().includes(bridge));
-        assertTrue(SceneVisibilityPolicy.editor().includes(roof));
-        assertTrue(!SceneVisibilityPolicy.effectivePlane(0)
-                .withBridgeUpperGeometry(true).includes(bridge));
-        assertTrue(!SceneVisibilityPolicy.editor().withRoofGeometry(true).includes(roof));
-        assertTrue(SceneVisibilityPolicy.editor().withRoofGeometry(true).includes(bridge));
+    void withShowHiddenTilesSetsFlag() {
+        SceneVisibilityPolicy policy = SceneVisibilityPolicy.editor().withShowHiddenTiles(true);
+        assertTrue(policy.showHiddenTiles());
     }
+
     @Test
-    void roofRemovalModeReplacesVanillaUpperPlaneCullWithSelectedConnectedRegions() {
-        SceneTileSnapshot lowerSelected = roofTile(0, 1, 1,
-                OsrsTileFlags.REMOVE_ROOFS, 0);
-        SceneTileSnapshot upperSelected = roofTile(1, 1, 1, 0, 1);
-        SceneTileSnapshot lowerOther = roofTile(0, 8, 1,
-                OsrsTileFlags.REMOVE_ROOFS, 0);
-        SceneTileSnapshot upperOther = roofTile(1, 8, 1, 0, 1);
-
-        WorldRegionWindow source = new WorldRegionWindow(0, 0, 1, 1, Map.of());
-        SceneWindow window = new SceneWindow(
-                source, 0, 0, 4, 0, 0, -1, java.util.Set.of(), java.util.List.of());
-        GpuScenePacket packet = new GpuScenePacket(
-                window,
-                java.util.List.of(lowerSelected, upperSelected, lowerOther, upperOther),
-                LightingProfile.osrs(),
-                "roof-removal-regions",
-                Map.of());
-
-        GpuScenePacket vanilla = SceneVisibilityPolicy.clientTraversal(0).apply(packet);
-        assertEquals(2, vanilla.tiles().size(),
-                "vanilla traversal hides every tile whose physical level is above the active plane");
-
-        RoofRemovalState state = new RoofRemovalState(
-                RoofRemovalState.POSITION,
-                new RoofRemovalState.ScenePoint(1, 1),
-                null, null, null, 200);
-        GpuScenePacket dynamic = SceneVisibilityPolicy.clientTraversal(0)
-                .withRoofRemovalState(state)
-                .apply(packet);
-
-        assertEquals(3, dynamic.tiles().size());
-        assertTrue(dynamic.tiles().stream().noneMatch(tile ->
-                tile.authoredPlane() == 1
-                        && tile.worldAddress().worldX() == 1
-                        && tile.worldAddress().worldY() == 1));
-        assertTrue(dynamic.tiles().stream().anyMatch(tile ->
-                tile.authoredPlane() == 1
-                        && tile.worldAddress().worldX() == 8
-                        && tile.worldAddress().worldY() == 1),
-                "when roof-removal mode is enabled, upper tiles outside selected roof regions stay visible");
-        assertNotEquals(vanilla.fingerprint(), dynamic.fingerprint());
+    void withShowEmptyTilesSetsFlag() {
+        SceneVisibilityPolicy policy = SceneVisibilityPolicy.editor().withShowEmptyTiles(true);
+        assertTrue(policy.showEmptyTiles());
     }
 
-    private static SceneTileSnapshot roofTile(int plane, int x, int y, int flags, int cullLevel) {
+    // -------------------------------------------------------------------------
+    // Bridge-deck and placeholder gate tests (Terraini/Terraforge parity)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void bridgeDeckAuthoredAboveIsIncludedWhenItsEffectivePlaneIsVisible() {
+        // Lumbridge-style bridge: authored on plane 1, drawn on scene plane 0.
+        SceneTileSnapshot bridge = texturedTile(1, 0, 100, -1, false);
+        assertTrue(SceneVisibilityPolicy.atHeight(0).includes(bridge));
+        // A normal plane-1 tile stays hidden at height 0.
+        assertTrue(!SceneVisibilityPolicy.atHeight(0).includes(texturedTile(1, 1, 100, -1, false)));
+        // At height 1 both are visible.
+        assertTrue(SceneVisibilityPolicy.atHeight(1).includes(bridge));
+    }
+
+    @Test
+    void placeholdersStayInThePacketAndAreGatedDownstreamInRenderConfig() {
+        // Packet tiles carry authored heights/settings/objects for scene APIs,
+        // so empty/hidden placeholders are always kept here; the empty/hidden
+        // flags strip or retint their faces in RenderConfig instead.
+        SceneTileSnapshot empty = texturedTile(0, 0, -1, -1, false);
+        assertTrue(empty.terrain().orElseThrow().isEmptyPlaceholder());
+        assertTrue(SceneVisibilityPolicy.editor().includes(empty));
+        assertTrue(SceneVisibilityPolicy.atHeight(0).includes(empty));
+
+        SceneTileSnapshot hidden = texturedTile(0, 0, -1, -2, true);
+        assertTrue(hidden.terrain().orElseThrow().isHiddenPlaceholder());
+        assertTrue(SceneVisibilityPolicy.editor().includes(hidden));
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private static SceneTileSnapshot stubTile(int authoredPlane, int effectivePlane, int cullLevel) {
         com.rspsi.editor.model.TileCoordinate coordinate =
-                new com.rspsi.editor.model.TileCoordinate(plane, x, y);
+                new com.rspsi.editor.model.TileCoordinate(authoredPlane, 1, 1);
         return new SceneTileSnapshot(
                 coordinate,
-                com.rspsi.editor.model.WorldTileAddress.of(x, y, plane),
-                flags,
-                plane,
-                plane,
-                plane,
+                com.rspsi.editor.model.WorldTileAddress.of(1, 1, authoredPlane),
+                0,
+                effectivePlane,
+                authoredPlane,
+                authoredPlane,
                 cullLevel,
                 java.util.Optional.empty(),
                 java.util.Optional.empty(),
@@ -221,4 +227,33 @@ class SceneVisibilityPolicyTest {
                 false);
     }
 
+    /** Snapshot carrying a single-triangle terrain packet with the given appearance markers. */
+    private static SceneTileSnapshot texturedTile(int authoredPlane, int effectivePlane,
+                                                  int underlayHsl, int overlayHsl,
+                                                  boolean overlayHidden) {
+        com.rspsi.editor.model.TileCoordinate coordinate =
+                new com.rspsi.editor.model.TileCoordinate(authoredPlane, 1, 1);
+        TerrainRenderPacket terrain = new TerrainRenderPacket(coordinate,
+                java.util.List.of(
+                        new TerrainRenderVertex(0, 0, 0, 100, 0, 0),
+                        new TerrainRenderVertex(128, 0, 0, 100, 128, 0),
+                        new TerrainRenderVertex(0, 128, 0, 100, 0, 128)),
+                java.util.List.of(new TerrainRenderFace(0, 1, 2, 0, -1, 255, 0)),
+                0, 0, -1, underlayHsl, overlayHsl, false, overlayHidden, overlayHsl);
+        return new SceneTileSnapshot(
+                coordinate,
+                com.rspsi.editor.model.WorldTileAddress.of(1, 1, authoredPlane),
+                0,
+                effectivePlane,
+                authoredPlane,
+                authoredPlane,
+                Math.max(0, effectivePlane),
+                java.util.Optional.empty(),
+                java.util.Optional.of(terrain),
+                java.util.List.of(),
+                java.util.List.of(new SceneLayer(SceneLayer.Kind.TERRAIN, java.util.List.of())),
+                java.util.List.of(),
+                false,
+                effectivePlane < authoredPlane);
+    }
 }

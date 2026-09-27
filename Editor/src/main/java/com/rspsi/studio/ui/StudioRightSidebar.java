@@ -86,20 +86,21 @@ public final class StudioRightSidebar {
             boolean isPinned = p.id().equals(pinnedTopPanelId);
 
             if (isSel) {
-                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
-                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.draw(StudioPalette.ACCENT));
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.draw(StudioPalette.ACCENT_HOVER));
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.draw(StudioPalette.ACCENT_ACTIVE));
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.draw(StudioPalette.TEXT));
             } else if (isPinned) {
-                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.WARNING);
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.WARNING);
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.WARNING);
-                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
+                // Pinned is a state, not a warning: muted brand fill, accent icon.
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.draw(StudioPalette.ACCENT_MUTED));
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.draw(StudioPalette.FIELD_HOVER));
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.draw(StudioPalette.ACCENT_ACTIVE));
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.draw(StudioPalette.ACCENT));
             } else {
-                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.CHROME_BG);
-                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
-                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
-                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
+                ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.draw(StudioPalette.CHROME_BG));
+                ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.draw(StudioPalette.FIELD_HOVER));
+                ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.draw(StudioPalette.ACCENT_SOFT));
+                ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.draw(StudioPalette.TEXT_MUTED));
             }
 
             ImGui.pushFont(StudioFonts.icon(), 0.0f);
@@ -170,7 +171,7 @@ public final class StudioRightSidebar {
             ImGui.beginChild("right-split-top", contentW, topH, true,
                     pinnedPanel.allowHorizontalScroll() ? ImGuiWindowFlags.HorizontalScrollbar : ImGuiWindowFlags.None);
             if (!pinnedPanel.allowHorizontalScroll()) ImGui.setScrollX(0.0f);
-            ImGui.textColored(StudioPalette.WARNING, StudioIcons.PIN + " " + pinnedPanel.title());
+            ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), StudioIcons.PIN + " " + pinnedPanel.title());
             String unpin = StudioIcons.CLOSE + " Unpin";
             ImGui.sameLine(Math.max(0.0f, ImGui.getWindowContentRegionMaxX()
                     - ImGui.calcTextSize(unpin).x - ImGui.getStyle().getFramePaddingX() * 2.0f));
@@ -193,7 +194,7 @@ public final class StudioRightSidebar {
             ImGui.beginChild("right-split-bottom", contentW, botH, true,
                     activePanel.allowHorizontalScroll() ? ImGuiWindowFlags.HorizontalScrollbar : ImGuiWindowFlags.None);
             if (!activePanel.allowHorizontalScroll()) ImGui.setScrollX(0.0f);
-            ImGui.textColored(StudioPalette.ACCENT, activePanel.title());
+            ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), activePanel.title());
             ImGui.separator();
             ImGui.pushTextWrapPos(0.0f);
             activePanel.render(context);
@@ -244,7 +245,7 @@ public final class StudioRightSidebar {
 
         ImGui.dummy(1.0f, 8.0f);
         ImGui.separator();
-        ImGui.textColored(StudioPalette.ACCENT, tool.name() + " Inspector");
+        ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), tool.name() + " Inspector");
         ImGui.separator();
         declarativeToolUi.render(inspector);
     }

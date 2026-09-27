@@ -451,9 +451,12 @@ public final class OpenRuneDefinitionProvider implements DefinitionProvider {
     static ObjectAppearanceView toAppearanceView(ObjectType definition) {
         return new ObjectAppearanceView(
                 definition.getAnimationId(), false,
-                Math.max(1, definition.getModelSizeX()), Math.max(1, definition.getModelSizeY()),
-                Math.max(1, definition.getModelSizeZ()), definition.getOffsetX(),
-                definition.getOffsetY(), definition.getOffsetZ(),
+                Math.max(1, definition.getModelSizeX()),
+                Math.max(1, definition.getModelSizeZ()),
+                Math.max(1, definition.getModelSizeY()),
+                (short) definition.getOffsetX(),
+                (short) definition.getOffsetZ(),
+                (short) definition.getOffsetY(),
                 ObjectAppearanceView.pairs(toArray(definition.getOriginalColours()),
                         toArray(definition.getModifiedColours())),
                 ObjectAppearanceView.pairs(toArray(definition.getOriginalTextureColours()),

@@ -66,6 +66,30 @@ public final class TerrainPacketBuilder {
                     textureId, 255, 0));
         }
 
+        if (faces.isEmpty() && appearance.underlayHsl() < 0 && appearance.textureId() < 0) {
+            // Empty tile: no underlay and no renderable overlay or texture, so
+            // nothing above produced geometry. Emit a flat editor placeholder
+            // quad over the tile topology instead of a hole: grey for truly
+            // empty ground, magenta when the tile carries a hidden marker.
+            // The packet keeps the -1/-2 appearance markers so packet and
+            // frame filtering can gate each placeholder on the empty-tiles or
+            // hidden-tiles flag (Terraini EMPTY_TILE/HIDDEN_TILE parity)
+            // without a second scene system for diagnostics.
+            int base = appearance.overlayHidden()
+                    ? OsrsTerrainColorMath.HIDDEN_HIGHLIGHT_HSL
+                    : OsrsTerrainColorMath.EMPTY_TILE_HSL;
+            for (TerrainFace sourceFace : topology.faces()) {
+                if (sourceFace.material() != 0) continue;
+                int a = placeholderVertexIndex(sourceFace.a(), topology,
+                        cornerLighting, cornerNormals, base, vertices, vertexIndexes);
+                int b = placeholderVertexIndex(sourceFace.b(), topology,
+                        cornerLighting, cornerNormals, base, vertices, vertexIndexes);
+                int c = placeholderVertexIndex(sourceFace.c(), topology,
+                        cornerLighting, cornerNormals, base, vertices, vertexIndexes);
+                faces.add(new TerrainRenderFace(a, b, c, 0, -1, 255, 0));
+            }
+        }
+
         boolean overlayPresent = appearance.overlayHsl() != -1 || appearance.textureId() >= 0;
         int sceneShape = overlayPresent ? appearance.shape() + 1 : 0;
         return new TerrainRenderPacket(coordinate, vertices, faces,
@@ -147,6 +171,35 @@ public final class TerrainPacketBuilder {
         int index = vertices.size();
         vertices.add(new TerrainRenderVertex(source.x(), source.y(), source.height(),
                 baseHsl, source.x(), source.y(),
+                normal.x(), normal.y(), normal.z(), normal.magnitude()));
+        vertexIndexes.put(key, index);
+        return index;
+    }
+
+    /**
+     * Builds one placeholder vertex with a fixed editor HSL (empty grey or
+     * hidden magenta) shaded by the corner light, so placeholders sit in the
+     * scene with the same slope shading as real terrain.
+     */
+    private static int placeholderVertexIndex(int sourceIndex,
+                                              TerrainMesh topology,
+                                              TerrainLight lighting,
+                                              TerrainNormalTile normals,
+                                              int baseHsl,
+                                              List<TerrainRenderVertex> vertices,
+                                              Map<VertexKey, Integer> vertexIndexes) {
+        TerrainVertex source = topology.vertices().get(sourceIndex);
+        VertexKey key = new VertexKey(0, sourceIndex);
+        Integer existing = vertexIndexes.get(key);
+        if (existing != null) {
+            return existing;
+        }
+        int light = bilinearLight(source.x(), source.y(), lighting);
+        TerrainNormal normal = normals.at(source.x(), source.y());
+        int index = vertices.size();
+        vertices.add(new TerrainRenderVertex(source.x(), source.y(), source.height(),
+                OsrsTerrainColorMath.adjustPackedHslLight(baseHsl, light),
+                source.x(), source.y(),
                 normal.x(), normal.y(), normal.z(), normal.magnitude()));
         vertexIndexes.put(key, index);
         return index;

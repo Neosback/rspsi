@@ -112,7 +112,7 @@ public final class ModelPacketBuilder {
                 }
             }
         }
-        return List.copyOf(mergeNormals(packets));
+        return List.copyOf(mergeNormals(packets, document));
     }
 
     /**
@@ -140,7 +140,7 @@ public final class ModelPacketBuilder {
         List<ModelRenderPacket> packets = new ArrayList<>();
         if (objects.size() == 1) {
             packets.addAll(buildScenePackets(objects.get(0), document, clientCycle, 0));
-            return List.copyOf(mergeNormals(packets));
+            return List.copyOf(mergeNormals(packets, document));
         }
 
         java.util.Map<WorldObject, Integer> occurrences =
@@ -150,7 +150,7 @@ public final class ModelPacketBuilder {
             occurrences.put(object, occurrence + 1);
             packets.addAll(buildScenePackets(object, document, clientCycle, occurrence));
         }
-        return List.copyOf(mergeNormals(packets));
+        return List.copyOf(mergeNormals(packets, document));
     }
 
     /** Builds one packet when its definition and at least one model are available. */
@@ -280,9 +280,11 @@ public final class ModelPacketBuilder {
         int sceneFootprintLength = object.rotation() % 2 == 0
                 ? placementDefinition.length() : placementDefinition.width();
 
-        // DynamicObject.getModel() resolves the transformed definition first,
-        // then uses THAT definition's rotated size to compute model centre and
-        // sampled placement height. Keep this distinct from scene occupancy.
+        // DynamicObject.getModel() resolves the transformed definition first and
+        // passes THAT definition's rotated size to getModelDynamic() only as the
+        // contourGround centre and reference height. The model is still drawn at
+        // the scene GameObject's centre and height, built from the placed size, so
+        // a 1x1 state of a 1x2 multiloc sits on the 1x2 footprint.
         int modelFootprintWidth = object.rotation() % 2 == 0
                 ? objectDefinition.width() : objectDefinition.length();
         int modelFootprintLength = object.rotation() % 2 == 0
@@ -339,7 +341,8 @@ public final class ModelPacketBuilder {
                 parts.animationTransformed |= animatedGeometry != baseGeometry;
                 int variantStart = parts.vertices.size();
                 append(parts, object, resolved.appearance(), animatedGeometry, document,
-                        variant, resolved.modelFootprintWidth(), resolved.modelFootprintLength());
+                        variant, resolved.sceneFootprintWidth(), resolved.sceneFootprintLength(),
+                        resolved.modelFootprintWidth(), resolved.modelFootprintLength());
                 if (variant.sourceType() == 2 && parts.vertices.size() > variantStart) {
                     // TSPS keeps the two type-2 L-wall models separate until
                     // ModelData.mergeNormals(model0, model1, 0, 0, 0, false).
@@ -370,12 +373,14 @@ public final class ModelPacketBuilder {
         SceneObjectIdentity sceneObjectIdentity = SceneObjectIdentity.of(
                 object, resolved.sceneFootprintWidth(), resolved.sceneFootprintLength(), occurrence);
         int placementHeight = objectCenterHeight(
-                document, object, resolved.modelFootprintWidth(), resolved.modelFootprintLength());
+                document, object, resolved.sceneFootprintWidth(), resolved.sceneFootprintLength());
         ModelContourContract contourContract = resolved.appearance().contourGroundType() >= 0
                 ? ModelContourContract.of(
                         resolved.appearance().contourGroundType(),
                         resolved.appearance().contourGroundParameter(),
-                        placementHeight, parts.contourApplied, parts.unskewedVertexY)
+                        objectCenterHeight(document, object,
+                                resolved.modelFootprintWidth(), resolved.modelFootprintLength()),
+                        parts.contourApplied, parts.unskewedVertexY)
                 : ModelContourContract.none();
         ModelRenderPacket packet = new ModelRenderPacket(
                 new TileCoordinate(object.plane(), object.x(), object.y()), object.id(),
@@ -544,6 +549,33 @@ public final class ModelPacketBuilder {
         return List.copyOf(result);
     }
 
+    /** World units a wall decoration is lifted off its wall, toward the tile interior. */
+    static final int DECORATION_NUDGE = 2;
+
+    /**
+     * Render-only offset of a wall-decoration model (source type 4) away from its wall.
+     *
+     * <p>The client draws a tile's decorations after its walls in painter's order, so a
+     * decoration always covers its wall even where the model dips into the wall surface
+     * (Lumbridge shutter slats sit 1 unit inside the wall face). A depth-tested renderer
+     * cannot rely on submission order, and a view-space depth bias fades at grazing angles,
+     * which made the result depend on camera angle and wall rotation. Moving the geometry
+     * itself a couple of units along the client's own displacement directions
+     * ({@code Tiles} straight / diagonal tables, as used for shapes 5, 6 and 8) keeps the
+     * decoration in front of its wall at every angle and every rotation.</p>
+     */
+    static int decorationNudge(int modelRotation, boolean xAxis) {
+        int rotation = modelRotation & 3;
+        if (modelRotation < 4) {
+            return DECORATION_NUDGE * (xAxis
+                    ? com.rspsi.osrs.rules.loc.WallDecorationRules.DECOR_DISPLACEMENT_X[rotation]
+                    : com.rspsi.osrs.rules.loc.WallDecorationRules.DECOR_DISPLACEMENT_Z[rotation]);
+        }
+        return DECORATION_NUDGE * (xAxis
+                ? com.rspsi.osrs.rules.loc.WallDecorationRules.DIAGONAL_DISPLACEMENT_X[rotation]
+                : com.rspsi.osrs.rules.loc.WallDecorationRules.DIAGONAL_DISPLACEMENT_Z[rotation]);
+    }
+
     private ObjectAppearanceView resolvedAppearance(int placedObjectId) {
         ObjectDefinitionResolver.Resolution resolution =
                 definitionResolver.resolveEditorDisplay(placedObjectId);
@@ -561,7 +593,8 @@ public final class ModelPacketBuilder {
     private void append(PacketParts parts, WorldObject object, ObjectAppearanceView appearance,
                         ModelGeometryView geometry,
                         WorldDocument document, WallRules.LocModelVariant variant,
-                        int footprintWidth, int footprintLength) {
+                        int footprintWidth, int footprintLength,
+                        int contourWidth, int contourLength) {
         int vertexOffset = parts.vertices.size();
         int vertexCount = geometry.vertexCount();
         int[] positions = geometry.vertexPositions();
@@ -579,6 +612,10 @@ public final class ModelPacketBuilder {
         int minZ = Integer.MAX_VALUE;
         int maxZ = Integer.MIN_VALUE;
 
+        // Wall decorations are painted over their wall by the client's painter's order;
+        // a depth buffer needs the geometry itself off the wall plane (see decorationNudge).
+        int nudgeX = variant.sourceType() == 4 ? decorationNudge(variant.rotation(), true) : 0;
+        int nudgeZ = variant.sourceType() == 4 ? decorationNudge(variant.rotation(), false) : 0;
         for (int index = 0; index < vertexCount; index++) {
             int offset = index * 3;
             int x = positions[offset];
@@ -607,8 +644,8 @@ public final class ModelPacketBuilder {
                 x = ModelTransformPipeline.unpackX(diagonal);
                 z = ModelTransformPipeline.unpackZ(diagonal);
             }
-            x += centerX + variant.decorX();
-            z += centerZ + variant.decorZ();
+            x += centerX + variant.decorX() + nudgeX;
+            z += centerZ + variant.decorZ() + nudgeZ;
             workspace.setVertex(index, x, y, z);
             minX = Math.min(minX, x);
             maxX = Math.max(maxX, x);
@@ -673,7 +710,8 @@ public final class ModelPacketBuilder {
         if (retainUnskewedY) {
             workspace.captureUnskewedY(vertexCount);
             if (applyContour(document, object, footprintWidth, footprintLength,
-                    workspace, vertexCount, appearance, variant.decorX(), variant.decorZ())) {
+                    contourWidth, contourLength,
+                    workspace, vertexCount, appearance, variant.decorX() + nudgeX, variant.decorZ() + nudgeZ)) {
                 parts.contourApplied = true;
             }
         }
@@ -691,8 +729,8 @@ public final class ModelPacketBuilder {
                     normalized(x, minX, maxX),
                     normalized(z, minZ, maxZ)));
             parts.clientBoundsVertices.add(new ModelVertex(
-                    x - centerX - variant.decorX(), y,
-                    z - centerZ - variant.decorZ(),
+                    x - centerX - variant.decorX() - nudgeX, y,
+                    z - centerZ - variant.decorZ() - nudgeZ,
                     0, 0, 0, 0, 0.0f, 0.0f));
         }
 
@@ -714,112 +752,87 @@ public final class ModelPacketBuilder {
     }
 
     /**
-     * Applies the client/TSPS shared-vertex normal merge after all objects
-     * have been placed in one document. Matching uses absolute plane-space
-     * coordinates, including the packet's placement elevation, rather than
-     * comparing object-local coordinates.
+     * Client {@code Scene.lightScene} normal sharing, applied once all objects of one
+     * document are placed.
+     *
+     * <p>Only unlit merge locations ({@link #sceneMergesNormals}) take part, and wall
+     * decorations never do. In the client's plane/x/y order, each boundary object, game
+     * object and floor decoration merges pairwise ({@code ModelData.mergeNormals}) with the
+     * neighbours that are still unlit: on its own plane the east column, north row and
+     * south-east tiles, hiding faces whose three vertices are all shared; on the plane above,
+     * the whole surrounding block, without hiding. A game object is listed on every tile it
+     * covers, so a large neighbour can merge more than once, exactly as in the client.
+     * Heights compare each model's local y offset by the average height of the tile it was
+     * found on ({@code Scene.tileHeightDifference}).</p>
      */
-    private List<ModelRenderPacket> mergeNormals(List<ModelRenderPacket> packets) {
-        if (packets.size() < 2) return packets;
-        Map<VertexKey, List<VertexReference>> references = new java.util.LinkedHashMap<>();
-        boolean[] mergeEnabled = new boolean[packets.size()];
-        for (int packetIndex = 0; packetIndex < packets.size(); packetIndex++) {
-            ModelRenderPacket packet = packets.get(packetIndex);
-            mergeEnabled[packetIndex] = sceneMergesNormals(packet.objectId());
-            for (int vertexIndex = 0; vertexIndex < packet.vertices().size(); vertexIndex++) {
-                ModelVertex vertex = packet.vertices().get(vertexIndex);
-                if (vertex.normalMagnitude() == 0) continue;
-                VertexKey key = new VertexKey(packet.anchor().plane(),
-                        packet.anchor().x() * 128 + vertex.x(),
-                        packet.placementHeight() + vertex.y(),
-                        packet.anchor().y() * 128 + vertex.z());
-                references.computeIfAbsent(key, ignored -> new ArrayList<>())
-                        .add(new VertexReference(packetIndex, vertexIndex, vertex));
-            }
-        }
-
-        @SuppressWarnings("unchecked")
-        List<ModelVertex>[] mergedVertices = new List[packets.size()];
-        @SuppressWarnings("unchecked")
-        List<ModelTriangle>[] packetTriangles = new List[packets.size()];
-        boolean[] changed = new boolean[packets.size()];
-        for (int index = 0; index < packets.size(); index++) {
-            mergedVertices[index] = new ArrayList<>(packets.get(index).vertices());
-            packetTriangles[index] = new ArrayList<>(packets.get(index).triangles());
-        }
-        for (List<VertexReference> group : references.values()) {
-            if (group.size() < 2 || group.stream().noneMatch(ref -> mergeEnabled[ref.packetIndex()])) {
-                continue;
-            }
-            for (VertexReference target : group) {
-                // RuneLite/TSPS leave only mergeNormals locations unlit until
-                // the scene-wide merge pass. A neighboring model that was
-                // already lit must remain untouched even if it shares a
-                // geometric vertex with a merge-enabled location.
-                if (!mergeEnabled[target.packetIndex()]) continue;
-                Normal accumulated = normal(target.vertex());
-                boolean foundOtherPacket = false;
-                for (VertexReference source : group) {
-                    if (source.packetIndex() == target.packetIndex()
-                            || !mergeEnabled[source.packetIndex()]
-                            || source.vertex().normalMagnitude() == 0) continue;
-                    Normal sourceNormal = normal(source.vertex());
-                    accumulated = new Normal(accumulated.x + sourceNormal.x,
-                            accumulated.y + sourceNormal.y,
-                            accumulated.z + sourceNormal.z,
-                            accumulated.magnitude + sourceNormal.magnitude);
-                    foundOtherPacket = true;
-                }
-                if (!foundOtherPacket) continue;
-                ModelVertex original = target.vertex();
-                mergedVertices[target.packetIndex()].set(target.vertexIndex(),
-                        new ModelVertex(original.x(), original.y(), original.z(),
-                                accumulated.x, accumulated.y, accumulated.z,
-                                accumulated.magnitude, original.u(), original.v()));
-                changed[target.packetIndex()] = true;
-            }
-        }
-
-        // OSRS/TSPS hideOccludedFaces contract: when two merge-enabled models
-        // meet at a seam, coplanar duplicate faces sharing all 3 vertex positions
-        // are marked as hidden (renderType = 2) to eliminate internal z-fighting.
-        Map<FaceKey, List<FaceReference>> faces = new java.util.LinkedHashMap<>();
-        for (int packetIndex = 0; packetIndex < packets.size(); packetIndex++) {
-            if (!mergeEnabled[packetIndex]) continue;
-            ModelRenderPacket packet = packets.get(packetIndex);
-            List<ModelVertex> vertices = packet.vertices();
-            int plane = packet.anchor().plane();
-            int anchorX = packet.anchor().x() * 128;
-            int height = packet.placementHeight();
-            int anchorZ = packet.anchor().y() * 128;
-            for (int faceIndex = 0; faceIndex < packet.triangles().size(); faceIndex++) {
-                ModelTriangle face = packet.triangles().get(faceIndex);
-                if (face.renderType() == 2) continue;
-                ModelVertex vA = vertices.get(face.a());
-                ModelVertex vB = vertices.get(face.b());
-                ModelVertex vC = vertices.get(face.c());
-                VertexKey kA = new VertexKey(plane, anchorX + vA.x(), height + vA.y(), anchorZ + vA.z());
-                VertexKey kB = new VertexKey(plane, anchorX + vB.x(), height + vB.y(), anchorZ + vB.z());
-                VertexKey kC = new VertexKey(plane, anchorX + vC.x(), height + vC.y(), anchorZ + vC.z());
-                FaceKey faceKey = FaceKey.canonical(kA, kB, kC);
-                faces.computeIfAbsent(faceKey, ignored -> new ArrayList<>())
-                        .add(new FaceReference(packetIndex, faceIndex));
-            }
-        }
-
-        for (List<FaceReference> group : faces.values()) {
-            if (group.size() < 2 || group.stream().map(FaceReference::packetIndex).distinct().count() < 2) {
-                continue;
-            }
-            for (FaceReference ref : group) {
-                ModelTriangle original = packetTriangles[ref.packetIndex()].get(ref.faceIndex());
-                if (original.renderType() != 2) {
-                    packetTriangles[ref.packetIndex()].set(ref.faceIndex(), original.withRenderType(2));
-                    changed[ref.packetIndex()] = true;
+    private List<ModelRenderPacket> mergeNormals(List<ModelRenderPacket> packets,
+                                                 WorldDocument document) {
+        int count = packets.size();
+        SceneMergeModel[] models = new SceneMergeModel[count];
+        Map<Long, List<SceneMergeModel>> boundaries = new java.util.HashMap<>();
+        Map<Long, List<SceneMergeModel>> gameObjects = new java.util.HashMap<>();
+        Map<Long, List<SceneMergeModel>> floorDecorations = new java.util.HashMap<>();
+        List<SceneMergeModel> order = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            ModelRenderPacket packet = packets.get(index);
+            int role = mergeRole(packet);
+            if (role == MERGE_NONE || !sceneMergesNormals(packet.objectId())) continue;
+            SceneMergeModel model = new SceneMergeModel(index, packet, role);
+            models[index] = model;
+            order.add(model);
+            TileCoordinate anchor = packet.anchor();
+            if (role == MERGE_BOUNDARY) {
+                boundaries.computeIfAbsent(tileKey(anchor.plane(), anchor.x(), anchor.y()),
+                        ignored -> new ArrayList<>(2)).add(model);
+            } else if (role == MERGE_FLOOR) {
+                floorDecorations.computeIfAbsent(tileKey(anchor.plane(), anchor.x(), anchor.y()),
+                        ignored -> new ArrayList<>(1)).add(model);
+            } else {
+                for (int dx = 0; dx < model.sizeX; dx++) {
+                    for (int dy = 0; dy < model.sizeY; dy++) {
+                        gameObjects.computeIfAbsent(
+                                tileKey(anchor.plane(), anchor.x() + dx, anchor.y() + dy),
+                                ignored -> new ArrayList<>(2)).add(model);
+                    }
                 }
             }
         }
+        if (order.isEmpty()) return packets;
+        order.sort(java.util.Comparator.<SceneMergeModel>comparingInt(model -> model.plane)
+                .thenComparingInt(model -> model.x)
+                .thenComparingInt(model -> model.y)
+                .thenComparingInt(model -> model.role));
 
+        MergeMarkers markers = new MergeMarkers();
+        for (SceneMergeModel model : order) {
+            if (model.role == MERGE_FLOOR) {
+                mergeFloorDecorationModels(model, document, floorDecorations, markers);
+            } else {
+                if (model.role == MERGE_BOUNDARY) {
+                    long sameTileKey = tileKey(model.plane, model.x, model.y);
+                    for (SceneMergeModel other : boundaries.getOrDefault(sameTileKey, List.of())) {
+                        if (!other.lit && other != model) {
+                            pairMerge(model, other, 0, false, markers);
+                        }
+                    }
+                }
+                mergeSceneModels(model, document, boundaries, gameObjects, markers);
+            }
+            model.lit = true;
+        }
+
+        @SuppressWarnings("unchecked")
+        List<ModelVertex>[] mergedVertices = new List[count];
+        @SuppressWarnings("unchecked")
+        List<ModelTriangle>[] packetTriangles = new List[count];
+        boolean[] changed = new boolean[count];
+        for (int index = 0; index < count; index++) {
+            SceneMergeModel model = models[index];
+            if (model == null || !model.changed()) continue;
+            changed[index] = true;
+            mergedVertices[index] = model.mergedVertices();
+            packetTriangles[index] = model.triangles();
+        }
         List<ModelRenderPacket> result = new ArrayList<>(packets.size());
         for (int index = 0; index < packets.size(); index++) {
             ModelRenderPacket packet = packets.get(index);
@@ -828,6 +841,324 @@ public final class ModelPacketBuilder {
                     : packet);
         }
         return result;
+    }
+
+    private static final int MERGE_NONE = -1;
+    private static final int MERGE_BOUNDARY = 0;
+    private static final int MERGE_GAME_OBJECT = 1;
+    private static final int MERGE_FLOOR = 2;
+
+    /** Which client scene slot a packet occupies for lightScene: walls, game objects, floor decor. */
+    private static int mergeRole(ModelRenderPacket packet) {
+        SceneObjectIdentity identity = packet.sceneObjectIdentity();
+        if (!identity.present()) return MERGE_NONE;
+        int shape = identity.shape();
+        if (shape >= 0 && shape <= 3) return MERGE_BOUNDARY;
+        if (shape >= 9 && shape <= 21) return MERGE_GAME_OBJECT;
+        if (shape == 22) return MERGE_FLOOR;
+        return MERGE_NONE;
+    }
+
+    private static long tileKey(int plane, int x, int y) {
+        return ((long) plane << 42) | ((long) (x & 0x1FFFFF) << 21) | (y & 0x1FFFFF);
+    }
+
+    /** Scene.averageTileHeight: the mean of a tile's four corner heights. */
+    private static int averageTileHeight(WorldDocument document, int plane, int x, int y) {
+        return (sampleGrid(document, plane, x + 1, y + 1) + sampleGrid(document, plane, x, y)
+                + sampleGrid(document, plane, x, y + 1) + sampleGrid(document, plane, x + 1, y)) / 4;
+    }
+
+    /** Scene.mergeSceneModels for a boundary object (1x1) or a game object (its scene size). */
+    private void mergeSceneModels(SceneMergeModel model, WorldDocument document,
+                                  Map<Long, List<SceneMergeModel>> boundaries,
+                                  Map<Long, List<SceneMergeModel>> gameObjects,
+                                  MergeMarkers markers) {
+        boolean hideOccluded = true;
+        int minX = model.x;
+        int maxX = model.x + model.sizeX;
+        int minY = model.y - 1;
+        int maxY = model.y + model.sizeY;
+        int ownHeight = averageTileHeight(document, model.plane, model.x, model.y);
+        for (int plane = model.plane; plane <= model.plane + 1; plane++) {
+            if (plane == document.planes()) continue;
+            for (int x = minX; x <= maxX; x++) {
+                if (x < 0 || x >= document.width()) continue;
+                for (int y = minY; y <= maxY; y++) {
+                    if (y < 0 || y >= document.length()) continue;
+                    if (hideOccluded && !(x >= maxX || y >= maxY || (y < model.y && x != model.x))) {
+                        continue;
+                    }
+                    int heightDelta = averageTileHeight(document, plane, x, y) - ownHeight;
+                    long key = tileKey(plane, x, y);
+                    for (SceneMergeModel other : boundaries.getOrDefault(key, List.of())) {
+                        if (!other.lit && other != model) pairMerge(model, other, heightDelta, hideOccluded, markers);
+                    }
+                    for (SceneMergeModel other : gameObjects.getOrDefault(key, List.of())) {
+                        if (!other.lit && other != model) pairMerge(model, other, heightDelta, hideOccluded, markers);
+                    }
+                }
+            }
+            minX--;
+            hideOccluded = false;
+        }
+    }
+
+    /** Scene.mergeFloorDecorationModels: the east column and north tile, hiding shared faces. */
+    private void mergeFloorDecorationModels(SceneMergeModel model, WorldDocument document,
+                                            Map<Long, List<SceneMergeModel>> floorDecorations,
+                                            MergeMarkers markers) {
+        int ownHeight = averageTileHeight(document, model.plane, model.x, model.y);
+        for (int x = model.x; x <= model.x + 1; x++) {
+            if (x < 0 || x >= document.width()) continue;
+            for (int y = model.y - 1; y <= model.y + 1; y++) {
+                if (y < 0 || y >= document.length() || !(x >= model.x + 1 || y >= model.y + 1)) continue;
+                int heightDelta = averageTileHeight(document, model.plane, x, y) - ownHeight;
+                for (SceneMergeModel other : floorDecorations.getOrDefault(
+                        tileKey(model.plane, x, y), List.of())) {
+                    if (!other.lit && other != model) pairMerge(model, other, heightDelta, true, markers);
+                }
+            }
+        }
+    }
+
+    /**
+     * ModelData.mergeNormals for one pair: every vertex of {@code a} at a position of
+     * {@code b} adds the other's original normal to both. With at least three matches and
+     * {@code hideOccluded}, faces whose three vertices all matched are hidden in both.
+     */
+    private static void pairMerge(SceneMergeModel a, SceneMergeModel b, int heightDelta,
+                                  boolean hideOccluded, MergeMarkers markers) {
+        int generation = markers.next();
+        int[] markA = a.markers();
+        int[] markB = b.markers();
+        long[] bKeys = b.sortedKeys();
+        int[] bVertices = b.sortedVertices();
+        int matches = 0;
+        List<ModelVertex> aVertices = a.packet.vertices();
+        List<ModelVertex> bList = b.packet.vertices();
+        int ax = a.x * 128;
+        int az = a.y * 128;
+        for (int vertexIndex = 0; vertexIndex < aVertices.size(); vertexIndex++) {
+            ModelVertex vertex = aVertices.get(vertexIndex);
+            if (vertex.normalMagnitude() == 0) continue;
+            long key = positionKey(ax + vertex.x(), vertex.y() - heightDelta, az + vertex.z());
+            int at = java.util.Arrays.binarySearch(bKeys, key);
+            if (at < 0) {
+                int insert = -at - 1;
+                int best = -1;
+                int bestDist = 3;
+                if (insert < bKeys.length && Math.abs(bKeys[insert] - key) <= 2) {
+                    best = insert;
+                    bestDist = (int) Math.abs(bKeys[insert] - key);
+                }
+                if (insert > 0 && Math.abs(bKeys[insert - 1] - key) < bestDist) {
+                    best = insert - 1;
+                }
+                if (best >= 0) {
+                    key = bKeys[best];
+                    at = best;
+                }
+            }
+            if (at < 0) continue;
+            while (at > 0 && bKeys[at - 1] == key) at--;
+            for (; at < bKeys.length && bKeys[at] == key; at++) {
+                int other = bVertices[at];
+                ModelVertex source = bList.get(other);
+                a.accumulate(vertexIndex, source);
+                b.accumulate(other, vertex);
+                matches++;
+                markA[vertexIndex] = generation;
+                markB[other] = generation;
+            }
+        }
+        if (matches >= 3 && hideOccluded) {
+            a.hideSharedFaces(markA, generation);
+            b.hideSharedFaces(markB, generation);
+        }
+    }
+
+    private static long positionKey(int x, int y, int z) {
+        return ((long) (x + (1 << 20)) << 42) | ((long) (z + (1 << 20)) << 21) | ((y + (1 << 20)) & 0x1FFFFF);
+    }
+
+    /** Generation counter for per-pair vertex markers, like ModelData.mergeVertexMarkerGeneration. */
+    private static final class MergeMarkers {
+        private int generation;
+
+        int next() {
+            return ++generation;
+        }
+    }
+
+    /** One unlit location during the lightScene pass; normals accumulate from originals. */
+    private static final class SceneMergeModel {
+        final int index;
+        final ModelRenderPacket packet;
+        final int role;
+        final int plane;
+        final int x;
+        final int y;
+        final int sizeX;
+        final int sizeY;
+        boolean lit;
+        private int[] normals;
+        private boolean[] hidden;
+        private int[] markers;
+        private long[] sortedKeys;
+        private int[] sortedVertices;
+
+        SceneMergeModel(int index, ModelRenderPacket packet, int role) {
+            this.index = index;
+            this.packet = packet;
+            this.role = role;
+            TileCoordinate anchor = packet.anchor();
+            this.plane = anchor.plane();
+            this.x = anchor.x();
+            this.y = anchor.y();
+            SceneObjectIdentity identity = packet.sceneObjectIdentity();
+            this.sizeX = role == MERGE_GAME_OBJECT ? Math.max(1, identity.footprintWidth()) : 1;
+            this.sizeY = role == MERGE_GAME_OBJECT ? Math.max(1, identity.footprintLength()) : 1;
+        }
+
+        int[] markers() {
+            if (markers == null) markers = new int[packet.vertices().size()];
+            return markers;
+        }
+
+        /** Vertex positions in plane-local world units, sorted for binary search. */
+        long[] sortedKeys() {
+            if (sortedKeys == null) buildIndex();
+            return sortedKeys;
+        }
+
+        int[] sortedVertices() {
+            if (sortedVertices == null) buildIndex();
+            return sortedVertices;
+        }
+
+        private void buildIndex() {
+            List<ModelVertex> vertices = packet.vertices();
+            int usable = 0;
+            for (ModelVertex vertex : vertices) {
+                if (vertex.normalMagnitude() != 0) usable++;
+            }
+            long[] keys = new long[usable];
+            int[] order = new int[usable];
+            int cursor = 0;
+            for (int index = 0; index < vertices.size(); index++) {
+                ModelVertex vertex = vertices.get(index);
+                if (vertex.normalMagnitude() == 0) continue;
+                keys[cursor] = positionKey(x * 128 + vertex.x(), vertex.y(), y * 128 + vertex.z());
+                order[cursor++] = index;
+            }
+            sortPaired(keys, order, 0, usable - 1);
+            sortedKeys = keys;
+            sortedVertices = order;
+        }
+
+        void accumulate(int vertexIndex, ModelVertex source) {
+            if (normals == null) {
+                List<ModelVertex> vertices = packet.vertices();
+                normals = new int[vertices.size() * 4];
+                for (int index = 0; index < vertices.size(); index++) {
+                    ModelVertex vertex = vertices.get(index);
+                    normals[index * 4] = vertex.normalX();
+                    normals[index * 4 + 1] = vertex.normalY();
+                    normals[index * 4 + 2] = vertex.normalZ();
+                    normals[index * 4 + 3] = vertex.normalMagnitude();
+                }
+            }
+            int base = vertexIndex * 4;
+            normals[base] += source.normalX();
+            normals[base + 1] += source.normalY();
+            normals[base + 2] += source.normalZ();
+            normals[base + 3] += source.normalMagnitude();
+        }
+
+        void hideSharedFaces(int[] marks, int generation) {
+            List<ModelTriangle> triangles = packet.triangles();
+            for (int face = 0; face < triangles.size(); face++) {
+                ModelTriangle triangle = triangles.get(face);
+                if (marks[triangle.a()] == generation && marks[triangle.b()] == generation
+                        && marks[triangle.c()] == generation) {
+                    if (hidden == null) hidden = new boolean[triangles.size()];
+                    hidden[face] = true;
+                }
+            }
+        }
+
+        boolean changed() {
+            return normals != null || hidden != null;
+        }
+
+        List<ModelVertex> mergedVertices() {
+            List<ModelVertex> vertices = packet.vertices();
+            if (normals == null) return vertices;
+            List<ModelVertex> result = new ArrayList<>(vertices.size());
+            for (int index = 0; index < vertices.size(); index++) {
+                ModelVertex vertex = vertices.get(index);
+                int base = index * 4;
+                result.add(new ModelVertex(vertex.x(), vertex.y(), vertex.z(),
+                        normals[base], normals[base + 1], normals[base + 2], normals[base + 3],
+                        vertex.u(), vertex.v()));
+            }
+            return result;
+        }
+
+        List<ModelTriangle> triangles() {
+            List<ModelTriangle> triangles = packet.triangles();
+            if (hidden == null) return triangles;
+            List<ModelTriangle> result = new ArrayList<>(triangles);
+            for (int face = 0; face < hidden.length; face++) {
+                if (hidden[face] && result.get(face).renderType() != 2) {
+                    result.set(face, result.get(face).withRenderType(2));
+                }
+            }
+            return result;
+        }
+    }
+
+    /** Sorts {@code keys[low..high]} ascending, applying the same permutation to {@code values}. */
+    private static void sortPaired(long[] keys, int[] values, int low, int high) {
+        while (low < high) {
+            if (high - low < 16) {
+                for (int i = low + 1; i <= high; i++) {
+                    long key = keys[i];
+                    int value = values[i];
+                    int j = i - 1;
+                    while (j >= low && keys[j] > key) {
+                        keys[j + 1] = keys[j];
+                        values[j + 1] = values[j];
+                        j--;
+                    }
+                    keys[j + 1] = key;
+                    values[j + 1] = value;
+                }
+                return;
+            }
+            long pivot = keys[(low + high) >>> 1];
+            int i = low;
+            int j = high;
+            while (i <= j) {
+                while (keys[i] < pivot) i++;
+                while (keys[j] > pivot) j--;
+                if (i <= j) {
+                    long key = keys[i]; keys[i] = keys[j]; keys[j] = key;
+                    int value = values[i]; values[i] = values[j]; values[j] = value;
+                    i++;
+                    j--;
+                }
+            }
+            // Recurse into the smaller side to bound stack depth.
+            if (j - low < high - i) {
+                sortPaired(keys, values, low, j);
+                low = i;
+            } else {
+                sortPaired(keys, values, i, high);
+                high = j;
+            }
+        }
     }
 
     private ModelRenderPacket relight(ModelRenderPacket packet, List<ModelVertex> vertices) {
@@ -913,34 +1244,6 @@ public final class ModelPacketBuilder {
     private static Normal normal(ModelVertex vertex) {
         return new Normal(vertex.normalX(), vertex.normalY(), vertex.normalZ(),
                 vertex.normalMagnitude());
-    }
-
-    private record VertexKey(int plane, int x, int y, int z) implements Comparable<VertexKey> {
-        @Override
-        public int compareTo(VertexKey other) {
-            int cmp = Integer.compare(plane, other.plane);
-            if (cmp != 0) return cmp;
-            cmp = Integer.compare(x, other.x);
-            if (cmp != 0) return cmp;
-            cmp = Integer.compare(y, other.y);
-            if (cmp != 0) return cmp;
-            return Integer.compare(z, other.z);
-        }
-    }
-
-    private record FaceKey(VertexKey v1, VertexKey v2, VertexKey v3) {
-        static FaceKey canonical(VertexKey a, VertexKey b, VertexKey c) {
-            VertexKey x = a;
-            VertexKey y = b;
-            VertexKey z = c;
-            if (x.compareTo(y) > 0) { VertexKey t = x; x = y; y = t; }
-            if (y.compareTo(z) > 0) { VertexKey t = y; y = z; z = t; }
-            if (x.compareTo(y) > 0) { VertexKey t = x; x = y; y = t; }
-            return new FaceKey(x, y, z);
-        }
-    }
-
-    private record FaceReference(int packetIndex, int faceIndex) {
     }
 
     private record PositionKey(int x, int y, int z) {
@@ -1364,6 +1667,7 @@ public final class ModelPacketBuilder {
      */
     private boolean applyContour(WorldDocument document, WorldObject object,
                                  int footprintWidth, int footprintLength,
+                                 int contourWidth, int contourLength,
                                  ModelBuildWorkspace workspace, int vertexCount,
                                  ObjectAppearanceView appearance,
                                  int decorX, int decorZ) {
@@ -1393,8 +1697,10 @@ public final class ModelPacketBuilder {
         int xzRadius = (int) (Math.sqrt((double) radiusSquared) + 0.99D);
         int verticalSpan = Math.max(1, modelMaxY - modelMinY);
 
-        int contourCenterX = object.x() * 128 + centerX;
-        int contourCenterZ = object.y() * 128 + centerZ;
+        // Vertices are local to the placed footprint; contourGround samples around the
+        // transformed definition's own centre (DynamicObject.getModel var10/var11).
+        int contourCenterX = object.x() * 128 + contourWidth * 64;
+        int contourCenterZ = object.y() * 128 + contourLength * 64;
         int plane = object.plane();
         int minWorldX = contourCenterX - xzRadius;
         int maxWorldX = contourCenterX + xzRadius;
@@ -1406,7 +1712,7 @@ public final class ModelPacketBuilder {
         }
 
         int sceneHeight = objectCenterHeight(
-                document, object, footprintWidth, footprintLength);
+                document, object, contourWidth, contourLength);
         int startTileX = minWorldX >> 7;
         int endTileX = (maxWorldX + 127) >> 7;
         int startTileZ = minWorldZ >> 7;

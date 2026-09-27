@@ -136,15 +136,15 @@ public final class StudioBottomBar {
                 boolean isActive = tool.toolIds().contains(activeToolId) || tool.id().equals(activeToolId);
 
                 if (isActive) {
-                    ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT); // Indigo 500
-                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
-                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
+                    ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.draw(StudioPalette.ACCENT)); // Indigo 500
+                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.draw(StudioPalette.ACCENT_HOVER));
+                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.draw(StudioPalette.ACCENT_ACTIVE));
                     ImGui.pushStyleColor(ImGuiCol.Text, 0xFFFFFFFF);
                 } else {
-                    ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.CHROME_BG); // Zinc dark surface
-                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
-                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
-                    ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
+                    ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.draw(StudioPalette.CHROME_BG)); // Zinc dark surface
+                    ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.draw(StudioPalette.FIELD_HOVER));
+                    ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.draw(StudioPalette.ACCENT_SOFT));
+                    ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.draw(StudioPalette.TEXT_MUTED));
                 }
 
                 ImGui.pushFont(StudioFonts.icon(), 0.0f);
@@ -174,7 +174,7 @@ public final class StudioBottomBar {
             var selected = context.session().selection().selectedCoordinates();
             if (!selected.isEmpty()) {
                 ImGui.sameLine(0.0f, 12.0f);
-                ImGui.textColored(StudioPalette.ACCENT, "(" + selected.size() + " selected)");
+                ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), "(" + selected.size() + " selected)");
                 ImGui.sameLine(0.0f, 4.0f);
                 if (ImGui.smallButton("Clear##clr-sel-hdr")) {
                     context.session().selection().clear();
@@ -229,7 +229,7 @@ public final class StudioBottomBar {
                         return;
                     }
                 } catch (Throwable t) {
-                    ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.DANGER);
+                    ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.draw(StudioPalette.DANGER));
                     ImGui.text(StudioIcons.BUG_REPORT + " Tool Drawer Error: " + t.getMessage());
                     ImGui.popStyleColor();
                     return;

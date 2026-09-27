@@ -48,7 +48,7 @@ class ProjectLoadingView {
         ImGui.dummy(1.0f, 16.0f)
 
         ImGui.pushFont(StudioFonts.display(), 31.0f)
-        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.ACCENT)
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(StudioPalette.ACCENT))
         centered("OPENRUNE CONTENT STUDIO")
         ImGui.popStyleColor()
         ImGui.popFont()
@@ -89,7 +89,7 @@ class ProjectLoadingView {
         retry: Runnable?,
         backToLauncher: Runnable?,
     ) {
-        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.DANGER)
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(StudioPalette.DANGER))
         centered("Project could not be opened")
         ImGui.popStyleColor()
         ImGui.dummy(1.0f, 8.0f)
@@ -114,7 +114,7 @@ class ProjectLoadingView {
     ) {
         centered(status.message())
         ImGui.dummy(1.0f, 14.0f)
-        ImGui.pushStyleColor(ImGuiCol.PlotHistogram, StudioPalette.ACCENT)
+        ImGui.pushStyleColor(ImGuiCol.PlotHistogram, StudioPalette.u32(StudioPalette.ACCENT))
         ImGui.progressBar(status.progress().toFloat(), -1.0f, 12.0f)
         ImGui.popStyleColor()
         ImGui.dummy(1.0f, 10.0f)

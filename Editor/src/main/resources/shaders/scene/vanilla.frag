@@ -60,7 +60,7 @@ void main() {
     } else {
         int hsl = clamp(int(vEncodedColor), 0, 65535);
         vec3 paletteColor = texelFetch(uPalette, ivec2(hsl & 255, (hsl >> 8) & 255), 0).rgb;
-        color = mix(vColor, paletteColor, float(uSmoothBanding));
+        color = mix(paletteColor, vColor, float(uSmoothBanding));
     }
 
     float alpha;
@@ -84,7 +84,7 @@ void main() {
     if (frameEditBounds.x <= frameEditBounds.y
             && (vWorldXZ.x < frameEditBounds.x || vWorldXZ.x > frameEditBounds.y
                 || vWorldXZ.y < frameEditBounds.z || vWorldXZ.y > frameEditBounds.w)) {
-        color *= 0.55;
+        color = max(color * 0.65, vec3(0.02));
     }
     color = mix(color, uFogColor, vFogAmount);
     outColor = vec4(color, alpha);

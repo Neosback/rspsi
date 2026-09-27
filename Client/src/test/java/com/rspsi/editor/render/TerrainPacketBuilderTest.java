@@ -127,8 +127,7 @@ class TerrainPacketBuilderTest {
     }
 
     @Test
-    void quarterShapePointsKeepTheirSourceCornerColours() {
-        TileSnapshot tile = new TileSnapshot(0, 0, 0, 0,
+    void quarterShapePointsKeepTheirSourceCornerColours() {        TileSnapshot tile = new TileSnapshot(0, 0, 0, 0,
                 1, 1, 11, 0, 0, List.of());
         int southWest = OsrsTerrainColorMath.packHsl(8, 64, 40);
         int southEast = OsrsTerrainColorMath.packHsl(16, 96, 60);
@@ -146,5 +145,46 @@ class TerrainPacketBuilderTest {
                 && vertex.y() == 32 && vertex.packedHsl() == southWest));
         assertTrue(packet.vertices().stream().anyMatch(vertex -> vertex.x() == 96
                 && vertex.y() == 32 && vertex.packedHsl() == southEast));
+    }
+
+    @Test
+    void emptyTilesEmitGreyPlaceholderQuadWithEmptyMarkers() {
+        TileSnapshot tile = new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of());
+        TerrainAppearance appearance = new TerrainAppearance(
+                -1, -1, -1, -1, -1, 0, 0, false);
+
+        TerrainRenderPacket packet = new TerrainPacketBuilder().build(
+                new TileCoordinate(0, 0, 0), new TerrainMeshBuilder().build(tile),
+                appearance, new TerrainLight(96, 96, 96, 96));
+
+        assertEquals(2, packet.faces().size());
+        assertTrue(packet.faces().stream().allMatch(face -> face.material() == 0));
+        assertEquals(-1, packet.underlayHsl());
+        assertTrue(packet.isEmptyPlaceholder());
+        int expected = OsrsTerrainColorMath.adjustPackedHslLight(
+                OsrsTerrainColorMath.EMPTY_TILE_HSL, 96);
+        assertTrue(packet.vertices().stream().allMatch(vertex ->
+                vertex.packedHsl() == expected));
+    }
+
+    @Test
+    void hiddenMarkerWithoutUnderlayEmitsMagentaPlaceholder() {
+        TileSnapshot tile = new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of());
+        TerrainAppearance appearance = new TerrainAppearance(
+                -1, -2, -1, -1, -1, 0, 0, true);
+
+        TerrainRenderPacket packet = new TerrainPacketBuilder().build(
+                new TileCoordinate(0, 0, 0), new TerrainMeshBuilder().build(tile),
+                appearance, new TerrainLight(96, 96, 96, 96));
+
+        assertEquals(2, packet.faces().size());
+        assertTrue(packet.overlayHidden());
+        assertTrue(packet.isHiddenPlaceholder());
+        int expected = OsrsTerrainColorMath.adjustPackedHslLight(
+                OsrsTerrainColorMath.HIDDEN_HIGHLIGHT_HSL, 96);
+        assertTrue(packet.vertices().stream().allMatch(vertex ->
+                vertex.packedHsl() == expected));
     }
 }

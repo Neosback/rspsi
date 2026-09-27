@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class MultilocModelSemanticsTest {
     @Test
-    void clientKeepsPlacedSceneFootprintButUsesDisplaySizeAndAppearanceForModel() {
+    void modelIsDrawnAtPlacedFootprintCentreWithDisplayAppearance() {
         WorldDocument document = new WorldDocument(8, 8, 1);
         WorldObject placed = new WorldObject(1000, 10, 1, 0, 2, 3);
         document.tile(0, 2, 3).restore(new TileSnapshot(
@@ -91,11 +91,12 @@ class MultilocModelSemanticsTest {
         assertEquals(3, packet.sceneObjectIdentity().footprintWidth());
         assertEquals(2, packet.sceneObjectIdentity().footprintLength());
 
-        // DynamicObject.getModel() resolves the child first. The display child
-        // is 1x1, so its model centre is one half-tile (64) from the anchor.
-        // Its scaleX=256 and offsetX=10 expand/shift this triangle to x 74..202.
-        assertEquals(74, packet.minX());
-        assertEquals(202, packet.maxX());
+        // DynamicObject.getModel() builds the model from the 1x1 child, but its
+        // child-sized centre only feeds contourGround; the scene draws the model at
+        // the placed GameObject centre (3x2 after rotation: x 192). The child's
+        // scaleX=256 and offsetX=10 expand/shift this triangle to local x 10..138.
+        assertEquals(202, packet.minX());
+        assertEquals(330, packet.maxX());
 
         // DynamicObject was constructed with the placed definition's
         // animation id even though getModelDynamic() runs on the child.

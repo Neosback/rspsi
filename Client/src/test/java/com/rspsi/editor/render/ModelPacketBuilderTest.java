@@ -791,11 +791,12 @@ class ModelPacketBuilderTest {
                 .build(diagonalDocument).get(0);
 
         // Diagonal wall decorations pass rotation+4 into getModelData, so
-        // the client's mirror condition is isRotated XOR true.
-        assertEquals(128, diagonalNormal.vertices().get(0).x());
-        assertEquals(-23, diagonalNormal.vertices().get(0).z());
-        assertEquals(150, diagonalRotated.vertices().get(0).x());
-        assertEquals(-1, diagonalRotated.vertices().get(0).z());
+        // the client's mirror condition is isRotated XOR true. Decorations are also
+        // lifted off their wall along the client's diagonal direction (+x, -z at rotation 0).
+        assertEquals(128 + ModelPacketBuilder.DECORATION_NUDGE, diagonalNormal.vertices().get(0).x());
+        assertEquals(-23 - ModelPacketBuilder.DECORATION_NUDGE, diagonalNormal.vertices().get(0).z());
+        assertEquals(150 + ModelPacketBuilder.DECORATION_NUDGE, diagonalRotated.vertices().get(0).x());
+        assertEquals(-1 - ModelPacketBuilder.DECORATION_NUDGE, diagonalRotated.vertices().get(0).z());
         assertEquals(2, diagonalNormal.triangles().get(0).b(),
                 "rotation+4 mirror path must preserve front-face winding");
         assertEquals(1, diagonalNormal.triangles().get(0).c());
@@ -841,14 +842,15 @@ class ModelPacketBuilderTest {
         List<ModelRenderPacket> packets = new ModelPacketBuilder(definitions).build(document);
 
         assertEquals(2, packets.size());
-        // Shape 5 uses the full supporting wall displacement.
-        assertEquals(96, packets.get(0).vertices().get(0).x());
+        // Shape 5 uses the full supporting wall displacement, plus the render-only lift
+        // off the wall along the same straight direction (+x at rotation 0).
+        assertEquals(96 + ModelPacketBuilder.DECORATION_NUDGE, packets.get(0).vertices().get(0).x());
         assertEquals(64, packets.get(0).vertices().get(0).z());
         assertEquals(new ClientRenderablePlacement(32, 0),
                 packets.get(0).clientRenderablePlacements().get(0));
         // Shape 6 uses the same displacement halved on the diagonal vector.
-        assertEquals(125, packets.get(1).vertices().get(0).x());
-        assertEquals(3, packets.get(1).vertices().get(0).z());
+        assertEquals(125 + ModelPacketBuilder.DECORATION_NUDGE, packets.get(1).vertices().get(0).x());
+        assertEquals(3 - ModelPacketBuilder.DECORATION_NUDGE, packets.get(1).vertices().get(0).z());
 
         WorldDocument fallback = new WorldDocument(1, 1, 1);
         fallback.tile(0, 0, 0).restore(new TileSnapshot(0, 0, 0, 0,
@@ -1418,6 +1420,122 @@ class ModelPacketBuilderTest {
         assertEquals(2, packets.size());
         assertEquals(2, packets.get(0).triangles().get(0).renderType());
         assertEquals(2, packets.get(1).triangles().get(0).renderType());
+    }
+
+    @Test
+    void adjacentWallsWithVerticalOffsetDifferenceWithinToleranceHideInternalSeamFaces() {
+        WorldDocument document = new WorldDocument(4, 4, 1);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 0, 0, 0, 1, 1))));
+        document.tile(0, 2, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(43, 0, 0, 0, 2, 1))));
+
+        ModelGeometryView geom1 = new ModelGeometryView(7,
+                new int[]{128, 0, 0, 128, 50, 0, 128, 0, 50},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+        ModelGeometryView geom2 = new ModelGeometryView(8,
+                new int[]{0, 1, 0, 0, 51, 0, 0, 1, 50},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+
+        ObjectAppearanceView merging = new ObjectAppearanceView(-1, false, 128, 128, 128,
+                0, 0, 0, Map.of(), Map.of(), true, false, true, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
+
+        DefinitionProvider definitions = new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                return Optional.of(new ObjectDefinitionView(id, "wall", 1, 1,
+                        List.of(), new int[]{id == 42 ? 7 : 8}, new int[]{0}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(merging);
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.of(id == 7 ? geom1 : geom2);
+            }
+        };
+
+        List<ModelRenderPacket> packets = new ModelPacketBuilder(definitions).build(document);
+        assertEquals(2, packets.size());
+        assertEquals(2, packets.get(0).triangles().get(0).renderType());
+        assertEquals(2, packets.get(1).triangles().get(0).renderType());
+    }
+
+    @Test
+    void sharedVertexFacesAreHiddenEvenWhenTheNeighbourTriangulatesDifferently() {
+        // ModelData.mergeNormals hides every face whose three vertices were all shared
+        // with the other model, not only faces the other model duplicates exactly: a
+        // corner pillar's side against a wall end disappears into the wall.
+        WorldDocument document = new WorldDocument(4, 4, 1);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 0, 0, 0, 1, 1))));
+        document.tile(0, 2, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(43, 1, 0, 0, 2, 1))));
+        // Wall end: a quad split along one diagonal.
+        ModelGeometryView wall = new ModelGeometryView(7,
+                new int[]{128, 0, 0, 128, -50, 0, 128, 0, 50, 128, -50, 50},
+                new int[]{0, 1, 2, 1, 3, 2}, new short[]{100, 100}, new int[]{0, 0},
+                new int[]{-1, -1});
+        // Neighbour face over the same quad, using the other diagonal.
+        ModelGeometryView pillar = new ModelGeometryView(8,
+                new int[]{0, 0, 0, 0, -50, 50, 0, 0, 50},
+                new int[]{0, 1, 2}, new short[]{100}, new int[]{0}, new int[]{-1});
+
+        List<ModelRenderPacket> packets = new ModelPacketBuilder(
+                mergingDefinitions(Map.of(42, new int[]{7, 0}, 43, new int[]{8, 1}),
+                        Map.of(7, wall, 8, pillar))).build(document);
+
+        ModelRenderPacket wallPacket = packets.stream().filter(p -> p.objectId() == 42).findFirst().orElseThrow();
+        ModelRenderPacket pillarPacket = packets.stream().filter(p -> p.objectId() == 43).findFirst().orElseThrow();
+        assertEquals(2, pillarPacket.triangles().get(0).renderType());
+        // Each wall face keeps one unshared vertex, so both stay visible.
+        assertEquals(0, wallPacket.triangles().get(0).renderType());
+        assertEquals(0, wallPacket.triangles().get(1).renderType());
+    }
+
+    @Test
+    void aWallAndAGameObjectOnTheSameTileNeverMerge() {
+        // Scene.mergeSceneModels skips the model's own tile on its own plane.
+        WorldDocument document = new WorldDocument(4, 4, 1);
+        document.tile(0, 1, 1).restore(new TileSnapshot(0, 0, 0, 0,
+                0, 0, 0, 0, 0, List.of(new WorldObject(42, 0, 0, 0, 1, 1),
+                new WorldObject(43, 10, 0, 0, 1, 1))));
+        ModelGeometryView geometry = triangle(7, 100);
+
+        List<ModelRenderPacket> packets = new ModelPacketBuilder(
+                mergingDefinitions(Map.of(42, new int[]{7, 0}, 43, new int[]{7, 10}),
+                        Map.of(7, geometry))).build(document);
+
+        assertEquals(2, packets.size());
+        for (ModelRenderPacket packet : packets) {
+            assertEquals(1, packet.vertices().get(0).normalMagnitude());
+            assertEquals(0, packet.triangles().get(0).renderType());
+        }
+    }
+
+    /** Definitions with opcode 22 set: object id -> {model id, model type}. */
+    private static DefinitionProvider mergingDefinitions(Map<Integer, int[]> objects,
+                                                         Map<Integer, ModelGeometryView> models) {
+        ObjectAppearanceView merging = new ObjectAppearanceView(-1, false, 128, 128, 128,
+                0, 0, 0, Map.of(), Map.of(), true, false, true, false,
+                0, 0, 16, -1, 0, false, false, false, 0);
+        return new DefinitionProvider() {
+            @Override public Optional<ObjectDefinitionView> object(int id) {
+                int[] model = objects.get(id);
+                if (model == null) return Optional.empty();
+                return Optional.of(new ObjectDefinitionView(id, "test", 1, 1,
+                        List.of(), new int[]{model[0]}, new int[]{model[1]}, -1, false));
+            }
+            @Override public Optional<FloorDefinitionView> underlay(int id) { return Optional.empty(); }
+            @Override public Optional<FloorDefinitionView> overlay(int id) { return Optional.empty(); }
+            @Override public Optional<ObjectAppearanceView> objectAppearance(int id) {
+                return Optional.of(merging);
+            }
+            @Override public Optional<ModelGeometryView> modelGeometry(int id) {
+                return Optional.ofNullable(models.get(id));
+            }
+        };
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.rspsi.editor.render;
 
 import com.rspsi.editor.model.BridgeLink;
 import com.rspsi.editor.model.ObjectCategory;
+import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.WorldTileAddress;
 
@@ -122,7 +123,7 @@ public final class GpuScenePacketBuilder {
             ScenePlaneSemantics planes = ScenePlaneSemantics.resolve(
                     address.plane(), flags, bridge.isPresent());
             List<SceneLayer> layers = layers(terrain, models, scene.textures());
-            boolean roofRelated = localObjects.roofRelated(local);
+            boolean roofRelated = localObjects.roofRelated(local) || OsrsTileFlags.removesRoofs(flags);
             tiles.add(new SceneTileSnapshot(addressToCoordinate(address), address, flags,
                     planes.scenePlane(), planes.authoredPlane(), planes.renderLevel(),
                     planes.planeCullLevel(), bridge, Optional.ofNullable(terrain), models,
@@ -268,7 +269,7 @@ public final class GpuScenePacketBuilder {
         boolean roofRelated = index.objectsAt(address).stream()
                 .map(value -> value.object().shape().map(shape -> shape.id() >= 12 && shape.id() <= 21)
                         .orElse(false))
-                .anyMatch(Boolean::booleanValue);
+                .anyMatch(Boolean::booleanValue) || OsrsTileFlags.removesRoofs(tileFlags);
         return new SceneTileSnapshot(addressToCoordinate(address), address, tileFlags,
                 planes.scenePlane(), planes.authoredPlane(), planes.renderLevel(),
                 planes.planeCullLevel(), bridge, Optional.ofNullable(terrain), models,

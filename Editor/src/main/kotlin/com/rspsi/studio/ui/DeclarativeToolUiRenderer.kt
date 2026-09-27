@@ -106,7 +106,7 @@ class DeclarativeToolUiRenderer {
             }
 
             is EditorUiNode.Section -> {
-                ImGui.textColored(StudioPalette.ACCENT, node.title())
+                ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), node.title())
                 ImGui.separator()
                 renderChildren(node.children(), "$path-section")
             }

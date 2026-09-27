@@ -27,7 +27,8 @@ final class LegacyRenderSettingsAdapter {
         store.set(RenderSettingKeys.HIDDEN_TILES_VISIBLE, Options.showHiddenTiles.get());
         store.set(RenderSettingKeys.COLLISION_VISIBLE, collisionVisible());
         store.set(RenderSettingKeys.BRIDGE_TILES_VISIBLE, true);
-        store.set(RenderSettingKeys.ROOFS_VISIBLE, !Options.showForceLowestPlaneFlag.get());
+        // showForceLowestPlaneFlag=true means "show only lowest plane" → allHeightsVisible=false
+        store.set(RenderSettingKeys.ALL_HEIGHTS_VISIBLE, !Options.showForceLowestPlaneFlag.get());
         return store;
     }
 
@@ -40,17 +41,18 @@ final class LegacyRenderSettingsAdapter {
                 store.set(RenderSettingKeys.OBJECTS_VISIBLE, newValue);
         ChangeListener<Boolean> hidden = (observable, oldValue, newValue) ->
                 store.set(RenderSettingKeys.HIDDEN_TILES_VISIBLE, newValue);
-        ChangeListener<Boolean> roofs = (observable, oldValue, newValue) ->
-                store.set(RenderSettingKeys.ROOFS_VISIBLE, !newValue);
+        // showForceLowestPlaneFlag=true → allHeightsVisible=false
+        ChangeListener<Boolean> allHeights = (observable, oldValue, newValue) ->
+                store.set(RenderSettingKeys.ALL_HEIGHTS_VISIBLE, !newValue);
         ChangeListener<Boolean> collision = (observable, oldValue, newValue) ->
                 store.set(RenderSettingKeys.COLLISION_VISIBLE, collisionVisible());
         Options.showObjects.addListener(objects);
         Options.showHiddenTiles.addListener(hidden);
-        Options.showForceLowestPlaneFlag.addListener(roofs);
+        Options.showForceLowestPlaneFlag.addListener(allHeights);
         Options.showBlockedFlag.addListener(collision);
         Options.showBridgeFlag.addListener(collision);
         Options.showLowerZFlag.addListener(collision);
-        return new LegacyBinding(store, objects, hidden, roofs, collision);
+        return new LegacyBinding(store, objects, hidden, allHeights, collision);
     }
 
     private static SettingsSnapshot captureSnapshot() {
@@ -59,7 +61,7 @@ final class LegacyRenderSettingsAdapter {
                 .with(RenderSettingKeys.HIDDEN_TILES_VISIBLE, Options.showHiddenTiles.get())
                 .with(RenderSettingKeys.COLLISION_VISIBLE, collisionVisible())
                 .with(RenderSettingKeys.BRIDGE_TILES_VISIBLE, true)
-                .with(RenderSettingKeys.ROOFS_VISIBLE, !Options.showForceLowestPlaneFlag.get());
+                .with(RenderSettingKeys.ALL_HEIGHTS_VISIBLE, !Options.showForceLowestPlaneFlag.get());
     }
 
     private static boolean collisionVisible() {
@@ -71,16 +73,16 @@ final class LegacyRenderSettingsAdapter {
         private final SettingsStore store;
         private final ChangeListener<Boolean> objects;
         private final ChangeListener<Boolean> hidden;
-        private final ChangeListener<Boolean> roofs;
+        private final ChangeListener<Boolean> allHeights;
         private final ChangeListener<Boolean> collision;
 
         private LegacyBinding(SettingsStore store, ChangeListener<Boolean> objects,
-                              ChangeListener<Boolean> hidden, ChangeListener<Boolean> roofs,
+                              ChangeListener<Boolean> hidden, ChangeListener<Boolean> allHeights,
                               ChangeListener<Boolean> collision) {
             this.store = store;
             this.objects = objects;
             this.hidden = hidden;
-            this.roofs = roofs;
+            this.allHeights = allHeights;
             this.collision = collision;
         }
 
@@ -88,7 +90,7 @@ final class LegacyRenderSettingsAdapter {
         public void close() {
             Options.showObjects.removeListener(objects);
             Options.showHiddenTiles.removeListener(hidden);
-            Options.showForceLowestPlaneFlag.removeListener(roofs);
+            Options.showForceLowestPlaneFlag.removeListener(allHeights);
             Options.showBlockedFlag.removeListener(collision);
             Options.showBridgeFlag.removeListener(collision);
             Options.showLowerZFlag.removeListener(collision);

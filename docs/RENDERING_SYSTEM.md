@@ -122,6 +122,8 @@ A zone is rebuilt when it is:
 
 Otherwise its immutable native-ready upload is reused.
 
+Plans hold every plane. As in the client, which loads all planes and chooses what to draw each frame, the active plane, plane-selection mode and bridge toggle are applied at draw time: `RenderConfig.forPlan()` builds the plan independently of them, and `RenderConfig.planeFilter()` produces the `ScenePlaneFilter` that `OpenGlSceneRenderer` evaluates per draw command. Changing the plane or showing all planes never rebuilds or re-uploads geometry. `ScenePlaneFilterTest` locks the filter to the `SceneVisibilityPolicy` result for every mode.
+
 ## 8. Native residency
 
 ZoneVboManager owns logical 8x8-zone residency.

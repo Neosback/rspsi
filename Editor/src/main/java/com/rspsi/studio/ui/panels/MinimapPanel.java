@@ -82,7 +82,7 @@ public final class MinimapPanel implements StudioPanel {
             return;
         }
 
-        int activePlane = context.settings().snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
+        int activePlane = context.settings().snapshot().get(RenderSettingKeys.CURRENT_HEIGHT);
         int cameraWorldX = Math.max(0, (int) Math.floor(viewport.navigation().camera().x() / 128.0f));
         int cameraWorldY = Math.max(0, (int) Math.floor(viewport.navigation().camera().z() / 128.0f));
         WorldTile cameraWorld = new WorldTile(activePlane, cameraWorldX, cameraWorldY);
@@ -99,9 +99,9 @@ public final class MinimapPanel implements StudioPanel {
         ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 4.0f, 2.0f);
         for (int p = 0; p < 4; p++) {
             boolean isCur = (p == activePlane);
-            if (isCur) ImGui.pushStyleColor(imgui.flag.ImGuiCol.Button, 0xFF3B82F6);
+            if (isCur) ImGui.pushStyleColor(imgui.flag.ImGuiCol.Button, com.rspsi.studio.theme.StudioPalette.u32(com.rspsi.studio.theme.StudioPalette.ACCENT));
             if (ImGui.button("P" + p + "##pl-sw-" + p)) {
-                context.settings().set(RenderSettingKeys.ACTIVE_PLANE, p);
+                context.settings().set(RenderSettingKeys.CURRENT_HEIGHT, p);
             }
             if (isCur) ImGui.popStyleColor();
             if (p < 3) ImGui.sameLine();

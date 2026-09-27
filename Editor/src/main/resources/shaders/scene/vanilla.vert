@@ -40,16 +40,16 @@ void main() {
     float depth = up * sp + forward * cp;
 
     float faceBias = float((aFaceWord0 >> 23u) & 0xFFu);
-    // The real client subtracts faceBias * 2 from the vertex's
-    // view-space depth and applies it to depth only. Screen x/y
-    // retain the unbiased divisor.
-    float biasedDepth = max(depth - faceBias * 2.0, 1.0);
-    // Multiplying the nudge by depth makes the additional separation
-    // survive the perspective divide as a constant normalized-depth
-    // offset, preserving the existing coplanar wall/decor behavior.
+    // The client subtracts faceBias * 2 from the face's view-space depth, for
+    // depth only; screen x/y keep the unbiased divisor. A view-space offset of
+    // a few units lifts a decoration off its own wall yet can never cross a
+    // wall's thickness, unlike a constant normalized-depth nudge, which lets
+    // far-side decorations bleed through walls as the camera pulls back. The
+    // 32-bit float depth target keeps this small offset exact at any distance.
+    // Packed in quarter units: client face bias * 8 plus the face priority (GpuPriority).
+    float biasedDepth = max(depth - faceBias * 0.25, 1.0);
     vec4 projected = vec4(uFocal / uAspect * x, uFocal * y,
-                          uDepthA * depth + uDepthB * (depth / biasedDepth)
-                                  + faceBias * uDepthBiasNudge * depth,
+                          uDepthA * depth + uDepthB * (depth / biasedDepth),
                           depth);
     gl_Position = projected;
     vUv = aUv;

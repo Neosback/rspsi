@@ -57,8 +57,10 @@ public final class LegacyDefinitionProvider implements DefinitionProvider {
             if (definition == null) return Optional.empty();
             return Optional.of(new ObjectAppearanceView(
                     definition.getAnimation(), definition.isContouredGround(),
-                    Math.max(1, definition.getScaleX()), Math.max(1, definition.getScaleY()),
-                    Math.max(1, definition.getScaleZ()), definition.getTranslateX(),
+                    Math.max(1, definition.getScaleX()),
+                    Math.max(1, definition.getScaleZ()),
+                    Math.max(1, definition.getScaleY()),
+                    definition.getTranslateX(),
                     definition.getTranslateY(), definition.getTranslateZ(),
                     ObjectAppearanceView.pairs(definition.getOriginalColours(), definition.getReplacementColours()),
                     ObjectAppearanceView.pairs(definition.getRetextureToFind(), definition.getTextureToReplace()),

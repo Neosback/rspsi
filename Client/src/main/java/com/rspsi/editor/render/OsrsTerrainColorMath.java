@@ -13,6 +13,18 @@ public final class OsrsTerrainColorMath {
     /** RuneLite/TSPS sentinel used for an invalid or hidden terrain color. */
     public static final int INVALID_HSL_COLOR = 12_345_678;
 
+    /**
+     * Terraini parity grey for empty-tile placeholder quads
+     * ({@code TileUtils.EMPTY_TILE_HSL}).
+     */
+    public static final int EMPTY_TILE_HSL = 47031;
+
+    /**
+     * Vivid magenta for hidden-tile highlights, packed from source-domain
+     * HSL (214, 255, 128): hue band 53, saturation band 7, lightness 64.
+     */
+    public static final int HIDDEN_HIGHLIGHT_HSL = (214 / 4 << 10) + (255 / 32 << 7) + 128 / 2;
+
     private OsrsTerrainColorMath() {
     }
 

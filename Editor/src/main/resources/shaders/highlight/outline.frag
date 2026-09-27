@@ -24,31 +24,59 @@ float outlineAlpha(float distance) {
 }
 
 void main() {
-    vec2 centre = texture(uMask, vUv).rg;
+    ivec2 coord = ivec2(gl_FragCoord.xy);
+    vec2 centre = texelFetch(uMask, coord, 0).rg;
+
+    // Inside selected shape: immediate interior fill, no neighbor dilation needed
+    if (centre.g > 0.5) {
+        float alpha = uSelectColor.a * uSelectFill;
+        if (alpha <= 0.001) discard;
+        outColor = vec4(uSelectColor.rgb, alpha);
+        return;
+    }
+
     float hoverDistance = 1e6;
     float selectDistance = 1e6;
     int radius = int(min(ceil(uWidth), float(MAX_RADIUS)));
-    for (int dy = -MAX_RADIUS; dy <= MAX_RADIUS; dy++) {
-        if (abs(dy) > radius) continue;
-        for (int dx = -MAX_RADIUS; dx <= MAX_RADIUS; dx++) {
-            if (abs(dx) > radius) continue;
-            vec2 sampleMask = texture(uMask, vUv + vec2(dx, dy) * uTexel).rg;
-            float distance = length(vec2(dx, dy));
-            if (sampleMask.r > 0.5) hoverDistance = min(hoverDistance, distance);
-            if (sampleMask.g > 0.5) selectDistance = min(selectDistance, distance);
+    float r2Limit = float(radius * radius) + 0.5;
+
+    bool needHover = (centre.r < 0.5) && (uHoverColor.a > 0.001);
+    bool needSelect = uSelectColor.a > 0.001;
+
+    if (!needHover && !needSelect) {
+        discard;
+    }
+
+    for (int dy = -radius; dy <= radius; dy++) {
+        int dy2 = dy * dy;
+        for (int dx = -radius; dx <= radius; dx++) {
+            float d2 = float(dx * dx + dy2);
+            if (d2 > r2Limit) continue;
+
+            vec2 sampleMask = texelFetch(uMask, coord + ivec2(dx, dy), 0).rg;
+            if (sampleMask.r < 0.5 && sampleMask.g < 0.5) continue;
+
+            float d = sqrt(d2);
+            if (needHover && sampleMask.r > 0.5) {
+                hoverDistance = min(hoverDistance, d);
+            }
+            if (needSelect && sampleMask.g > 0.5) {
+                selectDistance = min(selectDistance, d);
+            }
         }
     }
 
     vec4 result = vec4(0.0);
-    if (centre.g > 0.5) {
-        result = vec4(uSelectColor.rgb, uSelectColor.a * uSelectFill);
-    } else if (selectDistance < 1e5) {
+    if (selectDistance < 1e5) {
         result = vec4(uSelectColor.rgb, uSelectColor.a * outlineAlpha(selectDistance));
     }
-    if (centre.r < 0.5 && hoverDistance < 1e5) {
+    if (needHover && hoverDistance < 1e5) {
         float hoverAlpha = uHoverColor.a * outlineAlpha(hoverDistance);
-        if (hoverAlpha > result.a) result = vec4(uHoverColor.rgb, hoverAlpha);
+        if (hoverAlpha > result.a) {
+            result = vec4(uHoverColor.rgb, hoverAlpha);
+        }
     }
+
     if (result.a <= 0.001) discard;
     outColor = result;
 }

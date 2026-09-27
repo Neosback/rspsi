@@ -192,7 +192,7 @@ public final class KnowledgePanel implements StudioPanel {
 
     private static void renderFact(KnowledgeFact<SemanticTag> fact) {
         ImGui.pushID("knowledge-fact-" + fact.value().qualifiedName() + "-" + fact.source());
-        ImGui.textColored(StudioPalette.ACCENT, fact.value().qualifiedName());
+        ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), fact.value().qualifiedName());
         ImGui.sameLine();
         StudioWidgets.pill(
                 String.format("%.0f%%", fact.confidence() * 100),

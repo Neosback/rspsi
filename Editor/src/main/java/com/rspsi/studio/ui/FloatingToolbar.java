@@ -166,7 +166,7 @@ public final class FloatingToolbar {
 
         // Right-click context menu on grip
         if (ImGui.beginPopupContextItem("ftb_options_ctx")) {
-            ImGui.textColored(StudioPalette.ACCENT, "Flying Tool Rail");
+            ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), "Flying Tool Rail");
             ImGui.separator();
             if (ImGui.menuItem("Reset Position")) resetPosition();
             if (ImGui.menuItem("Minimize Toolbar")) collapsed = true;
@@ -204,18 +204,18 @@ public final class FloatingToolbar {
         ImGui.setCursorScreenPos(x, y);
 
         if (isActive) {
-            // Also cover Hovered/Active so the button stays visibly "on" immediately on click
-            // instead of only after the mouse moves away (ImGui's hover/press colors otherwise
-            // paint over the plain Button color while the cursor sits on top of it).
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
+            // pushStyleColor(slot, int) takes ImU32 = ABGR, not ARGB.
+            // Route all palette constants through StudioPalette.draw() so
+            // cyan #00CED1 doesn't get rendered as yellow from the R/B swap.
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.draw(StudioPalette.ACCENT));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.draw(StudioPalette.ACCENT_HOVER));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.draw(StudioPalette.ACCENT_ACTIVE));
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.draw(StudioPalette.TEXT));
         } else {
-            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.CHROME_BG);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
+            ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.draw(StudioPalette.CHROME_BG));
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.draw(StudioPalette.FIELD_HOVER));
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.draw(StudioPalette.ACCENT_SOFT));
+            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.draw(StudioPalette.TEXT_MUTED));
         }
 
         ImGui.pushFont(StudioFonts.icon(), 0.0f);

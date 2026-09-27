@@ -33,7 +33,7 @@ class WorkspaceTabBar {
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID())
 
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 8.0f, 2.0f)
-        ImGui.pushStyleColor(ImGuiCol.WindowBg, StudioPalette.CHROME_BG)
+        ImGui.pushStyleColor(ImGuiCol.WindowBg, StudioPalette.u32(StudioPalette.CHROME_BG))
 
         ImGui.begin("StudioWorkspaceTabBar", BAR_FLAGS)
 
@@ -84,22 +84,22 @@ class WorkspaceTabBar {
     private fun pushTabColors(active: Boolean) {
         ImGui.pushStyleColor(
             ImGuiCol.Button,
-            if (active) StudioPalette.ACCENT else StudioPalette.CHROME_BG,
+            StudioPalette.u32(if (active) StudioPalette.ACCENT else StudioPalette.CHROME_BG),
         )
         ImGui.pushStyleColor(
             ImGuiCol.ButtonHovered,
-            if (active) StudioPalette.ACCENT_HOVER else StudioPalette.FIELD_HOVER,
+            StudioPalette.u32(if (active) StudioPalette.ACCENT_HOVER else StudioPalette.FIELD_HOVER),
         )
         ImGui.pushStyleColor(
             ImGuiCol.ButtonActive,
-            if (active) StudioPalette.ACCENT_ACTIVE else StudioPalette.ACCENT_SOFT,
+            StudioPalette.u32(if (active) StudioPalette.ACCENT_ACTIVE else StudioPalette.ACCENT_SOFT),
         )
-        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT)
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(StudioPalette.TEXT))
     }
 
     private fun titleFor(workspace: WorkspaceManager.Workspace): String =
         when (workspace) {
-            WorkspaceManager.Workspace.DASHBOARD -> "Content Studio"
+            WorkspaceManager.Workspace.DASHBOARD -> "Home"
             WorkspaceManager.Workspace.MAP_EDITOR -> "${StudioIcons.MAP} Map Studio"
             WorkspaceManager.Workspace.INTERFACE_STUDIO -> "${StudioIcons.VIEWPORT} Interface Studio"
             WorkspaceManager.Workspace.OBJECT_STUDIO -> "${StudioIcons.OBJECT} Object Studio"

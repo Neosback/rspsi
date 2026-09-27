@@ -213,9 +213,13 @@ public final class GpuUploadPlanBuilder {
      * bias gives each priority tier its own depth step, same as the wall
      * case, instead of only stating intent in a comment nothing enforced.</p>
      */
+    /**
+     * Every model face submits its client face bias plus its priority (see
+     * {@link GpuPriority#submissionBias}); wall decorations are kept off their wall by
+     * geometry instead ({@code ModelPacketBuilder.decorationNudge}).
+     */
     private static int submissionDepthBias(SceneLayer.Kind layer, int facePriority, int faceBias) {
-        if (layer != SceneLayer.Kind.WALL_DECORATION) return faceBias;
-        return Math.min(255, Math.max(1, faceBias) + facePriority);
+        return GpuPriority.submissionBias(faceBias, facePriority);
     }
 
     private static void appendCommand(List<GpuDrawCommand> commands, SceneTileSnapshot tile,

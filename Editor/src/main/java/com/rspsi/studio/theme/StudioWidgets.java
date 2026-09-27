@@ -116,8 +116,20 @@ public final class StudioWidgets {
      * "Selection quarter tile" was rendering clipped. Naming the field above
      * it means the label can never be the thing that overflows.</p>
      */
+    public static void pushColor(int slot, int argb) {
+        ImGui.pushStyleColor(slot, StudioDrawColors.abgr(argb));
+    }
+
+    /**
+     * Labels a control on its own line and lets the control span the panel.
+     *
+     * <p>Dear ImGui puts a widget's label to its right, which in a fixed
+     * inspector column pushes long setting names past the edge - that is why
+     * "Selection quarter tile" was rendering clipped. Naming the field above
+     * it means the label can never be the thing that overflows.</p>
+     */
     public static void fieldLabel(String label) {
-        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
+        pushColor(ImGuiCol.Text, StudioPalette.TEXT_MUTED);
         ImGui.textWrapped(label);
         ImGui.popStyleColor();
         ImGui.setNextItemWidth(-Float.MIN_VALUE);
@@ -187,12 +199,33 @@ public final class StudioWidgets {
      * Begins an elevated, rounded card container with 1px subtle border.
      */
     public static void beginCard(String id, float width, float height) {
-        ImGui.pushStyleColor(ImGuiCol.ChildBg, StudioPalette.PANEL_BG);
-        ImGui.pushStyleColor(ImGuiCol.Border, StudioPalette.BORDER);
+        beginCard(id, width, height, ImGuiWindowFlags.None);
+    }
+
+    /**
+     * Opens a card. A {@code height <= 0} card sizes itself to its content and never
+     * scrolls, which is what almost every card wants; a fixed height is only for cards
+     * that genuinely hold scrolling content.
+     */
+    public static void beginCard(String id, float width, float height, int flags) {
+        pushColor(ImGuiCol.ChildBg, StudioPalette.PANEL_BG);
+        pushColor(ImGuiCol.Border, StudioPalette.BORDER);
         ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 8.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.ChildBorderSize, 1.0f);
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 14.0f, 12.0f);
-        ImGui.beginChild("##card-" + id, width, height, true, imgui.flag.ImGuiWindowFlags.None);
+        if (height <= 0.0f) {
+            ImGui.beginChild("##card-" + id, width, 0.0f,
+                    imgui.flag.ImGuiChildFlags.Borders | imgui.flag.ImGuiChildFlags.AutoResizeY
+                            | imgui.flag.ImGuiChildFlags.AlwaysUseWindowPadding,
+                    flags | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        } else {
+            ImGui.beginChild("##card-" + id, width, height, true, flags);
+        }
+    }
+
+    /** A card that fits its content; see {@link #beginCard(String, float, float, int)}. */
+    public static void beginCard(String id, float width) {
+        beginCard(id, width, 0.0f, ImGuiWindowFlags.None);
     }
 
     public static void endCard() {
@@ -250,12 +283,12 @@ public final class StudioWidgets {
         return newState;
     }
 
-    /** Primary brand CTA button using the Studio blue interaction token. */
+    /** Primary brand CTA button using the Studio cyan interaction token. */
     public static boolean buttonPrimary(String label, float width, float height) {
-        ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.ACCENT);
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
-        ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
-        ImGui.pushStyleColor(ImGuiCol.Text, ImGui.getColorU32(1.0f, 1.0f, 1.0f, 1.0f));
+        pushColor(ImGuiCol.Button, StudioPalette.ACCENT);
+        pushColor(ImGuiCol.ButtonHovered, StudioPalette.ACCENT_HOVER);
+        pushColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_ACTIVE);
+        pushColor(ImGuiCol.Text, StudioPalette.TEXT);
         boolean clicked = ImGui.button(label, width, height);
         ImGui.popStyleColor(4);
         return clicked;
@@ -263,10 +296,10 @@ public final class StudioWidgets {
 
     /** Secondary neutral surface button with subtle 1px border. */
     public static boolean buttonSecondary(String label, float width, float height) {
-        ImGui.pushStyleColor(ImGuiCol.Button, StudioPalette.PANEL_ELEVATED);
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
-        ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
-        ImGui.pushStyleColor(ImGuiCol.Border, StudioPalette.BORDER);
+        pushColor(ImGuiCol.Button, StudioPalette.PANEL_ELEVATED);
+        pushColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
+        pushColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
+        pushColor(ImGuiCol.Border, StudioPalette.BORDER);
         boolean clicked = ImGui.button(label, width, height);
         ImGui.popStyleColor(4);
         return clicked;
@@ -275,8 +308,8 @@ public final class StudioWidgets {
     /** Ghost button: transparent background until hovered. */
     public static boolean buttonGhost(String label, float width, float height) {
         ImGui.pushStyleColor(ImGuiCol.Button, 0x00000000);
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
-        ImGui.pushStyleColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
+        pushColor(ImGuiCol.ButtonHovered, StudioPalette.FIELD_HOVER);
+        pushColor(ImGuiCol.ButtonActive, StudioPalette.ACCENT_SOFT);
         boolean clicked = ImGui.button(label, width, height);
         ImGui.popStyleColor(3);
         return clicked;
@@ -373,13 +406,13 @@ public final class StudioWidgets {
             first = false;
 
             boolean isActive = workspace == active;
-            ImGui.pushStyleColor(ImGuiCol.Button,
+            pushColor(ImGuiCol.Button,
                     isActive ? StudioPalette.ACCENT : StudioPalette.CHROME_BG);
-            ImGui.pushStyleColor(ImGuiCol.ButtonHovered,
+            pushColor(ImGuiCol.ButtonHovered,
                     isActive ? StudioPalette.ACCENT_HOVER : StudioPalette.FIELD_HOVER);
-            ImGui.pushStyleColor(ImGuiCol.ButtonActive,
+            pushColor(ImGuiCol.ButtonActive,
                     isActive ? StudioPalette.ACCENT_ACTIVE : StudioPalette.ACCENT_SOFT);
-            ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
+            pushColor(ImGuiCol.Text, StudioPalette.TEXT);
             if (ImGui.button(workspaceLabel(workspace) + "##ws-" + workspace)) {
                 runWorkspaceCallback(workspace, openDashboard, openMapEditor, openInterfaceStudio, openObjectStudio);
             }
@@ -398,7 +431,7 @@ public final class StudioWidgets {
 
     private static String workspaceLabel(WorkspaceManager.Workspace workspace) {
         return switch (workspace) {
-            case DASHBOARD -> "Content Studio";
+            case DASHBOARD -> "Home";
             case MAP_EDITOR -> "Map Studio";
             case INTERFACE_STUDIO -> "Interface Studio";
             case OBJECT_STUDIO -> "Object Studio";

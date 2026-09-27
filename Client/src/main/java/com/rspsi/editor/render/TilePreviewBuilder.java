@@ -43,7 +43,10 @@ public final class TilePreviewBuilder {
         TerrainLight light = TerrainLighting.buildTile(document, LightingProfile.osrs(), null, plane, x, y);
         TerrainRenderPacket packet = packets.build(new TileCoordinate(plane, x, y),
                 meshes.build(tile), appearance, light);
-        return packet.faces().isEmpty() ? Optional.empty() : Optional.of(packet);
+        // Editor placeholder quads (empty grey, hidden magenta) mark tiles in
+        // viewports; inspectors preview real floors only.
+        return packet.faces().isEmpty() || packet.isEmptyPlaceholder() || packet.isHiddenPlaceholder()
+                ? Optional.empty() : Optional.of(packet);
     }
 
     private static TerrainAppearance unblended(TerrainAppearance blended, TileSnapshot tile,

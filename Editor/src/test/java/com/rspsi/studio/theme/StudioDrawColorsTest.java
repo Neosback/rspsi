@@ -20,10 +20,13 @@ class StudioDrawColorsTest {
 
     @Test
     void paletteKeepsTheExistingJavaStaticConstantsAndDrawHelper() {
-        assertEquals(0xFF168CFF, StudioPalette.ACCENT);
-        assertEquals(0xFF0B1119, StudioPalette.APP_BG);
+        assertEquals(0xFF00CED1, StudioPalette.ACCENT);
+        assertEquals(0xFF0B0F14, StudioPalette.APP_BG);
         assertEquals(
                 StudioDrawColors.abgr(StudioPalette.ACCENT),
                 StudioPalette.draw(StudioPalette.ACCENT));
+        assertEquals(
+                StudioDrawColors.abgr(StudioPalette.ACCENT),
+                StudioPalette.u32(StudioPalette.ACCENT));
     }
 }

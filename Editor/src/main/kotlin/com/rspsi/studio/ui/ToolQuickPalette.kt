@@ -48,12 +48,12 @@ class ToolQuickPalette {
         ImGui.setNextWindowSize(width, 0.0f, ImGuiCond.Always)
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID())
 
-        ImGui.pushStyleColor(ImGuiCol.Border, StudioPalette.BORDER_STRONG)
+        ImGui.pushStyleColor(ImGuiCol.Border, StudioPalette.u32(StudioPalette.BORDER_STRONG))
         ImGui.pushStyleVar(ImGuiStyleVar.WindowRounding, 8.0f)
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 10.0f, 8.0f)
 
         if (ImGui.begin("##ActiveToolQuickPalette", FLAGS)) {
-            ImGui.textColored(StudioPalette.ACCENT, tool.name())
+            ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), tool.name())
             ImGui.separator()
             renderer.render(node)
         }

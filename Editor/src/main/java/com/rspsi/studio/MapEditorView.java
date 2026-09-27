@@ -19,7 +19,6 @@ import com.rspsi.editor.plugin.runtime.PluginEcosystemService;
 import com.rspsi.editor.render.GpuUploadPlan;
 import com.rspsi.editor.render.RenderConfigCompiler;
 import com.rspsi.editor.render.RenderSettingKeys;
-import com.rspsi.editor.render.SceneVisibilityPolicy;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.simulation.SimulationEngine;
 import com.rspsi.editor.symbols.SymbolService;
@@ -28,6 +27,7 @@ import com.rspsi.editor.tool.ToolContext;
 import com.rspsi.studio.theme.StudioFonts;
 import com.rspsi.studio.brush.StudioBrushManager;
 import com.rspsi.studio.theme.StudioIcons;
+import com.rspsi.studio.theme.StudioPalette;
 import com.rspsi.studio.theme.StudioWidgets;
 import com.rspsi.studio.ui.FloatingToolbar;
 import com.rspsi.studio.ui.ToolQuickPalette;
@@ -69,6 +69,7 @@ import com.rspsi.editor.CompositeEditCommand;
 import com.rspsi.editor.terrain.TerrainVertexLattice;
 import com.rspsi.editor.model.TileCoordinate;
 import com.rspsi.editor.model.LocalTile;
+import com.rspsi.editor.model.WorldLocation;
 import com.rspsi.editor.model.WorldTile;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldObject;
@@ -142,6 +143,14 @@ public final class MapEditorView {
 
     private boolean commandPaletteOpen;
     private final ImString commandQuery = new ImString(128);
+    private Consumer<WorldLocation> locationNavigator = ignored -> { };
+    private boolean goToOpen;
+    private final imgui.type.ImInt goToX = new imgui.type.ImInt(3222);
+    private final imgui.type.ImInt goToY = new imgui.type.ImInt(3218);
+    private final imgui.type.ImInt goToPlane = new imgui.type.ImInt(0);
+    private final imgui.type.ImInt goToRegion = new imgui.type.ImInt(12850);
+    /** Which Go To section Enter submits: the one last edited. */
+    private boolean goToRegionMode;
     // Off by default: the rail auto-shows itself for brush tools (see
     // LeftBrushRail.isBrushToolActive); this is only the View > Left Brush
     // Rail override that forces it to stay up regardless of active tool.
@@ -172,6 +181,11 @@ public final class MapEditorView {
         definitionPublicationPersistence = persistence == null
                 ? ignored -> { }
                 : persistence;
+    }
+
+    /** Receives Go To requests; the application frames the tile or loads its region. */
+    public void setLocationNavigator(Consumer<WorldLocation> navigator) {
+        locationNavigator = navigator == null ? ignored -> { } : navigator;
     }
 
     public void render(LoadedOsrsCacheSession cache, GpuUploadPlan plan,
@@ -336,6 +350,7 @@ public final class MapEditorView {
         // 8. Overlays & Windows
         studioPluginManager.renderFloating(panelContext);
         renderCommandPalette(pluginLifecycle);
+        renderGoToDialog();
         preferencesWindow.render(settings, pluginLifecycle != null && pluginLifecycle.host() != null
                 ? pluginLifecycle.host().context().settingsService() : null);
         pluginManagerWindow.render(pluginLifecycle, studioPluginManager, panelContext);
@@ -364,13 +379,14 @@ public final class MapEditorView {
 
             // When all planes are visible, allow clicks on any plane's rendered geometry;
             // otherwise restrict picks to the active editing plane.
-            if (renderConfig.planeSelection() == SceneVisibilityPolicy.PlaneSelection.ALL) {
+            if (renderConfig.allHeightsVisible()) {
                 viewport.setPickPlaneRestriction(null);
             } else {
-                viewport.setPickPlaneRestriction(renderConfig.activePlane());
+                viewport.setPickPlaneRestriction(renderConfig.currentHeight());
             }
 
             viewport.setCullMode(renderConfig.nativeCullingMode());
+            viewport.setPlaneFilter(renderConfig.planeFilter());
             viewport.setHighlightSession(pluginLifecycle != null && pluginLifecycle.host() != null
                     ? pluginLifecycle.host().context().session() : null);
             viewport.render(plan, ImGui.getContentRegionAvailX(),
@@ -439,7 +455,7 @@ public final class MapEditorView {
     private void renderServerSpawnOverlays(NativeSceneViewport viewport, SettingsStore settings) {
         if (spawns == null || viewport == null) return;
         var draw = viewport.createOverlayDraw();
-        int activePlane = settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
+        int activePlane = settings.snapshot().get(RenderSettingKeys.CURRENT_HEIGHT);
         int camTileX = Math.max(0, (int) (viewport.navigation().camera().x() / 128.0f));
         int camTileY = Math.max(0, (int) (viewport.navigation().camera().z() / 128.0f));
         var visibleSpawns = spawns.spawns(activePlane, camTileX - 32, camTileY - 32, camTileX + 32, camTileY + 32);
@@ -546,11 +562,11 @@ public final class MapEditorView {
         } else if (!ctrl && !io.getKeyShift() && !io.getKeyAlt()) {
             // Plane cycling: PageUp / PageDown
             if (ImGui.isKeyPressed(ImGuiKey.PageUp, false)) {
-                int curPlane = settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
-                if (curPlane < 3) settings.set(RenderSettingKeys.ACTIVE_PLANE, curPlane + 1);
+                int curPlane = settings.snapshot().get(RenderSettingKeys.CURRENT_HEIGHT);
+                if (curPlane < 3) settings.set(RenderSettingKeys.CURRENT_HEIGHT, curPlane + 1);
             } else if (ImGui.isKeyPressed(ImGuiKey.PageDown, false)) {
-                int curPlane = settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE);
-                if (curPlane > 0) settings.set(RenderSettingKeys.ACTIVE_PLANE, curPlane - 1);
+                int curPlane = settings.snapshot().get(RenderSettingKeys.CURRENT_HEIGHT);
+                if (curPlane > 0) settings.set(RenderSettingKeys.CURRENT_HEIGHT, curPlane - 1);
             }
             // Tool hotkeys:
             else if (ImGui.isKeyPressed(ImGuiKey.V, false)) {
@@ -811,6 +827,102 @@ public final class MapEditorView {
                 && ImGui.isKeyPressed(ImGuiKey.Comma, false)) {
             preferencesWindow.toggle();
         }
+        if (!io.getWantTextInput() && (io.getKeyCtrl() || io.getKeySuper())
+                && ImGui.isKeyPressed(ImGuiKey.G, false)) {
+            openGoTo();
+        }
+    }
+
+    private void openGoTo() {
+        goToOpen = true;
+        goToPlane.set(0);
+        goToRegionMode = false;
+        if (viewport != null) {
+            viewport.navigationService().current().ifPresent(tile -> {
+                goToX.set(tile.x());
+                goToY.set(tile.y());
+                goToRegion.set(((tile.x() >> 6) << 8) | (tile.y() >> 6));
+            });
+        }
+    }
+
+    /** Ctrl+G: go to a world tile (X, Y, plane) or to a region by id. */
+    private void renderGoToDialog() {
+        if (goToOpen) {
+            ImGui.openPopup("Go to location##map-goto");
+            goToOpen = false;
+        }
+        imgui.ImVec2 center = ImGui.getMainViewport().getCenter();
+        ImGui.setNextWindowPos(center.x, center.y - 120.0f, ImGuiCond.Appearing, 0.5f, 0.5f);
+        ImGui.setNextWindowSize(360.0f, 0.0f, ImGuiCond.Appearing);
+        if (!ImGui.beginPopupModal("Go to location##map-goto", null,
+                ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoSavedSettings)) {
+            return;
+        }
+        if (ImGui.isWindowAppearing()) ImGui.setKeyboardFocusHere(0);
+
+        WorldLocation tile = WorldLocation.ofTile(goToX.get(), goToY.get(), goToPlane.get());
+        WorldLocation region = WorldLocation.ofRegionId(goToRegion.get());
+        WorldLocation go = null;
+
+        ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), "World tile");
+        if (com.rspsi.studio.theme.SettingRows.beginPlain("goto-tile")) {
+            if (com.rspsi.studio.theme.SettingRows.inputInt("X", goToX)) goToRegionMode = false;
+            if (ImGui.isItemActive()) goToRegionMode = false;
+            if (com.rspsi.studio.theme.SettingRows.inputInt("Y", goToY)) goToRegionMode = false;
+            if (ImGui.isItemActive()) goToRegionMode = false;
+            if (com.rspsi.studio.theme.SettingRows.inputInt("Plane", goToPlane)) {
+                goToPlane.set(Math.max(0, Math.min(3, goToPlane.get())));
+                goToRegionMode = false;
+            }
+            com.rspsi.studio.theme.SettingRows.end();
+        }
+        tile = WorldLocation.ofTile(goToX.get(), goToY.get(), goToPlane.get());
+        if (tile != null) {
+            ImGui.textDisabled("Region " + tile.regionX() + "," + tile.regionY()
+                    + " (id " + tile.regionId() + ")");
+        } else {
+            ImGui.textColored(StudioPalette.u32(StudioPalette.WARNING), "X and Y must be 0 to 16383.");
+        }
+        ImGui.beginDisabled(tile == null);
+        if (StudioWidgets.buttonPrimary("Go to tile", -1.0f, 26.0f)) go = tile;
+        ImGui.endDisabled();
+
+        ImGui.dummy(1.0f, 6.0f);
+        ImGui.separator();
+        ImGui.dummy(1.0f, 4.0f);
+
+        ImGui.textColored(StudioPalette.u32(StudioPalette.ACCENT), "Region");
+        if (com.rspsi.studio.theme.SettingRows.beginPlain("goto-region")) {
+            if (com.rspsi.studio.theme.SettingRows.inputInt("Region ID", goToRegion)) goToRegionMode = true;
+            if (ImGui.isItemActive()) goToRegionMode = true;
+            com.rspsi.studio.theme.SettingRows.end();
+        }
+        region = WorldLocation.ofRegionId(goToRegion.get());
+        if (region != null) {
+            int baseX = region.regionX() << 6;
+            int baseY = region.regionY() << 6;
+            ImGui.textDisabled("Region " + region.regionX() + "," + region.regionY()
+                    + "  ·  tiles " + baseX + "-" + (baseX + 63) + ", " + baseY + "-" + (baseY + 63));
+        } else {
+            ImGui.textColored(StudioPalette.u32(StudioPalette.WARNING), "Region ID must be 0 to 65535.");
+        }
+        ImGui.beginDisabled(region == null);
+        if (StudioWidgets.buttonPrimary("Go to region", -1.0f, 26.0f)) go = region;
+        ImGui.endDisabled();
+
+        ImGui.dummy(1.0f, 6.0f);
+        if (ImGui.isKeyPressed(ImGuiKey.Enter, false) || ImGui.isKeyPressed(ImGuiKey.KeypadEnter, false)) {
+            go = goToRegionMode ? region : tile;
+        }
+        if (StudioWidgets.buttonGhost("Cancel", -1.0f, 24.0f)
+                || ImGui.isKeyPressed(ImGuiKey.Escape, false)) {
+            ImGui.closeCurrentPopup();
+        } else if (go != null) {
+            ImGui.closeCurrentPopup();
+            locationNavigator.accept(go);
+        }
+        ImGui.endPopup();
     }
 
     private void openCommandPaletteShortcut() {
@@ -852,7 +964,7 @@ public final class MapEditorView {
         ImGui.pushStyleColor(ImGuiCol.FrameBgHovered, StudioDrawColors.abgr(0xFF222634));
         ImGui.pushStyleColor(ImGuiCol.FrameBgActive, StudioDrawColors.abgr(0xFF262B3B));
         ImGui.setNextItemWidth(-1.0f);
-        ImGui.inputTextWithHint("##cmd-query", StudioIcons.SEARCH + "  Type a tool, command, or region ID (e.g. 50,50)...", commandQuery, ImGuiInputTextFlags.None);
+        ImGui.inputTextWithHint("##cmd-query", StudioIcons.SEARCH + "  Type a tool, command, world tile, or region (e.g. 3222,3218)...", commandQuery, ImGuiInputTextFlags.None);
         ImGui.popStyleColor(3);
         ImGui.popStyleVar(2);
 
@@ -862,6 +974,18 @@ public final class MapEditorView {
 
         String query = commandQuery.get().toLowerCase().trim();
         ImGui.beginChild("palette-results", 0.0f, -36.0f, false);
+        WorldLocation paletteLocation = WorldLocation.parse(query);
+        if (paletteLocation != null) {
+            ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.SelectableTextAlign, 0.0f, 0.5f);
+            if (ImGui.selectable(StudioIcons.NAVIGATION + "  Go to " + paletteLocation.describe()
+                    + "##palette-goto", true, 0, 0.0f, 26.0f)
+                    || ImGui.isKeyPressed(ImGuiKey.Enter, false)
+                    || ImGui.isKeyPressed(ImGuiKey.KeypadEnter, false)) {
+                ImGui.closeCurrentPopup();
+                locationNavigator.accept(paletteLocation);
+            }
+            ImGui.popStyleVar();
+        }
         if (pluginLifecycle != null && pluginLifecycle.host() != null) {
             var registry = pluginLifecycle.host().registry();
             boolean any = false;
@@ -893,7 +1017,7 @@ public final class MapEditorView {
                 if (ImGui.isItemHovered()) ImGui.setItemTooltip(command.id());
             }
             ImGui.popStyleVar();
-            if (!any) ImGui.textDisabled("No matching tools or commands.");
+            if (!any && paletteLocation == null) ImGui.textDisabled("No matching tools or commands.");
         } else {
             ImGui.textDisabled("Plugin host unavailable.");
         }
@@ -934,6 +1058,13 @@ public final class MapEditorView {
 
         if (ImGui.begin("##AppStatusBar", statusFlags)) {
             ImGui.text("Ready");
+            ImGui.sameLine(0.0f, 16.0f);
+            ImGui.pushStyleVar(imgui.flag.ImGuiStyleVar.FramePadding, 6.0f, 0.0f);
+            if (ImGui.smallButton(StudioIcons.NAVIGATION + " Go to...##status-goto")) openGoTo();
+            ImGui.popStyleVar();
+            if (ImGui.isItemHovered()) {
+                ImGui.setItemTooltip("Go to a world tile, region, or region ID (Ctrl+G)");
+            }
 
             // Trailing diagnostic info: cache path and FPS only - no icons, no tile/selection dump
             // (that already lives in the Tile Inspector panel and viewport tile-info overlay).

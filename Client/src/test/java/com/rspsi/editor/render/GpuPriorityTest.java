@@ -26,9 +26,15 @@ class GpuPriorityTest {
      */
     @Test
     void faceBiasIsAConstantWorldSpaceOffsetAtEveryDistance() {
-        assertEquals(500.0f - 46.0f, GpuPriority.biasedDepth(500.0f, 1.0f, 1000.0f, 0, 23));
-        assertEquals(5000.0f - 46.0f, GpuPriority.biasedDepth(5000.0f, 1.0f, 100000.0f, 0, 23));
-        assertEquals(1000.0f - 2.0f, GpuPriority.biasedDepth(1000.0f, 1.0f, 1000.0f, 0, 1));
+        // Client face bias 23 is 46 world units at every distance.
+        int faceBias23 = GpuPriority.submissionBias(23, 0);
+        assertEquals(500.0f - 46.0f, GpuPriority.biasedDepth(500.0f, 1.0f, 1000.0f, 0, faceBias23));
+        assertEquals(5000.0f - 46.0f, GpuPriority.biasedDepth(5000.0f, 1.0f, 100000.0f, 0, faceBias23));
+        assertEquals(1000.0f - 2.0f, GpuPriority.biasedDepth(1000.0f, 1.0f, 1000.0f, 0,
+                GpuPriority.submissionBias(1, 0)));
+        // Each priority step is a quarter unit, so coplanar priority layers resolve.
+        assertEquals(1000.0f - 0.75f, GpuPriority.biasedDepth(1000.0f, 1.0f, 1000.0f, 0,
+                GpuPriority.submissionBias(0, 3)));
     }
 
     @Test

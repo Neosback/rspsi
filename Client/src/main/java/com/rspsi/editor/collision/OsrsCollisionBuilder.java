@@ -291,7 +291,7 @@ public final class OsrsCollisionBuilder {
         }
         int projectileMask = definition.blockProjectile() ? CollisionFlag.LOC_PROJECTILE : 0;
         int routeMask = definition.breakRouteFinding() ? CollisionFlag.LOC_ROUTE_BLOCKER : 0;
-        if (shape.category() == ObjectCategory.GROUND) {
+        if (shape.category() == ObjectCategory.GROUND || shape == OsrsLocShape.WALL_DIAGONAL) {
             for (int x = 0; x < width; x++) {
                 for (int y = 0; y < length; y++) {
                     addAt(collision, plane, object.x() + x + offsetX, object.y() + y + offsetY,

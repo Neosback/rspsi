@@ -84,12 +84,16 @@ class OpenGlSceneRendererStateTest {
                 SceneLayer.Kind.TERRAIN, OpenGlSceneRenderer.CULL_FRONT_CCW));
         assertFalse(OpenGlSceneRenderer.cullEnabledFor(
                 SceneLayer.Kind.TERRAIN, OpenGlSceneRenderer.CULL_FRONT_CW));
+        assertFalse(OpenGlSceneRenderer.cullEnabledFor(
+                SceneLayer.Kind.WALL_DECORATION, OpenGlSceneRenderer.CULL_FRONT_CCW));
+        assertFalse(OpenGlSceneRenderer.cullEnabledFor(
+                SceneLayer.Kind.WALL_DECORATION, OpenGlSceneRenderer.CULL_FRONT_CW));
     }
 
     @Test
     void nativeCullValidationCullsEveryModelLayerOnlyWhenEnabled() {
         for (SceneLayer.Kind layer : SceneLayer.Kind.values()) {
-            if (layer == SceneLayer.Kind.TERRAIN) continue;
+            if (layer == SceneLayer.Kind.TERRAIN || layer == SceneLayer.Kind.WALL_DECORATION) continue;
             assertFalse(OpenGlSceneRenderer.cullEnabledFor(
                     layer, OpenGlSceneRenderer.CULL_OFF));
             assertTrue(OpenGlSceneRenderer.cullEnabledFor(

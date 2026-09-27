@@ -93,16 +93,22 @@ public final class ContentStudioView {
         renderProjectHeader(project, status, cacheHealth, closeProject);
         ImGui.dummy(1.0f, 10.0f);
 
-        renderContinue(project, status, cacheHealth, openMapEditor);
-        ImGui.dummy(1.0f, 10.0f);
-
-        if (project.kind() == StudioProjectKind.OPENRUNE_SERVER) {
-            renderOpenRuneProjectStatus(project, status, cacheHealth, integrations, openIntegrationCenter);
-            ImGui.dummy(1.0f, 10.0f);
+        // Continue and project status sit side by side when there is room, stacked otherwise.
+        boolean twoColumns = ImGui.getContentRegionAvailX() >= 820.0f;
+        if (twoColumns && ImGui.beginTable("##home-primary", 2,
+                ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.PadOuterX)) {
+            ImGui.tableNextRow();
+            ImGui.tableNextColumn();
+            renderContinue(project, status, cacheHealth, openMapEditor);
+            ImGui.tableNextColumn();
+            renderProjectStatus(project, status, cacheHealth, integrations, openIntegrationCenter);
+            ImGui.endTable();
         } else {
-            renderStandaloneSummary(status, cacheHealth);
+            renderContinue(project, status, cacheHealth, openMapEditor);
             ImGui.dummy(1.0f, 10.0f);
+            renderProjectStatus(project, status, cacheHealth, integrations, openIntegrationCenter);
         }
+        ImGui.dummy(1.0f, 10.0f);
 
         renderWorkspaces(status, cacheHealth, openMapEditor, openInterfaceStudio, openObjectStudio);
         ImGui.dummy(1.0f, 10.0f);
@@ -119,9 +125,9 @@ public final class ContentStudioView {
             CacheSessionStatus status,
             OsrsCacheHealth cacheHealth,
             Runnable closeProject) {
-        StudioWidgets.beginCard("project-header", -1.0f, 136.0f);
+        StudioWidgets.beginCard("project-header", -1.0f);
 
-        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT);
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(StudioPalette.TEXT));
         ImGui.text(project.name());
         ImGui.popStyleColor();
 
@@ -148,7 +154,7 @@ public final class ContentStudioView {
                     ImGui.getColorU32(0.29f, 0.87f, 0.50f, 1.0f));
         }
 
-        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.TEXT_DISABLED);
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(StudioPalette.TEXT_DISABLED));
         ImGui.textWrapped(project.sourcePathValue().toString());
         ImGui.popStyleColor();
 
@@ -182,9 +188,9 @@ public final class ContentStudioView {
             Runnable openMapEditor) {
         boolean loading = status.state() == CacheSessionState.LOADING;
         boolean ready = cacheHealth != null && !loading;
-        StudioWidgets.beginCard("project-continue", -1.0f, 132.0f);
+        StudioWidgets.beginCard("project-continue", -1.0f);
         ImGui.text(StudioIcons.MAP + "  Continue");
-        ImGui.textDisabled(loading
+        mutedWrapped(loading
                 ? "Preparing cache definitions for the requested workspace..."
                 : ready
                 ? "Open Map Studio at a region. Definitions and scene data load only when you enter it."
@@ -192,7 +198,7 @@ public final class ContentStudioView {
 
         ImGui.dummy(1.0f, 5.0f);
         ImGui.setNextItemWidth(220.0f);
-        ImGui.inputTextWithHint("##home-region", "Region X,Y or ID", region);
+        ImGui.inputTextWithHint("##home-region", "Region X,Y, ID, or tile X,Y", region);
         ImGui.sameLine();
 
         ImGui.beginDisabled(!ready);
@@ -203,9 +209,22 @@ public final class ContentStudioView {
 
         if (project.kind() == StudioProjectKind.OPENRUNE_SERVER) {
             ImGui.dummy(1.0f, 4.0f);
-            ImGui.textDisabled("The imported OpenRune project stays connected while you edit.");
+            mutedWrapped("The imported OpenRune project stays connected while you edit.");
         }
         StudioWidgets.endCard();
+    }
+
+    private static void renderProjectStatus(
+            StudioProjectDescriptor project,
+            CacheSessionStatus status,
+            OsrsCacheHealth cacheHealth,
+            ServerIntegrationService integrations,
+            Runnable openIntegrationCenter) {
+        if (project.kind() == StudioProjectKind.OPENRUNE_SERVER) {
+            renderOpenRuneProjectStatus(project, status, cacheHealth, integrations, openIntegrationCenter);
+        } else {
+            renderStandaloneSummary(status, cacheHealth);
+        }
     }
 
     private static void renderOpenRuneProjectStatus(
@@ -214,13 +233,13 @@ public final class ContentStudioView {
             OsrsCacheHealth cacheHealth,
             ServerIntegrationService integrations,
             Runnable openIntegrationCenter) {
-        ImGui.separatorText("OpenRune Project");
-
         ServerProjectInspection inspection = integrations == null
                 ? null : integrations.activeProjectInspection().orElse(null);
         LoadedOsrsCacheSession cache = status.currentSession().orElse(null);
 
-        StudioWidgets.beginCard("openrune-project-status", -1.0f, 226.0f);
+        StudioWidgets.beginCard("openrune-project-status", -1.0f);
+        ImGui.text(StudioIcons.EXTENSION + "  OpenRune project");
+        ImGui.dummy(1.0f, 4.0f);
         if (ImGui.beginTable("##openrune-project-health", 2,
                 ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp)) {
             statusRow("LIVE cache", cache != null
@@ -239,10 +258,12 @@ public final class ContentStudioView {
         }
 
         ImGui.dummy(1.0f, 8.0f);
-        ImGui.textDisabled(
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(StudioPalette.TEXT_MUTED));
+        ImGui.textWrapped(
                 "Content Studio starts from a lightweight FileStore health check. Definitions, "
                         + "RSCM/GameVals, source indexing, spawns and semantic graphs activate "
                         + "only when a tool requests them.");
+        ImGui.popStyleColor();
         ImGui.dummy(1.0f, 8.0f);
 
         if (openIntegrationCenter != null
@@ -284,21 +305,22 @@ public final class ContentStudioView {
     private static void renderStandaloneSummary(
             CacheSessionStatus status,
             OsrsCacheHealth cacheHealth) {
-        ImGui.separatorText("Project Status");
         LoadedOsrsCacheSession cache = status.currentSession().orElse(null);
-        StudioWidgets.beginCard("standalone-project-health", -1.0f, 94.0f);
+        StudioWidgets.beginCard("standalone-project-health", -1.0f);
+        ImGui.text("Project status");
+        ImGui.dummy(1.0f, 4.0f);
         if (cache == null && cacheHealth == null) {
             ImGui.textDisabled(status.message());
         } else if (cache == null) {
             ImGui.textColored(
-                    StudioPalette.SUCCESS,
+                    StudioPalette.u32(StudioPalette.SUCCESS),
                     StudioIcons.CHECK + "  FileStore ready");
             ImGui.text("Revision " + cacheHealth.revision()
                     + "  ·  " + fmt(cacheHealth.mapArchiveCount()) + " map groups");
             ImGui.textDisabled(cacheHealth.backendName() + "  ·  " + cacheHealth.path());
         } else {
             ImGui.textColored(
-                    StudioPalette.SUCCESS,
+                    StudioPalette.u32(StudioPalette.SUCCESS),
                     StudioIcons.CHECK + "  Cache ready");
             ImGui.text("Revision " + cache.identity().revision()
                     + "  ·  " + fmt(cache.mapCount()) + " map groups");
@@ -357,10 +379,14 @@ public final class ContentStudioView {
             boolean ready,
             Runnable action,
             float width) {
-        StudioWidgets.beginCard(id, width, 144.0f);
+        StudioWidgets.beginCard(id, width);
         ImGui.text(icon + "  " + title);
+        // Reserve two lines so the buttons of a row of workspace cards line up.
+        float descriptionTop = ImGui.getCursorPosY();
         ImGui.textWrapped(description);
-        ImGui.dummy(1.0f, 8.0f);
+        float reserved = ImGui.getTextLineHeightWithSpacing() * 2.0f;
+        float used = ImGui.getCursorPosY() - descriptionTop;
+        ImGui.dummy(1.0f, 8.0f + Math.max(0.0f, reserved - used));
         ImGui.beginDisabled(!ready || action == null);
         if (StudioWidgets.buttonSecondary("Open " + title + "##" + id, -1.0f, 30.0f)
                 && action != null) {
@@ -380,7 +406,7 @@ public final class ContentStudioView {
         var summary = cache.decoderSummary();
         if (summary.allDecodersPassed()) {
             ImGui.textColored(
-                    StudioPalette.SUCCESS,
+                    StudioPalette.u32(StudioPalette.SUCCESS),
                     StudioIcons.CHECK + "  Required decoders healthy");
         } else {
             ImGui.text("Decoder diagnostics: " + summary.failures().size());
@@ -392,6 +418,13 @@ public final class ContentStudioView {
                         + summary.totalIndices() + " indices");
         ImGui.textDisabled(
                 "Detailed cache census belongs in Project Diagnostics, not the project home.");
+    }
+
+    /** Muted, wrapped text: text wrapping does not carry into child windows (cards). */
+    private static void mutedWrapped(String text) {
+        ImGui.pushStyleColor(ImGuiCol.Text, StudioPalette.u32(StudioPalette.TEXT_MUTED));
+        ImGui.textWrapped(text);
+        ImGui.popStyleColor();
     }
 
     private static void statusRow(String label, String value) {

@@ -86,7 +86,7 @@ class GpuUploadPlanBuilderTest {
         // Authored face bias (23) plus this face's own priority (2): wall
         // decorations fold priority into the bias so a model's own coplanar
         // priority layers separate in depth, not just the flat minimum step.
-        assertEquals(25, plan.commands().get(1).depthBias());
+        assertEquals(GpuPriority.submissionBias(23, 2), plan.commands().get(1).depthBias());
         assertEquals(2, plan.commands().get(1).priority(),
                 "wall decorations preserve authored model face priority");
         assertEquals(GpuDrawCommand.RenderMode.SORTED_NO_DEPTH,
@@ -740,15 +740,18 @@ class GpuUploadPlanBuilderTest {
         // identical bias leaves them separated only by float rounding and
         // they z-fight/flicker into each other. Depth bias must climb with
         // face priority so each layer gets its own depth step.
-        assertEquals(1, plan.commands().get(0).depthBias(), "cloth (priority 0) gets the base bias step");
+        assertEquals(GpuPriority.submissionBias(0, 0), plan.commands().get(0).depthBias(),
+                "cloth (priority 0) gets the base bias step");
 
         assertEquals(1, plan.commands().get(1).priority(), "trim retains priority 1");
         assertEquals(-1, plan.commands().get(1).textureId());
-        assertEquals(2, plan.commands().get(1).depthBias(), "trim (priority 1) sits one step above cloth");
+        assertEquals(GpuPriority.submissionBias(0, 1), plan.commands().get(1).depthBias(),
+                "trim (priority 1) sits one step above cloth");
 
         assertEquals(3, plan.commands().get(2).priority(), "crest retains priority 3");
         assertEquals(-1, plan.commands().get(2).textureId());
-        assertEquals(4, plan.commands().get(2).depthBias(), "crest (priority 3) sits above trim, not tied with it");
+        assertEquals(GpuPriority.submissionBias(0, 3), plan.commands().get(2).depthBias(),
+                "crest (priority 3) sits above trim, not tied with it");
     }
 
     @Test

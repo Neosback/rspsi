@@ -2,7 +2,6 @@ package com.rspsi.studio.ui.panels;
 
 import com.rspsi.editor.render.BackfacePolicy;
 import com.rspsi.editor.render.RenderSettingKeys;
-import com.rspsi.editor.render.SceneVisibilityPolicy;
 import com.rspsi.editor.settings.SettingKey;
 import com.rspsi.editor.settings.SettingsStore;
 import com.rspsi.editor.ui.DockRegion;
@@ -20,20 +19,20 @@ import java.util.Set;
  * Map Settings (gear icon), laid out like Displee's settings panel: label on
  * the left, control on the right, no horizontal scrolling.
  *
- * <p>Every live control is bound to a typed render setting. Controls from
- * Displee's panel that Studio does not implement yet are listed greyed out
- * with the reason, instead of being checkboxes that silently do nothing.</p>
+ * <p>Plane / height visibility follows Terraini's model:
+ * <ul>
+ *   <li><b>Height level</b> — spinner 0-3: which plane the camera sits on.</li>
+ *   <li><b>Show All Height Levels</b> — when on, every plane is rendered
+ *       (Terraini {@code allHeightsVisible=true}); when off, only planes
+ *       0..height-level are shown ({@code VisiblePlaneWindow.maxPlaneExclusive}).</li>
+ *   <li><b>Show Hidden Tiles</b> — highlight tiles flagged hidden (colour 12345678).</li>
+ *   <li><b>Show Empty Tiles</b> — draw grey placeholder for tiles with no underlay/overlay.</li>
+ * </ul></p>
  */
 public final class MapSettingsPanel implements StudioPanel {
     public static final String ID = "studio.settings";
 
     private static final String[] PLANES = {"Level 0", "Level 1", "Level 2", "Level 3"};
-    private static final String[] PLANE_MODES = {"All levels", "Authored level", "Effective level", "Client traversal"};
-    private static final SceneVisibilityPolicy.PlaneSelection[] PLANE_MODE_VALUES = {
-            SceneVisibilityPolicy.PlaneSelection.ALL,
-            SceneVisibilityPolicy.PlaneSelection.AUTHORED_PLANE,
-            SceneVisibilityPolicy.PlaneSelection.EFFECTIVE_PLANE,
-            SceneVisibilityPolicy.PlaneSelection.CLIENT_TRAVERSAL};
     private static final String[] MSAA = {"Off", "2x", "4x", "8x"};
     private static final int[] MSAA_VALUES = {0, 2, 4, 8};
 
@@ -49,25 +48,16 @@ public final class MapSettingsPanel implements StudioPanel {
         SettingsStore settings = context.settings();
 
         if (SettingRows.begin("Terrain", true)) {
-            ImInt plane = new ImInt(settings.snapshot().get(RenderSettingKeys.ACTIVE_PLANE));
-            if (SettingRows.combo("Player level", plane, PLANES)) {
-                settings.set(RenderSettingKeys.ACTIVE_PLANE, plane.get());
+            // --- Terraini height-level model ---
+            ImInt height = new ImInt(settings.snapshot().get(RenderSettingKeys.CURRENT_HEIGHT));
+            if (SettingRows.combo("Height level", height, PLANES)) {
+                settings.set(RenderSettingKeys.CURRENT_HEIGHT, height.get());
             }
-            ImInt mode = new ImInt(indexOf(settings.snapshot().get(RenderSettingKeys.PLANE_SELECTION)));
-            if (SettingRows.combo("Levels shown", mode, PLANE_MODES)) {
-                settings.set(RenderSettingKeys.PLANE_SELECTION, PLANE_MODE_VALUES[mode.get()]);
-            }
+            toggle(settings, RenderSettingKeys.ALL_HEIGHTS_VISIBLE, "Show All Height Levels");
             toggle(settings, RenderSettingKeys.TERRAIN_VISIBLE, "Terrain surfaces");
             toggle(settings, RenderSettingKeys.BRIDGE_TILES_VISIBLE, "Bridge tiles");
-            toggle(settings, RenderSettingKeys.HIDDEN_TILES_VISIBLE, "Hidden tiles");
-            toggle(settings, RenderSettingKeys.ROOFS_VISIBLE, "Roofs");
-            SettingRows.notImplemented("Textures", "Terrain textures cannot be switched off yet.");
-            SettingRows.notImplemented("Blending", "Scene-wide underlay blending toggle is not wired; "
-                    + "the Tile Inspector preview has a per-tile blending switch.");
-            SettingRows.notImplemented("High water detail", "No water detail levels yet.");
-            SettingRows.notImplemented("Lighting detail", "Low-detail lighting is not simulated yet.");
-            SettingRows.notImplemented("Shadows", "Terrain shadow toggle is not wired yet.");
-            SettingRows.notImplemented("Grid helper", "Tile grid overlay is not implemented yet.");
+            toggle(settings, RenderSettingKeys.HIDDEN_TILES_VISIBLE, "Show Hidden Tiles");
+            toggle(settings, RenderSettingKeys.EMPTY_TILES_VISIBLE, "Show Empty Tiles");
             SettingRows.end();
         }
 
@@ -78,8 +68,6 @@ public final class MapSettingsPanel implements StudioPanel {
             toggle(settings, RenderSettingKeys.GROUND_OBJECTS_VISIBLE, "Game objects");
             toggle(settings, RenderSettingKeys.GROUND_DECORATIONS_VISIBLE, "Ground decorations");
             toggle(settings, RenderSettingKeys.INVISIBLE_OBJECTS_VISIBLE, "Invisible objects (collision only)");
-            SettingRows.notImplemented("Textures", "Object textures cannot be switched off yet.");
-            SettingRows.notImplemented("Scenery shadows", "Object shadow modes are not implemented yet.");
             toggle(settings, RenderSettingKeys.OBJECT_ANIMATIONS, "Object animations");
             SettingRows.end();
         }
@@ -105,9 +93,6 @@ public final class MapSettingsPanel implements StudioPanel {
         }
 
         if (SettingRows.begin("Minimap & world map", false)) {
-            SettingRows.notImplemented("Collision spots", "Minimap collision spots are not implemented yet.");
-            SettingRows.notImplemented("Map square ids", "World map square labels are not implemented yet.");
-            SettingRows.notImplemented("Map square grid", "World map square grid is not implemented yet.");
             SettingRows.end();
         }
 
@@ -134,11 +119,6 @@ public final class MapSettingsPanel implements StudioPanel {
         if (SettingRows.checkbox(label, value)) {
             settings.set(key, value.get());
         }
-    }
-
-    private static int indexOf(SceneVisibilityPolicy.PlaneSelection selection) {
-        for (int i = 0; i < PLANE_MODE_VALUES.length; i++) if (PLANE_MODE_VALUES[i] == selection) return i;
-        return 2;
     }
 
     private static int msaaIndex(int samples) {
