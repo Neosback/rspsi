@@ -50,14 +50,14 @@ class SplinePathTool : EditorTool {
     override fun deactivate() { dragPointIndex = -1; hoveredTile = null }
 
     override fun pointerMove(event: PointerEvent) {
-        hoveredTile = context?.worldTileAt(event.x(), event.y())?.orElse(null)
+        hoveredTile = context?.worldTileAt(event.x, event.y)?.orElse(null)
     }
 
     override fun pointerDown(event: PointerEvent) {
         val ctx = context ?: return
-        val tile = ctx.worldTileAt(event.x(), event.y()).orElse(null) ?: return
+        val tile = ctx.worldTileAt(event.x, event.y).orElse(null) ?: return
         hoveredTile = tile
-        val near = path.findPointNear(tile.x(), tile.y(), tile.plane(), 1)
+        val near = path.findPointNear(tile.x, tile.y, tile.plane, 1)
         if (event.button() == PointerButton.SECONDARY || event.button() == PointerButton.PRIMARY && event.alt()) {
             if (near >= 0) {
                 path.removePoint(near)
@@ -71,7 +71,7 @@ class SplinePathTool : EditorTool {
             selectedPointIndex = near
             dragPointIndex = near
         } else {
-            path.addPoint(tile.x(), tile.y(), tile.plane())
+            path.addPoint(tile.x, tile.y, tile.plane)
             selectedPointIndex = path.size() - 1
             dragPointIndex = selectedPointIndex
         }
@@ -80,9 +80,9 @@ class SplinePathTool : EditorTool {
     override fun pointerDrag(event: PointerEvent) {
         val ctx = context ?: return
         if (dragPointIndex !in 0 until path.size()) return
-        val tile = ctx.worldTileAt(event.x(), event.y()).orElse(null) ?: return
+        val tile = ctx.worldTileAt(event.x, event.y).orElse(null) ?: return
         hoveredTile = tile
-        path.movePoint(dragPointIndex, tile.x(), tile.y())
+        path.movePoint(dragPointIndex, tile.x, tile.y)
     }
 
     override fun pointerUp(event: PointerEvent) { dragPointIndex = -1 }
@@ -100,9 +100,9 @@ class SplinePathTool : EditorTool {
             draw.tileOutline(h, 0x38BDF8EE)
             draw.tileFilled(h, 0x38BDF822)
             if (path.isEmpty) {
-                val x = h.x() * 128f + 64f
-                val z = h.y() * 128f + 64f
-                val y = sampleTileHeight(h.plane(), h.x(), h.y()) - 10f
+                val x = h.x * 128f + 64f
+                val z = h.y * 128f + 64f
+                val y = sampleTileHeight(h.plane, h.x, h.y) - 10f
                 draw.circle(x, y, z, 36f, 0x34D399FF, 2.5f)
                 draw.worldLabel("Click to place Start (P1)", x, y - 20f, z, -1, 0x059669EE)
             }
@@ -114,29 +114,29 @@ class SplinePathTool : EditorTool {
             val z = p.y * 128f + 64f
             val y = sampleTileHeight(p.plane, p.x, p.y) - 6f
             val selected = i == selectedPointIndex
-            draw.circle(x, y, z, 40f, if (selected) 0xFBBF24FF else 0x38BDF8FF, if (selected) 3.5f else 2.5f)
-            draw.worldLabel("P" + (i + 1), x, y, z, -1, if (selected) 0xD97706EE else 0x0284C7EE)
+            draw.circle(x, y, z, 40f, if (selected) 0xFBBF24FF.toInt().toInt() else 0x38BDF8FF.toInt(), if (selected) 3.5f else 2.5f)
+            draw.worldLabel("P" + (i + 1), x, y, z, -1, if (selected) 0xD97706EE.toInt() else 0x0284C7EE)
         }
         val hovered = hoveredTile
         if (hovered != null && points.isNotEmpty() && dragPointIndex < 0) {
             val last = points.last()
-            if (last.plane == hovered.plane() && (last.x != hovered.x() || last.y != hovered.y())) {
+            if (last.plane == hovered.plane && (last.x != hovered.x || last.y != hovered.y)) {
                 val x1 = last.x * 128f + 64f; val z1 = last.y * 128f + 64f
                 val y1 = sampleTileHeight(last.plane, last.x, last.y) - 6f
-                val x2 = hovered.x() * 128f + 64f; val z2 = hovered.y() * 128f + 64f
-                val y2 = sampleTileHeight(hovered.plane(), hovered.x(), hovered.y()) - 6f
+                val x2 = hovered.x * 128f + 64f; val z2 = hovered.y * 128f + 64f
+                val y2 = sampleTileHeight(hovered.plane, hovered.x, hovered.y) - 6f
                 draw.line(x1, y1, z1, x2, y2, z2, 0x38BDF8CC, 2.5f)
                 draw.circle(x2, y2, z2, 28f, 0x38BDF8AA, 2f)
-                draw.worldLabel("P" + (points.size + 1), x2, y2, z2, 0xFFE2E8F0, 0x0F172ACC)
+                draw.worldLabel("P" + (points.size + 1), x2, y2, z2, 0xFFE2E8F0.toInt(), 0x0F172ACC)
             }
         }
         val plane = points[0].plane
         if (points.size == 1 && hovered != null && dragPointIndex < 0 &&
-            (points[0].x != hovered.x() || points[0].y != hovered.y())) {
+            (points[0].x != hovered.x || points[0].y != hovered.y)) {
             val preview = SplinePath()
             preview.setWidthTiles(path.widthTiles())
             preview.addPoint(points[0].x, points[0].y, plane)
-            preview.addPoint(hovered.x(), hovered.y(), plane)
+            preview.addPoint(hovered.x, hovered.y, plane)
             drawFootprint(draw, preview.rasterize(0.4f), plane, 0x34D39944, 0x34D399AA, 0x38BDF844, 0x38BDF888)
             return
         }
@@ -147,7 +147,7 @@ class SplinePathTool : EditorTool {
             val y1 = sampleTileHeight(plane, curve[i * 2].roundToInt(), curve[i * 2 + 1].roundToInt()) - 4f
             val x2 = curve[(i + 1) * 2] * 128f + 64f; val z2 = curve[(i + 1) * 2 + 1] * 128f + 64f
             val y2 = sampleTileHeight(plane, curve[(i + 1) * 2].roundToInt(), curve[(i + 1) * 2 + 1].roundToInt()) - 4f
-            draw.line(x1, y1, z1, x2, y2, z2, 0xFBBF24FF, 3.5f)
+            draw.line(x1, y1, z1, x2, y2, z2, 0xFBBF24FF.toInt().toInt(), 3.5f)
         }
         drawFootprint(draw, path.rasterize(0.4f), plane, 0x34D39955, 0x34D399CC, 0x38BDF855, 0x38BDF8AA)
     }
@@ -211,10 +211,10 @@ class SplinePathTool : EditorTool {
             val distance = hypot((wx - start.x).toDouble(), (wy - start.y).toDouble()).toFloat()
             val progress = (distance / total).coerceIn(0f, 1f)
             val target = (startHeight + (endHeight - startHeight) * progress).roundToInt()
-            changed.addAll(lattice.setHeight(local.plane(), local.x(), local.y(), target))
-            changed.addAll(lattice.setHeight(local.plane(), local.x() + 1, local.y(), target))
-            changed.addAll(lattice.setHeight(local.plane(), local.x() + 1, local.y() + 1, target))
-            changed.addAll(lattice.setHeight(local.plane(), local.x(), local.y() + 1, target))
+            changed.addAll(lattice.setHeight(local.plane, local.x, local.y, target))
+            changed.addAll(lattice.setHeight(local.plane, local.x + 1, local.y, target))
+            changed.addAll(lattice.setHeight(local.plane, local.x + 1, local.y + 1, target))
+            changed.addAll(lattice.setHeight(local.plane, local.x, local.y + 1, target))
         }
         for (coord in changed) {
             val before = world.tile(coord).snapshot(); val after = predicted.tile(coord).snapshot()
