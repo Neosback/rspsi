@@ -4,21 +4,21 @@ import com.openrune.studio.core.osrs.map.ModernOsrsRegionCodec;
 import com.openrune.studio.core.osrs.map.OsrsRegionData;
 import com.rspsi.editor.model.WorldDocument;
 
-final class CoreRegionTestFixtures {
+public final class CoreRegionTestFixtures {
     private CoreRegionTestFixtures() {
     }
 
-    static byte[] encodeTerrain(WorldDocument document, int regionX, int regionY) {
+    public static byte[] encodeTerrain(WorldDocument document, int regionX, int regionY) {
         OsrsRegionData core = CoreOsrsRegionAdapter.toCore(document, regionX, regionY);
         return ModernOsrsRegionCodec.INSTANCE.encodeTerrain(core);
     }
 
-    static byte[] encodeLocations(WorldDocument document, int regionX, int regionY) {
+    public static byte[] encodeLocations(WorldDocument document, int regionX, int regionY) {
         OsrsRegionData core = CoreOsrsRegionAdapter.toCore(document, regionX, regionY);
         return ModernOsrsRegionCodec.INSTANCE.encodeLocations(core);
     }
 
-    static WorldDocument decode(byte[] terrain, byte[] locations, int regionX, int regionY) {
+    public static WorldDocument decode(byte[] terrain, byte[] locations, int regionX, int regionY) {
         return CoreOsrsRegionAdapter.toClient(
                 ModernOsrsRegionCodec.INSTANCE.decode(terrain, locations, regionX, regionY)
         ).document();
