@@ -58,17 +58,10 @@ public final class OsrsRegionSaveCoordinator {
                 throw new IllegalStateException("Cannot save a read-only editor session");
             }
             WorldDocument document = request.session().world();
-            byte[] landscape;
-            byte[] locations;
-            if (maps.newTerrainFormat()) {
-                OsrsRegionData core = CoreOsrsRegionAdapter.toCore(
-                        document, request.regionX(), request.regionY());
-                landscape = ModernOsrsRegionCodec.INSTANCE.encodeTerrain(core);
-                locations = ModernOsrsRegionCodec.INSTANCE.encodeLocations(core);
-            } else {
-                landscape = OsrsRegionEncoder.encodeTerrain(document, false);
-                locations = OsrsRegionEncoder.encodeLocations(document);
-            }
+            OsrsRegionData core = CoreOsrsRegionAdapter.toCore(
+                    document, request.regionX(), request.regionY());
+            byte[] landscape = ModernOsrsRegionCodec.INSTANCE.encodeTerrain(core);
+            byte[] locations = ModernOsrsRegionCodec.INSTANCE.encodeLocations(core);
             prepared.add(new PreparedRegion(request, landscape, locations));
         }
 

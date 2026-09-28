@@ -23,8 +23,8 @@ class OsrsSessionLoaderTest {
     @Test
     void createsCleanSaveCapableSessionAndPersistsThroughCoordinator() {
         WorldDocument source = new WorldDocument(64, 64, 4);
-        byte[] terrain = OsrsRegionEncoder.encodeTerrain(source, true);
-        byte[] locations = OsrsRegionEncoder.encodeLocations(source);
+        byte[] terrain = CoreRegionTestFixtures.encodeTerrain(source, 50, 50);
+        byte[] locations = CoreRegionTestFixtures.encodeLocations(source, 50, 50);
         RecordingStore store = new RecordingStore(terrain, locations);
         OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
                 new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))));
@@ -53,10 +53,10 @@ class OsrsSessionLoaderTest {
         WorldDocument westSource = new WorldDocument(64, 64, 4);
         WorldDocument eastSource = new WorldDocument(64, 64, 4);
         RecordingStore store = new RecordingStore(Map.of(
-                "5:100:0", OsrsRegionEncoder.encodeTerrain(westSource, true),
-                "5:100:1", OsrsRegionEncoder.encodeLocations(westSource),
-                "5:101:0", OsrsRegionEncoder.encodeTerrain(eastSource, true),
-                "5:101:1", OsrsRegionEncoder.encodeLocations(eastSource)));
+                "5:100:0", CoreRegionTestFixtures.encodeTerrain(westSource, 50, 50),
+                "5:100:1", CoreRegionTestFixtures.encodeLocations(westSource, 50, 50),
+                "5:101:0", CoreRegionTestFixtures.encodeTerrain(eastSource, 51, 50),
+                "5:101:1", CoreRegionTestFixtures.encodeLocations(eastSource, 51, 50)));
         OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
                 new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"),
                 new MapIndexEntry(51, 50, 101, 101, "m51_50", "l51_50"))));
@@ -85,12 +85,10 @@ class OsrsSessionLoaderTest {
         assertEquals(1, store.flushes);
         assertFalse(sessions.isDirty());
 
-        WorldDocument savedWest = OsrsRegionDecoder.decodeRegion(
-                store.values.get("5:100:0"), store.values.get("5:100:1"),
-                50, 50, true).document();
-        WorldDocument savedEast = OsrsRegionDecoder.decodeRegion(
-                store.values.get("5:101:0"), store.values.get("5:101:1"),
-                51, 50, true).document();
+        WorldDocument savedWest = CoreRegionTestFixtures.decode(
+                store.values.get("5:100:0"), store.values.get("5:100:1"), 50, 50);
+        WorldDocument savedEast = CoreRegionTestFixtures.decode(
+                store.values.get("5:101:0"), store.values.get("5:101:1"), 51, 50);
         assertEquals(7, savedWest.tile(0, 63, 10).snapshot().underlayId());
         assertEquals(8, savedEast.tile(0, 0, 10).snapshot().underlayId());
     }

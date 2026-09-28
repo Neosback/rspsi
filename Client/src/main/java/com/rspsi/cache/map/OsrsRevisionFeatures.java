@@ -1,16 +1,14 @@
 package com.rspsi.cache.map;
 
 /**
- * Revision-derived cache features used by the neutral OSRS boundary.
+ * Revision-derived map-index features used by the neutral OSRS boundary.
  *
- * <p>This is the single policy object for format decisions that are known to
- * vary across the currently supported OSRS map revisions. It deliberately
- * contains no archive, cache-library, or editor-world types.</p>
+ * <p>Terrain-width compatibility was retired when modern region codecs moved to Core. The only
+ * remaining revision-dependent map concern here is named versus numeric archive grouping.</p>
  */
 public record OsrsRevisionFeatures(
         int revision,
-        OsrsRevisionProfile.MapGroupLayout mapGroupLayout,
-        TerrainValueFormat terrainValueFormat) {
+        OsrsRevisionProfile.MapGroupLayout mapGroupLayout) {
 
     public OsrsRevisionFeatures {
         if (revision <= 0) {
@@ -19,31 +17,17 @@ public record OsrsRevisionFeatures(
         if (mapGroupLayout == null) {
             throw new NullPointerException("mapGroupLayout");
         }
-        if (terrainValueFormat == null) {
-            throw new NullPointerException("terrainValueFormat");
-        }
     }
 
-    /** Returns the audited policy for a revision supported by the map codec. */
     public static OsrsRevisionFeatures forRevision(int revision) {
         return new OsrsRevisionFeatures(
                 revision,
                 revision >= 237
                         ? OsrsRevisionProfile.MapGroupLayout.NUMERIC
-                        : OsrsRevisionProfile.MapGroupLayout.NAMED,
-                revision >= 209 ? TerrainValueFormat.SHORT : TerrainValueFormat.BYTE);
+                        : OsrsRevisionProfile.MapGroupLayout.NAMED);
     }
 
     public boolean usesNumericMapGroups() {
         return mapGroupLayout == OsrsRevisionProfile.MapGroupLayout.NUMERIC;
-    }
-
-    public boolean usesShortTerrainValues() {
-        return terrainValueFormat == TerrainValueFormat.SHORT;
-    }
-
-    public enum TerrainValueFormat {
-        BYTE,
-        SHORT
     }
 }

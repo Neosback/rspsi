@@ -132,7 +132,7 @@ class MapIndexTableTest {
     @Test
     void loadsCanonicalRegionWhenLocationArchiveIsAbsent() {
         FakeStore store = new FakeStore();
-        store.values.put("5:1234:0", OsrsRegionEncoder.encodeTerrain(new WorldDocument(64, 64, 4)));
+        store.values.put("5:1234:0", CoreRegionTestFixtures.encodeTerrain(new WorldDocument(64, 64, 4), 50, 75));
         MapIndexEntry entry = new MapIndexEntry(50, 75, 1234, -1, "m50_75", "l50_75");
         OsrsMapService service = new OsrsMapService(store, 5, MapIndexTable.of(java.util.List.of(entry)));
 

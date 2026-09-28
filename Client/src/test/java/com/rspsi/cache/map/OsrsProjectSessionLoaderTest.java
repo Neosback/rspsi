@@ -143,10 +143,10 @@ class OsrsProjectSessionLoaderTest {
             this.writable = writable;
             WorldDocument source = new WorldDocument(64, 64, 4);
             WorldDocument neighbor = new WorldDocument(64, 64, 4);
-            values.put("5:100:0", OsrsRegionEncoder.encodeTerrain(source, true));
-            values.put("5:100:1", OsrsRegionEncoder.encodeLocations(source));
-            values.put("5:101:0", OsrsRegionEncoder.encodeTerrain(neighbor, true));
-            values.put("5:101:1", OsrsRegionEncoder.encodeLocations(neighbor));
+            values.put("5:100:0", CoreRegionTestFixtures.encodeTerrain(source, 50, 50));
+            values.put("5:100:1", CoreRegionTestFixtures.encodeLocations(source, 50, 50));
+            values.put("5:101:0", CoreRegionTestFixtures.encodeTerrain(neighbor, 51, 50));
+            values.put("5:101:1", CoreRegionTestFixtures.encodeLocations(neighbor, 51, 50));
         }
 
         @Override public byte[] read(int index, int archive, int file) {
