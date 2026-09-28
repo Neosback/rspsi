@@ -98,10 +98,10 @@ class OsrsSessionLoaderTest {
         WorldDocument westSource = new WorldDocument(64, 64, 4);
         WorldDocument eastSource = new WorldDocument(64, 64, 4);
         RecordingStore store = new RecordingStore(Map.of(
-                "5:100:0", OsrsRegionEncoder.encodeTerrain(westSource, true),
-                "5:100:1", OsrsRegionEncoder.encodeLocations(westSource),
-                "5:101:0", OsrsRegionEncoder.encodeTerrain(eastSource, true),
-                "5:101:1", OsrsRegionEncoder.encodeLocations(eastSource)));
+                "5:100:0", CoreRegionTestFixtures.encodeTerrain(westSource, 50, 50),
+                "5:100:1", CoreRegionTestFixtures.encodeLocations(westSource, 50, 50),
+                "5:101:0", CoreRegionTestFixtures.encodeTerrain(eastSource, 51, 50),
+                "5:101:1", CoreRegionTestFixtures.encodeLocations(eastSource, 51, 50)));
         OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
                 new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"),
                 new MapIndexEntry(51, 50, 101, 101, "m51_50", "l51_50"))));
