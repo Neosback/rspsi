@@ -10,6 +10,7 @@ object ModernOsrsRegionCodec {
         fun heightAt(worldX: Int, worldY: Int): Int
     }
 
+    @JvmOverloads
     fun decode(
         landscape: ByteArray,
         locations: ByteArray?,
@@ -38,6 +39,7 @@ object ModernOsrsRegionCodec {
         return OsrsRegionData(regionX, regionY, tiles)
     }
 
+    @JvmOverloads
     fun decodeTerrain(
         data: ByteArray,
         regionX: Int,

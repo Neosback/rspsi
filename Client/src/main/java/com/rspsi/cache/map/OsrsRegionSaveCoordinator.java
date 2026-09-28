@@ -1,5 +1,7 @@
 package com.rspsi.cache.map;
 
+import com.openrune.studio.core.osrs.map.ModernOsrsRegionCodec;
+import com.openrune.studio.core.osrs.map.OsrsRegionData;
 import com.rspsi.editor.EditorSession;
 import com.rspsi.editor.model.WorldDocument;
 
@@ -56,8 +58,17 @@ public final class OsrsRegionSaveCoordinator {
                 throw new IllegalStateException("Cannot save a read-only editor session");
             }
             WorldDocument document = request.session().world();
-            byte[] landscape = OsrsRegionEncoder.encodeTerrain(document, maps.newTerrainFormat());
-            byte[] locations = OsrsRegionEncoder.encodeLocations(document);
+            byte[] landscape;
+            byte[] locations;
+            if (maps.newTerrainFormat()) {
+                OsrsRegionData core = CoreOsrsRegionAdapter.toCore(
+                        document, request.regionX(), request.regionY());
+                landscape = ModernOsrsRegionCodec.INSTANCE.encodeTerrain(core);
+                locations = ModernOsrsRegionCodec.INSTANCE.encodeLocations(core);
+            } else {
+                landscape = OsrsRegionEncoder.encodeTerrain(document, false);
+                locations = OsrsRegionEncoder.encodeLocations(document);
+            }
             prepared.add(new PreparedRegion(request, landscape, locations));
         }
 

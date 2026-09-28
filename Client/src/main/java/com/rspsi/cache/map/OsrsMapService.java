@@ -1,5 +1,6 @@
 package com.rspsi.cache.map;
 
+import com.openrune.studio.core.osrs.map.ModernOsrsRegionCodec;
 import com.rspsi.cache.store.CacheStore;
 import com.rspsi.editor.model.WorldRegion;
 import com.rspsi.editor.model.WorldRegionWindow;
@@ -38,8 +39,13 @@ public final class OsrsMapService implements MapService {
         byte[] landscape = readLandscape(regionX, regionY);
         if (landscape == null) return Optional.empty();
         byte[] locations = readLocations(regionX, regionY);
-        return Optional.of(OsrsRegionDecoder.decodeRegion(landscape, locations, regionX, regionY,
-                newTerrainFormat));
+        if (newTerrainFormat) {
+            return Optional.of(CoreOsrsRegionAdapter.toClient(
+                    ModernOsrsRegionCodec.INSTANCE.decode(
+                            landscape, locations, regionX, regionY)));
+        }
+        return Optional.of(OsrsRegionDecoder.decodeRegion(
+                landscape, locations, regionX, regionY, false));
     }
 
     /** Loads a bounded region window while preserving missing-region holes. */
