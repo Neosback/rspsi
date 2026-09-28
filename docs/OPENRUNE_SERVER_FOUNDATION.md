@@ -13,7 +13,7 @@ The purpose of this document is not to mirror every OpenRune implementation deta
 
 ## Architectural summary
 
-OpenRune Server is a Gradle multi-project Kotlin/JVM application with four major systems that matter to Studio:
+OpenRune Server is a Gradle multi-project Kotlin/JVM application with five major systems that matter to Studio:
 
 ```text
 Gradle project / source tree
