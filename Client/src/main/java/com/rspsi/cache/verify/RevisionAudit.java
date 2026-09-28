@@ -30,7 +30,7 @@ public final class RevisionAudit {
         checks.add(layoutCheck(index, profile));
         checks.add(new VerificationCheck("revision.codec",
                 VerificationCheck.Status.PASS,
-                "terrain=" + (profile.newTerrainFormat() ? "short" : "byte")
+                "terrain=modern-short"
                         + ", mapGroups=" + profile.mapGroupLayout()));
         if (profile.mapGroupLayout() == OsrsRevisionProfile.MapGroupLayout.NAMED
                 && !store.capabilities().namedArchives()) {
