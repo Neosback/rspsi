@@ -41,6 +41,7 @@ Do not create these modules merely to move files. Extraction happens responsibil
 - [Bridge API](docs/API.md)
 - [Cache model](docs/CACHE.md)
 - [OpenRune integration](docs/OPENRUNE.md)
+- [OpenRune server foundation reference](docs/OPENRUNE_SERVER_FOUNDATION.md)
 - [Roadmap](docs/ROADMAP.md)
 
 ## Build
