@@ -3,13 +3,14 @@ package com.rspsi.studio.ui
 import com.rspsi.cache.definition.DefinitionProvider
 import com.rspsi.cache.map.MapIndexEntry
 import com.rspsi.cache.map.OsrsMapService
-import com.rspsi.cache.map.OsrsRegionDecoder
+import com.rspsi.cache.map.CoreOsrsRegionAdapter
 import com.rspsi.cache.store.CacheStore
 import com.rspsi.cache.worldmap.OsrsWorldMapArea
 import com.rspsi.cache.store.OpenRuneWorldMapLoader
 import com.rspsi.editor.minimap.MinimapBuilder
 import org.lwjgl.opengl.GL11
 import java.util.concurrent.Executors
+import java.util.function.IntBinaryOperator
 import kotlin.math.max
 
 /**
@@ -334,12 +335,11 @@ class WorldMapOverview {
         try {
             val landscape = job.maps.readLandscape(regionX, regionY) ?: return
             if (landscape.isEmpty()) return
-            val document = OsrsRegionDecoder.decodeTerrain(
+            val document = CoreOsrsRegionAdapter.decodeTerrain(
                 landscape,
                 regionX,
                 regionY,
                 FLAT_BASE_HEIGHT,
-                job.maps.newTerrainFormat(),
             )
             val argb = builder.build(document, PLANE, job.definitions, true).argb()
             blit(argb, raster, current, regionX, regionY)
@@ -458,6 +458,6 @@ class WorldMapOverview {
          * heights, so opcode-0 tiles decode flat instead of running the
          * deterministic smooth-noise generator once per tile.
          */
-        val FLAT_BASE_HEIGHT = OsrsRegionDecoder.BaseHeightProvider { _, _ -> 0 }
+        val FLAT_BASE_HEIGHT = IntBinaryOperator { _, _ -> 0 }
     }
 }
