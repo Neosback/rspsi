@@ -21,7 +21,7 @@ Goal: prove the reusable backend works without depending on native UI/rendering.
 - remove accidental dependencies from reusable code into desktop/editor presentation;
 - establish headless tests for cache open/inspect;
 - [x] establish modern headless region decode/encode round trips in `:Core`;
-- migrate surviving Client callers to the Core codec and delete the duplicate legacy codec;
+- [x] cross-check the modern Core codec against the existing Client codec in both directions;\n- migrate surviving Client callers to the Core codec and delete the duplicate legacy codec;
 - establish explicit writable-output publication verification;
 - establish OpenRune project inspection and build discovery tests.
 

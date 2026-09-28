@@ -11,6 +11,7 @@ kotlin {
 }
 
 dependencies {
+    testImplementation project(':Core')
     implementation "org.tomlj:tomlj:1.1.1"
     // OpenRune currently targets Kotlin 2.2.0. PSI is kept behind the server semantic adapter so
     // compiler-internal types never enter Studio's neutral APIs.
