@@ -29,6 +29,7 @@ Java-to-Kotlin migration continues leaf-first, but new migration work should pri
 
 The initial target is deliberately small:
 
+- `:Protocol` - neutral shared DTOs/capabilities for Companion and future in-server Agent;
 - `:core` - neutral OSRS/cache domain and codecs;
 - `:openrune` - OpenRune-specific project, FileStore, source, GameVal, and Gradle integration;
 - `:server` - Ktor loopback API and WebSocket event stream.
