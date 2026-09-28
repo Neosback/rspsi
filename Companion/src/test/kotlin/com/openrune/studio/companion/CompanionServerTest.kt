@@ -29,11 +29,11 @@ class CompanionServerTest {
         assertTrue(body.contains("\"name\":\"OpenRune Studio Companion\""))
         assertTrue(body.contains("\"apiVersion\":1"))
         assertTrue(body.contains("\"status\":\"ready\""))
-        assertTrue(body.contains("\"openrune-project-inspection\""))
-        assertTrue(body.contains("\"openrune-cache-read\""))
-        assertTrue(body.contains("\"openrune-content-index\""))
-        assertTrue(body.contains("\"openrune-content-resolve\""))
-        assertTrue(body.contains("\"openrune-kotlin-source-index\""))
+        assertTrue(body.contains("\"project.inspect\""))
+        assertTrue(body.contains("\"cache.read\""))
+        assertTrue(body.contains("\"content.index\""))
+        assertTrue(body.contains("\"content.resolve\""))
+        assertTrue(body.contains("\"source.index\""))
     }
 
     @Test
