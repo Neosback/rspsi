@@ -25,7 +25,9 @@ class CompanionServerTest {
             companionModule(security = TEST_SECURITY)
         }
 
-        val response = client.get("/api/v1/status")
+        val response = client.get("/api/v1/status") {
+            loopbackHost()
+        }
 
         assertEquals(HttpStatusCode.Unauthorized, response.status)
         assertTrue(response.body<String>().contains("\"code\":\"UNAUTHORIZED\""))
@@ -194,7 +196,12 @@ class CompanionServerTest {
     }
 
     private fun io.ktor.client.request.HttpRequestBuilder.companionAuth() {
+        loopbackHost()
         header(CompanionSecurity.TOKEN_HEADER, TEST_TOKEN)
+    }
+
+    private fun io.ktor.client.request.HttpRequestBuilder.loopbackHost() {
+        header(HttpHeaders.Host, "localhost")
     }
 
     private fun pathBody(path: java.nio.file.Path): String {
