@@ -1,25 +1,39 @@
 package com.openrune.studio.core.osrs.map
 
+enum class TerrainHeightSourceKind {
+    UNKNOWN,
+    GENERATED,
+    EXPLICIT,
+}
+
 data class TerrainHeightSource(
-    val generated: Boolean,
-    val explicitValue: Int,
+    val kind: TerrainHeightSourceKind,
+    val explicitValue: Int = 0,
 ) {
     init {
         require(explicitValue in 0..255) {
             "Terrain height value must be between 0 and 255"
         }
-        require(!generated || explicitValue == 0) {
-            "Generated terrain height cannot carry an explicit value"
+        require(kind == TerrainHeightSourceKind.EXPLICIT || explicitValue == 0) {
+            "Only explicit terrain heights can carry an explicit value"
         }
     }
 
+    val generated: Boolean
+        get() = kind == TerrainHeightSourceKind.GENERATED
+
     companion object {
-        fun generated(): TerrainHeightSource = TerrainHeightSource(true, 0)
+        fun generated(): TerrainHeightSource =
+            TerrainHeightSource(TerrainHeightSourceKind.GENERATED)
 
         fun explicit(value: Int): TerrainHeightSource =
-            TerrainHeightSource(false, if (value == 1) 0 else value)
+            TerrainHeightSource(
+                TerrainHeightSourceKind.EXPLICIT,
+                if (value == 1) 0 else value,
+            )
 
-        fun unknown(): TerrainHeightSource = TerrainHeightSource(false, 0)
+        fun unknown(): TerrainHeightSource =
+            TerrainHeightSource(TerrainHeightSourceKind.UNKNOWN)
     }
 }
 
