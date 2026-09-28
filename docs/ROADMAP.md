@@ -9,7 +9,7 @@ This roadmap tracks the transition from the native desktop application to the JV
 - [x] collapse obsolete desktop architecture documentation;
 - [ ] keep CI/build green while extraction starts.
 
-## Phase 1 - headless core
+## Current foundation - Companion and protocol\n\nThe loopback Companion and neutral Protocol module now exist earlier than the original phase ordering anticipated. Security/project sessions and project-scoped indexing are foundation work, not deferred bridge polish.\n\n## Phase 1 - headless core
 
 Goal: prove the reusable backend works without depending on native UI/rendering.
 
@@ -20,7 +20,7 @@ Goal: prove the reusable backend works without depending on native UI/rendering.
 - establish explicit writable-output publication verification;
 - establish OpenRune project inspection and build discovery tests.
 
-Do not create new modules until the dependency seams are proven.
+The Protocol and Companion seams are now proven. The next extraction blocker is moving surviving neutral map/cache codecs, especially region decode/encode needed for publish/parity work, out of legacy `Client` into a clean headless core without renderer/editor dependencies.
 
 ## Phase 2 - module extraction
 

@@ -1,44 +1,51 @@
-# Bridge API
+# Companion API
 
 ## Purpose
 
-The bridge API exposes local JVM/OpenRune tooling to the browser editor without exposing internal Java/Kotlin/OpenRune object graphs.
+The Companion API exposes local JVM/OpenRune tooling to the browser Studio without exposing internal Java/Kotlin/OpenRune object graphs.
 
-This is an initial contract guide. Endpoints may change until the first versioned implementation lands.
+The API is versioned under `/api/v1`. The Companion is local tooling, not a general network service.
 
 ## Transport
 
-Use:
+Use HTTP/JSON for bounded operations, WebSocket or SSE for future long-running operation events, and byte-range/binary HTTP when large cache data makes JSON wasteful.
 
-- HTTP/JSON for bounded request/response operations;
-- WebSocket for project/cache change events, build progress, and logs;
-- binary HTTP responses or compact binary payloads when large cache/model data makes JSON materially wasteful.
-
-All externally consumed contracts are versioned DTOs.
-
-Do not serialize PSI nodes, Gradle model objects, OpenRune FileStore objects, Java `Path`, or internal editor classes directly.
+All externally consumed contracts are versioned DTOs. Do not serialize PSI nodes, Gradle model objects, OpenRune FileStore objects, Java `Path`, or editor implementation classes directly.
 
 ## Local security model
 
-The service is local tooling.
+The Companion binds to `127.0.0.1` and applies defense in depth against DNS rebinding and cross-origin access:
 
-Defaults:
+- every `/api/v1` request must use a loopback `Host` header;
+- an `Origin`, when present, must also be localhost/loopback;
+- every API request requires `X-OpenRune-Studio-Token`;
+- the token comes from `OPENRUNE_STUDIO_TOKEN` or is generated securely per launch;
+- arbitrary filesystem paths are accepted only by authenticated `POST /api/v1/project/open`;
+- later project operations use an opaque project ID and paths derived from the opened project root;
+- known project locations are rejected when real-path resolution escapes the selected root;
+- arbitrary shell execution is never exposed.
 
-- bind only to loopback;
-- reject non-local bind addresses unless explicitly configured;
-- restrict CORS to configured editor origins;
-- use a per-launch/session credential when the browser origin is not inherently trusted;
-- validate every filesystem path against an explicitly opened project/cache root;
-- never provide arbitrary shell execution;
-- expose allow-listed build operations discovered from the project model.
+For development, use a Vite proxy from the Studio origin to `127.0.0.1:8765` and inject the development token in the proxy. CORS is intentionally not enabled.
+
+For packaged use, the intended model is for Companion to serve the built Studio from loopback so UI and API are same-origin. That serving layer is not implemented yet.
 
 ## Capability discovery
 
-The frontend should begin with a status/capability request, conceptually:
+Before a project is opened:
 
 ```json
 {
   "apiVersion": 1,
+  "capabilities": ["project.open"]
+}
+```
+
+Opening a project returns its actual capabilities:
+
+```json
+{
+  "projectId": "opaque-session-id",
+  "root": "/project/root",
   "capabilities": [
     "project.inspect",
     "cache.read",
@@ -49,59 +56,41 @@ The frontend should begin with a status/capability request, conceptually:
 }
 ```
 
-Capabilities are explicit, dot-namespaced protocol identifiers and may depend on the currently opened project or runtime. The neutral `Protocol` module owns shared capability/runtime DTOs so neither the browser nor a future in-server Agent depends on Companion implementation types.
-
-## Initial resource families
-
-Expected first API families:
+## Current resource families
 
 ```text
-/status
-/capabilities
+GET  /api/v1/status
+POST /api/v1/project/open
+GET  /api/v1/project/{projectId}
 
-/cache/open
-/cache/metadata
-/cache/regions/{regionId}
-/cache/definitions/{type}/{id}
-/cache/validate
-/cache/publish
+POST /api/v1/project/{projectId}/content/index
+POST /api/v1/project/{projectId}/content/resolve
+POST /api/v1/project/{projectId}/source/index
 
-/project/open
-/project/inspection
-/project/capabilities
-/project/references/{namespace}/{name}
-
-/build
-/build/{id}
-/build/{id}/cancel
-
-/events
+GET  /api/v1/project/{projectId}/cache/live/inspect
+GET  /api/v1/project/{projectId}/cache/server/inspect
 ```
 
-Names above are design targets, not a promise that unimplemented endpoints exist.
-
-## Operation semantics
-
-Read endpoints must not mutate caches or projects.
-
-Validation must be side-effect free.
-
-Publication is explicit and returns enough identity to verify exactly what changed.
-
-Build invocation returns an operation ID. Progress and logs may stream over WebSocket. Completion must distinguish success, failure, cancellation, and verification failure.
+The project session is the filesystem security boundary. Do not reintroduce request-level arbitrary project paths.
 
 ## Error model
 
-Use stable machine-readable codes plus human diagnostics.
+Errors use stable codes:
 
-Examples:
+```json
+{
+  "code": "PROJECT_NOT_OPEN",
+  "message": "Project session is not open.",
+  "details": {}
+}
+```
 
-- `CACHE_UNSUPPORTED`
-- `CACHE_READ_ONLY`
-- `PROJECT_NOT_OPEN`
-- `PROJECT_CHANGED_EXTERNALLY`
-- `CAPABILITY_UNAVAILABLE`
-- `BUILD_FAILED`
-- `PUBLICATION_VERIFY_FAILED`
+The browser must not parse exception class names or free-form console output to determine state.
 
-Do not make the browser parse exception class names or console output to determine state.
+## Durable project ownership
+
+The browser owns the live draft document, interactive state, undo/redo, and IndexedDB autosave/crash recovery.
+
+Companion owns explicit durable save/publication to project files so changes remain visible to Git. Write support must perform stale-source checks, validation, atomic file replacement, optional OpenRune builds, and output verification.
+
+The versioned edit/publish payload is still to be specified as a shared schema before write support is implemented.

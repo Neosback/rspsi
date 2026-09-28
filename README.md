@@ -1,4 +1,4 @@
-# OpenRune Studio Bridge
+# OpenRune Studio Companion
 
 This repository is being refocused from a desktop map editor into the JVM companion for a browser-based OSRS content editor.
 

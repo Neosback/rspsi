@@ -1,12 +1,11 @@
 package com.openrune.studio.companion
 
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.openrune.studio.companion.cache.OpenRuneCacheReader
 import com.openrune.studio.companion.openrune.OpenRuneContentIndexer
 import com.openrune.studio.companion.openrune.OpenRuneContentResolver
-import com.openrune.studio.companion.openrune.OpenRuneProjectInspector
 import com.openrune.studio.companion.openrune.OpenRuneKotlinSourceIndexer
+import com.openrune.studio.companion.project.ProjectSessionManager
 import com.openrune.studio.protocol.StudioCapabilities
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.jackson.jackson
@@ -18,8 +17,6 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
-import java.nio.file.InvalidPathException
-import java.nio.file.Path
 
 private const val API_VERSION = 1
 
@@ -30,13 +27,20 @@ data class CompanionStatus(
     val capabilities: List<String>,
 )
 
+data class ProjectOpenRequest(val path: String = "")
+data class ContentResolveRequest(val symbol: String = "")
+
 fun Application.companionModule(
-    openRuneProjectInspector: OpenRuneProjectInspector = OpenRuneProjectInspector(),
+    security: CompanionSecurity = CompanionSecurity.create(),
+    projectSessions: ProjectSessionManager = ProjectSessionManager(),
     openRuneCacheReader: OpenRuneCacheReader = OpenRuneCacheReader(),
     openRuneContentIndexer: OpenRuneContentIndexer = OpenRuneContentIndexer(),
     openRuneContentResolver: OpenRuneContentResolver = OpenRuneContentResolver(),
     openRuneKotlinSourceIndexer: OpenRuneKotlinSourceIndexer = OpenRuneKotlinSourceIndexer(),
 ) {
+    installApiErrors()
+    installCompanionSecurity(security)
+
     install(ContentNegotiation) {
         jackson {
             disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
@@ -51,120 +55,85 @@ fun Application.companionModule(
                     name = "OpenRune Studio Companion",
                     apiVersion = API_VERSION,
                     status = "ready",
-                    capabilities =
-                        listOf(
-                            StudioCapabilities.ProjectInspection.id,
-                            StudioCapabilities.CacheRead.id,
-                            StudioCapabilities.ContentIndex.id,
-                            StudioCapabilities.ContentResolve.id,
-                            StudioCapabilities.SourceIndex.id,
-                        ),
+                    capabilities = listOf(StudioCapabilities.ProjectOpen.id),
                 ),
             )
         }
 
-        post("/api/v1/openrune/inspect") {
-            val path = call.requiredPath() ?: return@post
-            call.respond(HttpStatusCode.OK, openRuneProjectInspector.inspect(path))
-        }
-
-        post("/api/v1/openrune/content/index") {
-            val path = call.requiredPath() ?: return@post
-            val index =
-                try {
-                    openRuneContentIndexer.index(path)
-                } catch (failure: IllegalArgumentException) {
-                    call.respond(
-                        HttpStatusCode.UnprocessableEntity,
-                        mapOf("error" to (failure.message ?: "content indexing failed")),
-                    )
-                    return@post
-                }
-
-            call.respond(HttpStatusCode.OK, index)
-        }
-
-        post("/api/v1/openrune/content/resolve") {
-            val request = runCatching { call.receive<JsonNode>() }.getOrNull()
-            val requestedPath = request?.path("path")?.asText()?.trim().orEmpty()
-            val symbol = request?.path("symbol")?.asText()?.trim().orEmpty()
-            if (requestedPath.isEmpty()) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "path is required"))
-                return@post
+        post("/api/v1/project/open") {
+            val request = call.receive<ProjectOpenRequest>()
+            if (request.path.isBlank()) {
+                throw ApiException(
+                    code = ApiErrorCode.INVALID_REQUEST,
+                    status = HttpStatusCode.BadRequest,
+                    message = "Project path is required.",
+                )
             }
-            if (symbol.isEmpty()) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "symbol is required"))
-                return@post
+            call.respond(HttpStatusCode.OK, projectSessions.open(request.path))
+        }
+
+        get("/api/v1/project/{projectId}") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            call.respond(HttpStatusCode.OK, project.view())
+        }
+
+        post("/api/v1/project/{projectId}/content/index") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            requireCapability(project.capabilities, StudioCapabilities.ContentIndex.id)
+            call.respond(HttpStatusCode.OK, openRuneContentIndexer.index(project.root))
+        }
+
+        post("/api/v1/project/{projectId}/content/resolve") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            requireCapability(project.capabilities, StudioCapabilities.ContentResolve.id)
+            val request = call.receive<ContentResolveRequest>()
+            if (request.symbol.isBlank()) {
+                throw ApiException(
+                    code = ApiErrorCode.INVALID_REQUEST,
+                    status = HttpStatusCode.BadRequest,
+                    message = "Content symbol is required.",
+                )
             }
-
-            val path =
-                try {
-                    Path.of(requestedPath)
-                } catch (_: InvalidPathException) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "path is invalid"))
-                    return@post
-                }
-
-            val resolved =
-                try {
-                    openRuneContentResolver.resolve(path, symbol)
-                } catch (failure: IllegalArgumentException) {
-                    call.respond(
-                        HttpStatusCode.UnprocessableEntity,
-                        mapOf("error" to (failure.message ?: "content resolution failed")),
-                    )
-                    return@post
-                }
-
-            call.respond(HttpStatusCode.OK, resolved)
+            call.respond(
+                HttpStatusCode.OK,
+                openRuneContentResolver.resolve(project.root, request.symbol),
+            )
         }
 
-        post("/api/v1/openrune/source/index") {
-            val path = call.requiredPath() ?: return@post
-            val index =
-                try {
-                    openRuneKotlinSourceIndexer.index(path)
-                } catch (failure: IllegalArgumentException) {
-                    call.respond(
-                        HttpStatusCode.UnprocessableEntity,
-                        mapOf("error" to (failure.message ?: "source indexing failed")),
-                    )
-                    return@post
-                }
-
-            call.respond(HttpStatusCode.OK, index)
+        post("/api/v1/project/{projectId}/source/index") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            requireCapability(project.capabilities, StudioCapabilities.SourceIndex.id)
+            call.respond(HttpStatusCode.OK, openRuneKotlinSourceIndexer.index(project.root))
         }
 
-        post("/api/v1/cache/inspect") {
-            val path = call.requiredPath() ?: return@post
-            val inspection =
-                try {
-                    openRuneCacheReader.inspect(path)
-                } catch (failure: IllegalArgumentException) {
-                    call.respond(
-                        HttpStatusCode.UnprocessableEntity,
-                        mapOf("error" to (failure.message ?: "cache inspection failed")),
-                    )
-                    return@post
+        get("/api/v1/project/{projectId}/cache/{role}/inspect") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            requireCapability(project.capabilities, StudioCapabilities.CacheRead.id)
+            val locationKey =
+                when (call.parameters["role"]?.lowercase()) {
+                    "live" -> "liveCache"
+                    "server" -> "serverCache"
+                    else ->
+                        throw ApiException(
+                            code = ApiErrorCode.CACHE_UNSUPPORTED,
+                            status = HttpStatusCode.BadRequest,
+                            message = "Cache role must be 'live' or 'server'.",
+                        )
                 }
-
-            call.respond(HttpStatusCode.OK, inspection)
+            call.respond(
+                HttpStatusCode.OK,
+                openRuneCacheReader.inspect(project.location(locationKey)),
+            )
         }
     }
 }
 
-private suspend fun io.ktor.server.application.ApplicationCall.requiredPath(): Path? {
-    val request = runCatching { receive<JsonNode>() }.getOrNull()
-    val requestedPath = request?.path("path")?.asText()?.trim().orEmpty()
-    if (requestedPath.isEmpty()) {
-        respond(HttpStatusCode.BadRequest, mapOf("error" to "path is required"))
-        return null
-    }
-
-    return try {
-        Path.of(requestedPath)
-    } catch (_: InvalidPathException) {
-        respond(HttpStatusCode.BadRequest, mapOf("error" to "path is invalid"))
-        null
+private fun requireCapability(capabilities: List<String>, capability: String) {
+    if (capability !in capabilities) {
+        throw ApiException(
+            code = ApiErrorCode.CAPABILITY_UNAVAILABLE,
+            status = HttpStatusCode.Conflict,
+            message = "Project capability is unavailable: $capability",
+        )
     }
 }
