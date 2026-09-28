@@ -3,11 +3,10 @@ package com.openrune.studio.companion
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCallPipeline
-import io.ktor.server.application.intercept
+import io.ktor.server.application.createApplicationPlugin
+import io.ktor.server.application.install
 import io.ktor.server.request.header
 import io.ktor.server.request.path
-import io.ktor.server.response.respond
 import java.net.URI
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -68,47 +67,52 @@ data class CompanionSecurity(
     }
 }
 
-fun Application.installCompanionSecurity(security: CompanionSecurity) {
-    intercept(ApplicationCallPipeline.Plugins) {
-        if (!call.request.path().startsWith("/api/v1/")) {
-            return@intercept
-        }
+private class CompanionSecurityConfig {
+    lateinit var security: CompanionSecurity
+}
 
-        val host = call.request.headers[HttpHeaders.Host]
-        if (!security.acceptsHost(host)) {
-            call.respond(
-                HttpStatusCode.Forbidden,
-                ApiErrorResponse(
+private val CompanionSecurityPlugin =
+    createApplicationPlugin(
+        name = "OpenRuneStudioCompanionSecurity",
+        createConfiguration = ::CompanionSecurityConfig,
+    ) {
+        val security = pluginConfig.security
+
+        onCall { call ->
+            if (!call.request.path().startsWith("/api/v1/")) {
+                return@onCall
+            }
+
+            val host = call.request.headers[HttpHeaders.Host]
+            if (!security.acceptsHost(host)) {
+                throw ApiException(
                     code = ApiErrorCode.HOST_NOT_ALLOWED,
+                    status = HttpStatusCode.Forbidden,
                     message = "Companion accepts loopback Host headers only.",
-                ),
-            )
-            finish()
-            return@intercept
-        }
+                )
+            }
 
-        val origin = call.request.header(HttpHeaders.Origin)
-        if (!security.acceptsOrigin(origin)) {
-            call.respond(
-                HttpStatusCode.Forbidden,
-                ApiErrorResponse(
+            val origin = call.request.header(HttpHeaders.Origin)
+            if (!security.acceptsOrigin(origin)) {
+                throw ApiException(
                     code = ApiErrorCode.ORIGIN_NOT_ALLOWED,
+                    status = HttpStatusCode.Forbidden,
                     message = "Companion accepts loopback browser origins only.",
-                ),
-            )
-            finish()
-            return@intercept
-        }
+                )
+            }
 
-        if (!security.acceptsToken(call.request.header(CompanionSecurity.TOKEN_HEADER))) {
-            call.respond(
-                HttpStatusCode.Unauthorized,
-                ApiErrorResponse(
+            if (!security.acceptsToken(call.request.header(CompanionSecurity.TOKEN_HEADER))) {
+                throw ApiException(
                     code = ApiErrorCode.UNAUTHORIZED,
+                    status = HttpStatusCode.Unauthorized,
                     message = "A valid Companion session token is required.",
-                ),
-            )
-            finish()
+                )
+            }
         }
+    }
+
+fun Application.installCompanionSecurity(security: CompanionSecurity) {
+    install(CompanionSecurityPlugin) {
+        this.security = security
     }
 }
