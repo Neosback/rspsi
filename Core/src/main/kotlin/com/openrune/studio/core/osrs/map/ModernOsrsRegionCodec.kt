@@ -149,8 +149,8 @@ object ModernOsrsRegionCodec {
                         id = objectId,
                         type = attributes ushr 2,
                         rotation = attributes and 0x3,
-                        plane = packedPosition ushr 12 and 0x3,
-                        x = packedPosition ushr 6 and 0x3F,
+                        plane = (packedPosition ushr 12) and 0x3,
+                        x = (packedPosition ushr 6) and 0x3F,
                         y = packedPosition and 0x3F,
                     )
             }
@@ -435,7 +435,7 @@ object ModernOsrsRegionCodec {
     }
 
     private fun interpolate(a: Int, b: Int, offset: Int, scale: Int): Int {
-        val cosine = 0x10000 - HEIGHT_COSINE[1024 * offset / scale] shr 1
+        val cosine = (0x10000 - HEIGHT_COSINE[1024 * offset / scale]) shr 1
         return (a * (0x10000 - cosine) shr 16) + (b * cosine shr 16)
     }
 
@@ -451,9 +451,9 @@ object ModernOsrsRegionCodec {
 
     private fun noise(x: Int, y: Int): Int {
         var value = x + y * 57
-        value = value shl 13 xor value
-        value = value * (value * value * 15731 + 0xC0AE5) + 0x5208DD0D and 0x7FFFFFFF
-        return value shr 19 and 0xFF
+        value = (value shl 13) xor value
+        value = (value * (value * value * 15731 + 0xC0AE5) + 0x5208DD0D) and 0x7FFFFFFF
+        return (value shr 19) and 0xFF
     }
 
     private fun cube(): Array<Array<IntArray>> =
