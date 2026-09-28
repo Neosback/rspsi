@@ -20,7 +20,8 @@ Goal: prove the reusable backend works without depending on native UI/rendering.
 - continue Java-to-Kotlin migration in cache/OSRS/OpenRune boundaries;
 - remove accidental dependencies from reusable code into desktop/editor presentation;
 - establish headless tests for cache open/inspect;
-- [x] establish modern headless region decode/encode round trips in `:Core`;\n- migrate surviving Client callers to the Core codec and delete the duplicate legacy codec;
+- [x] establish modern headless region decode/encode round trips in `:Core`;
+- migrate surviving Client callers to the Core codec and delete the duplicate legacy codec;
 - establish explicit writable-output publication verification;
 - establish OpenRune project inspection and build discovery tests.
 
