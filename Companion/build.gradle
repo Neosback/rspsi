@@ -17,6 +17,10 @@ dependencies {
     implementation "io.ktor:ktor-server-content-negotiation-jvm"
     implementation "io.ktor:ktor-serialization-jackson-jvm"
 
+    // Read-only OpenRune cache access. Writable tooling remains a separate capability.
+    implementation "dev.or2:filesystem:${openruneFileStoreVersion}"
+    implementation "dev.or2:filestore:${openruneFileStoreVersion}"
+
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
     testImplementation "io.ktor:ktor-server-test-host-jvm"
 }

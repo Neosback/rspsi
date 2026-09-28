@@ -30,6 +30,7 @@ class CompanionServerTest {
         assertTrue(body.contains("\"apiVersion\":1"))
         assertTrue(body.contains("\"status\":\"ready\""))
         assertTrue(body.contains("\"openrune-project-inspection\""))
+        assertTrue(body.contains("\"openrune-cache-read\""))
     }
 
     @Test
@@ -65,6 +66,24 @@ class CompanionServerTest {
         } finally {
             root.toFile().deleteRecursively()
         }
+    }
+
+    @Test
+    fun cacheInspectRejectsMissingDirectoryWithoutOpeningFileStore() = testApplication {
+        val missing = Files.createTempDirectory("openrune-cache-api").resolve("missing")
+
+        application {
+            companionModule()
+        }
+
+        val jsonPath = missing.toString().replace("\\", "\\\\")
+        val response = client.post("/api/v1/cache/inspect") {
+            contentType(ContentType.Application.Json)
+            setBody("{\"path\":\"$jsonPath\"}")
+        }
+
+        assertEquals(HttpStatusCode.UnprocessableEntity, response.status)
+        assertTrue(response.body<String>().contains("not a directory"))
     }
 
     @Test
