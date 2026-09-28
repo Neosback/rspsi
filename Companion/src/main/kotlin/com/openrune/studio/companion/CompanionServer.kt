@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import com.openrune.studio.companion.cache.OpenRuneCacheReader
 import com.openrune.studio.companion.openrune.OpenRuneContentIndexer
 import com.openrune.studio.companion.openrune.OpenRuneProjectInspector
+import com.openrune.studio.companion.openrune.OpenRuneKotlinSourceIndexer
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.jackson.jackson
 import io.ktor.server.application.Application
@@ -31,6 +32,7 @@ fun Application.companionModule(
     openRuneProjectInspector: OpenRuneProjectInspector = OpenRuneProjectInspector(),
     openRuneCacheReader: OpenRuneCacheReader = OpenRuneCacheReader(),
     openRuneContentIndexer: OpenRuneContentIndexer = OpenRuneContentIndexer(),
+    openRuneKotlinSourceIndexer: OpenRuneKotlinSourceIndexer = OpenRuneKotlinSourceIndexer(),
 ) {
     install(ContentNegotiation) {
         jackson {
@@ -51,6 +53,7 @@ fun Application.companionModule(
                             "openrune-project-inspection",
                             "openrune-cache-read",
                             "openrune-content-index",
+                            "openrune-kotlin-source-index",
                         ),
                 ),
             )
@@ -70,6 +73,22 @@ fun Application.companionModule(
                     call.respond(
                         HttpStatusCode.UnprocessableEntity,
                         mapOf("error" to (failure.message ?: "content indexing failed")),
+                    )
+                    return@post
+                }
+
+            call.respond(HttpStatusCode.OK, index)
+        }
+
+        post("/api/v1/openrune/source/index") {
+            val path = call.requiredPath() ?: return@post
+            val index =
+                try {
+                    openRuneKotlinSourceIndexer.index(path)
+                } catch (failure: IllegalArgumentException) {
+                    call.respond(
+                        HttpStatusCode.UnprocessableEntity,
+                        mapOf("error" to (failure.message ?: "source indexing failed")),
                     )
                     return@post
                 }
