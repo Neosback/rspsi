@@ -31,7 +31,8 @@ class CompanionServerTest {
         assertTrue(body.contains("\"status\":\"ready\""))
         assertTrue(body.contains("\"openrune-project-inspection\""))
         assertTrue(body.contains("\"openrune-cache-read\""))
-        assertTrue(body.contains("\"openrune-content-index\""))\n        assertTrue(body.contains("\"openrune-kotlin-source-index\""))
+        assertTrue(body.contains("\"openrune-content-index\""))
+        assertTrue(body.contains("\"openrune-kotlin-source-index\""))
     }
 
     @Test
