@@ -1,11 +1,11 @@
-package com.rspsi.server;
+package com.rspsi.server
 
 /** Overall health of a saved server connection. */
-public enum ServerIntegrationStatus {
+enum class ServerIntegrationStatus {
     SUPPORTED,
     SUPPORTED_WITH_OVERRIDES,
     PARTIAL,
     STALE,
     INCOMPATIBLE,
-    NOT_DETECTED
+    NOT_DETECTED,
 }

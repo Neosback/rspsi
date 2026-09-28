@@ -1,7 +1,7 @@
-package com.rspsi.server;
+package com.rspsi.server
 
 /** Optional capabilities supplied by a server/project adapter. */
-public enum ServerCapability {
+enum class ServerCapability {
     PROJECT_LAYOUT,
     GRADLE_PROJECT_MODEL,
     CACHE_DISCOVERY,
@@ -15,5 +15,5 @@ public enum ServerCapability {
     SERVER_CACHE,
     SOURCE_STAGING,
     SERVER_LAUNCH,
-    RUNTIME_BRIDGE
+    RUNTIME_BRIDGE,
 }
