@@ -1,7 +1,7 @@
 package com.rspsi.cache.verify;
 
 import com.rspsi.cache.map.OsrsMapService;
-import com.rspsi.cache.map.OsrsRegionDecoder;
+import com.openrune.studio.core.osrs.map.ModernOsrsRegionCodec;
 import com.rspsi.cache.map.OsrsRevisionProfile;
 import com.rspsi.cache.store.CacheStoreFactory;
 import com.rspsi.cache.store.OpenRuneCacheStore;
@@ -47,7 +47,7 @@ public final class OsrsInstanceRevisionVerifier {
                     .orElseGet(() -> new InstanceObjectFootprintResolver.Footprint(1, 1));
             WorldDocument actual = new InstanceWorldBuilder().build(
                     source, fixture.grid(), fixture.width(), fixture.length(), fixture.planes(), footprints,
-                    OsrsRegionDecoder::generatedHeightAtWorldNoiseCoordinate);
+                    ModernOsrsRegionCodec.INSTANCE::generatedHeightAtWorldNoiseCoordinate);
             OsrsInstanceSemanticFixture.Comparison terrain = fixture.compareTerrain(actual);
             OsrsLocationSemanticFixture.Comparison objects = fixture.compareObjects(actual);
             lines.add("OSRS instance verification: " + fixturePath);
