@@ -1,5 +1,7 @@
 # OpenRune Integration
 
+For the verified server boot/plugin/event/cache model and live-agent constraints, see [OpenRune Server Foundation Reference](OPENRUNE_SERVER_FOUNDATION.md).
+
 ## Goal
 
 The companion provides first-class integration with OpenRune Server projects while respecting OpenRune's own build and source authority.

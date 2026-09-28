@@ -93,3 +93,17 @@ Near-term preference:
 5. bridge contracts/services.
 
 Do not spend migration effort on desktop-only classes scheduled for deletion unless required to unlock removal.
+
+
+## Foundation checkpoint - OpenRune runtime model
+
+Before expanding the source browser or adding invasive runtime instrumentation:
+
+- [x] document verified OpenRune boot, Guice, plugin, event, cache, GameVal, pack, and tooling architecture;
+- [x] document external-plugin classloader/reload constraints;
+- [x] separate Companion static/project authority from future Agent runtime authority;
+- [ ] add neutral runtime identity/lifecycle/plugin contracts;
+- [ ] prove a minimal read-only OpenRune Studio Agent;
+- [ ] inventory runtime event registrations through supported APIs or a narrow adapter;
+- [ ] validate game-thread access rules before any live mutation;
+- [ ] evaluate Byte Buddy only for trace features that cannot be implemented through supported registries.
