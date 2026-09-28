@@ -1,0 +1,26 @@
+description = 'OpenRune Studio Companion'
+
+apply plugin: 'application'
+apply plugin: 'org.jetbrains.kotlin.jvm'
+
+kotlin {
+    jvmToolchain(21)
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
+    }
+}
+
+dependencies {
+    implementation platform("io.ktor:ktor-bom:${ktorVersion}")
+    implementation "io.ktor:ktor-server-core-jvm"
+    implementation "io.ktor:ktor-server-netty-jvm"
+    implementation "io.ktor:ktor-server-content-negotiation-jvm"
+    implementation "io.ktor:ktor-serialization-jackson-jvm"
+
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
+    testImplementation "io.ktor:ktor-server-test-host-jvm"
+}
+
+application {
+    mainClass = 'com.openrune.studio.companion.CompanionMainKt'
+}
