@@ -13,8 +13,11 @@ The service is loopback-only and currently provides:
 ```
 GET  http://127.0.0.1:8765/api/v1/status
 POST http://127.0.0.1:8765/api/v1/openrune/inspect
+POST http://127.0.0.1:8765/api/v1/cache/inspect
 ```
 
-The OpenRune inspection endpoint is passive. It detects project layout, expected cache/GameVal locations, and available source/build roots without running Gradle, loading server code, opening caches, or changing files.
+OpenRune project inspection is passive. It detects project layout, expected cache/GameVal locations, and available source/build roots without running Gradle, loading server code, or changing files.
 
-FileStore, cache writes, SQLite, Compose, source indexing, build execution, and live-server integration will be added as separate focused changes.
+Cache inspection uses OpenRune FileStore in read-only mode and currently exposes archive/index structure plus revision metadata when `version.dat` provides it. The browser remains responsible for map/model decoding and rendering.
+
+Cache writes, SQLite, Compose, source indexing, build execution, and live-server integration will be added as separate focused changes.
