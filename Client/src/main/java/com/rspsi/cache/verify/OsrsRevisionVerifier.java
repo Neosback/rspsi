@@ -106,7 +106,7 @@ public final class OsrsRevisionVerifier {
             messages.add("cache metadata: " + metadata);
             OsrsRevisionProfile profile = OsrsRevisionProfile.forRevision(revision);
             messages.add("revision profile: " + profile.mapGroupLayout()
-                    + ", terrain=" + (profile.newTerrainFormat() ? "short" : "byte"));
+                    + ", terrain=modern-short");
             OsrsMapService maps = new OsrsMapService(store, revision);
             messages.add("map index entries: " + maps.index().size());
             byte[] landscape = maps.readLandscape(regionX, regionY);
@@ -137,8 +137,10 @@ public final class OsrsRevisionVerifier {
             AssetRepository assets = new DefinitionAssetRepository(definitions, store.symbolicNameProvider());
             List<AssetDescriptor> availableAssets = assets.search("");
             messages.add("asset descriptors: " + availableAssets.size());
-            WorldDocument document = OsrsRegionDecoder.decode(landscape, locations, regionX, regionY,
-                    profile.newTerrainFormat());
+            WorldDocument document = CoreOsrsRegionAdapter.toClient(
+                    ModernOsrsRegionCodec.INSTANCE.decode(
+                            landscape, locations, regionX, regionY)
+            ).document();
             int placedMapSceneObjects = 0;
             int placedMapSceneSprites = 0;
             int placedMapSceneDefinitionsMissing = 0;
@@ -175,8 +177,8 @@ public final class OsrsRevisionVerifier {
             int boundaryMismatches = context.boundaryMismatches().size();
             RenderWindowScene windowScene = new RenderWindowSceneBuilder(definitions).build(context);
             int expectedWindowTiles = context.loadedRegionCount()
-                    * OsrsRegionDecoder.REGION_SIZE * OsrsRegionDecoder.REGION_SIZE
-                    * OsrsRegionDecoder.PLANES;
+                    * OsrsRegionData.REGION_SIZE * OsrsRegionData.REGION_SIZE
+                    * OsrsRegionData.PLANES;
             boolean windowSceneComplete = windowScene.terrainMeshes().size() == expectedWindowTiles;
             int bridgeLinks = document.bridgeLinks().size();
             messages.add("context window: " + context.loadedRegionCount() + "/"
@@ -250,10 +252,14 @@ public final class OsrsRevisionVerifier {
                     + " planes; " + minimapPixels + " semantic pixels; "
                     + shapedMinimapPixels + " shaped pixels");
             exportParityImages(parityOutputPath(), minimaps, shapedMinimaps, collision, messages, errors);
-            byte[] encodedTerrain = OsrsRegionEncoder.encodeTerrain(document, profile.newTerrainFormat());
-            byte[] encodedLocations = OsrsRegionEncoder.encodeLocations(document);
-            WorldDocument roundTrip = OsrsRegionDecoder.decode(encodedTerrain, encodedLocations,
-                    regionX, regionY, profile.newTerrainFormat());
+            OsrsRegionData encodedRegion =
+                    CoreOsrsRegionAdapter.toCore(document, regionX, regionY);
+            byte[] encodedTerrain = ModernOsrsRegionCodec.INSTANCE.encodeTerrain(encodedRegion);
+            byte[] encodedLocations = ModernOsrsRegionCodec.INSTANCE.encodeLocations(encodedRegion);
+            WorldDocument roundTrip = CoreOsrsRegionAdapter.toClient(
+                    ModernOsrsRegionCodec.INSTANCE.decode(
+                            encodedTerrain, encodedLocations, regionX, regionY)
+            ).document();
             boolean equal = semanticallyEqual(document, roundTrip);
             RenderScene roundTripScene = new RenderSceneBuilder(definitions).build(roundTrip);
             RenderSceneParity.Report sceneRoundTripReport = RenderSceneParity.compare(scene, roundTripScene);
@@ -360,7 +366,7 @@ public final class OsrsRevisionVerifier {
                                     capabilities(store)),
                             check("cache.metadata", VerificationCheck.Status.PASS,
                                     "revision " + metadata.revision() + ", profile " + profile.mapGroupLayout()
-                                            + ", terrain=" + (profile.newTerrainFormat() ? "short" : "byte")
+                                            + ", terrain=modern-short"
                                             + ", fingerprint " + metadata.fingerprint()),
                             check("map.index", maps.index().size() == 0 ? VerificationCheck.Status.FAIL : VerificationCheck.Status.PASS,
                                     maps.index().size() + " map groups discovered"),
