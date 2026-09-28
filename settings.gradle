@@ -2,5 +2,6 @@ rootProject.name = 'RSPSiSuite'
 
 include ':Client'
 include ':Editor'
+include ':Core'
 include ':Protocol'
 include ':Companion'

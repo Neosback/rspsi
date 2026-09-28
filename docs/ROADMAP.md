@@ -20,11 +20,12 @@ Goal: prove the reusable backend works without depending on native UI/rendering.
 - continue Java-to-Kotlin migration in cache/OSRS/OpenRune boundaries;
 - remove accidental dependencies from reusable code into desktop/editor presentation;
 - establish headless tests for cache open/inspect;
-- establish region decode/encode round trips;
+- [x] establish modern headless region decode/encode round trips in `:Core`;
+- migrate surviving Client callers to the Core codec and delete the duplicate legacy codec;
 - establish explicit writable-output publication verification;
 - establish OpenRune project inspection and build discovery tests.
 
-The Protocol and Companion seams are now proven. The next extraction blocker is moving surviving neutral map/cache codecs, especially region decode/encode needed for publish/parity work, out of legacy `Client` into a clean headless core without renderer/editor dependencies.
+The Protocol and Companion seams are proven. Modern region decode/encode now belongs in `:Core`; the next blocker is adapting surviving Client/Companion publication callers to that model and removing the duplicate legacy codec. XTEA and pre-modern terrain compatibility are intentionally outside the new Core scope.
 
 ## Phase 2 - module extraction
 

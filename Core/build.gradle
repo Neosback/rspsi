@@ -1,0 +1,14 @@
+description = 'OpenRune Studio headless OSRS core'
+
+apply plugin: 'org.jetbrains.kotlin.jvm'
+
+kotlin {
+    jvmToolchain(21)
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
+    }
+}
+
+dependencies {
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
+}
