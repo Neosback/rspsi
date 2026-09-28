@@ -169,15 +169,17 @@ class OpenRuneDefinitionSemanticsTest {
                 if (data == null) data = store.read(5, entry.objectArchiveId(), 0);
                 if (data != null) {
                     try {
-                        java.util.List<com.rspsi.editor.model.WorldObject> objs =
-                                com.rspsi.cache.map.OsrsRegionDecoder.decodeLocations(data);
-                        for (com.rspsi.editor.model.WorldObject obj : objs) {
-                            if (obj.id() == 1821) {
-                                System.out.println("FOUND 1821: Region (" + entry.regionX() + "," + entry.regionY() + ") obj: ID=" + obj.id()
-                                        + " plane=" + obj.plane() + " at (" + obj.x() + "," + obj.y() + ") shape=" + obj.type() + " rot=" + obj.rotation());
-                                for (com.rspsi.editor.model.WorldObject neighbor : objs) {
-                                    if (neighbor.plane() == obj.plane() && neighbor.x() == obj.x() && neighbor.y() == obj.y()) {
-                                        System.out.println("   Same tile object: ID=" + neighbor.id() + " shape=" + neighbor.type() + " rot=" + neighbor.rotation());
+                        var objs =
+                                com.openrune.studio.core.osrs.map.ModernOsrsRegionCodec.INSTANCE.decodeLocations(data);
+                        for (var obj : objs) {
+                            if (obj.getId() == 1821) {
+                                System.out.println("FOUND 1821: Region (" + entry.regionX() + "," + entry.regionY() + ") obj: ID=" + obj.getId()
+                                        + " plane=" + obj.getPlane() + " at (" + obj.getX() + "," + obj.getY() + ") shape=" + obj.getType() + " rot=" + obj.getRotation());
+                                for (var neighbor : objs) {
+                                    if (neighbor.getPlane() == obj.getPlane()
+                                            && neighbor.getX() == obj.getX()
+                                            && neighbor.getY() == obj.getY()) {
+                                        System.out.println("   Same tile object: ID=" + neighbor.getId() + " shape=" + neighbor.getType() + " rot=" + neighbor.getRotation());
                                     }
                                 }
                             }

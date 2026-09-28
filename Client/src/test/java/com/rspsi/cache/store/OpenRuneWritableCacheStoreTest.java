@@ -1,5 +1,7 @@
 package com.rspsi.cache.store;
 
+import com.rspsi.cache.map.CoreRegionTestFixtures;
+
 import com.rspsi.cache.CacheStoreCapabilities;
 import com.rspsi.cache.CacheWriteMode;
 import com.rspsi.cache.map.OsrsMapService;
@@ -65,9 +67,10 @@ class OpenRuneWritableCacheStoreTest {
                         before.northEastHeight(), before.northWestHeight(), expected,
                         before.overlayId(), before.overlayShape(), before.overlayRotation(),
                         before.flags(), before.objects()));
-                maps.writeLandscape(regionX, regionY,
-                        com.rspsi.cache.map.OsrsRegionEncoder.encodeTerrain(
-                                region.document(), maps.newTerrainFormat()));
+                maps.writeLandscape(
+                        regionX,
+                        regionY,
+                        CoreRegionTestFixtures.encodeTerrain(region.document(), regionX, regionY));
                 maps.flush();
             }
 

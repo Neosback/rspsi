@@ -3,7 +3,7 @@ package com.rspsi.editor.render;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.FloorDefinitionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
-import com.rspsi.cache.map.OsrsRegionDecoder;
+import com.openrune.studio.core.osrs.map.ModernOsrsRegionCodec;
 import com.rspsi.editor.model.InstanceChunkTemplate;
 import com.rspsi.editor.model.OsrsTileFlags;
 import com.rspsi.editor.model.TerrainHeightSource;
@@ -150,7 +150,7 @@ class InstanceSceneMaterializerTest {
         // Source local (1,2) maps to target local (2,6) at rotation 1.
         int targetX = 2 * 8 + 2;
         int targetY = 3 * 8 + 6;
-        int expected = OsrsRegionDecoder.generatedHeightAtWorldNoiseCoordinate(
+        int expected = ModernOsrsRegionCodec.INSTANCE.generatedHeightAtWorldNoiseCoordinate(
                 8 + 2, 16 + 6);
         assertEquals(expected,
                 materialized.tile(0, targetX, targetY).snapshot().southWestHeight());

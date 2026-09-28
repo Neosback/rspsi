@@ -15,13 +15,6 @@ class OsrsRevisionFeaturesTest {
     }
 
     @Test
-    void centralizesTerrainValueWidthTransition() {
-        assertEquals(OsrsRevisionFeatures.TerrainValueFormat.BYTE,
-                OsrsRevisionFeatures.forRevision(208).terrainValueFormat());
-        assertTrue(OsrsRevisionFeatures.forRevision(209).usesShortTerrainValues());
-    }
-
-    @Test
     void rejectsInvalidRevision() {
         assertThrows(IllegalArgumentException.class,
                 () -> OsrsRevisionFeatures.forRevision(0));

@@ -7,8 +7,7 @@ import com.rspsi.cache.CacheWriteMode;
 import com.rspsi.cache.map.MapIndexEntry;
 import com.rspsi.cache.map.MapIndexTable;
 import com.rspsi.cache.map.OsrsMapService;
-import com.rspsi.cache.map.OsrsRegionDecoder;
-import com.rspsi.cache.map.OsrsRegionEncoder;
+import com.rspsi.cache.map.CoreRegionTestFixtures;
 import com.rspsi.editor.model.TileSnapshot;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.model.WorldObject;
@@ -71,8 +70,8 @@ class OpenRuneWritableRoundTripTest {
         // Seed one synthetic region through raw cache writes so the save path
         // edits an existing region instead of depending on new-archive packing.
         WorldDocument seeded = seededDocument();
-        seededLibrary.put(5, "m50_50", OsrsRegionEncoder.encodeTerrain(seeded));
-        seededLibrary.put(5, "l50_50", OsrsRegionEncoder.encodeLocations(seeded));
+        seededLibrary.put(5, "m50_50", CoreRegionTestFixtures.encodeTerrain(seeded, 50, 50));
+        seededLibrary.put(5, "l50_50", CoreRegionTestFixtures.encodeLocations(seeded, 50, 50));
         seededLibrary.update();
     }
 
@@ -90,7 +89,7 @@ class OpenRuneWritableRoundTripTest {
             assertEquals(new CacheStoreCapabilities(true, true, true, CacheWriteMode.DIRECT),
                     store.capabilities());
 
-            OsrsMapService maps = new OsrsMapService(store, 5, namedIndex(store), true);
+            OsrsMapService maps = new OsrsMapService(store, 5, namedIndex(store));
             WorldRegion region = maps.loadRegion(50, 50).orElseThrow();
 
             var document = region.document();
@@ -109,14 +108,14 @@ class OpenRuneWritableRoundTripTest {
             edited = document.copy();
 
             maps.writeLandscape(50, 50,
-                    OsrsRegionEncoder.encodeTerrain(edited, maps.newTerrainFormat()));
-            maps.writeLocations(50, 50, OsrsRegionEncoder.encodeLocations(edited));
+                    CoreRegionTestFixtures.encodeTerrain(edited, 50, 50));
+            maps.writeLocations(50, 50, CoreRegionTestFixtures.encodeLocations(edited, 50, 50));
             maps.flush();
         }
 
         // Reopen through the production read path and compare semantically.
         try (CacheStore reopened = CacheStoreFactory.openRune(output)) {
-            OsrsMapService maps = new OsrsMapService(reopened, 5, namedIndex(reopened), true);
+            OsrsMapService maps = new OsrsMapService(reopened, 5, namedIndex(reopened));
             WorldDocument decoded = maps.loadRegion(50, 50).orElseThrow().document();
             for (int plane = 0; plane < 4; plane++) {
                 for (int x = 0; x < 64; x++) {
@@ -131,14 +130,14 @@ class OpenRuneWritableRoundTripTest {
 
         // The written payload must also equal a fresh canonical encoding of
         // the same document: no adapter drift may leak into the bytes.
-        byte[] expectedTerrain = OsrsRegionEncoder.encodeTerrain(edited, true);
+        byte[] expectedTerrain = CoreRegionTestFixtures.encodeTerrain(edited, 50, 50);
         try (CacheStore reopened = CacheStoreFactory.openRune(output)) {
             assertNotNull(reopened.read(5, archiveId(reopened, "m50_50"), 0));
             // Compare after a decode-encode cycle rather than raw bytes: the
             // first seeded bytes already went through one encode pass, and the
             // edited payload overwrote them via the same encoder.
             assertEquals(64 * 64 * 4,
-                    OsrsRegionDecoder.decodeTerrain(expectedTerrain, 0, 0, (x, y) -> 10)
+                    CoreRegionTestFixtures.decode(expectedTerrain, null, 0, 0)
                             .width()
                             * 64 * 4);
         }
@@ -158,15 +157,15 @@ class OpenRuneWritableRoundTripTest {
         // Write the same payload back through the writable adapter; the file
         // bytes after flush must be semantically identical on reopen.
         try (CacheStore store = CacheStoreFactory.openRuneWritable(output)) {
-            OsrsMapService maps = new OsrsMapService(store, 5, namedIndex(store), true);
+            OsrsMapService maps = new OsrsMapService(store, 5, namedIndex(store));
             maps.writeLandscape(50, 50, seededTerrain);
             maps.flush();
         }
 
         try (CacheStore reopened = CacheStoreFactory.openRune(output)) {
             byte[] reread = reopened.read(5, archiveId(reopened, "m50_50"), 0);
-            WorldDocument before = OsrsRegionDecoder.decodeTerrain(seededTerrain, 0, 0, (x, y) -> 10);
-            WorldDocument after = OsrsRegionDecoder.decodeTerrain(reread, 0, 0, (x, y) -> 10);
+            WorldDocument before = CoreRegionTestFixtures.decode(seededTerrain, null, 0, 0);
+            WorldDocument after = CoreRegionTestFixtures.decode(reread, null, 0, 0);
             for (int plane = 0; plane < 4; plane++) {
                 for (int x = 0; x < 64; x++) {
                     for (int y = 0; y < 64; y++) {

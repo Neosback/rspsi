@@ -6,7 +6,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.map.MapIndexEntry;
 import com.rspsi.cache.map.MapIndexTable;
 import com.rspsi.cache.map.OsrsMapService;
-import com.rspsi.cache.map.OsrsRegionEncoder;
+import com.rspsi.cache.map.CoreRegionTestFixtures;
 import com.rspsi.cache.store.CacheStore;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.SetTileCommand;
@@ -36,7 +36,7 @@ class OsrsStudioProjectTest {
         OsrsCacheMetadata identity = new OsrsCacheMetadata(240, 2, "cache-a");
         RecordingStore store = new RecordingStore(identity);
         OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
-                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))), true);
+                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))));
         ProjectMetadata project = ProjectMetadata.forCache(identity);
 
         try (OsrsStudioProject studio = new OsrsStudioProject(store, maps,
@@ -58,7 +58,7 @@ class OsrsStudioProjectTest {
         OsrsCacheMetadata identity = new OsrsCacheMetadata(240, 2, "cache-a");
         RecordingStore store = new RecordingStore(identity);
         OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
-                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))), true);
+                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))));
         OsrsStudioProject studio = new OsrsStudioProject(store, maps,
                 emptyDefinitions(), ProjectMetadata.forCache(identity));
 
@@ -72,7 +72,7 @@ class OsrsStudioProjectTest {
         OsrsCacheMetadata identity = new OsrsCacheMetadata(240, 2, "cache-a");
         RecordingStore store = new RecordingStore(identity);
         OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
-                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))), true);
+                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))));
         ProjectMetadata project = ProjectMetadata.forCache(identity);
         ProjectLayout layout = new ProjectLayout(temporaryDirectory.resolve("project"));
         layout.initialize(project);
@@ -96,7 +96,7 @@ class OsrsStudioProjectTest {
         RecordingStore secondStore = new RecordingStore(identity);
         OsrsMapService secondMaps = new OsrsMapService(secondStore, 5,
                 MapIndexTable.of(List.of(new MapIndexEntry(50, 50, 100, 100,
-                        "m50_50", "l50_50"))), true);
+                        "m50_50", "l50_50"))));
         try (OsrsStudioProject studio = new OsrsStudioProject(secondStore, secondMaps,
                 emptyDefinitions(), mismatched)) {
             assertThrows(java.io.IOException.class, () -> studio.attachAutosave(layout,
@@ -126,8 +126,8 @@ class OsrsStudioProjectTest {
         private RecordingStore(OsrsCacheMetadata identity) {
             this.identity = identity;
             WorldDocument source = new WorldDocument(64, 64, 4);
-            values.put("5:100:0", OsrsRegionEncoder.encodeTerrain(source, true));
-            values.put("5:100:1", OsrsRegionEncoder.encodeLocations(source));
+            values.put("5:100:0", CoreRegionTestFixtures.encodeTerrain(source, 50, 50));
+            values.put("5:100:1", CoreRegionTestFixtures.encodeLocations(source, 50, 50));
         }
 
         @Override public byte[] read(int index, int archive, int file) {

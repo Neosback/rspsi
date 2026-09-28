@@ -23,11 +23,11 @@ Goal: prove the reusable backend works without depending on native UI/rendering.
 - [x] establish modern headless region decode/encode round trips in `:Core`;
 - [x] cross-check the modern Core codec against the existing Client codec in both directions;
 - [x] route production modern Client region load/save through Core using a temporary model adapter;
-- delete the duplicate Client codec and retire pre-modern terrain plumbing;
+- [x] delete the duplicate Client codec and retire pre-modern terrain plumbing;
 - establish explicit writable-output publication verification;
 - establish OpenRune project inspection and build discovery tests.
 
-The Protocol and Companion seams are proven. Modern region decode/encode now belongs in `:Core`; the next blocker is adapting surviving Client/Companion publication callers to that model and removing the duplicate legacy codec. XTEA and pre-modern terrain compatibility are intentionally outside the new Core scope.
+The Protocol and Companion seams are proven. Modern region decode/encode now belongs exclusively to `:Core`. Client uses a temporary model adapter while legacy editor sessions still exist. XTEA and pre-modern terrain compatibility are intentionally outside the new Core scope.
 
 ## Phase 2 - module extraction
 

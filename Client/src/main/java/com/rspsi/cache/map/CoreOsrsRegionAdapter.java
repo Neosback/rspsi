@@ -1,5 +1,6 @@
 package com.rspsi.cache.map;
 
+import com.openrune.studio.core.osrs.map.ModernOsrsRegionCodec;
 import com.openrune.studio.core.osrs.map.OsrsObjectPlacement;
 import com.openrune.studio.core.osrs.map.OsrsRegionData;
 import com.openrune.studio.core.osrs.map.OsrsTileData;
@@ -12,6 +13,7 @@ import com.rspsi.editor.model.WorldRegion;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.IntBinaryOperator;
 
 /**
  * Temporary compatibility adapter between the retiring Client world model and the headless Core model.
@@ -21,6 +23,21 @@ import java.util.Objects;
  */
 public final class CoreOsrsRegionAdapter {
     private CoreOsrsRegionAdapter() {
+    }
+
+    public static WorldDocument decodeTerrain(
+            byte[] landscape,
+            int regionX,
+            int regionY,
+            IntBinaryOperator baseHeightProvider) {
+        Objects.requireNonNull(baseHeightProvider, "baseHeightProvider");
+        return toClient(
+                ModernOsrsRegionCodec.INSTANCE.decodeTerrain(
+                        landscape,
+                        regionX,
+                        regionY,
+                        (x, y) -> baseHeightProvider.applyAsInt(x, y))
+        ).document();
     }
 
     public static OsrsRegionData toCore(WorldDocument document, int regionX, int regionY) {

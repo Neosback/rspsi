@@ -9,8 +9,10 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * OSRS map service backed by the neutral cache store. The map index remains
- * discoverable and testable without importing OpenRune or Displee types.
+ * OSRS map service backed by the neutral cache store.
+ *
+ * <p>Terrain decoding is modern-only and owned by Core. Revision policy remains relevant only
+ * for selecting named versus numeric map-group layout.</p>
  */
 public final class OsrsMapService implements MapService {
     public static final int OSRS_MAP_INDEX = 5;
@@ -18,20 +20,18 @@ public final class OsrsMapService implements MapService {
     private final CacheStore store;
     private final int mapIndex;
     private final MapIndexTable index;
-    private final boolean newTerrainFormat;
 
     public OsrsMapService(CacheStore store) {
-        this(store, OSRS_MAP_INDEX, MapIndexTable.discover(store, OSRS_MAP_INDEX), true);
+        this(store, OSRS_MAP_INDEX, MapIndexTable.discover(store, OSRS_MAP_INDEX));
     }
 
-    /** Creates a map service using the layout selected by an OSRS revision. */
+    /** Creates a map service using the map-group layout selected by an OSRS revision. */
     public OsrsMapService(CacheStore store, int revision) {
         this(store, OsrsRevisionProfile.forRevision(revision));
     }
 
     private OsrsMapService(CacheStore store, OsrsRevisionProfile profile) {
-        this(store, OSRS_MAP_INDEX, MapIndexTable.discover(store, OSRS_MAP_INDEX, profile),
-                profile.newTerrainFormat());
+        this(store, OSRS_MAP_INDEX, MapIndexTable.discover(store, OSRS_MAP_INDEX, profile));
     }
 
     /** Loads one canonical region; a missing location archive is treated as empty. */
@@ -39,13 +39,9 @@ public final class OsrsMapService implements MapService {
         byte[] landscape = readLandscape(regionX, regionY);
         if (landscape == null) return Optional.empty();
         byte[] locations = readLocations(regionX, regionY);
-        if (newTerrainFormat) {
-            return Optional.of(CoreOsrsRegionAdapter.toClient(
-                    ModernOsrsRegionCodec.INSTANCE.decode(
-                            landscape, locations, regionX, regionY)));
-        }
-        return Optional.of(OsrsRegionDecoder.decodeRegion(
-                landscape, locations, regionX, regionY, false));
+        return Optional.of(CoreOsrsRegionAdapter.toClient(
+                ModernOsrsRegionCodec.INSTANCE.decode(
+                        landscape, locations, regionX, regionY)));
     }
 
     /** Loads a bounded region window while preserving missing-region holes. */
@@ -61,25 +57,14 @@ public final class OsrsMapService implements MapService {
     }
 
     public OsrsMapService(CacheStore store, int mapIndex, MapIndexTable index) {
-        this(store, mapIndex, index, true);
-    }
-
-    /** Creates a map service with an explicit terrain representation policy. */
-    public OsrsMapService(CacheStore store, int mapIndex, MapIndexTable index, boolean newTerrainFormat) {
         this.store = Objects.requireNonNull(store, "store");
         this.mapIndex = mapIndex;
         this.index = Objects.requireNonNull(index, "index");
-        this.newTerrainFormat = newTerrainFormat;
     }
 
     @Override
     public MapIndexTable index() {
         return index;
-    }
-
-    @Override
-    public boolean newTerrainFormat() {
-        return newTerrainFormat;
     }
 
     @Override
@@ -109,15 +94,10 @@ public final class OsrsMapService implements MapService {
 
     private byte[] read(int regionX, int regionY, MapArchiveType type) {
         MapIndexEntry entry = index.region(regionX, regionY);
-        if (entry == null) {
-            return null;
-        }
+        if (entry == null) return null;
         int archiveId = index.archiveId(regionX, regionY, type);
-        if (archiveId < 0) {
-            return null;
-        }
-        int file = payloadFile(entry, type);
-        return store.read(mapIndex, archiveId, file);
+        if (archiveId < 0) return null;
+        return store.read(mapIndex, archiveId, payloadFile(entry, type));
     }
 
     private void write(int regionX, int regionY, MapArchiveType type, byte[] data) {
@@ -133,21 +113,11 @@ public final class OsrsMapService implements MapService {
         if (archiveId < 0) {
             throw new IllegalArgumentException("Region is not present in the map index: " + regionX + "," + regionY);
         }
-        int file = payloadFile(entry, type);
-        store.write(mapIndex, archiveId, file, data);
+        store.write(mapIndex, archiveId, payloadFile(entry, type), data);
     }
 
-    /**
-     * Named map indexes keep terrain and locations in separate groups, each
-     * with payload file 0. Modern packed indexes use one numeric group with
-     * terrain in file 0 and locations in file 1. The index shape is enough to
-     * distinguish these layouts without leaking a cache-library type into the
-     * world model.
-     */
     private static int payloadFile(MapIndexEntry entry, MapArchiveType type) {
-        if (entry.landscapeArchiveId() != entry.objectArchiveId()) {
-            return 0;
-        }
+        if (entry.landscapeArchiveId() != entry.objectArchiveId()) return 0;
         return type == MapArchiveType.LANDSCAPE ? 0 : 1;
     }
 }
