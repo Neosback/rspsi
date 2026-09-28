@@ -4,6 +4,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.application.intercept
 import io.ktor.server.request.header
 import io.ktor.server.request.path
 import io.ktor.server.response.respond
@@ -99,7 +100,7 @@ fun Application.installCompanionSecurity(security: CompanionSecurity) {
             return@intercept
         }
 
-        if (!security.acceptsToken(call.request.header(TOKEN_HEADER))) {
+        if (!security.acceptsToken(call.request.header(CompanionSecurity.TOKEN_HEADER))) {
             call.respond(
                 HttpStatusCode.Unauthorized,
                 ApiErrorResponse(
