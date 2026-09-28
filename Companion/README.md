@@ -8,10 +8,13 @@ This module must not depend on the legacy `Editor` module or on `Client/editor` 
 
 ## Current scope
 
-The first slice intentionally provides only a loopback Ktor service with a versioned status endpoint:
+The service is loopback-only and currently provides:
 
 ```
-GET http://127.0.0.1:8765/api/v1/status
+GET  http://127.0.0.1:8765/api/v1/status
+POST http://127.0.0.1:8765/api/v1/openrune/inspect
 ```
 
-OpenRune, FileStore, SQLite, Compose, source indexing, and build execution will be added as separate focused changes.
+The OpenRune inspection endpoint is passive. It detects project layout, expected cache/GameVal locations, and available source/build roots without running Gradle, loading server code, opening caches, or changing files.
+
+FileStore, cache writes, SQLite, Compose, source indexing, build execution, and live-server integration will be added as separate focused changes.
