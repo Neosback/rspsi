@@ -299,8 +299,8 @@ object ModernOsrsRegionCodec {
                 opcode <= 49 -> {
                     val rawOverlay = cursor.readUnsignedShort()
                     overlays[plane][x][y] = rawOverlay and 0x7FFF
-                    shapes[plane][x][y] = opcode - 2 ushr 2
-                    rotations[plane][x][y] = opcode - 2 and 0x3
+                    shapes[plane][x][y] = (opcode - 2) ushr 2
+                    rotations[plane][x][y] = (opcode - 2) and 0x3
                 }
 
                 opcode <= 81 -> flags[plane][x][y] = opcode - 49
