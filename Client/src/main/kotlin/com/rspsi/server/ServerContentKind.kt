@@ -1,7 +1,7 @@
-package com.rspsi.server;
+package com.rspsi.server
 
 /** Neutral classification for source and generated server content. */
-public enum ServerContentKind {
+enum class ServerContentKind {
     MAP,
     PACK_MODULE,
     CONFIG,
@@ -14,5 +14,5 @@ public enum ServerContentKind {
     GAMEVAL,
     SERVER_SCRIPT,
     RUNTIME_PLUGIN,
-    OTHER
+    OTHER,
 }
