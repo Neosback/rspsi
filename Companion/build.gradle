@@ -11,6 +11,8 @@ kotlin {
 }
 
 dependencies {
+    implementation project(':Protocol')
+
     implementation platform("io.ktor:ktor-bom:${ktorVersion}")
     implementation "io.ktor:ktor-server-core-jvm"
     implementation "io.ktor:ktor-server-netty-jvm"
