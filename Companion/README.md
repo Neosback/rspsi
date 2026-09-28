@@ -23,7 +23,9 @@ OpenRune project inspection is passive. It detects project layout, expected cach
 
 Content indexing discovers OpenRune content modules plus plugin-local `gamevals.toml` and generated `.data/gamevals/*.rscm` mappings. It emits neutral module/GameVal DTOs for the browser. The original Kotlin/TOML/RSCM files remain authoritative.
 
-Kotlin source indexing uses compiler PSI only for structural parsing. It emits neutral plugin-script, function, call, handler, symbol-reference, and source-span facts without requiring OpenRune classes to compile or leaking compiler types through the API.\n\nContent resolution joins those source facts to GameVals for one qualified symbol such as `content.rock`, returning the owning modules, handler registrations, references, and plugin-script sources the browser can surface for a selected world entity.
+Kotlin source indexing uses compiler PSI only for structural parsing. It emits neutral plugin-script, function, call, handler, symbol-reference, and source-span facts without requiring OpenRune classes to compile or leaking compiler types through the API.
+
+Content resolution joins those source facts to GameVals for one qualified symbol such as `content.rock`, returning the owning modules, handler registrations, references, and plugin-script sources the browser can surface for a selected world entity.
 
 Cache inspection uses OpenRune FileStore in read-only mode and currently exposes archive/index structure plus revision metadata when `version.dat` provides it. The browser remains responsible for map/model decoding and rendering.
 
