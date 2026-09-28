@@ -36,7 +36,7 @@ class OsrsStudioProjectTest {
         OsrsCacheMetadata identity = new OsrsCacheMetadata(240, 2, "cache-a");
         RecordingStore store = new RecordingStore(identity);
         OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
-                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50")));
+                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))));
         ProjectMetadata project = ProjectMetadata.forCache(identity);
 
         try (OsrsStudioProject studio = new OsrsStudioProject(store, maps,
@@ -58,7 +58,7 @@ class OsrsStudioProjectTest {
         OsrsCacheMetadata identity = new OsrsCacheMetadata(240, 2, "cache-a");
         RecordingStore store = new RecordingStore(identity);
         OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
-                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50")));
+                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))));
         OsrsStudioProject studio = new OsrsStudioProject(store, maps,
                 emptyDefinitions(), ProjectMetadata.forCache(identity));
 
@@ -72,7 +72,7 @@ class OsrsStudioProjectTest {
         OsrsCacheMetadata identity = new OsrsCacheMetadata(240, 2, "cache-a");
         RecordingStore store = new RecordingStore(identity);
         OsrsMapService maps = new OsrsMapService(store, 5, MapIndexTable.of(List.of(
-                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50")));
+                new MapIndexEntry(50, 50, 100, 100, "m50_50", "l50_50"))));
         ProjectMetadata project = ProjectMetadata.forCache(identity);
         ProjectLayout layout = new ProjectLayout(temporaryDirectory.resolve("project"));
         layout.initialize(project);
@@ -96,7 +96,7 @@ class OsrsStudioProjectTest {
         RecordingStore secondStore = new RecordingStore(identity);
         OsrsMapService secondMaps = new OsrsMapService(secondStore, 5,
                 MapIndexTable.of(List.of(new MapIndexEntry(50, 50, 100, 100,
-                        "m50_50", "l50_50")));
+                        "m50_50", "l50_50"))));
         try (OsrsStudioProject studio = new OsrsStudioProject(secondStore, secondMaps,
                 emptyDefinitions(), mismatched)) {
             assertThrows(java.io.IOException.class, () -> studio.attachAutosave(layout,
