@@ -3,7 +3,7 @@ package com.rspsi.editor.render;
 import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.definition.ObjectCollisionView;
 import com.rspsi.cache.definition.ObjectDefinitionView;
-import com.rspsi.cache.map.OsrsRegionDecoder;
+import com.openrune.studio.core.osrs.map.ModernOsrsRegionCodec;
 import com.rspsi.editor.model.InstanceChunkTemplate;
 import com.rspsi.editor.model.TerrainHeightSource;
 import com.rspsi.editor.model.TileSnapshot;
@@ -154,7 +154,7 @@ public final class InstanceSceneMaterializer {
         int plane = template.targetPlane();
         if (plane == 0) {
             if (source.generated()) {
-                return OsrsRegionDecoder.generatedHeightAtWorldNoiseCoordinate(
+                return ModernOsrsRegionCodec.INSTANCE.generatedHeightAtWorldNoiseCoordinate(
                         template.sourceOriginX() + projected.x(),
                         template.sourceOriginY() + projected.y());
             }
