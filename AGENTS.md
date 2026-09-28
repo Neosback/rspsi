@@ -1,189 +1,123 @@
 # AGENTS.md
 
-This file is the required operating guide for coding agents and contributors working in OpenRune Studio.
+This repository is transitioning from the old native OpenRune Studio application into the JVM companion for a Svelte/TypeScript/WebGL2 editor.
 
-## Read this first
+## Read first
 
-Before making architecture-affecting changes, read in this order:
+Before architecture-affecting work read:
 
-1. docs/README.md
-2. docs/AI_ARCHITECTURE_OVERVIEW.md
-3. docs/AI_CHANGE_PLAYBOOK.md
-4. the concern-specific authoritative document named in docs/README.md
-5. docs/ROADMAP.md only when sequencing or future work matters
+1. `docs/ARCHITECTURE.md`
+2. the concern-specific document: `API.md`, `CACHE.md`, or `OPENRUNE.md`
+3. `docs/ROADMAP.md` when sequencing matters
 
-Production code plus passing tests describe what exists today. Documentation describes ownership and intended flow. A roadmap item is not proof that a feature already exists.
+Production code plus passing tests describes what exists now. The documents above describe the intended ownership during extraction.
 
-## One responsibility, one canonical path
+## Product boundary
 
-Before creating a manager, registry, service, decoder, encoder, cache adapter, render setting, scene compiler, selection model, save path, project connection, or UI registration path:
+The browser editor owns:
 
-1. search for the existing responsibility;
-2. identify its canonical owner;
-3. extend that owner when the responsibility fits;
-4. add a new abstraction only when the existing owner genuinely cannot represent the new responsibility;
-5. add tests that prove why the new abstraction is distinct.
+- UI/workspace;
+- WebGL2 rendering;
+- camera and viewport behavior;
+- selection and interaction tools;
+- active editor state and ordinary undo/redo;
+- client-side previews and overlays.
 
-Do not create a second method that is almost the same as an existing method merely because its caller is different. Prefer one neutral operation with explicit inputs over parallel convenience implementations that drift.
+The JVM companion owns:
 
-## Core composition
+- OpenRune FileStore integration;
+- OSRS cache codecs and validation that rely on JVM/OpenRune tooling;
+- explicit cache publication and verification;
+- OpenRune project inspection;
+- Gradle invocation;
+- GameVal/RSCM integration;
+- Kotlin/source semantic indexing;
+- local filesystem/project watching;
+- loopback HTTP/WebSocket transport.
 
-OpenRune Studio is a modular monolith.
+Do not move browser responsibilities into the JVM service merely because equivalent desktop code exists today.
 
-Built-in feature composition uses:
+## Legacy Editor module
 
-- Client/src/main/java/com/rspsi/editor/core/CoreEditorModule.java
-- Client/src/main/java/com/rspsi/editor/core/CoreEditorModules.java
-- the existing CoreTerrainModule, CoreObjectModule, CorePathModule, CoreSelectionModule, CoreTilePainterModule, CoreDiagnosticsModule, and CoreUiModule
+`Editor/` is frozen legacy desktop code. Do not add features, panels, render paths, workspace concepts, or new architectural dependencies to it.
 
-Legacy extension-oriented names may still exist in source during migration. They are compatibility debt, not the model for new code. New built-in behavior belongs in the core module/service architecture.
+Only make changes there when required to:
 
-Studio is not an open plugin platform. There is no third-party plugin SDK, external jar loading, or RuneLite-style plugin lifecycle to design for. Anyone extending Studio adds an in-tree core module: a CoreEditorModule that registers its tool, panel, settings, overlays and commands on top of a shared Client service. RuneLite names (Tile, Scene, overlays, Perspective helpers) are welcome as API vocabulary only.
+- preserve build/test compatibility during extraction;
+- delete obsolete code;
+- remove a dependency on reusable headless code.
 
-## Kotlin migration
+The module is removed once the reusable backend no longer depends on it.
 
-The codebase is moving from Java to Kotlin, leaf-first, one ownership boundary per PR.
+## Java-to-Kotlin migration
 
-- Follow the phase order in ROADMAP.md section 3.1. Delete dead or duplicate code instead of converting it.
-- New files are Kotlin. Edit existing Java in place; do not convert a file as a side effect of an unrelated change.
-- A migration keeps behavior and tests passing. Improvements inside the migrated boundary (removing duplication, clearer ownership, fixing an obvious bug with a test) are welcome; anything wider gets a `TODO(migration):` comment naming the follow-up instead of being done in passing.
-- Document as you convert: every class gets a KDoc saying what it owns, and non-obvious logic cites its client/RuneLite source.
-- Records used from Java stay Java-shaped: annotate Kotlin data classes with @JvmRecord so callers keep x() accessors, and use @JvmStatic/@JvmOverloads where Java calls companions or defaults.
-- Keep hot render/compile paths free of boxing: IntArray/FloatArray and primitive loops, not List<Int> or lambdas per vertex.
-- Migrate a type only after its Java callers are few or migrate together; prefer moving whole packages (tools, core modules, then services, then render compile) over scattered files.
+Migration continues leaf-first and one ownership boundary at a time.
 
-## Canonical ownership
+Prioritize code expected to survive the pivot:
 
-| Concern | Canonical owner |
+1. neutral cache/OSRS value types and codecs;
+2. OpenRune adapters and project inspection;
+3. build/source/GameVal services;
+4. bridge protocol and service code.
+
+Rules:
+
+- new production files are Kotlin unless a concrete interop constraint requires Java;
+- do not mix broad redesign with mechanical migration;
+- preserve Java call shape with `@JvmRecord`, `@JvmStatic`, `@JvmOverloads`, or explicit accessors where existing callers require it;
+- delete dead code instead of converting it;
+- keep hot binary/codec paths allocation-aware;
+- migrate tests with the responsibility where useful;
+- keep each PR small enough to review and revert independently.
+
+## Canonical responsibilities
+
+| Concern | Current/target owner |
 | --- | --- |
-| authored map state | WorldDocument and editor session/window state |
-| undoable edits | EditorCommand, CommandHistory, CommandTransaction, ChangePlan as it matures |
-| selection | SelectionModel and canonical semantic hit/selection state |
-| modern OSRS cache access | OpenRuneCacheStore / OpenRune FileStore |
-| terrain/location encoding | OsrsRegionEncoder |
-| terrain/location decoding | OsrsRegionDecoder |
-| map archive access | MapService / OsrsMapService |
-| standalone cache publication | explicit writable output cache only |
-| project edit recovery | SessionAutosaveStore and project-owned edit state |
-| OpenRune project inspection | OpenRuneServerAdapter / ServerProjectInspection path |
-| OpenRune source/content integration | first-party OpenRune provider/services behind neutral integration contracts |
-| scene semantics | authored world -> resolver/compiler -> semantic scene views |
-| render compilation | com.rspsi.editor.render and compiler package |
-| native OpenGL rendering | Editor com.rspsi.renderer.opengl |
-| project startup | project descriptor -> launcher -> loading gate -> shell |
-| workspace placement | UI_WORKSPACE_CONTRACT.md |
-| priorities | ROADMAP.md |
+| OpenRune cache access | `OpenRuneCacheStore` and its extracted successor |
+| terrain/location encoding | `OsrsRegionEncoder` |
+| terrain/location decoding | `OsrsRegionDecoder` |
+| map archive access | `MapService` / `OsrsMapService` |
+| OpenRune project inspection | `OpenRuneServerAdapter` / `ServerProjectInspection` |
+| Gradle model/build integration | `server/gradle` plus build-runner services |
+| OpenRune semantic/source integration | `server/openrune` |
+| web transport | future `:server` Ktor module |
+| editor rendering/UI | separate web-editor repository |
 
-If the table and a lower-level document disagree, stop and reconcile the documentation with production code rather than inventing a third interpretation.
+Before adding another service, adapter, codec, build path, or project detector, search for the existing owner and extend it.
 
-## Editing flow
+## Cache publication
 
-The normal editing path is:
+Opening a cache is not permission to mutate it.
 
-    input
-      -> active core tool
-      -> command or validated ChangePlan
-      -> WorldDocument
-      -> dirty-region / revision tracking
-      -> incremental scene compile
-      -> render-neutral GPU plan
-      -> native renderer
+Normal reads remain read-only. Direct writes require an explicit writable output/staging cache, validation, flush, reopen, and verification. Connected OpenRune LIVE/SERVER caches are generated project outputs, not ordinary mutable workspaces.
 
-UI callbacks do not directly mutate cache files or renderer buffers.
+## OpenRune project publication
 
-## Save, autosave, publish
+For OpenRune-owned resources:
 
-Keep these meanings separate:
+1. determine the authoritative source;
+2. detect stale external edits;
+3. write the supported source form atomically;
+4. invoke the project's detected build;
+5. reopen the generated output;
+6. verify the expected semantic result.
 
-**Edit/preview**
-- changes canonical authored state;
-- records undo/redo;
-- marks project resources dirty;
-- updates derived scene state.
+Never silently patch generated LIVE/SERVER caches as a fallback.
 
-**Save Project**
-- writes Studio-owned project/edit state atomically;
-- must be reopenable without publishing a cache;
-- must not modify the source cache;
-- must not mark an unpublished cache change as published.
+## Bridge rules
 
-SessionAutosaveStore already proves the cache-independent snapshot model. Extend that model into the durable project-edit store rather than making autosave files the only long-lived representation.
+The eventual bridge is local tooling, not a public internet service.
 
-**Publish Cache**
-- is explicit;
-- encodes validated changed resources;
-- writes an explicit output/staging cache;
-- flushes reference-table changes;
-- reopens and verifies output;
-- only then advances the publication baseline.
+- bind loopback by default;
+- expose explicit versioned DTOs, not internal JVM/OpenRune classes;
+- use HTTP for request/response operations and WebSocket for events/logs;
+- make long-running build operations observable and cancellable where practical;
+- keep browser-only editor workflows usable when the bridge is absent;
+- report capabilities rather than forcing the frontend to guess.
 
-Do not redefine Save Project to mean Publish Cache.
+## PR discipline
 
-## Connected OpenRune projects
+Keep at most one or two focused PRs active. Finish validation and merge before starting additional work.
 
-Treat .data/cache/LIVE and .data/cache/SERVER as generated outputs owned by the imported OpenRune project.
-
-Never:
-
-- patch LIVE or SERVER directly as a normal Studio write path;
-- run FreshCache automatically on project open;
-- duplicate OpenRune's incremental build database or pack ordering;
-- assume LIVE and SERVER are interchangeable.
-
-For a supported resource, edit the authoritative OpenRune source representation, perform stale-source checks, then invoke the detected project build entry point and verify generated outputs.
-
-For arbitrary terrain/location map edits, connected-project publication remains disabled until there is an explicit lossless OpenRune-consumed source/build hook. Studio may still save the edit in its own project state and preview it without touching generated caches.
-
-## Rendering rules
-
-Rendering has one path. Do not build a second scene system for diagnostics, HD work, previews, or tools.
-
-Current high-level flow:
-
-    WorldDocument
-      -> scene resolution
-      -> incremental 8x8-zone compile
-      -> GpuScenePacket / upload plan
-      -> zoned upload plan
-      -> ZoneVboManager
-      -> SharedGpuArena
-      -> OpenGlSceneRenderer
-      -> NativeSceneViewport
-
-Camera movement alone must not rebuild or upload static scene geometry.
-
-Dirty edits should invalidate the smallest correct dependency set. Full rebuild remains a correctness fallback for topology, cache, revision, or renderer-contract changes.
-
-The renderer is not considered performance-complete. Preserve or improve telemetry for CPU compile time, upload bytes, native geometry bytes, draw submission time, GPU time, heap/direct memory, dirty/reused zone counts, and frame rate under both stationary and active-edit workloads.
-
-Do not trade OSRS semantics or editor correctness for a benchmark shortcut.
-
-## Reference discipline
-
-Use the right source for the question:
-
-1. real OSRS cache fixtures for data and scene acceptance;
-2. vendored RuneLite client source for OSRS scene behavior;
-3. RuneLite API naming only as a vocabulary reference;
-4. RuneLite GPU/client rendering source when investigating renderer behavior;
-5. OpenRune FileStore for modern cache encoding, writing, reference tables, and cache tooling;
-6. OpenRune Server for connected-project source/build/cache ownership;
-7. Terraini and TSPS only as secondary implementation references;
-8. legacy RSPSi behavior only when locked by current tests or independently validated.
-
-Do not copy a reference project's architecture simply because one useful algorithm lives there.
-
-## Change checklist
-
-Before opening a PR:
-
-1. identify the canonical owner;
-2. search for an existing equivalent method/service;
-3. update the smallest correct layer;
-4. keep backend/UI/native types behind their boundaries;
-5. add focused tests;
-6. update the authoritative document if ownership or flow changed;
-7. update ROADMAP.md only if priority/status changed;
-8. verify no obsolete architecture document now contradicts the change.
-
-A clean change leaves fewer possible ways to do the same thing, not more.
+A good migration PR reduces ambiguity: fewer duplicate paths, clearer ownership, and no new dependency on the old desktop architecture.
