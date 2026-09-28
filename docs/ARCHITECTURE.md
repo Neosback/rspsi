@@ -108,12 +108,18 @@ The frontend queries capabilities. It does not infer them from product names or 
 Target dependency direction:
 
 ```text
-server -> openrune -> core
-             |
-             +---- external OpenRune libraries
+Browser DTOs ----+
+                 |
+Companion -------+--> Protocol
+                 |
+OpenRune Agent --+
 
-protocol DTOs remain neutral
+Companion -> openrune -> core
+                    |
+                    +---- external OpenRune libraries
 ```
+
+The checked-in `:Protocol` module is the neutral contract seam. It must not expose Ktor, OpenRune, PSI, Gradle, FileStore, renderer, or editor implementation types.
 
 No core API should require Ktor, UI, GLFW, ImGui, OpenGL, or Svelte concepts.
 

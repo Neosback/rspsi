@@ -7,6 +7,7 @@ import com.openrune.studio.companion.openrune.OpenRuneContentIndexer
 import com.openrune.studio.companion.openrune.OpenRuneContentResolver
 import com.openrune.studio.companion.openrune.OpenRuneProjectInspector
 import com.openrune.studio.companion.openrune.OpenRuneKotlinSourceIndexer
+import com.openrune.studio.protocol.StudioCapabilities
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.jackson.jackson
 import io.ktor.server.application.Application
@@ -52,11 +53,11 @@ fun Application.companionModule(
                     status = "ready",
                     capabilities =
                         listOf(
-                            "openrune-project-inspection",
-                            "openrune-cache-read",
-                            "openrune-content-index",
-                            "openrune-content-resolve",
-                            "openrune-kotlin-source-index",
+                            StudioCapabilities.ProjectInspection.id,
+                            StudioCapabilities.CacheRead.id,
+                            StudioCapabilities.ContentIndex.id,
+                            StudioCapabilities.ContentResolve.id,
+                            StudioCapabilities.SourceIndex.id,
                         ),
                 ),
             )

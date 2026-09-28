@@ -39,17 +39,17 @@ The frontend should begin with a status/capability request, conceptually:
 ```json
 {
   "apiVersion": 1,
-  "capabilities": {
-    "cacheRead": true,
-    "cacheWrite": true,
-    "openRuneProject": true,
-    "gradleBuild": true,
-    "sourceIndex": true
-  }
+  "capabilities": [
+    "project.inspect",
+    "cache.read",
+    "content.index",
+    "content.resolve",
+    "source.index"
+  ]
 }
 ```
 
-Capabilities are explicit and may depend on the currently opened project.
+Capabilities are explicit, dot-namespaced protocol identifiers and may depend on the currently opened project or runtime. The neutral `Protocol` module owns shared capability/runtime DTOs so neither the browser nor a future in-server Agent depends on Companion implementation types.
 
 ## Initial resource families
 
