@@ -9,7 +9,11 @@ This roadmap tracks the transition from the native desktop application to the JV
 - [x] collapse obsolete desktop architecture documentation;
 - [ ] keep CI/build green while extraction starts.
 
-## Current foundation - Companion and protocol\n\nThe loopback Companion and neutral Protocol module now exist earlier than the original phase ordering anticipated. Security/project sessions and project-scoped indexing are foundation work, not deferred bridge polish.\n\n## Phase 1 - headless core
+## Current foundation - Companion and protocol
+
+The loopback Companion and neutral Protocol module now exist earlier than the original phase ordering anticipated. Security/project sessions and project-scoped indexing are foundation work, not deferred transport polish.
+
+## Phase 1 - headless core
 
 Goal: prove the reusable backend works without depending on native UI/rendering.
 
@@ -39,9 +43,9 @@ Acceptance:
 - `:server` depends on headless services only;
 - repository tests run without launching a desktop UI.
 
-## Phase 3 - local bridge
+## Phase 3 - local Companion expansion
 
-Add Ktor after the headless services exist.
+Ktor already exists as the loopback Companion transport. Continue hardening and expanding it over headless services rather than treating transport as a future phase.
 
 First slice:
 
@@ -59,7 +63,9 @@ Then:
 - OpenRune project open/inspection;
 - source/GameVal lookup;
 - build operation lifecycle;
-- project-scoped cached content/source snapshots;\n- dedicated single-thread PSI/index execution;\n- file/cache watchers.
+- project-scoped cached content/source snapshots;
+- dedicated single-thread PSI/index execution;
+- file/cache watchers.
 
 ## Phase 4 - web editor integration
 
@@ -102,7 +108,7 @@ Before expanding the source browser or adding invasive runtime instrumentation:
 - [x] document verified OpenRune boot, Guice, plugin, event, cache, GameVal, pack, and tooling architecture;
 - [x] document external-plugin classloader/reload constraints;
 - [x] separate Companion static/project authority from future Agent runtime authority;
-- [ ] add neutral runtime identity/lifecycle/plugin contracts;
+- [x] add neutral runtime identity/lifecycle/plugin contracts;
 - [ ] prove a minimal read-only OpenRune Studio Agent;
 - [ ] inventory runtime event registrations through supported APIs or a narrow adapter;
 - [ ] validate game-thread access rules before any live mutation;
