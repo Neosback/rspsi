@@ -6,7 +6,7 @@ import com.rspsi.cache.definition.DefinitionProvider;
 import com.rspsi.cache.map.MapIndexEntry;
 import com.rspsi.cache.map.MapIndexTable;
 import com.rspsi.cache.map.OsrsMapService;
-import com.rspsi.cache.map.OsrsRegionEncoder;
+import com.rspsi.cache.map.CoreRegionTestFixtures;
 import com.rspsi.cache.store.CacheStore;
 import com.rspsi.editor.model.WorldDocument;
 import com.rspsi.editor.SetTileCommand;
@@ -126,8 +126,8 @@ class OsrsStudioProjectTest {
         private RecordingStore(OsrsCacheMetadata identity) {
             this.identity = identity;
             WorldDocument source = new WorldDocument(64, 64, 4);
-            values.put("5:100:0", OsrsRegionEncoder.encodeTerrain(source, true));
-            values.put("5:100:1", OsrsRegionEncoder.encodeLocations(source));
+            values.put("5:100:0", CoreRegionTestFixtures.encodeTerrain(source, 50, 50));
+            values.put("5:100:1", CoreRegionTestFixtures.encodeLocations(source, 50, 50));
         }
 
         @Override public byte[] read(int index, int archive, int file) {
