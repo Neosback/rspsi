@@ -22,7 +22,8 @@ Goal: prove the reusable backend works without depending on native UI/rendering.
 - establish headless tests for cache open/inspect;
 - [x] establish modern headless region decode/encode round trips in `:Core`;
 - [x] cross-check the modern Core codec against the existing Client codec in both directions;
-- [x] route production modern Client region load/save through Core using a temporary model adapter;\n- delete the duplicate Client codec and retire pre-modern terrain plumbing;
+- [x] route production modern Client region load/save through Core using a temporary model adapter;
+- delete the duplicate Client codec and retire pre-modern terrain plumbing;
 - establish explicit writable-output publication verification;
 - establish OpenRune project inspection and build discovery tests.
 
