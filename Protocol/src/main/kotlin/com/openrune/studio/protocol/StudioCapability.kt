@@ -17,6 +17,7 @@ data class StudioCapability(
 }
 
 object StudioCapabilities {
+    val ProjectOpen = StudioCapability("project.open")
     val ProjectInspection = StudioCapability("project.inspect")
     val CacheRead = StudioCapability("cache.read")
     val ContentIndex = StudioCapability("content.index")
@@ -32,6 +33,7 @@ object StudioCapabilities {
 
     val all: List<StudioCapability> =
         listOf(
+            ProjectOpen,
             ProjectInspection,
             CacheRead,
             ContentIndex,
