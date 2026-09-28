@@ -24,13 +24,19 @@ class OpenRuneContentResolver(
     private val sourceIndexer: OpenRuneKotlinSourceIndexer = OpenRuneKotlinSourceIndexer(),
 ) {
     fun resolve(requestedRoot: Path, requestedSymbol: String): ResolvedContentSymbol {
+        val content = contentIndexer.index(requestedRoot)
+        val source = sourceIndexer.index(requestedRoot)
+        return resolve(content, source, requestedSymbol)
+    }
+
+    fun resolve(
+        content: OpenRuneContentIndex,
+        source: OpenRuneSourceIndex,
+        requestedSymbol: String,
+    ): ResolvedContentSymbol {
         val symbol = requestedSymbol.trim()
         require(symbol.isNotEmpty()) { "symbol is required" }
         require('.' in symbol) { "symbol must be qualified, for example content.rock" }
-
-        val content = contentIndexer.index(requestedRoot)
-        val source = sourceIndexer.index(requestedRoot)
-
         val gameVals =
             content.gameVals.filter { it.qualifiedName.equals(symbol, ignoreCase = true) }
 

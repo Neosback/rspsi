@@ -59,7 +59,7 @@ Then:
 - OpenRune project open/inspection;
 - source/GameVal lookup;
 - build operation lifecycle;
-- file/cache watchers.
+- project-scoped cached content/source snapshots;\n- dedicated single-thread PSI/index execution;\n- file/cache watchers.
 
 ## Phase 4 - web editor integration
 

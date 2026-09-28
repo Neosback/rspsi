@@ -2,9 +2,7 @@ package com.openrune.studio.companion
 
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.openrune.studio.companion.cache.OpenRuneCacheReader
-import com.openrune.studio.companion.openrune.OpenRuneContentIndexer
-import com.openrune.studio.companion.openrune.OpenRuneContentResolver
-import com.openrune.studio.companion.openrune.OpenRuneKotlinSourceIndexer
+import com.openrune.studio.companion.project.ProjectIndexService
 import com.openrune.studio.companion.project.ProjectSessionManager
 import com.openrune.studio.protocol.StudioCapabilities
 import io.ktor.http.HttpStatusCode
@@ -34,9 +32,7 @@ fun Application.companionModule(
     security: CompanionSecurity = CompanionSecurity.create(),
     projectSessions: ProjectSessionManager = ProjectSessionManager(),
     openRuneCacheReader: OpenRuneCacheReader = OpenRuneCacheReader(),
-    openRuneContentIndexer: OpenRuneContentIndexer = OpenRuneContentIndexer(),
-    openRuneContentResolver: OpenRuneContentResolver = OpenRuneContentResolver(),
-    openRuneKotlinSourceIndexer: OpenRuneKotlinSourceIndexer = OpenRuneKotlinSourceIndexer(),
+    projectIndexes: ProjectIndexService = ProjectIndexService(),
 ) {
     installApiErrors()
     installCompanionSecurity(security)
@@ -80,7 +76,7 @@ fun Application.companionModule(
         post("/api/v1/project/{projectId}/content/index") {
             val project = projectSessions.require(call.parameters["projectId"])
             requireCapability(project.capabilities, StudioCapabilities.ContentIndex.id)
-            call.respond(HttpStatusCode.OK, openRuneContentIndexer.index(project.root))
+            call.respond(HttpStatusCode.OK, projectIndexes.content(project))
         }
 
         post("/api/v1/project/{projectId}/content/resolve") {
@@ -96,14 +92,21 @@ fun Application.companionModule(
             }
             call.respond(
                 HttpStatusCode.OK,
-                openRuneContentResolver.resolve(project.root, request.symbol),
+                projectIndexes.resolve(project, request.symbol),
             )
         }
 
         post("/api/v1/project/{projectId}/source/index") {
             val project = projectSessions.require(call.parameters["projectId"])
             requireCapability(project.capabilities, StudioCapabilities.SourceIndex.id)
-            call.respond(HttpStatusCode.OK, openRuneKotlinSourceIndexer.index(project.root))
+            call.respond(HttpStatusCode.OK, projectIndexes.source(project))
+        }
+
+        post("/api/v1/project/{projectId}/index/refresh") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            requireCapability(project.capabilities, StudioCapabilities.ContentIndex.id)
+            requireCapability(project.capabilities, StudioCapabilities.SourceIndex.id)
+            call.respond(HttpStatusCode.OK, projectIndexes.refresh(project))
         }
 
         get("/api/v1/project/{projectId}/cache/{role}/inspect") {

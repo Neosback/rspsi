@@ -66,12 +66,15 @@ GET  /api/v1/project/{projectId}
 POST /api/v1/project/{projectId}/content/index
 POST /api/v1/project/{projectId}/content/resolve
 POST /api/v1/project/{projectId}/source/index
+POST /api/v1/project/{projectId}/index/refresh
 
 GET  /api/v1/project/{projectId}/cache/live/inspect
 GET  /api/v1/project/{projectId}/cache/server/inspect
 ```
 
 The project session is the filesystem security boundary. Do not reintroduce request-level arbitrary project paths.
+
+Content and Kotlin source indexes are cached together per open project. Requests compute a lightweight source fingerprint; unchanged projects reuse the same snapshot, while changed fingerprints rebuild it. Index construction, including Kotlin PSI, runs on one dedicated Companion index thread instead of Ktor call threads. `POST /index/refresh` forces a rebuild. A filesystem watcher will later invalidate the same snapshot proactively.
 
 ## Error model
 
