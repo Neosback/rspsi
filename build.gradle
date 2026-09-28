@@ -457,5 +457,5 @@ tasks.register('parityGate') {
 tasks.register('foundationGate') {
     description = 'Runs deterministic repository foundation checks without external cache dependencies.'
     group = 'verification'
-    dependsOn 'test', 'check', ':Client:check', ':Editor:check', 'verifyNativeBoundary', 'renderingAuditGate'
+    dependsOn 'test', 'check', ':Client:check', ':Editor:check', ':Companion:check', 'verifyNativeBoundary', 'renderingAuditGate'
 }
