@@ -3,6 +3,7 @@ package com.openrune.studio.companion
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.openrune.studio.companion.cache.OpenRuneCacheReader
+import com.openrune.studio.companion.openrune.OpenRuneContentIndexer
 import com.openrune.studio.companion.openrune.OpenRuneProjectInspector
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.jackson.jackson
@@ -29,6 +30,7 @@ data class CompanionStatus(
 fun Application.companionModule(
     openRuneProjectInspector: OpenRuneProjectInspector = OpenRuneProjectInspector(),
     openRuneCacheReader: OpenRuneCacheReader = OpenRuneCacheReader(),
+    openRuneContentIndexer: OpenRuneContentIndexer = OpenRuneContentIndexer(),
 ) {
     install(ContentNegotiation) {
         jackson {
@@ -48,6 +50,7 @@ fun Application.companionModule(
                         listOf(
                             "openrune-project-inspection",
                             "openrune-cache-read",
+                            "openrune-content-index",
                         ),
                 ),
             )
@@ -56,6 +59,22 @@ fun Application.companionModule(
         post("/api/v1/openrune/inspect") {
             val path = call.requiredPath() ?: return@post
             call.respond(HttpStatusCode.OK, openRuneProjectInspector.inspect(path))
+        }
+
+        post("/api/v1/openrune/content/index") {
+            val path = call.requiredPath() ?: return@post
+            val index =
+                try {
+                    openRuneContentIndexer.index(path)
+                } catch (failure: IllegalArgumentException) {
+                    call.respond(
+                        HttpStatusCode.UnprocessableEntity,
+                        mapOf("error" to (failure.message ?: "content indexing failed")),
+                    )
+                    return@post
+                }
+
+            call.respond(HttpStatusCode.OK, index)
         }
 
         post("/api/v1/cache/inspect") {
