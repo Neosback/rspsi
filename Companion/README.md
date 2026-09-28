@@ -13,13 +13,13 @@ The service is loopback-only and currently provides:
 ```
 GET  http://127.0.0.1:8765/api/v1/status
 POST http://127.0.0.1:8765/api/v1/openrune/inspect
-POST http://127.0.0.1:8765/api/v1/openrune/content/index
+POST http://127.0.0.1:8765/api/v1/openrune/content/index\nPOST http://127.0.0.1:8765/api/v1/openrune/source/index
 POST http://127.0.0.1:8765/api/v1/cache/inspect
 ```
 
 OpenRune project inspection is passive. It detects project layout, expected cache/GameVal locations, and available source/build roots without running Gradle, loading server code, or changing files.
 
-Content indexing discovers OpenRune content modules plus plugin-local `gamevals.toml` and generated `.data/gamevals/*.rscm` mappings. It emits neutral module/GameVal DTOs for the browser. The original Kotlin/TOML/RSCM files remain authoritative.
+Content indexing discovers OpenRune content modules plus plugin-local `gamevals.toml` and generated `.data/gamevals/*.rscm` mappings. It emits neutral module/GameVal DTOs for the browser. The original Kotlin/TOML/RSCM files remain authoritative.\n\nKotlin source indexing uses compiler PSI only for structural parsing. It emits neutral plugin-script, function, call, handler, symbol-reference, and source-span facts without requiring OpenRune classes to compile or leaking compiler types through the API.
 
 Cache inspection uses OpenRune FileStore in read-only mode and currently exposes archive/index structure plus revision metadata when `version.dat` provides it. The browser remains responsible for map/model decoding and rendering.
 
