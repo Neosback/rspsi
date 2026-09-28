@@ -32,6 +32,7 @@ class CompanionServerTest {
         assertTrue(body.contains("\"openrune-project-inspection\""))
         assertTrue(body.contains("\"openrune-cache-read\""))
         assertTrue(body.contains("\"openrune-content-index\""))
+        assertTrue(body.contains("\"openrune-content-resolve\""))
         assertTrue(body.contains("\"openrune-kotlin-source-index\""))
     }
 
@@ -98,6 +99,61 @@ class CompanionServerTest {
             val body = response.body<String>()
             assertTrue(body.contains("\"qualifiedName\":\"content.rock\""))
             assertTrue(body.contains("\"modulePath\":\"skills/mining\""))
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+
+    @Test
+    fun contentResolveEndpointJoinsGameValAndKotlinHandler() = testApplication {
+        val root = Files.createTempDirectory("openrune-content-resolve-api")
+        try {
+            val module = root.resolve("content/skills/mining")
+            module.createDirectories()
+            module.resolve("build.gradle.kts").writeText("plugins {}")
+
+            val resources = module.resolve("src/main/resources")
+            resources.createDirectories()
+            resources.resolve("gamevals.toml").writeText(
+                """
+                [gamevals.content]
+                rock = 52
+                """.trimIndent(),
+            )
+
+            val source = module.resolve("src/main/kotlin/org/example")
+            source.createDirectories()
+            source.resolve("Mining.kt").writeText(
+                """
+                package org.example
+
+                class Mining : PluginScript() {
+                    fun ScriptContext.startup() {
+                        onOpContentLoc1("content.rock") { mine() }
+                    }
+
+                    private fun mine() = Unit
+                }
+                """.trimIndent(),
+            )
+
+            application {
+                companionModule()
+            }
+
+            val jsonPath = root.toString().replace("\\", "\\\\")
+            val response = client.post("/api/v1/openrune/content/resolve") {
+                contentType(ContentType.Application.Json)
+                setBody("{\"path\":\"$jsonPath\",\"symbol\":\"content.rock\"}")
+            }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            val body = response.body<String>()
+            assertTrue(body.contains("\"found\":true"))
+            assertTrue(body.contains("\"qualifiedName\":\"content.rock\""))
+            assertTrue(body.contains("\"name\":\"onOpContentLoc1\""))
+            assertTrue(body.contains("\"name\":\"Mining\""))
         } finally {
             root.toFile().deleteRecursively()
         }

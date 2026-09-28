@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.openrune.studio.companion.cache.OpenRuneCacheReader
 import com.openrune.studio.companion.openrune.OpenRuneContentIndexer
+import com.openrune.studio.companion.openrune.OpenRuneContentResolver
 import com.openrune.studio.companion.openrune.OpenRuneProjectInspector
 import com.openrune.studio.companion.openrune.OpenRuneKotlinSourceIndexer
 import io.ktor.http.HttpStatusCode
@@ -32,6 +33,7 @@ fun Application.companionModule(
     openRuneProjectInspector: OpenRuneProjectInspector = OpenRuneProjectInspector(),
     openRuneCacheReader: OpenRuneCacheReader = OpenRuneCacheReader(),
     openRuneContentIndexer: OpenRuneContentIndexer = OpenRuneContentIndexer(),
+    openRuneContentResolver: OpenRuneContentResolver = OpenRuneContentResolver(),
     openRuneKotlinSourceIndexer: OpenRuneKotlinSourceIndexer = OpenRuneKotlinSourceIndexer(),
 ) {
     install(ContentNegotiation) {
@@ -53,6 +55,7 @@ fun Application.companionModule(
                             "openrune-project-inspection",
                             "openrune-cache-read",
                             "openrune-content-index",
+                            "openrune-content-resolve",
                             "openrune-kotlin-source-index",
                         ),
                 ),
@@ -78,6 +81,41 @@ fun Application.companionModule(
                 }
 
             call.respond(HttpStatusCode.OK, index)
+        }
+
+        post("/api/v1/openrune/content/resolve") {
+            val request = runCatching { call.receive<JsonNode>() }.getOrNull()
+            val requestedPath = request?.path("path")?.asText()?.trim().orEmpty()
+            val symbol = request?.path("symbol")?.asText()?.trim().orEmpty()
+            if (requestedPath.isEmpty()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "path is required"))
+                return@post
+            }
+            if (symbol.isEmpty()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "symbol is required"))
+                return@post
+            }
+
+            val path =
+                try {
+                    Path.of(requestedPath)
+                } catch (_: InvalidPathException) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "path is invalid"))
+                    return@post
+                }
+
+            val resolved =
+                try {
+                    openRuneContentResolver.resolve(path, symbol)
+                } catch (failure: IllegalArgumentException) {
+                    call.respond(
+                        HttpStatusCode.UnprocessableEntity,
+                        mapOf("error" to (failure.message ?: "content resolution failed")),
+                    )
+                    return@post
+                }
+
+            call.respond(HttpStatusCode.OK, resolved)
         }
 
         post("/api/v1/openrune/source/index") {
