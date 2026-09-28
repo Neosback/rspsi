@@ -157,7 +157,7 @@ class OpenRuneWritableRoundTripTest {
         // Write the same payload back through the writable adapter; the file
         // bytes after flush must be semantically identical on reopen.
         try (CacheStore store = CacheStoreFactory.openRuneWritable(output)) {
-            OsrsMapService maps = new OsrsMapService(store, 5, namedIndex(store), true);
+            OsrsMapService maps = new OsrsMapService(store, 5, namedIndex(store));
             maps.writeLandscape(50, 50, seededTerrain);
             maps.flush();
         }
