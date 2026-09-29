@@ -21,6 +21,9 @@ GET  /api/v1/status
 POST /api/v1/project/open
 GET  /api/v1/project/{projectId}
 GET  /api/v1/project/{projectId}/gradle/tasks
+GET  /api/v1/project/{projectId}/gradle/operations
+POST /api/v1/project/{projectId}/gradle/operations
+GET  /api/v1/project/{projectId}/gradle/operations/{operationId}
 POST /api/v1/project/{projectId}/content/index
 POST /api/v1/project/{projectId}/content/resolve
 POST /api/v1/project/{projectId}/source/index
@@ -33,7 +36,7 @@ GET  /api/v1/project/{projectId}/cache/server/inspect
 
 A project with a detected Gradle wrapper advertises the `gradle.tasks` capability.
 
-`GET /api/v1/project/{projectId}/gradle/tasks` is the only Gradle operation currently exposed. It explicitly invokes the opened project's wrapper with the fixed discovery command:
+`GET /api/v1/project/{projectId}/gradle/tasks` explicitly invokes the opened project's wrapper with the fixed discovery command:
 
 ```text
 tasks --all --console=plain --no-daemon
@@ -46,3 +49,22 @@ Opening a project remains passive and never executes Gradle.
 Clients query capabilities instead of assuming features from paths or product version.
 
 Externally consumed contracts are neutral, versioned DTOs. Do not serialize PSI nodes, Gradle model objects, OpenRune FileStore objects, Java `Path`, or server/plugin implementation instances.
+
+
+## Bounded Gradle operations
+
+Projects with a detected Gradle wrapper advertise the `gradle.operations` capability.
+
+The operation catalog exposes exactly three finite operations:
+
+| Operation ID | Gradle task |
+| --- | --- |
+| `assemble` | `assemble` |
+| `test` | `test` |
+| `cache-build` | `:or-cache:buildCache` |
+
+`POST /api/v1/project/{projectId}/gradle/operations` accepts only an operation ID. The caller cannot submit an arbitrary task, option, shell command, environment override, or working directory.
+
+Only one Gradle operation may run against an opened project at a time. Results receive an opaque operation ID and a terminal state of `SUCCEEDED`, `FAILED`, or `TIMED_OUT`. Recent results are project-scoped and can be fetched through the operation-result endpoint.
+
+Output is bounded and retains the tail when truncation is required. The OpenRune server `run` task is intentionally not exposed yet because it requires long-lived process lifecycle, log streaming, and cancellation semantics.
