@@ -14,9 +14,10 @@
 - harden project compatibility detection;
 - [x] model Gradle wrapper/task capabilities and explicit task discovery;
 - [x] add bounded `assemble`, `test`, and cache-build operations;
-- add asynchronous lifecycle before exposing the long-lived server `run` operation;
-- stream operation status/logs;
-- add cancellation;
+- [x] add asynchronous operation lifecycle;
+- [x] stream operation status/log snapshots over SSE;
+- [x] add cancellation and process-tree termination;
+- expose the long-lived server `run` operation on the proven lifecycle;
 - add project file/output watchers;
 - add fingerprints and stale-source diagnostics.
 
