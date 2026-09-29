@@ -1,5 +1,6 @@
 package com.openrune.studio.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.openrune.studio.service.cache.OpenRuneCacheReader
 import com.openrune.studio.service.gradle.DefaultGradleOperationService
@@ -19,8 +20,12 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.server.sse.SSE
+import io.ktor.server.sse.sse
+import kotlinx.coroutines.flow.first
 
 private const val API_VERSION = 1
+private val EVENT_JSON = ObjectMapper()
 
 data class StudioServiceStatus(
     val name: String,
@@ -43,6 +48,8 @@ fun Application.studioServiceModule(
 ) {
     installApiErrors()
     installStudioServiceSecurity(security)
+
+    install(SSE)
 
     install(ContentNegotiation) {
         jackson {
@@ -97,8 +104,8 @@ fun Application.studioServiceModule(
             requireCapability(project.capabilities, StudioCapabilities.GradleOperations.id)
             val request = call.receive<GradleOperationRequest>()
             call.respond(
-                HttpStatusCode.OK,
-                gradleOperations.execute(project, request.operation),
+                HttpStatusCode.Accepted,
+                gradleOperations.start(project, request.operation),
             )
         }
 
@@ -107,11 +114,38 @@ fun Application.studioServiceModule(
             requireCapability(project.capabilities, StudioCapabilities.GradleOperations.id)
             call.respond(
                 HttpStatusCode.OK,
-                gradleOperations.requireResult(
+                gradleOperations.requireSnapshot(
                     project,
                     call.parameters["operationId"].orEmpty(),
                 ),
             )
+        }
+
+        post("/api/v1/project/{projectId}/gradle/operations/{operationId}/cancel") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            requireCapability(project.capabilities, StudioCapabilities.GradleOperations.id)
+            call.respond(
+                HttpStatusCode.Accepted,
+                gradleOperations.cancel(
+                    project,
+                    call.parameters["operationId"].orEmpty(),
+                ),
+            )
+        }
+
+        sse("/api/v1/project/{projectId}/gradle/operations/{operationId}/events") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            requireCapability(project.capabilities, StudioCapabilities.GradleOperations.id)
+            val operationId = call.parameters["operationId"].orEmpty()
+
+            gradleOperations.snapshots(project, operationId).first { snapshot ->
+                send(
+                    data = EVENT_JSON.writeValueAsString(snapshot),
+                    event = "snapshot",
+                    id = snapshot.sequence.toString(),
+                )
+                snapshot.state.terminal
+            }
         }
 
         post("/api/v1/project/{projectId}/content/index") {
