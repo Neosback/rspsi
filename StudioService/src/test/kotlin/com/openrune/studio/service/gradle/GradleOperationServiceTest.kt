@@ -136,7 +136,7 @@ class GradleOperationServiceTest {
     }
 
     @Test
-    fun rejectsConcurrentOperationsForSameProject() = runBlocking {
+    fun rejectsConcurrentOperationsForSameCheckoutAcrossSessions() = runBlocking {
         val entered = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         val runner =
@@ -155,12 +155,13 @@ class GradleOperationServiceTest {
 
         val service = DefaultGradleOperationService(runner = runner)
         val project = projectSession("project-one")
+        val secondSession = project.copy(id = "project-two")
         val first = async { service.execute(project, "assemble") }
         entered.await()
 
         val failure =
             try {
-                service.execute(project, "test")
+                service.execute(secondSession, "test")
                 fail("expected project to reject concurrent Gradle operation")
             } catch (failure: ApiException) {
                 failure
