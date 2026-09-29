@@ -22,6 +22,7 @@ class OpenRuneProjectInspectorTest {
                 """.trimIndent(),
             )
             root.resolve("gradlew").writeText("#!/bin/sh")
+            root.resolve("gradlew.bat").writeText("@echo off")
             root.resolve("or-cache").createDirectories()
             root.resolve("or-cache/build.gradle.kts").writeText("plugins { id(\"base-conventions\") }")
             root.resolve("content").createDirectories()
@@ -35,6 +36,7 @@ class OpenRuneProjectInspectorTest {
             assertTrue("cache-build-module" in result.capabilities)
             assertTrue("content-source" in result.capabilities)
             assertTrue("gradle-project" in result.capabilities)
+            assertTrue(result.locations.getValue("gradleWrapper").exists)
             assertFalse(result.locations.getValue("liveCache").exists)
             assertFalse(result.locations.getValue("gamevals").exists)
         } finally {

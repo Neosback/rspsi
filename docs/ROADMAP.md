@@ -12,7 +12,7 @@
 ## Phase 1 - OpenRune project control plane
 
 - harden project compatibility detection;
-- model Gradle wrapper/task capabilities;
+- [x] model Gradle wrapper/task capabilities and explicit task discovery;
 - add bounded build/test/run operations;
 - stream operation status/logs;
 - add cancellation;
@@ -40,5 +40,3 @@
 ## Phase 4 - Studio UX
 
 Build around OpenRune Server workflows: project status, content/source explorer, symbol/provenance navigation, build/test/run controls, logs/diagnostics, runtime/plugin/event inspection, and generated-output verification.
-
-Do not reintroduce a map editor as the primary application architecture.

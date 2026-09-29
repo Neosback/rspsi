@@ -26,8 +26,7 @@ class OpenRuneProjectInspector {
         val root = requestedRoot.toAbsolutePath().normalize()
         val settings = firstExisting(root.resolve("settings.gradle.kts"), root.resolve("settings.gradle"))
             ?: root.resolve("settings.gradle.kts")
-        val wrapper = firstExisting(root.resolve("gradlew"), root.resolve("gradlew.bat"))
-            ?: root.resolve("gradlew")
+        val wrapper = root.resolve(nativeWrapperName())
         val cacheModule = root.resolve("or-cache/build.gradle.kts")
         val content = root.resolve("content")
         val engine = root.resolve("engine")
@@ -75,7 +74,7 @@ class OpenRuneProjectInspector {
 
         if (Files.isRegularFile(wrapper)) {
             confidence += 10
-            evidence += "Gradle wrapper detected"
+            evidence += "Platform Gradle wrapper detected"
         }
 
         if (Files.isRegularFile(cacheModule)) {
@@ -134,6 +133,13 @@ class OpenRuneProjectInspector {
 
     private fun location(path: Path): ProjectLocation =
         ProjectLocation(path = path.toString(), exists = Files.exists(path))
+
+    private fun nativeWrapperName(): String =
+        if (System.getProperty("os.name").orEmpty().lowercase().contains("win")) {
+            "gradlew.bat"
+        } else {
+            "gradlew"
+        }
 
     private companion object {
         const val MATCH_THRESHOLD = 50

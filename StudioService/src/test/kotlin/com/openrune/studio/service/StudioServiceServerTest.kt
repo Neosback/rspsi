@@ -1,5 +1,9 @@
 package com.openrune.studio.service
 
+import com.openrune.studio.service.gradle.GradleTaskDiscovery
+import com.openrune.studio.service.gradle.GradleTaskDiscoveryService
+import com.openrune.studio.service.gradle.GradleTaskInfo
+import com.openrune.studio.service.project.ProjectSession
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -77,6 +81,7 @@ class StudioServiceServerTest {
         val body = response.body<String>()
         assertTrue(body.contains("\"project.open\""))
         assertFalse(body.contains("\"source.index\""))
+        assertFalse(body.contains("\"gradle.tasks\""))
     }
 
     @Test
@@ -100,7 +105,64 @@ class StudioServiceServerTest {
             assertTrue(body.contains("\"content.index\""))
             assertTrue(body.contains("\"content.resolve\""))
             assertTrue(body.contains("\"source.index\""))
+            assertTrue(body.contains("\"gradle.tasks\""))
             assertFalse(body.contains("\"cache.read\""))
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun gradleTaskDiscoveryUsesOpenedProjectAndReturnsStructuredTasks() = testApplication {
+        val root = openRuneProject()
+        try {
+            val discovery =
+                object : GradleTaskDiscoveryService {
+                    override suspend fun discoverTasks(project: ProjectSession): GradleTaskDiscovery {
+                        assertEquals(root.toRealPath(), project.root)
+                        return GradleTaskDiscovery(
+                            wrapper = "gradlew",
+                            taskCount = 2,
+                            tasks =
+                                listOf(
+                                    GradleTaskInfo(
+                                        path = ":or-cache:buildCache",
+                                        group = "build",
+                                        description = "Builds OpenRune caches.",
+                                    ),
+                                    GradleTaskInfo(
+                                        path = ":server:run",
+                                        group = "application",
+                                        description = "Runs the server.",
+                                    ),
+                                ),
+                        )
+                    }
+                }
+
+            application {
+                studioServiceModule(
+                    security = TEST_SECURITY,
+                    gradleProjects = discovery,
+                )
+            }
+
+            val openResponse = client.post("/api/v1/project/open") {
+                studioServiceAuth()
+                contentType(ContentType.Application.Json)
+                setBody(pathBody(root))
+            }
+            val projectId = projectId(openResponse.body())
+
+            val response = client.get("/api/v1/project/$projectId/gradle/tasks") {
+                studioServiceAuth()
+            }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            val body = response.body<String>()
+            assertTrue(body.contains("\"taskCount\":2"))
+            assertTrue(body.contains("\"path\":\":or-cache:buildCache\""))
+            assertTrue(body.contains("\"path\":\":server:run\""))
         } finally {
             root.toFile().deleteRecursively()
         }
@@ -131,12 +193,7 @@ class StudioServiceServerTest {
                 contentType(ContentType.Application.Json)
                 setBody(pathBody(root))
             }
-            val projectId =
-                Regex("\\\"projectId\\\":\\\"([^\\\"]+)\\\"")
-                    .find(openResponse.body<String>())
-                    ?.groupValues
-                    ?.get(1)
-                    ?: error("projectId missing")
+            val projectId = projectId(openResponse.body())
 
             val response = client.post("/api/v1/project/$projectId/content/index") {
                 studioServiceAuth()
@@ -186,7 +243,7 @@ class StudioServiceServerTest {
             include("content", "engine", "server", "or-cache")
             """.trimIndent(),
         )
-        root.resolve("gradlew").writeText("#!/bin/sh")
+        root.resolve("gradlew").writeText("#!/bin/sh")\n        root.resolve("gradlew.bat").writeText("@echo off")
         root.resolve("or-cache").createDirectories()
         root.resolve("or-cache/build.gradle.kts").writeText("plugins {}")
         root.resolve("content").createDirectories()
@@ -194,6 +251,13 @@ class StudioServiceServerTest {
         root.resolve("server").createDirectories()
         return root
     }
+
+    private fun projectId(body: String): String =
+        Regex("\\\"projectId\\\":\\\"([^\\\"]+)\\\"")
+            .find(body)
+            ?.groupValues
+            ?.get(1)
+            ?: error("projectId missing")
 
     private fun io.ktor.client.request.HttpRequestBuilder.studioServiceAuth() {
         loopbackHost()
