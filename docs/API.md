@@ -24,6 +24,8 @@ GET  /api/v1/project/{projectId}/gradle/tasks
 GET  /api/v1/project/{projectId}/gradle/operations
 POST /api/v1/project/{projectId}/gradle/operations
 GET  /api/v1/project/{projectId}/gradle/operations/{operationId}
+POST /api/v1/project/{projectId}/gradle/operations/{operationId}/cancel
+GET  /api/v1/project/{projectId}/gradle/operations/{operationId}/events
 POST /api/v1/project/{projectId}/content/index
 POST /api/v1/project/{projectId}/content/resolve
 POST /api/v1/project/{projectId}/source/index
@@ -63,8 +65,16 @@ The operation catalog exposes exactly three finite operations:
 | `test` | `test` |
 | `cache-build` | `:or-cache:buildCache` |
 
-`POST /api/v1/project/{projectId}/gradle/operations` accepts only an operation ID. The caller cannot submit an arbitrary task, option, shell command, environment override, or working directory.
+`POST /api/v1/project/{projectId}/gradle/operations` accepts only an operation ID and returns `202 Accepted` with a `RUNNING` snapshot and opaque operation ID. The caller cannot submit an arbitrary task, option, shell command, environment override, or working directory.
 
-Only one Gradle operation may run against an opened project at a time. Results receive an opaque operation ID and a terminal state of `SUCCEEDED`, `FAILED`, or `TIMED_OUT`. Recent results are project-scoped and can be fetched through the operation-result endpoint.
+Operation snapshots expose lifecycle state, elapsed duration, exit status when available, bounded stdout/stderr tails, truncation flags, cancellation state, and stable error information. Terminal states are `SUCCEEDED`, `FAILED`, `TIMED_OUT`, and `CANCELLED`.
 
-Output is bounded and retains the tail when truncation is required. The OpenRune server `run` task is intentionally not exposed yet because it requires long-lived process lifecycle, log streaming, and cancellation semantics.
+`GET /api/v1/project/{projectId}/gradle/operations/{operationId}` returns the latest project-scoped snapshot.
+
+`POST /api/v1/project/{projectId}/gradle/operations/{operationId}/cancel` requests cancellation. The process runner polls the cancellation signal and terminates the Gradle wrapper plus descendant processes.
+
+`GET /api/v1/project/{projectId}/gradle/operations/{operationId}/events` is a Server-Sent Events stream. It sends `snapshot` events containing the current operation snapshot whenever status or bounded log tails change, then closes after a terminal state.
+
+Only one Gradle operation may run against the same canonical checkout at a time, even when that checkout is opened through multiple Studio sessions. Recent snapshots remain session-scoped for lookup.
+
+The OpenRune server `run` task is still intentionally excluded from the allowlist. The lifecycle foundation is now suitable for adding that long-lived operation in a separate, focused change.
