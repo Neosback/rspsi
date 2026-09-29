@@ -54,7 +54,7 @@ Studio should treat these as distinct integration domains:
 4. **event/runtime system**;
 5. **tooling system**.
 
-The companion owns project/source/cache/build knowledge. A future in-server Studio agent owns runtime knowledge.
+StudioService owns project/source/cache/build knowledge. A future in-server Studio agent owns runtime knowledge.
 
 ---
 
@@ -432,7 +432,7 @@ cheat commands active
 engine queue bindings active
 ```
 
-The static companion can then compare those facts against source-index expectations.
+StudioService can then compare those facts against source-index expectations.
 
 ---
 
@@ -505,7 +505,7 @@ open SERVER cache
 
 ### Studio implication
 
-The standalone companion may inspect LIVE or SERVER through FileStore, but it should not pretend they are interchangeable.
+StudioService may inspect LIVE or SERVER through FileStore, but it should not pretend they are interchangeable.
 
 For browser/editor workflows:
 
@@ -690,7 +690,7 @@ The server has an explicit service lifecycle.
 
 Any future agent operation that reads or mutates live game state must define its threading model.
 
-The companion's HTTP request thread must never be assumed safe for direct mutation of game-thread-owned state.
+StudioService's HTTP request thread must never be assumed safe for direct mutation of game-thread-owned state.
 
 Initial live-agent capabilities should therefore be read-only and snapshot-oriented until a supported game-thread scheduling mechanism is explicitly identified and tested.
 
@@ -714,9 +714,9 @@ This confirms a useful OpenRune design pattern:
 
 > developer tooling may be a separate local process consuming the same project/cache outputs without becoming part of the game server.
 
-That aligns directly with the Studio Companion architecture.
+That aligns directly with the StudioService architecture.
 
-We should reuse concepts and source authorities from OpenRune tooling, but Studio does not need to wrap MCP internally. The Companion's versioned HTTP/WebSocket protocol serves a different purpose.
+We should reuse concepts and source authorities from OpenRune tooling, but Studio does not need to wrap MCP internally. StudioService's versioned HTTP/WebSocket protocol serves a different purpose.
 
 ---
 
@@ -729,7 +729,7 @@ Browser Studio
       |
       | versioned HTTP / WebSocket
       v
-Kotlin Companion
+Kotlin StudioService
       |
       +-- project inspection
       +-- FileStore
@@ -751,9 +751,9 @@ OpenRune Studio Agent
 OpenRune Server JVM
 ```
 
-### Companion responsibilities
+### StudioService responsibilities
 
-The Companion remains authoritative for:
+StudioService remains authoritative for:
 
 - project/source facts;
 - static source graph;

@@ -7,7 +7,7 @@ Studio UI / CLI
       |
       | versioned local API
       v
-Kotlin/JVM application service
+StudioService (Kotlin/JVM)
       |
       +-- project inspection
       +-- content + GameVal/RSCM indexing
@@ -25,13 +25,11 @@ The product is not a map editor. Rendering and world-authoring systems are not p
 
 ### Protocol
 
-Neutral contracts shared by the application service and future runtime Agent. It must not expose Ktor, PSI, Gradle, FileStore, UI, or OpenRune implementation objects.
+Neutral contracts shared by StudioService and the future runtime Agent. It must not expose Ktor, PSI, Gradle, FileStore, UI, or OpenRune implementation objects.
 
-### Companion
+### StudioService
 
-The current application service. The module name is transitional.
-
-It owns local API/security, project sessions, OpenRune project inspection, content/source indexes, generated cache inspection, and future build/watch/publication services.
+The Kotlin/JVM application service. It owns local API/security, project sessions, OpenRune project inspection, content/source indexes, generated cache inspection, and future build/watch/publication services.
 
 ## Authority model
 
@@ -54,9 +52,9 @@ Static project inspection and live runtime inspection are separate capabilities.
 ## Dependency direction
 
 ```text
-UI / CLI -> versioned API -> Companion -> external OpenRune libraries/project
-                            |
-                            +-> Protocol <- future Agent
+UI / CLI -> versioned API -> StudioService -> external OpenRune libraries/project
+                                |
+                                +-> Protocol <- future Agent
 ```
 
 No active module may depend on the archived editor/rendering stack.

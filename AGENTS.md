@@ -23,13 +23,13 @@ Before architecture-affecting work read:
 
 | Concern | Owner |
 | --- | --- |
-| OpenRune project sessions | `:Companion` project services |
-| OpenRune project inspection | `:Companion` OpenRune services |
-| Content/GameVal indexing | `:Companion` OpenRune services |
-| Kotlin source indexing | `:Companion` OpenRune services |
-| Generated cache inspection | `:Companion` cache services |
+| OpenRune project sessions | `:StudioService` project services |
+| OpenRune project inspection | `:StudioService` OpenRune services |
+| Content/GameVal indexing | `:StudioService` OpenRune services |
+| Kotlin source indexing | `:StudioService` OpenRune services |
+| Generated cache inspection | `:StudioService` cache services |
 | Stable DTO/runtime contracts | `:Protocol` |
-| Local HTTP API/security | `:Companion` |
+| Local HTTP API/security | `:StudioService` |
 | Future live runtime integration | narrow OpenRune Agent + `:Protocol` |
 
 ## OpenRune authority

@@ -37,5 +37,5 @@ subprojects {
 tasks.register('foundationGate') {
     description = 'Runs the deterministic OpenRune Server Studio foundation checks.'
     group = 'verification'
-    dependsOn ':Protocol:check', ':Companion:check'
+    dependsOn ':Protocol:check', ':StudioService:check'
 }
