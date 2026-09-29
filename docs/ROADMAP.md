@@ -1,118 +1,44 @@
 # Roadmap
 
-This roadmap tracks the transition from the native desktop application to the JVM companion for the web editor.
+## Phase 0 - repository reset
 
-## Phase 0 - architecture reset
+- [x] preserve all pre-reset branch tips in `archive/pre-openrune-reset-2026-09-29`;
+- [x] remove the legacy desktop/map editor stack from the active product;
+- [x] remove RuneLite/rendering parity infrastructure from the active product;
+- [x] remove the vendored OpenRune Server snapshot;
+- [x] reduce the build to Protocol + application service;
+- [ ] prune old individual branch refs after archive verification.
 
-- [x] establish browser/JVM ownership boundary;
-- [x] freeze new native-editor feature work;
-- [x] collapse obsolete desktop architecture documentation;
-- [ ] keep CI/build green while extraction starts.
+## Phase 1 - OpenRune project control plane
 
-## Current foundation - Companion and protocol
+- harden project compatibility detection;
+- model Gradle wrapper/task capabilities;
+- add bounded build/test/run operations;
+- stream operation status/logs;
+- add cancellation;
+- add project file/output watchers;
+- add fingerprints and stale-source diagnostics.
 
-The loopback Companion and neutral Protocol module now exist earlier than the original phase ordering anticipated. Security/project sessions and project-scoped indexing are foundation work, not deferred transport polish.
+## Phase 2 - content development workflow
 
-## Phase 1 - headless core
+- deepen module and GameVal/RSCM provenance;
+- deepen Kotlin source relationships;
+- define versioned edit payloads;
+- perform stale-source checks;
+- write authoritative source atomically;
+- rebuild through detected OpenRune tasks;
+- verify generated output.
 
-Goal: prove the reusable backend works without depending on native UI/rendering.
+## Phase 3 - live OpenRune Agent
 
-- continue Java-to-Kotlin migration in cache/OSRS/OpenRune boundaries;
-- remove accidental dependencies from reusable code into desktop/editor presentation;
-- establish headless tests for cache open/inspect;
-- [x] establish modern headless region decode/encode round trips in `:Core`;
-- [x] cross-check the modern Core codec against the existing Client codec in both directions;
-- [x] route production modern Client region load/save through Core using a temporary model adapter;
-- [x] delete the duplicate Client codec and retire pre-modern terrain plumbing;
-- establish explicit writable-output publication verification;
-- establish OpenRune project inspection and build discovery tests.
+- prove a minimal read-only Agent;
+- expose runtime identity/lifecycle;
+- expose plugins/scripts and supported event registrations;
+- validate game-thread access constraints;
+- add runtime diagnostics/events.
 
-The Protocol and Companion seams are proven. Modern region decode/encode now belongs exclusively to `:Core`. Client uses a temporary model adapter while legacy editor sessions still exist. XTEA and pre-modern terrain compatibility are intentionally outside the new Core scope.
+## Phase 4 - Studio UX
 
-## Phase 2 - module extraction
+Build around OpenRune Server workflows: project status, content/source explorer, symbol/provenance navigation, build/test/run controls, logs/diagnostics, runtime/plugin/event inspection, and generated-output verification.
 
-Target shape, adjusted if dependency evidence suggests fewer modules:
-
-```text
-:core
-:openrune
-:server
-```
-
-Acceptance:
-
-- `:core` has no desktop/OpenGL/ImGui/Ktor dependency;
-- `:openrune` depends on core and OpenRune/JVM tooling, not desktop code;
-- `:server` depends on headless services only;
-- repository tests run without launching a desktop UI.
-
-## Phase 3 - local Companion expansion
-
-Ktor already exists as the loopback Companion transport. Continue hardening and expanding it over headless services rather than treating transport as a future phase.
-
-First slice:
-
-- loopback-only server;
-- API version/status;
-- capability discovery;
-- cache open/metadata;
-- region read;
-- side-effect-free validation;
-- explicit output-cache publication;
-- WebSocket event channel.
-
-Then:
-
-- OpenRune project open/inspection;
-- source/GameVal lookup;
-- build operation lifecycle;
-- project-scoped cached content/source snapshots;
-- dedicated single-thread PSI/index execution;
-- file/cache watchers.
-
-## Phase 4 - web editor integration
-
-The separate Svelte/TypeScript/WebGL2 editor consumes the bridge opportunistically.
-
-- browser-only mode remains usable;
-- bridge connection/capabilities are visible;
-- cache/project operations use versioned DTOs;
-- large resource transfer is profiled before choosing JSON versus binary formats;
-- editor interaction/render loops never depend on bridge round trips.
-
-## Phase 5 - retire desktop application
-
-Remove `Editor/` and desktop-only dependencies when:
-
-1. reusable cache/OpenRune functionality has headless coverage;
-2. no surviving backend code depends on native UI/render classes;
-3. the web editor covers the required authoring workflow;
-4. reference/fixture assets needed for cache semantics have been preserved.
-
-## Ongoing Kotlin migration
-
-Keep migration incremental and reviewable.
-
-Near-term preference:
-
-1. small cache value/contract types;
-2. map/cache services and codecs where interop is manageable;
-3. OpenRune project/build value types and services;
-4. semantic/source integration;
-5. bridge contracts/services.
-
-Do not spend migration effort on desktop-only classes scheduled for deletion unless required to unlock removal.
-
-
-## Foundation checkpoint - OpenRune runtime model
-
-Before expanding the source browser or adding invasive runtime instrumentation:
-
-- [x] document verified OpenRune boot, Guice, plugin, event, cache, GameVal, pack, and tooling architecture;
-- [x] document external-plugin classloader/reload constraints;
-- [x] separate Companion static/project authority from future Agent runtime authority;
-- [x] add neutral runtime identity/lifecycle/plugin contracts;
-- [ ] prove a minimal read-only OpenRune Studio Agent;
-- [ ] inventory runtime event registrations through supported APIs or a narrow adapter;
-- [ ] validate game-thread access rules before any live mutation;
-- [ ] evaluate Byte Buddy only for trace features that cannot be implemented through supported registries.
+Do not reintroduce a map editor as the primary application architecture.

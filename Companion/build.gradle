@@ -1,4 +1,4 @@
-description = 'OpenRune Studio Companion'
+description = 'OpenRune Server Studio application service'
 
 apply plugin: 'application'
 apply plugin: 'org.jetbrains.kotlin.jvm'
@@ -22,10 +22,7 @@ dependencies {
 
     implementation "dev.or2:filesystem:${openruneFileStoreVersion}"
     implementation "dev.or2:filestore:${openruneFileStoreVersion}"
-
     implementation "org.tomlj:tomlj:1.1.1"
-
-    // PSI-only structural indexing. Compiler symbols never cross the Companion API.
     implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:${openruneKotlinSemanticVersion}"
 
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"

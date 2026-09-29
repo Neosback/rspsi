@@ -1,141 +1,64 @@
 # Architecture
 
-## Direction
-
-OpenRune Studio is split into two independently useful pieces:
+OpenRune Server Studio is a local-first application for OpenRune Server development and operations.
 
 ```text
-Browser editor (Svelte + TypeScript + WebGL2)
-        |
-        | versioned HTTP / WebSocket
-        v
-Local JVM companion (Kotlin)
-        |
-        +-- OpenRune FileStore / cache tooling
-        +-- OpenRune project + Gradle tooling
-        +-- GameVal/RSCM + source indexing
-        +-- filesystem/build/watch capabilities
+Studio UI / CLI
+      |
+      | versioned local API
+      v
+Kotlin/JVM application service
+      |
+      +-- project inspection
+      +-- content + GameVal/RSCM indexing
+      +-- Kotlin source indexing
+      +-- Gradle build/test/run control
+      +-- generated cache inspection
+      +-- filesystem/watch services
+      |
+      +---- optional narrow in-server Agent
 ```
 
-The browser editor is the product UI. The JVM process is a local tooling companion.
+The product is not a map editor. Rendering and world-authoring systems are not part of the active architecture.
 
-## Ownership
+## Modules
 
-### Browser
+### Protocol
 
-The browser owns interactive authoring:
+Neutral contracts shared by the application service and future runtime Agent. It must not expose Ktor, PSI, Gradle, FileStore, UI, or OpenRune implementation objects.
 
-- workspace and panels;
-- viewport and WebGL2 renderer;
-- selection and picking;
-- brushes and editing tools;
-- active document state;
-- undo/redo;
-- visual overlays and previews;
-- browser-side serialization that does not require JVM tooling.
+### Companion
 
-Interactive pointer movement, camera changes, hover state, and ordinary render frames must never depend on RPC latency.
+The current application service. The module name is transitional.
 
-### JVM companion
+It owns local API/security, project sessions, OpenRune project inspection, content/source indexes, generated cache inspection, and future build/watch/publication services.
 
-The companion owns machine-local and JVM/OpenRune capabilities:
+## Authority model
 
-- FileStore-backed cache access;
-- revision-aware OSRS cache validation and codecs;
-- writable output/staging caches;
-- project and source-tree inspection;
-- OpenRune build discovery/invocation;
-- source provenance and Kotlin semantic indexing;
-- GameVal/RSCM resolution;
-- local file watching;
-- publication verification;
-- bridge API/event transport.
-
-It should be headless and useful from CLI/tests without the web editor.
-
-## State model
-
-Do not recreate the old architecture where the JVM owns every live editor object.
-
-The browser owns the active authoring document. The JVM should prefer bounded operations:
+An opened OpenRune Server checkout is authoritative. Studio may cache indexes and fingerprints, but source ownership stays with the project. Generated caches remain build outputs.
 
 ```text
-read resource -> neutral DTO
-validate candidate -> diagnostics
-publish candidate -> verified output
-inspect project -> capabilities/provenance
-run build -> streamed status
+source/config edit
+  -> stale-source check
+  -> atomic write
+  -> detected OpenRune Gradle task
+  -> generated-output verification
 ```
 
-The companion may keep caches, indexes, project sessions, fingerprints, and watch state for performance and safety, but it is not the authoritative owner of pointer/tool/render state.
+No fallback should silently patch generated LIVE/SERVER caches.
 
-## Progressive capability
+## Runtime model
 
-The editor must support two modes.
-
-### Browser-only
-
-Available:
-
-- editing/rendering;
-- manually selected/imported resources;
-- previews;
-- project files that are representable in browser APIs.
-
-Unavailable:
-
-- JVM OpenRune libraries;
-- local Gradle execution;
-- Kotlin PSI/source indexing;
-- unrestricted local filesystem watching;
-- direct local cache publication.
-
-### Bridge-connected
-
-Adds:
-
-- OpenRune project discovery;
-- cache read/write/pack/verify;
-- Gradle builds;
-- GameVal/source navigation;
-- server-content overlays;
-- local file watching and external-change diagnostics.
-
-The frontend queries capabilities. It does not infer them from product names or paths.
+Static project inspection and live runtime inspection are separate capabilities. A future in-server Agent should be deliberately narrow and expose neutral runtime facts such as lifecycle state, plugins/scripts, event registrations, cache/runtime identity, and diagnostics.
 
 ## Dependency direction
 
-Target dependency direction:
-
 ```text
-Browser DTOs ----+
-                 |
-Companion -------+--> Protocol
-                 |
-OpenRune Agent --+
-
-Companion -> openrune -> core
-                    |
-                    +---- external OpenRune libraries
+UI / CLI -> versioned API -> Companion -> external OpenRune libraries/project
+                            |
+                            +-> Protocol <- future Agent
 ```
 
-The checked-in `:Protocol` module is the neutral contract seam. It must not expose Ktor, OpenRune, PSI, Gradle, FileStore, renderer, or editor implementation types.
+No active module may depend on the archived editor/rendering stack.
 
-No core API should require Ktor, UI, GLFW, ImGui, OpenGL, or Svelte concepts.
-
-OpenRune-specific types should be reduced at the integration boundary before crossing into neutral protocol/domain contracts.
-
-## Migration strategy
-
-Do not perform a rewrite.
-
-1. freeze new desktop features;
-2. identify reusable headless seams in `Client`;
-3. continue Java-to-Kotlin conversion along those seams;
-4. prove headless cache and OpenRune operations with tests;
-5. extract modules when dependency boundaries are real;
-6. add Ktor transport over existing services;
-7. integrate the web editor;
-8. remove `Editor` and desktop-only dependencies.
-
-A module extraction is successful only when it reduces dependencies. Moving files without changing dependency direction is not progress.
+Pre-reset editor work is preserved by `archive/pre-openrune-reset-2026-09-29`.

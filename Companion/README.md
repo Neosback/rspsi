@@ -1,32 +1,33 @@
-# Companion
+# OpenRune Server Studio application service
 
-The Companion is the new Kotlin/JVM process behind OpenRune Studio.
+This module is the current Kotlin/JVM backend for OpenRune Server Studio.
 
-Its job is to expose local-only capabilities that the browser editor cannot reliably own, such as OpenRune/JVM integration, FileStore operations, source indexing, project builds, and filesystem access.
+It owns machine-local OpenRune capabilities that should not be duplicated in UI code:
 
-This module must not depend on the legacy `Editor` module or on `Client/editor` rendering/tooling code.
+- project open/inspection and capability detection;
+- content module and GameVal/RSCM indexing;
+- Kotlin structural source indexing;
+- content-symbol resolution;
+- generated LIVE/SERVER cache inspection through OpenRune FileStore;
+- project-scoped filesystem access;
+- local API security and transport.
 
-## Current scope
+It must not grow map editing, renderer, terrain, camera, scene-authoring, or desktop-editor responsibilities.
 
-The service is loopback-only and currently provides:
+## Current API
 
+```text
+GET  /api/v1/status
+POST /api/v1/project/open
+GET  /api/v1/project/{projectId}
+POST /api/v1/project/{projectId}/content/index
+POST /api/v1/project/{projectId}/content/resolve
+POST /api/v1/project/{projectId}/source/index
+POST /api/v1/project/{projectId}/index/refresh
+GET  /api/v1/project/{projectId}/cache/live/inspect
+GET  /api/v1/project/{projectId}/cache/server/inspect
 ```
-GET  http://127.0.0.1:8765/api/v1/status
-POST http://127.0.0.1:8765/api/v1/openrune/inspect
-POST http://127.0.0.1:8765/api/v1/openrune/content/index
-POST http://127.0.0.1:8765/api/v1/openrune/content/resolve
-POST http://127.0.0.1:8765/api/v1/openrune/source/index
-POST http://127.0.0.1:8765/api/v1/cache/inspect
-```
 
-OpenRune project inspection is passive. It detects project layout, expected cache/GameVal locations, and available source/build roots without running Gradle, loading server code, or changing files.
+Project opening is passive: it must not run Gradle, load server code, or mutate files.
 
-Content indexing discovers OpenRune content modules plus plugin-local `gamevals.toml` and generated `.data/gamevals/*.rscm` mappings. It emits neutral module/GameVal DTOs for the browser. The original Kotlin/TOML/RSCM files remain authoritative.
-
-Kotlin source indexing uses compiler PSI only for structural parsing. It emits neutral plugin-script, function, call, handler, symbol-reference, and source-span facts without requiring OpenRune classes to compile or leaking compiler types through the API.
-
-Content resolution joins those source facts to GameVals for one qualified symbol such as `content.rock`, returning the owning modules, handler registrations, references, and plugin-script sources the browser can surface for a selected world entity.
-
-Cache inspection uses OpenRune FileStore in read-only mode and currently exposes archive/index structure plus revision metadata when `version.dat` provides it. The browser remains responsible for map/model decoding and rendering.
-
-Cache writes, SQLite persistence, Compose, Kotlin semantic indexing, build execution, and live-server integration will be added as separate focused changes.
+The next backend priorities are build/task discovery and invocation, project watching, source-safe write/publish operations, and the minimal live OpenRune Agent.

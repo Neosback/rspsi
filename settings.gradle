@@ -1,7 +1,4 @@
-rootProject.name = 'RSPSiSuite'
+rootProject.name = 'OpenRuneServerStudio'
 
-include ':Client'
-include ':Editor'
-include ':Core'
 include ':Protocol'
 include ':Companion'

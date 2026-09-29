@@ -1,2 +1,0 @@
-[clientscript,spawn_menu_search_stop]
-~spawn_menu_search_idle(spawn_menu:searchtext, spawn_menu:grid, spawn_menu:scrollbar, spawn_menu:status);
