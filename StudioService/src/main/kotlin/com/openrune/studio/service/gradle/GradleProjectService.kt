@@ -91,6 +91,7 @@ class GradleProjectService(
                     cause = this,
                 )
             GradleProcessFailure.INTERRUPTED,
+            GradleProcessFailure.CANCELLED,
             GradleProcessFailure.OUTPUT_FAILED ->
                 ApiException(
                     code = ApiErrorCode.GRADLE_DISCOVERY_FAILED,
