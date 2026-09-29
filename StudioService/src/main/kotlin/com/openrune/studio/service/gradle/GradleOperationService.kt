@@ -334,8 +334,7 @@ class DefaultGradleOperationService(
                     )
                 GradleProcessFailure.START_FAILED,
                 GradleProcessFailure.INTERRUPTED,
-                GradleProcessFailure.OUTPUT_FAILED,
-                ->
+                GradleProcessFailure.OUTPUT_FAILED ->
                     completeLocked(
                         state = GradleOperationState.FAILED,
                         exitCode = null,
