@@ -243,7 +243,8 @@ class StudioServiceServerTest {
             include("content", "engine", "server", "or-cache")
             """.trimIndent(),
         )
-        root.resolve("gradlew").writeText("#!/bin/sh")\n        root.resolve("gradlew.bat").writeText("@echo off")
+        root.resolve("gradlew").writeText("#!/bin/sh")
+        root.resolve("gradlew.bat").writeText("@echo off")
         root.resolve("or-cache").createDirectories()
         root.resolve("or-cache/build.gradle.kts").writeText("plugins {}")
         root.resolve("content").createDirectories()

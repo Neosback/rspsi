@@ -176,14 +176,19 @@ class GradleProjectService(
         System.getProperty("os.name").orEmpty().lowercase().contains("win")
 
     private fun terminate(process: Process) {
+        val descendants = process.toHandle().descendants().toList().asReversed()
         process.destroy()
+        descendants.forEach { it.destroy() }
+
         try {
             if (!process.waitFor(TERMINATION_GRACE_MILLIS, TimeUnit.MILLISECONDS)) {
+                descendants.filter { it.isAlive }.forEach { it.destroyForcibly() }
                 process.destroyForcibly()
                 process.waitFor(TERMINATION_GRACE_MILLIS, TimeUnit.MILLISECONDS)
             }
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
+            descendants.filter { it.isAlive }.forEach { it.destroyForcibly() }
             process.destroyForcibly()
         }
     }

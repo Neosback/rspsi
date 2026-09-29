@@ -1,8 +1,20 @@
 package com.openrune.studio.service.gradle
 
+import com.openrune.studio.service.ApiErrorCode
+import com.openrune.studio.service.ApiException
+import com.openrune.studio.service.openrune.OpenRuneProjectInspection
+import com.openrune.studio.service.openrune.ProjectLocation
+import com.openrune.studio.service.project.ProjectSession
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Duration
+import kotlinx.coroutines.runBlocking
+import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GradleProjectServiceTest {
     @Test
@@ -70,4 +82,140 @@ class GradleProjectServiceTest {
 
         assertEquals(listOf(":help", ":projects"), tasks.map { it.path })
     }
+
+    @Test
+    fun executesFixedWrapperCommandFromProjectRootWithSpecialCharactersInPath() {
+        if (isWindows()) return
+
+        val root = Files.createTempDirectory("openrune gradle & project ")
+        try {
+            val wrapper =
+                createWrapper(
+                    root,
+                    """
+                    #!/bin/sh
+                    printf '%s\n' \
+                      'Build tasks' \
+                      '-----------' \
+                      'or-cache:buildCache - Builds OpenRune caches.' \
+                      '' \
+                      'Application tasks' \
+                      '-----------------' \
+                      'server:run - Runs the server.'
+                    """.trimIndent(),
+                )
+            val project = projectSession(root, wrapper)
+
+            val result =
+                runBlocking {
+                    GradleProjectService(timeout = Duration.ofSeconds(5)).discoverTasks(project)
+                }
+
+            assertEquals("gradlew", result.wrapper)
+            assertEquals(2, result.taskCount)
+            assertEquals(
+                listOf(":or-cache:buildCache", ":server:run"),
+                result.tasks.map { it.path },
+            )
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun reportsGradleFailureWithStableErrorCode() {
+        if (isWindows()) return
+
+        val root = Files.createTempDirectory("openrune-gradle-failure")
+        try {
+            val wrapper =
+                createWrapper(
+                    root,
+                    """
+                    #!/bin/sh
+                    echo 'configuration failed' >&2
+                    exit 7
+                    """.trimIndent(),
+                )
+            val project = projectSession(root, wrapper)
+
+            val failure =
+                assertFailsWith<ApiException> {
+                    runBlocking {
+                        GradleProjectService(timeout = Duration.ofSeconds(5)).discoverTasks(project)
+                    }
+                }
+
+            assertEquals(ApiErrorCode.GRADLE_DISCOVERY_FAILED, failure.code)
+            assertEquals("7", failure.details["exitCode"])
+            assertTrue(failure.details["stderr"].orEmpty().contains("configuration failed"))
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun timesOutAndTerminatesLongRunningWrapper() {
+        if (isWindows()) return
+
+        val root = Files.createTempDirectory("openrune-gradle-timeout")
+        try {
+            val wrapper =
+                createWrapper(
+                    root,
+                    """
+                    #!/bin/sh
+                    sleep 10
+                    """.trimIndent(),
+                )
+            val project = projectSession(root, wrapper)
+
+            val failure =
+                assertFailsWith<ApiException> {
+                    runBlocking {
+                        GradleProjectService(timeout = Duration.ofMillis(150)).discoverTasks(project)
+                    }
+                }
+
+            assertEquals(ApiErrorCode.GRADLE_TIMEOUT, failure.code)
+            assertEquals("150", failure.details["timeoutMillis"])
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    private fun createWrapper(root: Path, script: String): Path {
+        val wrapper = root.resolve("gradlew")
+        wrapper.writeText(script + "\n")
+        assertTrue(wrapper.toFile().setExecutable(true), "test wrapper must be executable")
+        return wrapper
+    }
+
+    private fun projectSession(root: Path, wrapper: Path): ProjectSession {
+        val realRoot = root.toRealPath()
+        return ProjectSession(
+            id = "project-id",
+            root = realRoot,
+            capabilities = listOf("gradle.tasks"),
+            inspection =
+                OpenRuneProjectInspection(
+                    root = realRoot.toString(),
+                    matched = true,
+                    confidence = 100,
+                    evidence = emptyList(),
+                    capabilities = listOf("gradle-project"),
+                    locations =
+                        mapOf(
+                            "gradleWrapper" to
+                                ProjectLocation(
+                                    path = wrapper.toRealPath().toString(),
+                                    exists = true,
+                                ),
+                        ),
+                ),
+        )
+    }
+
+    private fun isWindows(): Boolean =
+        System.getProperty("os.name").orEmpty().lowercase().contains("win")
 }
