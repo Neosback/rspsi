@@ -1,4 +1,4 @@
-package com.openrune.studio.companion.cache
+package com.openrune.studio.service.cache
 
 import java.nio.file.Files
 import kotlin.test.Test

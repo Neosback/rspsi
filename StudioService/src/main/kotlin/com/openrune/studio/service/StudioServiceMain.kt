@@ -1,4 +1,4 @@
-package com.openrune.studio.companion
+package com.openrune.studio.service
 
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
@@ -11,7 +11,7 @@ fun main() {
             ?.toIntOrNull()
             ?.takeIf { it in 1..65535 }
             ?: DEFAULT_PORT
-    val security = CompanionSecurity.create()
+    val security = StudioServiceSecurity.create()
 
     if (security.generatedToken) {
         System.err.println(
@@ -24,6 +24,6 @@ fun main() {
         factory = Netty,
         host = "127.0.0.1",
         port = port,
-        module = { companionModule(security = security) },
+        module = { studioServiceModule(security = security) },
     ).start(wait = true)
 }

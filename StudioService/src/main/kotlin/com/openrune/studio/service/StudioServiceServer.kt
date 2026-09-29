@@ -1,9 +1,9 @@
-package com.openrune.studio.companion
+package com.openrune.studio.service
 
 import com.fasterxml.jackson.databind.SerializationFeature
-import com.openrune.studio.companion.cache.OpenRuneCacheReader
-import com.openrune.studio.companion.project.ProjectIndexService
-import com.openrune.studio.companion.project.ProjectSessionManager
+import com.openrune.studio.service.cache.OpenRuneCacheReader
+import com.openrune.studio.service.project.ProjectIndexService
+import com.openrune.studio.service.project.ProjectSessionManager
 import com.openrune.studio.protocol.StudioCapabilities
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.jackson.jackson
@@ -18,7 +18,7 @@ import io.ktor.server.routing.routing
 
 private const val API_VERSION = 1
 
-data class CompanionStatus(
+data class StudioServiceStatus(
     val name: String,
     val apiVersion: Int,
     val status: String,
@@ -28,14 +28,14 @@ data class CompanionStatus(
 data class ProjectOpenRequest(val path: String = "")
 data class ContentResolveRequest(val symbol: String = "")
 
-fun Application.companionModule(
-    security: CompanionSecurity = CompanionSecurity.create(),
+fun Application.studioServiceModule(
+    security: StudioServiceSecurity = StudioServiceSecurity.create(),
     projectSessions: ProjectSessionManager = ProjectSessionManager(),
     openRuneCacheReader: OpenRuneCacheReader = OpenRuneCacheReader(),
     projectIndexes: ProjectIndexService = ProjectIndexService(),
 ) {
     installApiErrors()
-    installCompanionSecurity(security)
+    installStudioServiceSecurity(security)
 
     install(ContentNegotiation) {
         jackson {
@@ -47,7 +47,7 @@ fun Application.companionModule(
         get("/api/v1/status") {
             call.respond(
                 HttpStatusCode.OK,
-                CompanionStatus(
+                StudioServiceStatus(
                     name = "OpenRune Server Studio",
                     apiVersion = API_VERSION,
                     status = "ready",

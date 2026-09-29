@@ -1,4 +1,4 @@
-description = 'OpenRune Server Studio application service'
+description = 'OpenRune Server Studio service'
 
 apply plugin: 'application'
 apply plugin: 'org.jetbrains.kotlin.jvm'
@@ -30,5 +30,5 @@ dependencies {
 }
 
 application {
-    mainClass = 'com.openrune.studio.companion.CompanionMainKt'
+    mainClass = 'com.openrune.studio.service.StudioServiceMainKt'
 }

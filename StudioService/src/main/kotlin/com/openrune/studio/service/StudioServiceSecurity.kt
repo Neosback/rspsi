@@ -1,4 +1,4 @@
-package com.openrune.studio.companion
+package com.openrune.studio.service
 
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -12,13 +12,13 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
 
-data class CompanionSecurity(
+data class StudioServiceSecurity(
     val token: String,
     val generatedToken: Boolean = false,
 ) {
     init {
         require(token.length >= MIN_TOKEN_LENGTH) {
-            "Companion token must contain at least $MIN_TOKEN_LENGTH characters"
+            "Studio service token must contain at least $MIN_TOKEN_LENGTH characters"
         }
     }
 
@@ -53,28 +53,28 @@ data class CompanionSecurity(
             )
         private val LOOPBACK_ORIGIN_HOSTS = setOf("localhost", "127.0.0.1", "::1")
 
-        fun create(environmentToken: String? = System.getenv("OPENRUNE_STUDIO_TOKEN")): CompanionSecurity {
+        fun create(environmentToken: String? = System.getenv("OPENRUNE_STUDIO_TOKEN")): StudioServiceSecurity {
             val configured = environmentToken?.trim().orEmpty()
             if (configured.isNotEmpty()) {
-                return CompanionSecurity(configured, generatedToken = false)
+                return StudioServiceSecurity(configured, generatedToken = false)
             }
 
             val bytes = ByteArray(32)
             SecureRandom().nextBytes(bytes)
             val token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-            return CompanionSecurity(token, generatedToken = true)
+            return StudioServiceSecurity(token, generatedToken = true)
         }
     }
 }
 
-private class CompanionSecurityConfig {
-    lateinit var security: CompanionSecurity
+private class StudioServiceSecurityConfig {
+    lateinit var security: StudioServiceSecurity
 }
 
-private val CompanionSecurityPlugin =
+private val StudioServiceSecurityPlugin =
     createApplicationPlugin(
-        name = "OpenRuneStudioCompanionSecurity",
-        createConfiguration = ::CompanionSecurityConfig,
+        name = "OpenRuneStudioServiceSecurity",
+        createConfiguration = ::StudioServiceSecurityConfig,
     ) {
         val security = pluginConfig.security
 
@@ -88,7 +88,7 @@ private val CompanionSecurityPlugin =
                 throw ApiException(
                     code = ApiErrorCode.HOST_NOT_ALLOWED,
                     status = HttpStatusCode.Forbidden,
-                    message = "Companion accepts loopback Host headers only.",
+                    message = "Studio service accepts loopback Host headers only.",
                 )
             }
 
@@ -97,22 +97,22 @@ private val CompanionSecurityPlugin =
                 throw ApiException(
                     code = ApiErrorCode.ORIGIN_NOT_ALLOWED,
                     status = HttpStatusCode.Forbidden,
-                    message = "Companion accepts loopback browser origins only.",
+                    message = "Studio service accepts loopback browser origins only.",
                 )
             }
 
-            if (!security.acceptsToken(call.request.header(CompanionSecurity.TOKEN_HEADER))) {
+            if (!security.acceptsToken(call.request.header(StudioServiceSecurity.TOKEN_HEADER))) {
                 throw ApiException(
                     code = ApiErrorCode.UNAUTHORIZED,
                     status = HttpStatusCode.Unauthorized,
-                    message = "A valid Companion session token is required.",
+                    message = "A valid Studio service session token is required.",
                 )
             }
         }
     }
 
-fun Application.installCompanionSecurity(security: CompanionSecurity) {
-    install(CompanionSecurityPlugin) {
+fun Application.installStudioServiceSecurity(security: StudioServiceSecurity) {
+    install(StudioServiceSecurityPlugin) {
         this.security = security
     }
 }

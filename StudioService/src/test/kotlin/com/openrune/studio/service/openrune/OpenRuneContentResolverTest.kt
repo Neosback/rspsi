@@ -1,4 +1,4 @@
-package com.openrune.studio.companion.openrune
+package com.openrune.studio.service.openrune
 
 import java.nio.file.Files
 import kotlin.io.path.createDirectories

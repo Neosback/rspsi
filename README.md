@@ -1,38 +1,79 @@
 # OpenRune Server Studio
 
-This repository is focused on one product: a local-first application for working with **OpenRune Server** projects.
+OpenRune Server Studio is a local development application for **OpenRune Server** projects.
 
-It is not a general-purpose RSPS map editor. Legacy editor/rendering work is reference material, not active product code.
+It provides a structured view of an OpenRune project and exposes project-aware tooling through a local Kotlin/JVM service.
 
-## Product scope
+## Current capabilities
 
-OpenRune Server Studio should make an OpenRune Server project easier to inspect, develop, run, validate, and maintain.
+- Open and validate an OpenRune Server project.
+- Detect project structure and available capabilities.
+- Discover content modules.
+- Index GameVals and generated RSCM data.
+- Index Kotlin content source with PSI-backed structural analysis.
+- Resolve OpenRune symbols such as `content.rock` to source, handlers, references, modules, and GameVals.
+- Inspect generated `.data/cache/LIVE` and `.data/cache/SERVER` caches through OpenRune FileStore.
+- Maintain project-scoped index snapshots and refresh them when project inputs change.
+- Expose the functionality through a loopback-only, token-protected HTTP API.
 
-The Kotlin/JVM service provides the foundation for project discovery, OpenRune content/GameVal/source indexing, generated cache inspection, bounded Gradle operations, project watching, future runtime Agent integration, and the versioned local API used by Studio clients.
+## Modules
 
-Map rendering, terrain brushes, scene editing, camera tools, object placement, and renderer parity are intentionally outside the active product scope.
+### `:StudioService`
 
-## Active modules
+The Kotlin/JVM application service. It owns project sessions, OpenRune inspection, content/source indexing, cache inspection, API security, and local transport.
 
-- `:Protocol` - neutral application/runtime contracts.
-- `:StudioService` - the Kotlin/JVM application service and local API.
+### `:Protocol`
 
-## OpenRune authority
+Neutral contracts shared by Studio components and runtime integrations.
 
-Studio opens an existing OpenRune Server project. The project's source files, Gradle build, content modules, GameVals/RSCM, and generated cache outputs remain authoritative.
+## Project authority
 
-This repository does not vendor a copy of OpenRune Server as application code.
+The opened OpenRune Server checkout remains authoritative.
 
-## Legacy reference
+Studio reads project structure and source directly from the checkout. Generated LIVE and SERVER caches are treated as build outputs. Studio does not replace OpenRune's Gradle build, source layout, GameVals, or cache tooling.
 
-All branch tips that existed before the September 29, 2026 reset are preserved through `archive/pre-openrune-reset-2026-09-29`.
+## Local API
 
-Use that archive only when an old implementation is useful as reference. Do not reintroduce legacy editor architecture by default.
+The current API is versioned under `/api/v1`.
 
-## Build
+```text
+GET  /api/v1/status
+POST /api/v1/project/open
+GET  /api/v1/project/{projectId}
+
+POST /api/v1/project/{projectId}/content/index
+POST /api/v1/project/{projectId}/content/resolve
+POST /api/v1/project/{projectId}/source/index
+POST /api/v1/project/{projectId}/index/refresh
+
+GET  /api/v1/project/{projectId}/cache/live/inspect
+GET  /api/v1/project/{projectId}/cache/server/inspect
+```
+
+The service binds to loopback and requires an OpenRune Studio session token.
+
+## Requirements
+
+- Java 21
+- Gradle 8.14.3
+
+## Build and test
 
 ```bash
 ./gradlew foundationGate
 ```
 
-See `docs/ARCHITECTURE.md`, `docs/OPENRUNE.md`, and `docs/ROADMAP.md`.
+Run StudioService directly with:
+
+```bash
+./gradlew :StudioService:run
+```
+
+## Documentation
+
+- `docs/ARCHITECTURE.md`
+- `docs/API.md`
+- `docs/OPENRUNE.md`
+- `docs/CACHE.md`
+- `docs/OPENRUNE_SERVER_FOUNDATION.md`
+- `docs/ROADMAP.md`

@@ -1,13 +1,13 @@
-package com.openrune.studio.companion.project
+package com.openrune.studio.service.project
 
-import com.openrune.studio.companion.ApiErrorCode
-import com.openrune.studio.companion.ApiException
-import com.openrune.studio.companion.openrune.OpenRuneContentIndex
-import com.openrune.studio.companion.openrune.OpenRuneContentIndexer
-import com.openrune.studio.companion.openrune.OpenRuneContentResolver
-import com.openrune.studio.companion.openrune.OpenRuneKotlinSourceIndexer
-import com.openrune.studio.companion.openrune.OpenRuneSourceIndex
-import com.openrune.studio.companion.openrune.ResolvedContentSymbol
+import com.openrune.studio.service.ApiErrorCode
+import com.openrune.studio.service.ApiException
+import com.openrune.studio.service.openrune.OpenRuneContentIndex
+import com.openrune.studio.service.openrune.OpenRuneContentIndexer
+import com.openrune.studio.service.openrune.OpenRuneContentResolver
+import com.openrune.studio.service.openrune.OpenRuneKotlinSourceIndexer
+import com.openrune.studio.service.openrune.OpenRuneSourceIndex
+import com.openrune.studio.service.openrune.ResolvedContentSymbol
 import io.ktor.http.HttpStatusCode
 import java.nio.file.Files
 import java.nio.file.Path

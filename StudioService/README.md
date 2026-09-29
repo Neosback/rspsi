@@ -1,18 +1,19 @@
-# OpenRune Server Studio application service
+# StudioService
 
-This module is the current Kotlin/JVM backend for OpenRune Server Studio.
+`StudioService` is the Kotlin/JVM application service for OpenRune Server Studio.
 
-It owns machine-local OpenRune capabilities that should not be duplicated in UI code:
+It provides the local project-aware backend used to inspect and work with an OpenRune Server checkout.
 
-- project open/inspection and capability detection;
-- content module and GameVal/RSCM indexing;
-- Kotlin structural source indexing;
-- content-symbol resolution;
-- generated LIVE/SERVER cache inspection through OpenRune FileStore;
-- project-scoped filesystem access;
-- local API security and transport.
+## Responsibilities
 
-It must not grow map editing, renderer, terrain, camera, scene-authoring, or desktop-editor responsibilities.
+- OpenRune project validation and capability detection.
+- Project-scoped sessions and filesystem boundaries.
+- Content module and GameVal/RSCM indexing.
+- Kotlin structural source indexing.
+- Symbol-to-source resolution.
+- LIVE/SERVER generated cache inspection through OpenRune FileStore.
+- Loopback HTTP API, authentication, and stable API errors.
+- Project index caching and explicit refresh.
 
 ## Current API
 
@@ -28,6 +29,10 @@ GET  /api/v1/project/{projectId}/cache/live/inspect
 GET  /api/v1/project/{projectId}/cache/server/inspect
 ```
 
-Project opening is passive: it must not run Gradle, load server code, or mutate files.
+Opening a project is passive. It validates and inspects the checkout without executing Gradle or loading server code.
 
-The next backend priorities are build/task discovery and invocation, project watching, source-safe write/publish operations, and the minimal live OpenRune Agent.
+## Run
+
+```bash
+./gradlew :StudioService:run
+```

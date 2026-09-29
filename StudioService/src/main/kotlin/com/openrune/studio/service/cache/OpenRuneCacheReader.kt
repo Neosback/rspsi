@@ -1,4 +1,4 @@
-package com.openrune.studio.companion.cache
+package com.openrune.studio.service.cache
 
 import dev.openrune.filesystem.Cache
 import java.nio.ByteBuffer
@@ -21,10 +21,10 @@ data class OpenRuneCacheInspection(
 )
 
 /**
- * Thin read-only FileStore adapter for the companion.
+ * Read-only FileStore adapter for StudioService.
  *
  * This deliberately exposes archive structure and optional revision metadata only.
- * Browser-owned map/model decoding stays in the web editor.
+ * The service exposes bounded cache metadata without taking ownership of generated cache content.
  */
 class OpenRuneCacheReader(
     private val backendVersion: String = "3.0.3",

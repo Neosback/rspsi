@@ -1,8 +1,8 @@
-package com.openrune.studio.companion.project
+package com.openrune.studio.service.project
 
-import com.openrune.studio.companion.openrune.OpenRuneContentIndex
-import com.openrune.studio.companion.openrune.OpenRuneProjectInspection
-import com.openrune.studio.companion.openrune.OpenRuneSourceIndex
+import com.openrune.studio.service.openrune.OpenRuneContentIndex
+import com.openrune.studio.service.openrune.OpenRuneProjectInspection
+import com.openrune.studio.service.openrune.OpenRuneSourceIndex
 import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference

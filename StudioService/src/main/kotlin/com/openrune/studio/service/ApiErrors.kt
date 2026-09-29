@@ -1,4 +1,4 @@
-package com.openrune.studio.companion
+package com.openrune.studio.service
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -65,7 +65,7 @@ fun Application.installApiErrors() {
                 HttpStatusCode.InternalServerError,
                 ApiErrorResponse(
                     code = ApiErrorCode.INTERNAL_ERROR,
-                    message = "Companion could not complete the request.",
+                    message = "Studio service could not complete the request.",
                 ),
             )
         }

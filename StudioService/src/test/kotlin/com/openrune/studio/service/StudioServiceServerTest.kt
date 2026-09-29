@@ -1,4 +1,4 @@
-package com.openrune.studio.companion
+package com.openrune.studio.service
 
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -18,11 +18,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class CompanionServerTest {
+class StudioServiceServerTest {
     @Test
     fun apiRequiresSessionToken() = testApplication {
         application {
-            companionModule(security = TEST_SECURITY)
+            studioServiceModule(security = TEST_SECURITY)
         }
 
         val response = client.get("/api/v1/status") {
@@ -36,11 +36,11 @@ class CompanionServerTest {
     @Test
     fun apiRejectsNonLoopbackHostEvenWithToken() = testApplication {
         application {
-            companionModule(security = TEST_SECURITY)
+            studioServiceModule(security = TEST_SECURITY)
         }
 
         val response = client.get("/api/v1/status") {
-            companionAuth()
+            studioServiceAuth()
             header(HttpHeaders.Host, "attacker.example")
         }
 
@@ -51,11 +51,11 @@ class CompanionServerTest {
     @Test
     fun apiRejectsNonLoopbackBrowserOrigin() = testApplication {
         application {
-            companionModule(security = TEST_SECURITY)
+            studioServiceModule(security = TEST_SECURITY)
         }
 
         val response = client.get("/api/v1/status") {
-            companionAuth()
+            studioServiceAuth()
             header(HttpHeaders.Origin, "https://attacker.example")
         }
 
@@ -66,11 +66,11 @@ class CompanionServerTest {
     @Test
     fun statusOnlyAdvertisesProjectOpenBeforeAProjectSessionExists() = testApplication {
         application {
-            companionModule(security = TEST_SECURITY)
+            studioServiceModule(security = TEST_SECURITY)
         }
 
         val response = client.get("/api/v1/status") {
-            companionAuth()
+            studioServiceAuth()
         }
 
         assertEquals(HttpStatusCode.OK, response.status)
@@ -84,11 +84,11 @@ class CompanionServerTest {
         val root = openRuneProject()
         try {
             application {
-                companionModule(security = TEST_SECURITY)
+                studioServiceModule(security = TEST_SECURITY)
             }
 
             val response = client.post("/api/v1/project/open") {
-                companionAuth()
+                studioServiceAuth()
                 contentType(ContentType.Application.Json)
                 setBody(pathBody(root))
             }
@@ -123,11 +123,11 @@ class CompanionServerTest {
             )
 
             application {
-                companionModule(security = TEST_SECURITY)
+                studioServiceModule(security = TEST_SECURITY)
             }
 
             val openResponse = client.post("/api/v1/project/open") {
-                companionAuth()
+                studioServiceAuth()
                 contentType(ContentType.Application.Json)
                 setBody(pathBody(root))
             }
@@ -139,7 +139,7 @@ class CompanionServerTest {
                     ?: error("projectId missing")
 
             val response = client.post("/api/v1/project/$projectId/content/index") {
-                companionAuth()
+                studioServiceAuth()
             }
 
             assertEquals(HttpStatusCode.OK, response.status)
@@ -152,11 +152,11 @@ class CompanionServerTest {
     @Test
     fun unknownProjectIdUsesStableErrorCode() = testApplication {
         application {
-            companionModule(security = TEST_SECURITY)
+            studioServiceModule(security = TEST_SECURITY)
         }
 
         val response = client.post("/api/v1/project/missing/source/index") {
-            companionAuth()
+            studioServiceAuth()
         }
 
         assertEquals(HttpStatusCode.NotFound, response.status)
@@ -166,11 +166,11 @@ class CompanionServerTest {
     @Test
     fun legacyArbitraryPathEndpointIsRemoved() = testApplication {
         application {
-            companionModule(security = TEST_SECURITY)
+            studioServiceModule(security = TEST_SECURITY)
         }
 
         val response = client.post("/api/v1/openrune/source/index") {
-            companionAuth()
+            studioServiceAuth()
             contentType(ContentType.Application.Json)
             setBody("{\"path\":\"/tmp\"}")
         }
@@ -195,9 +195,9 @@ class CompanionServerTest {
         return root
     }
 
-    private fun io.ktor.client.request.HttpRequestBuilder.companionAuth() {
+    private fun io.ktor.client.request.HttpRequestBuilder.studioServiceAuth() {
         loopbackHost()
-        header(CompanionSecurity.TOKEN_HEADER, TEST_TOKEN)
+        header(StudioServiceSecurity.TOKEN_HEADER, TEST_TOKEN)
     }
 
     private fun io.ktor.client.request.HttpRequestBuilder.loopbackHost() {
@@ -211,6 +211,6 @@ class CompanionServerTest {
 
     private companion object {
         const val TEST_TOKEN = "test-token-with-at-least-32-characters"
-        val TEST_SECURITY = CompanionSecurity(TEST_TOKEN)
+        val TEST_SECURITY = StudioServiceSecurity(TEST_TOKEN)
     }
 }
