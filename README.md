@@ -14,7 +14,8 @@ It provides a structured view of an OpenRune project and exposes project-aware t
 - Resolve OpenRune symbols such as `content.rock` to source, handlers, references, modules, and GameVals.
 - Inspect generated `.data/cache/LIVE` and `.data/cache/SERVER` caches through OpenRune FileStore.
 - Discover the tasks exposed by an opened project's Gradle wrapper on explicit request.
-- Run bounded allowlisted Gradle operations for `assemble`, `test`, and `:or-cache:buildCache`.
+- Run bounded allowlisted Gradle operations for `assemble`, `test`, and `:or-cache:buildCache` asynchronously.
+- Stream operation status and bounded log tails over Server-Sent Events and cancel active operations.
 - Maintain project-scoped index snapshots and refresh them when project inputs change.
 - Expose the functionality through a loopback-only, token-protected HTTP API.
 
@@ -48,6 +49,8 @@ GET  /api/v1/project/{projectId}/gradle/tasks
 GET  /api/v1/project/{projectId}/gradle/operations
 POST /api/v1/project/{projectId}/gradle/operations
 GET  /api/v1/project/{projectId}/gradle/operations/{operationId}
+POST /api/v1/project/{projectId}/gradle/operations/{operationId}/cancel
+GET  /api/v1/project/{projectId}/gradle/operations/{operationId}/events
 
 POST /api/v1/project/{projectId}/content/index
 POST /api/v1/project/{projectId}/content/resolve
