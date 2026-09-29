@@ -207,8 +207,7 @@ class DefaultGradleOperationService(
                     cause = this,
                 )
             GradleProcessFailure.INTERRUPTED,
-            GradleProcessFailure.OUTPUT_FAILED,
-            ->
+            GradleProcessFailure.OUTPUT_FAILED ->
                 ApiException(
                     code = ApiErrorCode.GRADLE_EXECUTION_FAILED,
                     status = HttpStatusCode.ServiceUnavailable,
