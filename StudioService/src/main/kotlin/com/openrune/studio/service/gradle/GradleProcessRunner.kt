@@ -15,8 +15,19 @@ enum class GradleProcessFailure {
     START_FAILED,
     INTERRUPTED,
     TIMEOUT,
+    CANCELLED,
     OUTPUT_FAILED,
 }
+
+enum class GradleOutputStream {
+    STDOUT,
+    STDERR,
+}
+
+data class GradleExecutionControl(
+    val isCancellationRequested: () -> Boolean = { false },
+    val onOutput: (GradleOutputStream, String) -> Unit = { _, _ -> },
+)
 
 class GradleProcessException(
     val reason: GradleProcessFailure,
@@ -41,6 +52,20 @@ interface GradleCommandRunner {
         timeout: Duration,
         maxOutputBytes: Int,
     ): GradleProcessResult
+
+    suspend fun executeControlled(
+        project: ProjectSession,
+        arguments: List<String>,
+        timeout: Duration,
+        maxOutputBytes: Int,
+        control: GradleExecutionControl,
+    ): GradleProcessResult =
+        execute(
+            project = project,
+            arguments = arguments,
+            timeout = timeout,
+            maxOutputBytes = maxOutputBytes,
+        )
 }
 
 class GradleProcessRunner : GradleCommandRunner {
@@ -50,10 +75,32 @@ class GradleProcessRunner : GradleCommandRunner {
         timeout: Duration,
         maxOutputBytes: Int,
     ): GradleProcessResult =
+        executeControlled(
+            project = project,
+            arguments = arguments,
+            timeout = timeout,
+            maxOutputBytes = maxOutputBytes,
+            control = GradleExecutionControl(),
+        )
+
+    override suspend fun executeControlled(
+        project: ProjectSession,
+        arguments: List<String>,
+        timeout: Duration,
+        maxOutputBytes: Int,
+        control: GradleExecutionControl,
+    ): GradleProcessResult =
         withContext(Dispatchers.IO) {
             require(arguments.isNotEmpty()) { "Gradle arguments must not be empty" }
             require(!timeout.isNegative && !timeout.isZero) { "timeout must be positive" }
             require(maxOutputBytes > 0) { "maxOutputBytes must be positive" }
+
+            if (control.isCancellationRequested()) {
+                throw GradleProcessException(
+                    reason = GradleProcessFailure.CANCELLED,
+                    message = "Gradle execution was cancelled before process start.",
+                )
+            }
 
             val wrapper = project.location("gradleWrapper")
             val windows = isWindows()
@@ -92,39 +139,73 @@ class GradleProcessRunner : GradleCommandRunner {
                 }
 
             val startedAt = System.nanoTime()
+            val deadline = startedAt + timeout.toNanos()
             process.outputStream.close()
             val readers = Executors.newFixedThreadPool(2)
 
             try {
                 val stdoutFuture = readers.submit<CapturedOutput> {
-                    captureTail(process.inputStream, maxOutputBytes)
+                    captureTail(
+                        stream = process.inputStream,
+                        limit = maxOutputBytes,
+                        outputStream = GradleOutputStream.STDOUT,
+                        onOutput = control.onOutput,
+                    )
                 }
                 val stderrFuture = readers.submit<CapturedOutput> {
-                    captureTail(process.errorStream, maxOutputBytes)
+                    captureTail(
+                        stream = process.errorStream,
+                        limit = maxOutputBytes,
+                        outputStream = GradleOutputStream.STDERR,
+                        onOutput = control.onOutput,
+                    )
                 }
 
-                val completed =
-                    try {
-                        process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)
-                    } catch (interrupted: InterruptedException) {
-                        Thread.currentThread().interrupt()
+                while (true) {
+                    if (control.isCancellationRequested()) {
                         terminate(process)
+                        runCatching { awaitReader(stdoutFuture) }
+                        runCatching { awaitReader(stderrFuture) }
                         throw GradleProcessException(
-                            reason = GradleProcessFailure.INTERRUPTED,
-                            message = "Gradle execution was interrupted.",
-                            cause = interrupted,
+                            reason = GradleProcessFailure.CANCELLED,
+                            message = "Gradle execution was cancelled.",
                         )
                     }
 
-                if (!completed) {
-                    terminate(process)
-                    runCatching { awaitReader(stdoutFuture) }
-                    runCatching { awaitReader(stderrFuture) }
-                    throw GradleProcessException(
-                        reason = GradleProcessFailure.TIMEOUT,
-                        message = "Gradle execution exceeded the configured timeout.",
-                        details = mapOf("timeoutMillis" to timeout.toMillis().toString()),
-                    )
+                    val remainingNanos = deadline - System.nanoTime()
+                    if (remainingNanos <= 0) {
+                        terminate(process)
+                        runCatching { awaitReader(stdoutFuture) }
+                        runCatching { awaitReader(stderrFuture) }
+                        throw GradleProcessException(
+                            reason = GradleProcessFailure.TIMEOUT,
+                            message = "Gradle execution exceeded the configured timeout.",
+                            details = mapOf("timeoutMillis" to timeout.toMillis().toString()),
+                        )
+                    }
+
+                    val waitMillis =
+                        minOf(
+                            POLL_INTERVAL_MILLIS,
+                            TimeUnit.NANOSECONDS.toMillis(remainingNanos).coerceAtLeast(1),
+                        )
+
+                    val completed =
+                        try {
+                            process.waitFor(waitMillis, TimeUnit.MILLISECONDS)
+                        } catch (interrupted: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            terminate(process)
+                            throw GradleProcessException(
+                                reason = GradleProcessFailure.INTERRUPTED,
+                                message = "Gradle execution was interrupted.",
+                                cause = interrupted,
+                            )
+                        }
+
+                    if (completed) {
+                        break
+                    }
                 }
 
                 val stdout = awaitReader(stdoutFuture)
@@ -190,7 +271,12 @@ class GradleProcessRunner : GradleCommandRunner {
             )
         }
 
-    private fun captureTail(stream: InputStream, limit: Int): CapturedOutput {
+    private fun captureTail(
+        stream: InputStream,
+        limit: Int,
+        outputStream: GradleOutputStream,
+        onOutput: (GradleOutputStream, String) -> Unit,
+    ): CapturedOutput {
         val buffer = ByteArray(8192)
         val tail = TailBuffer(limit)
 
@@ -199,6 +285,10 @@ class GradleProcessRunner : GradleCommandRunner {
                 val read = input.read(buffer)
                 if (read < 0) break
                 tail.append(buffer, read)
+                onOutput(
+                    outputStream,
+                    String(buffer, 0, read, StandardCharsets.UTF_8),
+                )
             }
         }
 
@@ -276,6 +366,7 @@ class GradleProcessRunner : GradleCommandRunner {
     }
 
     private companion object {
+        const val POLL_INTERVAL_MILLIS = 100L
         const val TERMINATION_GRACE_MILLIS = 500L
         const val READER_JOIN_SECONDS = 5L
     }

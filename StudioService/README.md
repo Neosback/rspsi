@@ -12,7 +12,8 @@ It provides the local project-aware backend used to inspect and work with an Ope
 - Kotlin structural source indexing.
 - Symbol-to-source resolution.
 - Gradle wrapper task discovery through a bounded fixed command.
-- Allowlisted finite Gradle operations for assemble, test, and cache build.
+- Allowlisted asynchronous Gradle operations for assemble, test, and cache build.
+- Live operation snapshots, SSE status/log events, and cancellation.
 - LIVE/SERVER generated cache inspection through OpenRune FileStore.
 - Loopback HTTP API, authentication, and stable API errors.
 - Project index caching and explicit refresh.
@@ -27,6 +28,8 @@ GET  /api/v1/project/{projectId}/gradle/tasks
 GET  /api/v1/project/{projectId}/gradle/operations
 POST /api/v1/project/{projectId}/gradle/operations
 GET  /api/v1/project/{projectId}/gradle/operations/{operationId}
+POST /api/v1/project/{projectId}/gradle/operations/{operationId}/cancel
+GET  /api/v1/project/{projectId}/gradle/operations/{operationId}/events
 POST /api/v1/project/{projectId}/content/index
 POST /api/v1/project/{projectId}/content/resolve
 POST /api/v1/project/{projectId}/source/index
@@ -37,7 +40,7 @@ GET  /api/v1/project/{projectId}/cache/server/inspect
 
 Opening a project is passive. It validates and inspects the checkout without executing Gradle or loading server code.
 
-Gradle task discovery and execution happen only through explicit project-scoped endpoints. Execution accepts only the `assemble`, `test`, and `cache-build` operation IDs and never arbitrary Gradle arguments.
+Gradle task discovery and execution happen only through explicit project-scoped endpoints. Execution accepts only the `assemble`, `test`, and `cache-build` operation IDs and never arbitrary Gradle arguments. Starts return immediately with a `RUNNING` snapshot; clients can query the latest snapshot, stream updates over SSE, or request cancellation.
 
 ## Run
 

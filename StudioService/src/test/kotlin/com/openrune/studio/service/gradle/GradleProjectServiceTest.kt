@@ -8,6 +8,9 @@ import com.openrune.studio.service.project.ProjectSession
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlin.io.path.writeText
 import kotlin.test.Test
@@ -149,6 +152,69 @@ class GradleProjectServiceTest {
             assertEquals(ApiErrorCode.GRADLE_DISCOVERY_FAILED, failure.code)
             assertEquals("7", failure.details["exitCode"])
             assertTrue(failure.details["stderr"].orEmpty().contains("configuration failed"))
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun cancellationTerminatesRunningWrapperAndChildProcess() {
+        if (isWindows()) return
+
+        val root = Files.createTempDirectory("openrune-gradle-cancel")
+        try {
+            val wrapper =
+                createWrapper(
+                    root,
+                    """
+                    #!/bin/sh
+                    echo 'started'
+                    sleep 10
+                    echo 'finished'
+                    """.trimIndent(),
+                )
+            val project = projectSession(root, wrapper)
+            val cancel = AtomicBoolean(false)
+            val outputObserved = CompletableDeferred<Unit>()
+
+            val failure =
+                runBlocking {
+                    val execution =
+                        async {
+                            runCatching {
+                                GradleProcessRunner().executeControlled(
+                                    project = project,
+                                    arguments =
+                                        listOf(
+                                            "assemble",
+                                            "--console=plain",
+                                            "--no-daemon",
+                                        ),
+                                    timeout = Duration.ofSeconds(5),
+                                    maxOutputBytes = 4096,
+                                    control =
+                                        GradleExecutionControl(
+                                            isCancellationRequested = cancel::get,
+                                            onOutput = { stream, text ->
+                                                if (
+                                                    stream == GradleOutputStream.STDOUT &&
+                                                        "started" in text
+                                                ) {
+                                                    outputObserved.complete(Unit)
+                                                }
+                                            },
+                                        ),
+                                )
+                            }.exceptionOrNull()
+                        }
+
+                    outputObserved.await()
+                    cancel.set(true)
+                    execution.await()
+                }
+
+            val processFailure = failure as? GradleProcessException
+            assertEquals(GradleProcessFailure.CANCELLED, processFailure?.reason)
         } finally {
             root.toFile().deleteRecursively()
         }
