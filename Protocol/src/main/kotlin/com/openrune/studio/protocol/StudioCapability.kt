@@ -23,6 +23,7 @@ object StudioCapabilities {
     val ContentIndex = StudioCapability("content.index")
     val ContentResolve = StudioCapability("content.resolve")
     val SourceIndex = StudioCapability("source.index")
+    val GradleTasks = StudioCapability("gradle.tasks")
 
     val RuntimeIdentity = StudioCapability("runtime.identity")
     val RuntimeLifecycle = StudioCapability("runtime.lifecycle")
@@ -39,6 +40,7 @@ object StudioCapabilities {
             ContentIndex,
             ContentResolve,
             SourceIndex,
+            GradleTasks,
             RuntimeIdentity,
             RuntimeLifecycle,
             RuntimePlugins,

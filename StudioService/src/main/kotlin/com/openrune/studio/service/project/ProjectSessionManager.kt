@@ -135,6 +135,9 @@ class ProjectSessionManager(
                 ) {
                     add(StudioCapabilities.CacheRead.id)
                 }
+                if ("gradle-project" in inspection.capabilities) {
+                    add(StudioCapabilities.GradleTasks.id)
+                }
             }
 
         val id = UUID.randomUUID().toString()

@@ -13,6 +13,7 @@ It provides a structured view of an OpenRune project and exposes project-aware t
 - Index Kotlin content source with PSI-backed structural analysis.
 - Resolve OpenRune symbols such as `content.rock` to source, handlers, references, modules, and GameVals.
 - Inspect generated `.data/cache/LIVE` and `.data/cache/SERVER` caches through OpenRune FileStore.
+- Discover the tasks exposed by an opened project's Gradle wrapper on explicit request.
 - Maintain project-scoped index snapshots and refresh them when project inputs change.
 - Expose the functionality through a loopback-only, token-protected HTTP API.
 
@@ -20,7 +21,7 @@ It provides a structured view of an OpenRune project and exposes project-aware t
 
 ### `:StudioService`
 
-The Kotlin/JVM application service. It owns project sessions, OpenRune inspection, content/source indexing, cache inspection, API security, and local transport.
+The Kotlin/JVM application service. It owns project sessions, OpenRune inspection, content/source indexing, Gradle project discovery, cache inspection, API security, and local transport.
 
 ### `:Protocol`
 
@@ -32,6 +33,8 @@ The opened OpenRune Server checkout remains authoritative.
 
 Studio reads project structure and source directly from the checkout. Generated LIVE and SERVER caches are treated as build outputs. Studio does not replace OpenRune's Gradle build, source layout, GameVals, or cache tooling.
 
+Gradle is never executed merely because a project is opened. Task discovery is an explicit project-scoped operation that uses the detected wrapper with a fixed command.
+
 ## Local API
 
 The current API is versioned under `/api/v1`.
@@ -40,6 +43,7 @@ The current API is versioned under `/api/v1`.
 GET  /api/v1/status
 POST /api/v1/project/open
 GET  /api/v1/project/{projectId}
+GET  /api/v1/project/{projectId}/gradle/tasks
 
 POST /api/v1/project/{projectId}/content/index
 POST /api/v1/project/{projectId}/content/resolve

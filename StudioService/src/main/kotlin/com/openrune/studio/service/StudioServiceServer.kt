@@ -2,6 +2,8 @@ package com.openrune.studio.service
 
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.openrune.studio.service.cache.OpenRuneCacheReader
+import com.openrune.studio.service.gradle.GradleProjectService
+import com.openrune.studio.service.gradle.GradleTaskDiscoveryService
 import com.openrune.studio.service.project.ProjectIndexService
 import com.openrune.studio.service.project.ProjectSessionManager
 import com.openrune.studio.protocol.StudioCapabilities
@@ -33,6 +35,7 @@ fun Application.studioServiceModule(
     projectSessions: ProjectSessionManager = ProjectSessionManager(),
     openRuneCacheReader: OpenRuneCacheReader = OpenRuneCacheReader(),
     projectIndexes: ProjectIndexService = ProjectIndexService(),
+    gradleProjects: GradleTaskDiscoveryService = GradleProjectService(),
 ) {
     installApiErrors()
     installStudioServiceSecurity(security)
@@ -71,6 +74,12 @@ fun Application.studioServiceModule(
         get("/api/v1/project/{projectId}") {
             val project = projectSessions.require(call.parameters["projectId"])
             call.respond(HttpStatusCode.OK, project.view())
+        }
+
+        get("/api/v1/project/{projectId}/gradle/tasks") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            requireCapability(project.capabilities, StudioCapabilities.GradleTasks.id)
+            call.respond(HttpStatusCode.OK, gradleProjects.discoverTasks(project))
         }
 
         post("/api/v1/project/{projectId}/content/index") {
