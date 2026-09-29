@@ -13,7 +13,8 @@
 
 - harden project compatibility detection;
 - [x] model Gradle wrapper/task capabilities and explicit task discovery;
-- add bounded build/test/run operations;
+- [x] add bounded `assemble`, `test`, and cache-build operations;
+- add asynchronous lifecycle before exposing the long-lived server `run` operation;
 - stream operation status/logs;
 - add cancellation;
 - add project file/output watchers;
