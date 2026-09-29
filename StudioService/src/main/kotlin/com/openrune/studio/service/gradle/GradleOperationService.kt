@@ -4,6 +4,7 @@ import com.openrune.studio.service.ApiErrorCode
 import com.openrune.studio.service.ApiException
 import com.openrune.studio.service.project.ProjectSession
 import io.ktor.http.HttpStatusCode
+import java.nio.file.Path
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -55,7 +56,7 @@ class DefaultGradleOperationService(
     private val runner: GradleCommandRunner = GradleProcessRunner(),
     private val maxOutputBytes: Int = DEFAULT_MAX_OUTPUT_BYTES,
 ) : GradleOperationService {
-    private val activeProjects = ConcurrentHashMap.newKeySet<String>()
+    private val activeProjectRoots = ConcurrentHashMap.newKeySet<Path>()
     private val results = ConcurrentHashMap<String, GradleOperationResult>()
     private val resultOrder = ConcurrentLinkedDeque<String>()
 
@@ -85,7 +86,7 @@ class DefaultGradleOperationService(
                     details = mapOf("operation" to operationId),
                 )
 
-        if (!activeProjects.add(project.id)) {
+        if (!activeProjectRoots.add(project.root)) {
             throw ApiException(
                 code = ApiErrorCode.GRADLE_OPERATION_BUSY,
                 status = HttpStatusCode.Conflict,
@@ -158,7 +159,7 @@ class DefaultGradleOperationService(
                 ),
             )
         } finally {
-            activeProjects.remove(project.id)
+            activeProjectRoots.remove(project.root)
         }
     }
 
