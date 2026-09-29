@@ -1,2 +1,0 @@
-[clientscript,spawn_menu_card_op](component $grid, int $iconsub)
-if_triggerop($grid, $iconsub, 1);

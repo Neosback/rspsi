@@ -1,64 +1,52 @@
-# OpenRune Studio Companion
+# OpenRune Server Studio
 
-This repository is being refocused from a desktop map editor into the JVM companion for a browser-based OSRS content editor.
+This repository is now focused on one product: a local-first application for working with **OpenRune Server** projects.
 
-The browser application will own the editor experience: Svelte/TypeScript UI, WebGL2 rendering, interactive map state, tools, selection, undo/redo, overlays, and ordinary browser-side import/export.
+It is not a general-purpose RSPS map editor. The legacy desktop renderer, map-editing tools, RuneLite reference tree, rendering parity infrastructure, and vendored OpenRune Server snapshot are legacy reference material, not active product code.
 
-This repository owns capabilities that are better kept on the JVM or require native local access:
+## Product scope
 
-- OpenRune FileStore and OSRS cache tooling;
-- cache inspection, validation, encoding, packing, and explicit publication;
-- OpenRune Server project discovery and compatibility inspection;
-- Gradle task discovery/invocation and build verification;
-- GameVal/RSCM and OpenRune source integration;
-- Kotlin semantic/source indexing;
-- local filesystem access and project/cache watching;
-- a small loopback HTTP/WebSocket bridge for the web editor.
+OpenRune Server Studio should make an OpenRune Server project easier to inspect, develop, run, validate, and maintain.
 
-The bridge is optional for basic browser editing. It is required when the editor needs local OpenRune project integration, JVM tooling, direct cache publication, or build execution.
+The current Kotlin/JVM application service provides the foundation for:
 
-## Current transition state
+- opening and validating an OpenRune Server checkout;
+- discovering project structure and capabilities;
+- indexing OpenRune content modules, GameVals/RSCM, and Kotlin sources;
+- resolving content symbols back to their owning source;
+- inspecting generated LIVE/SERVER cache outputs through OpenRune FileStore;
+- running supported Gradle build/test/run operations;
+- watching project files and generated outputs;
+- integrating with a future in-server Agent for runtime/plugin/event visibility;
+- exposing versioned local APIs for the Studio UI.
 
-The existing `Client` module contains the reusable cache, OSRS, world-format, and OpenRune integration code that will be extracted into headless modules.
+Map rendering, terrain brushes, scene editing, camera tools, object placement, and renderer parity are intentionally outside the active product scope.
 
-The existing `Editor` module is legacy desktop UI/rendering code. It is frozen except for changes required to keep the repository buildable during extraction and will be removed after the headless core is proven independent.
+## Active modules
 
-Java-to-Kotlin migration continues leaf-first, but new migration work should prioritize code that survives this architecture: cache, OSRS formats, OpenRune integration, project inspection, protocol contracts, and bridge services.
+- `:Protocol` - neutral application/runtime contracts.
+- `:Companion` - the current Kotlin/JVM application service and local API.
 
-## Target modules
+The `Companion` module name is transitional. New work should treat it as the OpenRune Server Studio backend rather than as a bridge for a separate map editor.
 
-The initial target is deliberately small:
+## OpenRune authority
 
-- `:Protocol` - neutral shared DTOs/capabilities for Companion and future in-server Agent;
-- `:core` - neutral OSRS/cache domain and codecs;
-- `:openrune` - OpenRune-specific project, FileStore, source, GameVal, and Gradle integration;
-- `:server` - Ktor loopback API and WebSocket event stream.
+Studio opens an existing OpenRune Server project. The project's source files, Gradle build, content modules, GameVals/RSCM, and generated cache outputs remain authoritative.
 
-Do not create these modules merely to move files. Extraction happens responsibility-by-responsibility with tests proving the boundary.
+This repository does not vendor a copy of OpenRune Server as application code.
 
-## Documentation
+## Legacy reference
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Bridge API](docs/API.md)
-- [Cache model](docs/CACHE.md)
-- [OpenRune integration](docs/OPENRUNE.md)
-- [OpenRune server foundation reference](docs/OPENRUNE_SERVER_FOUNDATION.md)
-- [Roadmap](docs/ROADMAP.md)
+All branch tips that existed before the September 29, 2026 reset are preserved through:
+
+`archive/pre-openrune-reset-2026-09-29`
+
+Use that archive only when an old implementation is useful as reference. Do not reintroduce legacy editor architecture by default.
 
 ## Build
 
-The repository still uses the current Gradle layout during migration:
-
 ```bash
-./gradlew test
+./gradlew foundationGate
 ```
 
-Desktop execution is not the target architecture and should not receive new product features.
-
-## Reference trees
-
-Vendored OpenRune Server and RuneLite sources remain references during the transition. They are not alternate application architectures and must not leak their implementation types through bridge-neutral contracts.
-
-## License
-
-See [LICENSE](LICENSE).
+See `docs/ARCHITECTURE.md`, `docs/OPENRUNE.md`, and `docs/ROADMAP.md`.

@@ -15,7 +15,7 @@ fun main() {
 
     if (security.generatedToken) {
         System.err.println(
-            "OpenRune Studio Companion token: ${security.token}\n" +
+            "OpenRune Server Studio token: ${security.token}\n" +
                 "Set OPENRUNE_STUDIO_TOKEN to provide a stable development token.",
         )
     }

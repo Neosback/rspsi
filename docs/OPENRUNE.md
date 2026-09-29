@@ -1,106 +1,42 @@
-# OpenRune Integration
+# OpenRune Server integration
 
-For the verified server boot/plugin/event/cache model and live-agent constraints, see [OpenRune Server Foundation Reference](OPENRUNE_SERVER_FOUNDATION.md).
-
-## Goal
-
-The companion provides first-class integration with OpenRune Server projects while respecting OpenRune's own build and source authority.
-
-The bridge should understand a project deeply enough to answer:
-
-- what project was opened;
-- which cache/source capabilities are available;
-- where LIVE and SERVER outputs are;
-- which source owns a selected resource;
-- which GameVal/RSCM symbol resolves to which entity;
-- which supported build operation publishes a source change;
-- whether files or generated output changed externally.
-
-## JVM boundary
-
-OpenRune tooling is JVM-centric. Current useful dependencies include FileStore, definition codecs, writable cache tools, source/config tooling, and the Gradle-based OpenRune Server build.
-
-That is the main reason the local companion exists. Do not port OpenRune's JVM tooling into browser TypeScript merely to remove the bridge.
+OpenRune Server Studio should understand an opened OpenRune project deeply enough to help develop and operate it without taking ownership away from the project.
 
 ## Project inspection
 
-Use one structural project model.
-
-Inspection may discover:
+Use one structural project model. Inspection may discover:
 
 - checkout root;
 - Gradle wrapper/build files;
 - source/resource roots;
-- LIVE/SERVER cache paths;
+- content/plugin modules;
 - GameVal/RSCM roots;
-- content/plugin packs;
-- build tasks;
+- generated LIVE/SERVER cache paths;
+- supported build/test/run tasks;
 - compatibility diagnostics.
 
-Custom forks should be supported through detected capabilities and bounded adapters, not scattered path guesses.
+Custom forks should be represented through detected capabilities, not scattered path guesses.
 
-## Generated outputs
+Opening a project is passive. It must not run Gradle, load project code, or mutate files.
 
-Treat:
+## Source authority
 
-- `.data/cache/LIVE`
-- `.data/cache/SERVER`
-
-as generated outputs owned by the OpenRune project.
-
-Do not silently patch either as a fallback publication strategy.
-
-## Supported publication
-
-For a resource with an authoritative source form:
-
-```text
-browser edit
-  -> bridge validates payload
-  -> source authority/provenance lookup
-  -> stale-source check
-  -> atomic source write
-  -> detected OpenRune build
-  -> reopen generated output
-  -> semantic verification
-  -> report success
-```
-
-If no supported source form exists, report that publication capability as unavailable.
-
-Standalone output-cache publication is a separate capability and must not be presented as OpenRune source publication.
-
-## Source semantics
-
-Kotlin semantic indexing and project-source inspection remain backend responsibilities.
-
-Expose neutral facts:
-
-- declaration identity;
-- symbol/reference;
-- handler/content relationship;
-- source file/span;
-- evidence/diagnostic confidence.
-
-Do not expose Kotlin PSI objects through the API.
-
-## GameVals/RSCM
-
-Preserve provenance. A symbol is not just `name -> id`; its namespace, source, generated status, and origin matter.
-
-Generated/merged mappings must not be edited when an authoritative originating source exists.
+For OpenRune-owned resources, preserve provenance and edit the authoritative source form. Generated or merged output should not be edited when a supported source exists.
 
 ## Build execution
 
-Invoke the imported project's wrapper/task discovered from project inspection.
+Run only bounded, application-defined operations against the imported project's detected Gradle wrapper/tasks.
 
-The bridge should capture:
+Capture operation identity, timestamps, exit status, bounded logs, cancellation state, relevant output fingerprints, and post-build verification.
 
-- operation/task identity;
-- started/completed timestamps;
-- exit result;
-- bounded logs;
-- relevant output fingerprints before/after;
-- verification status.
+Never expose arbitrary shell execution through the local API.
 
-Fresh/bootstrap installation remains explicit and destructive. It must never run automatically when a project is opened.
+## Generated caches
+
+`.data/cache/LIVE` and `.data/cache/SERVER` are generated outputs. Studio may inspect them and use them for verification, not treat them as ordinary authoring workspaces.
+
+## Runtime Agent
+
+Static inspection does not require server code to be loaded. Live runtime visibility should come from a minimal Agent loaded by OpenRune Server and communicate through neutral `:Protocol` contracts.
+
+See `OPENRUNE_SERVER_FOUNDATION.md` for the foundation research.

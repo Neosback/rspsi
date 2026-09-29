@@ -48,7 +48,7 @@ fun Application.companionModule(
             call.respond(
                 HttpStatusCode.OK,
                 CompanionStatus(
-                    name = "OpenRune Studio Companion",
+                    name = "OpenRune Server Studio",
                     apiVersion = API_VERSION,
                     status = "ready",
                     capabilities = listOf(StudioCapabilities.ProjectOpen.id),
