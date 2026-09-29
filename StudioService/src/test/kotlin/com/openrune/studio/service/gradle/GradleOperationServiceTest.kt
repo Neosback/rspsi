@@ -8,7 +8,8 @@ import com.openrune.studio.service.project.ProjectSession
 import java.nio.file.Files
 import java.time.Duration
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,7 +19,7 @@ import kotlin.test.fail
 class GradleOperationServiceTest {
     @Test
     fun catalogContainsOnlySupportedOperations() {
-        val service = DefaultGradleOperationService(runner = RecordingRunner())
+        val service = DefaultGradleOperationService(runner = ImmediateRunner())
         val catalog = service.catalog()
 
         assertEquals(listOf("assemble", "test", "cache-build"), catalog.map { it.id })
@@ -30,14 +31,26 @@ class GradleOperationServiceTest {
     }
 
     @Test
-    fun operationIdsMapToFixedGradleArguments() = runBlocking {
-        val runner = RecordingRunner()
+    fun startReturnsRunningAndOperationIdsMapToFixedGradleArguments() = runBlocking {
+        val runner = GateRunner()
         val service = DefaultGradleOperationService(runner = runner)
         val project = projectSession("project-one")
 
-        service.execute(project, "assemble")
-        service.execute(project, "test")
-        val cache = service.execute(project, " CACHE-BUILD ")
+        val assemble = service.start(project, "assemble")
+        assertEquals(GradleOperationState.RUNNING, assemble.state)
+        runner.awaitStart()
+        runner.release()
+        service.snapshots(project, assemble.operationId).first { it.state.terminal }
+
+        val test = service.start(project, "test")
+        runner.awaitStart()
+        runner.release()
+        service.snapshots(project, test.operationId).first { it.state.terminal }
+
+        val cache = service.start(project, " CACHE-BUILD ")
+        runner.awaitStart()
+        runner.release()
+        val cacheDone = service.snapshots(project, cache.operationId).first { it.state.terminal }
 
         assertEquals(
             listOf(
@@ -47,33 +60,33 @@ class GradleOperationServiceTest {
             ),
             runner.arguments,
         )
-        assertEquals("cache-build", cache.operation)
-        assertEquals(":or-cache:buildCache", cache.task)
-        assertEquals(GradleOperationState.SUCCEEDED, cache.state)
+        assertEquals("cache-build", cacheDone.operation)
+        assertEquals(":or-cache:buildCache", cacheDone.task)
+        assertEquals(GradleOperationState.SUCCEEDED, cacheDone.state)
     }
 
     @Test
-    fun arbitraryGradleTaskIsRejectedBeforeRunnerIsCalled() = runBlocking {
-        val runner = RecordingRunner()
+    fun arbitraryGradleTaskIsRejectedBeforeRunnerIsCalled() {
+        val runner = ImmediateRunner()
         val service = DefaultGradleOperationService(runner = runner)
         val project = projectSession("project-one")
 
         val failure =
             try {
-                service.execute(project, ":server:app:run")
+                service.start(project, ":server:app:run")
                 fail("expected invalid operation")
             } catch (failure: ApiException) {
                 failure
             }
 
         assertEquals(ApiErrorCode.GRADLE_OPERATION_INVALID, failure.code)
-        assertTrue(runner.arguments.isEmpty())
+        assertEquals(0, runner.calls)
     }
 
     @Test
-    fun nonZeroExitIsStoredAsFailedOperation() = runBlocking {
+    fun nonZeroExitBecomesFailedTerminalSnapshot() = runBlocking {
         val runner =
-            RecordingRunner(
+            ImmediateRunner(
                 result =
                     GradleProcessResult(
                         exitCode = 7,
@@ -87,20 +100,23 @@ class GradleOperationServiceTest {
         val service = DefaultGradleOperationService(runner = runner)
         val project = projectSession("project-one")
 
-        val result = service.execute(project, "assemble")
-        val stored = service.requireResult(project, result.operationId)
+        val started = service.start(project, "assemble")
+        val result =
+            service.snapshots(project, started.operationId)
+                .first { it.state.terminal }
 
         assertEquals(GradleOperationState.FAILED, result.state)
         assertEquals(7, result.exitCode)
-        assertEquals("compile failed", result.stderr)
+        assertEquals("compile failed", result.stderrTail)
         assertTrue(result.stdoutTruncated)
-        assertEquals(result, stored)
+        assertEquals(ApiErrorCode.GRADLE_EXECUTION_FAILED.name, result.errorCode)
+        assertEquals(result, service.requireSnapshot(project, result.operationId))
     }
 
     @Test
-    fun timeoutBecomesTerminalOperationResult() = runBlocking {
+    fun timeoutBecomesTerminalSnapshot() = runBlocking {
         val runner =
-            RecordingRunner(
+            ImmediateRunner(
                 failure =
                     GradleProcessException(
                         reason = GradleProcessFailure.TIMEOUT,
@@ -110,23 +126,85 @@ class GradleOperationServiceTest {
         val service = DefaultGradleOperationService(runner = runner)
         val project = projectSession("project-one")
 
-        val result = service.execute(project, "test")
+        val started = service.start(project, "test")
+        val result =
+            service.snapshots(project, started.operationId)
+                .first { it.state.terminal }
 
         assertEquals(GradleOperationState.TIMED_OUT, result.state)
         assertEquals(null, result.exitCode)
-        assertEquals(result, service.requireResult(project, result.operationId))
+        assertEquals(ApiErrorCode.GRADLE_TIMEOUT.name, result.errorCode)
     }
 
     @Test
-    fun operationResultsAreScopedToOwningProject() = runBlocking {
-        val service = DefaultGradleOperationService(runner = RecordingRunner())
+    fun cancellationStreamsLogsAndEndsCancelled() = runBlocking {
+        val runner = CancellableRunner()
+        val service = DefaultGradleOperationService(runner = runner, liveLogChars = 64)
+        val project = projectSession("project-one")
+
+        val started = service.start(project, "assemble")
+        val withLog =
+            service.snapshots(project, started.operationId)
+                .first { "starting" in it.stdoutTail }
+
+        assertEquals(GradleOperationState.RUNNING, withLog.state)
+
+        val cancelling = service.cancel(project, started.operationId)
+        assertTrue(cancelling.cancelRequested)
+
+        val cancelled =
+            service.snapshots(project, started.operationId)
+                .first { it.state == GradleOperationState.CANCELLED }
+
+        assertTrue(cancelled.cancelRequested)
+        assertEquals("starting\n", cancelled.stdoutTail)
+    }
+
+    @Test
+    fun liveLogTailIsBounded() = runBlocking {
+        val runner =
+            object : GradleCommandRunner {
+                override suspend fun execute(
+                    project: ProjectSession,
+                    arguments: List<String>,
+                    timeout: Duration,
+                    maxOutputBytes: Int,
+                ): GradleProcessResult = successResult()
+
+                override suspend fun executeControlled(
+                    project: ProjectSession,
+                    arguments: List<String>,
+                    timeout: Duration,
+                    maxOutputBytes: Int,
+                    control: GradleExecutionControl,
+                ): GradleProcessResult {
+                    control.onOutput(GradleOutputStream.STDOUT, "abcdef")
+                    return successResult(stdout = "abcdef")
+                }
+            }
+        val service = DefaultGradleOperationService(runner = runner, liveLogChars = 4)
+        val project = projectSession("project-one")
+
+        val started = service.start(project, "assemble")
+        val result =
+            service.snapshots(project, started.operationId)
+                .first { it.state.terminal }
+
+        assertEquals("cdef", result.stdoutTail)
+        assertTrue(result.stdoutTruncated)
+    }
+
+    @Test
+    fun operationSnapshotsAreScopedToOwningProject() = runBlocking {
+        val service = DefaultGradleOperationService(runner = ImmediateRunner())
         val first = projectSession("project-one")
         val second = projectSession("project-two")
-        val result = service.execute(first, "assemble")
+        val started = service.start(first, "assemble")
+        service.snapshots(first, started.operationId).first { it.state.terminal }
 
         val failure =
             try {
-                service.requireResult(second, result.operationId)
+                service.requireSnapshot(second, started.operationId)
                 fail("expected result lookup to be project scoped")
             } catch (failure: ApiException) {
                 failure
@@ -137,45 +215,48 @@ class GradleOperationServiceTest {
 
     @Test
     fun rejectsConcurrentOperationsForSameCheckoutAcrossSessions() = runBlocking {
-        val entered = CompletableDeferred<Unit>()
-        val release = CompletableDeferred<Unit>()
-        val runner =
-            object : GradleCommandRunner {
-                override suspend fun execute(
-                    project: ProjectSession,
-                    arguments: List<String>,
-                    timeout: Duration,
-                    maxOutputBytes: Int,
-                ): GradleProcessResult {
-                    entered.complete(Unit)
-                    release.await()
-                    return successResult()
-                }
-            }
-
+        val runner = GateRunner()
         val service = DefaultGradleOperationService(runner = runner)
         val project = projectSession("project-one")
         val secondSession = project.copy(id = "project-two")
-        val first = async { service.execute(project, "assemble") }
-        entered.await()
+
+        val first = service.start(project, "assemble")
+        runner.awaitStart()
 
         val failure =
             try {
-                service.execute(secondSession, "test")
-                fail("expected project to reject concurrent Gradle operation")
+                service.start(secondSession, "test")
+                fail("expected checkout to reject concurrent Gradle operation")
             } catch (failure: ApiException) {
                 failure
             }
 
         assertEquals(ApiErrorCode.GRADLE_OPERATION_BUSY, failure.code)
-        release.complete(Unit)
-        assertEquals(GradleOperationState.SUCCEEDED, first.await().state)
+        runner.release()
+        service.snapshots(project, first.operationId).first { it.state.terminal }
     }
 
-    private class RecordingRunner(
+    private class ImmediateRunner(
         private val result: GradleProcessResult = successResult(),
         private val failure: GradleProcessException? = null,
     ) : GradleCommandRunner {
+        var calls = 0
+
+        override suspend fun execute(
+            project: ProjectSession,
+            arguments: List<String>,
+            timeout: Duration,
+            maxOutputBytes: Int,
+        ): GradleProcessResult {
+            calls += 1
+            failure?.let { throw it }
+            return result
+        }
+    }
+
+    private class GateRunner : GradleCommandRunner {
+        private var entered = CompletableDeferred<Unit>()
+        private var release = CompletableDeferred<Unit>()
         val arguments = mutableListOf<List<String>>()
 
         override suspend fun execute(
@@ -185,8 +266,45 @@ class GradleOperationServiceTest {
             maxOutputBytes: Int,
         ): GradleProcessResult {
             this.arguments += arguments
-            failure?.let { throw it }
-            return result
+            entered.complete(Unit)
+            release.await()
+            return successResult()
+        }
+
+        suspend fun awaitStart() {
+            entered.await()
+        }
+
+        fun release() {
+            release.complete(Unit)
+            entered = CompletableDeferred()
+            release = CompletableDeferred()
+        }
+    }
+
+    private class CancellableRunner : GradleCommandRunner {
+        override suspend fun execute(
+            project: ProjectSession,
+            arguments: List<String>,
+            timeout: Duration,
+            maxOutputBytes: Int,
+        ): GradleProcessResult = error("controlled execution expected")
+
+        override suspend fun executeControlled(
+            project: ProjectSession,
+            arguments: List<String>,
+            timeout: Duration,
+            maxOutputBytes: Int,
+            control: GradleExecutionControl,
+        ): GradleProcessResult {
+            control.onOutput(GradleOutputStream.STDOUT, "starting\n")
+            while (!control.isCancellationRequested()) {
+                delay(10)
+            }
+            throw GradleProcessException(
+                reason = GradleProcessFailure.CANCELLED,
+                message = "cancelled",
+            )
         }
     }
 
@@ -228,10 +346,10 @@ class GradleOperationServiceTest {
     }
 
     private companion object {
-        fun successResult(): GradleProcessResult =
+        fun successResult(stdout: String = "ok"): GradleProcessResult =
             GradleProcessResult(
                 exitCode = 0,
-                stdout = "ok",
+                stdout = stdout,
                 stderr = "",
                 stdoutTruncated = false,
                 stderrTruncated = false,
