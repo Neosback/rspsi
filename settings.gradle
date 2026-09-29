@@ -1,4 +1,4 @@
 rootProject.name = 'OpenRuneServerStudio'
 
 include ':Protocol'
-include ':Companion'
+include ':StudioService'
