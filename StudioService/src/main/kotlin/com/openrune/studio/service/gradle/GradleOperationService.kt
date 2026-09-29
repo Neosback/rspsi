@@ -135,6 +135,7 @@ class DefaultGradleOperationService(
             )
         records[record.operationId] = record
         recordOrder.addLast(record.operationId)
+        val initialSnapshot = record.snapshot()
 
         scope.launch {
             try {
@@ -171,7 +172,7 @@ class DefaultGradleOperationService(
             }
         }
 
-        return record.snapshot()
+        return initialSnapshot
     }
 
     override fun requireSnapshot(
