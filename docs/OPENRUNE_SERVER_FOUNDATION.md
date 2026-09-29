@@ -651,7 +651,7 @@ runtime resolution state
 
 Generated `.rscm` files are derived outputs when an authoritative plugin TOML entry exists.
 
-The companion's current content index correctly treats TOML/RSCM as source/derived inputs rather than replacing them with Studio JSON.
+Studio's current content index correctly treats TOML/RSCM as source/derived inputs rather than replacing them with a parallel proprietary source format.
 
 ---
 
@@ -672,7 +672,7 @@ The eventual runtime agent should distinguish:
 - queued spawn state;
 - live repository/entity state.
 
-A map editor preview is not the same thing as the running server world state.
+Static project/cache inspection is not the same thing as the running server world state.
 
 ---
 
@@ -1018,19 +1018,11 @@ Only after the above:
 
 ## 18. Non-goals
 
-The JVM foundation does not own:
+The JVM foundation does not own unrelated editor/rendering systems or arbitrary desktop UI state.
 
-- WebGL rendering;
-- browser viewport state;
-- camera/input;
-- map-editor selection;
-- brush/tool state;
-- frame-by-frame scene objects;
-- browser undo/redo.
+Static project inspection must remain useful without a running server.
 
-The browser editor should not require a running server merely to decode/render/edit a map.
-
-The Agent should not become a replacement renderer or map editor.
+The Agent should stay narrow: runtime identity, lifecycle, plugins/scripts, supported event registration facts, cache/runtime state, and diagnostics. It must not become a second server framework or an unrestricted remote-control surface.
 
 ---
 
