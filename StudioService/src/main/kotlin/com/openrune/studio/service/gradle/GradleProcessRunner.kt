@@ -49,14 +49,14 @@ interface GradleCommandRunner {
     suspend fun execute(
         project: ProjectSession,
         arguments: List<String>,
-        timeout: Duration,
+        timeout: Duration?,
         maxOutputBytes: Int,
     ): GradleProcessResult
 
     suspend fun executeControlled(
         project: ProjectSession,
         arguments: List<String>,
-        timeout: Duration,
+        timeout: Duration?,
         maxOutputBytes: Int,
         control: GradleExecutionControl,
     ): GradleProcessResult =
@@ -72,7 +72,7 @@ class GradleProcessRunner : GradleCommandRunner {
     override suspend fun execute(
         project: ProjectSession,
         arguments: List<String>,
-        timeout: Duration,
+        timeout: Duration?,
         maxOutputBytes: Int,
     ): GradleProcessResult =
         executeControlled(
@@ -86,13 +86,13 @@ class GradleProcessRunner : GradleCommandRunner {
     override suspend fun executeControlled(
         project: ProjectSession,
         arguments: List<String>,
-        timeout: Duration,
+        timeout: Duration?,
         maxOutputBytes: Int,
         control: GradleExecutionControl,
     ): GradleProcessResult =
         withContext(Dispatchers.IO) {
             require(arguments.isNotEmpty()) { "Gradle arguments must not be empty" }
-            require(!timeout.isNegative && !timeout.isZero) { "timeout must be positive" }
+            timeout?.let { require(!it.isNegative && !it.isZero) { "timeout must be positive" } }
             require(maxOutputBytes > 0) { "maxOutputBytes must be positive" }
 
             if (control.isCancellationRequested()) {
@@ -139,7 +139,7 @@ class GradleProcessRunner : GradleCommandRunner {
                 }
 
             val startedAt = System.nanoTime()
-            val deadline = startedAt + timeout.toNanos()
+            val deadline = timeout?.let { startedAt + it.toNanos() }
             process.outputStream.close()
             val readers = Executors.newFixedThreadPool(2)
 
@@ -172,23 +172,33 @@ class GradleProcessRunner : GradleCommandRunner {
                         )
                     }
 
-                    val remainingNanos = deadline - System.nanoTime()
-                    if (remainingNanos <= 0) {
+                    val remainingNanos = deadline?.minus(System.nanoTime())
+                    if (remainingNanos != null && remainingNanos <= 0) {
                         terminate(process)
                         runCatching { awaitReader(stdoutFuture) }
                         runCatching { awaitReader(stderrFuture) }
                         throw GradleProcessException(
                             reason = GradleProcessFailure.TIMEOUT,
                             message = "Gradle execution exceeded the configured timeout.",
-                            details = mapOf("timeoutMillis" to timeout.toMillis().toString()),
+                            details =
+                                mapOf(
+                                    "timeoutMillis" to
+                                        checkNotNull(timeout).toMillis().toString(),
+                                ),
                         )
                     }
 
                     val waitMillis =
-                        minOf(
-                            POLL_INTERVAL_MILLIS,
-                            TimeUnit.NANOSECONDS.toMillis(remainingNanos).coerceAtLeast(1),
-                        )
+                        if (remainingNanos == null) {
+                            POLL_INTERVAL_MILLIS
+                        } else {
+                            minOf(
+                                POLL_INTERVAL_MILLIS,
+                                TimeUnit.NANOSECONDS
+                                    .toMillis(remainingNanos)
+                                    .coerceAtLeast(1),
+                            )
+                        }
 
                     val completed =
                         try {
