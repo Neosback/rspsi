@@ -4,15 +4,7 @@ import com.openrune.studio.service.ApiErrorCode
 import com.openrune.studio.service.ApiException
 import com.openrune.studio.service.project.ProjectSession
 import io.ktor.http.HttpStatusCode
-import java.io.InputStream
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Path
 import java.time.Duration
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 data class GradleTaskInfo(
     val path: String,
@@ -30,217 +22,103 @@ interface GradleTaskDiscoveryService {
     suspend fun discoverTasks(project: ProjectSession): GradleTaskDiscovery
 }
 
-/**
- * Discovers Gradle tasks only after an explicit API request.
- *
- * This service never accepts arbitrary Gradle arguments. It invokes the detected project wrapper
- * with one fixed discovery command and bounds execution time and captured output.
- */
 class GradleProjectService(
+    private val runner: GradleCommandRunner = GradleProcessRunner(),
     private val timeout: Duration = Duration.ofSeconds(DEFAULT_TIMEOUT_SECONDS),
     private val maxOutputBytes: Int = DEFAULT_MAX_OUTPUT_BYTES,
 ) : GradleTaskDiscoveryService {
-    init {
-        require(!timeout.isNegative && !timeout.isZero) { "timeout must be positive" }
-        require(maxOutputBytes > 0) { "maxOutputBytes must be positive" }
-    }
-
-    override suspend fun discoverTasks(project: ProjectSession): GradleTaskDiscovery =
-        withContext(Dispatchers.IO) {
-            val wrapper = project.location("gradleWrapper")
-            val windows = isWindows()
-            val expectedName = if (windows) "gradlew.bat" else "gradlew"
-
-            if (
-                !Files.isRegularFile(wrapper) ||
-                    wrapper.parent != project.root ||
-                    wrapper.fileName.toString() != expectedName
-            ) {
-                throw ApiException(
-                    code = ApiErrorCode.GRADLE_UNAVAILABLE,
-                    status = HttpStatusCode.Conflict,
-                    message = "The opened project does not have a usable platform Gradle wrapper.",
-                )
-            }
-
-            if (!windows && !Files.isExecutable(wrapper)) {
-                throw ApiException(
-                    code = ApiErrorCode.GRADLE_UNAVAILABLE,
-                    status = HttpStatusCode.Conflict,
-                    message = "The project's Gradle wrapper is not executable.",
-                )
-            }
-
-            val command = wrapperCommand(expectedName, windows)
-            val process =
-                try {
-                    ProcessBuilder(command)
-                        .directory(project.root.toFile())
-                        .redirectInput(ProcessBuilder.Redirect.PIPE)
-                        .start()
-                } catch (failure: Exception) {
-                    throw ApiException(
-                        code = ApiErrorCode.GRADLE_DISCOVERY_FAILED,
-                        status = HttpStatusCode.UnprocessableEntity,
-                        message = "Gradle task discovery could not be started.",
-                        cause = failure,
-                    )
-                }
-
-            process.outputStream.close()
-            val readers = Executors.newFixedThreadPool(2)
+    override suspend fun discoverTasks(project: ProjectSession): GradleTaskDiscovery {
+        val result =
             try {
-                val stdoutFuture = readers.submit<CapturedOutput> {
-                    capture(process.inputStream, maxOutputBytes)
-                }
-                val stderrFuture = readers.submit<CapturedOutput> {
-                    capture(process.errorStream, maxOutputBytes)
-                }
-
-                val completed =
-                    try {
-                        process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)
-                    } catch (interrupted: InterruptedException) {
-                        Thread.currentThread().interrupt()
-                        terminate(process)
-                        throw ApiException(
-                            code = ApiErrorCode.GRADLE_DISCOVERY_FAILED,
-                            status = HttpStatusCode.ServiceUnavailable,
-                            message = "Gradle task discovery was interrupted.",
-                            cause = interrupted,
-                        )
-                    }
-
-                if (!completed) {
-                    terminate(process)
-                    runCatching { awaitReader(stdoutFuture) }
-                    runCatching { awaitReader(stderrFuture) }
-                    throw ApiException(
-                        code = ApiErrorCode.GRADLE_TIMEOUT,
-                        status = HttpStatusCode.GatewayTimeout,
-                        message = "Gradle task discovery exceeded the execution timeout.",
-                        details = mapOf("timeoutMillis" to timeout.toMillis().toString()),
-                    )
-                }
-
-                val stdout = awaitReader(stdoutFuture)
-                val stderr = awaitReader(stderrFuture)
-                if (stdout.truncated || stderr.truncated) {
-                    throw ApiException(
-                        code = ApiErrorCode.GRADLE_DISCOVERY_FAILED,
-                        status = HttpStatusCode.UnprocessableEntity,
-                        message = "Gradle task discovery exceeded the output limit.",
-                        details = mapOf("maxOutputBytes" to maxOutputBytes.toString()),
-                    )
-                }
-
-                if (process.exitValue() != 0) {
-                    throw ApiException(
-                        code = ApiErrorCode.GRADLE_DISCOVERY_FAILED,
-                        status = HttpStatusCode.UnprocessableEntity,
-                        message = "Gradle task discovery failed.",
-                        details =
-                            buildMap {
-                                put("exitCode", process.exitValue().toString())
-                                stderr.text.takeIf { it.isNotBlank() }?.let {
-                                    put("stderr", it.take(MAX_ERROR_DETAIL_CHARS))
-                                }
-                            },
-                    )
-                }
-
-                val tasks = parseGradleTasks(stdout.text)
-                GradleTaskDiscovery(
-                    wrapper = expectedName,
-                    taskCount = tasks.size,
-                    tasks = tasks,
+                runner.execute(
+                    project = project,
+                    arguments = DISCOVERY_ARGUMENTS,
+                    timeout = timeout,
+                    maxOutputBytes = maxOutputBytes,
                 )
-            } finally {
-                readers.shutdownNow()
-                if (process.isAlive) {
-                    terminate(process)
-                }
+            } catch (failure: GradleProcessException) {
+                throw failure.toDiscoveryApiException()
             }
-        }
 
-    private fun wrapperCommand(wrapperName: String, windows: Boolean): List<String> {
-        val fixedArguments = listOf("tasks", "--all", "--console=plain", "--no-daemon")
-        return if (windows) {
-            listOf("cmd.exe", "/d", "/c", wrapperName) + fixedArguments
-        } else {
-            listOf("./$wrapperName") + fixedArguments
-        }
-    }
-
-    private fun isWindows(): Boolean =
-        System.getProperty("os.name").orEmpty().lowercase().contains("win")
-
-    private fun terminate(process: Process) {
-        val descendants = process.toHandle().descendants().toList().asReversed()
-        process.destroy()
-        descendants.forEach { it.destroy() }
-
-        try {
-            if (!process.waitFor(TERMINATION_GRACE_MILLIS, TimeUnit.MILLISECONDS)) {
-                descendants.filter { it.isAlive }.forEach { it.destroyForcibly() }
-                process.destroyForcibly()
-                process.waitFor(TERMINATION_GRACE_MILLIS, TimeUnit.MILLISECONDS)
-            }
-        } catch (interrupted: InterruptedException) {
-            Thread.currentThread().interrupt()
-            descendants.filter { it.isAlive }.forEach { it.destroyForcibly() }
-            process.destroyForcibly()
-        }
-    }
-
-    private fun awaitReader(future: java.util.concurrent.Future<CapturedOutput>): CapturedOutput =
-        try {
-            future.get(READER_JOIN_SECONDS, TimeUnit.SECONDS)
-        } catch (failure: Exception) {
+        if (result.stdoutTruncated || result.stderrTruncated) {
             throw ApiException(
                 code = ApiErrorCode.GRADLE_DISCOVERY_FAILED,
-                status = HttpStatusCode.ServiceUnavailable,
-                message = "Gradle task discovery output could not be collected.",
-                cause = failure,
+                status = HttpStatusCode.UnprocessableEntity,
+                message = "Gradle task discovery exceeded the output limit.",
+                details = mapOf("maxOutputBytes" to maxOutputBytes.toString()),
             )
         }
 
-    private data class CapturedOutput(
-        val text: String,
-        val truncated: Boolean,
-    )
+        if (result.exitCode != 0) {
+            throw ApiException(
+                code = ApiErrorCode.GRADLE_DISCOVERY_FAILED,
+                status = HttpStatusCode.UnprocessableEntity,
+                message = "Gradle task discovery failed.",
+                details =
+                    buildMap {
+                        put("exitCode", result.exitCode.toString())
+                        result.stderr.takeIf { it.isNotBlank() }?.let {
+                            put("stderr", it.take(MAX_ERROR_DETAIL_CHARS))
+                        }
+                    },
+            )
+        }
+
+        val tasks = parseGradleTasks(result.stdout)
+        return GradleTaskDiscovery(
+            wrapper = if (isWindows()) "gradlew.bat" else "gradlew",
+            taskCount = tasks.size,
+            tasks = tasks,
+        )
+    }
+
+    private fun GradleProcessException.toDiscoveryApiException(): ApiException =
+        when (reason) {
+            GradleProcessFailure.WRAPPER_UNAVAILABLE ->
+                ApiException(
+                    code = ApiErrorCode.GRADLE_UNAVAILABLE,
+                    status = HttpStatusCode.Conflict,
+                    message = message,
+                    details = details,
+                    cause = this,
+                )
+            GradleProcessFailure.TIMEOUT ->
+                ApiException(
+                    code = ApiErrorCode.GRADLE_TIMEOUT,
+                    status = HttpStatusCode.GatewayTimeout,
+                    message = "Gradle task discovery exceeded the execution timeout.",
+                    details = details,
+                    cause = this,
+                )
+            GradleProcessFailure.INTERRUPTED,
+            GradleProcessFailure.OUTPUT_FAILED,
+            ->
+                ApiException(
+                    code = ApiErrorCode.GRADLE_DISCOVERY_FAILED,
+                    status = HttpStatusCode.ServiceUnavailable,
+                    message = "Gradle task discovery could not complete.",
+                    details = details,
+                    cause = this,
+                )
+            GradleProcessFailure.START_FAILED ->
+                ApiException(
+                    code = ApiErrorCode.GRADLE_DISCOVERY_FAILED,
+                    status = HttpStatusCode.UnprocessableEntity,
+                    message = "Gradle task discovery could not be started.",
+                    details = details,
+                    cause = this,
+                )
+        }
+
+    private fun isWindows(): Boolean =
+        System.getProperty("os.name").orEmpty().lowercase().contains("win")
 
     private companion object {
         const val DEFAULT_TIMEOUT_SECONDS = 45L
         const val DEFAULT_MAX_OUTPUT_BYTES = 2 * 1024 * 1024
         const val MAX_ERROR_DETAIL_CHARS = 4000
-        const val TERMINATION_GRACE_MILLIS = 500L
-        const val READER_JOIN_SECONDS = 5L
-
-        fun capture(stream: InputStream, limit: Int): CapturedOutput {
-            val buffer = ByteArray(8192)
-            val kept = java.io.ByteArrayOutputStream(minOf(limit, 64 * 1024))
-            var total = 0L
-            var truncated = false
-
-            stream.use { input ->
-                while (true) {
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    val remaining = (limit - kept.size()).coerceAtLeast(0)
-                    if (remaining > 0) {
-                        kept.write(buffer, 0, minOf(read, remaining))
-                    }
-                    total += read
-                    if (total > limit) truncated = true
-                }
-            }
-
-            return CapturedOutput(
-                text = kept.toString(StandardCharsets.UTF_8),
-                truncated = truncated,
-            )
-        }
+        val DISCOVERY_ARGUMENTS =
+            listOf("tasks", "--all", "--console=plain", "--no-daemon")
     }
 }
 
