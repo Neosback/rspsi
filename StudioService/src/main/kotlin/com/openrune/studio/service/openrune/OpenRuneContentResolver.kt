@@ -16,8 +16,8 @@ data class ResolvedContentSymbol(
 /**
  * Joins OpenRune GameVal/content metadata to structural Kotlin source facts.
  *
- * This is the browser-facing lookup used when a selected map/content entity already has a
- * symbolic OpenRune identity such as content.rock.
+ * Resolves a symbolic OpenRune identity such as content.rock to its GameVal, module,
+ * handler, reference, and source evidence.
  */
 class OpenRuneContentResolver(
     private val contentIndexer: OpenRuneContentIndexer = OpenRuneContentIndexer(),
