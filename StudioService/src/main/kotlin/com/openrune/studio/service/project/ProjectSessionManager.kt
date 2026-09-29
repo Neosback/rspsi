@@ -137,6 +137,7 @@ class ProjectSessionManager(
                 }
                 if ("gradle-project" in inspection.capabilities) {
                     add(StudioCapabilities.GradleTasks.id)
+                    add(StudioCapabilities.GradleOperations.id)
                 }
             }
 
