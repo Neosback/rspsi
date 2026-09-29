@@ -2,6 +2,8 @@ package com.openrune.studio.service
 
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.openrune.studio.service.cache.OpenRuneCacheReader
+import com.openrune.studio.service.gradle.DefaultGradleOperationService
+import com.openrune.studio.service.gradle.GradleOperationService
 import com.openrune.studio.service.gradle.GradleProjectService
 import com.openrune.studio.service.gradle.GradleTaskDiscoveryService
 import com.openrune.studio.service.project.ProjectIndexService
@@ -29,6 +31,7 @@ data class StudioServiceStatus(
 
 data class ProjectOpenRequest(val path: String = "")
 data class ContentResolveRequest(val symbol: String = "")
+data class GradleOperationRequest(val operation: String = "")
 
 fun Application.studioServiceModule(
     security: StudioServiceSecurity = StudioServiceSecurity.create(),
@@ -36,6 +39,7 @@ fun Application.studioServiceModule(
     openRuneCacheReader: OpenRuneCacheReader = OpenRuneCacheReader(),
     projectIndexes: ProjectIndexService = ProjectIndexService(),
     gradleProjects: GradleTaskDiscoveryService = GradleProjectService(),
+    gradleOperations: GradleOperationService = DefaultGradleOperationService(),
 ) {
     installApiErrors()
     installStudioServiceSecurity(security)
@@ -80,6 +84,34 @@ fun Application.studioServiceModule(
             val project = projectSessions.require(call.parameters["projectId"])
             requireCapability(project.capabilities, StudioCapabilities.GradleTasks.id)
             call.respond(HttpStatusCode.OK, gradleProjects.discoverTasks(project))
+        }
+
+        get("/api/v1/project/{projectId}/gradle/operations") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            requireCapability(project.capabilities, StudioCapabilities.GradleOperations.id)
+            call.respond(HttpStatusCode.OK, gradleOperations.catalog())
+        }
+
+        post("/api/v1/project/{projectId}/gradle/operations") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            requireCapability(project.capabilities, StudioCapabilities.GradleOperations.id)
+            val request = call.receive<GradleOperationRequest>()
+            call.respond(
+                HttpStatusCode.OK,
+                gradleOperations.execute(project, request.operation),
+            )
+        }
+
+        get("/api/v1/project/{projectId}/gradle/operations/{operationId}") {
+            val project = projectSessions.require(call.parameters["projectId"])
+            requireCapability(project.capabilities, StudioCapabilities.GradleOperations.id)
+            call.respond(
+                HttpStatusCode.OK,
+                gradleOperations.requireResult(
+                    project,
+                    call.parameters["operationId"].orEmpty(),
+                ),
+            )
         }
 
         post("/api/v1/project/{projectId}/content/index") {
